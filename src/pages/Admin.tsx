@@ -22,17 +22,39 @@ function slugify(s: string) {
     .slice(0, 64);
 }
 
+function decodeJwtPayload(token: string): any {
+  try {
+    const part = token.split(".")[1];
+    if (!part) return null;
+    const b64 = part.replace(/-/g, "+").replace(/_/g, "/");
+    const json = atob(b64);
+    return JSON.parse(json);
+  } catch {
+    return null;
+  }
+}
+
 export default function Admin() {
   const qc = useQueryClient();
   const { activeTenantId, activeTenant, isSuperAdmin } = useTenant();
 
   const [refreshingSession, setRefreshingSession] = useState(false);
+  const [debug, setDebug] = useState<any>(null);
 
   const refreshSession = async () => {
     setRefreshingSession(true);
     try {
       // Important: RLS checks JWT claims. After changing app_metadata, you must refresh the access token.
-      await supabase.auth.refreshSession();
+      const { data, error } = await supabase.auth.refreshSession();
+      if (error) throw error;
+      const accessToken = data.session?.access_token ?? null;
+      setDebug({
+        refreshedAt: new Date().toISOString(),
+        sessionUserId: data.session?.user?.id ?? null,
+        sessionEmail: data.session?.user?.email ?? null,
+        sessionAppMeta: data.session?.user?.app_metadata ?? null,
+        jwtPayload: accessToken ? decodeJwtPayload(accessToken) : null,
+      });
       showSuccess("Sessão atualizada. Se persistir, faça logout/login.");
     } catch (e: any) {
       showError(`Falha ao atualizar sessão: ${e?.message ?? "erro"}`);
@@ -47,6 +69,18 @@ export default function Admin() {
     } catch {
       // ignore
     }
+  };
+
+  const captureDebug = async () => {
+    const { data } = await supabase.auth.getSession();
+    const token = data.session?.access_token ?? null;
+    setDebug({
+      capturedAt: new Date().toISOString(),
+      sessionUserId: data.session?.user?.id ?? null,
+      sessionEmail: data.session?.user?.email ?? null,
+      sessionAppMeta: data.session?.user?.app_metadata ?? null,
+      jwtPayload: token ? decodeJwtPayload(token) : null,
+    });
   };
 
   // ---------------- Tenants ----------------
@@ -94,6 +128,7 @@ export default function Admin() {
       } else {
         showError(`Falha ao criar tenant: ${msg}`);
       }
+      await captureDebug();
     } finally {
       setCreatingTenant(false);
     }
@@ -178,6 +213,7 @@ export default function Admin() {
       } else {
         showError(`Falha ao cadastrar vendedor: ${msg}`);
       }
+      await captureDebug();
     } finally {
       setSavingVendor(false);
     }
@@ -228,6 +264,7 @@ export default function Admin() {
       } else {
         showError(`Falha ao cadastrar líder: ${msg}`);
       }
+      await captureDebug();
     } finally {
       setSavingLeader(false);
     }
@@ -285,6 +322,7 @@ export default function Admin() {
       } else {
         showError(`Falha ao cadastrar instância: ${msg}`);
       }
+      await captureDebug();
     } finally {
       setSavingInst(false);
     }
@@ -329,6 +367,24 @@ export default function Admin() {
               </div>
             </div>
           </div>
+
+          {debug && (
+            <div className="mt-4 rounded-[22px] border border-slate-200 bg-white p-4">
+              <div className="flex items-center justify-between">
+                <div className="text-sm font-semibold text-slate-900">Diagnóstico do token (RLS)</div>
+                <Button variant="secondary" className="h-9 rounded-2xl" onClick={captureDebug}>
+                  Recarregar
+                </Button>
+              </div>
+              <div className="mt-2 text-xs text-slate-600">
+                Procure por <span className="font-medium">jwtPayload.app_metadata.byfrost_super_admin</span>.
+                Se estiver vazio/false, o banco vai bloquear inserts/updates em tenants.
+              </div>
+              <pre className="mt-3 max-h-[280px] overflow-auto rounded-2xl bg-slate-50 p-3 text-[11px] text-slate-700">
+                {JSON.stringify(debug, null, 2)}
+              </pre>
+            </div>
+          )}
 
           <div className="mt-5">
             <Tabs defaultValue="tenants">
