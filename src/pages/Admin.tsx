@@ -26,6 +26,29 @@ export default function Admin() {
   const qc = useQueryClient();
   const { activeTenantId, activeTenant, isSuperAdmin } = useTenant();
 
+  const [refreshingSession, setRefreshingSession] = useState(false);
+
+  const refreshSession = async () => {
+    setRefreshingSession(true);
+    try {
+      // Important: RLS checks JWT claims. After changing app_metadata, you must refresh the access token.
+      await supabase.auth.refreshSession();
+      showSuccess("Sessão atualizada. Se persistir, faça logout/login.");
+    } catch (e: any) {
+      showError(`Falha ao atualizar sessão: ${e?.message ?? "erro"}`);
+    } finally {
+      setRefreshingSession(false);
+    }
+  };
+
+  const ensureFreshTokenForRls = async () => {
+    try {
+      await supabase.auth.refreshSession();
+    } catch {
+      // ignore
+    }
+  };
+
   // ---------------- Tenants ----------------
   const tenantsQ = useQuery({
     queryKey: ["admin_tenants"],
@@ -50,6 +73,8 @@ export default function Admin() {
     if (!tenantName.trim()) return;
     setCreatingTenant(true);
     try {
+      await ensureFreshTokenForRls();
+
       const { error } = await supabase.from("tenants").insert({
         name: tenantName.trim(),
         slug: tenantSlug || `tenant-${Date.now()}`,
@@ -61,7 +86,14 @@ export default function Admin() {
       setTenantName("");
       await qc.invalidateQueries({ queryKey: ["admin_tenants"] });
     } catch (e: any) {
-      showError(`Falha ao criar tenant: ${e?.message ?? "erro"}`);
+      const msg = String(e?.message ?? "erro");
+      if (msg.toLowerCase().includes("row-level security")) {
+        showError(
+          "Sem permissão (RLS). Clique em “Atualizar sessão” ou faça logout/login para aplicar o claim de super-admin."
+        );
+      } else {
+        showError(`Falha ao criar tenant: ${msg}`);
+      }
     } finally {
       setCreatingTenant(false);
     }
@@ -126,6 +158,8 @@ export default function Admin() {
     if (!activeTenantId) return;
     setSavingVendor(true);
     try {
+      await ensureFreshTokenForRls();
+
       const { error } = await supabase.from("vendors").insert({
         tenant_id: activeTenantId,
         phone_e164: vendorPhone.trim(),
@@ -138,7 +172,12 @@ export default function Admin() {
       setVendorName("");
       await qc.invalidateQueries({ queryKey: ["admin_vendors", activeTenantId] });
     } catch (e: any) {
-      showError(`Falha ao cadastrar vendedor: ${e?.message ?? "erro"}`);
+      const msg = String(e?.message ?? "erro");
+      if (msg.toLowerCase().includes("row-level security")) {
+        showError("Sem permissão (RLS). Atualize sessão ou faça logout/login.");
+      } else {
+        showError(`Falha ao cadastrar vendedor: ${msg}`);
+      }
     } finally {
       setSavingVendor(false);
     }
@@ -147,6 +186,8 @@ export default function Admin() {
   const toggleVendor = async (id: string, active: boolean) => {
     if (!activeTenantId) return;
     try {
+      await ensureFreshTokenForRls();
+
       const { error } = await supabase
         .from("vendors")
         .update({ active })
@@ -167,6 +208,8 @@ export default function Admin() {
     if (!activeTenantId) return;
     setSavingLeader(true);
     try {
+      await ensureFreshTokenForRls();
+
       const { error } = await supabase.from("leaders").insert({
         tenant_id: activeTenantId,
         phone_e164: leaderPhone.trim(),
@@ -179,7 +222,12 @@ export default function Admin() {
       setLeaderName("");
       await qc.invalidateQueries({ queryKey: ["admin_leaders", activeTenantId] });
     } catch (e: any) {
-      showError(`Falha ao cadastrar líder: ${e?.message ?? "erro"}`);
+      const msg = String(e?.message ?? "erro");
+      if (msg.toLowerCase().includes("row-level security")) {
+        showError("Sem permissão (RLS). Atualize sessão ou faça logout/login.");
+      } else {
+        showError(`Falha ao cadastrar líder: ${msg}`);
+      }
     } finally {
       setSavingLeader(false);
     }
@@ -188,6 +236,8 @@ export default function Admin() {
   const toggleLeader = async (id: string, active: boolean) => {
     if (!activeTenantId) return;
     try {
+      await ensureFreshTokenForRls();
+
       const { error } = await supabase
         .from("leaders")
         .update({ active })
@@ -211,6 +261,8 @@ export default function Admin() {
     if (!activeTenantId) return;
     setSavingInst(true);
     try {
+      await ensureFreshTokenForRls();
+
       const { error } = await supabase.from("wa_instances").insert({
         tenant_id: activeTenantId,
         name: instName.trim() || "Instância",
@@ -227,7 +279,12 @@ export default function Admin() {
       setInstSecret("");
       await qc.invalidateQueries({ queryKey: ["admin_instances", activeTenantId] });
     } catch (e: any) {
-      showError(`Falha ao cadastrar instância: ${e?.message ?? "erro"}`);
+      const msg = String(e?.message ?? "erro");
+      if (msg.toLowerCase().includes("row-level security")) {
+        showError("Sem permissão (RLS). Atualize sessão ou faça logout/login.");
+      } else {
+        showError(`Falha ao cadastrar instância: ${msg}`);
+      }
     } finally {
       setSavingInst(false);
     }
@@ -256,10 +313,20 @@ export default function Admin() {
                 Gestão do microsaas (super-admin): tenants, pessoas e integrações.
               </p>
             </div>
-            <div className="rounded-2xl border border-slate-200 bg-white/70 px-3 py-2 text-xs text-slate-600 shadow-sm">
-              Tenant ativo: <span className="font-medium text-slate-900">{activeTenant?.name ?? "—"}</span>
-              <span className="text-slate-400"> • </span>
-              <span className="text-slate-500">Troque pelo botão “Trocar”.</span>
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+              <Button
+                variant="secondary"
+                className="h-10 rounded-2xl"
+                onClick={refreshSession}
+                disabled={refreshingSession}
+              >
+                {refreshingSession ? "Atualizando…" : "Atualizar sessão"}
+              </Button>
+              <div className="rounded-2xl border border-slate-200 bg-white/70 px-3 py-2 text-xs text-slate-600 shadow-sm">
+                Tenant ativo: <span className="font-medium text-slate-900">{activeTenant?.name ?? "—"}</span>
+                <span className="text-slate-400"> • </span>
+                <span className="text-slate-500">Troque pelo botão "Trocar".</span>
+              </div>
             </div>
           </div>
 
@@ -349,7 +416,7 @@ export default function Admin() {
               <TabsContent value="people" className="mt-4">
                 {!activeTenantId ? (
                   <div className="rounded-[22px] border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-                    Selecione um tenant (botão “Trocar”) para cadastrar vendedores e líderes.
+                    Selecione um tenant (botão "Trocar") para cadastrar vendedores e líderes.
                   </div>
                 ) : (
                   <div className="grid gap-4 lg:grid-cols-2">
@@ -485,7 +552,7 @@ export default function Admin() {
               <TabsContent value="whatsapp" className="mt-4">
                 {!activeTenantId ? (
                   <div className="rounded-[22px] border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-                    Selecione um tenant (botão “Trocar”) para cadastrar instâncias WhatsApp.
+                    Selecione um tenant (botão "Trocar") para cadastrar instâncias WhatsApp.
                   </div>
                 ) : (
                   <div className="grid gap-4 lg:grid-cols-[0.95fr_1.05fr]">
