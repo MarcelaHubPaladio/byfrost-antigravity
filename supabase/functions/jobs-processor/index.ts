@@ -1,0 +1,465 @@
+import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
+import { corsHeaders } from "../_shared/cors.ts";
+import { createSupabaseAdmin } from "../_shared/supabaseAdmin.ts";
+import { fetchAsBase64 } from "../_shared/crypto.ts";
+
+type JobRow = {
+  id: string;
+  tenant_id: string;
+  type: string;
+  payload_json: any;
+  attempts: number;
+};
+
+function toDigits(s: string) {
+  return (s ?? "").replace(/\D/g, "");
+}
+
+function extractFieldsFromText(text: string) {
+  const cpfMatch = text.match(/\b(\d{3}\.?(\d{3})\.?(\d{3})-?(\d{2}))\b/);
+  const cpf = cpfMatch ? toDigits(cpfMatch[1]) : null;
+
+  const rgMatch = text.match(/\bRG\s*[:\-]?\s*(\d{6,12})\b/i) ?? text.match(/\b(\d{7,10})\b/);
+  const rg = rgMatch ? toDigits(rgMatch[1]) : null;
+
+  const birthMatch = text.match(/\b(\d{2}[\/-]\d{2}[\/-]\d{2,4})\b/);
+  const birth_date_text = birthMatch ? birthMatch[1] : null;
+
+  const phoneMatch = text.match(/\b(\(?\d{2}\)?\s*9?\d{4}[-\s]?\d{4})\b/);
+  const phone_raw = phoneMatch ? phoneMatch[1] : null;
+
+  const totalMatch = text.match(/R\$\s*([0-9\.,]{2,})/);
+  const total_raw = totalMatch ? totalMatch[0] : null;
+
+  const nameMatch = text.match(/\bNome\s*[:\-]\s*(.+)/i);
+  const name = nameMatch ? nameMatch[1].trim().slice(0, 80) : null;
+
+  const signaturePresent = /assinatura/i.test(text);
+
+  // Items (very rough): lines with qty and value
+  const lines = text
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter(Boolean);
+  const itemLines = lines.filter((l) => /\b(\d+[\.,]?\d*)\b/.test(l) && /R\$/.test(l));
+
+  return {
+    name,
+    cpf,
+    rg,
+    birth_date_text,
+    phone_raw,
+    total_raw,
+    signaturePresent,
+    itemLines: itemLines.slice(0, 15),
+  };
+}
+
+async function runOcrGoogleVision(imageUrl: string) {
+  const apiKey = Deno.env.get("GOOGLE_VISION_API_KEY") ?? "";
+  if (!apiKey) return { ok: false as const, error: "Missing GOOGLE_VISION_API_KEY" };
+
+  const content = await fetchAsBase64(imageUrl);
+  const endpoint = `https://vision.googleapis.com/v1/images:annotate?key=${encodeURIComponent(apiKey)}`;
+  const visionReq = {
+    requests: [
+      {
+        image: { content },
+        features: [{ type: "DOCUMENT_TEXT_DETECTION" }],
+      },
+    ],
+  };
+
+  const res = await fetch(endpoint, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(visionReq),
+  });
+
+  const json = await res.json().catch(() => null);
+  if (!res.ok || !json) {
+    return { ok: false as const, error: `Vision API error: ${res.status}`, raw: json };
+  }
+
+  const annotation = json?.responses?.[0]?.fullTextAnnotation;
+  const text = annotation?.text ?? "";
+
+  return { ok: true as const, text, raw: json?.responses?.[0] ?? json };
+}
+
+serve(async (req) => {
+  const fn = "jobs-processor";
+  try {
+    if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+    if (req.method !== "POST") return new Response("Method not allowed", { status: 405, headers: corsHeaders });
+
+    const supabase = createSupabaseAdmin();
+
+    const batchSize = 10;
+
+    // Fetch pending jobs
+    const { data: jobs, error: jobsErr } = await supabase
+      .from("job_queue")
+      .select("id, tenant_id, type, payload_json, attempts")
+      .eq("status", "pending")
+      .lte("run_after", new Date().toISOString())
+      .is("locked_at", null)
+      .order("created_at", { ascending: true })
+      .limit(batchSize);
+
+    if (jobsErr) {
+      console.error(`[${fn}] Failed to read jobs`, { jobsErr });
+      return new Response("Failed to read jobs", { status: 500, headers: corsHeaders });
+    }
+
+    const lockedBy = crypto.randomUUID();
+
+    // Lock jobs
+    const locked: JobRow[] = [];
+    for (const job of (jobs ?? []) as any[]) {
+      const { data: updated } = await supabase
+        .from("job_queue")
+        .update({ status: "processing", locked_at: new Date().toISOString(), locked_by: lockedBy })
+        .eq("id", job.id)
+        .eq("status", "pending")
+        .select("id, tenant_id, type, payload_json, attempts")
+        .maybeSingle();
+      if (updated) locked.push(updated as any);
+    }
+
+    const { data: agents } = await supabase.from("agents").select("id, key");
+    const agentIdByKey = new Map<string, string>();
+    for (const a of agents ?? []) agentIdByKey.set(a.key, a.id);
+
+    const results: any[] = [];
+
+    for (const job of locked) {
+      try {
+        const tenantId = job.tenant_id;
+        const caseId = job.payload_json?.case_id as string | undefined;
+        if (!caseId) throw new Error("Missing payload.case_id");
+
+        if (job.type === "OCR_IMAGE") {
+          const { data: att } = await supabase
+            .from("case_attachments")
+            .select("storage_path")
+            .eq("tenant_id", tenantId)
+            .eq("case_id", caseId)
+            .eq("kind", "image")
+            .order("created_at", { ascending: false })
+            .limit(1)
+            .maybeSingle();
+
+          const imageUrl = att?.storage_path as string | undefined;
+          if (!imageUrl) throw new Error("Missing image attachment");
+
+          const ocr = await runOcrGoogleVision(imageUrl);
+          if (!ocr.ok) {
+            await supabase.from("decision_logs").insert({
+              tenant_id: tenantId,
+              case_id: caseId,
+              agent_id: agentIdByKey.get("ocr_agent") ?? null,
+              input_summary: "OCR_IMAGE",
+              output_summary: "Falha no OCR",
+              reasoning_public: "Não foi possível executar OCR com o provedor configurado.",
+              why_json: { error: ocr.error },
+              confidence_json: { overall: 0 },
+              occurred_at: new Date().toISOString(),
+            });
+            // Keep job as failed
+            await supabase.from("job_queue").update({ status: "failed", attempts: job.attempts + 1 }).eq("id", job.id);
+            results.push({ id: job.id, ok: false, error: ocr.error });
+            continue;
+          }
+
+          await supabase.from("case_fields").upsert({
+            tenant_id: tenantId,
+            case_id: caseId,
+            key: "ocr_text",
+            value_text: ocr.text,
+            confidence: 0.85,
+            source: "ocr",
+            last_updated_by: "ocr_agent",
+          });
+
+          await supabase.from("timeline_events").insert({
+            tenant_id: tenantId,
+            case_id: caseId,
+            event_type: "ocr_done",
+            actor_type: "ai",
+            message: "OCR concluído. Extraindo campos…",
+            meta_json: {},
+            occurred_at: new Date().toISOString(),
+          });
+
+          await supabase.from("decision_logs").insert({
+            tenant_id: tenantId,
+            case_id: caseId,
+            agent_id: agentIdByKey.get("ocr_agent") ?? null,
+            input_summary: "Imagem do pedido",
+            output_summary: `Texto OCR com ${ocr.text.length} caracteres`,
+            reasoning_public: "Extraímos o texto do pedido para iniciar a extração estruturada de campos.",
+            why_json: { provider: "google_vision" },
+            confidence_json: { overall: 0.85 },
+            occurred_at: new Date().toISOString(),
+          });
+
+          await supabase.from("job_queue").update({ status: "done" }).eq("id", job.id);
+
+          // enqueue extraction/validation
+          await supabase.from("job_queue").insert({
+            tenant_id: tenantId,
+            type: "EXTRACT_FIELDS",
+            idempotency_key: `EXTRACT_FIELDS:${caseId}:${Date.now()}`,
+            payload_json: { case_id: caseId },
+            status: "pending",
+            run_after: new Date().toISOString(),
+          });
+
+          results.push({ id: job.id, ok: true });
+          continue;
+        }
+
+        if (job.type === "EXTRACT_FIELDS") {
+          const { data: ocrField } = await supabase
+            .from("case_fields")
+            .select("value_text")
+            .eq("tenant_id", tenantId)
+            .eq("case_id", caseId)
+            .eq("key", "ocr_text")
+            .maybeSingle();
+
+          const text = (ocrField?.value_text as string | null) ?? "";
+          const extracted = extractFieldsFromText(text);
+
+          const upserts: any[] = [];
+          if (extracted.name) upserts.push({ tenant_id: tenantId, case_id: caseId, key: "name", value_text: extracted.name, confidence: 0.7, source: "ocr", last_updated_by: "extract" });
+          if (extracted.cpf) upserts.push({ tenant_id: tenantId, case_id: caseId, key: "cpf", value_text: extracted.cpf, confidence: extracted.cpf.length === 11 ? 0.8 : 0.4, source: "ocr", last_updated_by: "extract" });
+          if (extracted.rg) upserts.push({ tenant_id: tenantId, case_id: caseId, key: "rg", value_text: extracted.rg, confidence: extracted.rg.length >= 7 ? 0.7 : 0.4, source: "ocr", last_updated_by: "extract" });
+          if (extracted.birth_date_text) upserts.push({ tenant_id: tenantId, case_id: caseId, key: "birth_date_text", value_text: extracted.birth_date_text, confidence: 0.65, source: "ocr", last_updated_by: "extract" });
+          if (extracted.phone_raw) upserts.push({ tenant_id: tenantId, case_id: caseId, key: "phone", value_text: extracted.phone_raw, confidence: 0.65, source: "ocr", last_updated_by: "extract" });
+          if (extracted.total_raw) upserts.push({ tenant_id: tenantId, case_id: caseId, key: "total_raw", value_text: extracted.total_raw, confidence: 0.6, source: "ocr", last_updated_by: "extract" });
+          upserts.push({ tenant_id: tenantId, case_id: caseId, key: "signature_present", value_text: extracted.signaturePresent ? "yes" : "no", confidence: 0.5, source: "ocr", last_updated_by: "extract" });
+
+          if (upserts.length) await supabase.from("case_fields").upsert(upserts);
+
+          await supabase.from("decision_logs").insert({
+            tenant_id: tenantId,
+            case_id: caseId,
+            agent_id: agentIdByKey.get("validation_agent") ?? null,
+            input_summary: "Texto OCR",
+            output_summary: "Campos iniciais extraídos",
+            reasoning_public: "Extração baseada em padrões (MVP). Se faltar algo, geraremos pendências ao vendedor.",
+            why_json: { extracted_keys: upserts.map((u) => u.key) },
+            confidence_json: { overall: 0.65 },
+            occurred_at: new Date().toISOString(),
+          });
+
+          await supabase.from("job_queue").update({ status: "done" }).eq("id", job.id);
+
+          await supabase.from("job_queue").insert({
+            tenant_id: tenantId,
+            type: "VALIDATE_FIELDS",
+            idempotency_key: `VALIDATE_FIELDS:${caseId}:${Date.now()}`,
+            payload_json: { case_id: caseId },
+            status: "pending",
+            run_after: new Date().toISOString(),
+          });
+
+          results.push({ id: job.id, ok: true });
+          continue;
+        }
+
+        if (job.type === "VALIDATE_FIELDS") {
+          const { data: fields } = await supabase
+            .from("case_fields")
+            .select("key, value_text, value_json")
+            .eq("tenant_id", tenantId)
+            .eq("case_id", caseId);
+
+          const fieldMap = new Map<string, any>();
+          for (const f of fields ?? []) fieldMap.set(f.key, f.value_text ?? f.value_json);
+
+          const missing: Array<{ type: string; question: string; required: boolean }> = [];
+
+          const name = fieldMap.get("name");
+          const cpf = fieldMap.get("cpf");
+          const rg = fieldMap.get("rg");
+          const birth = fieldMap.get("birth_date_text");
+          const phone = fieldMap.get("phone");
+          const location = fieldMap.get("location");
+          const signature = fieldMap.get("signature_present");
+          const totalRaw = fieldMap.get("total_raw");
+
+          if (!name) missing.push({ type: "missing_field", question: "Qual é o NOME do cliente no pedido?", required: true });
+          if (!cpf || String(cpf).length < 11) missing.push({ type: "missing_field", question: "Envie o CPF (somente números).", required: true });
+          if (!rg || String(rg).length < 7) missing.push({ type: "missing_field", question: "Envie o RG (somente números).", required: true });
+          if (!birth) missing.push({ type: "missing_field", question: "Qual é a data de nascimento? (dd/mm/aaaa)", required: true });
+          if (!phone) missing.push({ type: "missing_field", question: "Qual é o telefone do cliente? (DDD + número)", required: true });
+
+          if (!location) missing.push({ type: "need_location", question: "Envie sua localização (WhatsApp: Compartilhar localização).", required: true });
+
+          if (signature === "no") {
+            missing.push({ type: "missing_field", question: "O pedido está sem assinatura do cliente. Confirme se há assinatura e, se possível, envie uma foto mais nítida da assinatura.", required: true });
+          }
+
+          if (!totalRaw) {
+            // Não trava, mas avisa líder/admin
+            missing.push({ type: "leader_followup", question: "TOTAL não detectado. Validar manualmente o valor total do pedido.", required: false });
+          }
+
+          // Upsert pendencies (don't duplicate)
+          for (const m of missing) {
+            await supabase.from("pendencies").insert({
+              tenant_id: tenantId,
+              case_id: caseId,
+              type: m.type,
+              assigned_to_role: m.type === "leader_followup" ? "leader" : "vendor",
+              question_text: m.question,
+              required: m.required,
+              status: "open",
+              due_at: new Date(Date.now() + 4 * 60 * 60 * 1000).toISOString(),
+            });
+          }
+
+          const requiredOpen = (missing.filter((m) => m.required && m.type !== "leader_followup").length > 0) as boolean;
+
+          await supabase.from("cases").update({
+            state: requiredOpen ? "pending_vendor" : "ready_for_review",
+            status: requiredOpen ? "in_progress" : "ready",
+          }).eq("id", caseId);
+
+          await supabase.from("decision_logs").insert({
+            tenant_id: tenantId,
+            case_id: caseId,
+            agent_id: agentIdByKey.get("validation_agent") ?? null,
+            input_summary: "Campos extraídos / respostas do vendedor",
+            output_summary: requiredOpen ? "Pendências abertas para o vendedor" : "Pronto para revisão humana",
+            reasoning_public: "O pedido só pode seguir quando os campos obrigatórios e a localização estiverem presentes.",
+            why_json: { missing_required: missing.filter((m) => m.required).map((m) => m.question), missing_optional: missing.filter((m) => !m.required).map((m) => m.question) },
+            confidence_json: { overall: requiredOpen ? 0.55 : 0.75 },
+            occurred_at: new Date().toISOString(),
+          });
+
+          await supabase.from("job_queue").update({ status: "done" }).eq("id", job.id);
+          results.push({ id: job.id, ok: true, requiredOpen });
+          continue;
+        }
+
+        if (job.type === "ASK_PENDENCIES") {
+          // Build a pendency list message
+          const { data: c } = await supabase
+            .from("cases")
+            .select("assigned_vendor_id")
+            .eq("id", caseId)
+            .maybeSingle();
+
+          if (!c?.assigned_vendor_id) throw new Error("Case has no assigned_vendor_id");
+
+          const { data: vendor } = await supabase
+            .from("vendors")
+            .select("phone_e164")
+            .eq("id", c.assigned_vendor_id)
+            .maybeSingle();
+
+          if (!vendor?.phone_e164) throw new Error("Vendor has no phone_e164");
+
+          const { data: pends } = await supabase
+            .from("pendencies")
+            .select("id, question_text, required")
+            .eq("tenant_id", tenantId)
+            .eq("case_id", caseId)
+            .eq("assigned_to_role", "vendor")
+            .eq("status", "open")
+            .order("created_at", { ascending: true });
+
+          if (!pends?.length) {
+            await supabase.from("job_queue").update({ status: "done" }).eq("id", job.id);
+            results.push({ id: job.id, ok: true, note: "no pendencies" });
+            continue;
+          }
+
+          const list = pends
+            .map((p, idx) => `${idx + 1}) ${p.question_text}${p.required ? "" : " (opcional)"}`)
+            .join("\n");
+
+          const msg = `Byfrost.ia — Pendências do pedido:\n\n${list}\n\nVocê pode responder por texto ou áudio (MVP).`;
+
+          const { data: inst } = await supabase
+            .from("wa_instances")
+            .select("id, phone_number")
+            .eq("tenant_id", tenantId)
+            .eq("status", "active")
+            .order("created_at", { ascending: true })
+            .limit(1)
+            .maybeSingle();
+
+          if (inst?.id) {
+            await supabase.from("wa_messages").insert({
+              tenant_id: tenantId,
+              instance_id: inst.id,
+              direction: "outbound",
+              from_phone: inst.phone_number ?? null,
+              to_phone: vendor.phone_e164,
+              type: "text",
+              body_text: msg,
+              payload_json: { kind: "pendency_list", case_id: caseId },
+              correlation_id: `case:${caseId}`,
+              occurred_at: new Date().toISOString(),
+            });
+
+            await supabase.from("usage_events").insert({
+              tenant_id: tenantId,
+              type: "message",
+              qty: 1,
+              ref_type: "wa_message",
+              meta_json: { direction: "outbound", wa_type: "text", kind: "pendency_list" },
+              occurred_at: new Date().toISOString(),
+            });
+          }
+
+          await supabase.from("timeline_events").insert({
+            tenant_id: tenantId,
+            case_id: caseId,
+            event_type: "pendencies_asked",
+            actor_type: "ai",
+            message: "Pendências enviadas ao vendedor (lista).",
+            meta_json: { count: pends.length },
+            occurred_at: new Date().toISOString(),
+          });
+
+          await supabase.from("decision_logs").insert({
+            tenant_id: tenantId,
+            case_id: caseId,
+            agent_id: agentIdByKey.get("comms_agent") ?? null,
+            input_summary: "Pendências abertas",
+            output_summary: "Lista de perguntas preparada e registrada na outbox",
+            reasoning_public: "Mantemos a conversa com o vendedor sempre em formato de lista para reduzir ambiguidades.",
+            why_json: { pendency_count: pends.length },
+            confidence_json: { overall: 0.8 },
+            occurred_at: new Date().toISOString(),
+          });
+
+          await supabase.from("job_queue").update({ status: "done" }).eq("id", job.id);
+          results.push({ id: job.id, ok: true });
+          continue;
+        }
+
+        // Unknown job type
+        await supabase.from("job_queue").update({ status: "failed", attempts: job.attempts + 1 }).eq("id", job.id);
+        results.push({ id: job.id, ok: false, error: `Unknown job type ${job.type}` });
+      } catch (e) {
+        console.error(`[${fn}] Job failed`, { jobId: job.id, e });
+        await supabase.from("job_queue").update({ status: "failed", attempts: job.attempts + 1 }).eq("id", job.id);
+        results.push({ id: job.id, ok: false, error: String(e) });
+      }
+    }
+
+    return new Response(JSON.stringify({ ok: true, processed: results.length, results }), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  } catch (e) {
+    console.error(`[jobs-processor] Unhandled error`, { e });
+    return new Response("Internal error", { status: 500, headers: corsHeaders });
+  }
+});
