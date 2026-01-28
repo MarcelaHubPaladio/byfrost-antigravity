@@ -207,11 +207,12 @@ export default function CaseDetail() {
         const to = extractedCustomerPhone;
         if (!to) throw new Error("Telefone do cliente não encontrado nos campos extraídos.");
 
-        const text = `Olá! Recebemos seu pedido. O vendedor responsável foi avisado: ${vendorName}$${
+        const text = `Olá! Recebemos seu pedido. O vendedor responsável foi avisado: ${vendorName}${
           vendorPhone ? ` (${vendorPhone})` : ""
         }. Precisa de mais algo?`;
 
-        const url = "https://pryoirzeghatrgecwrci.supabase.co/functions/v1/integrations-zapi-send";
+        const url =
+          "https://pryoirzeghatrgecwrci.supabase.co/functions/v1/integrations-zapi-send";
         const { data: sess } = await supabase.auth.getSession();
         const token = sess.session?.access_token;
 
@@ -238,7 +239,8 @@ export default function CaseDetail() {
           event_type: "customer_message_prepared",
           actor_type: "admin",
           actor_id: user?.id ?? null,
-          message: "Mensagem ao cliente preparada/enfileirada (governança: aprovado por humano).",
+          message:
+            "Mensagem ao cliente preparada/enfileirada (governança: aprovado por humano).",
           meta_json: { to },
           occurred_at: new Date().toISOString(),
         });
@@ -280,7 +282,9 @@ export default function CaseDetail() {
                 </Badge>
                 <span className="truncate">
                   {(c?.vendors?.display_name ?? "Vendedor") +
-                    (c?.vendors?.phone_e164 ? ` • ${c?.vendors?.phone_e164}` : "")}
+                    (c?.vendors?.phone_e164
+                      ? ` • ${c?.vendors?.phone_e164}`
+                      : "")}
                 </span>
               </div>
             </div>
@@ -309,7 +313,9 @@ export default function CaseDetail() {
                   <div className="flex items-center gap-2 text-sm font-semibold text-slate-900">
                     <ImageIcon className="h-4 w-4 text-slate-500" /> Anexos
                   </div>
-                  <div className="text-xs text-slate-500">{attachmentsQ.data?.length ?? 0}</div>
+                  <div className="text-xs text-slate-500">
+                    {attachmentsQ.data?.length ?? 0}
+                  </div>
                 </div>
 
                 <div className="mt-3 grid gap-3 sm:grid-cols-2">
@@ -354,13 +360,19 @@ export default function CaseDetail() {
                     .filter((f: any) => f.key !== "ocr_text")
                     .sort((a: any, b: any) => a.key.localeCompare(b.key))
                     .map((f: any) => (
-                      <div key={f.key} className="flex items-start justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2">
+                      <div
+                        key={f.key}
+                        className="flex items-start justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2"
+                      >
                         <div className="min-w-0">
                           <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
                             {f.key}
                           </div>
                           <div className="truncate text-sm font-medium text-slate-900">
-                            {f.value_text ?? (f.value_json ? JSON.stringify(f.value_json) : "—")}
+                            {f.value_text ??
+                              (f.value_json
+                                ? JSON.stringify(f.value_json)
+                                : "—")}
                           </div>
                           <div className="mt-0.5 text-[11px] text-slate-500">
                             fonte: {f.source}
@@ -370,9 +382,11 @@ export default function CaseDetail() {
                       </div>
                     ))}
 
-                  {(fieldsQ.data ?? []).filter((f: any) => f.key !== "ocr_text").length === 0 && (
+                  {(fieldsQ.data ?? []).filter((f: any) => f.key !== "ocr_text")
+                    .length === 0 && (
                     <div className="rounded-2xl border border-dashed border-slate-200 bg-white/60 p-4 text-xs text-slate-500">
-                      Ainda não há campos extraídos. Rode o processor (jobs) ou use o simulador.
+                      Ainda não há campos extraídos. Rode o processor (jobs) ou use o
+                      simulador.
                     </div>
                   )}
                 </div>
@@ -388,12 +402,18 @@ export default function CaseDetail() {
                 </div>
                 <div className="mt-3 space-y-2">
                   {(pendQ.data ?? []).map((p: any) => (
-                    <div key={p.id} className="rounded-2xl border border-slate-200 bg-white px-3 py-2">
+                    <div
+                      key={p.id}
+                      className="rounded-2xl border border-slate-200 bg-white px-3 py-2"
+                    >
                       <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0">
-                          <div className="text-xs font-semibold text-slate-900 truncate">{p.question_text}</div>
+                          <div className="text-xs font-semibold text-slate-900 truncate">
+                            {p.question_text}
+                          </div>
                           <div className="mt-0.5 text-[11px] text-slate-500">
-                            {p.assigned_to_role} • {p.type} • {p.required ? "obrigatória" : "opcional"}
+                            {p.assigned_to_role} • {p.type} •{" "}
+                            {p.required ? "obrigatória" : "opcional"}
                           </div>
                         </div>
                         <Badge
@@ -432,10 +452,17 @@ export default function CaseDetail() {
 
                 <div className="mt-3 space-y-2">
                   {(timelineQ.data ?? []).slice(0, 10).map((e: any) => (
-                    <div key={e.id} className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2">
+                    <div
+                      key={e.id}
+                      className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2"
+                    >
                       <div className="flex items-center justify-between gap-2">
-                        <div className="text-xs font-semibold text-slate-900 truncate">{e.message}</div>
-                        <div className="text-[11px] text-slate-500">{new Date(e.occurred_at).toLocaleString()}</div>
+                        <div className="text-xs font-semibold text-slate-900 truncate">
+                          {e.message}
+                        </div>
+                        <div className="text-[11px] text-slate-500">
+                          {new Date(e.occurred_at).toLocaleString()}
+                        </div>
                       </div>
                       <div className="mt-0.5 text-[11px] text-slate-500">
                         {e.actor_type} • {e.event_type}
@@ -458,7 +485,10 @@ export default function CaseDetail() {
 
                 <div className="mt-3 space-y-2">
                   {(decisionQ.data ?? []).slice(0, 8).map((d: any) => (
-                    <div key={d.id} className="rounded-2xl border border-slate-200 bg-white px-3 py-2">
+                    <div
+                      key={d.id}
+                      className="rounded-2xl border border-slate-200 bg-white px-3 py-2"
+                    >
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
                           <div className="text-xs font-semibold text-slate-900 truncate">
@@ -474,18 +504,24 @@ export default function CaseDetail() {
                       </div>
 
                       {d.reasoning_public && (
-                        <div className="mt-2 text-xs leading-relaxed text-slate-600">{d.reasoning_public}</div>
+                        <div className="mt-2 text-xs leading-relaxed text-slate-600">
+                          {d.reasoning_public}
+                        </div>
                       )}
 
                       <div className="mt-2 grid gap-2 md:grid-cols-2">
                         <div className="rounded-2xl bg-slate-50 p-2">
-                          <div className="text-[11px] font-semibold text-slate-700">why_json</div>
+                          <div className="text-[11px] font-semibold text-slate-700">
+                            why_json
+                          </div>
                           <pre className="mt-1 max-h-24 overflow-auto text-[11px] text-slate-600">
                             {JSON.stringify(d.why_json ?? {}, null, 2)}
                           </pre>
                         </div>
                         <div className="rounded-2xl bg-slate-50 p-2">
-                          <div className="text-[11px] font-semibold text-slate-700">confidence_json</div>
+                          <div className="text-[11px] font-semibold text-slate-700">
+                            confidence_json
+                          </div>
                           <pre className="mt-1 max-h-24 overflow-auto text-[11px] text-slate-600">
                             {JSON.stringify(d.confidence_json ?? {}, null, 2)}
                           </pre>
@@ -506,7 +542,8 @@ export default function CaseDetail() {
 
           <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600">
             <CheckCircle2 className="mr-1 inline h-4 w-4 text-emerald-600" />
-            Ações críticas (aprovação/status) são humanas. A IA registra sugestões, pendências e justificativas.
+            Ações críticas (aprovação/status) são humanas. A IA registra sugestões,
+            pendências e justificativas.
           </div>
         </div>
       </AppShell>

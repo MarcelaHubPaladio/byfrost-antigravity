@@ -1,19 +1,26 @@
-// Update this page (the content is just a fallback if you fail to update the page)
+import { Navigate } from "react-router-dom";
+import { useSession } from "@/providers/SessionProvider";
+import { useTenant } from "@/providers/TenantProvider";
 
-import { MadeWithDyad } from "@/components/made-with-dyad";
+export default function Index() {
+  const { user, loading } = useSession();
+  const { tenants, activeTenantId, loading: tenantsLoading } = useTenant();
 
-const Index = () => {
-  return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-100">
-      <div className="text-center">
-        <h1 className="text-4xl font-bold mb-4">Welcome to Your Blank App</h1>
-        <p className="text-xl text-gray-600">
-          Start building your amazing project here!
-        </p>
+  if (loading || tenantsLoading) {
+    return (
+      <div className="min-h-screen bg-[hsl(var(--byfrost-bg))] flex items-center justify-center">
+        <div className="rounded-2xl bg-white/70 backdrop-blur px-5 py-3 text-sm text-slate-600 shadow-sm border border-slate-200">
+          Carregando…
+        </div>
       </div>
-      <MadeWithDyad />
-    </div>
-  );
-};
+    );
+  }
 
-export default Index;
+  if (!user) return <Navigate to="/login" replace />;
+
+  if (activeTenantId) return <Navigate to="/app" replace />;
+
+  if (tenants.length === 1) return <Navigate to="/app" replace />;
+
+  return <Navigate to="/tenants" replace />;
+}
