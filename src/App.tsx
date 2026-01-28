@@ -15,6 +15,7 @@ import Dashboard from "@/pages/Dashboard";
 import CaseDetail from "@/pages/CaseDetail";
 import Simulator from "@/pages/Simulator";
 import Settings from "@/pages/Settings";
+import Admin from "@/pages/Admin";
 
 const queryClient = new QueryClient();
 
@@ -35,6 +36,7 @@ const App = () => (
               <Route path="/app/cases/:id" element={<CaseDetail />} />
               <Route path="/app/simulator" element={<Simulator />} />
               <Route path="/app/settings" element={<Settings />} />
+              <Route path="/app/admin" element={<Admin />} />
 
               {/* Back-compat */}
               <Route path="/dashboard" element={<Navigate to="/app" replace />} />

@@ -2,6 +2,7 @@ import { PropsWithChildren } from "react";
 import { Link, NavLink, useNavigate } from "react-router-dom";
 import { supabase } from "@/lib/supabase";
 import { useTenant } from "@/providers/TenantProvider";
+import { useSession } from "@/providers/SessionProvider";
 import {
   LayoutGrid,
   FlaskConical,
@@ -9,6 +10,7 @@ import {
   LogOut,
   Search,
   ShieldCheck,
+  Crown,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -41,7 +43,8 @@ function NavIcon({
 
 export function AppShell({ children }: PropsWithChildren) {
   const nav = useNavigate();
-  const { activeTenant } = useTenant();
+  const { activeTenant, isSuperAdmin } = useTenant();
+  const { user } = useSession();
 
   const signOut = async () => {
     await supabase.auth.signOut();
@@ -67,6 +70,7 @@ export function AppShell({ children }: PropsWithChildren) {
             <div className="mt-4 flex flex-col items-center gap-2">
               <NavIcon to="/app" icon={LayoutGrid} label="Dashboard" />
               <NavIcon to="/app/simulator" icon={FlaskConical} label="Simulador" />
+              {isSuperAdmin && <NavIcon to="/app/admin" icon={Crown} label="Admin" />}
               <NavIcon to="/app/settings" icon={Settings} label="Configurações" />
             </div>
 
@@ -89,9 +93,15 @@ export function AppShell({ children }: PropsWithChildren) {
                 <div className="min-w-0">
                   <div className="text-sm font-semibold text-slate-900 truncate">
                     {activeTenant?.name ?? "Byfrost.ia"}
+                    {isSuperAdmin && (
+                      <span className="ml-2 rounded-full bg-[hsl(var(--byfrost-accent)/0.10)] px-2 py-0.5 text-[11px] font-medium text-[hsl(var(--byfrost-accent))]">
+                        super-admin
+                      </span>
+                    )}
                   </div>
                   <div className="text-xs text-slate-500 truncate">
                     Guardião do Negócio • Proativo (somente sugere/alerta) • Governança ativa
+                    {user?.email ? ` • ${user.email}` : ""}
                   </div>
                 </div>
 

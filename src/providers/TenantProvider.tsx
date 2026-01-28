@@ -17,6 +17,7 @@ type TenantState = {
   loading: boolean;
   setActiveTenantId: (id: string) => void;
   refresh: () => Promise<void>;
+  isSuperAdmin: boolean;
 };
 
 const Ctx = createContext<TenantState | null>(null);
@@ -30,6 +31,8 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
     localStorage.getItem(LS_KEY)
   );
   const [loading, setLoading] = useState(true);
+
+  const isSuperAdmin = Boolean((user as any)?.app_metadata?.byfrost_super_admin);
 
   const setActiveTenantId = (id: string) => {
     localStorage.setItem(LS_KEY, id);
@@ -45,6 +48,47 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
     }
 
     setLoading(true);
+
+    // Super-admin can see *all* tenants (via RLS bypass claim).
+    if (isSuperAdmin) {
+      const { data, error } = await supabase
+        .from("tenants")
+        .select("id,name,slug,branding_json")
+        .is("deleted_at", null)
+        .order("created_at", { ascending: false })
+        .limit(500);
+
+      if (error) {
+        console.warn("Failed to load tenants (super-admin)", error);
+        setTenants([]);
+        setLoading(false);
+        return;
+      }
+
+      const mapped: TenantInfo[] = (data ?? []).map((t: any) => ({
+        id: t.id,
+        name: t.name,
+        slug: t.slug,
+        branding_json: t.branding_json ?? {},
+        role: "admin",
+      }));
+
+      setTenants(mapped);
+
+      if (mapped.length === 1) {
+        setActiveTenantId(mapped[0].id);
+      } else if (mapped.length > 1) {
+        if (activeTenantId && !mapped.some((t) => t.id === activeTenantId)) {
+          localStorage.removeItem(LS_KEY);
+          setActiveTenantIdState(null);
+        }
+      }
+
+      setLoading(false);
+      return;
+    }
+
+    // Regular users: tenant list comes from users_profile membership.
     const { data, error } = await supabase
       .from("users_profile")
       .select("tenant_id, role, tenants(id,name,slug,branding_json)")
@@ -86,7 +130,7 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     refresh();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.id]);
+  }, [user?.id, isSuperAdmin]);
 
   const activeTenant = useMemo(
     () => tenants.find((t) => t.id === activeTenantId) ?? null,
@@ -94,8 +138,8 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
   );
 
   const value = useMemo<TenantState>(
-    () => ({ tenants, activeTenantId, activeTenant, loading, setActiveTenantId, refresh }),
-    [tenants, activeTenantId, activeTenant, loading]
+    () => ({ tenants, activeTenantId, activeTenant, loading, setActiveTenantId, refresh, isSuperAdmin }),
+    [tenants, activeTenantId, activeTenant, loading, isSuperAdmin]
   );
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
