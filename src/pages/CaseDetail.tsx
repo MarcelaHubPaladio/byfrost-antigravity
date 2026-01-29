@@ -62,9 +62,12 @@ export default function CaseDetail() {
     queryKey: ["case", activeTenantId, id],
     enabled: Boolean(activeTenantId && id),
     queryFn: async () => {
+      // NOTE: "cases" possui mais de uma FK para "vendors"; precisamos desambiguar o embed.
       const { data, error } = await supabase
         .from("cases")
-        .select("id,tenant_id,title,status,state,created_at,updated_at,assigned_vendor_id,vendors(display_name,phone_e164)")
+        .select(
+          "id,tenant_id,title,status,state,created_at,updated_at,assigned_vendor_id,vendors:vendors!cases_assigned_vendor_id_fkey(display_name,phone_e164)"
+        )
         .eq("tenant_id", activeTenantId!)
         .eq("id", id!)
         .maybeSingle();

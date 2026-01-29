@@ -162,10 +162,11 @@ export default function Dashboard() {
     refetchInterval: 5000,
     refetchOnWindowFocus: true,
     queryFn: async () => {
+      // NOTE: "cases" possui mais de uma FK para "vendors"; precisamos desambiguar o embed.
       const { data, error } = await supabase
         .from("cases")
         .select(
-          "id,journey_id,title,status,state,created_at,updated_at,assigned_vendor_id,vendors(display_name,phone_e164),journeys(key,name),meta_json"
+          "id,journey_id,title,status,state,created_at,updated_at,assigned_vendor_id,vendors:vendors!cases_assigned_vendor_id_fkey(display_name,phone_e164),journeys:journeys!cases_journey_id_fkey(key,name),meta_json"
         )
         .eq("tenant_id", activeTenantId!)
         .is("deleted_at", null)
@@ -290,17 +291,15 @@ export default function Dashboard() {
     });
   }, [filteredRows, states]);
 
-  const shouldShowInvalidJourneyBanner = Boolean(journeyKey) && Boolean(journeyQ.data?.length) && !selectedJourney;
+  const shouldShowInvalidJourneyBanner =
+    Boolean(journeyKey) && Boolean(journeyQ.data?.length) && !selectedJourney;
 
   const tokenLooksSuperAdminUi = Boolean(
     (user as any)?.app_metadata?.byfrost_super_admin || (user as any)?.app_metadata?.super_admin
   );
 
   const mismatch =
-    selectedKey &&
-    debugRpcQ.data &&
-    debugRpcQ.data.cases_total > 0 &&
-    filteredRows.length === 0;
+    selectedKey && debugRpcQ.data && debugRpcQ.data.cases_total > 0 && filteredRows.length === 0;
 
   const refreshToken = async () => {
     setRefreshingToken(true);
