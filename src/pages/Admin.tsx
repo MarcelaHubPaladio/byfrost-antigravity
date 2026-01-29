@@ -12,6 +12,8 @@ import { Badge } from "@/components/ui/badge";
 import { showError, showSuccess } from "@/utils/toast";
 import { cn } from "@/lib/utils";
 import { TenantBrandingPanel } from "@/components/admin/TenantBrandingPanel";
+import { TenantJourneysPanel } from "@/components/admin/TenantJourneysPanel";
+import { JourneyPromptsPanel } from "@/components/admin/JourneyPromptsPanel";
 
 function slugify(s: string) {
   return (s ?? "")
@@ -407,6 +409,8 @@ export default function Admin() {
             <Tabs defaultValue="tenants">
               <TabsList className="rounded-2xl bg-white/70 p-1">
                 <TabsTrigger value="tenants" className="rounded-xl">Tenants</TabsTrigger>
+                <TabsTrigger value="journeys" className="rounded-xl">Jornadas</TabsTrigger>
+                <TabsTrigger value="prompts" className="rounded-xl">Prompts</TabsTrigger>
                 <TabsTrigger value="people" className="rounded-xl">Vendedores & Líderes</TabsTrigger>
                 <TabsTrigger value="whatsapp" className="rounded-xl">WhatsApp</TabsTrigger>
                 <TabsTrigger value="branding" className="rounded-xl">Branding</TabsTrigger>
@@ -512,6 +516,14 @@ export default function Admin() {
                     </div>
                   </div>
                 </div>
+              </TabsContent>
+
+              <TabsContent value="journeys" className="mt-4">
+                <TenantJourneysPanel />
+              </TabsContent>
+
+              <TabsContent value="prompts" className="mt-4">
+                <JourneyPromptsPanel />
               </TabsContent>
 
               <TabsContent value="people" className="mt-4">
