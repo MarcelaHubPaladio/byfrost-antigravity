@@ -66,10 +66,22 @@ function normalizeInbound(payload: any): {
           ? "location"
           : "text";
 
-  const from = normalizePhoneE164Like(
-    pickFirst(payload?.from, payload?.data?.from, payload?.sender?.phone, payload?.phone)
+  // Z-API payloads vary; best-effort: accept chatId (ex: 551199...@c.us) too.
+  const fromRaw = pickFirst(
+    payload?.from,
+    payload?.data?.from,
+    payload?.sender?.phone,
+    payload?.data?.sender?.phone,
+    payload?.phone,
+    payload?.chatId,
+    payload?.data?.chatId,
+    payload?.senderId,
+    payload?.data?.senderId
   );
-  const to = normalizePhoneE164Like(pickFirst(payload?.to, payload?.data?.to));
+  const toRaw = pickFirst(payload?.to, payload?.data?.to, payload?.toPhone, payload?.data?.toPhone);
+
+  const from = normalizePhoneE164Like(fromRaw);
+  const to = normalizePhoneE164Like(toRaw);
 
   const text = pickFirst<string>(
     payload?.text,
@@ -171,6 +183,8 @@ serve(async (req) => {
 
     const supabase = createSupabaseAdmin();
 
+    const correlationId = String(payload?.correlation_id ?? crypto.randomUUID());
+
     const logInbox = async (args: {
       instance?: any;
       ok: boolean;
@@ -207,8 +221,6 @@ serve(async (req) => {
       }
     };
 
-    const correlationId = String(payload?.correlation_id ?? crypto.randomUUID());
-
     const { data: instance, error: instErr } = await supabase
       .from("wa_instances")
       .select("id, tenant_id, webhook_secret, default_journey_id")
@@ -228,32 +240,6 @@ serve(async (req) => {
       console.warn(`[${fn}] Invalid webhook secret`, { hasProvided: Boolean(providedSecret) });
       await logInbox({ instance, ok: false, http_status: 401, reason: "unauthorized" });
       return new Response("Unauthorized", { status: 401, headers: corsHeaders });
-    }
-
-    // Vendor identification (by WhatsApp number)
-    let vendorId: string | null = null;
-    if (normalized.from) {
-      const { data: vendor } = await supabase
-        .from("vendors")
-        .select("id")
-        .eq("tenant_id", instance.tenant_id)
-        .eq("phone_e164", normalized.from)
-        .maybeSingle();
-      if (vendor?.id) vendorId = vendor.id;
-      if (!vendorId) {
-        const { data: createdVendor, error: vErr } = await supabase
-          .from("vendors")
-          .insert({
-            tenant_id: instance.tenant_id,
-            phone_e164: normalized.from,
-            display_name: payload?.senderName ?? payload?.sender?.name ?? null,
-            active: true,
-          })
-          .select("id")
-          .single();
-        if (vErr) console.error(`[${fn}] Failed to create vendor`, { vErr });
-        vendorId = createdVendor?.id ?? null;
-      }
     }
 
     // Journey routing:
@@ -318,6 +304,10 @@ serve(async (req) => {
     const cfgPendenciesOnImage = Boolean(readCfg(cfg, "automation.on_image.create_default_pendencies"));
     const cfgInitialStateOnImage = (readCfg(cfg, "automation.on_image.initial_state") as string | undefined) ?? null;
 
+    // Conversations / vendor rules (panel-configurable)
+    const cfgAutoCreateVendor = (readCfg(cfg, "automation.conversations.auto_create_vendor") as boolean | undefined) ?? true;
+    const cfgRequireVendor = Boolean(readCfg(cfg, "automation.conversations.require_vendor"));
+
     // Default: create case on text unless explicitly disabled.
     const cfgCreateCaseOnText = (readCfg(cfg, "automation.on_text.create_case") as boolean | undefined) ?? true;
     const cfgInitialStateOnText = (readCfg(cfg, "automation.on_text.initial_state") as string | undefined) ?? null;
@@ -326,6 +316,32 @@ serve(async (req) => {
     const cfgInitialStateOnLocation =
       (readCfg(cfg, "automation.on_location.initial_state") as string | undefined) ?? null;
     const cfgLocationNextState = (readCfg(cfg, "automation.on_location.next_state") as string | undefined) ?? null;
+
+    // Vendor identification (by WhatsApp number)
+    let vendorId: string | null = null;
+    if (normalized.from) {
+      const { data: vendor } = await supabase
+        .from("vendors")
+        .select("id")
+        .eq("tenant_id", instance.tenant_id)
+        .eq("phone_e164", normalized.from)
+        .maybeSingle();
+      if (vendor?.id) vendorId = vendor.id;
+      if (!vendorId && cfgAutoCreateVendor) {
+        const { data: createdVendor, error: vErr } = await supabase
+          .from("vendors")
+          .insert({
+            tenant_id: instance.tenant_id,
+            phone_e164: normalized.from,
+            display_name: payload?.senderName ?? payload?.sender?.name ?? null,
+            active: true,
+          })
+          .select("id")
+          .single();
+        if (vErr) console.error(`[${fn}] Failed to create vendor`, { vErr });
+        vendorId = createdVendor?.id ?? null;
+      }
+    }
 
     const enqueueJob = async (type: string, idempotencyKey: string, payloadJson: any) => {
       const { error } = await supabase.from("job_queue").insert({
@@ -342,14 +358,29 @@ serve(async (req) => {
       }
     };
 
-    const findLatestActiveCaseForVendor = async () => {
-      if (!vendorId) return null;
+    const findLatestActiveCase = async () => {
+      // Prefer vendor_id; fallback to phone stored in meta_json.
+      if (vendorId) {
+        const { data } = await supabase
+          .from("cases")
+          .select("id,state,status")
+          .eq("tenant_id", instance.tenant_id)
+          .eq("journey_id", journey!.id)
+          .eq("assigned_vendor_id", vendorId)
+          .is("deleted_at", null)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        return (data as any) ?? null;
+      }
+
+      if (!normalized.from) return null;
       const { data } = await supabase
         .from("cases")
         .select("id,state,status")
         .eq("tenant_id", instance.tenant_id)
         .eq("journey_id", journey!.id)
-        .eq("assigned_vendor_id", vendorId)
+        .eq("meta_json->>vendor_phone", normalized.from)
         .is("deleted_at", null)
         .order("created_at", { ascending: false })
         .limit(1)
@@ -359,7 +390,7 @@ serve(async (req) => {
 
     const ensureCase = async (mode: "image" | "text" | "location") => {
       // Reuse last active case when possible (keeps conversation inside a single case)
-      const existing = await findLatestActiveCaseForVendor();
+      const existing = await findLatestActiveCase();
       if (existing?.id) return { caseId: existing.id as string, created: false as const, skippedReason: null };
 
       if (mode === "text" && !cfgCreateCaseOnText) {
@@ -369,7 +400,14 @@ serve(async (req) => {
         return { caseId: null as any, created: false as const, skippedReason: "create_case_disabled_location" };
       }
 
-      if (!vendorId) return { caseId: null as any, created: false as const, skippedReason: "missing_vendor" };
+      // If we require vendor, enforce it; otherwise allow opening based on phone.
+      if (cfgRequireVendor && !vendorId) {
+        return { caseId: null as any, created: false as const, skippedReason: "missing_vendor_required" };
+      }
+
+      if (!normalized.from) {
+        return { caseId: null as any, created: false as const, skippedReason: "missing_from_phone" };
+      }
 
       const initialHint =
         mode === "image" ? cfgInitialStateOnImage : mode === "location" ? cfgInitialStateOnLocation : cfgInitialStateOnText;
@@ -404,6 +442,7 @@ serve(async (req) => {
             zapi_instance: effectiveInstanceId,
             opened_by: mode,
             vendor_phone: normalized.from,
+            vendor_required: cfgRequireVendor,
           },
         })
         .select("id")
@@ -517,15 +556,14 @@ serve(async (req) => {
         journey_key: journey.key,
         default_journey_id: instance.default_journey_id ?? null,
         create_case_on_text: cfgCreateCaseOnText,
+        require_vendor: cfgRequireVendor,
+        auto_create_vendor: cfgAutoCreateVendor,
+        vendor_id: vendorId,
       },
     });
 
     // Routing
     if (normalized.type === "image") {
-      if (!vendorId) {
-        return new Response("Missing vendor phone", { status: 400, headers: corsHeaders });
-      }
-
       // Attach image to the active case
       if (caseId && normalized.mediaUrl) {
         await supabase.from("case_attachments").insert({
@@ -618,8 +656,8 @@ serve(async (req) => {
     }
 
     if (normalized.type === "location") {
-      if (!vendorId || !normalized.location) {
-        return new Response("Missing vendor or location", { status: 400, headers: corsHeaders });
+      if (!normalized.location) {
+        return new Response("Missing location", { status: 400, headers: corsHeaders });
       }
 
       if (!caseId) {
@@ -671,12 +709,6 @@ serve(async (req) => {
 
     // text/audio
     if (normalized.type === "text" || normalized.type === "audio") {
-      if (!vendorId) {
-        return new Response(JSON.stringify({ ok: true, note: "No vendor" }), {
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-
       if (!caseId) {
         return new Response(JSON.stringify({ ok: true, note: "No open case" }), {
           headers: { ...corsHeaders, "Content-Type": "application/json" },

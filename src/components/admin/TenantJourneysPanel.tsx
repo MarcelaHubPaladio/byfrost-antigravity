@@ -225,6 +225,9 @@ export function TenantJourneysPanel() {
   const createCaseOnText = (configObj as any)?.automation?.on_text?.create_case ?? true;
   const onTextInitialState = (configObj as any)?.automation?.on_text?.initial_state ?? "";
 
+  const convAutoCreateVendor = (configObj as any)?.automation?.conversations?.auto_create_vendor ?? true;
+  const convRequireVendor = Boolean((configObj as any)?.automation?.conversations?.require_vendor);
+
   const createCaseOnLocation = Boolean((configObj as any)?.automation?.on_location?.create_case);
   const onLocationInitialState = (configObj as any)?.automation?.on_location?.initial_state ?? "";
 
@@ -779,17 +782,49 @@ export function TenantJourneysPanel() {
                   </div>
                 </div>
 
-                <div className="mt-3 flex items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2">
-                  <div>
-                    <div className="text-xs font-semibold text-slate-900">Criar case ao receber texto</div>
-                    <div className="mt-0.5 text-[11px] text-slate-600">
-                      Se desligado, textos entram como log em <span className="font-medium">wa_messages</span>, mas não aparecem no Dashboard.
+                <div className="mt-3 grid gap-2">
+                  <div className="flex items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2">
+                    <div>
+                      <div className="text-xs font-semibold text-slate-900">Criar case ao receber texto</div>
+                      <div className="mt-0.5 text-[11px] text-slate-600">
+                        Se desligado, textos entram como log em <span className="font-medium">wa_messages</span>, mas não aparecem no Dashboard.
+                      </div>
                     </div>
+                    <Switch
+                      checked={createCaseOnText}
+                      onCheckedChange={(v) => updateConfig({ automation: { on_text: { create_case: v } } })}
+                    />
                   </div>
-                  <Switch
-                    checked={createCaseOnText}
-                    onCheckedChange={(v) => updateConfig({ automation: { on_text: { create_case: v } } })}
-                  />
+
+                  <div className="flex items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2">
+                    <div>
+                      <div className="text-xs font-semibold text-slate-900">Auto-criar vendedor ao receber mensagem</div>
+                      <div className="mt-0.5 text-[11px] text-slate-600">
+                        Se ligado, o sistema cria um registro em <span className="font-medium">vendors</span> automaticamente quando ainda não existir.
+                      </div>
+                    </div>
+                    <Switch
+                      checked={convAutoCreateVendor}
+                      onCheckedChange={(v) =>
+                        updateConfig({ automation: { conversations: { auto_create_vendor: v } } })
+                      }
+                    />
+                  </div>
+
+                  <div className="flex items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2">
+                    <div>
+                      <div className="text-xs font-semibold text-slate-900">Exigir vendedor identificado para abrir case</div>
+                      <div className="mt-0.5 text-[11px] text-slate-600">
+                        Se ligado, o case só abre quando o número for identificado como vendedor (via cadastro ou auto-criação).
+                      </div>
+                    </div>
+                    <Switch
+                      checked={convRequireVendor}
+                      onCheckedChange={(v) =>
+                        updateConfig({ automation: { conversations: { require_vendor: v } } })
+                      }
+                    />
+                  </div>
                 </div>
 
                 <div className="mt-3">
