@@ -12,7 +12,7 @@ import { Clock, MapPin, RefreshCw, Sparkles } from "lucide-react";
 
 type CaseRow = {
   id: string;
-  journey_id: string;
+  journey_id: string | null;
   title: string | null;
   status: string;
   state: string;
@@ -20,6 +20,7 @@ type CaseRow = {
   updated_at: string;
   assigned_vendor_id: string | null;
   vendors?: { display_name: string | null; phone_e164: string | null } | null;
+  journeys?: { key: string | null; name: string | null } | null;
 };
 
 type JourneyOpt = {
@@ -50,7 +51,6 @@ export default function Dashboard() {
   const journeyQ = useQuery({
     queryKey: ["tenant_journeys_enabled", activeTenantId],
     enabled: Boolean(activeTenantId),
-    // Jornadas mudam pouco; só precisamos revalidar ocasionalmente.
     staleTime: 30_000,
     refetchOnWindowFocus: true,
     queryFn: async () => {
@@ -72,7 +72,6 @@ export default function Dashboard() {
           default_state_machine_json: j.default_state_machine_json ?? {},
         }));
 
-      // keep stable order
       opts.sort((a, b) => a.name.localeCompare(b.name));
       return opts;
     },
@@ -100,16 +99,9 @@ export default function Dashboard() {
 
   useEffect(() => {
     if (!activeTenantId) return;
-    // Quando o reset cria uma jornada nova, URLs antigas (/app?journey=...) ficam inválidas.
-    // Aqui corrigimos automaticamente para a primeira jornada habilitada do tenant.
     if (selectedJourneyId && selectedJourneyIsValid) return;
-    if (!selectedJourneyId && journeyQ.data?.length) {
-      pickFirstJourney();
-      return;
-    }
-    if (selectedJourneyId && !selectedJourneyIsValid && journeyQ.data?.length) {
-      pickFirstJourney();
-    }
+    if (!journeyQ.data?.length) return;
+    pickFirstJourney();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTenantId, journeyQ.data, selectedJourneyId, selectedJourneyIsValid]);
 
@@ -124,37 +116,51 @@ export default function Dashboard() {
     return Array.from(new Set(normalized));
   }, [selectedJourney]);
 
+  // IMPORTANTE: após resets, podem existir jornadas duplicadas (mesma key, ids diferentes).
+  // Para não "sumir" com casos recém-criados, carregamos os casos do tenant e filtramos no client por:
+  // - journey_id (preferencial)
+  // - OU journey key (fallback)
   const casesQ = useQuery({
-    queryKey: ["cases", activeTenantId, selectedJourneyId],
-    enabled: Boolean(activeTenantId && selectedJourneyId),
-    // Webhooks podem criar cases a qualquer momento; manter o board vivo.
+    queryKey: ["cases_by_tenant", activeTenantId],
+    enabled: Boolean(activeTenantId),
     refetchInterval: 5000,
     refetchOnWindowFocus: true,
     queryFn: async () => {
-      const q = supabase
+      const { data, error } = await supabase
         .from("cases")
         .select(
-          "id,journey_id,title,status,state,created_at,updated_at,assigned_vendor_id,vendors(display_name,phone_e164)"
+          "id,journey_id,title,status,state,created_at,updated_at,assigned_vendor_id,vendors(display_name,phone_e164),journeys(key,name)"
         )
         .eq("tenant_id", activeTenantId!)
         .is("deleted_at", null)
         .order("updated_at", { ascending: false })
         .limit(300);
 
-      const { data, error } = await q.eq("journey_id", selectedJourneyId);
-
       if (error) throw error;
       return (data ?? []) as any as CaseRow[];
     },
   });
 
+  const filteredRows = useMemo(() => {
+    const rows = casesQ.data ?? [];
+    if (!selectedJourneyId) return [];
+
+    const key = selectedJourney?.key ?? null;
+
+    return rows.filter((r) => {
+      if (r.journey_id && r.journey_id === selectedJourneyId) return true;
+      if (key && r.journeys?.key && r.journeys.key === key) return true;
+      return false;
+    });
+  }, [casesQ.data, selectedJourneyId, selectedJourney?.key]);
+
   const pendQ = useQuery({
-    queryKey: ["pendencies_open", activeTenantId, casesQ.data?.map((c) => c.id).join(",")],
-    enabled: Boolean(activeTenantId && casesQ.data?.length),
+    queryKey: ["pendencies_open", activeTenantId, filteredRows.map((c) => c.id).join(",")],
+    enabled: Boolean(activeTenantId && filteredRows.length),
     refetchInterval: 7000,
     refetchOnWindowFocus: true,
     queryFn: async () => {
-      const ids = (casesQ.data ?? []).map((c) => c.id);
+      const ids = filteredRows.map((c) => c.id);
       const { data, error } = await supabase
         .from("pendencies")
         .select("case_id,type,status")
@@ -174,26 +180,24 @@ export default function Dashboard() {
     },
   });
 
-  const rows = casesQ.data ?? [];
-
   const columns = useMemo(() => {
-    const baseStates = states.length ? states : Array.from(new Set(rows.map((r) => r.state)));
+    const baseStates = states.length ? states : Array.from(new Set(filteredRows.map((r) => r.state)));
 
     const known = new Set(baseStates);
-    const extras = Array.from(new Set(rows.map((r) => r.state))).filter((s) => !known.has(s));
+    const extras = Array.from(new Set(filteredRows.map((r) => r.state))).filter((s) => !known.has(s));
 
     const all = [...baseStates, ...(extras.length ? ["__other__"] : [])];
 
     return all.map((st) => {
       const items =
-        st === "__other__" ? rows.filter((r) => !known.has(r.state)) : rows.filter((r) => r.state === st);
+        st === "__other__" ? filteredRows.filter((r) => !known.has(r.state)) : filteredRows.filter((r) => r.state === st);
       return {
         key: st,
         label: st === "__other__" ? "Outros" : titleizeState(st),
         items,
       };
     });
-  }, [rows, states]);
+  }, [filteredRows, states]);
 
   const shouldShowInvalidJourneyBanner =
     Boolean(selectedJourneyId) && !selectedJourneyIsValid && Boolean(journeyQ.data?.length);
@@ -272,6 +276,9 @@ export default function Dashboard() {
                 {selectedJourney && (
                   <div className="mt-2 text-[11px] text-slate-500">
                     {selectedJourney.key} • {selectedJourney.id.slice(0, 8)}…
+                    {filteredRows.length === 0 && (casesQ.data?.length ?? 0) > 0 ? (
+                      <span className="text-slate-400"> • 0 casos nesse filtro</span>
+                    ) : null}
                   </div>
                 )}
               </div>
