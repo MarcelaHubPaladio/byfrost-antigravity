@@ -29,6 +29,12 @@ type PromptVersionRow = {
   created_at: string;
 };
 
+type TenantJourneyOpt = {
+  id: string;
+  enabled: boolean;
+  journey: JourneyRow;
+};
+
 export function JourneyPromptsPanel() {
   const qc = useQueryClient();
   const { activeTenantId } = useTenant();
@@ -39,6 +45,7 @@ export function JourneyPromptsPanel() {
 
   const agentsQ = useQuery({
     queryKey: ["agents"],
+    staleTime: 5 * 60_000,
     queryFn: async () => {
       const { data, error } = await supabase.from("agents").select("id,key");
       if (error) throw error;
@@ -50,33 +57,39 @@ export function JourneyPromptsPanel() {
     return agentsQ.data?.find((a) => a.key === PROMPT_AGENT_KEY)?.id ?? null;
   }, [agentsQ.data]);
 
-  const journeysQ = useQuery({
-    queryKey: ["journeys"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("journeys")
-        .select("id,key,name,description")
-        .order("name", { ascending: true });
-      if (error) throw error;
-      return (data ?? []) as JourneyRow[];
-    },
-  });
-
-  const enabledJourneysQ = useQuery({
-    queryKey: ["tenant_journeys_enabled", activeTenantId],
+  // Importante: NÃO carregue o catálogo inteiro de journeys aqui.
+  // A lista pode ser grande e renderizar milhares de <option> pode travar o navegador.
+  // Para prompts, faz sentido listar só as jornadas habilitadas (ou cadastradas) no tenant.
+  const tenantJourneysQ = useQuery({
+    queryKey: ["admin_prompt_tenant_journeys", activeTenantId],
     enabled: Boolean(activeTenantId),
+    staleTime: 30_000,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("tenant_journeys")
-        .select("journey_id,enabled")
+        .select("journey_id,enabled,journeys(id,key,name,description)")
         .eq("tenant_id", activeTenantId!)
-        .is("deleted_at", null)
         .limit(500);
+
       if (error) throw error;
-      const enabled = new Set((data ?? []).filter((r: any) => r.enabled).map((r: any) => r.journey_id));
-      return enabled;
+
+      const opts: TenantJourneyOpt[] = (data ?? [])
+        .map((r: any) => ({
+          id: String(r.journey_id),
+          enabled: Boolean(r.enabled),
+          journey: r.journeys as JourneyRow,
+        }))
+        .filter((r) => Boolean(r.journey?.id));
+
+      opts.sort((a, b) => a.journey.name.localeCompare(b.journey.name));
+      return opts;
     },
   });
+
+  const selectedJourney = useMemo(() => {
+    if (!journeyId) return null;
+    return tenantJourneysQ.data?.find((j) => j.id === journeyId)?.journey ?? null;
+  }, [tenantJourneysQ.data, journeyId]);
 
   const promptVersionsQ = useQuery({
     queryKey: ["prompt_versions", activeTenantId, journeyId, agentId],
@@ -94,10 +107,6 @@ export function JourneyPromptsPanel() {
       return (data ?? []) as PromptVersionRow[];
     },
   });
-
-  const selectedJourney = useMemo(() => {
-    return (journeysQ.data ?? []).find((j) => j.id === journeyId) ?? null;
-  }, [journeysQ.data, journeyId]);
 
   const activeVersion = useMemo(() => {
     return (promptVersionsQ.data ?? []).find((v) => v.is_active) ?? null;
@@ -183,7 +192,7 @@ export function JourneyPromptsPanel() {
       <div className="rounded-[22px] border border-slate-200 bg-white p-4">
         <div className="text-sm font-semibold text-slate-900">Jornada</div>
         <div className="mt-1 text-xs text-slate-500">
-          Selecione uma jornada para editar os prompts versionados (por tenant + jornada).
+          Selecione uma jornada do tenant para editar prompts versionados.
         </div>
 
         <div className="mt-4">
@@ -197,15 +206,24 @@ export function JourneyPromptsPanel() {
             className="mt-1 h-10 w-full rounded-2xl border border-slate-200 bg-white px-3 text-sm text-slate-700 shadow-sm focus:border-[hsl(var(--byfrost-accent)/0.45)] outline-none"
           >
             <option value="">Selecione…</option>
-            {(journeysQ.data ?? []).map((j) => {
-              const enabled = enabledJourneysQ.data?.has(j.id) ?? false;
-              return (
-                <option key={j.id} value={j.id}>
-                  {j.name}{enabled ? "" : " (desabilitada)"}
-                </option>
-              );
-            })}
+            {(tenantJourneysQ.data ?? []).map((j) => (
+              <option key={j.id} value={j.id}>
+                {j.journey.name}{j.enabled ? "" : " (desabilitada)"}
+              </option>
+            ))}
           </select>
+
+          {tenantJourneysQ.isError && (
+            <div className="mt-2 text-xs text-rose-700">
+              Erro ao carregar jornadas do tenant: {(tenantJourneysQ.error as any)?.message ?? ""}
+            </div>
+          )}
+
+          {(tenantJourneysQ.data ?? []).length === 0 && !tenantJourneysQ.isError && (
+            <div className="mt-3 rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-4 text-xs text-slate-600">
+              Nenhuma jornada cadastrada/habilitada para este tenant.
+            </div>
+          )}
         </div>
 
         {selectedJourney && (
@@ -326,6 +344,12 @@ export function JourneyPromptsPanel() {
             {!journeyId && (
               <div className="rounded-2xl border border-dashed border-slate-200 bg-white/60 p-4 text-xs text-slate-500">
                 Selecione uma jornada para ver/criar versões.
+              </div>
+            )}
+
+            {promptVersionsQ.isError && (
+              <div className="rounded-2xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-900">
+                Erro ao carregar versões: {(promptVersionsQ.error as any)?.message ?? ""}
               </div>
             )}
           </div>
