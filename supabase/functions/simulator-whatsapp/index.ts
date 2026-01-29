@@ -25,11 +25,19 @@ function extractFieldsFromText(text: string) {
   return { name, cpf, rg, birth_date_text, phone_raw, total_raw, signaturePresent };
 }
 
-async function runOcrGoogleVision(imageUrl: string) {
+async function runOcrGoogleVision(input: { imageUrl?: string | null; imageBase64?: string | null }) {
   const apiKey = Deno.env.get("GOOGLE_VISION_API_KEY") ?? "";
   if (!apiKey) return { ok: false as const, error: "Missing GOOGLE_VISION_API_KEY" };
 
-  const content = await fetchAsBase64(imageUrl);
+  const imageUrl = input.imageUrl ?? null;
+  const imageBase64 = input.imageBase64 ?? null;
+
+  if (!imageUrl && !imageBase64) {
+    return { ok: false as const, error: "Missing mediaUrl/mediaBase64" };
+  }
+
+  const content = imageBase64 ?? (await fetchAsBase64(imageUrl!));
+
   const endpoint = `https://vision.googleapis.com/v1/images:annotate?key=${encodeURIComponent(apiKey)}`;
   const visionReq = {
     requests: [
@@ -67,6 +75,7 @@ serve(async (req) => {
     const to = normalizePhoneE164Like(body.to);
     const text = (body.text as string | undefined) ?? null;
     const mediaUrl = (body.mediaUrl as string | undefined) ?? null;
+    const mediaBase64 = (body.mediaBase64 as string | undefined) ?? null;
     const location = body.location as { lat: number; lng: number } | undefined;
 
     if (!tenantId || !instanceId || !from) {
@@ -152,6 +161,7 @@ serve(async (req) => {
 
       caseId = createdCase.id;
 
+      // attachment (URL-based) or placeholder (inline base64)
       if (mediaUrl) {
         await supabase.from("case_attachments").insert({
           tenant_id: tenantId,
@@ -159,6 +169,14 @@ serve(async (req) => {
           kind: "image",
           storage_path: mediaUrl,
           meta_json: { source: "simulator" },
+        });
+      } else if (mediaBase64) {
+        await supabase.from("case_attachments").insert({
+          tenant_id: tenantId,
+          case_id: caseId,
+          kind: "image",
+          storage_path: `inline://simulator/${correlationId}`,
+          meta_json: { source: "simulator", inline_base64: true, note: "inline image not stored" },
         });
       }
 
@@ -197,8 +215,8 @@ serve(async (req) => {
       });
 
       // OCR + extraction + validation (inline)
-      if (mediaUrl) {
-        const ocr = await runOcrGoogleVision(mediaUrl);
+      if (mediaUrl || mediaBase64) {
+        const ocr = await runOcrGoogleVision({ imageUrl: mediaUrl, imageBase64: mediaBase64 });
         if (ocr.ok) {
           await supabase.from("case_fields").upsert({ tenant_id: tenantId, case_id: caseId, key: "ocr_text", value_text: ocr.text, confidence: 0.85, source: "ocr", last_updated_by: "ocr_agent" });
           const extracted = extractFieldsFromText(ocr.text);

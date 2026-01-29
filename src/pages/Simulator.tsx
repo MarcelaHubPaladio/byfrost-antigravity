@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { AppShell } from "@/components/AppShell";
 import { RequireAuth } from "@/components/RequireAuth";
 import { useTenant } from "@/providers/TenantProvider";
@@ -10,12 +10,27 @@ import { Textarea } from "@/components/ui/textarea";
 
 const SIM_URL = "https://pryoirzeghatrgecwrci.supabase.co/functions/v1/simulator-whatsapp";
 
+async function fileToBase64(file: File) {
+  const buf = await file.arrayBuffer();
+  let binary = "";
+  const bytes = new Uint8Array(buf);
+  const chunkSize = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    binary += String.fromCharCode(...bytes.slice(i, i + chunkSize));
+  }
+  return btoa(binary);
+}
+
 export default function Simulator() {
   const { activeTenantId } = useTenant();
   const [type, setType] = useState<"image" | "text" | "location">("image");
   const [from, setFrom] = useState("+5511999999999");
   const [to, setTo] = useState("+5511888888888");
-  const [mediaUrl, setMediaUrl] = useState("");
+  const [mediaBase64, setMediaBase64] = useState<string>("");
+  const [mediaPreviewUrl, setMediaPreviewUrl] = useState<string>("");
+  const [readingImage, setReadingImage] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
   const [text, setText] = useState("Última folha");
   const [lat, setLat] = useState("-23.55052");
   const [lng, setLng] = useState("-46.633308");
@@ -23,7 +38,31 @@ export default function Simulator() {
   const [result, setResult] = useState<any>(null);
   const [loading, setLoading] = useState(false);
 
-  const canRun = Boolean(activeTenantId);
+  const canRun = Boolean(activeTenantId) && (type !== "image" || Boolean(mediaBase64));
+
+  const onPickImage = async (file?: File | null) => {
+    if (!file) {
+      setMediaBase64("");
+      setMediaPreviewUrl("");
+      return;
+    }
+
+    setReadingImage(true);
+    try {
+      // preview
+      const url = URL.createObjectURL(file);
+      setMediaPreviewUrl((prev) => {
+        if (prev) URL.revokeObjectURL(prev);
+        return url;
+      });
+
+      // base64 (SEM data: prefix)
+      const b64 = await fileToBase64(file);
+      setMediaBase64(b64);
+    } finally {
+      setReadingImage(false);
+    }
+  };
 
   const run = async () => {
     if (!activeTenantId) return;
@@ -54,7 +93,7 @@ export default function Simulator() {
         from,
         to,
       };
-      if (type === "image") payload.mediaUrl = mediaUrl;
+      if (type === "image") payload.mediaBase64 = mediaBase64;
       if (type === "text") payload.text = text;
       if (type === "location") payload.location = { lat: Number(lat), lng: Number(lng) };
 
@@ -93,7 +132,18 @@ export default function Simulator() {
                 <Label className="text-xs">Tipo</Label>
                 <select
                   value={type}
-                  onChange={(e) => setType(e.target.value as any)}
+                  onChange={(e) => {
+                    const next = e.target.value as any;
+                    setType(next);
+                    if (next !== "image") {
+                      setMediaBase64("");
+                      setMediaPreviewUrl((prev) => {
+                        if (prev) URL.revokeObjectURL(prev);
+                        return "";
+                      });
+                      if (fileInputRef.current) fileInputRef.current.value = "";
+                    }
+                  }}
                   className="mt-1 h-10 w-full rounded-2xl border border-slate-200 bg-white px-3 text-sm text-slate-700 shadow-sm focus:border-[hsl(var(--byfrost-accent)/0.45)] outline-none"
                 >
                   <option value="image">Imagem (pedido)</option>
@@ -125,15 +175,47 @@ export default function Simulator() {
 
               {type === "image" && (
                 <div>
-                  <Label className="text-xs">mediaUrl (URL da imagem do pedido)</Label>
+                  <Label className="text-xs">Imagem do pedido (upload → Base64 para OCR)</Label>
                   <Input
-                    value={mediaUrl}
-                    onChange={(e) => setMediaUrl(e.target.value)}
-                    placeholder="https://..."
-                    className="mt-1 rounded-2xl"
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => onPickImage(e.target.files?.[0] ?? null)}
+                    className="mt-1 rounded-2xl file:rounded-xl file:border-0 file:bg-slate-100 file:px-3 file:py-2 file:text-xs file:font-medium file:text-slate-700"
                   />
+
                   <div className="mt-1 text-xs text-slate-500">
-                    Dica: use uma URL pública. Se GOOGLE_VISION_API_KEY estiver configurada, o simulador tenta OCR.
+                    O simulador envia a imagem em Base64 para a Edge Function e tenta OCR (Google Vision).
+                  </div>
+
+                  <div className="mt-3 grid gap-3 sm:grid-cols-[120px_1fr]">
+                    <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+                      <div className="px-3 py-2 text-[11px] font-semibold text-slate-700">Preview</div>
+                      <div className="p-3">
+                        {mediaPreviewUrl ? (
+                          <img
+                            src={mediaPreviewUrl}
+                            alt="Preview"
+                            className="h-20 w-full rounded-xl border border-slate-200 bg-slate-50 object-cover"
+                          />
+                        ) : (
+                          <div className="grid h-20 place-items-center rounded-xl border border-dashed border-slate-200 bg-slate-50 text-[11px] text-slate-500">
+                            sem imagem
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="rounded-2xl border border-slate-200 bg-white p-3">
+                      <div className="text-[11px] font-semibold text-slate-700">Status</div>
+                      <div className="mt-1 text-xs text-slate-600">
+                        {readingImage
+                          ? "Convertendo para Base64…"
+                          : mediaBase64
+                            ? `Base64 pronto (${Math.round(mediaBase64.length / 1024)} KB)`
+                            : "Selecione uma imagem para habilitar o OCR"}
+                      </div>
+                    </div>
                   </div>
                 </div>
               )}
@@ -159,7 +241,7 @@ export default function Simulator() {
               )}
 
               <Button
-                disabled={!canRun || loading}
+                disabled={!canRun || loading || readingImage}
                 onClick={run}
                 className="h-11 rounded-2xl bg-[hsl(var(--byfrost-accent))] text-white shadow-sm hover:bg-[hsl(var(--byfrost-accent)/0.92)]"
               >
@@ -168,7 +250,7 @@ export default function Simulator() {
 
               {!activeTenantId && (
                 <div className="rounded-2xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
-                  Selecione um tenant antes (menu “Trocar”).
+                  Selecione um tenant antes (menu "Trocar").
                 </div>
               )}
             </div>
