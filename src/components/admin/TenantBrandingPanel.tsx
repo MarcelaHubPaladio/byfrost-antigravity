@@ -32,6 +32,16 @@ async function fileToBase64(file: File) {
   return btoa(binary);
 }
 
+function paletteErrorHint(message: string) {
+  if (message.includes("Missing GOOGLE_VISION_API_KEY")) {
+    return "Verifique o secret GOOGLE_VISION_API_KEY nas Edge Functions.";
+  }
+  if (message.toLowerCase().includes("api key not valid") || message.toLowerCase().includes("api_key_invalid")) {
+    return "A chave do Google Vision está inválida (ou com restrições/billing). Gere uma nova chave e habilite a Vision API.";
+  }
+  return null;
+}
+
 export function TenantBrandingPanel() {
   const qc = useQueryClient();
   const { activeTenantId } = useTenant();
@@ -151,9 +161,9 @@ export function TenantBrandingPanel() {
       await qc.invalidateQueries({ queryKey: ["tenant_branding", activeTenantId] });
       await qc.invalidateQueries({ queryKey: ["tenant_settings", activeTenantId] });
     } catch (e: any) {
-      showError(
-        `Falha ao extrair paleta. Verifique GOOGLE_VISION_API_KEY nos Secrets das Edge Functions. (${e?.message ?? "erro"})`
-      );
+      const msg = String(e?.message ?? "erro");
+      const hint = paletteErrorHint(msg);
+      showError(`Falha ao extrair paleta: ${msg}${hint ? `\n${hint}` : ""}`);
     } finally {
       setExtracting(false);
     }

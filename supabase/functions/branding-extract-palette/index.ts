@@ -46,6 +46,18 @@ async function getImageBase64(input: {
   throw new Error("Provide logoUrl or (bucket + path)");
 }
 
+function extractVisionError(json: any): string | null {
+  // top-level error
+  const top = json?.error?.message;
+  if (typeof top === "string" && top.trim()) return top;
+
+  // per-request error
+  const perReq = json?.responses?.[0]?.error?.message;
+  if (typeof perReq === "string" && perReq.trim()) return perReq;
+
+  return null;
+}
+
 serve(async (req) => {
   const fn = "branding-extract-palette";
   try {
@@ -96,12 +108,26 @@ serve(async (req) => {
     });
 
     const json = await res.json().catch(() => null);
-    if (!res.ok || !json) {
-      console.error(`[${fn}] Vision API error`, { status: res.status, json });
-      return new Response(JSON.stringify({ ok: false, status: res.status, json }), {
-        status: 502,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+
+    const visionErr = extractVisionError(json);
+    if (!res.ok || !json || visionErr) {
+      console.error(`[${fn}] Vision API error`, {
+        upstreamStatus: res.status,
+        visionErr,
+        json,
       });
+
+      return new Response(
+        JSON.stringify({
+          ok: false,
+          error: visionErr ? `Google Vision: ${visionErr}` : "Google Vision request failed",
+          upstreamStatus: res.status,
+        }),
+        {
+          status: 502,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
     }
 
     const colors =
