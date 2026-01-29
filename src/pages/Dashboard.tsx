@@ -82,9 +82,17 @@ export default function Dashboard() {
 
   useEffect(() => {
     if (!activeTenantId) return;
-    if (selectedJourneyId) return;
     const first = journeyQ.data?.[0]?.id;
     if (!first) return;
+
+    // Se o usuário tem um ?journey antigo (ex: reset criou uma jornada nova),
+    // força trocar para a primeira disponível.
+    const selectedIsValid = selectedJourneyId
+      ? Boolean((journeyQ.data ?? []).some((j) => j.id === selectedJourneyId))
+      : false;
+
+    if (selectedJourneyId && selectedIsValid) return;
+
     setSp(
       (prev) => {
         const next = new URLSearchParams(prev);
@@ -94,7 +102,7 @@ export default function Dashboard() {
       { replace: true }
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTenantId, journeyQ.data]);
+  }, [activeTenantId, journeyQ.data, selectedJourneyId]);
 
   const selectedJourney = useMemo(() => {
     if (!selectedJourneyId) return null;
