@@ -11,6 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { showError, showSuccess } from "@/utils/toast";
 import { cn } from "@/lib/utils";
+import { TenantBrandingPanel } from "@/components/admin/TenantBrandingPanel";
 
 function slugify(s: string) {
   return (s ?? "")
@@ -408,6 +409,7 @@ export default function Admin() {
                 <TabsTrigger value="tenants" className="rounded-xl">Tenants</TabsTrigger>
                 <TabsTrigger value="people" className="rounded-xl">Vendedores & Líderes</TabsTrigger>
                 <TabsTrigger value="whatsapp" className="rounded-xl">WhatsApp</TabsTrigger>
+                <TabsTrigger value="branding" className="rounded-xl">Branding</TabsTrigger>
               </TabsList>
 
               <TabsContent value="tenants" className="mt-4">
@@ -757,6 +759,10 @@ export default function Admin() {
                     </div>
                   </div>
                 )}
+              </TabsContent>
+
+              <TabsContent value="branding" className="mt-4">
+                <TenantBrandingPanel />
               </TabsContent>
             </Tabs>
           </div>
