@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { showError, showSuccess } from "@/utils/toast";
 import { cn } from "@/lib/utils";
+import { ArrowDown, ArrowUp, Plus, Trash2 } from "lucide-react";
 
 type SectorRow = {
   id: string;
@@ -38,12 +39,20 @@ type TenantJourneyRow = {
   config_json: any;
 };
 
-function safeJsonParse(s: string) {
-  try {
-    return { ok: true as const, value: JSON.parse(s) };
-  } catch (e: any) {
-    return { ok: false as const, error: e?.message ?? "JSON inválido" };
-  }
+function normalizeStateKey(s: string) {
+  return (s ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, "_")
+    .replace(/[^a-z0-9_\-]/g, "")
+    .slice(0, 48);
+}
+
+function move<T>(arr: T[], from: number, to: number) {
+  const copy = [...arr];
+  const [it] = copy.splice(from, 1);
+  copy.splice(to, 0, it);
+  return copy;
 }
 
 export function TenantJourneysPanel() {
@@ -64,16 +73,23 @@ export function TenantJourneysPanel() {
   const [journeyKey, setJourneyKey] = useState("");
   const [journeyName, setJourneyName] = useState("");
   const [journeyDesc, setJourneyDesc] = useState("");
-  const [journeyStateMachine, setJourneyStateMachine] = useState(
-    JSON.stringify(
-      {
-        states: ["new", "in_progress", "ready_for_review", "confirmed", "finalized"],
-        default: "new",
-      },
-      null,
-      2
-    )
-  );
+
+  // state machine builder (UI)
+  const [stateDraft, setStateDraft] = useState("");
+  const [states, setStates] = useState<string[]>([
+    "new",
+    "in_progress",
+    "ready_for_review",
+    "confirmed",
+    "finalized",
+  ]);
+  const [defaultState, setDefaultState] = useState<string>("new");
+
+  const stateMachineJson = useMemo(() => {
+    const unique = Array.from(new Set(states.map((s) => normalizeStateKey(s)).filter(Boolean)));
+    const def = unique.includes(defaultState) ? defaultState : unique[0] ?? "new";
+    return { states: unique, default: def };
+  }, [states, defaultState]);
 
   const sectorsQ = useQuery({
     queryKey: ["sectors"],
@@ -187,20 +203,21 @@ export function TenantJourneysPanel() {
 
   const createJourney = async () => {
     if (!journeyName.trim() || !journeyKey.trim()) return;
+
+    const uniqueStates = stateMachineJson.states;
+    if (uniqueStates.length < 2) {
+      showError("Adicione ao menos 2 estados (ex.: new, in_progress). ");
+      return;
+    }
+
     setCreatingJourney(true);
     try {
-      const sm = safeJsonParse(journeyStateMachine);
-      if (!sm.ok) {
-        showError(`State machine JSON inválido: ${sm.error}`);
-        return;
-      }
-
       const { error } = await supabase.from("journeys").insert({
         sector_id: journeySectorId || null,
         key: journeyKey.trim(),
         name: journeyName.trim(),
         description: journeyDesc.trim() || null,
-        default_state_machine_json: sm.value,
+        default_state_machine_json: stateMachineJson,
       });
       if (error) throw error;
 
@@ -213,6 +230,23 @@ export function TenantJourneysPanel() {
       showError(`Falha ao criar jornada: ${e?.message ?? "erro"}`);
     } finally {
       setCreatingJourney(false);
+    }
+  };
+
+  const addState = () => {
+    const key = normalizeStateKey(stateDraft);
+    if (!key) return;
+    setStates((prev) => {
+      if (prev.map(normalizeStateKey).includes(key)) return prev;
+      return [...prev, key];
+    });
+    setStateDraft("");
+  };
+
+  const removeState = (s: string) => {
+    setStates((prev) => prev.filter((x) => normalizeStateKey(x) !== normalizeStateKey(s)));
+    if (defaultState === s) {
+      setDefaultState((states[0] ?? "new") as string);
     }
   };
 
@@ -273,9 +307,11 @@ export function TenantJourneysPanel() {
     if (!activeTenantId || !selectedJourneyId) return;
     setSavingConfig(true);
     try {
-      const parsed = safeJsonParse(configDraft);
-      if (!parsed.ok) {
-        showError(`Config JSON inválido: ${parsed.error}`);
+      let parsed: any;
+      try {
+        parsed = JSON.parse(configDraft);
+      } catch (e: any) {
+        showError(`Config JSON inválido: ${e?.message ?? "erro"}`);
         return;
       }
 
@@ -286,13 +322,13 @@ export function TenantJourneysPanel() {
           tenant_id: activeTenantId,
           journey_id: selectedJourneyId,
           enabled: true,
-          config_json: parsed.value,
+          config_json: parsed,
         });
         if (error) throw error;
       } else {
         const { error } = await supabase
           .from("tenant_journeys")
-          .update({ config_json: parsed.value })
+          .update({ config_json: parsed })
           .eq("tenant_id", activeTenantId)
           .eq("id", existing.id);
         if (error) throw error;
@@ -328,11 +364,21 @@ export function TenantJourneysPanel() {
           <div className="mt-4 grid gap-3">
             <div>
               <Label className="text-xs">Nome</Label>
-              <Input value={sectorName} onChange={(e) => setSectorName(e.target.value)} className="mt-1 rounded-2xl" placeholder="Ex: Vendas" />
+              <Input
+                value={sectorName}
+                onChange={(e) => setSectorName(e.target.value)}
+                className="mt-1 rounded-2xl"
+                placeholder="Ex: Vendas"
+              />
             </div>
             <div>
               <Label className="text-xs">Descrição (opcional)</Label>
-              <Input value={sectorDesc} onChange={(e) => setSectorDesc(e.target.value)} className="mt-1 rounded-2xl" placeholder="Ex: Fluxos de captura de pedido" />
+              <Input
+                value={sectorDesc}
+                onChange={(e) => setSectorDesc(e.target.value)}
+                className="mt-1 rounded-2xl"
+                placeholder="Ex: Fluxos de captura de pedido"
+              />
             </div>
             <Button
               onClick={createSector}
@@ -347,7 +393,7 @@ export function TenantJourneysPanel() {
         <div className="rounded-[22px] border border-slate-200 bg-white p-4">
           <div className="text-sm font-semibold text-slate-900">Criar jornada/fluxo (catálogo)</div>
           <div className="mt-1 text-xs text-slate-500">
-            Jornadas são globais. Depois você habilita a jornada para o tenant logo abaixo.
+            Estados são montados pela UI; por baixo, viram JSON em <span className="font-medium">journeys.default_state_machine_json</span>.
           </div>
 
           <div className="mt-4 grid gap-3">
@@ -370,23 +416,135 @@ export function TenantJourneysPanel() {
             <div className="grid gap-3 sm:grid-cols-2">
               <div>
                 <Label className="text-xs">Key (única)</Label>
-                <Input value={journeyKey} onChange={(e) => setJourneyKey(e.target.value)} className="mt-1 rounded-2xl" placeholder="Ex: sales_order" />
+                <Input
+                  value={journeyKey}
+                  onChange={(e) => setJourneyKey(e.target.value)}
+                  className="mt-1 rounded-2xl"
+                  placeholder="Ex: sales_order"
+                />
               </div>
               <div>
                 <Label className="text-xs">Nome</Label>
-                <Input value={journeyName} onChange={(e) => setJourneyName(e.target.value)} className="mt-1 rounded-2xl" placeholder="Ex: Pedido (WhatsApp + Foto)" />
+                <Input
+                  value={journeyName}
+                  onChange={(e) => setJourneyName(e.target.value)}
+                  className="mt-1 rounded-2xl"
+                  placeholder="Ex: Pedido (WhatsApp + Foto)"
+                />
               </div>
             </div>
 
             <div>
               <Label className="text-xs">Descrição (opcional)</Label>
-              <Input value={journeyDesc} onChange={(e) => setJourneyDesc(e.target.value)} className="mt-1 rounded-2xl" placeholder="Ex: Captura por foto com OCR" />
+              <Input
+                value={journeyDesc}
+                onChange={(e) => setJourneyDesc(e.target.value)}
+                className="mt-1 rounded-2xl"
+                placeholder="Ex: Captura por foto com OCR"
+              />
             </div>
 
-            <div>
-              <Label className="text-xs">default_state_machine_json</Label>
-              <Textarea value={journeyStateMachine} onChange={(e) => setJourneyStateMachine(e.target.value)} className="mt-1 min-h-[140px] rounded-2xl bg-white font-mono text-[12px]" />
-              <div className="mt-1 text-[11px] text-slate-500">Precisa ser JSON válido.</div>
+            <div className="rounded-[20px] border border-slate-200 bg-slate-50 p-3">
+              <div className="text-xs font-semibold text-slate-900">Estados do fluxo</div>
+              <div className="mt-1 text-[11px] text-slate-600">
+                Dica: use chaves curtas (ex.: <span className="font-mono">awaiting_ocr</span>). A UI normaliza.
+              </div>
+
+              <div className="mt-3 flex gap-2">
+                <Input
+                  value={stateDraft}
+                  onChange={(e) => setStateDraft(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      addState();
+                    }
+                  }}
+                  className="h-10 flex-1 rounded-2xl bg-white"
+                  placeholder="novo estado (ex: awaiting_location)"
+                />
+                <Button
+                  type="button"
+                  variant="secondary"
+                  className="h-10 rounded-2xl"
+                  onClick={addState}
+                  disabled={!normalizeStateKey(stateDraft)}
+                >
+                  <Plus className="mr-2 h-4 w-4" /> Adicionar
+                </Button>
+              </div>
+
+              <div className="mt-3 space-y-2">
+                {stateMachineJson.states.map((s, idx) => (
+                  <div
+                    key={s}
+                    className={cn(
+                      "flex items-center justify-between gap-2 rounded-2xl border px-3 py-2",
+                      defaultState === s ? "border-emerald-200 bg-emerald-50" : "border-slate-200 bg-white/70"
+                    )}
+                  >
+                    <button
+                      type="button"
+                      className="flex min-w-0 flex-1 items-center gap-2 text-left"
+                      onClick={() => setDefaultState(s)}
+                      title="Definir como estado inicial"
+                    >
+                      <span
+                        className={cn(
+                          "h-2.5 w-2.5 rounded-full",
+                          defaultState === s ? "bg-emerald-600" : "bg-slate-300"
+                        )}
+                      />
+                      <span className="truncate text-sm font-medium text-slate-900">{s}</span>
+                      {defaultState === s && (
+                        <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-900">
+                          inicial
+                        </span>
+                      )}
+                    </button>
+
+                    <div className="flex items-center gap-1">
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        className="h-8 w-8 rounded-xl p-0"
+                        disabled={idx === 0}
+                        onClick={() => setStates((prev) => move(prev, idx, idx - 1))}
+                        title="Subir"
+                      >
+                        <ArrowUp className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        className="h-8 w-8 rounded-xl p-0"
+                        disabled={idx === stateMachineJson.states.length - 1}
+                        onClick={() => setStates((prev) => move(prev, idx, idx + 1))}
+                        title="Descer"
+                      >
+                        <ArrowDown className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        className="h-8 w-8 rounded-xl p-0"
+                        disabled={stateMachineJson.states.length <= 1}
+                        onClick={() => removeState(s)}
+                        title="Remover"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+
+                <div className="rounded-2xl border border-slate-200 bg-white/70 p-2">
+                  <div className="text-[11px] font-semibold text-slate-700">JSON gerado</div>
+                  <pre className="mt-1 max-h-[120px] overflow-auto text-[11px] text-slate-700">
+                    {JSON.stringify(stateMachineJson, null, 2)}
+                  </pre>
+                </div>
+              </div>
             </div>
 
             <Button
