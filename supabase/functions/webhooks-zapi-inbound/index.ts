@@ -171,6 +171,44 @@ serve(async (req) => {
 
     const supabase = createSupabaseAdmin();
 
+    const logInbox = async (args: {
+      instance?: any;
+      ok: boolean;
+      http_status: number;
+      reason?: string | null;
+      case_id?: string | null;
+      journey_id?: string | null;
+      meta?: any;
+    }) => {
+      const inst = args.instance;
+      try {
+        await supabase.from("wa_webhook_inbox").insert({
+          tenant_id: inst?.tenant_id ?? null,
+          instance_id: inst?.id ?? null,
+          zapi_instance_id: effectiveInstanceId,
+          direction: "inbound",
+          wa_type: normalized.type,
+          from_phone: normalized.from,
+          to_phone: normalized.to,
+          ok: args.ok,
+          http_status: args.http_status,
+          reason: args.reason ?? null,
+          payload_json: payload,
+          meta_json: {
+            correlation_id: correlationId,
+            journey_id: args.journey_id ?? null,
+            case_id: args.case_id ?? null,
+            ...((args.meta ?? {}) as any),
+          },
+          received_at: new Date().toISOString(),
+        });
+      } catch (e) {
+        console.error(`[${fn}] Failed to write wa_webhook_inbox`, { e });
+      }
+    };
+
+    const correlationId = String(payload?.correlation_id ?? crypto.randomUUID());
+
     const { data: instance, error: instErr } = await supabase
       .from("wa_instances")
       .select("id, tenant_id, webhook_secret, default_journey_id")
@@ -188,10 +226,9 @@ serve(async (req) => {
 
     if (!providedSecret || providedSecret !== instance.webhook_secret) {
       console.warn(`[${fn}] Invalid webhook secret`, { hasProvided: Boolean(providedSecret) });
+      await logInbox({ instance, ok: false, http_status: 401, reason: "unauthorized" });
       return new Response("Unauthorized", { status: 401, headers: corsHeaders });
     }
-
-    const correlationId = String(payload?.correlation_id ?? crypto.randomUUID());
 
     // Vendor identification (by WhatsApp number)
     let vendorId: string | null = null;
@@ -230,8 +267,14 @@ serve(async (req) => {
         .from("journeys")
         .select("id,key,name,default_state_machine_json")
         .eq("id", instance.default_journey_id)
+        .is("deleted_at", null)
         .maybeSingle();
       if (j?.id) journey = j as any;
+      if (!journey) {
+        console.warn(`[${fn}] Instance default_journey_id not found`, {
+          default_journey_id: instance.default_journey_id,
+        });
+      }
     }
 
     if (!journey) {
@@ -251,12 +294,14 @@ serve(async (req) => {
         .from("journeys")
         .select("id,key,name,default_state_machine_json")
         .eq("key", "sales_order")
+        .is("deleted_at", null)
         .maybeSingle();
       if (j?.id) journey = j as any;
     }
 
     if (!journey) {
       console.error(`[${fn}] No journey available for routing`, { tenantId: instance.tenant_id });
+      await logInbox({ instance, ok: false, http_status: 500, reason: "journey_not_configured" });
       return new Response("Journey not configured", { status: 500, headers: corsHeaders });
     }
 
@@ -306,7 +351,6 @@ serve(async (req) => {
         .eq("journey_id", journey!.id)
         .eq("assigned_vendor_id", vendorId)
         .is("deleted_at", null)
-        .neq("status", "finalized")
         .order("created_at", { ascending: false })
         .limit(1)
         .maybeSingle();
@@ -316,12 +360,16 @@ serve(async (req) => {
     const ensureCase = async (mode: "image" | "text" | "location") => {
       // Reuse last active case when possible (keeps conversation inside a single case)
       const existing = await findLatestActiveCaseForVendor();
-      if (existing?.id) return { caseId: existing.id as string, created: false as const };
+      if (existing?.id) return { caseId: existing.id as string, created: false as const, skippedReason: null };
 
-      if (mode === "text" && !cfgCreateCaseOnText) return { caseId: null as any, created: false as const };
-      if (mode === "location" && !cfgCreateCaseOnLocation) return { caseId: null as any, created: false as const };
+      if (mode === "text" && !cfgCreateCaseOnText) {
+        return { caseId: null as any, created: false as const, skippedReason: "create_case_disabled_text" };
+      }
+      if (mode === "location" && !cfgCreateCaseOnLocation) {
+        return { caseId: null as any, created: false as const, skippedReason: "create_case_disabled_location" };
+      }
 
-      if (!vendorId) return { caseId: null as any, created: false as const };
+      if (!vendorId) return { caseId: null as any, created: false as const, skippedReason: "missing_vendor" };
 
       const initialHint =
         mode === "image" ? cfgInitialStateOnImage : mode === "location" ? cfgInitialStateOnLocation : cfgInitialStateOnText;
@@ -363,7 +411,7 @@ serve(async (req) => {
 
       if (cErr || !createdCase?.id) {
         console.error(`[${fn}] Failed to create case`, { cErr });
-        return { caseId: null as any, created: false as const };
+        return { caseId: null as any, created: false as const, skippedReason: "create_case_failed" };
       }
 
       await supabase.from("timeline_events").insert({
@@ -391,18 +439,26 @@ serve(async (req) => {
         },
       });
 
-      return { caseId: createdCase.id as string, created: true as const };
+      return { caseId: createdCase.id as string, created: true as const, skippedReason: null };
     };
 
     // Decide case for this inbound
     let caseId: string | null = null;
+    let skippedReason: string | null = null;
+
     if (normalized.type === "image") {
-      caseId = (await ensureCase("image")).caseId ?? null;
+      const res = await ensureCase("image");
+      caseId = res.caseId ?? null;
+      skippedReason = (res as any).skippedReason ?? null;
     } else if (normalized.type === "location") {
-      caseId = (await ensureCase("location")).caseId ?? null;
+      const res = await ensureCase("location");
+      caseId = res.caseId ?? null;
+      skippedReason = (res as any).skippedReason ?? null;
     } else {
       // text/audio
-      caseId = (await ensureCase("text")).caseId ?? null;
+      const res = await ensureCase("text");
+      caseId = res.caseId ?? null;
+      skippedReason = (res as any).skippedReason ?? null;
     }
 
     // Write inbound message (always)
@@ -427,6 +483,14 @@ serve(async (req) => {
 
     if (msgErr) {
       console.error(`[${fn}] Failed to insert wa_message`, { msgErr });
+      await logInbox({
+        instance,
+        ok: false,
+        http_status: 500,
+        reason: "wa_message_insert_failed",
+        journey_id: journey.id,
+        case_id: caseId,
+      });
       return new Response("Failed to insert message", { status: 500, headers: corsHeaders });
     }
 
@@ -439,6 +503,21 @@ serve(async (req) => {
       ref_id: insertedMsg?.id ?? null,
       meta_json: { direction: "inbound", wa_type: normalized.type },
       occurred_at: new Date().toISOString(),
+    });
+
+    // Always log inbox for observability
+    await logInbox({
+      instance,
+      ok: true,
+      http_status: 200,
+      reason: skippedReason,
+      journey_id: journey.id,
+      case_id: caseId,
+      meta: {
+        journey_key: journey.key,
+        default_journey_id: instance.default_journey_id ?? null,
+        create_case_on_text: cfgCreateCaseOnText,
+      },
     });
 
     // Routing

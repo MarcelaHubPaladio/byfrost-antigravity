@@ -404,7 +404,7 @@ export default function Admin() {
     queryFn: async () => {
       let q = supabase
         .from("wa_messages")
-        .select("id,instance_id,direction,type,from_phone,to_phone,body_text,media_url,correlation_id,occurred_at")
+        .select("id,instance_id,direction,type,from_phone,to_phone,body_text,media_url,correlation_id,occurred_at,case_id")
         .eq("tenant_id", activeTenantId!)
         .order("occurred_at", { ascending: false })
         .limit(50);
@@ -414,6 +414,51 @@ export default function Admin() {
       const { data, error } = await q;
       if (error) throw error;
       return data ?? [];
+    },
+  });
+
+  const waInboxQ = useQuery({
+    queryKey: ["admin_wa_inbox", activeTenantId, monitorInstanceId],
+    enabled: Boolean(isSuperAdmin && activeTenantId),
+    queryFn: async () => {
+      let q = supabase
+        .from("wa_webhook_inbox")
+        .select("id,instance_id,ok,http_status,reason,wa_type,from_phone,to_phone,meta_json,received_at")
+        .eq("tenant_id", activeTenantId!)
+        .order("received_at", { ascending: false })
+        .limit(50);
+
+      if (monitorInstanceId) q = q.eq("instance_id", monitorInstanceId);
+
+      const { data, error } = await q;
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+
+  const caseIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const m of waRecentQ.data ?? []) if ((m as any).case_id) ids.add(String((m as any).case_id));
+    for (const it of waInboxQ.data ?? []) {
+      const cid = (it as any)?.meta_json?.case_id;
+      if (cid) ids.add(String(cid));
+    }
+    return Array.from(ids);
+  }, [waRecentQ.data, waInboxQ.data]);
+
+  const casesLookupQ = useQuery({
+    queryKey: ["admin_cases_lookup", activeTenantId, caseIds.join(",")],
+    enabled: Boolean(activeTenantId && caseIds.length),
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("cases")
+        .select("id,title,journey_id,journeys(key,name)")
+        .eq("tenant_id", activeTenantId!)
+        .in("id", caseIds);
+      if (error) throw error;
+      const map = new Map<string, any>();
+      for (const c of data ?? []) map.set((c as any).id, c);
+      return map;
     },
   });
 
@@ -909,7 +954,7 @@ export default function Admin() {
                         <div>
                           <div className="text-sm font-semibold text-slate-900">Monitor de eventos (Z-API → Byfrost)</div>
                           <div className="mt-1 text-xs text-slate-600">
-                            Se o webhook estiver chegando, você verá entradas novas em <span className="font-medium">wa_messages</span> aqui.
+                            Se o webhook estiver chegando, você verá entradas novas em <span className="font-medium">wa_messages</span> e em <span className="font-medium">wa_webhook_inbox</span>.
                           </div>
                         </div>
                         <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
@@ -931,88 +976,172 @@ export default function Admin() {
                           <Button
                             variant="secondary"
                             className="h-10 rounded-2xl"
-                            onClick={() => waRecentQ.refetch()}
+                            onClick={() => {
+                              waRecentQ.refetch();
+                              waInboxQ.refetch();
+                            }}
                           >
                             Atualizar
                           </Button>
                         </div>
                       </div>
 
-                      <div className="mt-4 overflow-hidden rounded-[18px] border border-slate-200">
-                        <div className="grid grid-cols-[140px_96px_110px_1fr] gap-0 bg-slate-50 px-3 py-2 text-[11px] font-semibold text-slate-700">
-                          <div>Quando</div>
-                          <div>Direção</div>
-                          <div>Tipo</div>
-                          <div>Resumo</div>
-                        </div>
+                      <div className="mt-4 grid gap-4 lg:grid-cols-2">
+                        <div className="overflow-hidden rounded-[18px] border border-slate-200">
+                          <div className="bg-slate-50 px-3 py-2 text-[11px] font-semibold text-slate-700">
+                            wa_messages (armazenamento)
+                          </div>
+                          <div className="grid grid-cols-[140px_96px_110px_1fr] gap-0 bg-slate-50/60 px-3 py-2 text-[11px] font-semibold text-slate-600">
+                            <div>Quando</div>
+                            <div>Direção</div>
+                            <div>Tipo</div>
+                            <div>Resumo</div>
+                          </div>
 
-                        <div className="divide-y divide-slate-200 bg-white">
-                          {(waRecentQ.data ?? []).map((m: any) => {
-                            const inst = instanceById.get(m.instance_id);
-                            const summary =
-                              m.type === "image"
-                                ? (m.media_url ? `Imagem: ${m.media_url}` : "Imagem")
-                                : m.type === "location"
-                                  ? "Localização"
-                                  : (m.body_text ?? "(sem texto)");
-                            return (
-                              <div
-                                key={m.id}
-                                className="grid grid-cols-[140px_96px_110px_1fr] items-start gap-0 px-3 py-2"
-                              >
-                                <div className="text-[11px] text-slate-600">
-                                  <div className="font-medium text-slate-900">{fmtTs(m.occurred_at)}</div>
-                                  <div className="mt-0.5 text-slate-500 truncate">{inst?.name ?? "—"}</div>
-                                </div>
+                          <div className="divide-y divide-slate-200 bg-white">
+                            {(waRecentQ.data ?? []).map((m: any) => {
+                              const inst = instanceById.get(m.instance_id);
+                              const summary =
+                                m.type === "image"
+                                  ? (m.media_url ? `Imagem: ${m.media_url}` : "Imagem")
+                                  : m.type === "location"
+                                    ? "Localização"
+                                    : (m.body_text ?? "(sem texto)");
 
-                                <div className="pt-0.5">
-                                  <Badge
-                                    className={cn(
-                                      "rounded-full border-0",
-                                      m.direction === "inbound"
-                                        ? "bg-indigo-100 text-indigo-900 hover:bg-indigo-100"
-                                        : "bg-emerald-100 text-emerald-900 hover:bg-emerald-100"
-                                    )}
-                                  >
-                                    {m.direction}
-                                  </Badge>
-                                </div>
+                              const c = m.case_id ? casesLookupQ.data?.get(String(m.case_id)) : null;
+                              const j = (c as any)?.journeys;
 
-                                <div className="pt-0.5">
-                                  <Badge className="rounded-full border-0 bg-slate-100 text-slate-700 hover:bg-slate-100">
-                                    {m.type}
-                                  </Badge>
-                                </div>
+                              return (
+                                <div
+                                  key={m.id}
+                                  className="grid grid-cols-[140px_96px_110px_1fr] items-start gap-0 px-3 py-2"
+                                >
+                                  <div className="text-[11px] text-slate-600">
+                                    <div className="font-medium text-slate-900">{fmtTs(m.occurred_at)}</div>
+                                    <div className="mt-0.5 text-slate-500 truncate">{inst?.name ?? "—"}</div>
+                                  </div>
 
-                                <div className="min-w-0">
-                                  <div className="text-xs text-slate-900 truncate">{summary}</div>
-                                  <div className="mt-0.5 text-[11px] text-slate-500 truncate">
-                                    {m.from_phone ? `de ${m.from_phone}` : ""}
-                                    {m.to_phone ? ` → ${m.to_phone}` : ""}
-                                    {m.correlation_id ? ` • ${m.correlation_id}` : ""}
+                                  <div className="pt-0.5">
+                                    <Badge
+                                      className={cn(
+                                        "rounded-full border-0",
+                                        m.direction === "inbound"
+                                          ? "bg-indigo-100 text-indigo-900 hover:bg-indigo-100"
+                                          : "bg-emerald-100 text-emerald-900 hover:bg-emerald-100"
+                                      )}
+                                    >
+                                      {m.direction}
+                                    </Badge>
+                                  </div>
+
+                                  <div className="pt-0.5">
+                                    <Badge className="rounded-full border-0 bg-slate-100 text-slate-700 hover:bg-slate-100">
+                                      {m.type}
+                                    </Badge>
+                                  </div>
+
+                                  <div className="min-w-0">
+                                    <div className="text-xs text-slate-900 truncate">{summary}</div>
+                                    <div className="mt-0.5 text-[11px] text-slate-500 truncate">
+                                      {m.from_phone ? `de ${m.from_phone}` : ""}
+                                      {m.to_phone ? ` → ${m.to_phone}` : ""}
+                                      {m.case_id ? ` • case ${String(m.case_id).slice(0, 8)}…` : " • sem case"}
+                                      {j?.key ? ` • ${j.key}` : ""}
+                                    </div>
                                   </div>
                                 </div>
+                              );
+                            })}
+
+                            {waRecentQ.isError && (
+                              <div className="px-3 py-3 text-sm text-rose-700">
+                                Erro ao carregar wa_messages: {(waRecentQ.error as any)?.message ?? ""}
                               </div>
-                            );
-                          })}
+                            )}
 
-                          {waRecentQ.isError && (
-                            <div className="px-3 py-3 text-sm text-rose-700">
-                              Erro ao carregar monitor: {(waRecentQ.error as any)?.message ?? ""}
-                            </div>
-                          )}
+                            {(waRecentQ.data ?? []).length === 0 && !waRecentQ.isError && (
+                              <div className="px-3 py-6 text-center text-sm text-slate-500">
+                                Nenhum evento ainda.
+                              </div>
+                            )}
+                          </div>
+                        </div>
 
-                          {(waRecentQ.data ?? []).length === 0 && !waRecentQ.isError && (
-                            <div className="px-3 py-6 text-center text-sm text-slate-500">
-                              Nenhum evento ainda. Se o Z-API estiver apontando para o webhook correto, os registros vão aparecer aqui.
-                            </div>
-                          )}
+                        <div className="overflow-hidden rounded-[18px] border border-slate-200">
+                          <div className="bg-slate-50 px-3 py-2 text-[11px] font-semibold text-slate-700">
+                            wa_webhook_inbox (diagnóstico do roteamento)
+                          </div>
+                          <div className="grid grid-cols-[120px_70px_90px_1fr] gap-0 bg-slate-50/60 px-3 py-2 text-[11px] font-semibold text-slate-600">
+                            <div>Quando</div>
+                            <div>OK</div>
+                            <div>Tipo</div>
+                            <div>Roteamento</div>
+                          </div>
+
+                          <div className="divide-y divide-slate-200 bg-white">
+                            {(waInboxQ.data ?? []).map((it: any) => {
+                              const cid = it?.meta_json?.case_id ? String(it.meta_json.case_id) : "";
+                              const c = cid ? casesLookupQ.data?.get(cid) : null;
+                              const j = (c as any)?.journeys;
+                              const reason = it.reason ? String(it.reason) : "";
+
+                              return (
+                                <div
+                                  key={it.id}
+                                  className="grid grid-cols-[120px_70px_90px_1fr] items-start gap-0 px-3 py-2"
+                                >
+                                  <div className="text-[11px] text-slate-600">
+                                    <div className="font-medium text-slate-900">{fmtTs(it.received_at)}</div>
+                                    <div className="mt-0.5 text-slate-500 truncate">{it.http_status ?? ""}</div>
+                                  </div>
+
+                                  <div className="pt-0.5">
+                                    <Badge
+                                      className={cn(
+                                        "rounded-full border-0",
+                                        it.ok ? "bg-emerald-100 text-emerald-900" : "bg-rose-100 text-rose-900"
+                                      )}
+                                    >
+                                      {it.ok ? "ok" : "fail"}
+                                    </Badge>
+                                  </div>
+
+                                  <div className="pt-0.5">
+                                    <Badge className="rounded-full border-0 bg-slate-100 text-slate-700">
+                                      {it.wa_type ?? "—"}
+                                    </Badge>
+                                  </div>
+
+                                  <div className="min-w-0">
+                                    <div className="text-xs text-slate-900 truncate">
+                                      {cid ? `case ${cid.slice(0, 8)}…` : "sem case"}
+                                      {j?.key ? ` • ${j.key}` : ""}
+                                    </div>
+                                    <div className="mt-0.5 text-[11px] text-slate-500 truncate">
+                                      {reason ? `motivo: ${reason}` : ""}
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            })}
+
+                            {waInboxQ.isError && (
+                              <div className="px-3 py-3 text-sm text-rose-700">
+                                Erro ao carregar wa_webhook_inbox: {(waInboxQ.error as any)?.message ?? ""}
+                              </div>
+                            )}
+
+                            {(waInboxQ.data ?? []).length === 0 && !waInboxQ.isError && (
+                              <div className="px-3 py-6 text-center text-sm text-slate-500">
+                                Nenhum diagnóstico ainda.
+                              </div>
+                            )}
+                          </div>
                         </div>
                       </div>
 
                       <div className="mt-3 rounded-2xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
-                        Dica: se você colou apenas <span className="font-medium">/webhooks-zapi-inbound</span> no Z-API, ele vai retornar 401 porque o Byfrost exige secret.
-                        Use a <span className="font-medium">Webhook URL (sem header/query)</span> da instância acima.
+                        Se aparecer <span className="font-medium">sem case</span> com motivo <span className="font-medium">create_case_disabled_text</span>, habilite em Admin → Jornadas → Automação → "Criar case ao receber texto".
                       </div>
                     </div>
                   </div>
