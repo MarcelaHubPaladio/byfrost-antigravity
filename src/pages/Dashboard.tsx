@@ -32,6 +32,23 @@ type JourneyOpt = {
   default_state_machine_json?: any;
 };
 
+type DebugRpc = {
+  tenant_id: string;
+  journey_key: string;
+  journey_ids: string[];
+  cases_total: number;
+  by_status: Array<{ status: string; qty: number }>;
+  latest: Array<{
+    id: string;
+    status: string;
+    state: string;
+    journey_id: string | null;
+    meta_journey_key: string | null;
+    created_at: string;
+    updated_at: string;
+  }>;
+};
+
 function minutesAgo(iso: string) {
   const diff = Date.now() - new Date(iso).getTime();
   return Math.max(0, Math.round(diff / 60000));
@@ -134,7 +151,7 @@ export default function Dashboard() {
   }, [selectedJourney]);
 
   // Para debug e confiabilidade pós-reset:
-  // - buscamos os casos do tenant
+  // - buscamos os casos do tenant (respeita RLS)
   // - filtramos por key (preferência: journeys.key; fallback: meta_json.journey_key)
   const casesQ = useQuery({
     queryKey: ["cases_by_tenant", activeTenantId],
@@ -183,6 +200,22 @@ export default function Dashboard() {
     }
     return Array.from(m.entries()).sort((a, b) => b[1] - a[1]);
   }, [filteredRows]);
+
+  // Diagnóstico "verdade do banco" (SECURITY DEFINER) — detecta casos mesmo quando o front não enxerga via RLS.
+  const debugRpcQ = useQuery({
+    queryKey: ["debug_cases_for_tenant_journey", activeTenantId, selectedKey],
+    enabled: Boolean(activeTenantId && selectedKey),
+    refetchInterval: 7000,
+    refetchOnWindowFocus: true,
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("debug_cases_for_tenant_journey", {
+        p_tenant_id: activeTenantId!,
+        p_journey_key: selectedKey,
+      });
+      if (error) throw error;
+      return data as any as DebugRpc;
+    },
+  });
 
   const pendQ = useQuery({
     queryKey: ["pendencies_open", activeTenantId, filteredRows.map((c) => c.id).join(",")],
@@ -258,6 +291,7 @@ export default function Dashboard() {
                   journeyQ.refetch();
                   casesQ.refetch();
                   pendQ.refetch();
+                  debugRpcQ.refetch();
                 }}
               >
                 <RefreshCw className="mr-2 h-4 w-4" /> Atualizar
@@ -303,13 +337,29 @@ export default function Dashboard() {
                   <div className="mt-2 text-[11px] text-slate-500">
                     {selectedKey}
                     {selectedJourney?.id ? ` • ${selectedJourney.id.slice(0, 8)}…` : ""}
-                    {(casesQ.data?.length ?? 0) ? ` • tenant: ${casesQ.data?.length ?? 0}` : ""}
-                    {` • nesse fluxo: ${filteredRows.length}`}
-                    {statusCounts.length ? (
+                    {typeof debugRpcQ.data?.cases_total === "number" ? (
                       <span className="text-slate-400">
-                        {" "}• status: {statusCounts.map(([s, n]) => `${s}(${n})`).join(", ")}
+                        {" "}• banco: {debugRpcQ.data.cases_total}
+                        {debugRpcQ.data.by_status?.length
+                          ? ` • ${debugRpcQ.data.by_status
+                              .map((s) => `${s.status}(${s.qty})`)
+                              .join(", ")}`
+                          : ""}
                       </span>
                     ) : null}
+                    {(casesQ.data?.length ?? 0) ? ` • UI(tenant): ${casesQ.data?.length ?? 0}` : ""}
+                    {` • UI(filtro): ${filteredRows.length}`}
+                    {statusCounts.length ? (
+                      <span className="text-slate-400">
+                        {" "}• UI status: {statusCounts.map(([s, n]) => `${s}(${n})`).join(", ")}
+                      </span>
+                    ) : null}
+                  </div>
+                )}
+
+                {debugRpcQ.isError && (
+                  <div className="mt-2 text-[11px] text-rose-700">
+                    Debug banco falhou: {(debugRpcQ.error as any)?.message ?? ""}
                   </div>
                 )}
               </div>
@@ -323,12 +373,13 @@ export default function Dashboard() {
             </div>
           )}
 
-          {selectedKey && (casesQ.data?.length ?? 0) === 0 && !casesQ.isLoading && (
+          {selectedKey && debugRpcQ.data && debugRpcQ.data.cases_total > 0 && filteredRows.length === 0 && (
             <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
-              Nenhum case foi retornado do banco para este tenant.
+              O banco diz que existem <span className="font-semibold">{debugRpcQ.data.cases_total}</span> case(s) nesse
+              fluxo, mas a UI não está enxergando.
               <div className="mt-1 text-xs text-amber-900/80">
-                Se você sabe que existe case no banco, isso geralmente indica <span className="font-semibold">RLS</span>{" "}
-                bloqueando seu usuário (policy em cases = is_panel_user(tenant_id)).
+                Isso quase sempre é <span className="font-semibold">RLS (policies)</span> ou seu usuário não está com
+                o token atualizado para o tenant.
               </div>
             </div>
           )}
