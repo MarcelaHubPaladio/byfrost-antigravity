@@ -68,6 +68,19 @@ function titleizeState(s: string) {
     .join(" ");
 }
 
+function getMetaPhone(meta: any): string | null {
+  if (!meta || typeof meta !== "object") return null;
+  const direct =
+    meta.customer_phone ??
+    meta.customerPhone ??
+    meta.phone ??
+    meta.whatsapp ??
+    meta.to_phone ??
+    meta.toPhone ??
+    null;
+  return typeof direct === "string" && direct.trim() ? direct.trim() : null;
+}
+
 export default function Dashboard() {
   const { activeTenantId } = useTenant();
   const { user } = useSession();
@@ -238,6 +251,49 @@ export default function Dashboard() {
     },
   });
 
+  const caseIdsForLookup = useMemo(() => {
+    if (!isCrm) return [] as string[];
+    return journeyRows.map((r) => r.id);
+  }, [journeyRows, isCrm]);
+
+  const casePhoneQ = useQuery({
+    queryKey: ["crm_case_phone_fallback", activeTenantId, caseIdsForLookup.join(",")],
+    enabled: Boolean(activeTenantId && isCrm && caseIdsForLookup.length),
+    staleTime: 20_000,
+    queryFn: async () => {
+      // Best-effort: tenta pegar um número relacionado ao case na criação (ex: case_fields.phone)
+      const { data, error } = await supabase
+        .from("case_fields")
+        .select("case_id,key,value_text")
+        .eq("tenant_id", activeTenantId!)
+        .in("case_id", caseIdsForLookup)
+        .in("key", ["whatsapp", "phone", "customer_phone"])
+        .limit(2000);
+      if (error) throw error;
+
+      const priority = new Map<string, number>([
+        ["whatsapp", 1],
+        ["customer_phone", 2],
+        ["phone", 3],
+      ]);
+
+      const best = new Map<string, { p: number; v: string }>();
+      for (const r of data ?? []) {
+        const cid = String((r as any).case_id ?? "");
+        const k = String((r as any).key ?? "");
+        const v = String((r as any).value_text ?? "").trim();
+        if (!cid || !v) continue;
+        const p = priority.get(k) ?? 999;
+        const cur = best.get(cid);
+        if (!cur || p < cur.p) best.set(cid, { p, v });
+      }
+
+      const out = new Map<string, string>();
+      for (const [cid, { v }] of best.entries()) out.set(cid, v);
+      return out;
+    },
+  });
+
   // 3) Busca
   const filteredRows = useMemo(() => {
     const qq = q.trim().toLowerCase();
@@ -245,10 +301,12 @@ export default function Dashboard() {
 
     return journeyRows.filter((r) => {
       const cust = isCrm ? customersQ.data?.get(String((r as any).customer_id ?? "")) : null;
-      const t = `${r.title ?? ""} ${(r.vendors?.display_name ?? "")} ${(r.vendors?.phone_e164 ?? "")} ${cust?.name ?? ""} ${cust?.phone_e164 ?? ""} ${cust?.email ?? ""}`.toLowerCase();
+      const metaPhone = getMetaPhone(r.meta_json);
+      const fieldPhone = isCrm ? casePhoneQ.data?.get(r.id) : null;
+      const t = `${r.title ?? ""} ${(r.vendors?.display_name ?? "")} ${(r.vendors?.phone_e164 ?? "")} ${cust?.name ?? ""} ${cust?.phone_e164 ?? ""} ${cust?.email ?? ""} ${metaPhone ?? ""} ${fieldPhone ?? ""}`.toLowerCase();
       return t.includes(qq);
     });
-  }, [journeyRows, q, isCrm, customersQ.data]);
+  }, [journeyRows, q, isCrm, customersQ.data, casePhoneQ.data]);
 
   const statusCounts = useMemo(() => {
     const m = new Map<string, number>();
@@ -630,6 +688,15 @@ export default function Dashboard() {
                         const age = minutesAgo(c.updated_at);
                         const isMoving = movingCaseId === c.id;
                         const cust = isCrm ? customersQ.data?.get(String((c as any).customer_id ?? "")) : null;
+                        const titlePrimary =
+                          isCrm
+                            ? (cust?.name ??
+                              cust?.phone_e164 ??
+                              getMetaPhone((c as any).meta_json) ??
+                              casePhoneQ.data?.get(c.id) ??
+                              c.title ??
+                              "Caso")
+                            : c.title ?? "Caso";
 
                         return (
                           <Link
@@ -651,9 +718,7 @@ export default function Dashboard() {
                           >
                             <div className="flex items-start justify-between gap-3">
                               <div className="min-w-0">
-                                <div className="truncate text-sm font-semibold text-slate-900">
-                                  {c.title ?? "Caso"}
-                                </div>
+                                <div className="truncate text-sm font-semibold text-slate-900">{titlePrimary}</div>
                                 <div className="mt-1 truncate text-xs text-slate-500">
                                   {(c.vendors?.display_name ?? "Vendedor") +
                                     (c.vendors?.phone_e164 ? ` • ${c.vendors.phone_e164}` : "")}
