@@ -241,14 +241,110 @@ serve(async (req) => {
   const fn = "webhooks-zapi-inbound";
   try {
     if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+
+    const { pathInstanceId, pathSecret } = extractPathAuth(req.url);
+    const forced = forceDirectionFromUrl(req.url);
+
+    const supabase = createSupabaseAdmin();
+
+    const lookupInstanceByZapiId = async (zapiInstanceId: string | null) => {
+      if (!zapiInstanceId) return null;
+      const { data, error } = await supabase
+        .from("wa_instances")
+        .select("id, tenant_id, webhook_secret, default_journey_id, phone_number")
+        .eq("zapi_instance_id", zapiInstanceId)
+        .maybeSingle();
+      if (error) {
+        console.error(`[${fn}] Failed to load wa_instance`, { error });
+        return null;
+      }
+      return data as any;
+    };
+
+    const logInboxLite = async (args: {
+      instance: any | null;
+      zapiInstanceId: string | null;
+      ok: boolean;
+      http_status: number;
+      reason: string;
+      direction: WebhookDirection;
+      payload_json?: any;
+      meta_json?: any;
+    }) => {
+      try {
+        await supabase.from("wa_webhook_inbox").insert({
+          tenant_id: args.instance?.tenant_id ?? null,
+          instance_id: args.instance?.id ?? null,
+          zapi_instance_id: args.zapiInstanceId,
+          direction: args.direction,
+          wa_type: null,
+          from_phone: null,
+          to_phone: null,
+          ok: args.ok,
+          http_status: args.http_status,
+          reason: args.reason,
+          payload_json: args.payload_json ?? {},
+          meta_json: args.meta_json ?? {},
+          received_at: new Date().toISOString(),
+        });
+      } catch (e) {
+        console.error(`[${fn}] Failed to write wa_webhook_inbox (lite)`, { e });
+      }
+    };
+
+    // Some providers do a GET to validate the webhook.
+    if (req.method === "GET") {
+      const zapiId = pathInstanceId;
+      const instance = await lookupInstanceByZapiId(zapiId);
+      await logInboxLite({
+        instance,
+        zapiInstanceId: zapiId,
+        ok: true,
+        http_status: 200,
+        reason: "healthcheck_get",
+        direction: forced ?? "inbound",
+        meta_json: { method: "GET", url: req.url, forced_direction: forced ?? null },
+      });
+      return new Response("OK", { headers: corsHeaders });
+    }
+
     if (req.method !== "POST") {
+      const zapiId = pathInstanceId;
+      const instance = await lookupInstanceByZapiId(zapiId);
+      await logInboxLite({
+        instance,
+        zapiInstanceId: zapiId,
+        ok: false,
+        http_status: 405,
+        reason: "method_not_allowed",
+        direction: forced ?? "inbound",
+        meta_json: { method: req.method, url: req.url, forced_direction: forced ?? null },
+      });
       return new Response("Method not allowed", { status: 405, headers: corsHeaders });
     }
 
-    const { pathInstanceId, pathSecret } = extractPathAuth(req.url);
+    // Parse JSON in a robust way (some webhook senders don't set content-type correctly)
+    const rawBody = await req.text().catch(() => "");
+    let payload: any = null;
+    try {
+      payload = rawBody ? JSON.parse(rawBody) : null;
+    } catch {
+      payload = null;
+    }
 
-    const payload = await req.json().catch(() => null);
     if (!payload) {
+      const zapiId = pathInstanceId;
+      const instance = await lookupInstanceByZapiId(zapiId);
+      await logInboxLite({
+        instance,
+        zapiInstanceId: zapiId,
+        ok: false,
+        http_status: 400,
+        reason: "invalid_json",
+        direction: forced ?? "inbound",
+        payload_json: { raw: String(rawBody ?? "").slice(0, 2000) },
+        meta_json: { url: req.url, forced_direction: forced ?? null },
+      });
       return new Response("Invalid JSON", { status: 400, headers: corsHeaders });
     }
 
@@ -257,14 +353,22 @@ serve(async (req) => {
 
     if (!effectiveInstanceId) {
       console.warn(`[${fn}] Missing instance id`, { keys: Object.keys(payload ?? {}) });
+      await logInboxLite({
+        instance: null,
+        zapiInstanceId: null,
+        ok: false,
+        http_status: 400,
+        reason: "missing_instance_id",
+        direction: forced ?? "inbound",
+        payload_json: payload,
+        meta_json: { url: req.url, forced_direction: forced ?? null },
+      });
       return new Response("Missing instanceId", { status: 400, headers: corsHeaders });
     }
 
     const secretHeader = req.headers.get("x-webhook-secret") ?? req.headers.get("x-byfrost-webhook-secret");
     const secretQuery = new URL(req.url).searchParams.get("secret");
     const providedSecret = secretHeader ?? secretQuery ?? pathSecret;
-
-    const supabase = createSupabaseAdmin();
 
     const correlationId = String(payload?.correlation_id ?? normalized.externalMessageId ?? crypto.randomUUID());
 
@@ -306,22 +410,22 @@ serve(async (req) => {
       }
     };
 
-    const { data: instance, error: instErr } = await supabase
-      .from("wa_instances")
-      .select("id, tenant_id, webhook_secret, default_journey_id, phone_number")
-      .eq("zapi_instance_id", effectiveInstanceId)
-      .maybeSingle();
-
-    if (instErr) {
-      console.error(`[${fn}] Failed to load wa_instance`, { instErr });
-      return new Response("Failed to load instance", { status: 500, headers: corsHeaders });
-    }
+    const instance = await lookupInstanceByZapiId(effectiveInstanceId);
 
     if (!instance) {
+      await logInboxLite({
+        instance: null,
+        zapiInstanceId: effectiveInstanceId,
+        ok: false,
+        http_status: 404,
+        reason: "unknown_instance",
+        direction: forced ?? "inbound",
+        payload_json: payload,
+        meta_json: { url: req.url, forced_direction: forced ?? null },
+      });
       return new Response("Unknown instance", { status: 404, headers: corsHeaders });
     }
 
-    const forced = forceDirectionFromUrl(req.url);
     const direction =
       forced ??
       inferDirection({
@@ -338,7 +442,7 @@ serve(async (req) => {
         http_status: 401,
         reason: "unauthorized",
         direction,
-        meta: forced ? { forced_direction: forced } : {},
+        meta: { forced_direction: forced ?? null },
       });
       return new Response("Unauthorized", { status: 401, headers: corsHeaders });
     }
@@ -364,7 +468,7 @@ serve(async (req) => {
           http_status: 400,
           reason: "missing_to_phone",
           direction,
-          meta: forced ? { forced_direction: forced } : {},
+          meta: { forced_direction: forced ?? null },
         });
         return new Response("Missing to", { status: 400, headers: corsHeaders });
       }
@@ -394,7 +498,7 @@ serve(async (req) => {
           http_status: 200,
           reason: "possible_duplicate_ignored",
           direction,
-          meta: { wa_message_id: possibleDup.id, ...(forced ? { forced_direction: forced } : {}) },
+          meta: { wa_message_id: possibleDup.id, forced_direction: forced ?? null },
         });
         return new Response(JSON.stringify({ ok: true, correlation_id: correlationId, duplicate: true }), {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -485,7 +589,7 @@ serve(async (req) => {
           reason: "wa_message_insert_failed",
           direction,
           case_id: caseId,
-          meta: forced ? { forced_direction: forced } : {},
+          meta: { forced_direction: forced ?? null },
         });
         return new Response("Failed to insert message", { status: 500, headers: corsHeaders });
       }
@@ -497,7 +601,7 @@ serve(async (req) => {
         reason: caseId ? null : "outbound_unlinked_no_case",
         direction,
         case_id: caseId,
-        meta: forced ? { forced_direction: forced } : {},
+        meta: { forced_direction: forced ?? null },
       });
 
       return new Response(JSON.stringify({ ok: true, correlation_id: correlationId, case_id: caseId }), {
