@@ -5,6 +5,8 @@ import { normalizePhoneE164Like } from "../_shared/normalize.ts";
 
 type InboundType = "text" | "image" | "audio" | "location";
 
+type WebhookDirection = "inbound" | "outbound";
+
 type JourneyInfo = {
   id: string;
   key: string;
@@ -43,6 +45,7 @@ function normalizeInbound(payload: any): {
   text: string | null;
   mediaUrl: string | null;
   location: { lat: number; lng: number } | null;
+  externalMessageId: string | null;
   raw: any;
 } {
   const zapiInstanceId = pickFirst<string>(payload?.instanceId, payload?.instance_id, payload?.instance);
@@ -119,6 +122,17 @@ function normalizeInbound(payload: any): {
       ? { lat: Number(latRaw), lng: Number(lngRaw) }
       : null;
 
+  // External message id (for dedupe), when present.
+  const externalMessageId =
+    pickFirst<string>(
+      payload?.messageId,
+      payload?.message_id,
+      payload?.data?.messageId,
+      payload?.data?.message_id,
+      payload?.id,
+      payload?.data?.id
+    ) ?? null;
+
   return {
     zapiInstanceId,
     type,
@@ -127,8 +141,47 @@ function normalizeInbound(payload: any): {
     text: text ?? null,
     mediaUrl: mediaUrl ?? null,
     location,
+    externalMessageId,
     raw: payload,
   };
+}
+
+function inferDirection(args: {
+  payload: any;
+  normalized: { from: string | null; to: string | null };
+  instancePhone: string | null;
+}): WebhookDirection {
+  const { payload, normalized, instancePhone } = args;
+
+  // Some providers send explicit flags for messages sent by the connected account.
+  if (payload?.fromMe === true || payload?.data?.fromMe === true) return "outbound";
+  if (payload?.isFromMe === true || payload?.data?.isFromMe === true) return "outbound";
+
+  const rawDirection = String(
+    pickFirst(
+      payload?.direction,
+      payload?.data?.direction,
+      payload?.event,
+      payload?.hookType,
+      payload?.webhookEvent,
+      payload?.action
+    ) ?? ""
+  ).toLowerCase();
+
+  if (rawDirection.includes("out") || rawDirection.includes("sent") || rawDirection.includes("send")) {
+    return "outbound";
+  }
+  if (rawDirection.includes("in") || rawDirection.includes("received") || rawDirection.includes("receive")) {
+    return "inbound";
+  }
+
+  // Heuristic: compare with instance phone.
+  const inst = normalizePhoneE164Like(instancePhone);
+  if (inst && normalized.from && normalized.from === inst) return "outbound";
+  if (inst && normalized.to && normalized.to === inst) return "inbound";
+
+  // Default safe assumption.
+  return "inbound";
 }
 
 function safeStates(j: JourneyInfo | null | undefined) {
@@ -183,7 +236,9 @@ serve(async (req) => {
 
     const supabase = createSupabaseAdmin();
 
-    const correlationId = String(payload?.correlation_id ?? crypto.randomUUID());
+    const correlationId = String(
+      payload?.correlation_id ?? normalized.externalMessageId ?? crypto.randomUUID()
+    );
 
     const logInbox = async (args: {
       instance?: any;
@@ -192,6 +247,7 @@ serve(async (req) => {
       reason?: string | null;
       case_id?: string | null;
       journey_id?: string | null;
+      direction: WebhookDirection;
       meta?: any;
     }) => {
       const inst = args.instance;
@@ -200,7 +256,7 @@ serve(async (req) => {
           tenant_id: inst?.tenant_id ?? null,
           instance_id: inst?.id ?? null,
           zapi_instance_id: effectiveInstanceId,
-          direction: "inbound",
+          direction: args.direction,
           wa_type: normalized.type,
           from_phone: normalized.from,
           to_phone: normalized.to,
@@ -212,6 +268,7 @@ serve(async (req) => {
             correlation_id: correlationId,
             journey_id: args.journey_id ?? null,
             case_id: args.case_id ?? null,
+            external_message_id: normalized.externalMessageId,
             ...((args.meta ?? {}) as any),
           },
           received_at: new Date().toISOString(),
@@ -223,7 +280,7 @@ serve(async (req) => {
 
     const { data: instance, error: instErr } = await supabase
       .from("wa_instances")
-      .select("id, tenant_id, webhook_secret, default_journey_id")
+      .select("id, tenant_id, webhook_secret, default_journey_id, phone_number")
       .eq("zapi_instance_id", effectiveInstanceId)
       .maybeSingle();
 
@@ -236,11 +293,161 @@ serve(async (req) => {
       return new Response("Unknown instance", { status: 404, headers: corsHeaders });
     }
 
+    const direction = inferDirection({
+      payload,
+      normalized: { from: normalized.from, to: normalized.to },
+      instancePhone: instance.phone_number ?? null,
+    });
+
     if (!providedSecret || providedSecret !== instance.webhook_secret) {
       console.warn(`[${fn}] Invalid webhook secret`, { hasProvided: Boolean(providedSecret) });
-      await logInbox({ instance, ok: false, http_status: 401, reason: "unauthorized" });
+      await logInbox({ instance, ok: false, http_status: 401, reason: "unauthorized", direction });
       return new Response("Unauthorized", { status: 401, headers: corsHeaders });
     }
+
+    // Outbound webhook capture (messages sent outside Byfrost):
+    // - We DO NOT create cases here.
+    // - We try to link to the latest existing case by vendor phone or by extracted customer phone.
+    if (direction === "outbound") {
+      const counterpart = normalized.to;
+      if (!counterpart) {
+        await logInbox({
+          instance,
+          ok: false,
+          http_status: 400,
+          reason: "missing_to_phone",
+          direction,
+        });
+        return new Response("Missing to", { status: 400, headers: corsHeaders });
+      }
+
+      // Heuristic dedupe: same message content to same phone within 20s.
+      const { data: possibleDup } = await supabase
+        .from("wa_messages")
+        .select("id")
+        .eq("tenant_id", instance.tenant_id)
+        .eq("instance_id", instance.id)
+        .eq("direction", "outbound")
+        .eq("to_phone", counterpart)
+        .eq("type", normalized.type)
+        .eq("body_text", normalized.text)
+        .gte("occurred_at", new Date(Date.now() - 20_000).toISOString())
+        .order("occurred_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (possibleDup?.id) {
+        await logInbox({
+          instance,
+          ok: true,
+          http_status: 200,
+          reason: "possible_duplicate_ignored",
+          direction,
+          meta: { wa_message_id: possibleDup.id },
+        });
+        return new Response(JSON.stringify({ ok: true, correlation_id: correlationId, duplicate: true }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      // Link to an existing case:
+      // 1) if 'counterpart' is a vendor phone => latest case assigned to this vendor
+      // 2) else, best-effort: last case where extracted 'phone' field matches this number (customer)
+      let caseId: string | null = null;
+
+      const { data: vendor } = await supabase
+        .from("vendors")
+        .select("id")
+        .eq("tenant_id", instance.tenant_id)
+        .eq("phone_e164", counterpart)
+        .maybeSingle();
+
+      if (vendor?.id) {
+        const { data: c } = await supabase
+          .from("cases")
+          .select("id")
+          .eq("tenant_id", instance.tenant_id)
+          .eq("assigned_vendor_id", vendor.id)
+          .is("deleted_at", null)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        caseId = (c as any)?.id ?? null;
+      }
+
+      if (!caseId) {
+        const { data: cByMeta } = await supabase
+          .from("cases")
+          .select("id")
+          .eq("tenant_id", instance.tenant_id)
+          .eq("meta_json->>vendor_phone", counterpart)
+          .is("deleted_at", null)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        caseId = (cByMeta as any)?.id ?? null;
+      }
+
+      if (!caseId) {
+        const digits = counterpart.replace(/\D/g, "");
+        // only attempt if we have a reasonably long number
+        if (digits.length >= 10) {
+          const { data: cf } = await supabase
+            .from("case_fields")
+            .select("case_id,updated_at")
+            .eq("tenant_id", instance.tenant_id)
+            .eq("key", "phone")
+            .ilike("value_text", `%${digits}%`)
+            .order("updated_at", { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          caseId = (cf as any)?.case_id ?? null;
+        }
+      }
+
+      const { error: msgErr } = await supabase.from("wa_messages").insert({
+        tenant_id: instance.tenant_id,
+        instance_id: instance.id,
+        direction: "outbound",
+        from_phone: normalized.from ?? instance.phone_number ?? null,
+        to_phone: counterpart,
+        type: normalized.type,
+        body_text: normalized.text,
+        media_url: normalized.mediaUrl,
+        payload_json: payload,
+        correlation_id: correlationId,
+        occurred_at: new Date().toISOString(),
+        case_id: caseId,
+      });
+
+      if (msgErr) {
+        console.error(`[${fn}] Failed to insert outbound wa_message`, { msgErr });
+        await logInbox({
+          instance,
+          ok: false,
+          http_status: 500,
+          reason: "wa_message_insert_failed",
+          direction,
+          case_id: caseId,
+        });
+        return new Response("Failed to insert message", { status: 500, headers: corsHeaders });
+      }
+
+      await logInbox({
+        instance,
+        ok: true,
+        http_status: 200,
+        reason: caseId ? null : "outbound_unlinked_no_case",
+        direction,
+        case_id: caseId,
+      });
+
+      return new Response(JSON.stringify({ ok: true, correlation_id: correlationId, case_id: caseId }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // -------------------- INBOUND routing below --------------------
 
     // Journey routing:
     // 1) instance.default_journey_id (if set)
@@ -294,7 +501,7 @@ serve(async (req) => {
 
     if (!journey) {
       console.error(`[${fn}] No journey available for routing`, { tenantId: instance.tenant_id });
-      await logInbox({ instance, ok: false, http_status: 500, reason: "journey_not_configured" });
+      await logInbox({ instance, ok: false, http_status: 500, reason: "journey_not_configured", direction });
       return new Response("Journey not configured", { status: 500, headers: corsHeaders });
     }
 
@@ -549,6 +756,7 @@ serve(async (req) => {
         reason: "wa_message_insert_failed",
         journey_id: journey.id,
         case_id: caseId,
+        direction,
       });
       return new Response("Failed to insert message", { status: 500, headers: corsHeaders });
     }
@@ -572,6 +780,7 @@ serve(async (req) => {
       reason: skippedReason,
       journey_id: journey.id,
       case_id: caseId,
+      direction,
       meta: {
         journey_key: journey.key,
         default_journey_id: instance.default_journey_id ?? null,
