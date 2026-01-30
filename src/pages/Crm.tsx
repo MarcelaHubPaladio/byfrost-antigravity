@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { AppShell } from "@/components/AppShell";
 import { RequireAuth } from "@/components/RequireAuth";
 import { useTenant } from "@/providers/TenantProvider";
@@ -9,8 +9,17 @@ import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
 import { showError, showSuccess } from "@/utils/toast";
-import { Clock, MapPin, RefreshCw, Search, UsersRound } from "lucide-react";
+import { Check, Clock, MapPin, RefreshCw, Search, Tags, UsersRound } from "lucide-react";
 
 type CaseRow = {
   id: string;
@@ -34,6 +43,8 @@ type JourneyOpt = {
   is_crm?: boolean;
   default_state_machine_json?: any;
 };
+
+type CaseTagRow = { case_id: string; tag: string };
 
 function minutesAgo(iso: string) {
   const diff = Date.now() - new Date(iso).getTime();
@@ -65,11 +76,12 @@ function getMetaPhone(meta: any): string | null {
 export default function Crm() {
   const { activeTenantId } = useTenant();
   const qc = useQueryClient();
-  const nav = useNavigate();
 
   const [selectedKey, setSelectedKey] = useState<string>("");
   const [q, setQ] = useState("");
   const [movingCaseId, setMovingCaseId] = useState<string | null>(null);
+  const [tagQuery, setTagQuery] = useState("");
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
 
   const crmJourneysQ = useQuery({
     queryKey: ["tenant_crm_journeys_enabled", activeTenantId],
@@ -102,8 +114,12 @@ export default function Crm() {
     },
   });
 
+  // Sem seletor: pegamos o primeiro fluxo CRM habilitado.
   const selectedJourney = useMemo(() => {
-    return (crmJourneysQ.data ?? []).find((j) => j.key === selectedKey) ?? null;
+    const list = crmJourneysQ.data ?? [];
+    if (!list.length) return null;
+    const key = selectedKey || list[0].key;
+    return list.find((j) => j.key === key) ?? list[0];
   }, [crmJourneysQ.data, selectedKey]);
 
   useEffect(() => {
@@ -132,7 +148,7 @@ export default function Crm() {
         .eq("tenant_id", activeTenantId!)
         .is("deleted_at", null)
         .order("updated_at", { ascending: false })
-        .limit(500);
+        .limit(800);
 
       if (error) throw error;
       return (data ?? []) as any as CaseRow[];
@@ -141,16 +157,17 @@ export default function Crm() {
 
   const journeyRows = useMemo(() => {
     const rows = casesQ.data ?? [];
-    if (!selectedKey) return [] as CaseRow[];
+    const key = selectedJourney?.key ?? "";
+    if (!key) return [] as CaseRow[];
 
     return rows.filter((r) => {
       const keyFromJoin = r.journeys?.key ?? null;
       const keyFromMeta = (r.meta_json as any)?.journey_key ?? null;
-      if (keyFromJoin && keyFromJoin === selectedKey) return true;
-      if (keyFromMeta && keyFromMeta === selectedKey) return true;
+      if (keyFromJoin && keyFromJoin === key) return true;
+      if (keyFromMeta && keyFromMeta === key) return true;
       return false;
     });
-  }, [casesQ.data, selectedKey]);
+  }, [casesQ.data, selectedJourney?.key]);
 
   const customerIds = useMemo(() => {
     const ids = new Set<string>();
@@ -219,18 +236,61 @@ export default function Crm() {
     },
   });
 
+  const tagsQ = useQuery({
+    queryKey: ["crm_case_tags", activeTenantId, caseIdsForLookup.join(",")],
+    enabled: Boolean(activeTenantId && caseIdsForLookup.length),
+    staleTime: 15_000,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("case_tags")
+        .select("case_id,tag")
+        .eq("tenant_id", activeTenantId!)
+        .in("case_id", caseIdsForLookup)
+        .limit(4000);
+      if (error) throw error;
+      return (data ?? []) as any as CaseTagRow[];
+    },
+  });
+
+  const tagsByCase = useMemo(() => {
+    const m = new Map<string, string[]>();
+    for (const r of tagsQ.data ?? []) {
+      const cid = String((r as any).case_id ?? "");
+      const t = String((r as any).tag ?? "").trim();
+      if (!cid || !t) continue;
+      const cur = m.get(cid) ?? [];
+      if (!cur.includes(t)) cur.push(t);
+      m.set(cid, cur);
+    }
+    return m;
+  }, [tagsQ.data]);
+
+  const allTags = useMemo(() => {
+    const s = new Set<string>();
+    for (const arr of tagsByCase.values()) for (const t of arr) s.add(t);
+    return Array.from(s).sort((a, b) => a.localeCompare(b));
+  }, [tagsByCase]);
+
   const filteredRows = useMemo(() => {
     const qq = q.trim().toLowerCase();
-    if (!qq) return journeyRows;
+    const tagSel = selectedTags;
 
     return journeyRows.filter((r) => {
+      if (tagSel.length) {
+        const tags = tagsByCase.get(r.id) ?? [];
+        // AND: precisa conter todas
+        if (!tagSel.every((t) => tags.includes(t))) return false;
+      }
+
+      if (!qq) return true;
+
       const cust = customersQ.data?.get(String((r as any).customer_id ?? "")) ?? null;
       const metaPhone = getMetaPhone(r.meta_json);
       const fieldPhone = casePhoneQ.data?.get(r.id) ?? null;
       const t = `${r.title ?? ""} ${(r.vendors?.display_name ?? "")} ${(r.vendors?.phone_e164 ?? "")} ${cust?.name ?? ""} ${cust?.phone_e164 ?? ""} ${cust?.email ?? ""} ${metaPhone ?? ""} ${fieldPhone ?? ""}`.toLowerCase();
       return t.includes(qq);
     });
-  }, [journeyRows, q, customersQ.data, casePhoneQ.data]);
+  }, [journeyRows, q, selectedTags, customersQ.data, casePhoneQ.data, tagsByCase]);
 
   const pendQ = useQuery({
     queryKey: ["crm_pendencies_open", activeTenantId, filteredRows.map((c) => c.id).join(",")],
@@ -305,55 +365,22 @@ export default function Crm() {
     casesQ.refetch();
     customersQ.refetch();
     casePhoneQ.refetch();
+    tagsQ.refetch();
     pendQ.refetch();
   };
+
+  const visibleTags = useMemo(() => {
+    const qq = tagQuery.trim().toLowerCase();
+    const base = allTags;
+    if (!qq) return base;
+    return base.filter((t) => t.toLowerCase().includes(qq));
+  }, [allTags, tagQuery]);
 
   return (
     <RequireAuth>
       <AppShell>
-        <div className="rounded-[28px] border border-slate-200 bg-white/65 p-4 shadow-sm backdrop-blur md:p-5">
-          <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-            <div className="min-w-0">
-              <h2 className="text-lg font-semibold tracking-tight text-slate-900">CRM</h2>
-              <p className="mt-1 text-sm text-slate-600">Pipeline único do CRM para este tenant.</p>
-            </div>
-
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-              <Button variant="secondary" className="h-10 rounded-2xl" onClick={refresh}>
-                <RefreshCw className="mr-2 h-4 w-4" /> Atualizar
-              </Button>
-
-              <div className="rounded-2xl border border-slate-200 bg-white/70 px-3 py-2 shadow-sm">
-                <div className="text-[11px] font-semibold text-slate-700">Fluxo CRM</div>
-                <select
-                  value={selectedKey}
-                  onChange={(e) => setSelectedKey(e.target.value)}
-                  className="mt-1 h-9 w-full min-w-[260px] rounded-xl border border-slate-200 bg-white px-2 text-sm text-slate-800 outline-none focus:border-[hsl(var(--byfrost-accent)/0.45)]"
-                >
-                  {(crmJourneysQ.data ?? []).length === 0 ? (
-                    <option value="">(nenhuma jornada CRM habilitada)</option>
-                  ) : (
-                    (crmJourneysQ.data ?? []).map((j) => (
-                      <option key={j.key} value={j.key}>
-                        {j.name}
-                      </option>
-                    ))
-                  )}
-                </select>
-              </div>
-
-              <Button
-                variant="secondary"
-                className="h-10 rounded-2xl"
-                onClick={() => nav("/app", { replace: false })}
-                title="Ir para outros fluxos"
-              >
-                Outros fluxos
-              </Button>
-            </div>
-          </div>
-
-          <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center">
+        <div className="rounded-[28px] border border-slate-200 bg-white/65 p-3 shadow-sm backdrop-blur md:p-4">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
             <div className="relative flex-1">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
               <Input
@@ -363,19 +390,96 @@ export default function Crm() {
                 className="h-11 rounded-2xl pl-10"
               />
             </div>
-            <div className="rounded-2xl border border-slate-200 bg-white/70 px-3 py-2 text-xs text-slate-600 shadow-sm">
-              Arraste um card para mudar de etapa.
-            </div>
+
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="secondary" className="h-11 rounded-2xl">
+                  <Tags className="mr-2 h-4 w-4" /> Tags
+                  {selectedTags.length ? (
+                    <span className="ml-2 rounded-full bg-white/70 px-2 py-0.5 text-[11px] font-semibold text-slate-700">
+                      {selectedTags.length}
+                    </span>
+                  ) : null}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent align="end" className="w-[320px] rounded-2xl border-slate-200 bg-white p-2">
+                <Command className="rounded-2xl border border-slate-200">
+                  <CommandInput
+                    value={tagQuery}
+                    onValueChange={setTagQuery}
+                    placeholder="Filtrar tags…"
+                    className="h-11"
+                  />
+                  <CommandList className="max-h-[240px]">
+                    <CommandEmpty>Nenhuma tag</CommandEmpty>
+                    <CommandGroup heading="Tags">
+                      {visibleTags.map((t) => {
+                        const checked = selectedTags.includes(t);
+                        return (
+                          <CommandItem
+                            key={t}
+                            value={t}
+                            onSelect={() => {
+                              setSelectedTags((prev) =>
+                                prev.includes(t) ? prev.filter((x) => x !== t) : [...prev, t]
+                              );
+                            }}
+                            className={cn(
+                              "rounded-xl",
+                              checked ? "bg-[hsl(var(--byfrost-accent)/0.10)]" : ""
+                            )}
+                          >
+                            <div
+                              className={cn(
+                                "mr-2 grid h-5 w-5 place-items-center rounded-md border",
+                                checked
+                                  ? "border-[hsl(var(--byfrost-accent)/0.35)] bg-[hsl(var(--byfrost-accent))] text-white"
+                                  : "border-slate-200 bg-white"
+                              )}
+                            >
+                              {checked ? <Check className="h-3.5 w-3.5" /> : null}
+                            </div>
+                            <span className="truncate text-sm font-medium">{t}</span>
+                          </CommandItem>
+                        );
+                      })}
+                    </CommandGroup>
+                  </CommandList>
+                </Command>
+
+                <div className="mt-2 flex items-center justify-between gap-2">
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    className="h-9 flex-1 rounded-2xl"
+                    onClick={() => {
+                      setSelectedTags([]);
+                      setTagQuery("");
+                    }}
+                    disabled={!selectedTags.length}
+                  >
+                    Limpar
+                  </Button>
+                  <Button type="button" variant="secondary" className="h-9 rounded-2xl" onClick={refresh}>
+                    <RefreshCw className="h-4 w-4" />
+                  </Button>
+                </div>
+              </PopoverContent>
+            </Popover>
+
+            <Button type="button" variant="secondary" className="h-11 rounded-2xl" onClick={refresh}>
+              <RefreshCw className="mr-2 h-4 w-4" /> Atualizar
+            </Button>
           </div>
 
           {crmJourneysQ.data?.length === 0 && (
-            <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+            <div className="mt-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
               Não há nenhuma jornada marcada como CRM habilitada para este tenant.
             </div>
           )}
 
-          {selectedKey && (
-            <div className="mt-4 overflow-x-auto pb-1">
+          {selectedJourney?.key && (
+            <div className="mt-3 overflow-x-auto pb-1">
               <div className="flex min-w-[980px] gap-4">
                 {columns.map((col) => (
                   <div
@@ -483,7 +587,7 @@ export default function Crm() {
           )}
 
           {casesQ.isError && (
-            <div className="mt-4 rounded-2xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-900">
+            <div className="mt-3 rounded-2xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-900">
               Erro ao carregar casos: {(casesQ.error as any)?.message ?? ""}
             </div>
           )}

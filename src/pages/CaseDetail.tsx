@@ -14,6 +14,7 @@ import { CaseCustomerCard } from "@/components/crm/CaseCustomerCard";
 import { CaseNotesCard } from "@/components/crm/CaseNotesCard";
 import { CaseTasksCard } from "@/components/crm/CaseTasksCard";
 import { CaseProductsCard } from "@/components/crm/CaseProductsCard";
+import { CaseTagsCard } from "@/components/crm/CaseTagsCard";
 import {
   ArrowLeft,
   CheckCircle2,
@@ -335,6 +336,8 @@ export default function CaseDetail() {
                     assignedVendorId={c?.assigned_vendor_id ?? null}
                     suggestedPhone={extractedCustomerPhone ?? null}
                   />
+
+                  <CaseTagsCard tenantId={activeTenantId} caseId={id} />
 
                   <CaseProductsCard tenantId={activeTenantId} caseId={id} />
 
