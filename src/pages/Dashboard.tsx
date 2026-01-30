@@ -856,9 +856,11 @@ export default function Dashboard() {
 
                               <div className="flex flex-col items-end gap-2">
                                 {unread ? (
-                                  <div className="inline-flex items-center gap-2 rounded-full bg-rose-100 px-2 py-1 text-[11px] font-semibold text-rose-900">
-                                    <span className="h-1.5 w-1.5 rounded-full bg-rose-600" /> nova msg
-                                  </div>
+                                  <span
+                                    className="h-2.5 w-2.5 rounded-full bg-rose-600 ring-4 ring-rose-100"
+                                    title="Mensagem nova"
+                                    aria-label="Mensagem nova"
+                                  />
                                 ) : null}
 
                                 {pend?.open ? (

@@ -176,7 +176,7 @@ export default function CrmCaseDetail() {
 
   return (
     <RequireAuth>
-      <AppShell>
+      <AppShell hideTopBar>
         <div className="rounded-[28px] border border-slate-200 bg-white/65 p-4 shadow-sm backdrop-blur md:p-5">
           <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
             <div className="min-w-0">

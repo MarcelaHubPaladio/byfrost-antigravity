@@ -124,7 +124,10 @@ function getUserDisplayName(user: any) {
   return email ? email.split("@")[0] : "Usuário";
 }
 
-export function AppShell({ children }: PropsWithChildren) {
+export function AppShell({
+  children,
+  hideTopBar,
+}: PropsWithChildren<{ hideTopBar?: boolean }>) {
   const nav = useNavigate();
   const { activeTenant, isSuperAdmin, activeTenantId } = useTenant();
   const { user } = useSession();
@@ -246,79 +249,81 @@ export function AppShell({ children }: PropsWithChildren) {
           {/* Main */}
           <div className="min-w-0">
             {/* Content header (tenant accent border) */}
-            <div className="overflow-hidden rounded-[28px] border border-slate-200 border-t-4 border-t-[hsl(var(--byfrost-accent))] bg-white/65 px-4 py-3 shadow-sm backdrop-blur">
-              <div className="flex items-center justify-between gap-3">
-                <div className="flex min-w-0 items-center gap-2">
-                  {isSuperAdmin && (
-                    <div className="inline-flex items-center gap-1 rounded-full bg-[hsl(var(--byfrost-accent)/0.10)] px-2 py-1 text-[11px] font-semibold text-[hsl(var(--byfrost-accent))]">
-                      <ShieldCheck className="h-3.5 w-3.5" />
-                      super-admin
-                    </div>
-                  )}
-                </div>
+            {!hideTopBar && (
+              <div className="overflow-hidden rounded-[28px] border border-slate-200 border-t-4 border-t-[hsl(var(--byfrost-accent))] bg-white/65 px-4 py-3 shadow-sm backdrop-blur">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex min-w-0 items-center gap-2">
+                    {isSuperAdmin && (
+                      <div className="inline-flex items-center gap-1 rounded-full bg-[hsl(var(--byfrost-accent)/0.10)] px-2 py-1 text-[11px] font-semibold text-[hsl(var(--byfrost-accent))]">
+                        <ShieldCheck className="h-3.5 w-3.5" />
+                        super-admin
+                      </div>
+                    )}
+                  </div>
 
-                <DropdownMenu open={userMenuOpen} onOpenChange={setUserMenuOpen}>
-                  <DropdownMenuTrigger asChild>
-                    <button
-                      type="button"
-                      className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-white/75 px-2.5 py-2 text-left text-slate-900 shadow-sm transition hover:bg-white"
+                  <DropdownMenu open={userMenuOpen} onOpenChange={setUserMenuOpen}>
+                    <DropdownMenuTrigger asChild>
+                      <button
+                        type="button"
+                        className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-white/75 px-2.5 py-2 text-left text-slate-900 shadow-sm transition hover:bg-white"
+                        onMouseEnter={() => setUserMenuOpen(true)}
+                        onMouseLeave={() => setUserMenuOpen(false)}
+                        title={userEmail}
+                      >
+                        <Avatar className="h-8 w-8 rounded-2xl">
+                          <AvatarImage src={avatarUrl ?? undefined} alt={userName} />
+                          <AvatarFallback className="rounded-2xl bg-[hsl(var(--byfrost-accent)/0.12)] text-[hsl(var(--byfrost-accent))]">
+                            {(userName?.slice(0, 1) ?? "U").toUpperCase()}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div className="hidden sm:block">
+                          <div className="max-w-[180px] truncate text-xs font-semibold text-slate-900">
+                            {userName}
+                          </div>
+                          <div className="max-w-[180px] truncate text-[11px] text-slate-500">{activeTenant?.slug}</div>
+                        </div>
+                        <User2 className="hidden h-4 w-4 text-slate-400 sm:block" />
+                      </button>
+                    </DropdownMenuTrigger>
+
+                    <DropdownMenuContent
+                      align="end"
+                      className="w-64 rounded-2xl border-slate-200 bg-white p-2"
                       onMouseEnter={() => setUserMenuOpen(true)}
                       onMouseLeave={() => setUserMenuOpen(false)}
-                      title={userEmail}
                     >
-                      <Avatar className="h-8 w-8 rounded-2xl">
-                        <AvatarImage src={avatarUrl ?? undefined} alt={userName} />
-                        <AvatarFallback className="rounded-2xl bg-[hsl(var(--byfrost-accent)/0.12)] text-[hsl(var(--byfrost-accent))]">
-                          {(userName?.slice(0, 1) ?? "U").toUpperCase()}
-                        </AvatarFallback>
-                      </Avatar>
-                      <div className="hidden sm:block">
-                        <div className="max-w-[180px] truncate text-xs font-semibold text-slate-900">
-                          {userName}
-                        </div>
-                        <div className="max-w-[180px] truncate text-[11px] text-slate-500">{activeTenant?.slug}</div>
-                      </div>
-                      <User2 className="hidden h-4 w-4 text-slate-400 sm:block" />
-                    </button>
-                  </DropdownMenuTrigger>
-
-                  <DropdownMenuContent
-                    align="end"
-                    className="w-64 rounded-2xl border-slate-200 bg-white p-2"
-                    onMouseEnter={() => setUserMenuOpen(true)}
-                    onMouseLeave={() => setUserMenuOpen(false)}
-                  >
-                    <DropdownMenuLabel className="px-2 py-2">
-                      <div className="flex items-center justify-between gap-2">
-                        <div className="min-w-0">
-                          <div className="truncate text-xs font-semibold text-slate-900">{userName}</div>
-                          <div className="mt-0.5 truncate text-[11px] font-normal text-slate-600">{userEmail}</div>
-                        </div>
-                        {isSuperAdmin && (
-                          <div className="shrink-0 rounded-full bg-amber-100 px-2 py-1 text-[10px] font-semibold text-amber-900">
-                            super-admin
+                      <DropdownMenuLabel className="px-2 py-2">
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="min-w-0">
+                            <div className="truncate text-xs font-semibold text-slate-900">{userName}</div>
+                            <div className="mt-0.5 truncate text-[11px] font-normal text-slate-600">{userEmail}</div>
                           </div>
-                        )}
-                      </div>
-                    </DropdownMenuLabel>
-                    <DropdownMenuSeparator className="bg-slate-200" />
-                    <DropdownMenuItem
-                      className="cursor-pointer rounded-xl px-2 py-2 text-rose-700 focus:bg-rose-50 focus:text-rose-800"
-                      onSelect={(e) => {
-                        e.preventDefault();
-                        setUserMenuOpen(false);
-                        signOut();
-                      }}
-                    >
-                      <LogOut className="mr-2 h-4 w-4" />
-                      Sair
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
+                          {isSuperAdmin && (
+                            <div className="shrink-0 rounded-full bg-amber-100 px-2 py-1 text-[10px] font-semibold text-amber-900">
+                              super-admin
+                            </div>
+                          )}
+                        </div>
+                      </DropdownMenuLabel>
+                      <DropdownMenuSeparator className="bg-slate-200" />
+                      <DropdownMenuItem
+                        className="cursor-pointer rounded-xl px-2 py-2 text-rose-700 focus:bg-rose-50 focus:text-rose-800"
+                        onSelect={(e) => {
+                          e.preventDefault();
+                          setUserMenuOpen(false);
+                          signOut();
+                        }}
+                      >
+                        <LogOut className="mr-2 h-4 w-4" />
+                        Sair
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
               </div>
-            </div>
+            )}
 
-            <div className="mt-3 md:mt-5">{children}</div>
+            <div className={cn(hideTopBar ? "" : "mt-3 md:mt-5")}>{children}</div>
           </div>
         </div>
       </div>
