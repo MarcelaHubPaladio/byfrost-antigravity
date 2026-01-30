@@ -25,7 +25,7 @@ import { cn } from "@/lib/utils";
 import { TenantBrandingPanel } from "@/components/admin/TenantBrandingPanel";
 import { TenantJourneysPanel } from "@/components/admin/TenantJourneysPanel";
 import { JourneyPromptsPanel } from "@/components/admin/JourneyPromptsPanel";
-import { Trash2 } from "lucide-react";
+import { Trash2, PauseCircle, PlayCircle } from "lucide-react";
 
 function slugify(s: string) {
   return (s ?? "")
@@ -64,6 +64,7 @@ export default function Admin() {
   const [refreshingSession, setRefreshingSession] = useState(false);
   const [debug, setDebug] = useState<any>(null);
   const [deletingInstanceId, setDeletingInstanceId] = useState<string | null>(null);
+  const [updatingInstanceId, setUpdatingInstanceId] = useState<string | null>(null);
 
   const refreshSession = async () => {
     setRefreshingSession(true);
@@ -260,6 +261,26 @@ export default function Admin() {
       await qc.invalidateQueries({ queryKey: ["admin_instances", activeTenantId] });
     } catch (e: any) {
       showError(`Falha ao salvar roteamento: ${e?.message ?? "erro"}`);
+    }
+  };
+
+  const setInstanceStatus = async (instanceId: string, status: "active" | "paused") => {
+    if (!activeTenantId) return;
+    setUpdatingInstanceId(instanceId);
+    try {
+      await ensureFreshTokenForRls();
+      const { error } = await supabase
+        .from("wa_instances")
+        .update({ status })
+        .eq("tenant_id", activeTenantId)
+        .eq("id", instanceId);
+      if (error) throw error;
+      showSuccess(status === "active" ? "Instância ativada." : "Instância inativada.");
+      await qc.invalidateQueries({ queryKey: ["admin_instances", activeTenantId] });
+    } catch (e: any) {
+      showError(`Falha ao atualizar status: ${e?.message ?? "erro"}`);
+    } finally {
+      setUpdatingInstanceId(null);
     }
   };
 
@@ -920,6 +941,9 @@ export default function Admin() {
                             )}/${encodeURIComponent(i.webhook_secret)}`;
                             const inboundUrl = `${pathUrl}?dir=inbound`;
                             const outboundUrl = `${pathUrl}?dir=outbound`;
+                            const isActive = i.status === "active";
+                            const isPaused = i.status === "paused";
+                            const isDisabled = i.status === "disabled";
                             return (
                               <div
                                 key={i.id}
@@ -938,16 +962,46 @@ export default function Admin() {
                                     </div>
                                   </div>
                                   <div className="flex items-center gap-2">
-                                    <Badge className="rounded-full border-0 bg-emerald-100 text-emerald-900 hover:bg-emerald-100">
-                                      {i.status}
+                                    <Badge
+                                      className={cn(
+                                        "rounded-full border-0",
+                                        isActive
+                                          ? "bg-emerald-100 text-emerald-900 hover:bg-emerald-100"
+                                          : isPaused
+                                            ? "bg-amber-100 text-amber-900 hover:bg-amber-100"
+                                            : "bg-slate-200 text-slate-800 hover:bg-slate-200"
+                                      )}
+                                    >
+                                      {isActive ? "ativo" : isPaused ? "inativo" : i.status}
                                     </Badge>
+
+                                    {!isDisabled && (
+                                      <Button
+                                        variant="secondary"
+                                        className={cn(
+                                          "h-9 rounded-2xl px-3 shadow-sm",
+                                          isActive
+                                            ? "border border-amber-200 bg-amber-50 text-amber-900 hover:bg-amber-100"
+                                            : "border border-emerald-200 bg-emerald-50 text-emerald-900 hover:bg-emerald-100"
+                                        )}
+                                        disabled={Boolean(updatingInstanceId) || deletingInstanceId === i.id}
+                                        onClick={() => setInstanceStatus(i.id, isActive ? "paused" : "active")}
+                                        title={isActive ? "Inativar instância" : "Ativar instância"}
+                                      >
+                                        {isActive ? (
+                                          <PauseCircle className="h-4 w-4" />
+                                        ) : (
+                                          <PlayCircle className="h-4 w-4" />
+                                        )}
+                                      </Button>
+                                    )}
 
                                     <AlertDialog>
                                       <AlertDialogTrigger asChild>
                                         <Button
                                           variant="secondary"
                                           className="h-9 rounded-2xl border border-rose-200 bg-rose-50 px-3 text-rose-800 shadow-sm hover:bg-rose-100 hover:text-rose-900"
-                                          disabled={deletingInstanceId === i.id}
+                                          disabled={deletingInstanceId === i.id || Boolean(updatingInstanceId)}
                                           title="Excluir instância"
                                         >
                                           <Trash2 className="h-4 w-4" />
