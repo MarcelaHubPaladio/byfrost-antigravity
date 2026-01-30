@@ -181,13 +181,13 @@ export function AppShell({ children }: PropsWithChildren) {
           {/* Sidebar */}
           <aside className="overflow-hidden rounded-[28px] border border-slate-200 bg-white/65 shadow-sm backdrop-blur md:sticky md:top-5 md:h-[calc(100vh-40px)]">
             {/* Top brand block */}
-            <div className="bg-[hsl(var(--byfrost-accent))] px-3 pb-3 pt-2">
+            <div className="bg-[hsl(var(--byfrost-accent))] px-2 pb-2 pt-1.5">
               <Link
                 to="/app"
                 className="mx-auto flex w-fit flex-col items-center"
                 title={activeTenant?.name ?? "Byfrost"}
               >
-                <div className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-[22px] bg-white p-2 shadow-sm ring-1 ring-white/40">
+                <div className="flex h-[74px] w-[74px] items-center justify-center overflow-hidden rounded-[22px] bg-white p-1.5 shadow-sm ring-1 ring-white/40">
                   {logoUrl ? (
                     <img
                       src={logoUrl}
@@ -218,17 +218,9 @@ export function AppShell({ children }: PropsWithChildren) {
 
           {/* Main */}
           <div className="min-w-0">
-            {/* Content header (search + user dropdown) */}
-            <div className="rounded-[28px] border border-slate-200 bg-white/65 px-4 py-3 shadow-sm backdrop-blur">
-              <div className="flex items-center justify-between gap-3">
-                <div className="relative w-full md:max-w-[560px]">
-                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                  <input
-                    placeholder="Buscar casos, vendedores, CPF…"
-                    className="h-10 w-full rounded-2xl border border-slate-200 bg-white px-9 text-sm text-slate-700 shadow-sm outline-none ring-0 placeholder:text-slate-400 focus:border-[hsl(var(--byfrost-accent)/0.45)]"
-                  />
-                </div>
-
+            {/* Content header (user dropdown) */}
+            <div className="rounded-[28px] border border-[hsl(var(--byfrost-accent)/0.35)] bg-white/65 px-4 py-3 shadow-sm backdrop-blur">
+              <div className="flex items-center justify-end">
                 <DropdownMenu open={userMenuOpen} onOpenChange={setUserMenuOpen}>
                   <DropdownMenuTrigger asChild>
                     <button
