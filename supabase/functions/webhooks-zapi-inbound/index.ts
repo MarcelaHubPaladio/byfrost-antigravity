@@ -402,43 +402,46 @@ serve(async (req) => {
       }
 
       // Link to an existing case:
-      // 1) if sender is a vendor phone => latest case assigned to this vendor
-      // 2) else, best-effort: last case where extracted 'phone' field matches counterpart (customer)
+      // Most common in Byfrost: instance sends a message back to a vendor (counterpart = vendor phone).
+      // But we also support the opposite mapping (vendor phone = fromPhone) for setups where the sender is the vendor.
       let caseId: string | null = null;
 
-      if (fromPhone) {
-        const { data: senderVendor } = await supabase
+      const vendorPhoneCandidates = Array.from(new Set([counterpart, fromPhone].filter(Boolean))) as string[];
+      for (const vp of vendorPhoneCandidates) {
+        const { data: vendor } = await supabase
           .from("vendors")
           .select("id")
           .eq("tenant_id", instance.tenant_id)
-          .eq("phone_e164", fromPhone)
+          .eq("phone_e164", vp)
           .maybeSingle();
 
-        if (senderVendor?.id) {
+        if (vendor?.id) {
           const { data: c } = await supabase
             .from("cases")
             .select("id")
             .eq("tenant_id", instance.tenant_id)
-            .eq("assigned_vendor_id", senderVendor.id)
+            .eq("assigned_vendor_id", vendor.id)
             .is("deleted_at", null)
             .order("created_at", { ascending: false })
             .limit(1)
             .maybeSingle();
+
           caseId = (c as any)?.id ?? null;
+          if (caseId) break;
         }
 
-        if (!caseId) {
-          const { data: cByMeta } = await supabase
-            .from("cases")
-            .select("id")
-            .eq("tenant_id", instance.tenant_id)
-            .eq("meta_json->>vendor_phone", fromPhone)
-            .is("deleted_at", null)
-            .order("created_at", { ascending: false })
-            .limit(1)
-            .maybeSingle();
-          caseId = (cByMeta as any)?.id ?? null;
-        }
+        const { data: cByMeta } = await supabase
+          .from("cases")
+          .select("id")
+          .eq("tenant_id", instance.tenant_id)
+          .eq("meta_json->>vendor_phone", vp)
+          .is("deleted_at", null)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        caseId = (cByMeta as any)?.id ?? null;
+        if (caseId) break;
       }
 
       if (!caseId) {
