@@ -23,6 +23,7 @@ type JourneyRow = {
   key: string;
   name: string;
   description: string | null;
+  is_crm?: boolean;
   default_state_machine_json?: any;
 };
 
@@ -92,6 +93,9 @@ export function TenantJourneysPanel() {
   const [journeyKey, setJourneyKey] = useState("");
   const [journeyName, setJourneyName] = useState("");
   const [journeyDesc, setJourneyDesc] = useState("");
+  const [journeyIsCrm, setJourneyIsCrm] = useState(false);
+
+  const [savingCatalogFlags, setSavingCatalogFlags] = useState(false);
 
   // state machine builder (UI)
   const [stateDraft, setStateDraft] = useState("");
@@ -127,7 +131,7 @@ export function TenantJourneysPanel() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("journeys")
-        .select("id,sector_id,key,name,description,default_state_machine_json")
+        .select("id,sector_id,key,name,description,is_crm,default_state_machine_json")
         .order("name", { ascending: true });
       if (error) throw error;
       return (data ?? []) as JourneyRow[];
@@ -269,6 +273,7 @@ export function TenantJourneysPanel() {
         key: journeyKey.trim(),
         name: journeyName.trim(),
         description: journeyDesc.trim() || null,
+        is_crm: journeyIsCrm,
         default_state_machine_json: stateMachineJson,
       });
       if (error) throw error;
@@ -277,11 +282,27 @@ export function TenantJourneysPanel() {
       setJourneyKey("");
       setJourneyName("");
       setJourneyDesc("");
+      setJourneyIsCrm(false);
       await qc.invalidateQueries({ queryKey: ["journeys"] });
     } catch (e: any) {
       showError(`Falha ao criar jornada: ${e?.message ?? "erro"}`);
     } finally {
       setCreatingJourney(false);
+    }
+  };
+
+  const updateJourneyCatalog = async (journeyId: string, patch: Partial<Pick<JourneyRow, "is_crm">>) => {
+    setSavingCatalogFlags(true);
+    try {
+      const { error } = await supabase.from("journeys").update(patch).eq("id", journeyId);
+      if (error) throw error;
+      showSuccess("Catálogo atualizado.");
+      await qc.invalidateQueries({ queryKey: ["journeys"] });
+    } catch (e: any) {
+      // journeys_update is super-admin only
+      showError(`Falha ao atualizar catálogo (RLS): ${e?.message ?? "erro"}`);
+    } finally {
+      setSavingCatalogFlags(false);
     }
   };
 
@@ -524,6 +545,16 @@ export function TenantJourneysPanel() {
               />
             </div>
 
+            <div className="flex items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3">
+              <div>
+                <div className="text-sm font-medium text-slate-900">Fluxo estilo CRM</div>
+                <div className="mt-0.5 text-xs text-slate-600">
+                  Marca o fluxo para que o painel /app habilite recursos de CRM (drag, busca, cliente, tarefas, observações).
+                </div>
+              </div>
+              <Switch checked={journeyIsCrm} onCheckedChange={setJourneyIsCrm} />
+            </div>
+
             <div className="rounded-[20px] border border-slate-200 bg-slate-50 p-3">
               <div className="text-xs font-semibold text-slate-900">Estados do fluxo</div>
               <div className="mt-1 text-[11px] text-slate-600">
@@ -692,7 +723,14 @@ export function TenantJourneysPanel() {
                           )}
                         >
                           <div className="min-w-0">
-                            <div className="truncate text-xs font-semibold text-slate-900">{j.name}</div>
+                            <div className="flex items-center gap-2">
+                              <div className="truncate text-xs font-semibold text-slate-900">{j.name}</div>
+                              {j.is_crm ? (
+                                <span className="rounded-full bg-[hsl(var(--byfrost-accent)/0.12)] px-2 py-0.5 text-[10px] font-semibold text-[hsl(var(--byfrost-accent))]">
+                                  CRM
+                                </span>
+                              ) : null}
+                            </div>
                             <div className="mt-0.5 truncate text-[11px] text-slate-500">key: {j.key}</div>
                           </div>
                           <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
@@ -735,7 +773,14 @@ export function TenantJourneysPanel() {
                         )}
                       >
                         <div className="min-w-0">
-                          <div className="truncate text-xs font-semibold text-slate-900">{j.name}</div>
+                          <div className="flex items-center gap-2">
+                            <div className="truncate text-xs font-semibold text-slate-900">{j.name}</div>
+                            {j.is_crm ? (
+                              <span className="rounded-full bg-[hsl(var(--byfrost-accent)/0.12)] px-2 py-0.5 text-[10px] font-semibold text-[hsl(var(--byfrost-accent))]">
+                                CRM
+                              </span>
+                            ) : null}
+                          </div>
                           <div className="mt-0.5 truncate text-[11px] text-slate-500">key: {j.key}</div>
                         </div>
                         <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
@@ -768,8 +813,25 @@ export function TenantJourneysPanel() {
           ) : (
             <div className="mt-4 space-y-3">
               <div className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2">
-                <div className="text-xs font-semibold text-slate-900">{selectedJourney.name}</div>
-                <div className="mt-0.5 text-[11px] text-slate-500">key: {selectedJourney.key}</div>
+                <div className="flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="text-xs font-semibold text-slate-900 truncate">{selectedJourney.name}</div>
+                    <div className="mt-0.5 text-[11px] text-slate-500">key: {selectedJourney.key}</div>
+                  </div>
+
+                  <div className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-3 py-2">
+                    <div className="text-[11px] text-slate-500">CRM</div>
+                    <Switch
+                      checked={Boolean(selectedJourney.is_crm)}
+                      disabled={savingCatalogFlags}
+                      onCheckedChange={(v) => updateJourneyCatalog(selectedJourney.id, { is_crm: v })}
+                    />
+                  </div>
+                </div>
+
+                <div className="mt-2 text-[11px] text-slate-500">
+                  Essa flag é do <span className="font-medium">catálogo (journeys)</span> e é protegida por RLS (apenas super-admin).
+                </div>
               </div>
 
               <div className="rounded-2xl border border-slate-200 bg-white p-3">

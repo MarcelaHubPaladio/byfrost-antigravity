@@ -1,5 +1,5 @@
 import { useMemo, useEffect, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { AppShell } from "@/components/AppShell";
 import { RequireAuth } from "@/components/RequireAuth";
@@ -9,7 +9,9 @@ import { supabase } from "@/lib/supabase";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Clock, MapPin, RefreshCw, Sparkles, ShieldAlert } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { showError, showSuccess } from "@/utils/toast";
+import { Clock, MapPin, RefreshCw, Search, Sparkles, ShieldAlert } from "lucide-react";
 
 type CaseRow = {
   id: string;
@@ -22,7 +24,7 @@ type CaseRow = {
   assigned_vendor_id: string | null;
   vendors?: { display_name: string | null; phone_e164: string | null } | null;
   // Nem sempre existe FK/relacionamento exposto; então mantemos também meta_json.
-  journeys?: { key: string | null; name: string | null } | null;
+  journeys?: { key: string | null; name: string | null; is_crm?: boolean } | null;
   meta_json?: any;
 };
 
@@ -30,6 +32,7 @@ type JourneyOpt = {
   id: string;
   key: string;
   name: string;
+  is_crm?: boolean;
   default_state_machine_json?: any;
 };
 
@@ -70,7 +73,11 @@ export default function Dashboard() {
   const nav = useNavigate();
   const loc = useLocation();
   const { journeyKey } = useParams<{ journeyKey?: string }>();
+  const qc = useQueryClient();
+
   const [refreshingToken, setRefreshingToken] = useState(false);
+  const [q, setQ] = useState("");
+  const [movingCaseId, setMovingCaseId] = useState<string | null>(null);
 
   // Back-compat: /app?journey=<uuid> -> /app/j/<journeys.key>
   const legacyJourneyId = useMemo(() => {
@@ -87,7 +94,7 @@ export default function Dashboard() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("tenant_journeys")
-        .select("journey_id, journeys(id,key,name,default_state_machine_json)")
+        .select("journey_id, journeys(id,key,name,is_crm,default_state_machine_json)")
         .eq("tenant_id", activeTenantId!)
         .eq("enabled", true)
         .limit(300);
@@ -100,6 +107,7 @@ export default function Dashboard() {
           id: j.id,
           key: j.key,
           name: j.name,
+          is_crm: j.is_crm ?? false,
           default_state_machine_json: j.default_state_machine_json ?? {},
         }));
 
@@ -114,6 +122,8 @@ export default function Dashboard() {
     if (!selectedKey) return null;
     return (journeyQ.data ?? []).find((j) => j.key === selectedKey) ?? null;
   }, [journeyQ.data, selectedKey]);
+
+  const isCrm = Boolean(selectedJourney?.is_crm);
 
   const pickFirstJourney = () => {
     const first = journeyQ.data?.[0];
@@ -166,7 +176,7 @@ export default function Dashboard() {
       const { data, error } = await supabase
         .from("cases")
         .select(
-          "id,journey_id,title,status,state,created_at,updated_at,assigned_vendor_id,vendors:vendors!cases_assigned_vendor_id_fkey(display_name,phone_e164),journeys:journeys!cases_journey_id_fkey(key,name),meta_json"
+          "id,journey_id,title,status,state,created_at,updated_at,assigned_vendor_id,vendors:vendors!cases_assigned_vendor_id_fkey(display_name,phone_e164),journeys:journeys!cases_journey_id_fkey(key,name,is_crm),meta_json"
         )
         .eq("tenant_id", activeTenantId!)
         .is("deleted_at", null)
@@ -182,7 +192,7 @@ export default function Dashboard() {
     const rows = casesQ.data ?? [];
     if (!selectedKey) return [];
 
-    return rows.filter((r) => {
+    const base = rows.filter((r) => {
       const keyFromJoin = r.journeys?.key ?? null;
       const keyFromMeta = (r.meta_json as any)?.journey_key ?? null;
 
@@ -194,7 +204,15 @@ export default function Dashboard() {
 
       return false;
     });
-  }, [casesQ.data, selectedKey, selectedJourney?.id]);
+
+    const qq = q.trim().toLowerCase();
+    if (!qq) return base;
+
+    return base.filter((r) => {
+      const t = `${r.title ?? ""} ${(r.vendors?.display_name ?? "")} ${(r.vendors?.phone_e164 ?? "")}`.toLowerCase();
+      return t.includes(qq);
+    });
+  }, [casesQ.data, selectedKey, selectedJourney?.id, q]);
 
   const statusCounts = useMemo(() => {
     const m = new Map<string, number>();
@@ -317,6 +335,28 @@ export default function Dashboard() {
     }
   };
 
+  const updateCaseState = async (caseId: string, nextState: string) => {
+    if (!activeTenantId) return;
+    if (movingCaseId) return;
+    setMovingCaseId(caseId);
+
+    try {
+      const { error } = await supabase
+        .from("cases")
+        .update({ state: nextState })
+        .eq("tenant_id", activeTenantId)
+        .eq("id", caseId);
+      if (error) throw error;
+
+      showSuccess(`Movido para ${titleizeState(nextState)}.`);
+      await qc.invalidateQueries({ queryKey: ["cases_by_tenant", activeTenantId] });
+    } catch (e: any) {
+      showError(`Falha ao mover: ${e?.message ?? "erro"}`);
+    } finally {
+      setMovingCaseId(null);
+    }
+  };
+
   return (
     <RequireAuth>
       <AppShell>
@@ -367,7 +407,7 @@ export default function Dashboard() {
                       ) : (
                         (journeyQ.data ?? []).map((j) => (
                           <option key={j.key} value={j.key}>
-                            {j.name}
+                            {j.name}{j.is_crm ? " • CRM" : ""}
                           </option>
                         ))
                       )}
@@ -389,6 +429,11 @@ export default function Dashboard() {
                   <div className="mt-2 text-[11px] text-slate-500">
                     {selectedKey}
                     {selectedJourney?.id ? ` • ${selectedJourney.id.slice(0, 8)}…` : ""}
+                    {selectedJourney?.is_crm ? (
+                      <span className="ml-2 rounded-full bg-[hsl(var(--byfrost-accent)/0.12)] px-2 py-0.5 font-semibold text-[hsl(var(--byfrost-accent))]">
+                        CRM
+                      </span>
+                    ) : null}
                     {typeof debugRpcQ.data?.cases_total === "number" ? (
                       <span className="text-slate-400">
                         {" "}• banco: {debugRpcQ.data.cases_total}
@@ -417,6 +462,23 @@ export default function Dashboard() {
               </div>
             </div>
           </div>
+
+          {isCrm && (
+            <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center">
+              <div className="relative flex-1">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                <Input
+                  value={q}
+                  onChange={(e) => setQ(e.target.value)}
+                  placeholder="Buscar por título, vendedor ou telefone…"
+                  className="h-11 rounded-2xl pl-10"
+                />
+              </div>
+              <div className="rounded-2xl border border-slate-200 bg-white/70 px-3 py-2 text-xs text-slate-600 shadow-sm">
+                Arraste um card para mudar de status.
+              </div>
+            </div>
+          )}
 
           {shouldShowInvalidJourneyBanner && (
             <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
@@ -492,7 +554,26 @@ export default function Dashboard() {
             <div className="mt-4 overflow-x-auto pb-1">
               <div className="flex min-w-[980px] gap-4">
                 {columns.map((col) => (
-                  <div key={col.key} className="w-[320px] flex-shrink-0">
+                  <div
+                    key={col.key}
+                    className={cn(
+                      "w-[320px] flex-shrink-0",
+                      isCrm && col.key !== "__other__" ? "" : ""
+                    )}
+                    onDragOver={(e) => {
+                      if (!isCrm) return;
+                      if (col.key === "__other__") return;
+                      e.preventDefault();
+                    }}
+                    onDrop={(e) => {
+                      if (!isCrm) return;
+                      if (col.key === "__other__") return;
+                      const cid = e.dataTransfer.getData("text/caseId");
+                      if (!cid) return;
+                      if (movingCaseId) return;
+                      updateCaseState(cid, col.key);
+                    }}
+                  >
                     <div className="flex items-center justify-between px-1">
                       <div className="text-sm font-semibold text-slate-800">{col.label}</div>
                       <div className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-600">
@@ -500,18 +581,36 @@ export default function Dashboard() {
                       </div>
                     </div>
 
-                    <div className="mt-2 space-y-3">
+                    <div
+                      className={cn(
+                        "mt-2 space-y-3 rounded-[24px] p-2",
+                        isCrm && col.key !== "__other__"
+                          ? "bg-slate-50/60 border border-dashed border-slate-200"
+                          : ""
+                      )}
+                    >
                       {col.items.map((c) => {
                         const pend = pendQ.data?.get(c.id);
                         const age = minutesAgo(c.updated_at);
+                        const isMoving = movingCaseId === c.id;
+
                         return (
                           <Link
                             key={c.id}
                             to={`/app/cases/${c.id}`}
+                            draggable={isCrm}
+                            onDragStart={(e) => {
+                              if (!isCrm) return;
+                              e.dataTransfer.setData("text/caseId", c.id);
+                              e.dataTransfer.effectAllowed = "move";
+                            }}
                             className={cn(
                               "block rounded-[22px] border bg-white p-4 shadow-sm transition hover:shadow-md",
-                              "border-slate-200 hover:border-slate-300"
+                              "border-slate-200 hover:border-slate-300",
+                              isCrm ? "cursor-grab active:cursor-grabbing" : "",
+                              isMoving ? "opacity-60" : ""
                             )}
+                            title={isCrm ? "Arraste para mudar de estado" : undefined}
                           >
                             <div className="flex items-start justify-between gap-3">
                               <div className="min-w-0">
@@ -552,7 +651,9 @@ export default function Dashboard() {
 
                       {col.items.length === 0 && (
                         <div className="rounded-[22px] border border-dashed border-slate-200 bg-white/40 p-4 text-xs text-slate-500">
-                          Sem cards aqui.
+                          {isCrm && col.key !== "__other__"
+                            ? "Solte um card aqui para mover."
+                            : "Sem cards aqui."}
                         </div>
                       )}
                     </div>
