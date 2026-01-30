@@ -134,7 +134,7 @@ export default function Admin() {
       const msg = String(e?.message ?? "erro");
       if (msg.toLowerCase().includes("row-level security")) {
         showError(
-          "Sem permissão (RLS). Clique em “Atualizar sessão” ou faça logout/login para aplicar o claim de super-admin."
+          'Sem permissão (RLS). Clique em "Atualizar sessão" ou faça logout/login para aplicar o claim de super-admin.'
         );
       } else {
         showError(`Falha ao criar tenant: ${msg}`);
@@ -884,6 +884,8 @@ export default function Admin() {
                             const pathUrl = `https://pryoirzeghatrgecwrci.supabase.co/functions/v1/webhooks-zapi-inbound/${encodeURIComponent(
                               i.zapi_instance_id
                             )}/${encodeURIComponent(i.webhook_secret)}`;
+                            const inboundUrl = `${pathUrl}?dir=inbound`;
+                            const outboundUrl = `${pathUrl}?dir=outbound`;
                             return (
                               <div
                                 key={i.id}
@@ -907,12 +909,33 @@ export default function Admin() {
                                 </div>
 
                                 <div className="mt-3 rounded-2xl border border-slate-200 bg-white/70 p-2">
-                                  <div className="text-[11px] font-semibold text-slate-700">Webhook URL (sem header/query)</div>
+                                  <div className="text-[11px] font-semibold text-slate-700">Webhook URL (base)</div>
                                   <div className="mt-1 rounded-xl bg-slate-50 px-2 py-1 text-[11px] text-slate-700 break-all">
                                     {pathUrl}
                                   </div>
                                   <div className="mt-1 text-[11px] text-slate-500">
                                     Cole essa URL no Z-API. Ela já carrega <span className="font-medium">instanceId</span> e <span className="font-medium">secret</span> no caminho.
+                                  </div>
+                                </div>
+
+                                <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                                  <div className="rounded-2xl border border-slate-200 bg-white/70 p-2">
+                                    <div className="text-[11px] font-semibold text-slate-700">Z-API: Ao receber</div>
+                                    <div className="mt-1 rounded-xl bg-slate-50 px-2 py-1 text-[11px] text-slate-700 break-all">
+                                      {inboundUrl}
+                                    </div>
+                                    <div className="mt-1 text-[11px] text-slate-500">
+                                      Garante que o evento seja tratado como <span className="font-medium">inbound</span>.
+                                    </div>
+                                  </div>
+                                  <div className="rounded-2xl border border-slate-200 bg-white/70 p-2">
+                                    <div className="text-[11px] font-semibold text-slate-700">Z-API: Ao enviar</div>
+                                    <div className="mt-1 rounded-xl bg-slate-50 px-2 py-1 text-[11px] text-slate-700 break-all">
+                                      {outboundUrl}
+                                    </div>
+                                    <div className="mt-1 text-[11px] text-slate-500">
+                                      Garante que o evento seja tratado como <span className="font-medium">outbound</span>.
+                                    </div>
                                   </div>
                                 </div>
 

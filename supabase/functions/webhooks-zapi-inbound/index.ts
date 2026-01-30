@@ -37,6 +37,18 @@ function extractPathAuth(reqUrl: string): { pathInstanceId: string | null; pathS
   }
 }
 
+function forceDirectionFromUrl(reqUrl: string): WebhookDirection | null {
+  try {
+    const u = new URL(reqUrl);
+    const raw = (u.searchParams.get("dir") ?? u.searchParams.get("direction") ?? "").toLowerCase();
+    if (raw === "out" || raw === "outbound" || raw === "send" || raw === "sent") return "outbound";
+    if (raw === "in" || raw === "inbound" || raw === "receive" || raw === "received") return "inbound";
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 function normalizeInbound(payload: any): {
   zapiInstanceId: string | null;
   type: InboundType;
@@ -236,9 +248,7 @@ serve(async (req) => {
 
     const supabase = createSupabaseAdmin();
 
-    const correlationId = String(
-      payload?.correlation_id ?? normalized.externalMessageId ?? crypto.randomUUID()
-    );
+    const correlationId = String(payload?.correlation_id ?? normalized.externalMessageId ?? crypto.randomUUID());
 
     const logInbox = async (args: {
       instance?: any;
@@ -293,15 +303,25 @@ serve(async (req) => {
       return new Response("Unknown instance", { status: 404, headers: corsHeaders });
     }
 
-    const direction = inferDirection({
-      payload,
-      normalized: { from: normalized.from, to: normalized.to },
-      instancePhone: instance.phone_number ?? null,
-    });
+    const forced = forceDirectionFromUrl(req.url);
+    const direction =
+      forced ??
+      inferDirection({
+        payload,
+        normalized: { from: normalized.from, to: normalized.to },
+        instancePhone: instance.phone_number ?? null,
+      });
 
     if (!providedSecret || providedSecret !== instance.webhook_secret) {
       console.warn(`[${fn}] Invalid webhook secret`, { hasProvided: Boolean(providedSecret) });
-      await logInbox({ instance, ok: false, http_status: 401, reason: "unauthorized", direction });
+      await logInbox({
+        instance,
+        ok: false,
+        http_status: 401,
+        reason: "unauthorized",
+        direction,
+        meta: forced ? { forced_direction: forced } : {},
+      });
       return new Response("Unauthorized", { status: 401, headers: corsHeaders });
     }
 
@@ -317,6 +337,7 @@ serve(async (req) => {
           http_status: 400,
           reason: "missing_to_phone",
           direction,
+          meta: forced ? { forced_direction: forced } : {},
         });
         return new Response("Missing to", { status: 400, headers: corsHeaders });
       }
@@ -343,7 +364,7 @@ serve(async (req) => {
           http_status: 200,
           reason: "possible_duplicate_ignored",
           direction,
-          meta: { wa_message_id: possibleDup.id },
+          meta: { wa_message_id: possibleDup.id, ...(forced ? { forced_direction: forced } : {}) },
         });
         return new Response(JSON.stringify({ ok: true, correlation_id: correlationId, duplicate: true }), {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -429,6 +450,7 @@ serve(async (req) => {
           reason: "wa_message_insert_failed",
           direction,
           case_id: caseId,
+          meta: forced ? { forced_direction: forced } : {},
         });
         return new Response("Failed to insert message", { status: 500, headers: corsHeaders });
       }
@@ -440,6 +462,7 @@ serve(async (req) => {
         reason: caseId ? null : "outbound_unlinked_no_case",
         direction,
         case_id: caseId,
+        meta: forced ? { forced_direction: forced } : {},
       });
 
       return new Response(JSON.stringify({ ok: true, correlation_id: correlationId, case_id: caseId }), {
