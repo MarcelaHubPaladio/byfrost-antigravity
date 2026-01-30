@@ -1,10 +1,19 @@
-import { PropsWithChildren, useEffect, useMemo } from "react";
+import { PropsWithChildren, useEffect, useMemo, useState } from "react";
 import { Link, NavLink, useNavigate } from "react-router-dom";
 import { supabase } from "@/lib/supabase";
 import { useTenant } from "@/providers/TenantProvider";
 import { useSession } from "@/providers/SessionProvider";
-import { LayoutGrid, FlaskConical, Settings, LogOut, Search, Crown, ArrowLeftRight } from "lucide-react";
+import { LayoutGrid, FlaskConical, Settings, Search, Crown, ArrowLeftRight, LogOut, User2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 function hexToRgb(hex: string) {
   const h = hex.replace("#", "").trim();
@@ -91,32 +100,23 @@ function NavTile({
   );
 }
 
-function ActionTile({
-  icon: Icon,
-  label,
-  onClick,
-}: {
-  icon: any;
-  label: string;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className="group flex w-full flex-col items-center gap-1 rounded-2xl border border-slate-200 bg-white/70 px-2 py-2 text-slate-700 transition hover:border-slate-300 hover:bg-white"
-      title={label}
-      type="button"
-    >
-      <Icon className="h-5 w-5" />
-      <span className="text-[11px] font-semibold tracking-tight leading-none">{label}</span>
-    </button>
-  );
+function getUserDisplayName(user: any) {
+  const md = user?.user_metadata ?? {};
+  const full = (md.full_name as string | undefined) ?? null;
+  const first = (md.first_name as string | undefined) ?? null;
+  const last = (md.last_name as string | undefined) ?? null;
+  const composed = [first, last].filter(Boolean).join(" ").trim();
+  if (full) return full;
+  if (composed) return composed;
+  const email = (user?.email as string | undefined) ?? "";
+  return email ? email.split("@")[0] : "Usuário";
 }
 
 export function AppShell({ children }: PropsWithChildren) {
   const nav = useNavigate();
   const { activeTenant, isSuperAdmin } = useTenant();
   const { user } = useSession();
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
 
   const palettePrimaryHex =
     (activeTenant?.branding_json?.palette?.primary?.hex as string | undefined) ?? null;
@@ -155,16 +155,19 @@ export function AppShell({ children }: PropsWithChildren) {
     nav("/login", { replace: true });
   };
 
+  const userName = getUserDisplayName(user);
+  const userEmail = user?.email ?? "";
+  const avatarUrl = (user?.user_metadata as any)?.avatar_url ?? null;
+
   return (
     <div className="min-h-screen bg-[hsl(var(--byfrost-bg))]">
-      {/* Super-admin: floating tenant switch */}
+      {/* Super-admin: floating tenant switch (top-right) */}
       {isSuperAdmin && (
         <Link
           to="/tenants"
           className={cn(
-            "fixed left-3 z-50 flex items-center gap-2 rounded-2xl px-3 py-2 text-xs font-semibold text-white shadow-md",
-            "bg-[hsl(var(--byfrost-accent))] hover:bg-[hsl(var(--byfrost-accent)/0.92)]",
-            "bottom-4 md:bottom-auto md:top-1/2 md:-translate-y-1/2"
+            "fixed right-3 top-3 z-50 inline-flex items-center gap-2 rounded-2xl px-3 py-2 text-xs font-semibold text-white shadow-md",
+            "bg-[hsl(var(--byfrost-accent))] hover:bg-[hsl(var(--byfrost-accent)/0.92)]"
           )}
           title="Trocar tenant"
         >
@@ -201,16 +204,18 @@ export function AppShell({ children }: PropsWithChildren) {
             </div>
 
             <div className="mt-4 border-t border-slate-200/70 pt-4">
-              <ActionTile icon={LogOut} label="Sair" onClick={signOut} />
+              <div className="rounded-2xl bg-white/60 px-3 py-2 text-center text-[11px] font-medium text-slate-600">
+                {activeTenant?.name ?? "Byfrost"}
+              </div>
             </div>
           </aside>
 
           {/* Main */}
           <div className="min-w-0">
-            {/* Top bar (without tenant block) */}
+            {/* Content header (search + user dropdown) */}
             <div className="rounded-[28px] border border-slate-200 bg-white/65 px-4 py-3 shadow-sm backdrop-blur">
               <div className="flex items-center justify-between gap-3">
-                <div className="relative w-full md:max-w-[520px]">
+                <div className="relative w-full md:max-w-[560px]">
                   <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                   <input
                     placeholder="Buscar casos, vendedores, CPF…"
@@ -218,9 +223,55 @@ export function AppShell({ children }: PropsWithChildren) {
                   />
                 </div>
 
-                <div className="hidden text-xs text-slate-500 md:block">
-                  {user?.email ? user.email : ""}
-                </div>
+                <DropdownMenu open={userMenuOpen} onOpenChange={setUserMenuOpen}>
+                  <DropdownMenuTrigger asChild>
+                    <button
+                      type="button"
+                      className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-white/75 px-2.5 py-2 text-left shadow-sm transition hover:bg-white"
+                      onMouseEnter={() => setUserMenuOpen(true)}
+                      onMouseLeave={() => setUserMenuOpen(false)}
+                      title={userEmail}
+                    >
+                      <Avatar className="h-8 w-8 rounded-2xl">
+                        <AvatarImage src={avatarUrl ?? undefined} alt={userName} />
+                        <AvatarFallback className="rounded-2xl bg-[hsl(var(--byfrost-accent)/0.12)] text-[hsl(var(--byfrost-accent))]">
+                          {(userName?.slice(0, 1) ?? "U").toUpperCase()}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="hidden sm:block">
+                        <div className="max-w-[180px] truncate text-xs font-semibold text-slate-900">
+                          {userName}
+                        </div>
+                        <div className="max-w-[180px] truncate text-[11px] text-slate-500">{activeTenant?.slug}</div>
+                      </div>
+                      <User2 className="hidden h-4 w-4 text-slate-400 sm:block" />
+                    </button>
+                  </DropdownMenuTrigger>
+
+                  <DropdownMenuContent
+                    align="end"
+                    className="w-64 rounded-2xl border-slate-200 bg-white p-2"
+                    onMouseEnter={() => setUserMenuOpen(true)}
+                    onMouseLeave={() => setUserMenuOpen(false)}
+                  >
+                    <DropdownMenuLabel className="px-2 py-2">
+                      <div className="text-xs font-semibold text-slate-900">{userName}</div>
+                      <div className="mt-0.5 text-[11px] font-normal text-slate-600">{userEmail}</div>
+                    </DropdownMenuLabel>
+                    <DropdownMenuSeparator className="bg-slate-200" />
+                    <DropdownMenuItem
+                      className="cursor-pointer rounded-xl px-2 py-2 text-rose-700 focus:bg-rose-50 focus:text-rose-800"
+                      onSelect={(e) => {
+                        e.preventDefault();
+                        setUserMenuOpen(false);
+                        signOut();
+                      }}
+                    >
+                      <LogOut className="mr-2 h-4 w-4" />
+                      Sair
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </div>
             </div>
 
