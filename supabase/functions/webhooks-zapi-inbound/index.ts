@@ -426,13 +426,24 @@ serve(async (req) => {
       return new Response("Unknown instance", { status: 404, headers: corsHeaders });
     }
 
-    const direction =
-      forced ??
-      inferDirection({
-        payload,
-        normalized: { from: normalized.from, to: normalized.to },
-        instancePhone: instance.phone_number ?? null,
-      });
+    const inferred = inferDirection({
+      payload,
+      normalized: { from: normalized.from, to: normalized.to },
+      instancePhone: instance.phone_number ?? null,
+    });
+
+    // Hygiene: Sometimes the webhook is configured with a forced dir=inbound URL, but provider still
+    // sends outbound events to that same endpoint. If we can strongly infer outbound, prefer it.
+    const strongOutbound =
+      inferred === "outbound" &&
+      (payload?.fromMe === true ||
+        payload?.data?.fromMe === true ||
+        payload?.isFromMe === true ||
+        payload?.data?.isFromMe === true ||
+        (normalizePhoneE164Like(instance.phone_number ?? null) &&
+          normalized.from === normalizePhoneE164Like(instance.phone_number ?? null)));
+
+    const direction: WebhookDirection = forced && strongOutbound ? "outbound" : forced ?? inferred;
 
     if (!providedSecret || providedSecret !== instance.webhook_secret) {
       console.warn(`[${fn}] Invalid webhook secret`, { hasProvided: Boolean(providedSecret) });
@@ -442,7 +453,7 @@ serve(async (req) => {
         http_status: 401,
         reason: "unauthorized",
         direction,
-        meta: { forced_direction: forced ?? null },
+        meta: { forced_direction: forced ?? null, inferred_direction: inferred, strong_outbound: strongOutbound },
       });
       return new Response("Unauthorized", { status: 401, headers: corsHeaders });
     }
@@ -468,7 +479,7 @@ serve(async (req) => {
           http_status: 400,
           reason: "missing_to_phone",
           direction,
-          meta: { forced_direction: forced ?? null },
+          meta: { forced_direction: forced ?? null, inferred_direction: inferred, strong_outbound: strongOutbound },
         });
         return new Response("Missing to", { status: 400, headers: corsHeaders });
       }
@@ -498,7 +509,12 @@ serve(async (req) => {
           http_status: 200,
           reason: "possible_duplicate_ignored",
           direction,
-          meta: { wa_message_id: possibleDup.id, forced_direction: forced ?? null },
+          meta: {
+            wa_message_id: possibleDup.id,
+            forced_direction: forced ?? null,
+            inferred_direction: inferred,
+            strong_outbound: strongOutbound,
+          },
         });
         return new Response(JSON.stringify({ ok: true, correlation_id: correlationId, duplicate: true }), {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -589,7 +605,7 @@ serve(async (req) => {
           reason: "wa_message_insert_failed",
           direction,
           case_id: caseId,
-          meta: { forced_direction: forced ?? null },
+          meta: { forced_direction: forced ?? null, inferred_direction: inferred, strong_outbound: strongOutbound },
         });
         return new Response("Failed to insert message", { status: 500, headers: corsHeaders });
       }
@@ -601,7 +617,7 @@ serve(async (req) => {
         reason: caseId ? null : "outbound_unlinked_no_case",
         direction,
         case_id: caseId,
-        meta: { forced_direction: forced ?? null },
+        meta: { forced_direction: forced ?? null, inferred_direction: inferred, strong_outbound: strongOutbound },
       });
 
       return new Response(JSON.stringify({ ok: true, correlation_id: correlationId, case_id: caseId }), {
@@ -950,6 +966,9 @@ serve(async (req) => {
         require_vendor: cfgRequireVendor,
         auto_create_vendor: cfgAutoCreateVendor,
         vendor_id: vendorId,
+        forced_direction: forced ?? null,
+        inferred_direction: inferred,
+        strong_outbound: strongOutbound,
       },
     });
 

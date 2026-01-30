@@ -92,6 +92,23 @@ export default function CrmCaseDetail() {
     nav(`/app/cases/${caseQ.data.id}`, { replace: true });
   }, [caseQ.data?.id, caseQ.data?.journeys?.is_crm, nav]);
 
+  // Ao abrir o case, marca as mensagens inbound como "vistas" (por usuário).
+  useEffect(() => {
+    if (!activeTenantId || !id || !user?.id) return;
+    supabase
+      .from("case_message_reads")
+      .upsert(
+        {
+          tenant_id: activeTenantId,
+          case_id: id,
+          user_id: user.id,
+          last_seen_at: new Date().toISOString(),
+        },
+        { onConflict: "tenant_id,case_id,user_id" }
+      )
+      .then(() => null);
+  }, [activeTenantId, id, user?.id]);
+
   const attachmentsQ = useQuery({
     queryKey: ["case_attachments", activeTenantId, id],
     enabled: Boolean(activeTenantId && id),

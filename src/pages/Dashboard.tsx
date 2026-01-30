@@ -54,6 +54,12 @@ type DebugRpc = {
   }>;
 };
 
+type ReadRow = { case_id: string; last_seen_at: string };
+
+type WaMsgLite = { case_id: string | null; occurred_at: string; from_phone: string | null };
+
+type WaInstanceRow = { id: string; phone_number: string | null };
+
 function minutesAgo(iso: string) {
   const diff = Date.now() - new Date(iso).getTime();
   return Math.max(0, Math.round(diff / 60000));
@@ -81,6 +87,20 @@ function getMetaPhone(meta: any): string | null {
   return typeof direct === "string" && direct.trim() ? direct.trim() : null;
 }
 
+function digitsTail(s: string | null | undefined, tail = 11) {
+  const d = String(s ?? "").replace(/\D/g, "");
+  if (!d) return "";
+  return d.length > tail ? d.slice(-tail) : d;
+}
+
+function samePhoneLoose(a: string | null | undefined, b: string | null | undefined) {
+  const da = digitsTail(a);
+  const db = digitsTail(b);
+  if (!da || !db) return false;
+  if (Math.min(da.length, db.length) < 10) return false;
+  return da === db;
+}
+
 export default function Dashboard() {
   const { activeTenantId } = useTenant();
   const { user } = useSession();
@@ -92,6 +112,24 @@ export default function Dashboard() {
   const [refreshingToken, setRefreshingToken] = useState(false);
   const [q, setQ] = useState("");
   const [movingCaseId, setMovingCaseId] = useState<string | null>(null);
+
+  const instanceQ = useQuery({
+    queryKey: ["wa_instance_active_first", activeTenantId],
+    enabled: Boolean(activeTenantId),
+    staleTime: 30_000,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("wa_instances")
+        .select("id,phone_number")
+        .eq("tenant_id", activeTenantId!)
+        .eq("status", "active")
+        .order("created_at", { ascending: true })
+        .limit(1)
+        .maybeSingle();
+      if (error) throw error;
+      return (data ?? null) as WaInstanceRow | null;
+    },
+  });
 
   // Back-compat: /app?journey=<uuid> -> /app/j/<journeys.key>
   const legacyJourneyId = useMemo(() => {
@@ -310,6 +348,76 @@ export default function Dashboard() {
     });
   }, [journeyRows, q, isCrm, customersQ.data, casePhoneQ.data]);
 
+  const visibleCaseIds = useMemo(() => filteredRows.map((r) => r.id), [filteredRows]);
+
+  const readsQ = useQuery({
+    queryKey: ["case_message_reads", activeTenantId, user?.id],
+    enabled: Boolean(activeTenantId && user?.id),
+    staleTime: 10_000,
+    refetchOnWindowFocus: true,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("case_message_reads")
+        .select("case_id,last_seen_at")
+        .eq("tenant_id", activeTenantId!)
+        .eq("user_id", user!.id)
+        .limit(2000);
+      if (error) throw error;
+      return (data ?? []) as any as ReadRow[];
+    },
+  });
+
+  const lastInboundQ = useQuery({
+    queryKey: ["case_last_inbound", activeTenantId, visibleCaseIds.join(",")],
+    enabled: Boolean(activeTenantId && visibleCaseIds.length),
+    refetchInterval: 5000,
+    refetchOnWindowFocus: true,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("wa_messages")
+        .select("case_id,occurred_at,from_phone")
+        .eq("tenant_id", activeTenantId!)
+        .eq("direction", "inbound")
+        .in("case_id", visibleCaseIds)
+        .order("occurred_at", { ascending: false })
+        .limit(5000);
+      if (error) throw error;
+      return (data ?? []) as any as WaMsgLite[];
+    },
+  });
+
+  const readByCase = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const r of readsQ.data ?? []) m.set(r.case_id, r.last_seen_at);
+    return m;
+  }, [readsQ.data]);
+
+  const lastInboundAtByCase = useMemo(() => {
+    const m = new Map<string, string>();
+    const instPhone = instanceQ.data?.phone_number ?? null;
+
+    for (const row of lastInboundQ.data ?? []) {
+      const cid = String((row as any).case_id ?? "");
+      if (!cid) continue;
+      if (instPhone && samePhoneLoose(instPhone, (row as any).from_phone)) continue;
+      if (!m.has(cid)) m.set(cid, row.occurred_at);
+    }
+    return m;
+  }, [lastInboundQ.data, instanceQ.data?.phone_number]);
+
+  const unreadByCase = useMemo(() => {
+    const s = new Set<string>();
+    for (const [cid, lastInboundAt] of lastInboundAtByCase.entries()) {
+      const seenAt = readByCase.get(cid) ?? null;
+      if (!seenAt) {
+        s.add(cid);
+        continue;
+      }
+      if (new Date(lastInboundAt).getTime() > new Date(seenAt).getTime()) s.add(cid);
+    }
+    return s;
+  }, [lastInboundAtByCase, readByCase]);
+
   const statusCounts = useMemo(() => {
     const m = new Map<string, number>();
     for (const r of filteredRows) {
@@ -392,18 +500,31 @@ export default function Dashboard() {
 
     const all = [...baseStates, ...(extras.length ? ["__other__"] : [])];
 
+    const sortCases = (a: CaseRow, b: CaseRow) => {
+      const au = unreadByCase.has(a.id);
+      const bu = unreadByCase.has(b.id);
+      if (au !== bu) return au ? -1 : 1;
+
+      const at = lastInboundAtByCase.get(a.id) ?? a.updated_at;
+      const bt = lastInboundAtByCase.get(b.id) ?? b.updated_at;
+      return new Date(bt).getTime() - new Date(at).getTime();
+    };
+
     return all.map((st) => {
-      const items =
+      const itemsRaw =
         st === "__other__"
           ? filteredRows.filter((r) => !known.has(r.state))
           : filteredRows.filter((r) => r.state === st);
+
+      const items = [...itemsRaw].sort(sortCases);
+
       return {
         key: st,
         label: st === "__other__" ? "Outros" : titleizeState(st),
         items,
       };
     });
-  }, [filteredRows, states]);
+  }, [filteredRows, states, unreadByCase, lastInboundAtByCase]);
 
   const shouldShowInvalidJourneyBanner =
     Boolean(journeyKey) && Boolean(journeyQ.data?.length) && !selectedJourney;
@@ -480,6 +601,8 @@ export default function Dashboard() {
                   pendQ.refetch();
                   debugRpcQ.refetch();
                   rlsDiagQ.refetch();
+                  lastInboundQ.refetch();
+                  readsQ.refetch();
                 }}
               >
                 <RefreshCw className="mr-2 h-4 w-4" /> Atualizar
@@ -689,6 +812,7 @@ export default function Dashboard() {
                         const pend = pendQ.data?.get(c.id);
                         const age = minutesAgo(c.updated_at);
                         const isMoving = movingCaseId === c.id;
+                        const unread = unreadByCase.has(c.id);
                         const cust = isCrm ? customersQ.data?.get(String((c as any).customer_id ?? "")) : null;
 
                         // Para CRM: o título do card vira o nome do cliente; se não tiver,
@@ -715,7 +839,7 @@ export default function Dashboard() {
                             }}
                             className={cn(
                               "block rounded-[22px] border bg-white p-4 shadow-sm transition hover:shadow-md",
-                              "border-slate-200 hover:border-slate-300",
+                              unread ? "border-rose-200 hover:border-rose-300" : "border-slate-200 hover:border-slate-300",
                               isCrm ? "cursor-grab active:cursor-grabbing" : "",
                               isMoving ? "opacity-60" : ""
                             )}
@@ -729,15 +853,24 @@ export default function Dashboard() {
                                     (c.vendors?.phone_e164 ? ` • ${c.vendors.phone_e164}` : "")}
                                 </div>
                               </div>
-                              {pend?.open ? (
-                                <Badge className="rounded-full border-0 bg-amber-100 text-amber-900 hover:bg-amber-100">
-                                  {pend.open} pend.
-                                </Badge>
-                              ) : (
-                                <Badge className="rounded-full border-0 bg-emerald-100 text-emerald-900 hover:bg-emerald-100">
-                                  ok
-                                </Badge>
-                              )}
+
+                              <div className="flex flex-col items-end gap-2">
+                                {unread ? (
+                                  <div className="inline-flex items-center gap-2 rounded-full bg-rose-100 px-2 py-1 text-[11px] font-semibold text-rose-900">
+                                    <span className="h-1.5 w-1.5 rounded-full bg-rose-600" /> nova msg
+                                  </div>
+                                ) : null}
+
+                                {pend?.open ? (
+                                  <Badge className="rounded-full border-0 bg-amber-100 text-amber-900 hover:bg-amber-100">
+                                    {pend.open} pend.
+                                  </Badge>
+                                ) : (
+                                  <Badge className="rounded-full border-0 bg-emerald-100 text-emerald-900 hover:bg-emerald-100">
+                                    ok
+                                  </Badge>
+                                )}
+                              </div>
                             </div>
 
                             <div className="mt-3 flex items-center justify-between gap-2 text-xs text-slate-600">

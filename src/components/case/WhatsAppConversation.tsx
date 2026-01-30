@@ -116,6 +116,21 @@ function getBestText(m: WaMessageRow) {
   );
 }
 
+function digitsTail(s: string | null | undefined, tail = 11) {
+  const d = String(s ?? "").replace(/\D/g, "");
+  if (!d) return "";
+  return d.length > tail ? d.slice(-tail) : d;
+}
+
+function samePhoneLoose(a: string | null | undefined, b: string | null | undefined) {
+  const da = digitsTail(a);
+  const db = digitsTail(b);
+  if (!da || !db) return false;
+  // require at least 10 digits to reduce false matches
+  if (Math.min(da.length, db.length) < 10) return false;
+  return da === db;
+}
+
 export function WhatsAppConversation({ caseId, className }: { caseId: string; className?: string }) {
   const qc = useQueryClient();
   const { activeTenantId } = useTenant();
@@ -161,14 +176,23 @@ export function WhatsAppConversation({ caseId, className }: { caseId: string; cl
     },
   });
 
+  const instancePhone = instanceQ.data?.phone_number ?? null;
+
   const counterpartPhone = useMemo(() => {
     const msgs = waMsgsQ.data ?? [];
     if (!msgs.length) return null;
 
     const last = msgs[msgs.length - 1];
-    if (last.direction === "inbound") return last.from_phone ?? null;
-    return last.to_phone ?? null;
-  }, [waMsgsQ.data]);
+
+    // Hygiene: sometimes provider webhooks store our own instance-sent messages as inbound.
+    // If the instance phone matches `from_phone`, treat it as outbound.
+    const effectiveOutbound =
+      samePhoneLoose(instancePhone, last.from_phone) ||
+      (last.direction === "outbound" && !samePhoneLoose(instancePhone, last.to_phone));
+
+    if (effectiveOutbound) return last.to_phone ?? null;
+    return last.from_phone ?? null;
+  }, [waMsgsQ.data, instancePhone]);
 
   const participants = useMemo(() => {
     const s = new Set<string>();
@@ -333,16 +357,25 @@ export function WhatsAppConversation({ caseId, className }: { caseId: string; cl
 
             <div className="space-y-3">
               {(waMsgsQ.data ?? []).map((m) => {
-                const inbound = m.direction === "inbound";
+                const effectiveInbound =
+                  samePhoneLoose(instancePhone, m.from_phone)
+                    ? false
+                    : samePhoneLoose(instancePhone, m.to_phone)
+                      ? true
+                      : m.direction === "inbound";
+
                 const loc = m.type === "location" ? extractLocation(m.payload_json) : null;
                 const mapsUrl = loc ? `https://www.google.com/maps?q=${loc.lat},${loc.lng}` : null;
 
                 const text = m.type === "text" ? getBestText(m) : "";
 
                 return (
-                  <div key={m.id} className={cn("flex items-end gap-2", inbound ? "justify-start" : "justify-end")}>
+                  <div
+                    key={m.id}
+                    className={cn("flex items-end gap-2", effectiveInbound ? "justify-start" : "justify-end")}
+                  >
                     {/* Avatar (only show on inbound to mimic the reference layout) */}
-                    {inbound ? (
+                    {effectiveInbound ? (
                       <div className="h-9 w-9 flex-shrink-0 rounded-2xl bg-white/80 border border-slate-200 grid place-items-center text-xs font-bold text-slate-700">
                         {initialsFromPhone(m.from_phone)}
                       </div>
@@ -350,11 +383,11 @@ export function WhatsAppConversation({ caseId, className }: { caseId: string; cl
                       <div className="h-9 w-9 flex-shrink-0" />
                     )}
 
-                    <div className={cn("max-w-[78%]", inbound ? "mr-auto" : "ml-auto")}>
+                    <div className={cn("max-w-[78%]", effectiveInbound ? "mr-auto" : "ml-auto")}>
                       <div
                         className={cn(
                           "rounded-[20px] px-3 py-2 shadow-sm",
-                          inbound
+                          effectiveInbound
                             ? "bg-white border border-slate-200 text-slate-900"
                             : "bg-[hsl(var(--byfrost-accent))] text-white"
                         )}
@@ -366,7 +399,7 @@ export function WhatsAppConversation({ caseId, className }: { caseId: string; cl
                               alt="Imagem"
                               className={cn(
                                 "max-h-[220px] w-auto rounded-2xl border",
-                                inbound ? "border-slate-200" : "border-white/25"
+                                effectiveInbound ? "border-slate-200" : "border-white/25"
                               )}
                             />
                           </a>
@@ -375,7 +408,7 @@ export function WhatsAppConversation({ caseId, className }: { caseId: string; cl
                             <div
                               className={cn(
                                 "text-sm font-medium",
-                                inbound ? "text-slate-900" : "text-white"
+                                effectiveInbound ? "text-slate-900" : "text-white"
                               )}
                             >
                               Áudio
@@ -383,7 +416,7 @@ export function WhatsAppConversation({ caseId, className }: { caseId: string; cl
                             {m.media_url ? (
                               <audio controls src={m.media_url} className="w-full" />
                             ) : (
-                              <div className={cn("text-sm", inbound ? "text-slate-600" : "text-white/90")}>
+                              <div className={cn("text-sm", effectiveInbound ? "text-slate-600" : "text-white/90")}>
                                 (sem URL do áudio)
                               </div>
                             )}
@@ -393,7 +426,7 @@ export function WhatsAppConversation({ caseId, className }: { caseId: string; cl
                             <div
                               className={cn(
                                 "flex items-center gap-2 text-sm font-medium",
-                                inbound ? "text-slate-900" : "text-white"
+                                effectiveInbound ? "text-slate-900" : "text-white"
                               )}
                             >
                               <MapPin className="h-4 w-4" /> Localização
@@ -405,26 +438,36 @@ export function WhatsAppConversation({ caseId, className }: { caseId: string; cl
                                 rel="noreferrer"
                                 className={cn(
                                   "text-sm underline underline-offset-2",
-                                  inbound ? "text-slate-700" : "text-white/95"
+                                  effectiveInbound ? "text-slate-700" : "text-white/95"
                                 )}
                               >
                                 Abrir no Maps
                               </a>
                             ) : (
-                              <div className={cn("text-sm", inbound ? "text-slate-600" : "text-white/90")}>
+                              <div className={cn("text-sm", effectiveInbound ? "text-slate-600" : "text-white/90")}>
                                 (sem coordenadas)
                               </div>
                             )}
                           </div>
                         ) : (
-                          <div className={cn("text-sm leading-relaxed", inbound ? "text-slate-900" : "text-white")}>
+                          <div
+                            className={cn(
+                              "text-sm leading-relaxed",
+                              effectiveInbound ? "text-slate-900" : "text-white"
+                            )}
+                          >
                             {text || "(sem texto)"}
                           </div>
                         )}
                       </div>
 
-                      <div className={cn("mt-1 text-[11px]", inbound ? "text-slate-500" : "text-slate-500 text-right")}>
-                        {inbound ? (m.from_phone ?? "") : "Você"} • {fmtTime(m.occurred_at)}
+                      <div
+                        className={cn(
+                          "mt-1 text-[11px]",
+                          effectiveInbound ? "text-slate-500" : "text-slate-500 text-right"
+                        )}
+                      >
+                        {effectiveInbound ? (m.from_phone ?? "") : "Você"} • {fmtTime(m.occurred_at)}
                       </div>
                     </div>
                   </div>
