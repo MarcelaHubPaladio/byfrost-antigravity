@@ -10,6 +10,9 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { WhatsAppConversation } from "@/components/case/WhatsAppConversation";
 import { CaseTimeline, type CaseTimelineEvent } from "@/components/case/CaseTimeline";
+import { CaseCustomerCard } from "@/components/crm/CaseCustomerCard";
+import { CaseNotesCard } from "@/components/crm/CaseNotesCard";
+import { CaseTasksCard } from "@/components/crm/CaseTasksCard";
 import {
   ArrowLeft,
   CheckCircle2,
@@ -46,7 +49,9 @@ type CaseRow = {
   created_at: string;
   updated_at: string;
   assigned_vendor_id: string | null;
+  customer_id: string | null;
   vendors?: { display_name: string | null; phone_e164: string | null } | null;
+  journeys?: { key: string | null; name: string | null; is_crm?: boolean } | null;
 };
 
 export default function CaseDetail() {
@@ -66,7 +71,7 @@ export default function CaseDetail() {
       const { data, error } = await supabase
         .from("cases")
         .select(
-          "id,tenant_id,title,status,state,created_at,updated_at,assigned_vendor_id,vendors:vendors!cases_assigned_vendor_id_fkey(display_name,phone_e164)"
+          "id,tenant_id,customer_id,title,status,state,created_at,updated_at,assigned_vendor_id,vendors:vendors!cases_assigned_vendor_id_fkey(display_name,phone_e164),journeys:journeys!cases_journey_id_fkey(key,name,is_crm)"
         )
         .eq("tenant_id", activeTenantId!)
         .eq("id", id!)
@@ -160,6 +165,8 @@ export default function CaseDetail() {
     const phone = fieldsQ.data?.find((f: any) => f.key === "phone")?.value_text;
     return phone as string | undefined;
   }, [fieldsQ.data]);
+
+  const isCrm = Boolean(caseQ.data?.journeys?.is_crm);
 
   const approveAndPrepare = async () => {
     if (!activeTenantId || !id || !caseQ.data) return;
@@ -286,6 +293,11 @@ export default function CaseDetail() {
                 <Badge className="rounded-full border-0 bg-[hsl(var(--byfrost-accent)/0.10)] text-[hsl(var(--byfrost-accent))] hover:bg-[hsl(var(--byfrost-accent)/0.10)]">
                   {c?.status}
                 </Badge>
+                {c?.journeys?.is_crm ? (
+                  <Badge className="rounded-full border-0 bg-indigo-100 text-indigo-900 hover:bg-indigo-100">
+                    CRM
+                  </Badge>
+                ) : null}
                 <span className="truncate">
                   {(c?.vendors?.display_name ?? "Vendedor") +
                     (c?.vendors?.phone_e164 ? ` • ${c?.vendors?.phone_e164}` : "")}
@@ -313,6 +325,23 @@ export default function CaseDetail() {
           <div className="mt-5 grid gap-4 lg:grid-cols-[0.95fr_1.05fr]">
             {/* Left */}
             <div className="space-y-4">
+              {isCrm && activeTenantId && id && (
+                <div className="space-y-4">
+                  <CaseCustomerCard
+                    tenantId={activeTenantId}
+                    caseId={id}
+                    customerId={c?.customer_id ?? null}
+                    assignedVendorId={c?.assigned_vendor_id ?? null}
+                    suggestedPhone={extractedCustomerPhone ?? null}
+                  />
+
+                  <div className="grid gap-4 lg:grid-cols-2">
+                    <CaseTasksCard tenantId={activeTenantId} caseId={id} />
+                    <CaseNotesCard tenantId={activeTenantId} caseId={id} userId={user?.id ?? null} />
+                  </div>
+                </div>
+              )}
+
               {/* Pendências */}
               <div className="rounded-[22px] border border-slate-200 bg-white p-4">
                 <div className="flex items-center justify-between">

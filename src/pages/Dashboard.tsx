@@ -16,6 +16,7 @@ import { Clock, MapPin, RefreshCw, Search, Sparkles, ShieldAlert } from "lucide-
 type CaseRow = {
   id: string;
   journey_id: string | null;
+  customer_id?: string | null;
   title: string | null;
   status: string;
   state: string;
@@ -176,7 +177,7 @@ export default function Dashboard() {
       const { data, error } = await supabase
         .from("cases")
         .select(
-          "id,journey_id,title,status,state,created_at,updated_at,assigned_vendor_id,vendors:vendors!cases_assigned_vendor_id_fkey(display_name,phone_e164),journeys:journeys!cases_journey_id_fkey(key,name,is_crm),meta_json"
+          "id,journey_id,customer_id,title,status,state,created_at,updated_at,assigned_vendor_id,vendors:vendors!cases_assigned_vendor_id_fkey(display_name,phone_e164),journeys:journeys!cases_journey_id_fkey(key,name,is_crm),meta_json"
         )
         .eq("tenant_id", activeTenantId!)
         .is("deleted_at", null)
@@ -188,11 +189,12 @@ export default function Dashboard() {
     },
   });
 
-  const filteredRows = useMemo(() => {
+  // 1) Base: casos desta jornada (sem busca)
+  const journeyRows = useMemo(() => {
     const rows = casesQ.data ?? [];
-    if (!selectedKey) return [];
+    if (!selectedKey) return [] as CaseRow[];
 
-    const base = rows.filter((r) => {
+    return rows.filter((r) => {
       const keyFromJoin = r.journeys?.key ?? null;
       const keyFromMeta = (r.meta_json as any)?.journey_key ?? null;
 
@@ -204,15 +206,49 @@ export default function Dashboard() {
 
       return false;
     });
+  }, [casesQ.data, selectedKey, selectedJourney?.id]);
 
+  // 2) Clientes (somente CRM)
+  const customerIds = useMemo(() => {
+    if (!isCrm) return [] as string[];
+    const ids = new Set<string>();
+    for (const r of journeyRows) {
+      const cid = String((r as any).customer_id ?? "");
+      if (cid && cid.length > 10) ids.add(cid);
+    }
+    return Array.from(ids);
+  }, [journeyRows, isCrm]);
+
+  const customersQ = useQuery({
+    queryKey: ["customers_by_ids", activeTenantId, customerIds.join(",")],
+    enabled: Boolean(activeTenantId && isCrm && customerIds.length),
+    staleTime: 20_000,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("customer_accounts")
+        .select("id,phone_e164,name,email")
+        .eq("tenant_id", activeTenantId!)
+        .in("id", customerIds)
+        .is("deleted_at", null)
+        .limit(500);
+      if (error) throw error;
+      const m = new Map<string, any>();
+      for (const c of data ?? []) m.set((c as any).id, c);
+      return m;
+    },
+  });
+
+  // 3) Busca
+  const filteredRows = useMemo(() => {
     const qq = q.trim().toLowerCase();
-    if (!qq) return base;
+    if (!qq) return journeyRows;
 
-    return base.filter((r) => {
-      const t = `${r.title ?? ""} ${(r.vendors?.display_name ?? "")} ${(r.vendors?.phone_e164 ?? "")}`.toLowerCase();
+    return journeyRows.filter((r) => {
+      const cust = isCrm ? customersQ.data?.get(String((r as any).customer_id ?? "")) : null;
+      const t = `${r.title ?? ""} ${(r.vendors?.display_name ?? "")} ${(r.vendors?.phone_e164 ?? "")} ${cust?.name ?? ""} ${cust?.phone_e164 ?? ""} ${cust?.email ?? ""}`.toLowerCase();
       return t.includes(qq);
     });
-  }, [casesQ.data, selectedKey, selectedJourney?.id, q]);
+  }, [journeyRows, q, isCrm, customersQ.data]);
 
   const statusCounts = useMemo(() => {
     const m = new Map<string, number>();
@@ -593,6 +629,7 @@ export default function Dashboard() {
                         const pend = pendQ.data?.get(c.id);
                         const age = minutesAgo(c.updated_at);
                         const isMoving = movingCaseId === c.id;
+                        const cust = isCrm ? customersQ.data?.get(String((c as any).customer_id ?? "")) : null;
 
                         return (
                           <Link
@@ -621,6 +658,11 @@ export default function Dashboard() {
                                   {(c.vendors?.display_name ?? "Vendedor") +
                                     (c.vendors?.phone_e164 ? ` • ${c.vendors.phone_e164}` : "")}
                                 </div>
+                                {isCrm && cust && (
+                                  <div className="mt-1 truncate text-xs text-slate-600">
+                                    Cliente: {cust.name ?? cust.phone_e164 ?? "—"}
+                                  </div>
+                                )}
                               </div>
                               {pend?.open ? (
                                 <Badge className="rounded-full border-0 bg-amber-100 text-amber-900 hover:bg-amber-100">
