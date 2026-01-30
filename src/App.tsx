@@ -16,6 +16,7 @@ import CaseDetail from "@/pages/CaseDetail";
 import Simulator from "@/pages/Simulator";
 import Settings from "@/pages/Settings";
 import Admin from "@/pages/Admin";
+import Crm from "@/pages/Crm";
 
 const queryClient = new QueryClient();
 
@@ -35,6 +36,7 @@ const App = () => (
               {/* Dashboard por jornada (slug = journeys.key) */}
               <Route path="/app" element={<Dashboard />} />
               <Route path="/app/j/:journeyKey" element={<Dashboard />} />
+              <Route path="/app/crm" element={<Crm />} />
 
               <Route path="/app/cases/:id" element={<CaseDetail />} />
               <Route path="/app/simulator" element={<Simulator />} />

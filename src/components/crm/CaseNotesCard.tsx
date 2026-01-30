@@ -12,7 +12,7 @@ type NoteRow = {
   id: string;
   tenant_id: string;
   case_id: string;
-  body: string;
+  body_text: string;
   created_by_user_id: string | null;
   created_at: string;
   deleted_at: string | null;
@@ -39,7 +39,7 @@ export function CaseNotesCard(props: { tenantId: string; caseId: string; userId:
     queryFn: async () => {
       const { data, error } = await supabase
         .from("case_notes")
-        .select("id,tenant_id,case_id,body,created_by_user_id,created_at,deleted_at")
+        .select("id,tenant_id,case_id,body_text,created_by_user_id,created_at,deleted_at")
         .eq("tenant_id", props.tenantId)
         .eq("case_id", props.caseId)
         .is("deleted_at", null)
@@ -58,7 +58,7 @@ export function CaseNotesCard(props: { tenantId: string; caseId: string; userId:
       const { error } = await supabase.from("case_notes").insert({
         tenant_id: props.tenantId,
         case_id: props.caseId,
-        body: t,
+        body_text: t,
         created_by_user_id: props.userId,
       });
       if (error) throw error;
@@ -131,7 +131,7 @@ export function CaseNotesCard(props: { tenantId: string; caseId: string; userId:
           <div key={n.id} className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
-                <div className="whitespace-pre-wrap text-sm text-slate-900">{n.body}</div>
+                <div className="whitespace-pre-wrap text-sm text-slate-900">{n.body_text}</div>
                 <div className="mt-2 text-[11px] text-slate-500">{fmt(n.created_at)}</div>
               </div>
               <Button

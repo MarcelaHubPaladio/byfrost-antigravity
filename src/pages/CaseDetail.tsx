@@ -13,6 +13,7 @@ import { CaseTimeline, type CaseTimelineEvent } from "@/components/case/CaseTime
 import { CaseCustomerCard } from "@/components/crm/CaseCustomerCard";
 import { CaseNotesCard } from "@/components/crm/CaseNotesCard";
 import { CaseTasksCard } from "@/components/crm/CaseTasksCard";
+import { CaseProductsCard } from "@/components/crm/CaseProductsCard";
 import {
   ArrowLeft,
   CheckCircle2,
@@ -334,6 +335,8 @@ export default function CaseDetail() {
                     assignedVendorId={c?.assigned_vendor_id ?? null}
                     suggestedPhone={extractedCustomerPhone ?? null}
                   />
+
+                  <CaseProductsCard tenantId={activeTenantId} caseId={id} />
 
                   <div className="grid gap-4 lg:grid-cols-2">
                     <CaseTasksCard tenantId={activeTenantId} caseId={id} />

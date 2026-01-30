@@ -114,14 +114,16 @@ export default function Dashboard() {
         .limit(300);
       if (error) throw error;
 
+      // IMPORTANT: /app não deve listar jornadas CRM.
       const opts: JourneyOpt[] = (data ?? [])
         .map((r: any) => r.journeys)
         .filter(Boolean)
+        .filter((j: any) => !j.is_crm)
         .map((j: any) => ({
           id: j.id,
           key: j.key,
           name: j.name,
-          is_crm: j.is_crm ?? false,
+          is_crm: false,
           default_state_machine_json: j.default_state_machine_json ?? {},
         }));
 

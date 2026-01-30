@@ -1,9 +1,20 @@
 import { PropsWithChildren, useEffect, useMemo, useState } from "react";
 import { Link, NavLink, useNavigate } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { useTenant } from "@/providers/TenantProvider";
 import { useSession } from "@/providers/SessionProvider";
-import { LayoutGrid, FlaskConical, Settings, Crown, ArrowLeftRight, LogOut, User2, ShieldCheck } from "lucide-react";
+import {
+  LayoutGrid,
+  FlaskConical,
+  Settings,
+  Crown,
+  ArrowLeftRight,
+  LogOut,
+  User2,
+  ShieldCheck,
+  LayoutDashboard,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
@@ -115,9 +126,27 @@ function getUserDisplayName(user: any) {
 
 export function AppShell({ children }: PropsWithChildren) {
   const nav = useNavigate();
-  const { activeTenant, isSuperAdmin } = useTenant();
+  const { activeTenant, isSuperAdmin, activeTenantId } = useTenant();
   const { user } = useSession();
   const [userMenuOpen, setUserMenuOpen] = useState(false);
+
+  const crmEnabledQ = useQuery({
+    queryKey: ["nav_has_crm", activeTenantId],
+    enabled: Boolean(activeTenantId),
+    staleTime: 30_000,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("tenant_journeys")
+        .select("id, journeys(is_crm)")
+        .eq("tenant_id", activeTenantId!)
+        .eq("enabled", true)
+        .limit(50);
+      if (error) throw error;
+      return Boolean((data ?? []).some((r: any) => Boolean(r?.journeys?.is_crm)));
+    },
+  });
+
+  const hasCrm = Boolean(crmEnabledQ.data);
 
   const palettePrimaryHex =
     (activeTenant?.branding_json?.palette?.primary?.hex as string | undefined) ?? null;
@@ -206,6 +235,7 @@ export function AppShell({ children }: PropsWithChildren) {
             <div className="p-3">
               <div className="grid gap-2">
                 <NavTile to="/app" icon={LayoutGrid} label="Dashboard" />
+                {hasCrm && <NavTile to="/app/crm" icon={LayoutDashboard} label="CRM" />}
                 <NavTile to="/app/simulator" icon={FlaskConical} label="Simulador" />
                 {isSuperAdmin && <NavTile to="/app/admin" icon={Crown} label="Admin" />}
                 <NavTile to="/app/settings" icon={Settings} label="Config" />
