@@ -23,6 +23,7 @@ type CaseRow = {
   created_at: string;
   updated_at: string;
   assigned_vendor_id: string | null;
+  is_chat?: boolean;
   vendors?: { display_name: string | null; phone_e164: string | null } | null;
   // Nem sempre existe FK/relacionamento exposto; então mantemos também meta_json.
   journeys?: { key: string | null; name: string | null; is_crm?: boolean } | null;
@@ -230,10 +231,11 @@ export default function Dashboard() {
       const { data, error } = await supabase
         .from("cases")
         .select(
-          "id,journey_id,customer_id,title,status,state,created_at,updated_at,assigned_vendor_id,vendors:vendors!cases_assigned_vendor_id_fkey(display_name,phone_e164),journeys:journeys!cases_journey_id_fkey(key,name,is_crm),meta_json"
+          "id,journey_id,customer_id,title,status,state,created_at,updated_at,assigned_vendor_id,is_chat,vendors:vendors!cases_assigned_vendor_id_fkey(display_name,phone_e164),journeys:journeys!cases_journey_id_fkey(key,name,is_crm),meta_json"
         )
         .eq("tenant_id", activeTenantId!)
         .is("deleted_at", null)
+        .eq("is_chat", false)
         .order("updated_at", { ascending: false })
         .limit(300);
 

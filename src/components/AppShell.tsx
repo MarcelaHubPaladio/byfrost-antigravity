@@ -14,6 +14,7 @@ import {
   User2,
   ShieldCheck,
   LayoutDashboard,
+  MessagesSquare,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -238,6 +239,7 @@ export function AppShell({
             <div className="p-3">
               <div className="grid gap-2">
                 <NavTile to="/app" icon={LayoutGrid} label="Dashboard" />
+                <NavTile to="/app/chat" icon={MessagesSquare} label="Chat" />
                 {hasCrm && <NavTile to="/app/crm" icon={LayoutDashboard} label="CRM" />}
                 <NavTile to="/app/simulator" icon={FlaskConical} label="Simulador" />
                 {isSuperAdmin && <NavTile to="/app/admin" icon={Crown} label="Admin" />}

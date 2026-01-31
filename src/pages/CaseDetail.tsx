@@ -8,6 +8,7 @@ import { useSession } from "@/providers/SessionProvider";
 import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
 import { WhatsAppConversation } from "@/components/case/WhatsAppConversation";
 import { CaseTimeline, type CaseTimelineEvent } from "@/components/case/CaseTimeline";
 import {
@@ -17,8 +18,10 @@ import {
   Image as ImageIcon,
   ShieldCheck,
   Send,
+  MessagesSquare,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { showError, showSuccess } from "@/utils/toast";
 
 function ConfidencePill({ v }: { v: number | null | undefined }) {
   const pct = Math.round(Math.max(0, Math.min(1, Number(v ?? 0))) * 100);
@@ -47,6 +50,7 @@ type CaseRow = {
   updated_at: string;
   assigned_vendor_id: string | null;
   customer_id: string | null;
+  is_chat?: boolean;
   vendors?: { display_name: string | null; phone_e164: string | null } | null;
   journeys?: { key: string | null; name: string | null; is_crm?: boolean } | null;
 };
@@ -59,6 +63,8 @@ export default function CaseDetail() {
   const { user } = useSession();
 
   const [sending, setSending] = useState(false);
+  const [chatOnly, setChatOnly] = useState(false);
+  const [updatingChatOnly, setUpdatingChatOnly] = useState(false);
 
   const caseQ = useQuery({
     queryKey: ["case", activeTenantId, id],
@@ -68,7 +74,7 @@ export default function CaseDetail() {
       const { data, error } = await supabase
         .from("cases")
         .select(
-          "id,tenant_id,customer_id,title,status,state,created_at,updated_at,assigned_vendor_id,vendors:vendors!cases_assigned_vendor_id_fkey(display_name,phone_e164),journeys:journeys!cases_journey_id_fkey(key,name,is_crm)"
+          "id,tenant_id,customer_id,title,status,state,created_at,updated_at,assigned_vendor_id,is_chat,vendors:vendors!cases_assigned_vendor_id_fkey(display_name,phone_e164),journeys:journeys!cases_journey_id_fkey(key,name,is_crm)"
         )
         .eq("tenant_id", activeTenantId!)
         .eq("id", id!)
@@ -78,6 +84,39 @@ export default function CaseDetail() {
       return data as any as CaseRow;
     },
   });
+
+  useEffect(() => {
+    setChatOnly(Boolean(caseQ.data?.is_chat));
+  }, [caseQ.data?.is_chat]);
+
+  const updateChatOnly = async (next: boolean) => {
+    if (!activeTenantId || !id) return;
+    if (updatingChatOnly) return;
+
+    setUpdatingChatOnly(true);
+    setChatOnly(next);
+    try {
+      const { error } = await supabase
+        .from("cases")
+        .update({ is_chat: next })
+        .eq("tenant_id", activeTenantId)
+        .eq("id", id);
+      if (error) throw error;
+
+      showSuccess(next ? "Marcado como chat." : "Removido de chat.");
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ["case", activeTenantId, id] }),
+        qc.invalidateQueries({ queryKey: ["cases_by_tenant", activeTenantId] }),
+        qc.invalidateQueries({ queryKey: ["crm_cases_by_tenant", activeTenantId] }),
+        qc.invalidateQueries({ queryKey: ["chat_cases", activeTenantId] }),
+      ]);
+    } catch (e: any) {
+      setChatOnly(Boolean(caseQ.data?.is_chat));
+      showError(`Falha ao atualizar: ${e?.message ?? "erro"}`);
+    } finally {
+      setUpdatingChatOnly(false);
+    }
+  };
 
   // Higienização: caso CRM abre em rota própria.
   useEffect(() => {
@@ -319,11 +358,33 @@ export default function CaseDetail() {
               </div>
             </div>
 
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
+              <div className="flex items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white/70 px-3 py-2 text-xs text-slate-700 shadow-sm">
+                <div className="min-w-0">
+                  <div className="text-[11px] font-semibold text-slate-800">Somente chat</div>
+                  <div className="text-[11px] text-slate-500">fora de fluxo</div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <Switch checked={chatOnly} onCheckedChange={updateChatOnly} disabled={updatingChatOnly || !c} />
+                  {chatOnly ? (
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      className="h-9 rounded-2xl"
+                      onClick={() => nav(`/app/chat/${id}`)}
+                      title="Abrir no inbox de Chat"
+                    >
+                      <MessagesSquare className="mr-2 h-4 w-4" /> Abrir
+                    </Button>
+                  ) : null}
+                </div>
+              </div>
+
               <Button
                 onClick={approveAndPrepare}
-                disabled={sending || !c}
+                disabled={sending || !c || chatOnly}
                 className="h-11 rounded-2xl bg-[hsl(var(--byfrost-accent))] px-5 text-white shadow-sm hover:bg-[hsl(var(--byfrost-accent)/0.92)]"
+                title={chatOnly ? "Este case está como chat; ações de fluxo ficam desabilitadas." : undefined}
               >
                 {sending ? "Processando…" : "Aprovar e preparar mensagem"}
                 <Send className="ml-2 h-4 w-4" />
