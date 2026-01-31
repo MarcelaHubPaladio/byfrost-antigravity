@@ -43,6 +43,14 @@ type CustomerLite = {
   name: string | null;
   email: string | null;
   assigned_vendor_id: string | null;
+  meta_json?: any;
+};
+
+type ChatCaseLite = {
+  id: string;
+  customer_id: string | null;
+  assigned_vendor_id: string | null;
+  meta_json?: any;
 };
 
 type ParsedRow = {
@@ -56,6 +64,7 @@ type ParsedRow = {
 type PreviewRow = ParsedRow & {
   normalizedPhone: string | null;
   existingCustomerId: string | null;
+  existingChatCaseId: string | null;
   action: "create_case" | "update_only" | "skip_error";
   ownerUserId: string | null;
   ownerVendorId: string | null;
@@ -88,6 +97,19 @@ function normalizePhoneLoose(v: string) {
   if (s.startsWith("+")) return s;
   const digits = s.replace(/\D/g, "");
   return digits ? `+${digits}` : "";
+}
+
+function getMetaPhone(meta: any): string | null {
+  if (!meta || typeof meta !== "object") return null;
+  const direct =
+    meta.customer_phone ??
+    meta.customerPhone ??
+    meta.phone ??
+    meta.whatsapp ??
+    meta.to_phone ??
+    meta.toPhone ??
+    null;
+  return typeof direct === "string" && direct.trim() ? direct.trim() : null;
 }
 
 function detectDelimiter(headerLine: string): "," | ";" {
@@ -216,6 +238,8 @@ export function ImportLeadsDialog({
   const [customersCache, setCustomersCache] = useState<CustomerLite[] | null>(null);
   const [usersCache, setUsersCache] = useState<UserProfileLite[] | null>(null);
   const [vendorsCache, setVendorsCache] = useState<VendorLite[] | null>(null);
+  const [chatCasesCache, setChatCasesCache] = useState<ChatCaseLite[] | null>(null);
+  const [chatCasePhonesCache, setChatCasePhonesCache] = useState<Map<string, string> | null>(null);
 
   const reset = () => {
     setFileName("");
@@ -271,6 +295,8 @@ export function ImportLeadsDialog({
     const customers = customersCache ?? [];
     const users = usersCache ?? [];
     const vendors = vendorsCache ?? [];
+    const chatCases = chatCasesCache ?? [];
+    const chatCasePhones = chatCasePhonesCache ?? new Map<string, string>();
 
     const userByEmail = new Map<string, UserProfileLite>();
     for (const u of users) {
@@ -282,13 +308,24 @@ export function ImportLeadsDialog({
     const vendorByPhone = new Map<string, VendorLite>();
     for (const v of vendors) vendorByPhone.set(v.phone_e164, v);
 
+    const findChatCaseByPhone = (phone: string) => {
+      for (const c of chatCases) {
+        const p = chatCasePhones.get(c.id) ?? getMetaPhone(c.meta_json) ?? null;
+        if (!p) continue;
+        if (samePhoneLoose(p, phone)) return c;
+      }
+      return null;
+    };
+
     return parseRows.map((r) => {
       const normalizedPhone = normalizePhoneLoose(r.whatsapp) || null;
       const err = !normalizedPhone ? "WhatsApp inválido" : null;
 
-      const existing = normalizedPhone
+      const existingCustomer = normalizedPhone
         ? customers.find((c) => samePhoneLoose(c.phone_e164, normalizedPhone)) ?? null
         : null;
+
+      const existingChatCase = !existingCustomer && normalizedPhone ? findChatCaseByPhone(normalizedPhone) : null;
 
       const ownerEmail = r.ownerEmail.trim().toLowerCase();
       const ownerUser = ownerEmail ? userByEmail.get(ownerEmail) ?? null : null;
@@ -298,7 +335,7 @@ export function ImportLeadsDialog({
 
       const action: PreviewRow["action"] = err
         ? "skip_error"
-        : existing
+        : existingCustomer || existingChatCase
           ? "update_only"
           : "create_case";
 
@@ -307,7 +344,8 @@ export function ImportLeadsDialog({
       return {
         ...r,
         normalizedPhone,
-        existingCustomerId: existing?.id ?? null,
+        existingCustomerId: existingCustomer?.id ?? null,
+        existingChatCaseId: existingChatCase?.id ?? null,
         action,
         ownerUserId: ownerUser?.user_id ?? null,
         ownerVendorId: ownerVendor?.id ?? null,
@@ -315,13 +353,14 @@ export function ImportLeadsDialog({
         error: err,
       } satisfies PreviewRow;
     });
-  }, [parseRows, customersCache, usersCache, vendorsCache]);
+  }, [parseRows, customersCache, usersCache, vendorsCache, chatCasesCache, chatCasePhonesCache]);
 
   const counts = useMemo(() => {
-    const c = { create_case: 0, update_only: 0, skip_error: 0, missing_owner: 0 };
+    const c = { create_case: 0, update_only: 0, skip_error: 0, missing_owner: 0, update_chat_only: 0 };
     for (const r of previewRows) {
       c[r.action] += 1;
       if (r.action === "create_case" && r.ownerEmail && !r.ownerResolved) c.missing_owner += 1;
+      if (r.action === "update_only" && r.existingChatCaseId && !r.existingCustomerId) c.update_chat_only += 1;
     }
     return c;
   }, [previewRows]);
@@ -330,7 +369,7 @@ export function ImportLeadsDialog({
     // Customers
     const { data: customers, error: cErr } = await supabase
       .from("customer_accounts")
-      .select("id,phone_e164,name,email,assigned_vendor_id")
+      .select("id,phone_e164,name,email,assigned_vendor_id,meta_json")
       .eq("tenant_id", tenantId)
       .is("deleted_at", null)
       .limit(10_000);
@@ -354,9 +393,54 @@ export function ImportLeadsDialog({
       .limit(5000);
     if (vErr) throw vErr;
 
+    // Chat cases (para reconhecer lead já existente mesmo se só chat)
+    const { data: chatCases, error: ccErr } = await supabase
+      .from("cases")
+      .select("id,customer_id,assigned_vendor_id,meta_json")
+      .eq("tenant_id", tenantId)
+      .is("deleted_at", null)
+      .eq("is_chat", true)
+      .limit(5000);
+    if (ccErr) throw ccErr;
+
+    const chatIds = (chatCases ?? []).map((c: any) => String(c.id)).filter(Boolean);
+
+    const phoneByCase = new Map<string, string>();
+    if (chatIds.length) {
+      const { data: fields, error: fErr } = await supabase
+        .from("case_fields")
+        .select("case_id,key,value_text")
+        .eq("tenant_id", tenantId)
+        .in("case_id", chatIds)
+        .in("key", ["whatsapp", "phone", "customer_phone"])
+        .limit(20_000);
+      if (fErr) throw fErr;
+
+      const priority = new Map<string, number>([
+        ["whatsapp", 1],
+        ["customer_phone", 2],
+        ["phone", 3],
+      ]);
+
+      const best = new Map<string, { p: number; v: string }>();
+      for (const r of fields ?? []) {
+        const cid = String((r as any).case_id ?? "");
+        const k = String((r as any).key ?? "");
+        const v = String((r as any).value_text ?? "").trim();
+        if (!cid || !v) continue;
+        const p = priority.get(k) ?? 999;
+        const cur = best.get(cid);
+        if (!cur || p < cur.p) best.set(cid, { p, v });
+      }
+
+      for (const [cid, { v }] of best.entries()) phoneByCase.set(cid, v);
+    }
+
     setCustomersCache((customers ?? []) as any);
     setUsersCache((users ?? []) as any);
     setVendorsCache((vendors ?? []) as any);
+    setChatCasesCache((chatCases ?? []) as any);
+    setChatCasePhonesCache(phoneByCase);
   };
 
   const onFile = async (f: File | null) => {
@@ -423,7 +507,7 @@ export function ImportLeadsDialog({
         assigned_vendor_id: null,
         meta_json: { lead_source: "csv_import" },
       } as any)
-      .select("id,phone_e164,name,email,assigned_vendor_id")
+      .select("id,phone_e164,name,email,assigned_vendor_id,meta_json")
       .single();
 
     if (error) throw error;
@@ -434,13 +518,16 @@ export function ImportLeadsDialog({
   };
 
   const updateCustomer = async (customerId: string, patch: Partial<CustomerLite>) => {
+    const cur = (customersCache ?? []).find((c) => c.id === customerId) ?? null;
+    const mergedMeta = { ...(cur?.meta_json ?? {}), lead_source: "csv_import" };
+
     const { error } = await supabase
       .from("customer_accounts")
       .update({
         name: patch.name ?? null,
         email: patch.email ?? null,
         assigned_vendor_id: patch.assigned_vendor_id ?? null,
-        meta_json: { lead_source: "csv_import" },
+        meta_json: mergedMeta,
       } as any)
       .eq("tenant_id", tenantId)
       .eq("id", customerId);
@@ -456,10 +543,27 @@ export function ImportLeadsDialog({
               name: patch.name ?? c.name,
               email: patch.email ?? c.email,
               assigned_vendor_id: patch.assigned_vendor_id ?? c.assigned_vendor_id,
+              meta_json: mergedMeta,
             }
           : c
       );
     });
+  };
+
+  const linkCaseToCustomer = async (caseId: string, customerId: string, assignedVendorId: string | null) => {
+    const { error } = await supabase
+      .from("cases")
+      .update({
+        customer_id: customerId,
+        assigned_vendor_id: assignedVendorId,
+        meta_json: {
+          lead_source: "csv_import",
+        },
+      } as any)
+      .eq("tenant_id", tenantId)
+      .eq("id", caseId);
+
+    if (error) throw error;
   };
 
   const createCase = async (p: {
@@ -547,11 +651,12 @@ export function ImportLeadsDialog({
 
     let createdCases = 0;
     let updatedCustomers = 0;
+    let linkedFromChat = 0;
     let errors = 0;
 
     try {
       // refresh caches (safe)
-      if (!customersCache || !usersCache || !vendorsCache) await loadCaches();
+      if (!customersCache || !usersCache || !vendorsCache || !chatCasesCache || !chatCasePhonesCache) await loadCaches();
 
       // index users by email
       const userByEmail = new Map<string, UserProfileLite>();
@@ -574,38 +679,58 @@ export function ImportLeadsDialog({
           const ownerVendorId = ownerUser ? await ensureVendorForUser(ownerUser) : null;
 
           if (row.action === "update_only") {
-            // Atualiza cadastro (sem criar case)
-            await updateCustomer(row.existingCustomerId!, {
-              name: row.name.trim() || null,
-              email: row.email.trim() || null,
-              assigned_vendor_id: ownerVendorId,
-            });
-            updatedCustomers += 1;
-          } else {
-            // Novo lead => cria customer + case
-            const { customer } = await ensureCustomerByPhoneTail(phone);
-
-            // Atualiza customer com dados do CSV
-            await updateCustomer(customer.id, {
-              name: row.name.trim() || null,
-              email: row.email.trim() || null,
-              assigned_vendor_id: ownerVendorId,
-            });
-
-            const title = row.name.trim() || phone;
-            const caseId = await createCase({
-              customerId: customer.id,
-              title,
-              assignedVendorId: ownerVendorId,
-              ownerEmail,
-              rowNo: row.rowNo,
-            });
-
-            createdCases += 1;
-
-            if (!ownerVendorId) {
-              await createMissingOwnerPendency(caseId, ownerEmail);
+            // 1) já existe customer => atualiza cadastro (sem criar case)
+            if (row.existingCustomerId) {
+              await updateCustomer(row.existingCustomerId, {
+                name: row.name.trim() || null,
+                email: row.email.trim() || null,
+                assigned_vendor_id: ownerVendorId,
+              });
+              updatedCustomers += 1;
+              continue;
             }
+
+            // 2) já existe apenas como chat => cria/vincula customer e atualiza dados (sem criar case)
+            if (row.existingChatCaseId) {
+              const { customer } = await ensureCustomerByPhoneTail(phone);
+              await updateCustomer(customer.id, {
+                name: row.name.trim() || null,
+                email: row.email.trim() || null,
+                assigned_vendor_id: ownerVendorId,
+              });
+
+              await linkCaseToCustomer(row.existingChatCaseId, customer.id, ownerVendorId);
+              linkedFromChat += 1;
+              continue;
+            }
+
+            // fallback
+            continue;
+          }
+
+          // Novo lead => cria customer + case
+          const { customer } = await ensureCustomerByPhoneTail(phone);
+
+          // Atualiza customer com dados do CSV
+          await updateCustomer(customer.id, {
+            name: row.name.trim() || null,
+            email: row.email.trim() || null,
+            assigned_vendor_id: ownerVendorId,
+          });
+
+          const title = row.name.trim() || phone;
+          const caseId = await createCase({
+            customerId: customer.id,
+            title,
+            assignedVendorId: ownerVendorId,
+            ownerEmail,
+            rowNo: row.rowNo,
+          });
+
+          createdCases += 1;
+
+          if (!ownerVendorId) {
+            await createMissingOwnerPendency(caseId, ownerEmail);
           }
         } catch (e: any) {
           errors += 1;
@@ -616,7 +741,9 @@ export function ImportLeadsDialog({
         }
       }
 
-      showSuccess(`Importação concluída: ${createdCases} case(s) criado(s), ${updatedCustomers} cliente(s) atualizado(s).`);
+      showSuccess(
+        `Importação concluída: ${createdCases} case(s) criado(s), ${updatedCustomers} cliente(s) atualizado(s), ${linkedFromChat} lead(s) reconhecido(s) via chat.`
+      );
 
       await Promise.all([
         qc.invalidateQueries({ queryKey: ["crm_cases_by_tenant", tenantId] }),
@@ -707,6 +834,8 @@ export function ImportLeadsDialog({
                     setCustomersCache(null);
                     setUsersCache(null);
                     setVendorsCache(null);
+                    setChatCasesCache(null);
+                    setChatCasePhonesCache(null);
                     setFileName("");
                     setParsingError(null);
                   }}
@@ -731,6 +860,9 @@ export function ImportLeadsDialog({
             </Badge>
             <Badge className="rounded-full border-0 bg-slate-100 text-slate-800 hover:bg-slate-100">
               atualizar: {counts.update_only}
+            </Badge>
+            <Badge className="rounded-full border-0 bg-indigo-100 text-indigo-900 hover:bg-indigo-100">
+              reconhecidos via chat: {counts.update_chat_only}
             </Badge>
             <Badge className="rounded-full border-0 bg-rose-100 text-rose-900 hover:bg-rose-100">
               erros: {counts.skip_error}
@@ -806,6 +938,11 @@ export function ImportLeadsDialog({
                           {r.action !== "skip_error" && r.existingCustomerId && (
                             <Badge className="rounded-full border-0 bg-indigo-100 text-indigo-900 hover:bg-indigo-100">
                               já existe
+                            </Badge>
+                          )}
+                          {r.action !== "skip_error" && !r.existingCustomerId && r.existingChatCaseId && (
+                            <Badge className="rounded-full border-0 bg-indigo-100 text-indigo-900 hover:bg-indigo-100">
+                              já existe (chat)
                             </Badge>
                           )}
                         </div>
