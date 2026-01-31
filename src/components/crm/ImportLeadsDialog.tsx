@@ -676,6 +676,56 @@ export function ImportLeadsDialog({
     if (error) throw error;
   };
 
+  const touchLatestLeadCaseForCustomer = async (p: {
+    customerId: string;
+    assignedVendorId: string | null;
+    ownerEmail: string | null;
+    rowNo: number;
+    leadName: string | null;
+    leadEmail: string | null;
+    leadWhatsappRaw: string | null;
+    leadWhatsappE164: string | null;
+  }) => {
+    const { data: existing, error: findErr } = await supabase
+      .from("cases")
+      .select("id,meta_json")
+      .eq("tenant_id", tenantId)
+      .eq("journey_id", journey.id)
+      .eq("is_chat", false)
+      .is("deleted_at", null)
+      .eq("customer_id", p.customerId)
+      .order("updated_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (findErr) throw findErr;
+    if (!existing?.id) return false;
+
+    const mergedMeta = {
+      ...(existing as any).meta_json,
+      lead_source: "csv_import",
+      lead_owner_email: p.ownerEmail,
+      import_file_name: fileName || null,
+      import_row_no: p.rowNo,
+      lead_name: p.leadName,
+      lead_email: p.leadEmail,
+      lead_whatsapp_raw: p.leadWhatsappRaw,
+      lead_whatsapp_e164: p.leadWhatsappE164,
+    };
+
+    const { error: updErr } = await supabase
+      .from("cases")
+      .update({
+        assigned_vendor_id: p.assignedVendorId,
+        meta_json: mergedMeta,
+      } as any)
+      .eq("tenant_id", tenantId)
+      .eq("id", existing.id);
+
+    if (updErr) throw updErr;
+    return true;
+  };
+
   const createCase = async (p: {
     customerId: string | null;
     title: string | null;
@@ -774,6 +824,7 @@ export function ImportLeadsDialog({
     let createdCases = 0;
     let updatedCustomers = 0;
     let linkedFromChat = 0;
+    let touchedCases = 0;
     let errors = 0;
 
     try {
@@ -803,7 +854,7 @@ export function ImportLeadsDialog({
             // update_only só faz sentido com telefone (para localizar registros)
             if (!phone) continue;
 
-            // 1) já existe customer => atualiza cadastro (sem criar case)
+            // 1) já existe customer => atualiza cadastro e "toca" o case para aparecer no funil (sem criar duplicado)
             if (row.existingCustomerId) {
               await updateCustomer(row.existingCustomerId, {
                 name: row.name.trim() || null,
@@ -811,6 +862,18 @@ export function ImportLeadsDialog({
                 assigned_vendor_id: ownerVendorId,
               });
               updatedCustomers += 1;
+
+              const touched = await touchLatestLeadCaseForCustomer({
+                customerId: row.existingCustomerId,
+                assignedVendorId: ownerVendorId,
+                ownerEmail,
+                rowNo: row.rowNo,
+                leadName: row.name.trim() || null,
+                leadEmail: row.email.trim() || null,
+                leadWhatsappRaw: row.whatsapp.trim() || null,
+                leadWhatsappE164: phone,
+              });
+              if (touched) touchedCases += 1;
               continue;
             }
 
@@ -893,7 +956,7 @@ export function ImportLeadsDialog({
       }
 
       showSuccess(
-        `Importação concluída: ${createdCases} case(s) criado(s), ${updatedCustomers} cliente(s) atualizado(s), ${linkedFromChat} lead(s) reconhecido(s) via chat.`
+        `Importação concluída: ${createdCases} case(s) criado(s), ${updatedCustomers} cliente(s) atualizado(s), ${touchedCases} case(s) atualizados no funil, ${linkedFromChat} lead(s) reconhecido(s) via chat.`
       );
 
       await Promise.all([
