@@ -83,12 +83,76 @@ function digitsTail(s: string | null | undefined, tail = 11) {
   return d.length > tail ? d.slice(-tail) : d;
 }
 
+function digitsOnly(s: string | null | undefined) {
+  return String(s ?? "").replace(/\D/g, "");
+}
+
+function brPhoneVariants(raw: string | null | undefined) {
+  const set = new Set<string>();
+
+  const push = (v: string) => {
+    const d = digitsOnly(v);
+    if (!d) return;
+    set.add(d);
+  };
+
+  push(raw);
+
+  // Expand variants
+  const queue = Array.from(set);
+  for (const d0 of queue) {
+    let d = d0;
+
+    // strip leading 00 / 0
+    while (d.startsWith("00")) d = d.slice(2);
+    while (d.startsWith("0") && d.length > 10) d = d.slice(1);
+
+    // strip BR country code
+    if (d.startsWith("55") && d.length >= 12) {
+      const no55 = d.slice(2);
+      if (!set.has(no55)) {
+        set.add(no55);
+        queue.push(no55);
+      }
+    }
+
+    // If has DDD + 9-digit mobile, add variant without the extra 9
+    if (d.length === 11 && d[2] === "9") {
+      const no9 = d.slice(0, 2) + d.slice(3);
+      if (!set.has(no9)) {
+        set.add(no9);
+        queue.push(no9);
+      }
+    }
+
+    // If has DDD + 8-digit, add variant with 9 inserted
+    if (d.length === 10) {
+      const with9 = d.slice(0, 2) + "9" + d.slice(2);
+      if (!set.has(with9)) {
+        set.add(with9);
+        queue.push(with9);
+      }
+    }
+
+    // also add tails for fuzzy matching
+    if (d.length >= 10) set.add(d.slice(-10));
+    if (d.length >= 11) set.add(d.slice(-11));
+    if (d.length >= 12) set.add(d.slice(-12));
+  }
+
+  return set;
+}
+
 function samePhoneLoose(a: string | null | undefined, b: string | null | undefined) {
-  const da = digitsTail(a);
-  const db = digitsTail(b);
-  if (!da || !db) return false;
-  if (Math.min(da.length, db.length) < 10) return false;
-  return da === db;
+  const A = brPhoneVariants(a);
+  const B = brPhoneVariants(b);
+  if (!A.size || !B.size) return false;
+
+  for (const v of A) {
+    if (v.length < 10) continue;
+    if (B.has(v)) return true;
+  }
+  return false;
 }
 
 function normalizePhoneLoose(v: string) {
