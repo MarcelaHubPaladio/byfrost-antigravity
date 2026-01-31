@@ -157,10 +157,17 @@ function samePhoneLoose(a: string | null | undefined, b: string | null | undefin
 
 function normalizeWhatsappOrNull(raw: string) {
   const s = String(raw ?? "").trim();
-  const digits = digitsOnly(s);
+  const digitsRaw = digitsOnly(s);
 
   // Regra pedida: se não tiver número (ou só texto), ignora e cadastra sem WhatsApp.
-  if (!digits) return { phone: null as string | null, error: null as string | null };
+  if (!digitsRaw) return { phone: null as string | null, error: null as string | null };
+
+  // Normalização BR-friendly: se vier só DDD+numero (10/11 dígitos), assume Brasil (+55)
+  // Ex: "42 8817-3442" => +554288173442
+  let digits = digitsRaw;
+  if ((digits.length === 10 || digits.length === 11) && !digits.startsWith("55")) {
+    digits = `55${digits}`;
+  }
 
   // Validação mínima para E.164 / WhatsApp: 10..15 dígitos.
   if (digits.length < 10) return { phone: null, error: "WhatsApp inválido (poucos dígitos)" };
