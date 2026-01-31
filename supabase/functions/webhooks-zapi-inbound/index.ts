@@ -931,19 +931,66 @@ serve(async (req) => {
         return (data as any) ?? null;
       }
 
-      // Default chat-like behavior: reuse case by counterpart (phone)
       if (!normalized.from) return null;
-      const { data } = await supabase
-        .from("cases")
-        .select("id,state,status")
-        .eq("tenant_id", instance.tenant_id)
-        .eq("journey_id", journey!.id)
-        .eq("meta_json->>counterpart_phone", normalized.from)
-        .is("deleted_at", null)
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      return (data as any) ?? null;
+
+      // CRM: customer_id is the most stable link if present.
+      if (customerId) {
+        const { data } = await supabase
+          .from("cases")
+          .select("id,state,status")
+          .eq("tenant_id", instance.tenant_id)
+          .eq("journey_id", journey!.id)
+          .eq("customer_id", customerId)
+          .is("deleted_at", null)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if ((data as any)?.id) return (data as any) ?? null;
+      }
+
+      // Default chat-like behavior: reuse case by counterpart phone.
+      // IMPORTANT: historically we used different meta keys; try them all to avoid duplicates.
+      const metaKeys = ["counterpart_phone", "customer_phone", "vendor_phone"];
+      for (const k of metaKeys) {
+        const { data } = await supabase
+          .from("cases")
+          .select("id,state,status")
+          .eq("tenant_id", instance.tenant_id)
+          .eq("journey_id", journey!.id)
+          .eq(`meta_json->>${k}`, normalized.from)
+          .is("deleted_at", null)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if ((data as any)?.id) return (data as any) ?? null;
+      }
+
+      // Last resort: search case_fields (older cases may store phone in fields)
+      const digits = normalized.from.replace(/\D/g, "");
+      if (digits.length >= 10) {
+        const { data: cf } = await supabase
+          .from("case_fields")
+          .select("case_id,updated_at")
+          .eq("key", "phone")
+          .ilike("value_text", `%${digits}%`)
+          .order("updated_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if ((cf as any)?.case_id) {
+          const { data } = await supabase
+            .from("cases")
+            .select("id,state,status")
+            .eq("tenant_id", instance.tenant_id)
+            .eq("journey_id", journey!.id)
+            .eq("id", (cf as any).case_id)
+            .is("deleted_at", null)
+            .maybeSingle();
+          if ((data as any)?.id) return (data as any) ?? null;
+        }
+      }
+
+      return null;
     };
 
     const ensureCase = async (mode: "image" | "text" | "location") => {
