@@ -155,12 +155,18 @@ function samePhoneLoose(a: string | null | undefined, b: string | null | undefin
   return false;
 }
 
-function normalizePhoneLoose(v: string) {
-  const s = (v ?? "").trim();
-  if (!s) return "";
-  if (s.startsWith("+")) return s;
-  const digits = s.replace(/\D/g, "");
-  return digits ? `+${digits}` : "";
+function normalizeWhatsappOrNull(raw: string) {
+  const s = String(raw ?? "").trim();
+  const digits = digitsOnly(s);
+
+  // Regra pedida: se não tiver número (ou só texto), ignora e cadastra sem WhatsApp.
+  if (!digits) return { phone: null as string | null, error: null as string | null };
+
+  // Validação mínima para E.164 / WhatsApp: 10..15 dígitos.
+  if (digits.length < 10) return { phone: null, error: "WhatsApp inválido (poucos dígitos)" };
+  if (digits.length > 15) return { phone: null, error: "WhatsApp inválido (muitos dígitos)" };
+
+  return { phone: `+${digits}`, error: null };
 }
 
 function getMetaPhone(meta: any): string | null {
@@ -382,8 +388,7 @@ export function ImportLeadsDialog({
     };
 
     return parseRows.map((r) => {
-      const normalizedPhone = normalizePhoneLoose(r.whatsapp) || null;
-      const err = !normalizedPhone ? "WhatsApp inválido" : null;
+      const { phone: normalizedPhone, error: err } = normalizeWhatsappOrNull(r.whatsapp);
 
       const existingCustomer = normalizedPhone
         ? customers.find((c) => samePhoneLoose(c.phone_e164, normalizedPhone)) ?? null
@@ -394,7 +399,10 @@ export function ImportLeadsDialog({
       const ownerEmail = r.ownerEmail.trim().toLowerCase();
       const ownerUser = ownerEmail ? userByEmail.get(ownerEmail) ?? null : null;
 
-      // tenta resolver vendor via phone do users_profile
+      // Preview considera dono resolvido se existir um usuário com phone (o vendor pode ser criado na importação)
+      const ownerResolved = Boolean((ownerUser?.phone_e164 ?? "").trim());
+
+      // tenta resolver vendor via phone do users_profile (se já existir)
       const ownerVendor = ownerUser?.phone_e164 ? vendorByPhone.get(ownerUser.phone_e164) ?? null : null;
 
       const action: PreviewRow["action"] = err
@@ -402,8 +410,6 @@ export function ImportLeadsDialog({
         : existingCustomer || existingChatCase
           ? "update_only"
           : "create_case";
-
-      const ownerResolved = Boolean(ownerVendor?.id);
 
       return {
         ...r,
@@ -631,11 +637,15 @@ export function ImportLeadsDialog({
   };
 
   const createCase = async (p: {
-    customerId: string;
+    customerId: string | null;
     title: string | null;
     assignedVendorId: string | null;
     ownerEmail: string | null;
     rowNo: number;
+    leadName: string | null;
+    leadEmail: string | null;
+    leadWhatsappRaw: string | null;
+    leadWhatsappE164: string | null;
   }) => {
     const { data: inserted, error } = await supabase
       .from("cases")
@@ -653,6 +663,10 @@ export function ImportLeadsDialog({
           lead_owner_email: p.ownerEmail,
           import_file_name: fileName || null,
           import_row_no: p.rowNo,
+          lead_name: p.leadName,
+          lead_email: p.leadEmail,
+          lead_whatsapp_raw: p.leadWhatsappRaw,
+          lead_whatsapp_e164: p.leadWhatsappE164,
         },
       } as any)
       .select("id")
@@ -674,6 +688,10 @@ export function ImportLeadsDialog({
         owner_email: p.ownerEmail,
         file_name: fileName || null,
         row_no: p.rowNo,
+        lead_name: p.leadName,
+        lead_email: p.leadEmail,
+        lead_whatsapp_raw: p.leadWhatsappRaw,
+        lead_whatsapp_e164: p.leadWhatsappE164,
       },
       occurred_at: new Date().toISOString(),
     });
@@ -735,14 +753,16 @@ export function ImportLeadsDialog({
         setProgress({ done: i, total: previewRows.length });
 
         try {
-          const phone = row.normalizedPhone;
-          if (!phone) throw new Error("WhatsApp inválido");
+          const phone = row.normalizedPhone; // pode ser null (importar sem WhatsApp)
 
           const ownerEmail = row.ownerEmail.trim().toLowerCase() || null;
           const ownerUser = ownerEmail ? userByEmail.get(ownerEmail) ?? null : null;
           const ownerVendorId = ownerUser ? await ensureVendorForUser(ownerUser) : null;
 
           if (row.action === "update_only") {
+            // update_only só faz sentido com telefone (para localizar registros)
+            if (!phone) continue;
+
             // 1) já existe customer => atualiza cadastro (sem criar case)
             if (row.existingCustomerId) {
               await updateCustomer(row.existingCustomerId, {
@@ -772,23 +792,50 @@ export function ImportLeadsDialog({
             continue;
           }
 
-          // Novo lead => cria customer + case
-          const { customer } = await ensureCustomerByPhoneTail(phone);
+          // Novo lead => cria case. Se tiver WhatsApp, cria/vincula customer; se não, cria case sem customer.
+          if (phone) {
+            const { customer } = await ensureCustomerByPhoneTail(phone);
 
-          // Atualiza customer com dados do CSV
-          await updateCustomer(customer.id, {
-            name: row.name.trim() || null,
-            email: row.email.trim() || null,
-            assigned_vendor_id: ownerVendorId,
-          });
+            // Atualiza customer com dados do CSV
+            await updateCustomer(customer.id, {
+              name: row.name.trim() || null,
+              email: row.email.trim() || null,
+              assigned_vendor_id: ownerVendorId,
+            });
 
-          const title = row.name.trim() || phone;
+            const title = row.name.trim() || phone;
+            const caseId = await createCase({
+              customerId: customer.id,
+              title,
+              assignedVendorId: ownerVendorId,
+              ownerEmail,
+              rowNo: row.rowNo,
+              leadName: row.name.trim() || null,
+              leadEmail: row.email.trim() || null,
+              leadWhatsappRaw: row.whatsapp.trim() || null,
+              leadWhatsappE164: phone,
+            });
+
+            createdCases += 1;
+
+            if (!ownerVendorId) {
+              await createMissingOwnerPendency(caseId, ownerEmail);
+            }
+            continue;
+          }
+
+          // Sem WhatsApp (ou campo com texto sem números): cria case sem customer.
+          const title = row.name.trim() || row.email.trim() || `Lead importado (linha ${row.rowNo})`;
           const caseId = await createCase({
-            customerId: customer.id,
+            customerId: null,
             title,
             assignedVendorId: ownerVendorId,
             ownerEmail,
             rowNo: row.rowNo,
+            leadName: row.name.trim() || null,
+            leadEmail: row.email.trim() || null,
+            leadWhatsappRaw: row.whatsapp.trim() || null,
+            leadWhatsappE164: null,
           });
 
           createdCases += 1;
