@@ -474,7 +474,7 @@ export function ImportLeadsDialog({
       const { data: fields, error: fErr } = await supabase
         .from("case_fields")
         .select("case_id,key,value_text")
-        .eq("tenant_id", tenantId)
+        // NOTE: case_fields não tem tenant_id; o RLS já valida via cases
         .in("case_id", chatIds)
         .in("key", ["whatsapp", "phone", "customer_phone"])
         .limit(20_000);

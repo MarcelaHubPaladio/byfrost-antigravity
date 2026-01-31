@@ -292,7 +292,7 @@ export default function CrmCaseDetail() {
       const { data, error } = await supabase
         .from("case_fields")
         .select("key,value_text,value_json,confidence,source,updated_at")
-        .eq("tenant_id", activeTenantId!)
+        // NOTE: case_fields não tem tenant_id; o RLS já valida via cases
         .eq("case_id", id!);
       if (error) throw error;
       return data ?? [];
