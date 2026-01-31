@@ -56,6 +56,8 @@ type ChatCaseLite = {
 type NonChatCaseLite = {
   id: string;
   customer_id: string | null;
+  deleted_at: string | null;
+  updated_at: string;
 };
 
 type ParsedRow = {
@@ -70,7 +72,8 @@ type PreviewRow = ParsedRow & {
   normalizedPhone: string | null;
   existingCustomerId: string | null;
   existingChatCaseId: string | null;
-  action: "create_case" | "update_only" | "skip_error";
+  reactivateCaseId: string | null;
+  action: "create_case" | "update_only" | "reactivate_case" | "skip_error";
   ownerUserId: string | null;
   ownerVendorId: string | null;
   ownerResolved: boolean;
@@ -397,10 +400,19 @@ export function ImportLeadsDialog({
     const vendorByPhone = new Map<string, VendorLite>();
     for (const v of vendors) vendorByPhone.set(v.phone_e164, v);
 
-    const casesByCustomerId = new Set<string>();
+    const activeCaseByCustomerId = new Set<string>();
+    const latestDeletedCaseByCustomerId = new Map<string, NonChatCaseLite>();
     for (const c of nonChatCases) {
       const cid = String(c.customer_id ?? "");
-      if (cid) casesByCustomerId.add(cid);
+      if (!cid) continue;
+      if (!c.deleted_at) {
+        activeCaseByCustomerId.add(cid);
+        continue;
+      }
+      const cur = latestDeletedCaseByCustomerId.get(cid);
+      if (!cur || new Date(c.updated_at).getTime() > new Date(cur.updated_at).getTime()) {
+        latestDeletedCaseByCustomerId.set(cid, c);
+      }
     }
 
     const findChatCaseByPhone = (phone: string) => {
@@ -436,28 +448,34 @@ export function ImportLeadsDialog({
       // tenta resolver vendor via phone do users_profile (se já existir)
       const ownerVendor = ownerUser?.phone_e164 ? vendorByPhone.get(ownerUser.phone_e164) ?? null : null;
 
+      const hasActiveNonChatCase = existingCustomer ? activeCaseByCustomerId.has(existingCustomer.id) : false;
+      const reactivateCase = existingCustomer ? latestDeletedCaseByCustomerId.get(existingCustomer.id) ?? null : null;
+      const shouldReactivate = Boolean(existingCustomer && !hasActiveNonChatCase && reactivateCase?.id);
+
       // Regras:
       // - Duplicado dentro do CSV: nunca cria case 2x; vira "atualizar"
       // - Se já existe chat para esse número => atualizar/vincular (não criar case novo)
-      // - Se já existe customer e já existe case não-chat nesta jornada => apenas atualizar
+      // - Se existe customer e só existe lead soft-deleted => reativar
+      // - Se existe customer e já existe lead ativo => apenas atualizar
       // - Caso contrário => criar case
-      const hasNonChatCaseForCustomer = existingCustomer ? casesByCustomerId.has(existingCustomer.id) : false;
-
       const action: PreviewRow["action"] = err
         ? "skip_error"
         : duplicateInFile
           ? "update_only"
           : existingChatCase
             ? "update_only"
-            : existingCustomer && hasNonChatCaseForCustomer
-              ? "update_only"
-              : "create_case";
+            : shouldReactivate
+              ? "reactivate_case"
+              : existingCustomer && hasActiveNonChatCase
+                ? "update_only"
+                : "create_case";
 
       return {
         ...r,
         normalizedPhone,
         existingCustomerId: existingCustomer?.id ?? null,
         existingChatCaseId: existingChatCase?.id ?? null,
+        reactivateCaseId: shouldReactivate ? reactivateCase!.id : null,
         action,
         ownerUserId: ownerUser?.user_id ?? null,
         ownerVendorId: ownerVendor?.id ?? null,
@@ -469,10 +487,17 @@ export function ImportLeadsDialog({
   }, [parseRows, customersCache, usersCache, vendorsCache, chatCasesCache, chatCasePhonesCache, nonChatCasesCache]);
 
   const counts = useMemo(() => {
-    const c = { create_case: 0, update_only: 0, skip_error: 0, missing_owner: 0, update_chat_only: 0 };
+    const c = {
+      create_case: 0,
+      update_only: 0,
+      reactivate_case: 0,
+      skip_error: 0,
+      missing_owner: 0,
+      update_chat_only: 0,
+    };
     for (const r of previewRows) {
       c[r.action] += 1;
-      if (r.action === "create_case" && r.ownerEmail && !r.ownerResolved) c.missing_owner += 1;
+      if ((r.action === "create_case" || r.action === "reactivate_case") && r.ownerEmail && !r.ownerResolved) c.missing_owner += 1;
       if (r.action === "update_only" && r.existingChatCaseId && !r.existingCustomerId) c.update_chat_only += 1;
     }
     return c;
@@ -506,14 +531,14 @@ export function ImportLeadsDialog({
       .limit(5000);
     if (vErr) throw vErr;
 
-    // Existing cases (não-chat) desta jornada: para não criar duplicado ao importar o mesmo lead
+    // Existing cases (não-chat) desta jornada (inclui soft-deleted)
     const { data: nonChatCases, error: ncErr } = await supabase
       .from("cases")
-      .select("id,customer_id")
+      .select("id,customer_id,deleted_at,updated_at")
       .eq("tenant_id", tenantId)
-      .is("deleted_at", null)
-      .eq("is_chat", false)
       .eq("journey_id", journey.id)
+      .eq("is_chat", false)
+      .order("updated_at", { ascending: false })
       .limit(20_000);
     if (ncErr) throw ncErr;
 
@@ -522,8 +547,8 @@ export function ImportLeadsDialog({
       .from("cases")
       .select("id,customer_id,assigned_vendor_id,meta_json")
       .eq("tenant_id", tenantId)
-      .is("deleted_at", null)
       .eq("is_chat", true)
+      .is("deleted_at", null)
       .limit(5000);
     if (ccErr) throw ccErr;
 
@@ -772,7 +797,6 @@ export function ImportLeadsDialog({
       .eq("tenant_id", tenantId)
       .eq("journey_id", journey.id)
       .eq("is_chat", false)
-      .is("deleted_at", null)
       .eq("customer_id", p.customerId)
       .order("updated_at", { ascending: false })
       .limit(1)
@@ -804,6 +828,126 @@ export function ImportLeadsDialog({
 
     if (updErr) throw updErr;
     return true;
+  };
+
+  const reactivateLeadCase = async (p: {
+    caseId: string;
+    customerId: string;
+    assignedVendorId: string | null;
+    ownerEmail: string | null;
+    rowNo: number;
+    leadName: string | null;
+    leadEmail: string | null;
+    leadWhatsappRaw: string | null;
+    leadWhatsappE164: string | null;
+  }) => {
+    const { data: existing, error: selErr } = await supabase
+      .from("cases")
+      .select("id,meta_json")
+      .eq("tenant_id", tenantId)
+      .eq("id", p.caseId)
+      .maybeSingle();
+    if (selErr) throw selErr;
+    if (!existing?.id) throw new Error("Case não encontrado para reativar.");
+
+    const mergedMeta = {
+      ...(existing as any).meta_json,
+      lead_source: "csv_import",
+      lead_owner_email: p.ownerEmail,
+      import_file_name: fileName || null,
+      import_row_no: p.rowNo,
+      lead_name: p.leadName,
+      lead_email: p.leadEmail,
+      lead_whatsapp_raw: p.leadWhatsappRaw,
+      lead_whatsapp_e164: p.leadWhatsappE164,
+      reactivated_from_soft_delete: true,
+    };
+
+    const { error: updErr } = await supabase
+      .from("cases")
+      .update({
+        deleted_at: null,
+        is_chat: false,
+        journey_id: journey.id,
+        state: firstState,
+        customer_id: p.customerId,
+        assigned_vendor_id: p.assignedVendorId,
+        meta_json: mergedMeta,
+      } as any)
+      .eq("tenant_id", tenantId)
+      .eq("id", p.caseId);
+    if (updErr) throw updErr;
+
+    const { error: tlErr } = await supabase.from("timeline_events").insert({
+      tenant_id: tenantId,
+      case_id: p.caseId,
+      event_type: "lead_reactivated",
+      actor_type: "admin",
+      actor_id: actorUserId,
+      message: "Lead reativado via planilha.",
+      meta_json: { source: "csv_import" },
+      occurred_at: new Date().toISOString(),
+    });
+
+    if (tlErr) throw tlErr;
+
+    return p.caseId;
+  };
+
+  const mergeDuplicateLeadCases = async (p: { customerId: string; keepCaseId: string }) => {
+    // Mantém o case mais recente (keepCaseId) e soft-delete os demais ativos na mesma jornada.
+    const { data: all, error: err } = await supabase
+      .from("cases")
+      .select("id,deleted_at")
+      .eq("tenant_id", tenantId)
+      .eq("journey_id", journey.id)
+      .eq("is_chat", false)
+      .eq("customer_id", p.customerId)
+      .order("updated_at", { ascending: false })
+      .limit(50);
+
+    if (err) throw err;
+
+    const toDelete = (all ?? []).filter((c: any) => c.id !== p.keepCaseId && !c.deleted_at).map((c: any) => String(c.id));
+    if (!toDelete.length) return 0;
+
+    const now = new Date().toISOString();
+    for (const id of toDelete) {
+      const { error: updErr } = await supabase
+        .from("cases")
+        .update({
+          deleted_at: now,
+          meta_json: { merged_into_case_id: p.keepCaseId },
+        } as any)
+        .eq("tenant_id", tenantId)
+        .eq("id", id);
+      if (updErr) throw updErr;
+
+      // registra no case antigo também (para auditoria)
+      await supabase.from("timeline_events").insert({
+        tenant_id: tenantId,
+        case_id: id,
+        event_type: "lead_merged",
+        actor_type: "admin",
+        actor_id: actorUserId,
+        message: `Lead mesclado automaticamente no case ${p.keepCaseId}.`,
+        meta_json: { merged_into_case_id: p.keepCaseId },
+        occurred_at: new Date().toISOString(),
+      });
+    }
+
+    await supabase.from("timeline_events").insert({
+      tenant_id: tenantId,
+      case_id: p.keepCaseId,
+      event_type: "lead_merged",
+      actor_type: "admin",
+      actor_id: actorUserId,
+      message: `Leads duplicados mesclados automaticamente (${toDelete.length}).`,
+      meta_json: { merged_case_ids: toDelete },
+      occurred_at: new Date().toISOString(),
+    });
+
+    return toDelete.length;
   };
 
   const createCase = async (p: {
@@ -907,6 +1051,8 @@ export function ImportLeadsDialog({
     let updatedCustomers = 0;
     let linkedFromChat = 0;
     let touchedCases = 0;
+    let reactivatedCases = 0;
+    let mergedCases = 0;
     let errors = 0;
 
     // Dedup intra-import: evita criar 2 cases para o mesmo WhatsApp na mesma execução
@@ -961,6 +1107,35 @@ export function ImportLeadsDialog({
             continue;
           }
 
+          if (row.action === "reactivate_case") {
+            if (!phone || !row.existingCustomerId || !row.reactivateCaseId) continue;
+            if (phoneKey) processedPhoneKeys.add(phoneKey);
+
+            // Atualiza customer com dados do CSV
+            await updateCustomer(row.existingCustomerId, {
+              name: row.name.trim() || null,
+              email: row.email.trim() || null,
+              assigned_vendor_id: ownerVendorId,
+            });
+            updatedCustomers += 1;
+
+            const keepId = await reactivateLeadCase({
+              caseId: row.reactivateCaseId,
+              customerId: row.existingCustomerId,
+              assignedVendorId: ownerVendorId,
+              ownerEmail,
+              rowNo: row.rowNo,
+              leadName: row.name.trim() || null,
+              leadEmail: row.email.trim() || null,
+              leadWhatsappRaw: row.whatsapp.trim() || null,
+              leadWhatsappE164: phone,
+            });
+            reactivatedCases += 1;
+
+            mergedCases += await mergeDuplicateLeadCases({ customerId: row.existingCustomerId, keepCaseId: keepId });
+            continue;
+          }
+
           if (row.action === "update_only") {
             // update_only só faz sentido com telefone (para localizar registros)
             if (!phone) continue;
@@ -986,6 +1161,22 @@ export function ImportLeadsDialog({
                 leadWhatsappE164: phone,
               });
               if (touched) touchedCases += 1;
+
+              // mescla duplicados (mantém o mais recente)
+              const { data: keep, error: keepErr } = await supabase
+                .from("cases")
+                .select("id")
+                .eq("tenant_id", tenantId)
+                .eq("journey_id", journey.id)
+                .eq("is_chat", false)
+                .eq("customer_id", row.existingCustomerId)
+                .is("deleted_at", null)
+                .order("updated_at", { ascending: false })
+                .limit(1)
+                .maybeSingle();
+              if (keepErr) throw keepErr;
+              if (keep?.id) mergedCases += await mergeDuplicateLeadCases({ customerId: row.existingCustomerId, keepCaseId: keep.id });
+
               continue;
             }
 
@@ -998,7 +1189,7 @@ export function ImportLeadsDialog({
                 assigned_vendor_id: ownerVendorId,
               });
 
-              await promoteChatToCrm({
+              const keepId = await promoteChatToCrm({
                 chatCaseId: row.existingChatCaseId,
                 customerId: customer.id,
                 assignedVendorId: ownerVendorId,
@@ -1011,6 +1202,7 @@ export function ImportLeadsDialog({
               });
 
               linkedFromChat += 1;
+              mergedCases += await mergeDuplicateLeadCases({ customerId: customer.id, keepCaseId: keepId });
               continue;
             }
 
@@ -1024,6 +1216,20 @@ export function ImportLeadsDialog({
 
             const { customer } = await ensureCustomerByPhoneTail(phone);
 
+            // Se existir algum case soft-deleted nessa jornada para este customer, reativa ao invés de criar.
+            const { data: del, error: delErr } = await supabase
+              .from("cases")
+              .select("id")
+              .eq("tenant_id", tenantId)
+              .eq("journey_id", journey.id)
+              .eq("is_chat", false)
+              .eq("customer_id", customer.id)
+              .not("deleted_at", "is", null)
+              .order("updated_at", { ascending: false })
+              .limit(1)
+              .maybeSingle();
+            if (delErr) throw delErr;
+
             // Atualiza customer com dados do CSV
             await updateCustomer(customer.id, {
               name: row.name.trim() || null,
@@ -1031,26 +1237,47 @@ export function ImportLeadsDialog({
               assigned_vendor_id: ownerVendorId,
             });
 
-            const title = row.name.trim() || phone;
-            const caseId = await createCase({
-              customerId: customer.id,
-              title,
-              assignedVendorId: ownerVendorId,
-              ownerEmail,
-              rowNo: row.rowNo,
-              leadName: row.name.trim() || null,
-              leadEmail: row.email.trim() || null,
-              leadWhatsappRaw: row.whatsapp.trim() || null,
-              leadWhatsappE164: phone,
-            });
+            let keepId: string;
+            if (del?.id) {
+              keepId = await reactivateLeadCase({
+                caseId: del.id,
+                customerId: customer.id,
+                assignedVendorId: ownerVendorId,
+                ownerEmail,
+                rowNo: row.rowNo,
+                leadName: row.name.trim() || null,
+                leadEmail: row.email.trim() || null,
+                leadWhatsappRaw: row.whatsapp.trim() || null,
+                leadWhatsappE164: phone,
+              });
+              reactivatedCases += 1;
+            } else {
+              const title = row.name.trim() || phone;
+              keepId = await createCase({
+                customerId: customer.id,
+                title,
+                assignedVendorId: ownerVendorId,
+                ownerEmail,
+                rowNo: row.rowNo,
+                leadName: row.name.trim() || null,
+                leadEmail: row.email.trim() || null,
+                leadWhatsappRaw: row.whatsapp.trim() || null,
+                leadWhatsappE164: phone,
+              });
+              createdCases += 1;
 
-            createdCases += 1;
+              // Atualiza cache local de cases da jornada para o preview/run atual
+              setNonChatCasesCache((prev) =>
+                prev
+                  ? [{ id: keepId, customer_id: customer.id, deleted_at: null, updated_at: new Date().toISOString() }, ...prev]
+                  : [{ id: keepId, customer_id: customer.id, deleted_at: null, updated_at: new Date().toISOString() }]
+              );
+            }
 
-            // Atualiza cache local de cases da jornada para o preview/run atual
-            setNonChatCasesCache((prev) => (prev ? [{ id: caseId, customer_id: customer.id }, ...prev] : [{ id: caseId, customer_id: customer.id }]));
+            mergedCases += await mergeDuplicateLeadCases({ customerId: customer.id, keepCaseId: keepId });
 
             if (!ownerVendorId) {
-              await createMissingOwnerPendency(caseId, ownerEmail);
+              await createMissingOwnerPendency(keepId, ownerEmail);
             }
             continue;
           }
@@ -1112,13 +1339,12 @@ export function ImportLeadsDialog({
       }
 
       showSuccess(
-        `Importação concluída: ${createdCases} case(s) criado(s), ${updatedCustomers} cliente(s) atualizado(s), ${touchedCases} case(s) atualizados no funil, ${linkedFromChat} lead(s) reconhecido(s) via chat.`
+        `Importação concluída: ${createdCases} criado(s), ${reactivatedCases} reativado(s), ${updatedCustomers} cliente(s) atualizado(s), ${touchedCases} atualizado(s) no funil, ${mergedCases} mesclado(s), ${linkedFromChat} promovido(s) do chat.`
       );
 
       await Promise.all([
         qc.invalidateQueries({ queryKey: ["crm_cases_by_tenant", tenantId] }),
         qc.invalidateQueries({ queryKey: ["crm_customers_by_ids", tenantId] }),
-        qc.invalidateQueries({ queryKey: ["case", tenantId] }),
       ]);
 
       setOpen(false);
@@ -1226,6 +1452,9 @@ export function ImportLeadsDialog({
             <Badge className="rounded-full border-0 bg-emerald-100 text-emerald-900 hover:bg-emerald-100">
               novos: {counts.create_case}
             </Badge>
+            <Badge className="rounded-full border-0 bg-amber-100 text-amber-900 hover:bg-amber-100">
+              reativar: {counts.reactivate_case}
+            </Badge>
             <Badge className="rounded-full border-0 bg-slate-100 text-slate-800 hover:bg-slate-100">
               atualizar: {counts.update_only}
             </Badge>
@@ -1236,7 +1465,7 @@ export function ImportLeadsDialog({
               erros: {counts.skip_error}
             </Badge>
             <Badge className="rounded-full border-0 bg-amber-100 text-amber-900 hover:bg-amber-100">
-              novos sem dono: {counts.missing_owner}
+              novos/reativados sem dono: {counts.missing_owner}
             </Badge>
 
             {progress && (
@@ -1259,9 +1488,11 @@ export function ImportLeadsDialog({
                       ? "rose"
                       : r.action === "update_only"
                         ? "slate"
-                        : r.ownerResolved
-                          ? "emerald"
-                          : "amber";
+                        : r.action === "reactivate_case"
+                          ? "amber"
+                          : r.ownerResolved
+                            ? "emerald"
+                            : "amber";
 
                   const badgeCls =
                     tone === "rose"
@@ -1277,9 +1508,11 @@ export function ImportLeadsDialog({
                       ? "erro"
                       : r.action === "update_only"
                         ? "atualizar"
-                        : r.ownerResolved
-                          ? "criar case"
-                          : "criar case (sem dono)";
+                        : r.action === "reactivate_case"
+                          ? "reativar"
+                          : r.ownerResolved
+                            ? "criar case"
+                            : "criar case (sem dono)";
 
                   return (
                     <div key={r.rowNo} className="px-3 py-2">
