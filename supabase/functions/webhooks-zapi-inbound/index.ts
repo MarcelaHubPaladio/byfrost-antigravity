@@ -20,6 +20,48 @@ function pickFirst<T>(...values: Array<T | null | undefined>): T | null {
   return null;
 }
 
+function digitsOnly(v: string | null | undefined) {
+  return String(v ?? "").replace(/\D/g, "");
+}
+
+function buildBrPhoneVariantsE164(phoneE164: string | null | undefined) {
+  const digits = digitsOnly(phoneE164);
+  const out = new Set<string>();
+  if (!digits) return out;
+
+  // normalize base
+  const dNo00 = digits.replace(/^00+/, "");
+  const dNo55 = dNo00.startsWith("55") ? dNo00.slice(2) : dNo00;
+
+  const add = (d: string) => {
+    const dd = digitsOnly(d);
+    if (!dd) return;
+    // Always store as E.164-like +...
+    if (dd.startsWith("55")) out.add(`+${dd}`);
+    else out.add(`+55${dd}`);
+  };
+
+  // base
+  add(dNo00);
+  add(dNo55);
+
+  // mobile 9-digit variants
+  if (dNo55.length === 11 && dNo55[2] === "9") {
+    // remove extra 9
+    add(dNo55.slice(0, 2) + dNo55.slice(3));
+  }
+  if (dNo55.length === 10) {
+    // insert extra 9
+    add(dNo55.slice(0, 2) + "9" + dNo55.slice(2));
+  }
+
+  // Also add tail-based variants (common imports without country)
+  if (dNo55.length >= 10) add(dNo55.slice(-10));
+  if (dNo55.length >= 11) add(dNo55.slice(-11));
+
+  return out;
+}
+
 function looksLikeWhatsAppGroupId(v: any) {
   const s = String(v ?? "").trim().toLowerCase();
   if (!s) return false;
@@ -615,11 +657,12 @@ serve(async (req) => {
           if (caseId) break;
         }
 
+        // Best-effort legacy lookup by meta_json (may be absent)
         const { data: cByMeta } = await supabase
           .from("cases")
           .select("id")
           .eq("tenant_id", instance.tenant_id)
-          .eq("meta_json->>vendor_phone", vp)
+          .contains("meta_json", { vendor_phone: vp })
           .is("deleted_at", null)
           .order("created_at", { ascending: false })
           .limit(1)
@@ -629,22 +672,7 @@ serve(async (req) => {
         if (caseId) break;
       }
 
-      if (!caseId) {
-        const digits = counterpart.replace(/\D/g, "");
-        // only attempt if we have a reasonably long number
-        if (digits.length >= 10) {
-          const { data: cf } = await supabase
-            .from("case_fields")
-            .select("case_id,updated_at")
-            .eq("tenant_id", instance.tenant_id)
-            .eq("key", "phone")
-            .ilike("value_text", `%${digits}%`)
-            .order("updated_at", { ascending: false })
-            .limit(1)
-            .maybeSingle();
-          caseId = (cf as any)?.case_id ?? null;
-        }
-      }
+      // NOTE: evitamos consultar case_fields aqui, pois esta tabela não tem tenant_id em algumas instalações.
 
       const { error: msgErr } = await supabase.from("wa_messages").insert({
         tenant_id: instance.tenant_id,
@@ -870,15 +898,36 @@ serve(async (req) => {
       }
     }
 
-    // CRM: if this journey is CRM and the sender is a customer, ensure a customer_accounts row.
+    // Carrega jornadas CRM habilitadas (para linkar/puxar conversa pro CRM)
+    const { data: crmTj, error: crmTjErr } = await supabase
+      .from("tenant_journeys")
+      .select("journey_id, journeys(id,key,is_crm,default_state_machine_json)")
+      .eq("tenant_id", instance.tenant_id)
+      .eq("enabled", true)
+      .limit(200);
+    if (crmTjErr) console.error(`[${fn}] Failed to load crm journeys`, { crmTjErr });
+
+    const crmJourneys: JourneyInfo[] = (crmTj ?? [])
+      .map((r: any) => r.journeys)
+      .filter((j: any) => Boolean(j?.id) && Boolean(j?.is_crm));
+
+    const crmJourneyIds = crmJourneys.map((j) => j.id);
+    const defaultCrmJourney = crmJourneys[0] ?? null;
+
+    // Sempre tenta garantir customer (mesmo se a jornada roteada não for CRM),
+    // para conseguir linkar mensagens por customer_id e evitar duplicação.
     let customerId: string | null = null;
-    if (journey.is_crm && !cfgSenderIsVendor && normalized.from) {
+    const phoneVariants = normalized.from ? Array.from(buildBrPhoneVariantsE164(normalized.from)) : [];
+
+    if (!cfgSenderIsVendor && normalized.from) {
       const { data: existingCustomer, error: custErr } = await supabase
         .from("customer_accounts")
-        .select("id,name")
+        .select("id,phone_e164")
         .eq("tenant_id", instance.tenant_id)
-        .eq("phone_e164", normalized.from)
+        .in("phone_e164", phoneVariants.length ? phoneVariants : [normalized.from])
         .is("deleted_at", null)
+        .order("updated_at", { ascending: false })
+        .limit(1)
         .maybeSingle();
       if (custErr) console.error(`[${fn}] Failed to load customer_accounts`, { custErr });
 
@@ -900,6 +949,119 @@ serve(async (req) => {
       }
     }
 
+    const getJourneyById = async (journeyId: string) => {
+      const { data, error } = await supabase
+        .from("journeys")
+        .select("id,key,name,is_crm,default_state_machine_json")
+        .eq("id", journeyId)
+        .maybeSingle();
+      if (error) {
+        console.error(`[${fn}] Failed to load journey by id`, { journeyId, error });
+        return null;
+      }
+      return (data as any as JourneyInfo) ?? null;
+    };
+
+    const promoteOrBumpCaseToCrm = async (c: any) => {
+      const currentJourneyId = String(c?.journey_id ?? "") || null;
+      const isChat = Boolean(c?.is_chat);
+      const wasDeleted = Boolean(c?.deleted_at);
+
+      // Prefer CRM journey when available.
+      const targetJourneyId = (defaultCrmJourney?.id ?? null) || currentJourneyId;
+      const targetJourney = targetJourneyId ? await getJourneyById(targetJourneyId) : null;
+      if (!targetJourneyId || !targetJourney) return { caseId: String(c.id), bumped: false };
+
+      const initial = pickInitialState(targetJourney, null);
+
+      const { error: updErr } = await supabase
+        .from("cases")
+        .update({
+          deleted_at: null,
+          is_chat: false,
+          journey_id: targetJourneyId,
+          state: initial,
+          status: "open",
+          customer_id: customerId,
+        })
+        .eq("tenant_id", instance.tenant_id)
+        .eq("id", c.id);
+
+      if (updErr) {
+        console.error(`[${fn}] Failed to bump case to CRM`, { updErr, case_id: c.id });
+        return { caseId: String(c.id), bumped: false };
+      }
+
+      await supabase.from("timeline_events").insert({
+        tenant_id: instance.tenant_id,
+        case_id: c.id,
+        event_type: wasDeleted ? "lead_reactivated" : "case_updated",
+        actor_type: "system",
+        actor_id: null,
+        message: wasDeleted
+          ? "Lead reativado automaticamente ao receber mensagem do cliente."
+          : isChat
+            ? "Case removido de chat e movido para o início do fluxo (mensagem recebida)."
+            : "Mensagem recebida: case movido para o início do fluxo.",
+        meta_json: { source: "zapi_inbound", correlation_id: correlationId },
+        occurred_at: new Date().toISOString(),
+      });
+
+      return { caseId: String(c.id), bumped: true };
+    };
+
+    const findExistingOpenCase = async () => {
+      if (!normalized.from) return null;
+
+      // 1) Prefer CRM cases by customer_id
+      if (customerId && crmJourneyIds.length) {
+        const { data } = await supabase
+          .from("cases")
+          .select("id,journey_id,is_chat,deleted_at,updated_at")
+          .eq("tenant_id", instance.tenant_id)
+          .eq("status", "open")
+          .eq("customer_id", customerId)
+          .in("journey_id", crmJourneyIds)
+          .order("updated_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if ((data as any)?.id) return data as any;
+      }
+
+      // 2) Any open case by customer_id
+      if (customerId) {
+        const { data } = await supabase
+          .from("cases")
+          .select("id,journey_id,is_chat,deleted_at,updated_at")
+          .eq("tenant_id", instance.tenant_id)
+          .eq("status", "open")
+          .eq("customer_id", customerId)
+          .order("updated_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if ((data as any)?.id) return data as any;
+      }
+
+      // 3) Fallback by meta_json stored phones (accept variants)
+      const keys = ["customer_phone", "counterpart_phone", "phone", "whatsapp"];
+      for (const k of keys) {
+        for (const p of phoneVariants.length ? phoneVariants : [normalized.from]) {
+          const { data } = await supabase
+            .from("cases")
+            .select("id,journey_id,is_chat,deleted_at,updated_at")
+            .eq("tenant_id", instance.tenant_id)
+            .eq("status", "open")
+            .contains("meta_json", { [k]: p })
+            .order("updated_at", { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          if ((data as any)?.id) return data as any;
+        }
+      }
+
+      return null;
+    };
+
     const enqueueJob = async (type: string, idempotencyKey: string, payloadJson: any) => {
       const { error } = await supabase.from("job_queue").insert({
         tenant_id: instance.tenant_id,
@@ -920,83 +1082,32 @@ serve(async (req) => {
       if (vendorId) {
         const { data } = await supabase
           .from("cases")
-          .select("id,state,status")
+          .select("id,journey_id,is_chat,deleted_at,state,status,updated_at")
           .eq("tenant_id", instance.tenant_id)
           .eq("journey_id", journey!.id)
           .eq("assigned_vendor_id", vendorId)
-          .is("deleted_at", null)
-          .order("created_at", { ascending: false })
+          .eq("status", "open")
+          .order("updated_at", { ascending: false })
           .limit(1)
           .maybeSingle();
         return (data as any) ?? null;
       }
 
-      if (!normalized.from) return null;
-
-      // CRM: customer_id is the most stable link if present.
-      if (customerId) {
-        const { data } = await supabase
-          .from("cases")
-          .select("id,state,status")
-          .eq("tenant_id", instance.tenant_id)
-          .eq("journey_id", journey!.id)
-          .eq("customer_id", customerId)
-          .is("deleted_at", null)
-          .order("created_at", { ascending: false })
-          .limit(1)
-          .maybeSingle();
-        if ((data as any)?.id) return (data as any) ?? null;
-      }
-
-      // Default chat-like behavior: reuse case by counterpart phone.
-      // IMPORTANT: historically we used different meta keys; try them all to avoid duplicates.
-      const metaKeys = ["counterpart_phone", "customer_phone", "vendor_phone"];
-      for (const k of metaKeys) {
-        const { data } = await supabase
-          .from("cases")
-          .select("id,state,status")
-          .eq("tenant_id", instance.tenant_id)
-          .eq("journey_id", journey!.id)
-          .eq(`meta_json->>${k}`, normalized.from)
-          .is("deleted_at", null)
-          .order("created_at", { ascending: false })
-          .limit(1)
-          .maybeSingle();
-        if ((data as any)?.id) return (data as any) ?? null;
-      }
-
-      // Last resort: search case_fields (older cases may store phone in fields)
-      const digits = normalized.from.replace(/\D/g, "");
-      if (digits.length >= 10) {
-        const { data: cf } = await supabase
-          .from("case_fields")
-          .select("case_id,updated_at")
-          .eq("key", "phone")
-          .ilike("value_text", `%${digits}%`)
-          .order("updated_at", { ascending: false })
-          .limit(1)
-          .maybeSingle();
-
-        if ((cf as any)?.case_id) {
-          const { data } = await supabase
-            .from("cases")
-            .select("id,state,status")
-            .eq("tenant_id", instance.tenant_id)
-            .eq("journey_id", journey!.id)
-            .eq("id", (cf as any).case_id)
-            .is("deleted_at", null)
-            .maybeSingle();
-          if ((data as any)?.id) return (data as any) ?? null;
-        }
-      }
+      // Regras pedidas: se já existe um case aberto para este número (mesmo que esteja em chat ou soft-deleted),
+      // reaproveita e move para o início do fluxo.
+      const existing = await findExistingOpenCase();
+      if (existing?.id) return existing as any;
 
       return null;
     };
 
     const ensureCase = async (mode: "image" | "text" | "location") => {
-      // Reuse last active case when possible (keeps conversation inside a single case)
+      // Reuse existing open case when possible (keeps conversation inside a single case)
       const existing = await findLatestActiveCase();
-      if (existing?.id) return { caseId: existing.id as string, created: false as const, skippedReason: null };
+      if (existing?.id) {
+        const bumped = await promoteOrBumpCaseToCrm(existing);
+        return { caseId: bumped.caseId, created: false as const, skippedReason: null };
+      }
 
       if (mode === "text" && !cfgCreateCaseOnText) {
         return { caseId: null as any, created: false as const, skippedReason: "create_case_disabled_text" };
@@ -1014,22 +1125,20 @@ serve(async (req) => {
         return { caseId: null as any, created: false as const, skippedReason: "missing_from_phone" };
       }
 
+      // Ao criar case novo, se existir CRM padrão habilitado, cria já nele.
+      const targetJourney = defaultCrmJourney ?? journey!;
+
       const initialHint =
         mode === "image" ? cfgInitialStateOnImage : mode === "location" ? cfgInitialStateOnLocation : cfgInitialStateOnText;
-      const initial = pickInitialState(journey!, initialHint);
+      const initial = pickInitialState(targetJourney, initialHint);
 
-      // Title rule:
-      // - general cases: phone or contact name (editable later)
-      // - CRM cases: client name (fallback: phone)
       const title = contactLabel ?? normalized.from;
 
-      // IMPORTANT: The current DB schema enforces a status check constraint.
-      // Use the default/expected status "open".
       const { data: createdCase, error: cErr } = await supabase
         .from("cases")
         .insert({
           tenant_id: instance.tenant_id,
-          journey_id: journey!.id,
+          journey_id: targetJourney.id,
           customer_id: customerId,
           case_type: "order",
           status: "open",
@@ -1040,7 +1149,7 @@ serve(async (req) => {
           title,
           meta_json: {
             correlation_id: correlationId,
-            journey_key: journey!.key,
+            journey_key: targetJourney.key,
             zapi_instance: effectiveInstanceId,
             opened_by: mode,
             counterpart_phone: normalized.from,
@@ -1059,18 +1168,6 @@ serve(async (req) => {
         return { caseId: null as any, created: false as const, skippedReason: "create_case_failed" };
       }
 
-      // If CRM case and we have a customer name, make the case title match the client name.
-      if (journey.is_crm && customerId) {
-        const desiredTitle = contactLabel && contactLabel !== normalized.from ? contactLabel : null;
-        if (desiredTitle) {
-          await supabase
-            .from("cases")
-            .update({ title: desiredTitle })
-            .eq("tenant_id", instance.tenant_id)
-            .eq("id", createdCase.id);
-        }
-      }
-
       await supabase.from("timeline_events").insert({
         tenant_id: instance.tenant_id,
         case_id: createdCase.id,
@@ -1078,7 +1175,7 @@ serve(async (req) => {
         actor_type: "system",
         actor_id: null,
         message: `Case aberto automaticamente (${mode}).`,
-        meta_json: { correlation_id: correlationId, journey_key: journey!.key },
+        meta_json: { correlation_id: correlationId, journey_key: targetJourney.key },
         occurred_at: new Date().toISOString(),
       });
 
@@ -1090,8 +1187,8 @@ serve(async (req) => {
           case_id: createdCase.id,
           from: normalized.from,
           instance: effectiveInstanceId,
-          journey_id: journey!.id,
-          journey_key: journey!.key,
+          journey_id: targetJourney.id,
+          journey_key: targetJourney.key,
           mode,
         },
       });
@@ -1294,7 +1391,6 @@ serve(async (req) => {
 
       await supabase.from("case_fields")
         .upsert({
-          tenant_id: instance.tenant_id,
           case_id: caseId,
           key: "location",
           value_json: normalized.location,
