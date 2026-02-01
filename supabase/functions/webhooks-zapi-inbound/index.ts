@@ -565,6 +565,36 @@ serve(async (req) => {
       });
     }
 
+    // INBOUND idempotency (best-effort): if the provider sends a stable external message id,
+    // prevent duplicate processing/case creation.
+    if (direction === "inbound" && normalized.externalMessageId) {
+      const { data: existingInbound } = await supabase
+        .from("wa_messages")
+        .select("id, case_id")
+        .eq("tenant_id", instance.tenant_id)
+        .eq("instance_id", instance.id)
+        .eq("direction", "inbound")
+        .eq("correlation_id", correlationId)
+        .limit(1)
+        .maybeSingle();
+
+      if (existingInbound?.id) {
+        await logInbox({
+          instance,
+          ok: true,
+          http_status: 200,
+          reason: "duplicate_ignored",
+          direction,
+          case_id: (existingInbound as any).case_id ?? null,
+          meta: { forced_direction: forced ?? null, inferred_direction: inferred, strong_outbound: strongOutbound },
+        });
+
+        return new Response(JSON.stringify({ ok: true, correlation_id: correlationId, duplicate: true }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    }
+
     // Outbound webhook capture (messages sent outside Byfrost):
     // - We DO NOT create cases here.
     // - We try to link to the latest existing case by vendor phone or by extracted customer phone.
@@ -967,7 +997,46 @@ serve(async (req) => {
       const isChat = Boolean(c?.is_chat);
       const wasDeleted = Boolean(c?.deleted_at);
 
-      // Prefer CRM journey when available.
+      // Regra refinada:
+      // - Se é "só mensagem" (is_chat=true) e NÃO está deletado => NÃO promover pro CRM.
+      if (isChat && !wasDeleted) {
+        return { caseId: String(c.id), bumped: false };
+      }
+
+      // Se está deletado: reativa, mantendo is_chat como está.
+      if (wasDeleted) {
+        const { error: updErr } = await supabase
+          .from("cases")
+          .update({
+            deleted_at: null,
+            status: "open",
+            customer_id: customerId,
+            // mantém is_chat
+            is_chat: isChat,
+          })
+          .eq("tenant_id", instance.tenant_id)
+          .eq("id", c.id);
+
+        if (updErr) {
+          console.error(`[${fn}] Failed to reactivate deleted case`, { updErr, case_id: c.id });
+          return { caseId: String(c.id), bumped: false };
+        }
+
+        await supabase.from("timeline_events").insert({
+          tenant_id: instance.tenant_id,
+          case_id: c.id,
+          event_type: "lead_reactivated",
+          actor_type: "system",
+          actor_id: null,
+          message: "Lead reativado automaticamente ao receber mensagem do WhatsApp.",
+          meta_json: { source: "zapi_inbound", correlation_id: correlationId },
+          occurred_at: new Date().toISOString(),
+        });
+
+        return { caseId: String(c.id), bumped: true };
+      }
+
+      // Caso não seja chat e exista CRM habilitado, move para CRM + estado inicial (comportamento anterior)
       const targetJourneyId = (defaultCrmJourney?.id ?? null) || currentJourneyId;
       const targetJourney = targetJourneyId ? await getJourneyById(targetJourneyId) : null;
       if (!targetJourneyId || !targetJourney) return { caseId: String(c.id), bumped: false };
@@ -977,7 +1046,6 @@ serve(async (req) => {
       const { error: updErr } = await supabase
         .from("cases")
         .update({
-          deleted_at: null,
           is_chat: false,
           journey_id: targetJourneyId,
           state: initial,
@@ -995,14 +1063,10 @@ serve(async (req) => {
       await supabase.from("timeline_events").insert({
         tenant_id: instance.tenant_id,
         case_id: c.id,
-        event_type: wasDeleted ? "lead_reactivated" : "case_updated",
+        event_type: "case_updated",
         actor_type: "system",
         actor_id: null,
-        message: wasDeleted
-          ? "Lead reativado automaticamente ao receber mensagem do cliente."
-          : isChat
-            ? "Case removido de chat e movido para o início do fluxo (mensagem recebida)."
-            : "Mensagem recebida: case movido para o início do fluxo.",
+        message: "Mensagem recebida: case movido para o início do fluxo.",
         meta_json: { source: "zapi_inbound", correlation_id: correlationId },
         occurred_at: new Date().toISOString(),
       });
@@ -1093,8 +1157,8 @@ serve(async (req) => {
         return (data as any) ?? null;
       }
 
-      // Regras pedidas: se já existe um case aberto para este número (mesmo que esteja em chat ou soft-deleted),
-      // reaproveita e move para o início do fluxo.
+      // Regras pedidas: se já existe um case aberto para este número,
+      // reaproveita. Se estiver deletado, reativa. Se for is_chat=true, NÃO promove pro CRM.
       const existing = await findExistingOpenCase();
       if (existing?.id) return existing as any;
 
@@ -1458,16 +1522,7 @@ serve(async (req) => {
           .eq("id", pendency.id);
       }
 
-      await supabase.from("timeline_events").insert({
-        tenant_id: instance.tenant_id,
-        case_id: caseId,
-        event_type: cfgSenderIsVendor ? "vendor_reply" : "customer_reply",
-        actor_type: cfgSenderIsVendor ? "vendor" : "customer",
-        actor_id: vendorId,
-        message: `Mensagem recebida${normalized.type === "audio" ? " (áudio)" : ""}.`,
-        meta_json: { correlation_id: correlationId, journey_key: journey.key },
-        occurred_at: new Date().toISOString(),
-      });
+      // Obs: não salvamos um evento de timeline por mensagem (será resumido diariamente).
 
       // If OCR pipeline is enabled for this journey, keep validating/asking.
       if (cfgOcrEnabled) {

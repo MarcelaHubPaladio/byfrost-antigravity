@@ -5,6 +5,30 @@ import { createSupabaseAdmin } from "../_shared/supabaseAdmin.ts";
 const JOBS_PROCESSOR_URL =
   "https://pryoirzeghatrgecwrci.supabase.co/functions/v1/jobs-processor";
 
+function formatYyyyMmDd(date: Date) {
+  const y = date.getUTCFullYear();
+  const m = String(date.getUTCMonth() + 1).padStart(2, "0");
+  const d = String(date.getUTCDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+function getLocalDatePartsInTimeZone(date: Date, timeZone: string) {
+  const dtf = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+  const parts = dtf.formatToParts(date);
+  const map: any = {};
+  for (const p of parts) map[p.type] = p.value;
+  return {
+    year: Number(map.year),
+    month: Number(map.month),
+    day: Number(map.day),
+  };
+}
+
 serve(async (req) => {
   const fn = "cron-runner";
   try {
@@ -26,10 +50,10 @@ serve(async (req) => {
       jobsProcessor = { ok: false, error: String(e) };
     }
 
-    // 2) Escalate overdue vendor pendencies (>4h by due_at)
     const supabase = createSupabaseAdmin();
     const now = new Date().toISOString();
 
+    // 2) Escalate overdue vendor pendencies (>4h by due_at)
     const { data: overdue, error: oErr } = await supabase
       .from("pendencies")
       .select("id, tenant_id, case_id, due_at, question_text")
@@ -138,7 +162,45 @@ serve(async (req) => {
       escalated += 1;
     }
 
-    return new Response(JSON.stringify({ ok: true, jobsProcessor, escalated }), {
+    // 3) Enqueue daily WhatsApp summaries (MVP, no AI)
+    // We enqueue the previous day summary in America/Sao_Paulo.
+    const timeZone = "America/Sao_Paulo";
+    const todayLocal = getLocalDatePartsInTimeZone(new Date(), timeZone);
+    const todayUtcNoon = new Date(Date.UTC(todayLocal.year, todayLocal.month - 1, todayLocal.day, 12, 0, 0));
+    todayUtcNoon.setUTCDate(todayUtcNoon.getUTCDate() - 1);
+    const dateStr = formatYyyyMmDd(todayUtcNoon);
+
+    const { data: tenants, error: tErr } = await supabase.from("tenants").select("id").limit(5000);
+    if (tErr) {
+      console.error(`[${fn}] Failed to list tenants for summary enqueue`, { tErr });
+    }
+
+    let dailySummaryEnqueued = 0;
+
+    for (const t of tenants ?? []) {
+      const tenantId = (t as any).id as string;
+      const idempotencyKey = `DAILY_WA_SUMMARY:${tenantId}:${dateStr}`;
+
+      const { error } = await supabase.from("job_queue").insert({
+        tenant_id: tenantId,
+        type: "DAILY_WA_SUMMARY",
+        idempotency_key: idempotencyKey,
+        payload_json: { date: dateStr, time_zone: timeZone },
+        status: "pending",
+        run_after: new Date().toISOString(),
+      });
+
+      if (error) {
+        const msg = String((error as any)?.message ?? "").toLowerCase();
+        if (!msg.includes("duplicate")) {
+          console.error(`[${fn}] Failed to enqueue DAILY_WA_SUMMARY`, { tenantId, error });
+        }
+      } else {
+        dailySummaryEnqueued += 1;
+      }
+    }
+
+    return new Response(JSON.stringify({ ok: true, jobsProcessor, escalated, dailySummaryEnqueued, date: dateStr, timeZone }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (e) {

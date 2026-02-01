@@ -87,6 +87,115 @@ async function runOcrGoogleVision(imageUrl: string) {
   return { ok: true as const, text, raw: json?.responses?.[0] ?? json };
 }
 
+function addDays(dateStr: string, days: number) {
+  const [y, m, d] = dateStr.split("-").map((n) => Number(n));
+  const base = new Date(Date.UTC(y, (m ?? 1) - 1, d ?? 1, 12, 0, 0));
+  base.setUTCDate(base.getUTCDate() + days);
+  const yy = base.getUTCFullYear();
+  const mm = String(base.getUTCMonth() + 1).padStart(2, "0");
+  const dd = String(base.getUTCDate()).padStart(2, "0");
+  return `${yy}-${mm}-${dd}`;
+}
+
+function tzOffsetMs(date: Date, timeZone: string) {
+  const dtf = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hourCycle: "h23",
+  });
+  const parts = dtf.formatToParts(date);
+  const map: any = {};
+  for (const p of parts) map[p.type] = p.value;
+
+  const asUtc = Date.UTC(
+    Number(map.year),
+    Number(map.month) - 1,
+    Number(map.day),
+    Number(map.hour),
+    Number(map.minute),
+    Number(map.second)
+  );
+
+  return asUtc - date.getTime();
+}
+
+function localMidnightUtcMs(dateStr: string, timeZone: string) {
+  const [y, m, d] = dateStr.split("-").map((n) => Number(n));
+  const guess = Date.UTC(y, m - 1, d, 0, 0, 0);
+
+  // Two-pass correction (handles DST shifts if they ever exist again)
+  let t = guess;
+  let off = tzOffsetMs(new Date(t), timeZone);
+  t = guess - off;
+  off = tzOffsetMs(new Date(t), timeZone);
+  t = guess - off;
+
+  return t;
+}
+
+function buildDailyTopics(text: string) {
+  const stop = new Set([
+    "de",
+    "da",
+    "do",
+    "das",
+    "dos",
+    "e",
+    "a",
+    "o",
+    "os",
+    "as",
+    "que",
+    "pra",
+    "para",
+    "com",
+    "na",
+    "no",
+    "em",
+    "um",
+    "uma",
+    "uns",
+    "umas",
+    "por",
+    "se",
+    "não",
+    "sim",
+    "oi",
+    "ola",
+    "olá",
+    "boa",
+    "bom",
+    "dia",
+    "tarde",
+    "noite",
+  ]);
+
+  const words = (text ?? "")
+    .toLowerCase()
+    .replace(/https?:\/\/\S+/g, " ")
+    .replace(/[^\p{L}\p{N}\s]/gu, " ")
+    .split(/\s+/)
+    .map((w) => w.trim())
+    .filter(Boolean)
+    .filter((w) => w.length >= 4)
+    .filter((w) => !stop.has(w));
+
+  const freq = new Map<string, number>();
+  for (const w of words) freq.set(w, (freq.get(w) ?? 0) + 1);
+
+  const top = Array.from(freq.entries())
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 3)
+    .map(([w]) => w);
+
+  return top;
+}
+
 serve(async (req) => {
   const fn = "jobs-processor";
   try {
@@ -137,6 +246,133 @@ serve(async (req) => {
       try {
         const tenantId = job.tenant_id;
         const caseId = job.payload_json?.case_id as string | undefined;
+
+        if (job.type === "DAILY_WA_SUMMARY") {
+          const dateStr = String(job.payload_json?.date ?? "").trim();
+          const timeZone = String(job.payload_json?.time_zone ?? "America/Sao_Paulo").trim() || "America/Sao_Paulo";
+          if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) throw new Error("Missing/invalid payload.date (YYYY-MM-DD)");
+
+          const next = addDays(dateStr, 1);
+          const startIso = new Date(localMidnightUtcMs(dateStr, timeZone)).toISOString();
+          const endIso = new Date(localMidnightUtcMs(next, timeZone)).toISOString();
+
+          // Pull messages in pages (MVP)
+          const pageSize = 1000;
+          const maxPages = 20;
+          let all: any[] = [];
+          for (let page = 0; page < maxPages; page++) {
+            const from = page * pageSize;
+            const to = from + pageSize - 1;
+
+            const { data, error } = await supabase
+              .from("wa_messages")
+              .select("case_id,direction,body_text,occurred_at")
+              .eq("tenant_id", tenantId)
+              .gte("occurred_at", startIso)
+              .lt("occurred_at", endIso)
+              .not("case_id", "is", null)
+              .order("occurred_at", { ascending: true })
+              .range(from, to);
+
+            if (error) throw error;
+            if (!data?.length) break;
+            all = all.concat(data as any[]);
+            if (data.length < pageSize) break;
+          }
+
+          if (!all.length) {
+            await supabase.from("job_queue").update({ status: "done" }).eq("id", job.id);
+            results.push({ id: job.id, ok: true, note: "no messages" });
+            continue;
+          }
+
+          const { data: existingSummaries } = await supabase
+            .from("timeline_events")
+            .select("case_id")
+            .eq("tenant_id", tenantId)
+            .eq("event_type", "daily_conversation_summary")
+            .contains("meta_json", { date: dateStr })
+            .limit(5000);
+
+          const already = new Set<string>((existingSummaries ?? []).map((r: any) => String(r.case_id)));
+
+          const byCase = new Map<
+            string,
+            {
+              inbound: number;
+              outbound: number;
+              first: string;
+              last: string;
+              text: string;
+            }
+          >();
+
+          for (const m of all) {
+            const cid = String((m as any).case_id);
+            if (!cid) continue;
+
+            const cur = byCase.get(cid) ?? {
+              inbound: 0,
+              outbound: 0,
+              first: String((m as any).occurred_at),
+              last: String((m as any).occurred_at),
+              text: "",
+            };
+
+            const dir = String((m as any).direction);
+            if (dir === "inbound") cur.inbound += 1;
+            if (dir === "outbound") cur.outbound += 1;
+
+            const t = String((m as any).occurred_at);
+            if (t < cur.first) cur.first = t;
+            if (t > cur.last) cur.last = t;
+
+            const body = (m as any).body_text ? String((m as any).body_text) : "";
+            if (body) cur.text += `\n${body}`;
+
+            byCase.set(cid, cur);
+          }
+
+          const inserts: any[] = [];
+          const [yyyy, mm, dd] = dateStr.split("-");
+          const dateBr = `${dd}/${mm}`;
+
+          for (const [cid, s] of byCase.entries()) {
+            if (already.has(cid)) continue;
+            if ((s.inbound + s.outbound) <= 0) continue;
+
+            const topics = buildDailyTopics(s.text).slice(0, 3);
+            const topicsText = topics.length ? topics.join(", ") : "(sem tema dominante)";
+
+            inserts.push({
+              tenant_id: tenantId,
+              case_id: cid,
+              event_type: "daily_conversation_summary",
+              actor_type: "system",
+              actor_id: null,
+              message: `Resumo do dia (${dateBr}): ${s.inbound} mensagens do cliente, ${s.outbound} do time. Principais temas: ${topicsText}.`,
+              meta_json: {
+                date: dateStr,
+                time_zone: timeZone,
+                inbound_count: s.inbound,
+                outbound_count: s.outbound,
+                first_message_at: s.first,
+                last_message_at: s.last,
+                topics,
+              },
+              occurred_at: new Date().toISOString(),
+            });
+          }
+
+          if (inserts.length) {
+            await supabase.from("timeline_events").insert(inserts);
+          }
+
+          await supabase.from("job_queue").update({ status: "done" }).eq("id", job.id);
+          results.push({ id: job.id, ok: true, date: dateStr, inserted: inserts.length, cases: byCase.size });
+          continue;
+        }
+
         if (!caseId) throw new Error("Missing payload.case_id");
 
         if (job.type === "OCR_IMAGE") {
