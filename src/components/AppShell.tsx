@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { useTenant } from "@/providers/TenantProvider";
 import { useSession } from "@/providers/SessionProvider";
+import { useTheme } from "@/providers/ThemeProvider";
 import {
   LayoutGrid,
   FlaskConical,
@@ -132,6 +133,7 @@ export function AppShell({
   const nav = useNavigate();
   const { activeTenant, isSuperAdmin, activeTenantId } = useTenant();
   const { user } = useSession();
+  const { prefs } = useTheme();
   const [userMenuOpen, setUserMenuOpen] = useState(false);
 
   const crmEnabledQ = useQuery({
@@ -168,6 +170,9 @@ export function AppShell({
   useEffect(() => {
     const root = document.documentElement;
 
+    // If the user is in custom theme, we do NOT override their CSS vars.
+    if (prefs.mode === "custom") return;
+
     // Default
     let accent = { h: 252, s: 86, l: 62 };
     let bg = { h: 220, s: 45, l: 97 };
@@ -180,9 +185,14 @@ export function AppShell({
       }
     }
 
+    // Always keep accent aligned with tenant palette (even in dark).
     root.style.setProperty("--byfrost-accent", `${accent.h} ${accent.s}% ${accent.l}%`);
-    root.style.setProperty("--byfrost-bg", `${bg.h} ${bg.s}% ${bg.l}%`);
-  }, [palettePrimaryHex, activeTenant?.id]);
+
+    // Only set the light background when not in dark mode.
+    if (prefs.mode !== "dark") {
+      root.style.setProperty("--byfrost-bg", `${bg.h} ${bg.s}% ${bg.l}%`);
+    }
+  }, [palettePrimaryHex, activeTenant?.id, prefs.mode]);
 
   const signOut = async () => {
     await supabase.auth.signOut();
@@ -213,7 +223,7 @@ export function AppShell({
       <div className="w-full px-3 py-3 md:px-5 md:py-5">
         <div className="grid gap-3 md:grid-cols-[96px_1fr] md:gap-5">
           {/* Sidebar */}
-          <aside className="overflow-hidden rounded-[28px] border border-slate-200 bg-white/65 shadow-sm backdrop-blur md:sticky md:top-5 md:h-[calc(100vh-40px)]">
+          <aside className="overflow-hidden rounded-[28px] border border-slate-200 bg-white/65 shadow-sm backdrop-blur md:sticky md:top-5 md:h-[calc(100vh-40px)] dark:border-slate-800 dark:bg-slate-950/40">
             {/* Top brand block */}
             <div className="bg-[hsl(var(--byfrost-accent))] px-2 pb-2 pt-1.5">
               <Link
@@ -252,7 +262,7 @@ export function AppShell({
           <div className="min-w-0">
             {/* Content header (tenant accent border) */}
             {!hideTopBar && (
-              <div className="overflow-hidden rounded-[28px] border border-slate-200 border-t-4 border-t-[hsl(var(--byfrost-accent))] bg-white/65 px-4 py-3 shadow-sm backdrop-blur">
+              <div className="overflow-hidden rounded-[28px] border border-slate-200 border-t-4 border-t-[hsl(var(--byfrost-accent))] bg-white/65 px-4 py-3 shadow-sm backdrop-blur dark:border-slate-800 dark:bg-slate-950/40">
                 <div className="flex items-center justify-between gap-3">
                   <div className="flex min-w-0 items-center gap-2">
                     {isSuperAdmin && (
@@ -267,7 +277,7 @@ export function AppShell({
                     <DropdownMenuTrigger asChild>
                       <button
                         type="button"
-                        className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-white/75 px-2.5 py-2 text-left text-slate-900 shadow-sm transition hover:bg-white"
+                        className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-white/75 px-2.5 py-2 text-left text-slate-900 shadow-sm transition hover:bg-white dark:border-slate-800 dark:bg-slate-950/40 dark:text-slate-100 dark:hover:bg-slate-950/60"
                         onMouseEnter={() => setUserMenuOpen(true)}
                         onMouseLeave={() => setUserMenuOpen(false)}
                         title={userEmail}
@@ -279,10 +289,10 @@ export function AppShell({
                           </AvatarFallback>
                         </Avatar>
                         <div className="hidden sm:block">
-                          <div className="max-w-[180px] truncate text-xs font-semibold text-slate-900">
+                          <div className="max-w-[180px] truncate text-xs font-semibold text-slate-900 dark:text-slate-100">
                             {userName}
                           </div>
-                          <div className="max-w-[180px] truncate text-[11px] text-slate-500">{activeTenant?.slug}</div>
+                          <div className="max-w-[180px] truncate text-[11px] text-slate-500 dark:text-slate-400">{activeTenant?.slug}</div>
                         </div>
                         <User2 className="hidden h-4 w-4 text-slate-400 sm:block" />
                       </button>
@@ -290,15 +300,15 @@ export function AppShell({
 
                     <DropdownMenuContent
                       align="end"
-                      className="w-64 rounded-2xl border-slate-200 bg-white p-2"
+                      className="w-64 rounded-2xl border-slate-200 bg-white p-2 dark:border-slate-800 dark:bg-slate-950"
                       onMouseEnter={() => setUserMenuOpen(true)}
                       onMouseLeave={() => setUserMenuOpen(false)}
                     >
                       <DropdownMenuLabel className="px-2 py-2">
                         <div className="flex items-center justify-between gap-2">
                           <div className="min-w-0">
-                            <div className="truncate text-xs font-semibold text-slate-900">{userName}</div>
-                            <div className="mt-0.5 truncate text-[11px] font-normal text-slate-600">{userEmail}</div>
+                            <div className="truncate text-xs font-semibold text-slate-900 dark:text-slate-100">{userName}</div>
+                            <div className="mt-0.5 truncate text-[11px] font-normal text-slate-600 dark:text-slate-400">{userEmail}</div>
                           </div>
                           {isSuperAdmin && (
                             <div className="shrink-0 rounded-full bg-amber-100 px-2 py-1 text-[10px] font-semibold text-amber-900">
@@ -307,9 +317,9 @@ export function AppShell({
                           )}
                         </div>
                       </DropdownMenuLabel>
-                      <DropdownMenuSeparator className="bg-slate-200" />
+                      <DropdownMenuSeparator className="bg-slate-200 dark:bg-slate-800" />
                       <DropdownMenuItem
-                        className="cursor-pointer rounded-xl px-2 py-2 text-rose-700 focus:bg-rose-50 focus:text-rose-800"
+                        className="cursor-pointer rounded-xl px-2 py-2 text-rose-700 focus:bg-rose-50 focus:text-rose-800 dark:text-rose-300 dark:focus:bg-rose-950/30 dark:focus:text-rose-200"
                         onSelect={(e) => {
                           e.preventDefault();
                           setUserMenuOpen(false);

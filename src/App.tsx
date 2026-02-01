@@ -6,6 +6,7 @@ import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 
 import { SessionProvider } from "@/providers/SessionProvider";
 import { TenantProvider } from "@/providers/TenantProvider";
+import { ThemeProvider } from "@/providers/ThemeProvider";
 import { RequireTenantRole } from "@/components/RequireTenantRole";
 import { RequireRouteAccess } from "@/components/RequireRouteAccess";
 
@@ -30,111 +31,113 @@ const App = () => (
       <Toaster />
       <Sonner />
       <SessionProvider>
-        <TenantProvider>
-          <BrowserRouter>
-            <Routes>
-              <Route path="/" element={<Index />} />
-              <Route path="/login" element={<Login />} />
-              <Route path="/tenants" element={<TenantSelect />} />
+        <ThemeProvider>
+          <TenantProvider>
+            <BrowserRouter>
+              <Routes>
+                <Route path="/" element={<Index />} />
+                <Route path="/login" element={<Login />} />
+                <Route path="/tenants" element={<TenantSelect />} />
 
-              {/* Dashboard por jornada (slug = journeys.key) */}
-              <Route
-                path="/app"
-                element={
-                  <RequireRouteAccess routeKey="app.dashboard">
-                    <Dashboard />
-                  </RequireRouteAccess>
-                }
-              />
-              <Route
-                path="/app/j/:journeyKey"
-                element={
-                  <RequireRouteAccess routeKey="app.dashboard">
-                    <Dashboard />
-                  </RequireRouteAccess>
-                }
-              />
+                {/* Dashboard por jornada (slug = journeys.key) */}
+                <Route
+                  path="/app"
+                  element={
+                    <RequireRouteAccess routeKey="app.dashboard">
+                      <Dashboard />
+                    </RequireRouteAccess>
+                  }
+                />
+                <Route
+                  path="/app/j/:journeyKey"
+                  element={
+                    <RequireRouteAccess routeKey="app.dashboard">
+                      <Dashboard />
+                    </RequireRouteAccess>
+                  }
+                />
 
-              <Route
-                path="/app/crm"
-                element={
-                  <RequireRouteAccess routeKey="app.crm">
-                    <Crm />
-                  </RequireRouteAccess>
-                }
-              />
+                <Route
+                  path="/app/crm"
+                  element={
+                    <RequireRouteAccess routeKey="app.crm">
+                      <Crm />
+                    </RequireRouteAccess>
+                  }
+                />
 
-              <Route
-                path="/app/chat"
-                element={
-                  <RequireRouteAccess routeKey="app.chat">
-                    <Chats />
-                  </RequireRouteAccess>
-                }
-              />
-              <Route
-                path="/app/chat/:id"
-                element={
-                  <RequireRouteAccess routeKey="app.chat">
-                    <Chats />
-                  </RequireRouteAccess>
-                }
-              />
+                <Route
+                  path="/app/chat"
+                  element={
+                    <RequireRouteAccess routeKey="app.chat">
+                      <Chats />
+                    </RequireRouteAccess>
+                  }
+                />
+                <Route
+                  path="/app/chat/:id"
+                  element={
+                    <RequireRouteAccess routeKey="app.chat">
+                      <Chats />
+                    </RequireRouteAccess>
+                  }
+                />
 
-              {/* Detalhes */}
-              <Route
-                path="/app/cases/:id"
-                element={
-                  <RequireRouteAccess routeKey="app.case_detail">
-                    <CaseDetail />
-                  </RequireRouteAccess>
-                }
-              />
-              <Route
-                path="/crm/cases/:id"
-                element={
-                  <RequireRouteAccess routeKey="crm.case_detail">
-                    <CrmCaseDetail />
-                  </RequireRouteAccess>
-                }
-              />
+                {/* Detalhes */}
+                <Route
+                  path="/app/cases/:id"
+                  element={
+                    <RequireRouteAccess routeKey="app.case_detail">
+                      <CaseDetail />
+                    </RequireRouteAccess>
+                  }
+                />
+                <Route
+                  path="/crm/cases/:id"
+                  element={
+                    <RequireRouteAccess routeKey="crm.case_detail">
+                      <CrmCaseDetail />
+                    </RequireRouteAccess>
+                  }
+                />
 
-              <Route
-                path="/app/simulator"
-                element={
-                  <RequireRouteAccess routeKey="app.simulator">
-                    <Simulator />
-                  </RequireRouteAccess>
-                }
-              />
+                <Route
+                  path="/app/simulator"
+                  element={
+                    <RequireRouteAccess routeKey="app.simulator">
+                      <Simulator />
+                    </RequireRouteAccess>
+                  }
+                />
 
-              <Route
-                path="/app/settings"
-                element={
-                  <RequireRouteAccess routeKey="app.settings">
-                    <Settings />
-                  </RequireRouteAccess>
-                }
-              />
+                <Route
+                  path="/app/settings"
+                  element={
+                    <RequireRouteAccess routeKey="app.settings">
+                      <Settings />
+                    </RequireRouteAccess>
+                  }
+                />
 
-              {/* Super-admin only */}
-              <Route
-                path="/app/admin"
-                element={
-                  <RequireTenantRole roles={["admin"]}>
-                    <Admin />
-                  </RequireTenantRole>
-                }
-              />
+                {/* Super-admin only */}
+                <Route
+                  path="/app/admin"
+                  element={
+                    <RequireTenantRole roles={["admin"]}>
+                      <Admin />
+                    </RequireTenantRole>
+                  }
+                />
 
-              {/* Back-compat */}
-              <Route path="/dashboard" element={<Navigate to="/app" replace />} />
+                {/* Back-compat */}
+                <Route path="/dashboard" element={<Navigate to="/app" replace />} />
 
-              {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-              <Route path="*" element={<NotFound />} />
-            </Routes>
-          </BrowserRouter>
-        </TenantProvider>
+                {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+                <Route path="*" element={<NotFound />} />
+              </Routes>
+            </BrowserRouter>
+          </TenantProvider>
+        </ThemeProvider>
       </SessionProvider>
     </TooltipProvider>
   </QueryClientProvider>
