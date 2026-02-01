@@ -237,6 +237,12 @@ export function TenantJourneysPanel() {
 
   const onLocationNextState = (configObj as any)?.automation?.on_location?.next_state ?? "";
 
+  // Presence (optional journey)
+  const presenceEnabledFlag = Boolean((configObj as any)?.flags?.presence_enabled);
+  const presenceAllowWhats = Boolean((configObj as any)?.flags?.presence_allow_whatsapp_clocking);
+  const presenceScheduleStart = (configObj as any)?.presence?.schedule?.start_time ?? "";
+  const presencePlannedMinutes = (configObj as any)?.presence?.schedule?.planned_minutes ?? 480;
+
   const createSector = async () => {
     if (!sectorName.trim()) return;
     setCreatingSector(true);
@@ -1030,6 +1036,70 @@ export function TenantJourneysPanel() {
                   <Sparkles className="mr-2 h-4 w-4" /> Aplicar defaults de OCR
                 </Button>
               </div>
+
+              {selectedJourney.key === "presence" && (
+                <div className="rounded-2xl border border-slate-200 bg-white p-3">
+                  <div className="text-xs font-semibold text-slate-900">Presença (Ponto Digital)</div>
+                  <div className="mt-0.5 text-[11px] text-slate-500">
+                    Esta jornada é opcional e só habilita as funcionalidades quando
+                    <span className="font-mono"> flags.presence_enabled = true</span>.
+                  </div>
+
+                  <div className="mt-3 grid gap-2">
+                    <div className="flex items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2">
+                      <div>
+                        <div className="text-xs font-semibold text-slate-900">Habilitar ponto neste tenant</div>
+                        <div className="mt-0.5 text-[11px] text-slate-600">
+                          Exigido para liberar telas e pipeline de batidas.
+                        </div>
+                      </div>
+                      <Switch
+                        checked={presenceEnabledFlag}
+                        onCheckedChange={(v) => updateConfig({ flags: { presence_enabled: v } })}
+                      />
+                    </div>
+
+                    <div className="flex items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2">
+                      <div>
+                        <div className="text-xs font-semibold text-slate-900">Permitir bater ponto via WhatsApp</div>
+                        <div className="mt-0.5 text-[11px] text-slate-600">
+                          Default: desligado. Requer mensagem de <span className="font-semibold">localização</span> com legenda (ENTRADA, SAIDA, INTERVALO, VOLTEI).
+                        </div>
+                      </div>
+                      <Switch
+                        checked={presenceAllowWhats}
+                        onCheckedChange={(v) => updateConfig({ flags: { presence_allow_whatsapp_clocking: v } })}
+                      />
+                    </div>
+
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <div>
+                        <Label className="text-xs">Início previsto (HH:MM)</Label>
+                        <Input
+                          value={presenceScheduleStart}
+                          onChange={(e) =>
+                            updateConfig({ presence: { schedule: { start_time: e.target.value } } })
+                          }
+                          className="mt-1 rounded-2xl"
+                          placeholder="Ex: 09:00"
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-xs">Minutos previstos (dia)</Label>
+                        <Input
+                          type="number"
+                          value={String(presencePlannedMinutes)}
+                          onChange={(e) =>
+                            updateConfig({ presence: { schedule: { planned_minutes: Number(e.target.value || 0) } } })
+                          }
+                          className="mt-1 rounded-2xl"
+                          placeholder="480"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               <div className="rounded-2xl border border-slate-200 bg-white p-3">
                 <div className="flex items-center justify-between gap-3">

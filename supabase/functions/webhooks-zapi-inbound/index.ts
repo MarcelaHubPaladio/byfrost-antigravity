@@ -565,6 +565,301 @@ serve(async (req) => {
       });
     }
 
+    // ------------------------------------------------------------------
+    // PRESENCE (PONTO DIGITAL) via WhatsApp (FEATURE FLAG)
+    // - Only when tenant_journeys(presence).config_json.flags.presence_enabled=true
+    //   AND presence_allow_whatsapp_clocking=true
+    // - Requires a LOCATION message (lat/lng)
+    // - Uses the same persistence tables (time_punches + cases + pendencies)
+    // - Never blocks a punch
+    // ------------------------------------------------------------------
+    if (direction === "inbound" && normalized.type === "location" && normalized.location && normalized.from) {
+      const rawCmd = String(normalized.text ?? "").trim().toUpperCase();
+
+      const cmdToType = (cmd: string): "ENTRY" | "BREAK_START" | "BREAK_END" | "EXIT" | null => {
+        if (!cmd) return null;
+        if (cmd.includes("ENTRADA")) return "ENTRY";
+        if (cmd.includes("SAIDA") || cmd.includes("SAÍDA")) return "EXIT";
+        if (cmd.includes("INTERVALO") || cmd.includes("INTERVAL") || cmd.includes("PAUSA")) return "BREAK_START";
+        if (cmd.includes("VOLTEI") || cmd.includes("RETORNO")) return "BREAK_END";
+        return null;
+      };
+
+      const forcedPunchType = cmdToType(rawCmd);
+
+      if (forcedPunchType) {
+        const timeZone = "America/Sao_Paulo";
+
+        const getLocalYyyyMmDdInTz = (date: Date, tz: string) => {
+          const dtf = new Intl.DateTimeFormat("en-CA", {
+            timeZone: tz,
+            year: "numeric",
+            month: "2-digit",
+            day: "2-digit",
+          });
+          return dtf.format(date);
+        };
+
+        const haversineMeters = (a: { lat: number; lng: number }, b: { lat: number; lng: number }) => {
+          const R = 6371000;
+          const toRad = (x: number) => (x * Math.PI) / 180;
+          const dLat = toRad(b.lat - a.lat);
+          const dLng = toRad(b.lng - a.lng);
+          const lat1 = toRad(a.lat);
+          const lat2 = toRad(b.lat);
+
+          const sin1 = Math.sin(dLat / 2);
+          const sin2 = Math.sin(dLng / 2);
+          const h = sin1 * sin1 + Math.cos(lat1) * Math.cos(lat2) * sin2 * sin2;
+          return 2 * R * Math.asin(Math.min(1, Math.sqrt(h)));
+        };
+
+        const ensurePendency = async (args: { tenantId: string; caseId: string; type: string; question: string }) => {
+          const { data: existing } = await supabase
+            .from("pendencies")
+            .select("id")
+            .eq("tenant_id", args.tenantId)
+            .eq("case_id", args.caseId)
+            .eq("type", args.type)
+            .eq("status", "open")
+            .limit(1)
+            .maybeSingle();
+
+          if (existing?.id) return;
+
+          await supabase.from("pendencies").insert({
+            tenant_id: args.tenantId,
+            case_id: args.caseId,
+            type: args.type,
+            assigned_to_role: "admin",
+            question_text: args.question,
+            required: true,
+            status: "open",
+            due_at: null,
+          });
+        };
+
+        try {
+          const tenantId = String(instance.tenant_id);
+          const today = getLocalYyyyMmDdInTz(new Date(), timeZone);
+
+          // Check feature flags on presence journey
+          const { data: presenceJourney } = await supabase
+            .from("journeys")
+            .select("id")
+            .eq("key", "presence")
+            .limit(1)
+            .maybeSingle();
+
+          if (presenceJourney?.id) {
+            const { data: tj } = await supabase
+              .from("tenant_journeys")
+              .select("enabled,config_json")
+              .eq("tenant_id", tenantId)
+              .eq("journey_id", presenceJourney.id)
+              .eq("enabled", true)
+              .limit(1)
+              .maybeSingle();
+
+            const presenceEnabled = Boolean((tj as any)?.config_json?.flags?.presence_enabled);
+            const allowWhats = Boolean((tj as any)?.config_json?.flags?.presence_allow_whatsapp_clocking);
+
+            if (presenceEnabled && allowWhats) {
+              // Map WhatsApp phone to an employee (users_profile.phone_e164)
+              const variants = Array.from(buildBrPhoneVariantsE164(normalized.from));
+              const { data: emp } = await supabase
+                .from("users_profile")
+                .select("user_id")
+                .eq("tenant_id", tenantId)
+                .in("phone_e164", variants.length ? variants : [normalized.from])
+                .is("deleted_at", null)
+                .limit(1)
+                .maybeSingle();
+
+              const employeeId = (emp as any)?.user_id ? String((emp as any).user_id) : null;
+
+              if (employeeId) {
+                // Ensure day case
+                const { data: existingCase } = await supabase
+                  .from("cases")
+                  .select("id")
+                  .eq("tenant_id", tenantId)
+                  .eq("case_type", "PRESENCE_DAY")
+                  .eq("entity_type", "employee")
+                  .eq("entity_id", employeeId)
+                  .eq("case_date", today)
+                  .is("deleted_at", null)
+                  .limit(1)
+                  .maybeSingle();
+
+                let caseId: string | null = (existingCase as any)?.id ?? null;
+
+                if (!caseId) {
+                  const { data: created } = await supabase
+                    .from("cases")
+                    .insert({
+                      tenant_id: tenantId,
+                      journey_id: presenceJourney.id,
+                      case_type: "PRESENCE_DAY",
+                      status: "open",
+                      state: "AGUARDANDO_ENTRADA",
+                      created_by_channel: "whatsapp",
+                      title: normalized.from,
+                      entity_type: "employee",
+                      entity_id: employeeId,
+                      case_date: today,
+                      meta_json: { journey_key: "presence", employee_user_id: employeeId, case_date: today },
+                    })
+                    .select("id")
+                    .single();
+
+                  caseId = (created as any)?.id ?? null;
+                }
+
+                if (caseId) {
+                  // Geofence (optional)
+                  const { data: policy } = await supabase
+                    .from("presence_policies")
+                    .select("id,radius_meters,lateness_tolerance_minutes,break_required,presence_locations(latitude,longitude,name)")
+                    .eq("tenant_id", tenantId)
+                    .order("created_at", { ascending: true })
+                    .limit(1)
+                    .maybeSingle();
+
+                  const loc = (policy as any)?.presence_locations;
+                  const lat = Number(normalized.location.lat);
+                  const lng = Number(normalized.location.lng);
+
+                  let dist: number | null = null;
+                  let within = true;
+
+                  if (loc?.latitude != null && loc?.longitude != null) {
+                    dist = haversineMeters(
+                      { lat, lng },
+                      { lat: Number(loc.latitude), lng: Number(loc.longitude) }
+                    );
+                    within = dist <= Number((policy as any)?.radius_meters ?? 100);
+                  }
+
+                  await supabase.from("time_punches").insert({
+                    tenant_id: tenantId,
+                    employee_id: employeeId,
+                    case_id: caseId,
+                    type: forcedPunchType,
+                    latitude: lat,
+                    longitude: lng,
+                    accuracy_meters: null,
+                    distance_from_location: dist,
+                    within_radius: within,
+                    status: within ? "VALID" : "VALID_WITH_EXCEPTION",
+                    source: "WHATSAPP",
+                    meta_json: { policy_id: (policy as any)?.id ?? null, location_name: loc?.name ?? null, raw_cmd: rawCmd },
+                  });
+
+                  // Exceptions
+                  let movedToJustification = false;
+                  if (!within) {
+                    movedToJustification = true;
+                    await ensurePendency({
+                      tenantId,
+                      caseId,
+                      type: "outside_radius",
+                      question: `Batida registrada fora do raio do local (distância ~${Math.round(dist ?? 0)}m). Justifique.`,
+                    });
+                  }
+
+                  // Break requirement check when exiting
+                  if (forcedPunchType === "EXIT" && Boolean((policy as any)?.break_required ?? true)) {
+                    const { data: all } = await supabase
+                      .from("time_punches")
+                      .select("type")
+                      .eq("tenant_id", tenantId)
+                      .eq("case_id", caseId)
+                      .limit(50);
+
+                    const hasBreakStart = (all ?? []).some((r: any) => r.type === "BREAK_START");
+                    const hasBreakEnd = (all ?? []).some((r: any) => r.type === "BREAK_END");
+
+                    if (!hasBreakStart || !hasBreakEnd) {
+                      movedToJustification = true;
+                      await ensurePendency({
+                        tenantId,
+                        caseId,
+                        type: "missing_break",
+                        question: "Intervalo obrigatório não identificado (BREAK_START/BREAK_END). Justifique.",
+                      });
+                    }
+                  }
+
+                  const nextState =
+                    movedToJustification
+                      ? "PENDENTE_JUSTIFICATIVA"
+                      : forcedPunchType === "ENTRY"
+                        ? "EM_EXPEDIENTE"
+                        : forcedPunchType === "BREAK_START"
+                          ? "EM_INTERVALO"
+                          : forcedPunchType === "BREAK_END"
+                            ? "AGUARDANDO_SAIDA"
+                            : forcedPunchType === "EXIT"
+                              ? "PENDENTE_APROVACAO"
+                              : null;
+
+                  if (nextState) {
+                    await supabase.from("cases").update({ state: nextState, status: "open" }).eq("id", caseId);
+                  }
+
+                  // Persist inbound wa_message too (audit)
+                  await supabase.from("wa_messages").insert({
+                    tenant_id: tenantId,
+                    instance_id: instance.id,
+                    direction: "inbound",
+                    from_phone: normalized.from,
+                    to_phone: normalized.to,
+                    type: "location",
+                    body_text: normalized.text,
+                    media_url: null,
+                    payload_json: payload,
+                    correlation_id: correlationId,
+                    occurred_at: new Date().toISOString(),
+                    case_id: caseId,
+                  });
+
+                  await supabase.from("timeline_events").insert({
+                    tenant_id: tenantId,
+                    case_id: caseId,
+                    event_type: "presence_punch",
+                    actor_type: "system",
+                    actor_id: null,
+                    message: `Batida via WhatsApp: ${forcedPunchType}.`,
+                    meta_json: { source: "WHATSAPP", raw_cmd: rawCmd, within_radius: within, distance_from_location: dist },
+                    occurred_at: new Date().toISOString(),
+                  });
+
+                  await logInbox({
+                    instance,
+                    ok: true,
+                    http_status: 200,
+                    reason: "presence_whatsapp_clocking",
+                    direction,
+                    case_id: caseId,
+                    journey_id: presenceJourney.id,
+                    meta: { forced_punch_type: forcedPunchType, employee_id: employeeId },
+                  });
+
+                  return new Response(JSON.stringify({ ok: true, presence_clocked: true, case_id: caseId }), {
+                    headers: { ...corsHeaders, "Content-Type": "application/json" },
+                  });
+                }
+              }
+            }
+          }
+        } catch (e) {
+          // Never break the webhook pipeline; just log and continue with normal routing
+          console.error(`[${fn}] presence whatsapp clocking failed (ignored)`, { e: String(e) });
+        }
+      }
+    }
+
     // INBOUND idempotency (best-effort): if the provider sends a stable external message id,
     // prevent duplicate processing/case creation.
     if (direction === "inbound" && normalized.externalMessageId) {

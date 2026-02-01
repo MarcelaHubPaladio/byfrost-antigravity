@@ -15,6 +15,7 @@ import {
   ShieldCheck,
   LayoutDashboard,
   MessagesSquare,
+  Clock,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -150,7 +151,36 @@ export function AppShell({
     },
   });
 
+  const presenceEnabledQ = useQuery({
+    queryKey: ["nav_has_presence", activeTenantId],
+    enabled: Boolean(activeTenantId),
+    staleTime: 30_000,
+    queryFn: async () => {
+      const { data: j, error: jErr } = await supabase
+        .from("journeys")
+        .select("id")
+        .eq("key", "presence")
+        .limit(1)
+        .maybeSingle();
+      if (jErr) throw jErr;
+      if (!j?.id) return false;
+
+      const { data: tj, error: tjErr } = await supabase
+        .from("tenant_journeys")
+        .select("enabled,config_json")
+        .eq("tenant_id", activeTenantId!)
+        .eq("journey_id", j.id)
+        .eq("enabled", true)
+        .limit(1)
+        .maybeSingle();
+      if (tjErr) throw tjErr;
+
+      return Boolean((tj as any)?.config_json?.flags?.presence_enabled);
+    },
+  });
+
   const hasCrm = Boolean(crmEnabledQ.data);
+  const hasPresence = Boolean(presenceEnabledQ.data);
 
   const palettePrimaryHex =
     (activeTenant?.branding_json?.palette?.primary?.hex as string | undefined) ?? null;
@@ -242,6 +272,7 @@ export function AppShell({
                 <NavTile to="/app" icon={LayoutGrid} label="Dashboard" />
                 <NavTile to="/app/chat" icon={MessagesSquare} label="Chat" />
                 {hasCrm && <NavTile to="/app/crm" icon={LayoutDashboard} label="CRM" />}
+                {hasPresence && <NavTile to="/app/presence" icon={Clock} label="Ponto" />}
                 <NavTile to="/app/simulator" icon={FlaskConical} label="Simulador" />
                 {isSuperAdmin && <NavTile to="/app/admin" icon={Crown} label="Admin" />}
                 <NavTile to="/app/settings" icon={Settings} label="Config" />
@@ -321,6 +352,20 @@ export function AppShell({
                         <User2 className="mr-2 h-4 w-4" />
                         Meu usuário
                       </DropdownMenuItem>
+
+                      {hasPresence && (
+                        <DropdownMenuItem
+                          className="cursor-pointer rounded-xl px-2 py-2 text-slate-700 focus:bg-slate-100 focus:text-slate-900 dark:text-slate-200 dark:focus:bg-slate-800"
+                          onSelect={(e) => {
+                            e.preventDefault();
+                            setUserMenuOpen(false);
+                            nav("/app/presence");
+                          }}
+                        >
+                          <Clock className="mr-2 h-4 w-4" />
+                          Bater ponto
+                        </DropdownMenuItem>
+                      )}
 
                       <DropdownMenuSeparator className="bg-slate-200 dark:bg-slate-800" />
 
