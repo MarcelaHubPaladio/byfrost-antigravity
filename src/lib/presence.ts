@@ -13,6 +13,14 @@ export function titleizePunchType(t: PresencePunchType) {
   }
 }
 
+export function inferNextPunchType(last: PresencePunchType | null, breakRequired: boolean): PresencePunchType | null {
+  if (!last) return "ENTRY";
+  if (last === "ENTRY") return breakRequired ? "BREAK_START" : "EXIT";
+  if (last === "BREAK_START") return "BREAK_END";
+  if (last === "BREAK_END") return "EXIT";
+  return null;
+}
+
 export function formatYmdInTimeZone(timeZone: string, d = new Date()) {
   const dtf = new Intl.DateTimeFormat("en-CA", {
     timeZone,

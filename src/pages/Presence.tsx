@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { AppShell } from "@/components/AppShell";
 import { RequireAuth } from "@/components/RequireAuth";
@@ -8,10 +8,15 @@ import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
-import { Input } from "@/components/ui/input";
 import { showError, showSuccess } from "@/utils/toast";
 import { cn } from "@/lib/utils";
-import { formatYmdInTimeZone, titleizeCaseState, titleizePunchType, type PresencePunchType } from "@/lib/presence";
+import {
+  formatYmdInTimeZone,
+  inferNextPunchType,
+  titleizeCaseState,
+  titleizePunchType,
+  type PresencePunchType,
+} from "@/lib/presence";
 import { ArrowRight, Compass, MapPin, ShieldAlert } from "lucide-react";
 
 type TenantJourneyPresence = {
@@ -53,6 +58,7 @@ export default function Presence() {
 
   const [punching, setPunching] = useState(false);
   const [justificationDraft, setJustificationDraft] = useState<Record<string, string>>({});
+  const [geoHint, setGeoHint] = useState<"idle" | "ok" | "denied">("idle");
 
   const presenceCfgQ = useQuery({
     queryKey: ["presence_cfg", activeTenantId],
@@ -76,6 +82,25 @@ export default function Presence() {
   const timeZone = String((presenceCfgQ.data as any)?.config_json?.presence?.time_zone ?? "America/Sao_Paulo");
 
   const today = useMemo(() => formatYmdInTimeZone(timeZone), [timeZone]);
+
+  const policyQ = useQuery({
+    queryKey: ["presence_policy", activeTenantId, presenceEnabled],
+    enabled: Boolean(activeTenantId && presenceEnabled),
+    staleTime: 20_000,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("presence_policies")
+        .select("break_required")
+        .eq("tenant_id", activeTenantId!)
+        .order("created_at", { ascending: true })
+        .limit(1)
+        .maybeSingle();
+      if (error) throw error;
+      return data as any as { break_required: boolean } | null;
+    },
+  });
+
+  const breakRequired = policyQ.data?.break_required ?? true;
 
   const caseQ = useQuery({
     queryKey: ["presence_case_today", activeTenantId, user?.id, today],
@@ -144,10 +169,40 @@ export default function Presence() {
 
   const openPendencies = useMemo(() => (pendQ.data ?? []).filter((p) => p.status === "open"), [pendQ.data]);
 
+  const suggestedNext = useMemo(() => {
+    const last = lastPunch?.type ?? null;
+    return inferNextPunchType(last, breakRequired);
+  }, [lastPunch?.type, breakRequired]);
+
+  useEffect(() => {
+    if (!presenceEnabled) return;
+    if (!navigator.geolocation) {
+      setGeoHint("denied");
+      return;
+    }
+
+    // Best-effort permission hint (not supported on all browsers)
+    const anyNav: any = navigator;
+    if (anyNav.permissions?.query) {
+      anyNav.permissions
+        .query({ name: "geolocation" })
+        .then((s: any) => {
+          if (s?.state === "denied") setGeoHint("denied");
+          else setGeoHint("ok");
+        })
+        .catch(() => setGeoHint("idle"));
+    }
+  }, [presenceEnabled]);
+
   const clockNow = async () => {
     if (!activeTenantId) return;
     if (!presenceEnabled) {
       showError("Presença não está habilitada para este tenant.");
+      return;
+    }
+
+    if (!suggestedNext) {
+      showError("Nenhuma ação disponível para hoje.");
       return;
     }
 
@@ -194,6 +249,7 @@ export default function Presence() {
         qc.invalidateQueries({ queryKey: ["presence_pendencies_today", activeTenantId, caseQ.data?.id] }),
       ]);
     } catch (e: any) {
+      if (String(e?.message ?? "").toLowerCase().includes("permission")) setGeoHint("denied");
       showError(e?.message ?? "Falha ao bater ponto");
     } finally {
       setPunching(false);
@@ -247,6 +303,15 @@ export default function Presence() {
     }
   };
 
+  const timeFmt = useMemo(() => {
+    return new Intl.DateTimeFormat("pt-BR", {
+      timeZone,
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+    });
+  }, [timeZone]);
+
   return (
     <RequireAuth>
       <AppShell>
@@ -269,13 +334,17 @@ export default function Presence() {
               </div>
               <Button
                 onClick={clockNow}
-                disabled={punching || !activeTenantId || !presenceEnabled}
+                disabled={punching || !activeTenantId || !presenceEnabled || !suggestedNext}
                 className={cn(
                   "h-11 rounded-2xl px-5 text-white shadow-sm",
                   "bg-[hsl(var(--byfrost-accent))] hover:bg-[hsl(var(--byfrost-accent)/0.92)]"
                 )}
               >
-                {punching ? "Registrando…" : "Registrar agora"}
+                {punching
+                  ? "Registrando…"
+                  : suggestedNext
+                    ? `Registrar: ${titleizePunchType(suggestedNext)}`
+                    : "Dia finalizado"}
                 <ArrowRight className="ml-2 h-4 w-4" />
               </Button>
             </div>
@@ -289,38 +358,32 @@ export default function Presence() {
             </div>
           )}
 
-          {lastPunch && (
+          {presenceEnabled && (
             <div className="mt-4 grid gap-3 md:grid-cols-3">
               <div className="rounded-[22px] border border-slate-200 bg-white p-4">
-                <div className="text-xs font-semibold text-slate-600">Última batida</div>
+                <div className="text-xs font-semibold text-slate-600">Próxima ação sugerida</div>
                 <div className="mt-2 text-lg font-semibold text-slate-900">
-                  {titleizePunchType(lastPunch.type)}
+                  {suggestedNext ? titleizePunchType(suggestedNext) : "—"}
                 </div>
                 <div className="mt-1 text-sm text-slate-600">
-                  {new Date(lastPunch.timestamp).toLocaleTimeString()}
-                  <span className="text-slate-400"> • </span>
-                  {lastPunch.source}
+                  {breakRequired ? "Intervalo obrigatório" : "Sem intervalo obrigatório"}
                 </div>
               </div>
 
               <div className="rounded-[22px] border border-slate-200 bg-white p-4">
-                <div className="text-xs font-semibold text-slate-600">Geofence</div>
+                <div className="text-xs font-semibold text-slate-600">Geolocalização</div>
                 <div className="mt-2 flex items-center gap-2">
                   <span
                     className={cn(
                       "h-2.5 w-2.5 rounded-full",
-                      lastPunch.within_radius ? "bg-emerald-600" : "bg-amber-600"
+                      geoHint === "denied" ? "bg-rose-600" : geoHint === "ok" ? "bg-emerald-600" : "bg-slate-300"
                     )}
                   />
                   <div className="text-sm font-semibold text-slate-900">
-                    {lastPunch.within_radius ? "Dentro do raio" : "Fora do raio"}
+                    {geoHint === "denied" ? "Bloqueada" : geoHint === "ok" ? "Disponível" : "Verificando…"}
                   </div>
                 </div>
-                <div className="mt-1 text-sm text-slate-600">
-                  {typeof lastPunch.distance_from_location === "number"
-                    ? `${Math.round(lastPunch.distance_from_location)}m`
-                    : "—"}
-                </div>
+                <div className="mt-1 text-sm text-slate-600">A batida exige localização (APP e WhatsApp).</div>
               </div>
 
               <div className="rounded-[22px] border border-slate-200 bg-white p-4">
@@ -361,11 +424,14 @@ export default function Presence() {
 
               <div className="mt-3 space-y-2">
                 {(punchesQ.data ?? []).map((p) => (
-                  <div key={p.id} className="flex items-center justify-between rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2">
+                  <div
+                    key={p.id}
+                    className="flex items-center justify-between rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2"
+                  >
                     <div className="min-w-0">
                       <div className="text-sm font-semibold text-slate-900">{titleizePunchType(p.type)}</div>
                       <div className="mt-0.5 text-[11px] text-slate-600">
-                        {new Date(p.timestamp).toLocaleTimeString()} • {p.status}
+                        {timeFmt.format(new Date(p.timestamp))} • {p.status}
                       </div>
                     </div>
                     <div className="flex items-center gap-2 text-xs text-slate-600">
@@ -377,7 +443,7 @@ export default function Presence() {
 
                 {!punchesQ.data?.length && (
                   <div className="rounded-2xl border border-dashed border-slate-200 bg-white/60 p-4 text-sm text-slate-600">
-                    Ainda não há batidas hoje. Clique em "Registrar agora" para iniciar.
+                    Ainda não há batidas hoje. Clique em "Registrar" para iniciar.
                   </div>
                 )}
               </div>
@@ -428,7 +494,7 @@ export default function Presence() {
             </div>
           </div>
 
-          {(presenceCfgQ.isError || caseQ.isError || punchesQ.isError || pendQ.isError) && (
+          {(presenceCfgQ.isError || policyQ.isError || caseQ.isError || punchesQ.isError || pendQ.isError) && (
             <div className="mt-4 rounded-2xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-900">
               Erro ao carregar presença: {(presenceCfgQ.error as any)?.message ?? (caseQ.error as any)?.message ?? ""}
             </div>

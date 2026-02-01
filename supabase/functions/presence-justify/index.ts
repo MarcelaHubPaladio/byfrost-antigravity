@@ -84,6 +84,20 @@ serve(async (req) => {
     const requiredOpen = (open ?? []).some((p: any) => Boolean(p.required));
 
     if (!requiredOpen) {
+      // Ensure an approval pendency exists (governance: human approval/close)
+      try {
+        await supabase.rpc("presence_upsert_pendency", {
+          p_tenant_id: tenantId,
+          p_case_id: caseId,
+          p_type: "approval_required",
+          p_question: "Aprovação do gestor necessária para fechamento do dia.",
+          p_required: true,
+          p_assigned_to_role: "admin",
+        });
+      } catch (e) {
+        console.warn(`[${fn}] presence_upsert_pendency failed (ignored)`, { e: String(e) });
+      }
+
       const { error: updErr } = await supabase
         .from("cases")
         .update({ state: "PENDENTE_APROVACAO" })
