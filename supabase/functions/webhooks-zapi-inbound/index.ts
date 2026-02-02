@@ -124,12 +124,24 @@ function normalizePresenceCommand(
 }
 
 function detectCallEvent(payload: any, rawTypeLower: string) {
-  // Providers vary; keep detection intentionally broad but safe.
-  if (rawTypeLower.includes("call")) return true;
+  // Providers vary. IMPORTANT: avoid false-positives like "receivedcallback" (contains "call").
+  // Only mark as call when we have explicit evidence.
+
+  const t = String(rawTypeLower ?? "").toLowerCase();
+
+  // Explicit type patterns
+  if ((/(^|[^a-z])call([^a-z]|$)/i).test(t)) return true; // matches "call", "call_event", "call-event" etc; NOT "callback"
+  if (t.startsWith("call_")) return true;
+  if (t.endsWith("_call")) return true;
+
+  // Explicit event/hook markers
   if (String(payload?.event ?? "").toLowerCase().includes("call")) return true;
   if (String(payload?.hookType ?? "").toLowerCase().includes("call")) return true;
+
+  // Structured call objects/ids
   if (payload?.call || payload?.data?.call) return true;
   if (payload?.callId || payload?.data?.callId) return true;
+
   return false;
 }
 
