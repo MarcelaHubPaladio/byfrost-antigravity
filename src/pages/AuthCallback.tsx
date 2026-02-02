@@ -34,7 +34,7 @@ export default function AuthCallback() {
   const nav = useNavigate();
   const { user, loading: sessionLoading, refresh } = useSession();
   const { activeTenantId, tenants, loading: tenantsLoading, membershipHint } = useTenant();
-  const [checking, setChecking] = useState(true);
+  const [bootDone, setBootDone] = useState(false);
   const [diag, setDiag] = useState<LocalAuthDiag>({
     stage: "init",
     hasSession: false,
@@ -113,7 +113,7 @@ export default function AuthCallback() {
       } catch (e: any) {
         setDiag((d) => ({ ...d, lastError: String(e?.message ?? "erro") }));
       } finally {
-        if (mounted) setChecking(false);
+        if (mounted) setBootDone(true);
       }
     })();
 
@@ -123,9 +123,9 @@ export default function AuthCallback() {
   }, [refresh, nav, urlInfo.type, urlInfo.code]);
 
   useEffect(() => {
-    if (checking || sessionLoading || tenantsLoading) return;
+    // Redirect once we've finished the local bootstrap AND providers are not loading.
+    if (!bootDone || sessionLoading || tenantsLoading) return;
 
-    // If signed in, route to tenant/app.
     if (user) {
       if (activeTenantId) nav("/app", { replace: true });
       else if (tenants.length === 1) nav("/app", { replace: true });
@@ -133,20 +133,23 @@ export default function AuthCallback() {
       return;
     }
 
-    // If no session, send to login.
-    nav("/login", { replace: true });
-  }, [checking, sessionLoading, tenantsLoading, user, activeTenantId, tenants.length, nav]);
+    // If session exists but provider user is still null, try a soft refresh once.
+    if (diag.hasSession && !user) {
+      refresh().finally(() => nav("/tenants", { replace: true }));
+      return;
+    }
 
-  const showStuck = !checking && !sessionLoading && !tenantsLoading && !user;
+    nav("/login", { replace: true });
+  }, [bootDone, sessionLoading, tenantsLoading, user, activeTenantId, tenants.length, nav, diag.hasSession, refresh]);
+
+  const showStuck = bootDone && !sessionLoading && !tenantsLoading && !user;
 
   return (
     <div className="min-h-screen bg-[hsl(var(--byfrost-bg))]">
       <div className="mx-auto flex max-w-xl flex-col gap-4 px-4 py-12">
         <div className="rounded-[28px] border border-slate-200 bg-white/70 p-5 shadow-sm backdrop-blur">
           <div className="text-sm font-semibold text-slate-900">Conectando…</div>
-          <div className="mt-1 text-sm text-slate-600">
-            Finalizando autenticação e preparando seu acesso ao tenant.
-          </div>
+          <div className="mt-1 text-sm text-slate-600">Finalizando autenticação e preparando seu acesso ao tenant.</div>
 
           <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-3 text-xs text-slate-600">
             <div className="font-semibold text-slate-800">Diagnóstico rápido</div>
@@ -167,7 +170,7 @@ export default function AuthCallback() {
               {JSON.stringify(
                 {
                   urlInfo,
-                  checking,
+                  bootDone,
                   sessionLoading,
                   tenantsLoading,
                   providerUser: user ? { id: user.id, email: user.email } : null,
@@ -201,7 +204,7 @@ export default function AuthCallback() {
             </div>
           )}
 
-          {!checking && user && tenants.length === 0 && (
+          {bootDone && user && tenants.length === 0 && (
             <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
               Você entrou, mas ainda não há tenant acessível para este usuário.
               <div className="mt-2 text-xs text-amber-900">
