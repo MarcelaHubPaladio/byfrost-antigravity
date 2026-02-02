@@ -16,11 +16,14 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/co
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { showError, showSuccess } from "@/utils/toast";
 import { GeofenceMapPicker } from "@/components/presence/GeofenceMapPicker";
+import { PunchAdjustDialog, type PunchAdjustMode } from "@/components/presence/PunchAdjustDialog";
 import {
   CalendarDays,
   ClipboardCheck,
   Clock3,
   MapPin,
+  Pencil,
+  Plus,
   ShieldAlert,
   Sparkles,
   UserRound,
@@ -94,6 +97,18 @@ type BankLedgerRow = {
   minutes_delta: number;
   balance_after: number;
   source: string;
+  created_at: string;
+};
+
+type PunchAdjustmentRow = {
+  id: string;
+  punch_id: string | null;
+  type: PresencePunchType;
+  action: "INSERT" | "UPDATE";
+  from_timestamp: string | null;
+  to_timestamp: string;
+  note: string;
+  adjusted_by: string;
   created_at: string;
 };
 
@@ -447,13 +462,16 @@ export default function PresenceManage() {
   const [openCaseId, setOpenCaseId] = useState<string | null>(null);
   const openCase = useMemo(() => (casesQ.data ?? []).find((c) => c.id === openCaseId) ?? null, [casesQ.data, openCaseId]);
 
+  const [punchDialogOpen, setPunchDialogOpen] = useState(false);
+  const [punchDialogMode, setPunchDialogMode] = useState<PunchAdjustMode | null>(null);
+
   const caseDetailQ = useQuery({
     queryKey: ["presence_manage_case_detail", activeTenantId, openCaseId, openCase?.entity_id],
     enabled: Boolean(activeTenantId && openCaseId && presenceEnabled),
     queryFn: async () => {
       const employeeId = String(openCase?.entity_id ?? "");
 
-      const [timelineRes, punchesRes, pendRes, ledgerRes] = await Promise.all([
+      const [timelineRes, punchesRes, pendRes, ledgerRes, adjRes] = await Promise.all([
         supabase
           .from("timeline_events")
           .select("id,occurred_at,event_type,message,meta_json")
@@ -477,27 +495,108 @@ export default function PresenceManage() {
         employeeId
           ? supabase
               .from("bank_hour_ledger")
-              .select("id,employee_id,minutes_delta,balance_after,source,created_at")
+              .select("id,case_id,employee_id,minutes_delta,balance_after,source,created_at")
               .eq("tenant_id", activeTenantId!)
               .eq("employee_id", employeeId)
               .order("created_at", { ascending: false })
               .limit(80)
           : (Promise.resolve({ data: [], error: null }) as any),
+        supabase
+          .from("time_punch_adjustments")
+          .select("id,punch_id,type,action,from_timestamp,to_timestamp,note,adjusted_by,created_at")
+          .eq("tenant_id", activeTenantId!)
+          .eq("case_id", openCaseId!)
+          .order("created_at", { ascending: false })
+          .limit(400),
       ]);
 
       if (timelineRes.error) throw timelineRes.error;
       if (punchesRes.error) throw punchesRes.error;
       if (pendRes.error) throw pendRes.error;
       if (ledgerRes.error) throw ledgerRes.error;
+      if (adjRes.error) throw adjRes.error;
 
       return {
         timeline: timelineRes.data ?? [],
         punches: punchesRes.data ?? [],
         pendencies: pendRes.data ?? [],
         bankLedger: ledgerRes.data ?? [],
+        adjustments: (adjRes.data ?? []) as any as PunchAdjustmentRow[],
       };
     },
   });
+
+  const adjustmentsByPunch = useMemo(() => {
+    const m = new Map<string, PunchAdjustmentRow[]>();
+    for (const a of caseDetailQ.data?.adjustments ?? []) {
+      if (!a.punch_id) continue;
+      const cur = m.get(a.punch_id) ?? [];
+      cur.push(a);
+      m.set(a.punch_id, cur);
+    }
+    return m;
+  }, [caseDetailQ.data?.adjustments]);
+
+  const hasLedgerForOpenCase = useMemo(() => {
+    return Boolean((caseDetailQ.data?.bankLedger ?? []).some((r: any) => String(r.case_id) === String(openCaseId)));
+  }, [caseDetailQ.data?.bankLedger, openCaseId]);
+
+  const openPunchDialogForEdit = (p: any) => {
+    if (!openCaseId) return;
+    setPunchDialogMode({ mode: "edit", punchId: String(p.id), type: p.type as PresencePunchType, timestampIso: String(p.timestamp) });
+    setPunchDialogOpen(true);
+  };
+
+  const openPunchDialogForAdd = (type: PresencePunchType) => {
+    setPunchDialogMode({ mode: "add", type });
+    setPunchDialogOpen(true);
+  };
+
+  const submitPunchAdjust = async ({ mode, timestampIso, note }: { mode: PunchAdjustMode; timestampIso: string; note: string }) => {
+    if (!activeTenantId || !openCaseId) return;
+    if (!manager) {
+      showError("Apenas gestores podem ajustar batidas.");
+      return;
+    }
+
+    try {
+      if (mode.mode === "edit") {
+        const { data, error } = await supabase.rpc("presence_adjust_time_punch", {
+          p_punch_id: mode.punchId,
+          p_new_timestamp: timestampIso,
+          p_note: note,
+        });
+        if (error) throw error;
+        if (!(data as any)?.ok) throw new Error((data as any)?.error ?? "Falha ao ajustar batida");
+        showSuccess("Batida ajustada.");
+      } else {
+        const { data, error } = await supabase.rpc("presence_admin_add_time_punch", {
+          p_case_id: openCaseId,
+          p_type: mode.type,
+          p_timestamp: timestampIso,
+          p_note: note,
+        });
+        if (error) throw error;
+        if (!(data as any)?.ok) throw new Error((data as any)?.error ?? "Falha ao adicionar batida");
+        showSuccess("Batida adicionada.");
+      }
+
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ["presence_manage_cases", activeTenantId] }),
+        qc.invalidateQueries({ queryKey: ["presence_manage_punches", activeTenantId] }),
+        qc.invalidateQueries({ queryKey: ["presence_manage_case_detail", activeTenantId, openCaseId] }),
+        qc.invalidateQueries({ queryKey: ["presence_manage_bank_ledger", activeTenantId] }),
+      ]);
+    } catch (e: any) {
+      const msg = String(e?.message ?? "Falha ao ajustar batida");
+      if (msg.includes("note_required")) {
+        showError("Nota é obrigatória para ajustes manuais.");
+      } else {
+        showError(msg);
+      }
+      throw e;
+    }
+  };
 
   // --- Policy/location config (basic) ---
   const configQ = useQuery({
@@ -1210,27 +1309,122 @@ export default function PresenceManage() {
 
                               <div className="mt-4 grid gap-4 lg:grid-cols-2">
                                 <div className="rounded-2xl border border-slate-200 bg-white p-3">
-                                  <div className="text-xs font-semibold text-slate-900">Batidas</div>
+                                  <div className="flex items-center justify-between gap-2">
+                                    <div className="text-xs font-semibold text-slate-900">Batidas</div>
+                                    {manager && (
+                                      <Button
+                                        size="sm"
+                                        variant="secondary"
+                                        onClick={() => {
+                                          // default: try ENTRY first
+                                          const has = new Set((caseDetailQ.data?.punches ?? []).map((p: any) => String(p.type)));
+                                          const firstMissing = (["ENTRY", "BREAK_START", "BREAK_END", "EXIT"] as PresencePunchType[]).find(
+                                            (t) => !has.has(t)
+                                          );
+                                          openPunchDialogForAdd(firstMissing ?? "ENTRY");
+                                        }}
+                                        className="h-9 rounded-2xl"
+                                      >
+                                        <Plus className="mr-2 h-4 w-4" />
+                                        Adicionar
+                                      </Button>
+                                    )}
+                                  </div>
+
                                   <div className="mt-2 space-y-2">
-                                    {(caseDetailQ.data?.punches ?? []).map((p: any) => (
-                                      <div key={p.id} className="flex items-center justify-between rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2">
-                                        <div className="min-w-0">
-                                          <div className="text-sm font-semibold text-slate-900">{titleizePunchType(p.type)}</div>
-                                          <div className="mt-0.5 text-[11px] text-slate-600">
-                                            {new Date(p.timestamp).toLocaleTimeString()} • {p.source} • {p.status}
+                                    {(caseDetailQ.data?.punches ?? []).map((p: any) => {
+                                      const adjs = adjustmentsByPunch.get(String(p.id)) ?? [];
+                                      const lastAdj = adjs[0] ?? null;
+
+                                      return (
+                                        <div
+                                          key={p.id}
+                                          className={cn(
+                                            "rounded-2xl border bg-slate-50 px-3 py-2",
+                                            adjs.length ? "border-[hsl(var(--byfrost-accent)/0.35)]" : "border-slate-200"
+                                          )}
+                                        >
+                                          <div className="flex items-start justify-between gap-2">
+                                            <div className="min-w-0">
+                                              <div className="flex flex-wrap items-center gap-2">
+                                                <div className="text-sm font-semibold text-slate-900">{titleizePunchType(p.type)}</div>
+                                                {adjs.length > 0 && (
+                                                  <Badge className="rounded-full border-0 bg-[hsl(var(--byfrost-accent)/0.12)] text-[hsl(var(--byfrost-accent))]">
+                                                    ajustado ({adjs.length})
+                                                  </Badge>
+                                                )}
+                                              </div>
+                                              <div className="mt-0.5 text-[11px] text-slate-600">
+                                                {new Date(p.timestamp).toLocaleTimeString()} • {p.source} • {p.status}
+                                              </div>
+                                              {lastAdj && (
+                                                <div className="mt-2 rounded-2xl bg-white px-3 py-2 text-[11px] text-slate-700 ring-1 ring-slate-200">
+                                                  <div className="font-semibold text-slate-800">
+                                                    Último ajuste: {new Date(lastAdj.created_at).toLocaleString()}
+                                                  </div>
+                                                  <div className="mt-0.5 text-slate-700">{lastAdj.note}</div>
+                                                </div>
+                                              )}
+                                            </div>
+
+                                            <div className="flex flex-col items-end gap-2">
+                                              <div className="text-right text-[11px] text-slate-600">
+                                                {typeof p.distance_from_location === "number" ? `${Math.round(p.distance_from_location)}m` : "—"}
+                                              </div>
+
+                                              {manager && (
+                                                <Button
+                                                  size="sm"
+                                                  variant="ghost"
+                                                  onClick={() => openPunchDialogForEdit(p)}
+                                                  className="h-9 rounded-2xl border border-slate-200 bg-white/70"
+                                                >
+                                                  <Pencil className="mr-2 h-4 w-4" />
+                                                  Ajustar
+                                                </Button>
+                                              )}
+                                            </div>
                                           </div>
                                         </div>
-                                        <div className="text-right text-[11px] text-slate-600">
-                                          {typeof p.distance_from_location === "number" ? `${Math.round(p.distance_from_location)}m` : "—"}
-                                        </div>
-                                      </div>
-                                    ))}
+                                      );
+                                    })}
                                     {!caseDetailQ.data?.punches?.length && (
                                       <div className="rounded-2xl border border-dashed border-slate-200 bg-white/60 p-3 text-sm text-slate-600">
                                         Sem batidas.
                                       </div>
                                     )}
                                   </div>
+
+                                  {manager && (
+                                    <div className="mt-3 rounded-2xl border border-slate-200 bg-white p-3">
+                                      <div className="text-[11px] font-semibold text-slate-800">Adicionar rápido</div>
+                                      <div className="mt-2 flex flex-wrap gap-2">
+                                        {(["ENTRY", "BREAK_START", "BREAK_END", "EXIT"] as PresencePunchType[]).map((t) => {
+                                          const already = (caseDetailQ.data?.punches ?? []).some((p: any) => String(p.type) === t);
+                                          return (
+                                            <Button
+                                              key={t}
+                                              size="sm"
+                                              variant={already ? "secondary" : "default"}
+                                              disabled={already}
+                                              onClick={() => openPunchDialogForAdd(t)}
+                                              className={cn(
+                                                "h-9 rounded-2xl",
+                                                already
+                                                  ? "opacity-60"
+                                                  : "bg-[hsl(var(--byfrost-accent))] text-white hover:bg-[hsl(var(--byfrost-accent)/0.92)]"
+                                              )}
+                                            >
+                                              {titleizePunchType(t)}
+                                            </Button>
+                                          );
+                                        })}
+                                      </div>
+                                      <div className="mt-2 text-[11px] text-slate-500">
+                                        Para qualquer adição/ajuste, uma <span className="font-semibold">nota é obrigatória</span> e fica registrada no histórico.
+                                      </div>
+                                    </div>
+                                  )}
                                 </div>
 
                                 <div className="rounded-2xl border border-slate-200 bg-white p-3">
@@ -1305,6 +1499,15 @@ export default function PresenceManage() {
                                   </div>
                                 </div>
                               </div>
+
+                              <PunchAdjustDialog
+                                open={punchDialogOpen}
+                                onOpenChange={setPunchDialogOpen}
+                                mode={punchDialogMode}
+                                caseDate={String(c.case_date ?? selectedDate)}
+                                hasLedgerForCase={hasLedgerForOpenCase}
+                                onSubmit={submitPunchAdjust}
+                              />
                             </SheetContent>
                           </Sheet>
                         );
