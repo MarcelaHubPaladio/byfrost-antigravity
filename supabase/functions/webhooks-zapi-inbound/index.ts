@@ -306,14 +306,19 @@ function inferDirection(args: {
       payload?.hookType,
       payload?.webhookEvent,
       payload?.action,
-      payload?.data?.action
+      payload?.data?.action,
+      // Some providers encode direction in the type/messageType itself
+      payload?.type,
+      payload?.messageType,
+      payload?.data?.type,
+      payload?.data?.messageType
     ) ?? ""
   ).toLowerCase();
 
-  if (rawDirection.includes("out") || rawDirection.includes("sent") || rawDirection.includes("send")) {
+  if (rawDirection.includes("out") || rawDirection.includes("sent") || rawDirection.includes("send") || rawDirection.includes("outgoing")) {
     return "outbound";
   }
-  if (rawDirection.includes("in") || rawDirection.includes("received") || rawDirection.includes("receive")) {
+  if (rawDirection.includes("in") || rawDirection.includes("received") || rawDirection.includes("receive") || rawDirection.includes("incoming")) {
     return "inbound";
   }
 
@@ -342,13 +347,24 @@ function detectFromMe(payload: any) {
   if (direct) return true;
 
   const raw = String(
-    pickFirst(payload?.direction, payload?.data?.direction, payload?.event, payload?.hookType, payload?.action, payload?.data?.action) ??
-      ""
+    pickFirst(
+      payload?.direction,
+      payload?.data?.direction,
+      payload?.event,
+      payload?.hookType,
+      payload?.action,
+      payload?.data?.action,
+      payload?.type,
+      payload?.messageType,
+      payload?.data?.type,
+      payload?.data?.messageType
+    ) ?? ""
   ).toLowerCase();
 
   // Z-API/webhook naming patterns
   if (raw.includes("message_sent") || raw.includes("messagesent")) return true;
   if (raw.includes("outgoing") || raw.includes("outbound")) return true;
+  if (raw.includes("sent") || raw.includes("send")) return true;
 
   return false;
 }
@@ -1433,17 +1449,16 @@ serve(async (req) => {
     };
 
     const promoteOrBumpCaseToCrm = async (c: any) => {
-      const currentJourneyId = String(c?.journey_id ?? "") || null;
       const isChat = Boolean(c?.is_chat);
       const wasDeleted = Boolean(c?.deleted_at);
 
-      // Regra refinada:
-      // - Se é "só mensagem" (is_chat=true) e NÃO está deletado => NÃO promover pro CRM.
+      // Regra:
+      // - Se é "só mensagem" (is_chat=true) e NÃO está deletado => não mexe.
       if (isChat && !wasDeleted) {
         return { caseId: String(c.id), bumped: false };
       }
 
-      // Se está deletado: reativa, mantendo is_chat como está.
+      // Se está deletado: apenas reativa (NÃO muda estado/jornada).
       if (wasDeleted) {
         const { error: updErr } = await supabase
           .from("cases")
@@ -1476,42 +1491,9 @@ serve(async (req) => {
         return { caseId: String(c.id), bumped: true };
       }
 
-      // Caso não seja chat e exista CRM habilitado, move para CRM + estado inicial (comportamento anterior)
-      const targetJourneyId = (defaultCrmJourney?.id ?? null) || currentJourneyId;
-      const targetJourney = targetJourneyId ? await getJourneyById(targetJourneyId) : null;
-      if (!targetJourneyId || !targetJourney) return { caseId: String(c.id), bumped: false };
-
-      const initial = pickInitialState(targetJourney, null);
-
-      const { error: updErr } = await supabase
-        .from("cases")
-        .update({
-          is_chat: false,
-          journey_id: targetJourneyId,
-          state: initial,
-          status: "open",
-          customer_id: customerId,
-        })
-        .eq("tenant_id", instance.tenant_id)
-        .eq("id", c.id);
-
-      if (updErr) {
-        console.error(`[${fn}] Failed to bump case to CRM`, { updErr, case_id: c.id });
-        return { caseId: String(c.id), bumped: false };
-      }
-
-      await supabase.from("timeline_events").insert({
-        tenant_id: instance.tenant_id,
-        case_id: c.id,
-        event_type: "case_updated",
-        actor_type: "system",
-        actor_id: null,
-        message: "Mensagem recebida: case movido para o início do fluxo.",
-        meta_json: { source: "zapi_inbound", correlation_id: correlationId },
-        occurred_at: new Date().toISOString(),
-      });
-
-      return { caseId: String(c.id), bumped: true };
+      // Caso já existe e está ativo: NÃO reseta estado para o início do CRM.
+      // Apenas reutiliza.
+      return { caseId: String(c.id), bumped: false };
     };
 
     const findExistingOpenCase = async () => {
