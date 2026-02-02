@@ -101,7 +101,9 @@ export function ContentCalendar() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("content_publications")
-        .select("id,tenant_id,case_id,content_item_id,channel,scheduled_at,publish_status,content_items(theme_title,client_name)")
+        .select(
+          "id,tenant_id,case_id,content_item_id,channel,scheduled_at,publish_status,content_items(theme_title,client_name)"
+        )
         .eq("tenant_id", activeTenantId!)
         .gte("scheduled_at", range.start.toISOString())
         .lt("scheduled_at", range.end.toISOString())
@@ -134,9 +136,10 @@ export function ContentCalendar() {
     try {
       const { error } = await supabase
         .from("content_publications")
-        .update({ scheduled_at: next.toISOString() })
+        .update({ scheduled_at: next.toISOString(), publish_status: "SCHEDULED" })
         .eq("tenant_id", activeTenantId)
-        .eq("id", pubId);
+        .eq("id", pubId)
+        .neq("publish_status", "PUBLISHED");
       if (error) throw error;
 
       showSuccess("Agendamento atualizado.");
@@ -286,13 +289,15 @@ export function ContentCalendar() {
                       {items.slice(0, 4).map((p) => {
                         const label = p.content_items?.theme_title || p.content_items?.client_name || p.channel;
                         const dim = movingPubId === p.id;
+                        const canDrag = p.publish_status !== "PUBLISHED";
 
                         return (
                           <button
                             key={p.id}
                             type="button"
-                            draggable
+                            draggable={canDrag}
                             onDragStart={(e) => {
+                              if (!canDrag) return;
                               e.dataTransfer.setData("text/pubId", p.id);
                               e.dataTransfer.setData("text/pubTime", String(p.scheduled_at ?? ""));
                               e.dataTransfer.effectAllowed = "move";
@@ -301,6 +306,7 @@ export function ContentCalendar() {
                             className={cn(
                               "w-full rounded-2xl border px-2 py-1 text-left text-[11px] font-semibold transition",
                               dim ? "opacity-60" : "",
+                              canDrag ? "cursor-grab active:cursor-grabbing" : "cursor-pointer",
                               "border-slate-200 bg-slate-50 hover:bg-white"
                             )}
                             title={label}
@@ -370,13 +376,15 @@ export function ContentCalendar() {
                     {items.map((p) => {
                       const label = p.content_items?.theme_title || p.content_items?.client_name || p.channel;
                       const dim = movingPubId === p.id;
+                      const canDrag = p.publish_status !== "PUBLISHED";
 
                       return (
                         <button
                           key={p.id}
                           type="button"
-                          draggable
+                          draggable={canDrag}
                           onDragStart={(e) => {
+                            if (!canDrag) return;
                             e.dataTransfer.setData("text/pubId", p.id);
                             e.dataTransfer.setData("text/pubTime", String(p.scheduled_at ?? ""));
                             e.dataTransfer.effectAllowed = "move";
@@ -384,7 +392,8 @@ export function ContentCalendar() {
                           onClick={() => nav(`/app/content/${encodeURIComponent(p.case_id)}`)}
                           className={cn(
                             "w-full rounded-[18px] border border-slate-200 bg-slate-50 px-3 py-2 text-left transition hover:bg-white",
-                            dim ? "opacity-60" : ""
+                            dim ? "opacity-60" : "",
+                            canDrag ? "cursor-grab active:cursor-grabbing" : "cursor-pointer"
                           )}
                         >
                           <div className="flex items-start justify-between gap-2">

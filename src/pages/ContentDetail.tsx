@@ -23,10 +23,13 @@ import {
   Instagram,
   Save,
   Upload,
+  Zap,
 } from "lucide-react";
 
 const CONTENT_MEDIA_UPLOAD_URL =
   "https://pryoirzeghatrgecwrci.supabase.co/functions/v1/content-media-upload";
+
+const META_PUBLISH_URL = "https://pryoirzeghatrgecwrci.supabase.co/functions/v1/meta-publish";
 
 type ContentItemRow = {
   id: string;
@@ -344,6 +347,46 @@ export default function ContentDetail() {
       showError(`Falha ao criar publicação: ${e?.message ?? "erro"}`);
     } finally {
       setCreatingPub(false);
+    }
+  };
+
+  const [publishingNowId, setPublishingNowId] = useState<string | null>(null);
+
+  const publishNow = async (publicationId: string) => {
+    if (!activeTenantId) return;
+    setPublishingNowId(publicationId);
+
+    try {
+      const { data: sess } = await supabase.auth.getSession();
+      const token = sess.session?.access_token;
+      if (!token) throw new Error("Sessão inválida");
+
+      const res = await fetch(META_PUBLISH_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ tenantId: activeTenantId, publicationId }),
+      });
+
+      const json = await res.json().catch(() => null);
+      if (!res.ok || !json?.ok) {
+        throw new Error(json?.error || `HTTP ${res.status}`);
+      }
+
+      const status = json?.result?.status as PubRow["publish_status"] | undefined;
+
+      if (status === "PUBLISHED") showSuccess("Publicado com sucesso.");
+      else if (status === "ASSISTED_REQUIRED") showError("Publicação marcada como ASSISTED_REQUIRED (tarefa criada). ");
+      else showError("Falha ao publicar. Verifique o erro e a tarefa gerada.");
+
+      await qc.invalidateQueries({ queryKey: ["content_publications_by_case", activeTenantId, caseId] });
+      await qc.invalidateQueries({ queryKey: ["content_calendar_pubs", activeTenantId] });
+    } catch (e: any) {
+      showError(`Falha ao publicar: ${e?.message ?? "erro"}`);
+    } finally {
+      setPublishingNowId(null);
     }
   };
 
@@ -669,6 +712,8 @@ export default function ContentDetail() {
                   {(pubsQ.data ?? []).map((p) => {
                     const when = p.scheduled_at ? format(new Date(p.scheduled_at), "dd/MM HH:mm") : "—";
                     const media = p.media_storage_paths ?? [];
+                    const canAuto = p.channel === "ig_story" || p.channel === "ig_feed";
+                    const canPublishNow = canAuto && p.publish_status !== "PUBLISHED";
 
                     return (
                       <div key={p.id} className="rounded-[20px] border border-slate-200 bg-slate-50 p-3">
@@ -687,7 +732,9 @@ export default function ContentDetail() {
                                       ? "bg-rose-100 text-rose-900"
                                       : p.publish_status === "SCHEDULED"
                                         ? "bg-amber-100 text-amber-900"
-                                        : "bg-slate-100 text-slate-700"
+                                        : p.publish_status === "ASSISTED_REQUIRED"
+                                          ? "bg-fuchsia-100 text-fuchsia-900"
+                                          : "bg-slate-100 text-slate-700"
                                 )}
                               >
                                 {p.publish_status}
@@ -695,6 +742,16 @@ export default function ContentDetail() {
                               <Badge className="rounded-full border-0 bg-white text-slate-700 hover:bg-white">
                                 <CalendarDays className="mr-1 h-3.5 w-3.5" /> {when}
                               </Badge>
+                              {p.meta_permalink ? (
+                                <a
+                                  href={p.meta_permalink}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="inline-flex items-center gap-1 rounded-full bg-white px-3 py-1.5 text-[11px] font-semibold text-slate-700 ring-1 ring-slate-200 hover:bg-slate-50"
+                                >
+                                  Ver post <ExternalLink className="h-3.5 w-3.5 text-slate-400" />
+                                </a>
+                              ) : null}
                             </div>
 
                             {p.caption_text ? (
@@ -735,11 +792,25 @@ export default function ContentDetail() {
                             ) : null}
                           </div>
 
-                          <div className="rounded-2xl border border-slate-200 bg-white px-3 py-2 text-[11px] text-slate-600">
-                            <div className="flex items-center gap-2">
-                              <Hash className="h-3.5 w-3.5 text-slate-400" />
-                              <span className="font-medium text-slate-900">{p.id.slice(0, 8)}…</span>
+                          <div className="flex flex-col items-end gap-2">
+                            <div className="rounded-2xl border border-slate-200 bg-white px-3 py-2 text-[11px] text-slate-600">
+                              <div className="flex items-center gap-2">
+                                <Hash className="h-3.5 w-3.5 text-slate-400" />
+                                <span className="font-medium text-slate-900">{p.id.slice(0, 8)}…</span>
+                              </div>
                             </div>
+
+                            {canPublishNow ? (
+                              <Button
+                                onClick={() => publishNow(p.id)}
+                                disabled={publishingNowId === p.id}
+                                className="h-9 rounded-2xl bg-[hsl(var(--byfrost-accent))] text-white hover:bg-[hsl(var(--byfrost-accent)/0.92)]"
+                                title="Publicar agora via Meta Graph API"
+                              >
+                                <Zap className="mr-2 h-4 w-4" />
+                                {publishingNowId === p.id ? "Publicando…" : "Publicar agora"}
+                              </Button>
+                            ) : null}
                           </div>
                         </div>
                       </div>
@@ -757,8 +828,7 @@ export default function ContentDetail() {
           </div>
 
           <div className="mt-4 flex justify-end">
-            <Button variant="secondary" className="h-10 rounded-2xl" onClick={() => nav("/app/content")}
-            >
+            <Button variant="secondary" className="h-10 rounded-2xl" onClick={() => nav("/app/content")}>
               Voltar
             </Button>
           </div>
