@@ -196,7 +196,7 @@ function normalizeInbound(payload: any): {
           ? "location"
           : "text";
 
-  // Z-API payloads vary; best-effort: accept chatId (ex: 551199...@c.us) too.
+  // Z-API payloads vary; best-effort: accept chatId (ex: 5511...@c.us) too.
   // For call events, some providers store caller/callee in different fields.
   const fromRaw = pickFirst(
     callInfo.from,
@@ -305,7 +305,8 @@ function inferDirection(args: {
       payload?.event,
       payload?.hookType,
       payload?.webhookEvent,
-      payload?.action
+      payload?.action,
+      payload?.data?.action
     ) ?? ""
   ).toLowerCase();
 
@@ -323,6 +324,33 @@ function inferDirection(args: {
 
   // Default safe assumption.
   return "inbound";
+}
+
+function detectFromMe(payload: any) {
+  // Broad detection for outbound/sent events across providers.
+  // Keep it safe: only return true when we have explicit evidence.
+  if (!payload) return false;
+  const direct =
+    payload?.fromMe === true ||
+    payload?.isFromMe === true ||
+    payload?.sentByMe === true ||
+    payload?.sendByMe === true ||
+    payload?.data?.fromMe === true ||
+    payload?.data?.isFromMe === true ||
+    payload?.data?.sentByMe === true ||
+    payload?.data?.sendByMe === true;
+  if (direct) return true;
+
+  const raw = String(
+    pickFirst(payload?.direction, payload?.data?.direction, payload?.event, payload?.hookType, payload?.action, payload?.data?.action) ??
+      ""
+  ).toLowerCase();
+
+  // Z-API/webhook naming patterns
+  if (raw.includes("message_sent") || raw.includes("messagesent")) return true;
+  if (raw.includes("outgoing") || raw.includes("outbound")) return true;
+
+  return false;
 }
 
 function safeStates(j: JourneyInfo | null | undefined) {
@@ -605,16 +633,18 @@ serve(async (req) => {
       instancePhone: instance.phone_number ?? null,
     });
 
+    const explicitFromMe = detectFromMe(payload);
+
     // Hygiene: Sometimes the webhook is configured with a forced dir=inbound URL, but provider still
     // sends outbound events to that same endpoint. If we can strongly infer outbound, prefer it.
     const strongOutbound =
-      inferred === "outbound" &&
+      (inferred === "outbound" || explicitFromMe) &&
       (payload?.fromMe === true ||
         payload?.data?.fromMe === true ||
         payload?.isFromMe === true ||
         payload?.data?.isFromMe === true ||
-        (normalizePhoneE164Like(instance.phone_number ?? null) &&
-          normalized.from === normalizePhoneE164Like(instance.phone_number ?? null)));
+        explicitFromMe ||
+        (instancePhoneNorm && normalized.from === instancePhoneNorm));
 
     // For call events, if we could identify a counterpart phone, treat them as inbound by default.
     const direction: WebhookDirection =
@@ -623,6 +653,19 @@ serve(async (req) => {
         : forced && strongOutbound
           ? "outbound"
           : forced ?? inferred;
+
+    console.log(`[${fn}] direction_resolved`, {
+      tenant_id: instance.tenant_id,
+      zapi_instance_id: effectiveInstanceId,
+      instance_phone: instancePhoneNorm,
+      normalized_from: normalized.from,
+      normalized_to: normalized.to,
+      forced_direction: forced ?? null,
+      inferred_direction: inferred,
+      explicit_from_me: explicitFromMe,
+      strong_outbound: strongOutbound,
+      raw_direction: String(pickFirst(payload?.direction, payload?.data?.direction, payload?.event, payload?.hookType, payload?.action) ?? ""),
+    });
 
     if (!providedSecret || providedSecret !== instance.webhook_secret) {
       console.warn(`[${fn}] Invalid webhook secret`, { hasProvided: Boolean(providedSecret) });
@@ -901,7 +944,7 @@ serve(async (req) => {
 
     // Outbound webhook capture (messages sent outside Byfrost):
     // - We DO NOT create cases here.
-    // - We try to link to the latest existing case by vendor phone or by extracted customer phone.
+    // - We try to link to an existing case by customer phone (counterpart).
     if (direction === "outbound") {
       const instPhone = normalizePhoneE164Like(instance.phone_number ?? null);
 
@@ -911,6 +954,11 @@ serve(async (req) => {
       // If normalization picked chatId as `from` (common), use it as counterpart.
       if ((!counterpart || (instPhone && counterpart === instPhone)) && normalized.from && normalized.from !== instPhone) {
         counterpart = normalized.from;
+      }
+
+      // If we do have an instance phone, ensure counterpart is the "other" side.
+      if (instPhone && counterpart && counterpart === instPhone) {
+        counterpart = normalized.from && normalized.from !== instPhone ? normalized.from : null;
       }
 
       if (!counterpart) {
@@ -927,6 +975,64 @@ serve(async (req) => {
 
       // Pick the best sender phone (prefer instance phone for outbound)
       const fromPhone = instPhone ?? normalized.from ?? null;
+
+      // Link outbound to an existing customer case when possible
+      const counterpartVariants = Array.from(buildBrPhoneVariantsE164(counterpart));
+      let caseId: string | null = null;
+
+      try {
+        // 1) Find customer by phone variants
+        const { data: existingCustomer } = await supabase
+          .from("customer_accounts")
+          .select("id")
+          .eq("tenant_id", instance.tenant_id)
+          .in("phone_e164", counterpartVariants.length ? counterpartVariants : [counterpart])
+          .is("deleted_at", null)
+          .order("updated_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        const customerId = (existingCustomer as any)?.id ?? null;
+
+        if (customerId) {
+          // Prefer an open case for this customer.
+          const { data: c } = await supabase
+            .from("cases")
+            .select("id")
+            .eq("tenant_id", instance.tenant_id)
+            .eq("status", "open")
+            .eq("customer_id", customerId)
+            .is("deleted_at", null)
+            .order("updated_at", { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          caseId = (c as any)?.id ?? null;
+        }
+
+        // 2) Fallback: open case matching phone stored in meta_json
+        if (!caseId) {
+          const keys = ["customer_phone", "counterpart_phone", "phone", "whatsapp"];
+          for (const k of keys) {
+            for (const p of counterpartVariants.length ? counterpartVariants : [counterpart]) {
+              const { data: c } = await supabase
+                .from("cases")
+                .select("id")
+                .eq("tenant_id", instance.tenant_id)
+                .eq("status", "open")
+                .contains("meta_json", { [k]: p })
+                .is("deleted_at", null)
+                .order("updated_at", { ascending: false })
+                .limit(1)
+                .maybeSingle();
+              caseId = (c as any)?.id ?? null;
+              if (caseId) break;
+            }
+            if (caseId) break;
+          }
+        }
+      } catch (e) {
+        console.warn(`[${fn}] outbound_case_link_failed (ignored)`, { e: String((e as any)?.message ?? e) });
+      }
 
       // Heuristic dedupe: same message content to same phone within 20s.
       const { data: possibleDup } = await supabase
@@ -961,52 +1067,6 @@ serve(async (req) => {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
-
-      // Link to an existing case:
-      // Most common in Byfrost: instance sends a message back to a vendor (counterpart = vendor phone).
-      // But we also support the opposite mapping (vendor phone = fromPhone) for setups where the sender is the vendor.
-      let caseId: string | null = null;
-
-      const vendorPhoneCandidates = Array.from(new Set([counterpart, fromPhone].filter(Boolean))) as string[];
-      for (const vp of vendorPhoneCandidates) {
-        const { data: vendor } = await supabase
-          .from("vendors")
-          .select("id")
-          .eq("tenant_id", instance.tenant_id)
-          .eq("phone_e164", vp)
-          .maybeSingle();
-
-        if (vendor?.id) {
-          const { data: c } = await supabase
-            .from("cases")
-            .select("id")
-            .eq("tenant_id", instance.tenant_id)
-            .eq("assigned_vendor_id", vendor.id)
-            .is("deleted_at", null)
-            .order("created_at", { ascending: false })
-            .limit(1)
-            .maybeSingle();
-
-          caseId = (c as any)?.id ?? null;
-          if (caseId) break;
-        }
-
-        // Best-effort legacy lookup by meta_json (may be absent)
-        const { data: cByMeta } = await supabase
-          .from("cases")
-          .select("id")
-          .eq("tenant_id", instance.tenant_id)
-          .contains("meta_json", { vendor_phone: vp })
-          .is("deleted_at", null)
-          .order("created_at", { ascending: false })
-          .limit(1)
-          .maybeSingle();
-
-        caseId = (cByMeta as any)?.id ?? null;
-        if (caseId) break;
-      }
-
-      // NOTE: evitamos consultar case_fields aqui, pois esta tabela não tem tenant_id em algumas instalações.
 
       const { error: msgErr } = await supabase.from("wa_messages").insert({
         tenant_id: instance.tenant_id,
@@ -1044,7 +1104,12 @@ serve(async (req) => {
         reason: caseId ? null : "outbound_unlinked_no_case",
         direction,
         case_id: caseId,
-        meta: { forced_direction: forced ?? null, inferred_direction: inferred, strong_outbound: strongOutbound },
+        meta: {
+          forced_direction: forced ?? null,
+          inferred_direction: inferred,
+          strong_outbound: strongOutbound,
+          linked_by: caseId ? "customer_phone" : null,
+        },
       });
 
       return new Response(JSON.stringify({ ok: true, correlation_id: correlationId, case_id: caseId }), {
