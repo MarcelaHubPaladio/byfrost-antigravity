@@ -21,11 +21,28 @@ function parseHashParams() {
   return obj;
 }
 
+type LocalAuthDiag = {
+  stage: "init" | "exchanged" | "checked";
+  hasSession: boolean;
+  sessionUserId: string | null;
+  sessionEmail: string | null;
+  lastEvent: string | null;
+  lastError: string | null;
+};
+
 export default function AuthCallback() {
   const nav = useNavigate();
   const { user, loading: sessionLoading, refresh } = useSession();
   const { activeTenantId, tenants, loading: tenantsLoading, membershipHint } = useTenant();
   const [checking, setChecking] = useState(true);
+  const [diag, setDiag] = useState<LocalAuthDiag>({
+    stage: "init",
+    hasSession: false,
+    sessionUserId: null,
+    sessionEmail: null,
+    lastEvent: null,
+    lastError: null,
+  });
 
   const nowInfo = useMemo(() => {
     const now = Date.now();
@@ -45,23 +62,56 @@ export default function AuthCallback() {
   }, []);
 
   useEffect(() => {
+    // Local watcher: helps ensure we see auth transitions even if the global provider misses.
+    const { data } = supabase.auth.onAuthStateChange((event, session) => {
+      setDiag((d) => ({
+        ...d,
+        lastEvent: event,
+        hasSession: Boolean(session),
+        sessionUserId: session?.user?.id ?? null,
+        sessionEmail: session?.user?.email ?? null,
+      }));
+    });
+
+    return () => {
+      data.subscription.unsubscribe();
+    };
+  }, []);
+
+  useEffect(() => {
     // If this is a password recovery callback, route to reset page.
     if (String(urlInfo.type).toLowerCase() === "recovery") {
       nav("/auth/reset" + window.location.search + window.location.hash, { replace: true });
       return;
     }
 
-    // Force a session read after returning from Supabase verify link.
+    // Force a session read after returning from Supabase.
     let mounted = true;
     (async () => {
       try {
         // Support PKCE-style redirects
         if (urlInfo.code) {
-          await supabase.auth.exchangeCodeForSession(urlInfo.code).catch(() => null);
+          const { error } = await supabase.auth.exchangeCodeForSession(urlInfo.code);
+          if (error) {
+            setDiag((d) => ({ ...d, stage: "exchanged", lastError: error.message }));
+          } else {
+            setDiag((d) => ({ ...d, stage: "exchanged" }));
+          }
         }
 
+        // Sync provider state
         await refresh();
-        await supabase.auth.getSession();
+
+        const { data } = await supabase.auth.getSession();
+        setDiag((d) => ({
+          ...d,
+          stage: "checked",
+          hasSession: Boolean(data.session),
+          sessionUserId: data.session?.user?.id ?? null,
+          sessionEmail: data.session?.user?.email ?? null,
+        }));
+      } catch (e: any) {
+        setDiag((d) => ({ ...d, lastError: String(e?.message ?? "erro") }));
       } finally {
         if (mounted) setChecking(false);
       }
@@ -75,6 +125,7 @@ export default function AuthCallback() {
   useEffect(() => {
     if (checking || sessionLoading || tenantsLoading) return;
 
+    // If signed in, route to tenant/app.
     if (user) {
       if (activeTenantId) nav("/app", { replace: true });
       else if (tenants.length === 1) nav("/app", { replace: true });
@@ -82,8 +133,11 @@ export default function AuthCallback() {
       return;
     }
 
+    // If no session, send to login.
     nav("/login", { replace: true });
   }, [checking, sessionLoading, tenantsLoading, user, activeTenantId, tenants.length, nav]);
+
+  const showStuck = !checking && !sessionLoading && !tenantsLoading && !user;
 
   return (
     <div className="min-h-screen bg-[hsl(var(--byfrost-bg))]">
@@ -107,12 +161,31 @@ export default function AuthCallback() {
             </div>
           </div>
 
-          {!checking && !sessionLoading && !user && (
+          <div className="mt-3 rounded-2xl border border-slate-200 bg-slate-50 p-3 text-[11px] text-slate-700">
+            <div className="font-semibold text-slate-800">Status (debug)</div>
+            <pre className="mt-2 max-h-[220px] overflow-auto rounded-xl bg-white p-2 text-[11px]">
+              {JSON.stringify(
+                {
+                  urlInfo,
+                  checking,
+                  sessionLoading,
+                  tenantsLoading,
+                  providerUser: user ? { id: user.id, email: user.email } : null,
+                  tenant: { activeTenantId, tenantsCount: tenants.length, membershipHint },
+                  localAuth: diag,
+                },
+                null,
+                2
+              )}
+            </pre>
+          </div>
+
+          {showStuck && (
             <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
-              Não consegui criar uma sessão. Se você abriu um link de convite, verifique:
+              Não consegui finalizar a sessão automaticamente.
               <ul className="mt-2 list-disc pl-5 text-sm">
-                <li>Data/hora automáticas no dispositivo (evita "clock skew").</li>
-                <li>O link foi aberto em aba anônima ou após sair do app.</li>
+                <li>Confirme data/hora automáticas no dispositivo.</li>
+                <li>Tente novamente em aba anônima.</li>
               </ul>
               <div className="mt-3 flex flex-wrap gap-2">
                 <Button variant="secondary" className="h-10 rounded-2xl" onClick={() => window.location.reload()}>
