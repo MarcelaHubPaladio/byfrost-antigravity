@@ -524,7 +524,14 @@ export default function Admin() {
       await qc.invalidateQueries({ queryKey: ["admin_tenant_users", activeTenantId] });
       await qc.invalidateQueries({ queryKey: ["admin_user_invites", activeTenantId] });
     } catch (e: any) {
-      showError(`Falha ao convidar usuário: ${e?.message ?? "erro"}`);
+      const msg = String(e?.message ?? "erro");
+      if (msg.toLowerCase().includes("unauthorized")) {
+        showError(
+          "Falha ao convidar usuário: Unauthorized. Isso normalmente acontece quando o frontend está autenticado em um projeto Supabase diferente das Edge Functions. Verifique VITE_SUPABASE_URL/VITE_SUPABASE_ANON_KEY ou recarregue e faça logout/login."
+        );
+      } else {
+        showError(`Falha ao convidar usuário: ${msg}`);
+      }
     } finally {
       setInviting(false);
     }
