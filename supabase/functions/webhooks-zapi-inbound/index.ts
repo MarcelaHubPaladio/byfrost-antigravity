@@ -233,16 +233,28 @@ function normalizeInbound(payload: any): {
   const from = normalizePhoneE164Like(fromRaw);
   const to = normalizePhoneE164Like(toRaw);
 
-  const text = pickFirst<string>(
-    payload?.text,
-    payload?.body,
-    payload?.message,
-    payload?.data?.text,
-    payload?.data?.body,
-    payload?.data?.message,
-    payload?.caption,
-    payload?.data?.caption
-  );
+  // Common Z-API schema: payload.text.message (and link previews)
+  const textMessage = pickFirst<string>(payload?.text?.message, payload?.data?.text?.message);
+  const textTitle = pickFirst<string>(payload?.text?.title, payload?.data?.text?.title);
+  const textUrl = pickFirst<string>(payload?.text?.url, payload?.data?.text?.url);
+  const textDescription = pickFirst<string>(payload?.text?.description, payload?.data?.text?.description);
+
+  const text =
+    textMessage ??
+    pickFirst<string>(
+      payload?.text,
+      payload?.body,
+      payload?.message,
+      payload?.data?.text,
+      payload?.data?.body,
+      payload?.data?.message,
+      payload?.caption,
+      payload?.data?.caption,
+      // Link preview fallbacks
+      textTitle,
+      textDescription,
+      textUrl
+    );
 
   const mediaUrl = pickFirst<string>(
     payload?.mediaUrl,
@@ -250,7 +262,13 @@ function normalizeInbound(payload: any): {
     payload?.url,
     payload?.data?.mediaUrl,
     payload?.data?.url,
-    payload?.data?.media_url
+    payload?.data?.media_url,
+    payload?.audio?.audioUrl,
+    payload?.data?.audio?.audioUrl,
+    payload?.sticker?.stickerUrl,
+    payload?.data?.sticker?.stickerUrl,
+    payload?.image?.imageUrl,
+    payload?.data?.image?.imageUrl
   );
 
   const latRaw = pickFirst(
@@ -303,6 +321,7 @@ function normalizeInbound(payload: any): {
 
 function isNonMessageCallbackEvent(args: {
   rawType: string;
+  payload: any;
   normalized: { text: string | null; mediaUrl: string | null; location: any };
 }) {
   const t = String(args.rawType ?? "").toLowerCase();
@@ -323,6 +342,12 @@ function isNonMessageCallbackEvent(args: {
     t.includes("disconnected");
 
   if (!looksCallback) return false;
+
+  // Z-API flag: waitingMessage=true frequently indicates a "receipt/callback" without actual user message.
+  if (args.payload?.waitingMessage === true || args.payload?.data?.waitingMessage === true) {
+    const hasContent = Boolean(args.normalized.text || args.normalized.mediaUrl || args.normalized.location);
+    if (!hasContent) return true;
+  }
 
   const hasContent = Boolean(args.normalized.text || args.normalized.mediaUrl || args.normalized.location);
   if (hasContent) return false;
@@ -777,7 +802,7 @@ serve(async (req) => {
 
     // Ignore provider callbacks/receipts (delivery/read/ack/etc) that carry no user content.
     // These events must never open cases.
-    if (isNonMessageCallbackEvent({ rawType: normalized.meta.rawType, normalized })) {
+    if (isNonMessageCallbackEvent({ rawType: normalized.meta.rawType, payload, normalized })) {
       await logInbox({
         instance,
         ok: true,
