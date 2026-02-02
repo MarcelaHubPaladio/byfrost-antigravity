@@ -1,14 +1,17 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { RequireAuth } from "@/components/RequireAuth";
 import { AppShell } from "@/components/AppShell";
 import { useSession } from "@/providers/SessionProvider";
 import { useTheme } from "@/providers/ThemeProvider";
 import { showError, showSuccess } from "@/utils/toast";
 import { cn } from "@/lib/utils";
+import { supabase } from "@/lib/supabase";
 
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Link2 } from "lucide-react";
 
 function ThemeCard({
   selected,
@@ -64,9 +67,38 @@ export default function Me() {
   const { user } = useSession();
   const { prefs, setMode, setCustom, isLoading } = useTheme();
   const [busy, setBusy] = useState(false);
+  const [linking, setLinking] = useState(false);
 
   const userName = getUserDisplayName(user);
   const userEmail = user?.email ?? "";
+
+  const identities = useMemo(() => {
+    const ids = ((user as any)?.identities ?? []) as any[];
+    return ids
+      .map((i) => ({ provider: String(i.provider ?? ""), created_at: i.created_at }))
+      .filter((i) => Boolean(i.provider));
+  }, [user]);
+
+  const linkGoogle = async () => {
+    setLinking(true);
+    try {
+      const { data, error } = await supabase.auth.linkIdentity({
+        provider: "google",
+        options: {
+          redirectTo: `${window.location.origin}/auth/callback`,
+        },
+      } as any);
+
+      if (error) throw error;
+      // In browser, supabase-js usually redirects automatically. If not:
+      if ((data as any)?.url) window.location.assign((data as any).url);
+    } catch (e: any) {
+      showError(
+        `Não foi possível vincular Google. (${e?.message ?? "erro"}) Verifique se "Manual linking" está habilitado no Auth do Supabase.`
+      );
+      setLinking(false);
+    }
+  };
 
   const applyMode = async (mode: "byfrost" | "dark" | "custom") => {
     setBusy(true);
@@ -121,7 +153,14 @@ export default function Me() {
 
             <div className="mt-4 grid gap-3 lg:grid-cols-2">
               <div className="rounded-[22px] border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-950/30">
-                <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">Identidade</div>
+                <div className="flex items-center justify-between gap-2">
+                  <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">Identidade</div>
+                  <div className="inline-flex items-center gap-2 rounded-full bg-[hsl(var(--byfrost-accent)/0.12)] px-2 py-1 text-[11px] font-semibold text-[hsl(var(--byfrost-accent))]">
+                    <Link2 className="h-3.5 w-3.5" />
+                    contas
+                  </div>
+                </div>
+
                 <div className="mt-3 grid gap-3">
                   <div>
                     <Label className="text-xs text-slate-700 dark:text-slate-200">Nome</Label>
@@ -138,6 +177,37 @@ export default function Me() {
                       readOnly
                       className="mt-1 h-11 rounded-2xl border-slate-200 bg-white font-mono text-xs text-slate-800 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-100"
                     />
+                  </div>
+
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-800 dark:bg-slate-950/40">
+                    <div className="text-[11px] font-semibold text-slate-700 dark:text-slate-200">
+                      Provedores conectados
+                    </div>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {identities.length ? (
+                        identities.map((i) => (
+                          <Badge
+                            key={i.provider}
+                            className="rounded-full border-0 bg-white text-slate-700 hover:bg-white dark:bg-slate-950/40 dark:text-slate-200"
+                          >
+                            {i.provider}
+                          </Badge>
+                        ))
+                      ) : (
+                        <div className="text-xs text-slate-600 dark:text-slate-400">(apenas email/senha)</div>
+                      )}
+                    </div>
+                    <Button
+                      onClick={linkGoogle}
+                      disabled={linking}
+                      variant="secondary"
+                      className="mt-3 h-10 rounded-2xl"
+                    >
+                      {linking ? "Redirecionando…" : "Vincular Google"}
+                    </Button>
+                    <div className="mt-2 text-[11px] text-slate-500 dark:text-slate-400">
+                      Requer Google provider habilitado e "Manual linking" ativo no Supabase Auth.
+                    </div>
                   </div>
                 </div>
               </div>

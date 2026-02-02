@@ -13,6 +13,14 @@ function fmtTs(ts: number) {
   }
 }
 
+function parseHashParams() {
+  const h = window.location.hash?.replace(/^#/, "") ?? "";
+  const sp = new URLSearchParams(h);
+  const obj: Record<string, string> = {};
+  sp.forEach((v, k) => (obj[k] = v));
+  return obj;
+}
+
 export default function AuthCallback() {
   const nav = useNavigate();
   const { user, loading: sessionLoading, refresh } = useSession();
@@ -28,14 +36,31 @@ export default function AuthCallback() {
     };
   }, []);
 
+  const urlInfo = useMemo(() => {
+    const u = new URL(window.location.href);
+    const hs = parseHashParams();
+    const type = u.searchParams.get("type") || hs.type || "";
+    const code = u.searchParams.get("code");
+    return { type, code, hasAccessToken: Boolean(hs.access_token) };
+  }, []);
+
   useEffect(() => {
+    // If this is a password recovery callback, route to reset page.
+    if (String(urlInfo.type).toLowerCase() === "recovery") {
+      nav("/auth/reset" + window.location.search + window.location.hash, { replace: true });
+      return;
+    }
+
     // Force a session read after returning from Supabase verify link.
-    // This page is intentionally minimal and resilient.
     let mounted = true;
     (async () => {
       try {
+        // Support PKCE-style redirects
+        if (urlInfo.code) {
+          await supabase.auth.exchangeCodeForSession(urlInfo.code).catch(() => null);
+        }
+
         await refresh();
-        // If the URL had tokens, Supabase JS may have already processed them.
         await supabase.auth.getSession();
       } finally {
         if (mounted) setChecking(false);
@@ -45,12 +70,11 @@ export default function AuthCallback() {
     return () => {
       mounted = false;
     };
-  }, [refresh]);
+  }, [refresh, nav, urlInfo.type, urlInfo.code]);
 
   useEffect(() => {
     if (checking || sessionLoading || tenantsLoading) return;
 
-    // If signed in, route to tenant/app.
     if (user) {
       if (activeTenantId) nav("/app", { replace: true });
       else if (tenants.length === 1) nav("/app", { replace: true });
@@ -58,7 +82,6 @@ export default function AuthCallback() {
       return;
     }
 
-    // If no session, send to login.
     nav("/login", { replace: true });
   }, [checking, sessionLoading, tenantsLoading, user, activeTenantId, tenants.length, nav]);
 
@@ -80,7 +103,7 @@ export default function AuthCallback() {
               Hora do dispositivo (ISO): <span className="font-medium text-slate-900">{nowInfo.iso}</span>
             </div>
             <div className="mt-2 text-[11px] text-slate-500">
-              Se você ver no console algo como “Session … was issued in the future”, normalmente é relógio do dispositivo fora de sincronia.
+              Se você ver no console algo como "Session … was issued in the future", normalmente é relógio do dispositivo fora de sincronia.
             </div>
           </div>
 
@@ -88,15 +111,11 @@ export default function AuthCallback() {
             <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
               Não consegui criar uma sessão. Se você abriu um link de convite, verifique:
               <ul className="mt-2 list-disc pl-5 text-sm">
-                <li>Data/hora automáticas no dispositivo (evita “clock skew”).</li>
+                <li>Data/hora automáticas no dispositivo (evita "clock skew").</li>
                 <li>O link foi aberto em aba anônima ou após sair do app.</li>
               </ul>
               <div className="mt-3 flex flex-wrap gap-2">
-                <Button
-                  variant="secondary"
-                  className="h-10 rounded-2xl"
-                  onClick={() => window.location.reload()}
-                >
+                <Button variant="secondary" className="h-10 rounded-2xl" onClick={() => window.location.reload()}>
                   Recarregar
                 </Button>
                 <Button

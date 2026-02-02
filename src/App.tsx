@@ -15,6 +15,7 @@ import NotFound from "@/pages/NotFound";
 import Login from "@/pages/Login";
 import TenantSelect from "@/pages/TenantSelect";
 import AuthCallback from "@/pages/AuthCallback";
+import ResetPassword from "@/pages/ResetPassword";
 import Dashboard from "@/pages/Dashboard";
 import CaseDetail from "@/pages/CaseDetail";
 import Simulator from "@/pages/Simulator";
@@ -46,6 +47,7 @@ const App = () => (
                 <Route path="/login" element={<Login />} />
                 <Route path="/tenants" element={<TenantSelect />} />
                 <Route path="/auth/callback" element={<AuthCallback />} />
+                <Route path="/auth/reset" element={<ResetPassword />} />
 
                 {/* Dashboard por jornada (slug = journeys.key) */}
                 <Route
