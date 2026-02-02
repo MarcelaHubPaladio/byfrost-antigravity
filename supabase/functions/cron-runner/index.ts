@@ -53,6 +53,47 @@ serve(async (req) => {
     const supabase = createSupabaseAdmin();
     const now = new Date().toISOString();
 
+    // 1.5) Enqueue due Meta publishes (scheduled_at <= now)
+    const { data: duePubs, error: dueErr } = await supabase
+      .from("content_publications")
+      .select("id, tenant_id")
+      .eq("publish_status", "SCHEDULED")
+      .not("scheduled_at", "is", null)
+      .lte("scheduled_at", now)
+      .in("channel", ["ig_feed", "ig_story"])
+      .order("scheduled_at", { ascending: true })
+      .limit(200);
+
+    let metaPublishEnqueued = 0;
+
+    if (dueErr) {
+      console.error(`[${fn}] Failed to list due publications`, { dueErr });
+    } else {
+      for (const p of duePubs ?? []) {
+        const tenantId = (p as any).tenant_id as string;
+        const publicationId = (p as any).id as string;
+        const idempotencyKey = `META_PUBLISH_PUBLICATION:${publicationId}`;
+
+        const { error } = await supabase.from("job_queue").insert({
+          tenant_id: tenantId,
+          type: "META_PUBLISH_PUBLICATION",
+          idempotency_key: idempotencyKey,
+          payload_json: { publication_id: publicationId },
+          status: "pending",
+          run_after: new Date().toISOString(),
+        });
+
+        if (error) {
+          const msg = String((error as any)?.message ?? "").toLowerCase();
+          if (!msg.includes("duplicate")) {
+            console.error(`[${fn}] Failed to enqueue META_PUBLISH_PUBLICATION`, { tenantId, publicationId, error });
+          }
+        } else {
+          metaPublishEnqueued += 1;
+        }
+      }
+    }
+
     // 2) Escalate overdue vendor pendencies (>4h by due_at)
     const { data: overdue, error: oErr } = await supabase
       .from("pendencies")
@@ -200,9 +241,12 @@ serve(async (req) => {
       }
     }
 
-    return new Response(JSON.stringify({ ok: true, jobsProcessor, escalated, dailySummaryEnqueued, date: dateStr, timeZone }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return new Response(
+      JSON.stringify({ ok: true, jobsProcessor, metaPublishEnqueued, escalated, dailySummaryEnqueued, date: dateStr, timeZone }),
+      {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      }
+    );
   } catch (e) {
     console.error(`[cron-runner] Unhandled error`, { e });
     return new Response("Internal error", { status: 500, headers: corsHeaders });

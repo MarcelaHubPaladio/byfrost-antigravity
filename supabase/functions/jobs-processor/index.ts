@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { corsHeaders } from "../_shared/cors.ts";
 import { createSupabaseAdmin } from "../_shared/supabaseAdmin.ts";
 import { fetchAsBase64 } from "../_shared/crypto.ts";
+import { publishContentPublication } from "../_shared/metaPublish.ts";
 
 type JobRow = {
   id: string;
@@ -246,6 +247,17 @@ serve(async (req) => {
       try {
         const tenantId = job.tenant_id;
         const caseId = job.payload_json?.case_id as string | undefined;
+
+        if (job.type === "META_PUBLISH_PUBLICATION") {
+          const publicationId = String(job.payload_json?.publication_id ?? "").trim();
+          if (!publicationId) throw new Error("Missing payload.publication_id");
+
+          const out = await publishContentPublication({ supabase, tenantId, publicationId, requestedByUserId: null });
+
+          await supabase.from("job_queue").update({ status: "done" }).eq("id", job.id);
+          results.push({ id: job.id, ok: true, type: job.type, publicationId, result: out });
+          continue;
+        }
 
         if (job.type === "DAILY_WA_SUMMARY") {
           const dateStr = String(job.payload_json?.date ?? "").trim();
