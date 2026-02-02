@@ -175,6 +175,8 @@ export default function Admin() {
   // Super-admin bootstrap helper (edge function checks allowlist APP_SUPER_ADMIN_EMAILS)
   const ADMIN_SET_SUPERADMIN_URL =
     "https://pryoirzeghatrgecwrci.supabase.co/functions/v1/admin-set-super-admin";
+  const ADMIN_LIST_SUPERADMINS_URL =
+    "https://pryoirzeghatrgecwrci.supabase.co/functions/v1/admin-super-admins-list";
 
   const [refreshingSession, setRefreshingSession] = useState(false);
   const [debug, setDebug] = useState<any>(null);
@@ -352,82 +354,8 @@ export default function Admin() {
   const [invRole, setInvRole] = useState<UserRole>("vendor");
   const [inviting, setInviting] = useState(false);
 
-  const inviteUser = async () => {
-    if (!activeTenantId) return;
-    const email = invEmail.trim().toLowerCase();
-    if (!email.includes("@")) {
-      showError("Informe um email válido.");
-      return;
-    }
-
-    setInviting(true);
-    try {
-      const { data: sess } = await supabase.auth.getSession();
-      const token = sess.session?.access_token ?? null;
-      if (!token) throw new Error("Sessão inválida");
-
-      const url = "https://pryoirzeghatrgecwrci.supabase.co/functions/v1/admin-invite-user";
-      const res = await fetch(url, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          tenantId: activeTenantId,
-          email,
-          role: invRole,
-          displayName: invName.trim() || null,
-          phoneE164: normalizePhoneLoose(invPhone),
-        }),
-      });
-
-      const json = await res.json().catch(() => null);
-      if (!res.ok || !json?.ok) {
-        const msg = String(json?.error || `HTTP ${res.status}`);
-        if (msg.toLowerCase().includes("error sending invite email")) {
-          showError(
-            "O Supabase não conseguiu enviar o email de convite (SMTP). Vou te mostrar um link manual para compartilhar." 
-          );
-        }
-        throw new Error(msg);
-      }
-
-      const link = typeof json?.inviteLink === "string" ? json.inviteLink : "";
-      const sentEmail = Boolean(json?.sentEmail);
-
-      showSuccess(sentEmail ? "Convite enviado por email." : "Convite gerado. Compartilhe o link manual.");
-
-      if (link) {
-        setInviteLink(link);
-        setInviteLinkOpen(true);
-      }
-
-      setInvEmail("");
-      setInvName("");
-      setInvPhone("+55");
-      setInvRole("vendor");
-
-      await qc.invalidateQueries({ queryKey: ["admin_tenant_users", activeTenantId] });
-    } catch (e: any) {
-      showError(`Falha ao convidar usuário: ${e?.message ?? "erro"}`);
-    } finally {
-      setInviting(false);
-    }
-  };
-
-  const copyInviteLink = async () => {
-    if (!inviteLink) return;
-    try {
-      await navigator.clipboard.writeText(inviteLink);
-      showSuccess("Link copiado.");
-    } catch {
-      showError("Não consegui copiar automaticamente. Selecione e copie manualmente.");
-    }
-  };
-
-  const setSuperAdminByEmail = async (set: boolean) => {
-    const email = superAdminEmail.trim().toLowerCase();
+  const setSuperAdminByEmail = async (emailInput: string, set: boolean) => {
+    const email = emailInput.trim().toLowerCase();
     if (!email.includes("@")) {
       showError("Informe um email válido.");
       return;
@@ -472,6 +400,115 @@ export default function Admin() {
       }
     } finally {
       setSettingSuperAdmin(false);
+    }
+  };
+
+  const superAdminsQ = useQuery({
+    queryKey: ["admin_super_admins_list"],
+    enabled: Boolean(isSuperAdmin),
+    queryFn: async () => {
+      const { data: sess } = await supabase.auth.getSession();
+      const token = sess.session?.access_token ?? null;
+      if (!token) throw new Error("Sessão inválida");
+
+      const res = await fetch(ADMIN_LIST_SUPERADMINS_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      const json = await res.json().catch(() => null);
+      if (!res.ok || !json?.ok) throw new Error(json?.error || `HTTP ${res.status}`);
+      return (json.rows ?? []) as any[];
+    },
+  });
+
+  const invitesQ = useQuery({
+    queryKey: ["admin_user_invites", activeTenantId],
+    enabled: Boolean(isSuperAdmin && activeTenantId),
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("user_invites")
+        .select("id,tenant_id,user_id,email,sent_email,invite_link,created_by_user_id,created_at")
+        .eq("tenant_id", activeTenantId!)
+        .order("created_at", { ascending: false })
+        .limit(40);
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+
+  const openInviteLink = (link: string) => {
+    if (!link) return;
+    setInviteLink(link);
+    setInviteLinkOpen(true);
+  };
+
+  const copyInviteLink = async () => {
+    if (!inviteLink) return;
+    try {
+      await navigator.clipboard.writeText(inviteLink);
+      showSuccess("Link copiado.");
+    } catch {
+      showError("Não consegui copiar automaticamente. Selecione e copie manualmente.");
+    }
+  };
+
+  const inviteUser = async () => {
+    if (!activeTenantId) return;
+    const email = invEmail.trim().toLowerCase();
+    if (!email.includes("@")) {
+      showError("Informe um email válido.");
+      return;
+    }
+
+    setInviting(true);
+    try {
+      const { data: sess } = await supabase.auth.getSession();
+      const token = sess.session?.access_token ?? null;
+      if (!token) throw new Error("Sessão inválida");
+
+      const url = "https://pryoirzeghatrgecwrci.supabase.co/functions/v1/admin-invite-user";
+      const res = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          tenantId: activeTenantId,
+          email,
+          role: invRole,
+          displayName: invName.trim() || null,
+          phoneE164: normalizePhoneLoose(invPhone),
+        }),
+      });
+
+      const json = await res.json().catch(() => null);
+      if (!res.ok || !json?.ok) {
+        throw new Error(String(json?.error || `HTTP ${res.status}`));
+      }
+
+      const link = typeof json?.inviteLink === "string" ? json.inviteLink : "";
+      const sentEmail = Boolean(json?.sentEmail);
+
+      showSuccess(sentEmail ? "Convite enviado por email." : "Convite gerado. Compartilhe o link manual.");
+
+      if (link) openInviteLink(link);
+
+      setInvEmail("");
+      setInvName("");
+      setInvPhone("+55");
+      setInvRole("vendor");
+
+      await qc.invalidateQueries({ queryKey: ["admin_tenant_users", activeTenantId] });
+      await qc.invalidateQueries({ queryKey: ["admin_user_invites", activeTenantId] });
+    } catch (e: any) {
+      showError(`Falha ao convidar usuário: ${e?.message ?? "erro"}`);
+    } finally {
+      setInviting(false);
     }
   };
 
@@ -847,7 +884,7 @@ export default function Admin() {
             <DialogHeader>
               <DialogTitle>Convite manual</DialogTitle>
               <DialogDescription>
-                O Supabase não conseguiu enviar o email. Copie o link abaixo e compartilhe com o usuário (WhatsApp, etc.).
+                Copie o link abaixo e compartilhe com o usuário (WhatsApp, etc.).
               </DialogDescription>
             </DialogHeader>
 
@@ -1054,6 +1091,14 @@ export default function Admin() {
                             </div>
                           </div>
                         </div>
+                        <Button
+                          variant="secondary"
+                          className="h-10 rounded-2xl"
+                          onClick={() => superAdminsQ.refetch()}
+                          disabled={superAdminsQ.isFetching}
+                        >
+                          {superAdminsQ.isFetching ? "Atualizando…" : "Atualizar"}
+                        </Button>
                       </div>
 
                       <div className="mt-4 grid gap-2 sm:grid-cols-[1fr_auto_auto] sm:items-end">
@@ -1070,14 +1115,14 @@ export default function Admin() {
                           </div>
                         </div>
                         <Button
-                          onClick={() => setSuperAdminByEmail(true)}
+                          onClick={() => setSuperAdminByEmail(superAdminEmail, true)}
                           disabled={settingSuperAdmin || !superAdminEmail.trim()}
                           className="h-11 rounded-2xl bg-indigo-600 px-4 text-white hover:bg-indigo-700"
                         >
                           {settingSuperAdmin ? "Salvando…" : "Tornar super-admin"}
                         </Button>
                         <Button
-                          onClick={() => setSuperAdminByEmail(false)}
+                          onClick={() => setSuperAdminByEmail(superAdminEmail, false)}
                           disabled={settingSuperAdmin || !superAdminEmail.trim()}
                           variant="secondary"
                           className="h-11 rounded-2xl px-4"
@@ -1086,8 +1131,65 @@ export default function Admin() {
                         </Button>
                       </div>
 
+                      <div className="mt-4 overflow-hidden rounded-2xl border border-slate-200">
+                        <div className="grid grid-cols-[1fr_120px_120px] gap-0 bg-slate-50 px-3 py-2 text-[11px] font-semibold text-slate-700">
+                          <div>Email</div>
+                          <div>Allowlist</div>
+                          <div>Claim</div>
+                        </div>
+                        <div className="divide-y divide-slate-200 bg-white">
+                          {(superAdminsQ.data ?? []).map((r: any) => (
+                            <div key={r.email} className="grid grid-cols-[1fr_120px_120px] items-center gap-0 px-3 py-2">
+                              <div className="min-w-0">
+                                <div className="truncate text-sm font-semibold text-slate-900">{r.email}</div>
+                                <div className="mt-0.5 text-[11px] text-slate-500">
+                                  {r.state === "not_found"
+                                    ? "não cadastrado"
+                                    : r.state === "allowlist_only"
+                                      ? "allowlist (bootstrap)"
+                                      : "super-admin (claim)"}
+                                </div>
+                              </div>
+                              <div>
+                                <Badge
+                                  className={cn(
+                                    "rounded-full border-0",
+                                    r.allowlisted ? "bg-slate-100 text-slate-700" : "bg-slate-50 text-slate-500"
+                                  )}
+                                >
+                                  {r.allowlisted ? "sim" : "não"}
+                                </Badge>
+                              </div>
+                              <div className="flex items-center justify-between gap-2">
+                                <Badge
+                                  className={cn(
+                                    "rounded-full border-0",
+                                    r.claimSuperAdmin ? "bg-indigo-100 text-indigo-900" : "bg-slate-100 text-slate-600"
+                                  )}
+                                >
+                                  {r.claimSuperAdmin ? "ativo" : "—"}
+                                </Badge>
+                                {r.claimSuperAdmin && (
+                                  <Button
+                                    variant="secondary"
+                                    className="h-8 rounded-2xl"
+                                    onClick={() => setSuperAdminByEmail(r.email, false)}
+                                    disabled={settingSuperAdmin}
+                                  >
+                                    Remover
+                                  </Button>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                          {(superAdminsQ.data ?? []).length === 0 && (
+                            <div className="px-3 py-4 text-xs text-slate-500">Nenhum super-admin encontrado.</div>
+                          )}
+                        </div>
+                      </div>
+
                       <div className="mt-3 rounded-2xl border border-slate-200 bg-slate-50 p-3 text-[11px] text-slate-600">
-                        Observação: esta ação é protegida por allowlist (Secret <span className="font-medium">APP_SUPER_ADMIN_EMAILS</span>) para evitar escalonamento acidental.
+                        Observação: a promoção é protegida por allowlist (Secret <span className="font-medium">APP_SUPER_ADMIN_EMAILS</span>) para evitar escalonamento acidental.
                       </div>
                     </div>
 
@@ -1279,6 +1381,79 @@ export default function Admin() {
                             Nenhum usuário cadastrado para este tenant.
                           </div>
                         )}
+                      </div>
+                    </div>
+
+                    <div className="rounded-[22px] border border-slate-200 bg-white p-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex items-center gap-2">
+                          <div className="grid h-10 w-10 place-items-center rounded-2xl bg-emerald-50 text-emerald-700">
+                            <Copy className="h-5 w-5" />
+                          </div>
+                          <div>
+                            <div className="text-sm font-semibold text-slate-900">Convites recentes</div>
+                            <div className="mt-0.5 text-[11px] text-slate-500">Inclui links manuais quando o email falha.</div>
+                          </div>
+                        </div>
+                        <Button
+                          variant="secondary"
+                          className="h-10 rounded-2xl"
+                          onClick={() => invitesQ.refetch()}
+                          disabled={invitesQ.isFetching}
+                        >
+                          {invitesQ.isFetching ? "Atualizando…" : "Atualizar"}
+                        </Button>
+                      </div>
+
+                      <div className="mt-3 overflow-hidden rounded-2xl border border-slate-200">
+                        <div className="grid grid-cols-[1fr_120px_auto] gap-0 bg-slate-50 px-3 py-2 text-[11px] font-semibold text-slate-700">
+                          <div>Email</div>
+                          <div>Tipo</div>
+                          <div className="text-right">Ações</div>
+                        </div>
+                        <div className="divide-y divide-slate-200 bg-white">
+                          {(invitesQ.data ?? []).map((it: any) => {
+                            const link = String(it.invite_link ?? "");
+                            const manual = Boolean(link);
+                            return (
+                              <div key={it.id} className="grid grid-cols-[1fr_120px_auto] items-center gap-0 px-3 py-2">
+                                <div className="min-w-0">
+                                  <div className="truncate text-sm font-semibold text-slate-900">{it.email}</div>
+                                  <div className="mt-0.5 text-[11px] text-slate-500">
+                                    {new Date(it.created_at).toLocaleString()}
+                                  </div>
+                                </div>
+                                <div>
+                                  <Badge
+                                    className={cn(
+                                      "rounded-full border-0",
+                                      manual ? "bg-amber-100 text-amber-900" : "bg-emerald-100 text-emerald-900"
+                                    )}
+                                  >
+                                    {manual ? "manual" : "email"}
+                                  </Badge>
+                                </div>
+                                <div className="flex justify-end gap-2">
+                                  {manual ? (
+                                    <Button
+                                      variant="secondary"
+                                      className="h-9 rounded-2xl"
+                                      onClick={() => openInviteLink(link)}
+                                    >
+                                      Ver link
+                                    </Button>
+                                  ) : (
+                                    <div className="text-[11px] text-slate-500">—</div>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })}
+
+                          {(invitesQ.data ?? []).length === 0 && (
+                            <div className="px-3 py-4 text-xs text-slate-500">Nenhum convite registrado ainda.</div>
+                          )}
+                        </div>
                       </div>
                     </div>
                   </div>

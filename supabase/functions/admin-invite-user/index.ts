@@ -107,7 +107,11 @@ serve(async (req) => {
     if (inviteErr || !invited?.user) {
       console.error(`[${fn}] inviteUserByEmail failed`, { inviteErr });
 
-      const shouldFallbackToLink = Boolean(inviteErr?.message?.toLowerCase().includes("error sending invite email"));
+      const msg = String(inviteErr?.message ?? "").toLowerCase();
+      const shouldFallbackToLink =
+        msg.includes("invite") && msg.includes("email") ||
+        (inviteErr as any)?.status === 500 ||
+        String((inviteErr as any)?.code ?? "").toLowerCase().includes("unexpected_failure");
 
       if (!shouldFallbackToLink) {
         return new Response(
@@ -173,6 +177,20 @@ serve(async (req) => {
         });
       }
 
+      // Store invite attempt for later retrieval in the admin panel
+      const { error: invErr } = await supabase.from("user_invites").insert({
+        tenant_id: tenantId,
+        user_id: userId,
+        email,
+        sent_email: false,
+        invite_link: inviteLink,
+        created_by_user_id: caller.id,
+      } as any);
+
+      if (invErr) {
+        console.warn(`[${fn}] user_invites insert failed (ignored)`, { invErr });
+      }
+
       // Back-compat: keep vendors/leaders tables in sync when role is vendor/leader.
       if (phoneE164 && (role === "vendor" || role === "leader")) {
         const table = role === "vendor" ? "vendors" : "leaders";
@@ -221,6 +239,20 @@ serve(async (req) => {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
+    }
+
+    // Store invite attempt
+    const { error: invErr } = await supabase.from("user_invites").insert({
+      tenant_id: tenantId,
+      user_id: userId,
+      email,
+      sent_email: true,
+      invite_link: null,
+      created_by_user_id: caller.id,
+    } as any);
+
+    if (invErr) {
+      console.warn(`[${fn}] user_invites insert failed (ignored)`, { invErr });
     }
 
     // Back-compat: keep vendors/leaders tables in sync when role is vendor/leader.
