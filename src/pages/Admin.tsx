@@ -23,6 +23,14 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -35,7 +43,7 @@ import { TenantBrandingPanel } from "@/components/admin/TenantBrandingPanel";
 import { TenantJourneysPanel } from "@/components/admin/TenantJourneysPanel";
 import { JourneyPromptsPanel } from "@/components/admin/JourneyPromptsPanel";
 import { AccessMatrixPanel } from "@/components/admin/AccessMatrixPanel";
-import { Trash2, PauseCircle, PlayCircle, ChevronLeft, ChevronRight, UsersRound, Smartphone } from "lucide-react";
+import { Trash2, PauseCircle, PlayCircle, ChevronLeft, ChevronRight, UsersRound, Smartphone, Copy } from "lucide-react";
 
 type UserRole = string;
 
@@ -171,6 +179,9 @@ export default function Admin() {
   const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
   const [addingSelf, setAddingSelf] = useState(false);
   const [selfRole, setSelfRole] = useState<UserRole>("admin");
+
+  const [inviteLink, setInviteLink] = useState<string>("");
+  const [inviteLinkOpen, setInviteLinkOpen] = useState(false);
 
   const ensureFreshTokenForRls = async () => {
     try {
@@ -366,10 +377,25 @@ export default function Admin() {
 
       const json = await res.json().catch(() => null);
       if (!res.ok || !json?.ok) {
-        throw new Error(json?.error || `HTTP ${res.status}`);
+        const msg = String(json?.error || `HTTP ${res.status}`);
+        if (msg.toLowerCase().includes("error sending invite email")) {
+          showError(
+            "O Supabase não conseguiu enviar o email de convite (SMTP). Vou te mostrar um link manual para compartilhar." 
+          );
+        }
+        throw new Error(msg);
       }
 
-      showSuccess("Convite enviado e usuário registrado no tenant.");
+      const link = typeof json?.inviteLink === "string" ? json.inviteLink : "";
+      const sentEmail = Boolean(json?.sentEmail);
+
+      showSuccess(sentEmail ? "Convite enviado por email." : "Convite gerado. Compartilhe o link manual.");
+
+      if (link) {
+        setInviteLink(link);
+        setInviteLinkOpen(true);
+      }
+
       setInvEmail("");
       setInvName("");
       setInvPhone("+55");
@@ -380,6 +406,16 @@ export default function Admin() {
       showError(`Falha ao convidar usuário: ${e?.message ?? "erro"}`);
     } finally {
       setInviting(false);
+    }
+  };
+
+  const copyInviteLink = async () => {
+    if (!inviteLink) return;
+    try {
+      await navigator.clipboard.writeText(inviteLink);
+      showSuccess("Link copiado.");
+    } catch {
+      showError("Não consegui copiar automaticamente. Selecione e copie manualmente.");
     }
   };
 
@@ -750,6 +786,40 @@ export default function Admin() {
   return (
     <RequireAuth>
       <AppShell>
+        <Dialog open={inviteLinkOpen} onOpenChange={setInviteLinkOpen}>
+          <DialogContent className="rounded-[22px]">
+            <DialogHeader>
+              <DialogTitle>Convite manual</DialogTitle>
+              <DialogDescription>
+                O Supabase não conseguiu enviar o email. Copie o link abaixo e compartilhe com o usuário (WhatsApp, etc.).
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="grid gap-2">
+              <Label className="text-xs">Link</Label>
+              <div className="flex items-center gap-2">
+                <Input value={inviteLink} readOnly className="h-11 rounded-2xl bg-slate-50" />
+                <Button variant="secondary" className="h-11 rounded-2xl" onClick={copyInviteLink}>
+                  <Copy className="mr-2 h-4 w-4" />
+                  Copiar
+                </Button>
+              </div>
+              <div className="text-[11px] text-slate-500">
+                Dica: para voltar a enviar emails automaticamente, configure SMTP no Supabase (Auth → Email).
+              </div>
+            </div>
+
+            <DialogFooter>
+              <Button
+                className="h-10 rounded-2xl bg-[hsl(var(--byfrost-accent))] text-white hover:bg-[hsl(var(--byfrost-accent)/0.92)]"
+                onClick={() => setInviteLinkOpen(false)}
+              >
+                Fechar
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
         <div className="rounded-[28px] border border-slate-200 bg-white/65 p-4 shadow-sm backdrop-blur md:p-5">
           <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
             <div>

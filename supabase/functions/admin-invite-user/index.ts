@@ -65,6 +65,7 @@ serve(async (req) => {
     const role = String(body.role ?? "").trim() as RoleKey;
     const displayName = String(body.displayName ?? "").trim() || null;
     const phoneE164 = normalizePhone(body.phoneE164);
+    const redirectTo = typeof body.redirectTo === "string" ? body.redirectTo.trim() : "";
 
     if (!tenantId || !email || !role) {
       return new Response(JSON.stringify({ ok: false, error: "Missing tenantId/email/role" }), {
@@ -98,11 +99,101 @@ serve(async (req) => {
       });
     }
 
+    // Primary path: send the invite email.
     const { data: invited, error: inviteErr } = await supabase.auth.admin.inviteUserByEmail(email);
+
+    // Fallback path: if email sending is failing (common when SMTP isn't configured),
+    // generate an invite link and return it so the admin can share manually.
     if (inviteErr || !invited?.user) {
       console.error(`[${fn}] inviteUserByEmail failed`, { inviteErr });
-      return new Response(JSON.stringify({ ok: false, error: inviteErr?.message ?? "Invite failed" }), {
-        status: 400,
+
+      const shouldFallbackToLink = Boolean(inviteErr?.message?.toLowerCase().includes("error sending invite email"));
+
+      if (!shouldFallbackToLink) {
+        return new Response(
+          JSON.stringify({ ok: false, error: inviteErr?.message ?? "Invite failed", code: (inviteErr as any)?.code ?? null }),
+          {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          }
+        );
+      }
+
+      console.warn(`[${fn}] falling back to admin.generateLink(type=invite)`, {
+        email,
+        redirectTo: redirectTo || null,
+      });
+
+      const { data: linkData, error: linkErr } = await supabase.auth.admin.generateLink({
+        type: "invite",
+        email,
+        options: redirectTo ? { redirectTo } : undefined,
+      } as any);
+
+      if (linkErr || !linkData?.user || !(linkData as any)?.properties?.action_link) {
+        console.error(`[${fn}] generateLink failed`, { linkErr });
+        return new Response(
+          JSON.stringify({
+            ok: false,
+            error: linkErr?.message ?? "Invite failed (SMTP + link generation)",
+            code: (linkErr as any)?.code ?? null,
+            hint:
+              "Parece que o SMTP do Supabase não está configurado. Configure um provedor SMTP (Auth → Email) ou use o link manual.",
+          }),
+          {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          }
+        );
+      }
+
+      const userId = linkData.user.id;
+      const inviteLink = (linkData as any).properties.action_link as string;
+
+      const { error: profErr } = await supabase
+        .from("users_profile")
+        .upsert(
+          {
+            user_id: userId,
+            tenant_id: tenantId,
+            role,
+            display_name: displayName,
+            phone_e164: phoneE164,
+            email,
+            deleted_at: null,
+          } as any,
+          { onConflict: "user_id,tenant_id" }
+        );
+
+      if (profErr) {
+        console.error(`[${fn}] users_profile upsert failed`, { profErr });
+        return new Response(JSON.stringify({ ok: false, error: profErr.message }), {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      // Back-compat: keep vendors/leaders tables in sync when role is vendor/leader.
+      if (phoneE164 && (role === "vendor" || role === "leader")) {
+        const table = role === "vendor" ? "vendors" : "leaders";
+        const payload = {
+          tenant_id: tenantId,
+          phone_e164: phoneE164,
+          display_name: displayName,
+          active: true,
+          deleted_at: null,
+        };
+
+        const { error: upErr } = await supabase.from(table).upsert(payload as any, { onConflict: "tenant_id,phone_e164" });
+
+        if (upErr) {
+          console.warn(`[${fn}] ${table} upsert failed (ignored)`, { upErr });
+        }
+      }
+
+      console.log(`[${fn}] invited user (manual link)`, { tenantId, userId, role, email });
+
+      return new Response(JSON.stringify({ ok: true, userId, sentEmail: false, inviteLink }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
@@ -152,7 +243,7 @@ serve(async (req) => {
 
     console.log(`[${fn}] invited user`, { tenantId, userId, role, email });
 
-    return new Response(JSON.stringify({ ok: true, userId }), {
+    return new Response(JSON.stringify({ ok: true, userId, sentEmail: true }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (e) {
