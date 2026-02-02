@@ -2,7 +2,8 @@ import { ReactNode } from "react";
 import { Navigate, useLocation } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { useTenant } from "@/providers/TenantProvider";
-import { supabase } from "@/lib/supabase";
+import { AccessRedirect } from "@/components/AccessRedirect";
+import { checkRouteAccess, findFirstAllowedRoute } from "@/lib/access";
 
 export function RequireRouteAccess({
   routeKey,
@@ -20,13 +21,20 @@ export function RequireRouteAccess({
     queryKey: ["route_access", activeTenantId, roleKey, routeKey],
     enabled: Boolean(!loading && activeTenantId && roleKey && routeKey && !isSuperAdmin),
     queryFn: async () => {
-      const { data, error } = await supabase.rpc("check_route_access", {
-        p_tenant_id: activeTenantId,
-        p_role_key: roleKey,
-        p_route_key: routeKey,
-      });
-      if (error) throw error;
-      return Boolean(data);
+      const allowed = await checkRouteAccess({ tenantId: activeTenantId!, roleKey, routeKey });
+      return allowed;
+    },
+    staleTime: 10_000,
+  });
+
+  const fallbackQ = useQuery({
+    queryKey: ["route_fallback", activeTenantId, roleKey, routeKey],
+    enabled: Boolean(
+      !loading && !isSuperAdmin && activeTenantId && roleKey && routeKey && accessQ.data === false
+    ),
+    queryFn: async () => {
+      const next = await findFirstAllowedRoute({ tenantId: activeTenantId!, roleKey, excludeRouteKey: routeKey });
+      return next;
     },
     staleTime: 10_000,
   });
@@ -48,11 +56,70 @@ export function RequireRouteAccess({
   }
 
   if (accessQ.isError) {
-    // Fallback seguro: em caso de erro, bloqueia.
-    return <Navigate to="/app" replace />;
+    return (
+      <AccessRedirect
+        title="Permissões indisponíveis"
+        description="Não consegui validar suas permissões agora (RLS/consulta)."
+        to="/tenants"
+        toLabel="Voltar para tenants"
+        details={[
+          { label: "tenant", value: activeTenantId },
+          { label: "role", value: String(roleKey || "—") },
+          { label: "rota", value: routeKey },
+        ]}
+      />
+    );
   }
 
   if (accessQ.data) return <>{children}</>;
 
-  return <Navigate to="/app" replace />;
+  if (fallbackQ.isLoading) {
+    return (
+      <AccessRedirect
+        title="Acesso negado"
+        description="Seu cargo não tem permissão para esta área. Procurando um destino permitido…"
+        to="/tenants"
+        toLabel="Ir para tenants"
+        details={[
+          { label: "tenant", value: activeTenantId },
+          { label: "role", value: String(roleKey || "—") },
+          { label: "rota", value: routeKey },
+        ]}
+        autoMs={1400}
+      />
+    );
+  }
+
+  const next = fallbackQ.data;
+  if (!next) {
+    return (
+      <AccessRedirect
+        title="Sem rotas liberadas"
+        description="Seu usuário está vinculado ao tenant, mas não há nenhuma rota liberada para este cargo. Peça ao admin para ajustar a matriz de acesso."
+        to="/tenants"
+        toLabel="Trocar tenant"
+        details={[
+          { label: "tenant", value: activeTenantId },
+          { label: "role", value: String(roleKey || "—") },
+          { label: "rota solicitada", value: routeKey },
+        ]}
+        autoMs={1800}
+      />
+    );
+  }
+
+  return (
+    <AccessRedirect
+      title="Acesso negado"
+      description="Seu cargo não tem permissão para esta área. Vou te levar para uma página liberada."
+      to={next.path}
+      toLabel={`Ir para ${next.label}`}
+      details={[
+        { label: "tenant", value: activeTenantId },
+        { label: "role", value: String(roleKey || "—") },
+        { label: "rota solicitada", value: routeKey },
+        { label: "destino", value: `${next.key} → ${next.path}` },
+      ]}
+    />
+  );
 }
