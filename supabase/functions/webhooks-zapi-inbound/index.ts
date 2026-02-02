@@ -123,6 +123,41 @@ function normalizePresenceCommand(
   return null;
 }
 
+function detectCallEvent(payload: any, rawTypeLower: string) {
+  // Providers vary; keep detection intentionally broad but safe.
+  if (rawTypeLower.includes("call")) return true;
+  if (String(payload?.event ?? "").toLowerCase().includes("call")) return true;
+  if (String(payload?.hookType ?? "").toLowerCase().includes("call")) return true;
+  if (payload?.call || payload?.data?.call) return true;
+  if (payload?.callId || payload?.data?.callId) return true;
+  return false;
+}
+
+function extractCallPeerPhones(payload: any): { from: string | null; to: string | null; status: string | null } {
+  // Best-effort across common schemas.
+  const call = payload?.call ?? payload?.data?.call ?? null;
+
+  const fromRaw = pickFirst(
+    call?.from,
+    call?.caller,
+    call?.callerPhone,
+    payload?.caller,
+    payload?.callerPhone,
+    payload?.data?.caller,
+    payload?.data?.callerPhone
+  );
+
+  const toRaw = pickFirst(call?.to, call?.callee, call?.calleePhone, payload?.callee, payload?.data?.callee);
+
+  const statusRaw = pickFirst(call?.status, call?.type, payload?.callStatus, payload?.data?.callStatus, payload?.event);
+
+  return {
+    from: normalizePhoneE164Like(fromRaw),
+    to: normalizePhoneE164Like(toRaw),
+    status: statusRaw ? String(statusRaw) : null,
+  };
+}
+
 function normalizeInbound(payload: any): {
   zapiInstanceId: string | null;
   type: InboundType;
@@ -132,6 +167,7 @@ function normalizeInbound(payload: any): {
   mediaUrl: string | null;
   location: { lat: number; lng: number } | null;
   externalMessageId: string | null;
+  meta: { isCallEvent: boolean; callStatus: string | null };
   raw: any;
 } {
   const zapiInstanceId = pickFirst<string>(payload?.instanceId, payload?.instance_id, payload?.instance);
@@ -142,9 +178,14 @@ function normalizeInbound(payload: any): {
       payload?.messageType,
       payload?.data?.type,
       payload?.data?.messageType,
-      payload?.message?.type
+      payload?.message?.type,
+      payload?.event,
+      payload?.hookType
     ) ?? "text"
   ).toLowerCase();
+
+  const callInfo = extractCallPeerPhones(payload);
+  const isCallEvent = detectCallEvent(payload, rawType);
 
   const type: InboundType =
     rawType.includes("image") || rawType.includes("photo")
@@ -156,7 +197,9 @@ function normalizeInbound(payload: any): {
           : "text";
 
   // Z-API payloads vary; best-effort: accept chatId (ex: 551199...@c.us) too.
+  // For call events, some providers store caller/callee in different fields.
   const fromRaw = pickFirst(
+    callInfo.from,
     payload?.from,
     payload?.data?.from,
     payload?.sender?.phone,
@@ -167,7 +210,13 @@ function normalizeInbound(payload: any): {
     payload?.senderId,
     payload?.data?.senderId
   );
-  const toRaw = pickFirst(payload?.to, payload?.data?.to, payload?.toPhone, payload?.data?.toPhone);
+  const toRaw = pickFirst(
+    callInfo.to,
+    payload?.to,
+    payload?.data?.to,
+    payload?.toPhone,
+    payload?.data?.toPhone
+  );
 
   const from = normalizePhoneE164Like(fromRaw);
   const to = normalizePhoneE164Like(toRaw);
@@ -219,15 +268,21 @@ function normalizeInbound(payload: any): {
       payload?.data?.id
     ) ?? null;
 
+  // If it's a call event but the sender didn't provide a usable text, create a readable text.
+  const synthesizedText = isCallEvent
+    ? `📞 Evento de ligação${callInfo.status ? ` (${callInfo.status})` : ""}`
+    : null;
+
   return {
     zapiInstanceId,
     type,
     from,
     to,
-    text: text ?? null,
+    text: (text ?? null) || synthesizedText,
     mediaUrl: mediaUrl ?? null,
     location,
     externalMessageId,
+    meta: { isCallEvent, callStatus: callInfo.status },
     raw: payload,
   };
 }
@@ -486,6 +541,8 @@ serve(async (req) => {
             journey_id: args.journey_id ?? null,
             case_id: args.case_id ?? null,
             external_message_id: normalized.externalMessageId,
+            call_event: normalized.meta.isCallEvent,
+            call_status: normalized.meta.callStatus,
             ...((args.meta ?? {}) as any),
           },
           received_at: new Date().toISOString(),
@@ -511,6 +568,37 @@ serve(async (req) => {
       return new Response("Unknown instance", { status: 404, headers: corsHeaders });
     }
 
+    // If this is a call event, we want to ensure we attach it to the "other" phone (caller/callee),
+    // not to the instance phone.
+    const instancePhoneNorm = normalizePhoneE164Like(instance.phone_number ?? null);
+    const callCounterpartPhone =
+      normalized.meta.isCallEvent && instancePhoneNorm
+        ? (normalized.from && normalized.from === instancePhoneNorm
+            ? normalized.to
+            : normalized.to && normalized.to === instancePhoneNorm
+              ? normalized.from
+              : normalized.from) // default
+        : null;
+
+    // For call events, treat the peer (caller/callee) as the effective sender for matching/case linking.
+    const inboundFromPhone =
+      normalized.meta.isCallEvent && callCounterpartPhone ? callCounterpartPhone : normalized.from;
+    const inboundToPhone =
+      normalized.meta.isCallEvent && inboundFromPhone && instancePhoneNorm ? instancePhoneNorm : normalized.to;
+
+    if (normalized.meta.isCallEvent) {
+      console.log(`[${fn}] call_event_detected`, {
+        tenant_id: instance.tenant_id,
+        instance_phone: instancePhoneNorm,
+        from: normalized.from,
+        to: normalized.to,
+        counterpart: callCounterpartPhone,
+        effective_from: inboundFromPhone,
+        effective_to: inboundToPhone,
+        raw_type: payload?.type ?? payload?.messageType ?? payload?.event ?? payload?.hookType,
+      });
+    }
+
     const inferred = inferDirection({
       payload,
       normalized: { from: normalized.from, to: normalized.to },
@@ -528,7 +616,13 @@ serve(async (req) => {
         (normalizePhoneE164Like(instance.phone_number ?? null) &&
           normalized.from === normalizePhoneE164Like(instance.phone_number ?? null)));
 
-    const direction: WebhookDirection = forced && strongOutbound ? "outbound" : forced ?? inferred;
+    // For call events, if we could identify a counterpart phone, treat them as inbound by default.
+    const direction: WebhookDirection =
+      normalized.meta.isCallEvent && callCounterpartPhone
+        ? (forced === "outbound" ? "outbound" : "inbound")
+        : forced && strongOutbound
+          ? "outbound"
+          : forced ?? inferred;
 
     if (!providedSecret || providedSecret !== instance.webhook_secret) {
       console.warn(`[${fn}] Invalid webhook secret`, { hasProvided: Boolean(providedSecret) });
@@ -1023,7 +1117,7 @@ serve(async (req) => {
       journey_id: journey.id,
       journey_key: journey.key,
       wa_type: normalized.type,
-      from: normalized.from,
+      from: inboundFromPhone,
     });
 
     // Read tenant+jornada config_json (panel-configurable)
@@ -1075,30 +1169,30 @@ serve(async (req) => {
     // 2) payload sender name
     // 3) phone
     let waContactName: string | null = null;
-    if (normalized.from) {
+    if (inboundFromPhone) {
       const { data: waContact } = await supabase
         .from("wa_contacts")
         .select("name")
         .eq("tenant_id", instance.tenant_id)
-        .eq("phone_e164", normalized.from)
+        .eq("phone_e164", inboundFromPhone)
         .is("deleted_at", null)
         .maybeSingle();
       waContactName = (waContact as any)?.name ? String((waContact as any).name).trim() : null;
     }
 
-    const payloadLabel = inferContactLabel(payload, normalized.from);
+    const payloadLabel = inferContactLabel(payload, inboundFromPhone);
     const contactLabel = (waContactName && waContactName.trim()) ? waContactName : payloadLabel;
 
     // Upsert WA contact (best-effort)
-    if (normalized.from) {
+    if (inboundFromPhone) {
       const incomingName = typeof payloadLabel === "string" ? payloadLabel.trim() : "";
-      const nextName = incomingName && incomingName !== normalized.from ? incomingName : waContactName;
+      const nextName = incomingName && incomingName !== inboundFromPhone ? incomingName : waContactName;
       await supabase
         .from("wa_contacts")
         .upsert(
           {
             tenant_id: instance.tenant_id,
-            phone_e164: normalized.from,
+            phone_e164: inboundFromPhone,
             name: nextName ?? null,
             role_hint: cfgSenderIsVendor ? "vendor" : "customer",
             meta_json: {
@@ -1114,12 +1208,12 @@ serve(async (req) => {
 
     // Vendor identification (by WhatsApp number) — only when configured.
     let vendorId: string | null = null;
-    if (cfgSenderIsVendor && normalized.from) {
+    if (cfgSenderIsVendor && inboundFromPhone) {
       const { data: vendor } = await supabase
         .from("vendors")
         .select("id")
         .eq("tenant_id", instance.tenant_id)
-        .eq("phone_e164", normalized.from)
+        .eq("phone_e164", inboundFromPhone)
         .maybeSingle();
       if (vendor?.id) vendorId = vendor.id;
       if (!vendorId && cfgAutoCreateVendor) {
@@ -1127,7 +1221,7 @@ serve(async (req) => {
           .from("vendors")
           .insert({
             tenant_id: instance.tenant_id,
-            phone_e164: normalized.from,
+            phone_e164: inboundFromPhone,
             display_name: contactLabel,
             active: true,
           })
@@ -1157,14 +1251,14 @@ serve(async (req) => {
     // Sempre tenta garantir customer (mesmo se a jornada roteada não for CRM),
     // para conseguir linkar mensagens por customer_id e evitar duplicação.
     let customerId: string | null = null;
-    const phoneVariants = normalized.from ? Array.from(buildBrPhoneVariantsE164(normalized.from)) : [];
+    const phoneVariants = inboundFromPhone ? Array.from(buildBrPhoneVariantsE164(inboundFromPhone)) : [];
 
-    if (!cfgSenderIsVendor && normalized.from) {
+    if (!cfgSenderIsVendor && inboundFromPhone) {
       const { data: existingCustomer, error: custErr } = await supabase
         .from("customer_accounts")
         .select("id,phone_e164")
         .eq("tenant_id", instance.tenant_id)
-        .in("phone_e164", phoneVariants.length ? phoneVariants : [normalized.from])
+        .in("phone_e164", phoneVariants.length ? phoneVariants : [inboundFromPhone])
         .is("deleted_at", null)
         .order("updated_at", { ascending: false })
         .limit(1)
@@ -1178,8 +1272,8 @@ serve(async (req) => {
           .from("customer_accounts")
           .insert({
             tenant_id: instance.tenant_id,
-            phone_e164: normalized.from,
-            name: contactLabel && contactLabel !== normalized.from ? contactLabel : null,
+            phone_e164: inboundFromPhone,
+            name: contactLabel && contactLabel !== inboundFromPhone ? contactLabel : null,
             meta_json: { source: "whatsapp", correlation_id: correlationId },
           })
           .select("id")
@@ -1285,7 +1379,7 @@ serve(async (req) => {
     };
 
     const findExistingOpenCase = async () => {
-      if (!normalized.from) return null;
+      if (!inboundFromPhone) return null;
 
       // 1) Prefer CRM cases by customer_id
       if (customerId && crmJourneyIds.length) {
@@ -1319,7 +1413,7 @@ serve(async (req) => {
       // 3) Fallback by meta_json stored phones (accept variants)
       const keys = ["customer_phone", "counterpart_phone", "phone", "whatsapp"];
       for (const k of keys) {
-        for (const p of phoneVariants.length ? phoneVariants : [normalized.from]) {
+        for (const p of phoneVariants.length ? phoneVariants : [inboundFromPhone]) {
           const { data } = await supabase
             .from("cases")
             .select("id,journey_id,is_chat,deleted_at,updated_at")
@@ -1395,7 +1489,7 @@ serve(async (req) => {
         return { caseId: null as any, created: false as const, skippedReason: "missing_vendor_required" };
       }
 
-      if (!normalized.from) {
+      if (!inboundFromPhone) {
         return { caseId: null as any, created: false as const, skippedReason: "missing_from_phone" };
       }
 
@@ -1406,7 +1500,7 @@ serve(async (req) => {
         mode === "image" ? cfgInitialStateOnImage : mode === "location" ? cfgInitialStateOnLocation : cfgInitialStateOnText;
       const initial = pickInitialState(targetJourney, initialHint);
 
-      const title = contactLabel ?? normalized.from;
+      const title = contactLabel ?? inboundFromPhone;
 
       const { data: createdCase, error: cErr } = await supabase
         .from("cases")
@@ -1426,12 +1520,12 @@ serve(async (req) => {
             journey_key: targetJourney.key,
             zapi_instance: effectiveInstanceId,
             opened_by: mode,
-            counterpart_phone: normalized.from,
+            counterpart_phone: inboundFromPhone,
             contact_label: contactLabel,
             sender_is_vendor: cfgSenderIsVendor,
             ...(cfgSenderIsVendor
-              ? { vendor_phone: normalized.from, vendor_required: cfgRequireVendor }
-              : { customer_phone: normalized.from }),
+              ? { vendor_phone: inboundFromPhone, vendor_required: cfgRequireVendor }
+              : { customer_phone: inboundFromPhone }),
           },
         })
         .select("id")
@@ -1459,7 +1553,7 @@ serve(async (req) => {
           kind: "case_opened",
           correlation_id: correlationId,
           case_id: createdCase.id,
-          from: normalized.from,
+          from: inboundFromPhone,
           instance: effectiveInstanceId,
           journey_id: targetJourney.id,
           journey_key: targetJourney.key,
@@ -1498,8 +1592,8 @@ serve(async (req) => {
         tenant_id: instance.tenant_id,
         instance_id: instance.id,
         direction: "inbound",
-        from_phone: normalized.from,
-        to_phone: normalized.to,
+        from_phone: inboundFromPhone,
+        to_phone: inboundToPhone,
         type: normalized.type,
         body_text: normalized.text,
         media_url: normalized.mediaUrl,
