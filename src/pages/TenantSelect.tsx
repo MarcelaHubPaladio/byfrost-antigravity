@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
 
 export default function TenantSelect() {
   const nav = useNavigate();
-  const { tenants, activeTenantId, setActiveTenantId, loading, isSuperAdmin } = useTenant();
+  const { tenants, activeTenantId, setActiveTenantId, loading, isSuperAdmin, membershipHint } = useTenant();
 
   useEffect(() => {
     // Only auto-skip when there is nothing to choose.
@@ -74,8 +74,22 @@ export default function TenantSelect() {
 
           {!loading && tenants.length === 0 && (
             <div className="mt-6 rounded-3xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-              Seu usuário ainda não tem vínculo com nenhum tenant (users_profile). Peça ao super-admin para
-              vincular.
+              {membershipHint.type === "soft_deleted" ? (
+                <>
+                  Seu vínculo com o tenant está <span className="font-semibold">desativado</span> (users_profile.deleted_at).
+                  Peça ao super-admin para <span className="font-semibold">restaurar</span> seu acesso.
+                </>
+              ) : membershipHint.type === "error" ? (
+                <>
+                  Não foi possível carregar seu vínculo com tenants (RLS/consulta):{" "}
+                  <span className="font-semibold">{membershipHint.message}</span>
+                </>
+              ) : (
+                <>
+                  Seu usuário ainda não tem vínculo com nenhum tenant (users_profile). Peça ao super-admin para
+                  vincular.
+                </>
+              )}
             </div>
           )}
         </div>

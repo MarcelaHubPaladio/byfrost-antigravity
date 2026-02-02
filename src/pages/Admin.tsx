@@ -304,7 +304,6 @@ export default function Admin() {
         .from("users_profile")
         .select("user_id,tenant_id,role,display_name,phone_e164,email,created_at,deleted_at")
         .eq("tenant_id", activeTenantId!)
-        .is("deleted_at", null)
         .order("created_at", { ascending: false })
         .limit(500);
       if (error) throw error;
@@ -562,6 +561,26 @@ export default function Admin() {
       await qc.invalidateQueries({ queryKey: ["admin_instances", activeTenantId] });
     } catch (e: any) {
       showError(`Falha ao excluir usuário: ${e?.message ?? "erro"}`);
+    } finally {
+      setDeletingUserId(null);
+    }
+  };
+
+  const restoreUserInTenant = async (u: TenantUserRow) => {
+    if (!activeTenantId) return;
+    setDeletingUserId(u.user_id);
+    try {
+      await ensureFreshTokenForRls();
+      const { error } = await supabase
+        .from("users_profile")
+        .update({ deleted_at: null })
+        .eq("tenant_id", activeTenantId)
+        .eq("user_id", u.user_id);
+      if (error) throw error;
+      showSuccess("Acesso restaurado.");
+      await qc.invalidateQueries({ queryKey: ["admin_tenant_users", activeTenantId] });
+    } catch (e: any) {
+      showError(`Falha ao restaurar usuário: ${e?.message ?? "erro"}`);
     } finally {
       setDeletingUserId(null);
     }
@@ -1263,118 +1282,144 @@ export default function Admin() {
                       </div>
 
                       <div className="mt-3 grid gap-2">
-                        {(usersQ.data ?? []).map((u) => (
-                          <div key={u.user_id} className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
-                            <div className="grid gap-2 lg:grid-cols-[1.1fr_1fr_0.8fr_0.6fr_auto]">
-                              <div>
-                                <Label className="text-[11px]">Nome</Label>
-                                <Input
-                                  defaultValue={u.display_name ?? ""}
-                                  className="mt-1 h-10 rounded-2xl bg-white"
-                                  onBlur={(e) => {
-                                    const v = e.target.value.trim() || null;
-                                    if (v === (u.display_name ?? null)) return;
-                                    updateUserProfile(u, { display_name: v } as any);
-                                  }}
-                                />
-                              </div>
-                              <div>
-                                <Label className="text-[11px]">Email</Label>
-                                <Input
-                                  defaultValue={u.email ?? ""}
-                                  className="mt-1 h-10 rounded-2xl bg-white"
-                                  onBlur={(e) => {
-                                    const v = e.target.value.trim().toLowerCase() || null;
-                                    if (v === (u.email ?? null)) return;
-                                    updateUserProfile(u, { email: v } as any);
-                                  }}
-                                />
-                              </div>
-                              <div>
-                                <Label className="text-[11px]">WhatsApp</Label>
-                                <Input
-                                  defaultValue={u.phone_e164 ?? ""}
-                                  className="mt-1 h-10 rounded-2xl bg-white"
-                                  onBlur={(e) => {
-                                    const v = normalizePhoneLoose(e.target.value);
-                                    const next = v || null;
-                                    if (next === (u.phone_e164 ?? null)) return;
-                                    updateUserProfile(u, { phone_e164: next } as any);
-                                  }}
-                                />
-                              </div>
-                              <div>
-                                <Label className="text-[11px]">Cargo</Label>
-                                <Select
-                                  value={u.role}
-                                  onValueChange={(v) => {
-                                    if (v === u.role) return;
-                                    updateUserProfile(u, { role: v as any } as any);
-                                  }}
-                                >
-                                  <SelectTrigger className="mt-1 h-10 rounded-2xl bg-white">
-                                    <SelectValue />
-                                  </SelectTrigger>
-                                  <SelectContent className="rounded-2xl">
-                                    {(tenantRolesQ.data ?? ([
-                                      { key: "admin", name: "Admin" },
-                                      { key: "manager", name: "Gerente" },
-                                      { key: "supervisor", name: "Supervisor" },
-                                      { key: "leader", name: "Líder" },
-                                      { key: "vendor", name: "Vendedor" },
-                                    ] as any)).map((r: any) => (
-                                      <SelectItem key={r.key} value={r.key} className="rounded-xl">
-                                        {r.name}
-                                      </SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
-                              </div>
-                              <div className="flex items-end justify-end gap-2">
-                                <div className="rounded-2xl border border-slate-200 bg-white px-3 py-2 text-[11px] text-slate-600">
-                                  id: <span className="font-medium text-slate-900">{u.user_id.slice(0, 8)}…</span>
+                        {(usersQ.data ?? []).map((u) => {
+                          const isDeleted = Boolean(u.deleted_at);
+                          return (
+                            <div
+                              key={u.user_id}
+                              className={cn(
+                                "rounded-2xl border p-3",
+                                isDeleted ? "border-rose-200 bg-rose-50" : "border-slate-200 bg-slate-50"
+                              )}
+                            >
+                              <div className="grid gap-2 lg:grid-cols-[1.1fr_1fr_0.8fr_0.6fr_auto]">
+                                <div>
+                                  <Label className="text-[11px]">Nome</Label>
+                                  <Input
+                                    defaultValue={u.display_name ?? ""}
+                                    className={cn("mt-1 h-10 rounded-2xl", isDeleted ? "bg-white" : "bg-white")}
+                                    onBlur={(e) => {
+                                      const v = e.target.value.trim() || null;
+                                      if (v === (u.display_name ?? null)) return;
+                                      updateUserProfile(u, { display_name: v } as any);
+                                    }}
+                                  />
                                 </div>
-
-                                <AlertDialog>
-                                  <AlertDialogTrigger asChild>
+                                <div>
+                                  <Label className="text-[11px]">Email</Label>
+                                  <Input
+                                    defaultValue={u.email ?? ""}
+                                    className={cn("mt-1 h-10 rounded-2xl", isDeleted ? "bg-white" : "bg-white")}
+                                    onBlur={(e) => {
+                                      const v = e.target.value.trim().toLowerCase() || null;
+                                      if (v === (u.email ?? null)) return;
+                                      updateUserProfile(u, { email: v } as any);
+                                    }}
+                                  />
+                                </div>
+                                <div>
+                                  <Label className="text-[11px]">WhatsApp</Label>
+                                  <Input
+                                    defaultValue={u.phone_e164 ?? ""}
+                                    className={cn("mt-1 h-10 rounded-2xl", isDeleted ? "bg-white" : "bg-white")}
+                                    onBlur={(e) => {
+                                      const v = normalizePhoneLoose(e.target.value);
+                                      const next = v || null;
+                                      if (next === (u.phone_e164 ?? null)) return;
+                                      updateUserProfile(u, { phone_e164: next } as any);
+                                    }}
+                                  />
+                                </div>
+                                <div>
+                                  <Label className="text-[11px]">Cargo</Label>
+                                  <Select
+                                    value={u.role}
+                                    onValueChange={(v) => {
+                                      if (v === u.role) return;
+                                      updateUserProfile(u, { role: v as any } as any);
+                                    }}
+                                  >
+                                    <SelectTrigger className={cn("mt-1 h-10 rounded-2xl", isDeleted ? "bg-white" : "bg-white")}>
+                                      <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent className="rounded-2xl">
+                                      {(tenantRolesQ.data ?? ([
+                                        { key: "admin", name: "Admin" },
+                                        { key: "manager", name: "Gerente" },
+                                        { key: "supervisor", name: "Supervisor" },
+                                        { key: "leader", name: "Líder" },
+                                        { key: "vendor", name: "Vendedor" },
+                                      ] as any)).map((r: any) => (
+                                        <SelectItem key={r.key} value={r.key} className="rounded-xl">
+                                          {r.name}
+                                        </SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                </div>
+                                <div className="flex items-end justify-end gap-2">
+                                  {isDeleted ? (
                                     <Button
                                       variant="secondary"
-                                      className="h-10 rounded-2xl border border-rose-200 bg-rose-50 px-3 text-rose-800 shadow-sm hover:bg-rose-100 hover:text-rose-900"
+                                      className="h-10 rounded-2xl border border-emerald-200 bg-emerald-50 px-3 text-emerald-900 hover:bg-emerald-100"
                                       disabled={deletingUserId === u.user_id}
-                                      title="Excluir usuário do tenant"
+                                      onClick={() => restoreUserInTenant(u)}
+                                      title="Restaurar acesso"
                                     >
-                                      <Trash2 className="h-4 w-4" />
+                                      Restaurar
                                     </Button>
-                                  </AlertDialogTrigger>
-                                  <AlertDialogContent className="rounded-[22px]">
-                                    <AlertDialogHeader>
-                                      <AlertDialogTitle>Excluir usuário deste tenant?</AlertDialogTitle>
-                                      <AlertDialogDescription>
-                                        Isso remove o acesso do usuário ao tenant (soft delete). Não apaga a conta do Supabase Auth.
-                                      </AlertDialogDescription>
-                                    </AlertDialogHeader>
-                                    <AlertDialogFooter>
-                                      <AlertDialogCancel className="rounded-2xl">Cancelar</AlertDialogCancel>
-                                      <AlertDialogAction
-                                        className="rounded-2xl bg-rose-600 text-white hover:bg-rose-700"
-                                        onClick={() => removeUserFromTenant(u)}
-                                      >
-                                        Excluir
-                                      </AlertDialogAction>
-                                    </AlertDialogFooter>
-                                  </AlertDialogContent>
-                                </AlertDialog>
+                                  ) : (
+                                    <AlertDialog>
+                                      <AlertDialogTrigger asChild>
+                                        <Button
+                                          variant="secondary"
+                                          className="h-10 rounded-2xl border border-rose-200 bg-rose-50 px-3 text-rose-800 shadow-sm hover:bg-rose-100 hover:text-rose-900"
+                                          disabled={deletingUserId === u.user_id}
+                                          title="Excluir usuário do tenant"
+                                        >
+                                          <Trash2 className="h-4 w-4" />
+                                        </Button>
+                                      </AlertDialogTrigger>
+                                      <AlertDialogContent className="rounded-[22px]">
+                                        <AlertDialogHeader>
+                                          <AlertDialogTitle>Excluir usuário deste tenant?</AlertDialogTitle>
+                                          <AlertDialogDescription>
+                                            Isso remove o acesso do usuário ao tenant (soft delete). Não apaga a conta do Supabase Auth.
+                                          </AlertDialogDescription>
+                                        </AlertDialogHeader>
+                                        <AlertDialogFooter>
+                                          <AlertDialogCancel className="rounded-2xl">Cancelar</AlertDialogCancel>
+                                          <AlertDialogAction
+                                            className="rounded-2xl bg-rose-600 text-white hover:bg-rose-700"
+                                            onClick={() => removeUserFromTenant(u)}
+                                          >
+                                            Excluir
+                                          </AlertDialogAction>
+                                        </AlertDialogFooter>
+                                      </AlertDialogContent>
+                                    </AlertDialog>
+                                  )}
+
+                                  <div className="rounded-2xl border border-slate-200 bg-white px-3 py-2 text-[11px] text-slate-600">
+                                    id: <span className="font-medium text-slate-900">{u.user_id.slice(0, 8)}…</span>
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
+                                <Badge className="rounded-full border-0 bg-slate-100 text-slate-700 hover:bg-slate-100">
+                                  {roleLabel(u.role)}
+                                </Badge>
+                                {isDeleted ? (
+                                  <Badge className="rounded-full border-0 bg-rose-100 text-rose-900 hover:bg-rose-100">
+                                    removido
+                                  </Badge>
+                                ) : null}
+                                <span>criado em {fmtTs(u.created_at)}</span>
                               </div>
                             </div>
-
-                            <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
-                              <Badge className="rounded-full border-0 bg-slate-100 text-slate-700 hover:bg-slate-100">
-                                {roleLabel(u.role)}
-                              </Badge>
-                              <span>criado em {fmtTs(u.created_at)}</span>
-                            </div>
-                          </div>
-                        ))}
+                          );
+                        })}
 
                         {(usersQ.data ?? []).length === 0 && (
                           <div className="rounded-2xl border border-dashed border-slate-200 bg-white/60 p-4 text-xs text-slate-500">

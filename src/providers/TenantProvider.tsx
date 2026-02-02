@@ -12,6 +12,11 @@ type TenantInfo = {
   role: TenantRole;
 };
 
+type MembershipHint =
+  | { type: "none" }
+  | { type: "soft_deleted" }
+  | { type: "error"; message: string };
+
 type TenantState = {
   tenants: TenantInfo[];
   activeTenantId: string | null;
@@ -20,6 +25,7 @@ type TenantState = {
   setActiveTenantId: (id: string) => void;
   refresh: () => Promise<void>;
   isSuperAdmin: boolean;
+  membershipHint: MembershipHint;
 };
 
 const Ctx = createContext<TenantState | null>(null);
@@ -33,6 +39,7 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
     localStorage.getItem(LS_KEY)
   );
   const [loading, setLoading] = useState(true);
+  const [membershipHint, setMembershipHint] = useState<MembershipHint>({ type: "none" });
 
   // Keep this aligned with database RLS helpers (public.is_super_admin()).
   const isSuperAdmin = Boolean(
@@ -48,11 +55,13 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
     if (!user) {
       setTenants([]);
       setActiveTenantIdState(null);
+      setMembershipHint({ type: "none" });
       setLoading(false);
       return;
     }
 
     setLoading(true);
+    setMembershipHint({ type: "none" });
 
     // Super-admin can see *all* tenants (via RLS bypass claim).
     if (isSuperAdmin) {
@@ -66,6 +75,7 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
       if (error) {
         console.warn("Failed to load tenants (super-admin)", error);
         setTenants([]);
+        setMembershipHint({ type: "error", message: error.message });
         setLoading(false);
         return;
       }
@@ -103,6 +113,7 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
     if (error) {
       console.warn("Failed to load tenants", error);
       setTenants([]);
+      setMembershipHint({ type: "error", message: error.message });
       setLoading(false);
       return;
     }
@@ -118,6 +129,23 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
       .filter((t: any) => Boolean(t.id));
 
     setTenants(mapped);
+
+    if (mapped.length === 0) {
+      // Distinguish "no membership" vs "membership exists but is soft-deleted".
+      const { data: anyRows, error: anyErr } = await supabase
+        .from("users_profile")
+        .select("tenant_id, deleted_at")
+        .eq("user_id", user.id)
+        .limit(1);
+
+      if (anyErr) {
+        setMembershipHint({ type: "error", message: anyErr.message });
+      } else {
+        const hasAny = (anyRows ?? []).length > 0;
+        const softDeleted = Boolean((anyRows ?? [])[0]?.deleted_at);
+        setMembershipHint(hasAny && softDeleted ? { type: "soft_deleted" } : { type: "none" });
+      }
+    }
 
     if (mapped.length === 1) {
       setActiveTenantId(mapped[0].id);
@@ -143,8 +171,17 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
   );
 
   const value = useMemo<TenantState>(
-    () => ({ tenants, activeTenantId, activeTenant, loading, setActiveTenantId, refresh, isSuperAdmin }),
-    [tenants, activeTenantId, activeTenant, loading, isSuperAdmin]
+    () => ({
+      tenants,
+      activeTenantId,
+      activeTenant,
+      loading,
+      setActiveTenantId,
+      refresh,
+      isSuperAdmin,
+      membershipHint,
+    }),
+    [tenants, activeTenantId, activeTenant, loading, isSuperAdmin, membershipHint]
   );
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
