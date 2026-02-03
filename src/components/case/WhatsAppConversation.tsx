@@ -11,7 +11,7 @@ import { Paperclip, Send, Image as ImageIcon, Mic, Users, MessagesSquare, MapPin
 type WaMessageRow = {
   id: string;
   direction: "inbound" | "outbound";
-  type: "text" | "image" | "audio" | "location";
+  type: string;
   from_phone: string | null;
   to_phone: string | null;
   body_text: string | null;
@@ -152,6 +152,34 @@ function readCfg(obj: any, path: string) {
   return cur;
 }
 
+function normalizeWaType(type: string, payload: any, mediaUrl: string | null): "text" | "image" | "audio" | "location" {
+  const t = String(type ?? "").toLowerCase();
+  const mime = String(
+    pickFirstString(
+      payload?.mimeType,
+      payload?.mimetype,
+      payload?.data?.mimeType,
+      payload?.data?.mimetype,
+      payload?.audio?.mimetype,
+      payload?.data?.audio?.mimetype,
+      payload?.document?.mimetype,
+      payload?.data?.document?.mimetype
+    ) ?? ""
+  ).toLowerCase();
+
+  const isImageMime = mime.startsWith("image/") || mime.includes("jpeg") || mime.includes("png") || mime.includes("webp");
+  const isAudioMime = mime.startsWith("audio/") || mime.includes("ogg") || mime.includes("opus") || mime.includes("mpeg");
+
+  if (t.includes("location")) return "location";
+  if (t.includes("image") || t.includes("photo") || isImageMime) return "image";
+  if (t.includes("audio") || t.includes("ptt") || t.includes("voice") || isAudioMime) return "audio";
+
+  // Some providers send audio as "document" but include a media URL.
+  if (mediaUrl && (t.includes("document") || t.includes("file")) && isAudioMime) return "audio";
+
+  return "text";
+}
+
 export function WhatsAppConversation({ caseId, className }: { caseId: string; className?: string }) {
   const qc = useQueryClient();
   const { activeTenantId } = useTenant();
@@ -159,6 +187,7 @@ export function WhatsAppConversation({ caseId, className }: { caseId: string; cl
   const [tab, setTab] = useState<"messages" | "participants">("messages");
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
+  const [transcribingById, setTranscribingById] = useState<Record<string, boolean>>({});
 
   const scrollerRef = useRef<HTMLDivElement | null>(null);
 
@@ -359,6 +388,45 @@ export function WhatsAppConversation({ caseId, className }: { caseId: string; cl
     }
   };
 
+  const transcribeAudio = async (msgId: string) => {
+    if (!activeTenantId) return;
+    if (transcribingById[msgId]) return;
+
+    setTranscribingById((p) => ({ ...p, [msgId]: true }));
+    try {
+      const { data: sess } = await supabase.auth.getSession();
+      const token = sess.session?.access_token;
+      if (!token) throw new Error("Sessão expirada. Faça login novamente.");
+
+      const url = "https://pryoirzeghatrgecwrci.supabase.co/functions/v1/wa-transcribe-audio";
+      const res = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ tenantId: activeTenantId, messageId: msgId }),
+      });
+
+      const json = await res.json().catch(() => null);
+      if (!res.ok || !json?.ok) {
+        const hint = json?.hint ? ` (${json.hint})` : "";
+        throw new Error(String(json?.error ?? `Falha ao transcrever (${res.status})`) + hint);
+      }
+
+      showSuccess("Áudio transcrito.");
+
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ["wa_messages_case", activeTenantId, caseId] }),
+        qc.invalidateQueries({ queryKey: ["timeline", activeTenantId, caseId] }),
+      ]);
+    } catch (e: any) {
+      showError(e?.message ?? "Falha ao transcrever áudio");
+    } finally {
+      setTranscribingById((p) => ({ ...p, [msgId]: false }));
+    }
+  };
+
   useEffect(() => {
     if (tab !== "messages") return;
     const el = scrollerRef.current;
@@ -464,10 +532,14 @@ export function WhatsAppConversation({ caseId, className }: { caseId: string; cl
                       ? true
                       : m.direction === "inbound";
 
-                const loc = m.type === "location" ? extractLocation(m.payload_json) : null;
+                const normalizedType = normalizeWaType(m.type, m.payload_json, m.media_url);
+
+                const loc = normalizedType === "location" ? extractLocation(m.payload_json) : null;
                 const mapsUrl = loc ? `https://www.google.com/maps?q=${loc.lat},${loc.lng}` : null;
 
-                const msgText = m.type === "text" ? getBestText(m) : "";
+                // For audio we reuse body_text as transcript (when available).
+                const transcript = normalizedType === "audio" ? getBestText(m) : "";
+                const msgText = normalizedType === "text" ? getBestText(m) : "";
 
                 const inboundLabel = senderIsVendor ? "Vendedor" : "Cliente";
 
@@ -494,7 +566,7 @@ export function WhatsAppConversation({ caseId, className }: { caseId: string; cl
                             : "bg-[hsl(var(--byfrost-accent))] text-white"
                         )}
                       >
-                        {m.type === "image" && m.media_url ? (
+                        {normalizedType === "image" && m.media_url ? (
                           <a href={m.media_url} target="_blank" rel="noreferrer" className="block">
                             <img
                               src={m.media_url}
@@ -505,16 +577,37 @@ export function WhatsAppConversation({ caseId, className }: { caseId: string; cl
                               )}
                             />
                           </a>
-                        ) : m.type === "audio" ? (
+                        ) : normalizedType === "audio" ? (
                           <div className="space-y-2">
                             <div
                               className={cn(
-                                "text-sm font-medium",
+                                "flex items-center justify-between gap-2 text-sm font-medium",
                                 effectiveInbound ? "text-slate-900" : "text-white"
                               )}
                             >
-                              Áudio
+                              <span>Áudio</span>
+                              <Button
+                                type="button"
+                                variant="secondary"
+                                size="sm"
+                                className={cn(
+                                  "h-8 rounded-2xl px-3",
+                                  effectiveInbound ? "" : "border-white/25 bg-white/10 text-white hover:bg-white/15"
+                                )}
+                                onClick={() => transcribeAudio(m.id)}
+                                disabled={Boolean(transcribingById[m.id]) || !m.media_url || Boolean(transcript?.trim())}
+                                title={
+                                  transcript?.trim()
+                                    ? "Este áudio já tem transcrição"
+                                    : !m.media_url
+                                      ? "Sem URL do áudio"
+                                      : "Transcrever áudio"
+                                }
+                              >
+                                {transcribingById[m.id] ? "Transcrevendo…" : transcript?.trim() ? "Transcrito" : "Transcrever"}
+                              </Button>
                             </div>
+
                             {m.media_url ? (
                               <audio controls src={m.media_url} className="w-full" />
                             ) : (
@@ -522,8 +615,19 @@ export function WhatsAppConversation({ caseId, className }: { caseId: string; cl
                                 (sem URL do áudio)
                               </div>
                             )}
+
+                            {transcript?.trim() ? (
+                              <div
+                                className={cn(
+                                  "rounded-2xl p-3 text-sm leading-relaxed",
+                                  effectiveInbound ? "bg-slate-50 text-slate-800" : "bg-white/10 text-white/95"
+                                )}
+                              >
+                                {transcript}
+                              </div>
+                            ) : null}
                           </div>
-                        ) : m.type === "location" ? (
+                        ) : normalizedType === "location" ? (
                           <div className="space-y-1">
                             <div
                               className={cn(

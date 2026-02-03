@@ -199,10 +199,26 @@ function normalizeInbound(payload: any): {
   const callInfo = extractCallPeerPhones(payload);
   const isCallEvent = detectCallEvent(payload, rawType);
 
+  const mime = String(
+    pickFirst(
+      payload?.mimeType,
+      payload?.mimetype,
+      payload?.data?.mimeType,
+      payload?.data?.mimetype,
+      payload?.audio?.mimetype,
+      payload?.data?.audio?.mimetype,
+      payload?.document?.mimetype,
+      payload?.data?.document?.mimetype
+    ) ?? ""
+  ).toLowerCase();
+
+  const isImageMime = mime.startsWith("image/") || mime.includes("jpeg") || mime.includes("png") || mime.includes("webp");
+  const isAudioMime = mime.startsWith("audio/") || mime.includes("ogg") || mime.includes("opus") || mime.includes("mpeg");
+
   const type: InboundType =
-    rawType.includes("image") || rawType.includes("photo")
+    rawType.includes("image") || rawType.includes("photo") || isImageMime
       ? "image"
-      : rawType.includes("audio") || rawType.includes("ptt")
+      : rawType.includes("audio") || rawType.includes("ptt") || isAudioMime
         ? "audio"
         : rawType.includes("location")
           ? "location"

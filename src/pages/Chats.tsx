@@ -39,6 +39,7 @@ type WaMsgLite = {
   direction: "inbound" | "outbound";
   type: string;
   body_text: string | null;
+  media_url?: string | null;
   from_phone: string | null;
   to_phone: string | null;
 };
@@ -81,11 +82,13 @@ function minutesAgo(iso: string) {
 
 function bestSnippet(m: WaMsgLite | null) {
   if (!m) return "";
-  if (m.type === "image") return "📷 Imagem";
-  if (m.type === "audio") return "🎤 Áudio";
-  if (m.type === "location") return "📍 Localização";
-  const t = String(m.body_text ?? "").trim();
-  return t || "(sem texto)";
+  const t = String(m.type ?? "").toLowerCase();
+  if (t.includes("image") || t.includes("photo")) return "📷 Imagem";
+  if (t.includes("audio") || t.includes("ptt") || t.includes("voice")) return "🎤 Áudio";
+  if (t.includes("location")) return "📍 Localização";
+  if (m.media_url) return "📎 Mídia";
+  const txt = String(m.body_text ?? "").trim();
+  return txt || "(sem texto)";
 }
 
 export default function Chats() {
@@ -226,7 +229,7 @@ export default function Chats() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("wa_messages")
-        .select("case_id,occurred_at,direction,type,body_text,from_phone,to_phone")
+        .select("case_id,occurred_at,direction,type,body_text,media_url,from_phone,to_phone")
         .eq("tenant_id", activeTenantId!)
         .in("case_id", caseIds)
         .order("occurred_at", { ascending: false })
