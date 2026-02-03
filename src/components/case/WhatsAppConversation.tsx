@@ -152,7 +152,7 @@ function readCfg(obj: any, path: string) {
   return cur;
 }
 
-function normalizeWaType(type: string, payload: any, mediaUrl: string | null): "text" | "image" | "audio" | "location" {
+function normalizeWaType(type: string, payload: any, mediaUrl: string | null): "text" | "image" | "audio" | "video" | "location" {
   const t = String(type ?? "").toLowerCase();
   const mime = String(
     pickFirstString(
@@ -164,6 +164,10 @@ function normalizeWaType(type: string, payload: any, mediaUrl: string | null): "
       payload?.audio?.mimetype,
       payload?.data?.audio?.mimeType,
       payload?.data?.audio?.mimetype,
+      payload?.video?.mimeType,
+      payload?.video?.mimetype,
+      payload?.data?.video?.mimeType,
+      payload?.data?.video?.mimetype,
       payload?.document?.mimeType,
       payload?.document?.mimetype,
       payload?.data?.document?.mimeType,
@@ -173,13 +177,12 @@ function normalizeWaType(type: string, payload: any, mediaUrl: string | null): "
 
   const isImageMime = mime.startsWith("image/") || mime.includes("jpeg") || mime.includes("png") || mime.includes("webp");
   const isAudioMime = mime.startsWith("audio/") || mime.includes("ogg") || mime.includes("opus") || mime.includes("mpeg");
+  const isVideoMime = mime.startsWith("video/") || mime.includes("mp4") || mime.includes("webm");
 
   if (t.includes("location")) return "location";
   if (t.includes("image") || t.includes("photo") || isImageMime) return "image";
+  if (t.includes("video") || isVideoMime || payload?.video?.videoUrl || payload?.data?.video?.videoUrl) return "video";
   if (t.includes("audio") || t.includes("ptt") || t.includes("voice") || isAudioMime) return "audio";
-
-  // Some providers send audio as "document" but include a media URL + mime.
-  if (mediaUrl && (t.includes("document") || t.includes("file")) && isAudioMime) return "audio";
 
   // Extra fallback: payload contains an audio object.
   if (payload?.audio?.audioUrl || payload?.data?.audio?.audioUrl) return "audio";
@@ -199,6 +202,8 @@ function pickBestMediaUrl(m: { media_url: string | null; payload_json: any }) {
       m.payload_json?.data?.url,
       m.payload_json?.audio?.audioUrl,
       m.payload_json?.data?.audio?.audioUrl,
+      m.payload_json?.video?.videoUrl,
+      m.payload_json?.data?.video?.videoUrl,
       m.payload_json?.image?.imageUrl,
       m.payload_json?.data?.image?.imageUrl
     ) ?? null
@@ -413,7 +418,7 @@ export function WhatsAppConversation({ caseId, className }: { caseId: string; cl
     }
   };
 
-  const transcribeAudio = async (msgId: string) => {
+  const analyzeMedia = async (msgId: string, mode: "ocr" | "transcribe") => {
     if (!activeTenantId) return;
     if (transcribingById[msgId]) return;
 
@@ -423,30 +428,30 @@ export function WhatsAppConversation({ caseId, className }: { caseId: string; cl
       const token = sess.session?.access_token;
       if (!token) throw new Error("Sessão expirada. Faça login novamente.");
 
-      const url = "https://pryoirzeghatrgecwrci.supabase.co/functions/v1/wa-transcribe-audio";
+      const url = "https://pryoirzeghatrgecwrci.supabase.co/functions/v1/wa-analyze-media";
       const res = await fetch(url, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ tenantId: activeTenantId, messageId: msgId }),
+        body: JSON.stringify({ tenantId: activeTenantId, messageId: msgId, mode }),
       });
 
       const json = await res.json().catch(() => null);
       if (!res.ok || !json?.ok) {
         const hint = json?.hint ? ` (${json.hint})` : "";
-        throw new Error(String(json?.error ?? `Falha ao transcrever (${res.status})`) + hint);
+        throw new Error(String(json?.error ?? `Falha (${res.status})`) + hint);
       }
 
-      showSuccess("Áudio transcrito.");
+      showSuccess(mode === "ocr" ? "Texto extraído da imagem." : "Mídia transcrita.");
 
       await Promise.all([
         qc.invalidateQueries({ queryKey: ["wa_messages_case", activeTenantId, caseId] }),
         qc.invalidateQueries({ queryKey: ["timeline", activeTenantId, caseId] }),
       ]);
     } catch (e: any) {
-      showError(e?.message ?? "Falha ao transcrever áudio");
+      showError(e?.message ?? "Falha ao interpretar mídia");
     } finally {
       setTranscribingById((p) => ({ ...p, [msgId]: false }));
     }
@@ -563,8 +568,10 @@ export function WhatsAppConversation({ caseId, className }: { caseId: string; cl
                 const loc = normalizedType === "location" ? extractLocation(m.payload_json) : null;
                 const mapsUrl = loc ? `https://www.google.com/maps?q=${loc.lat},${loc.lng}` : null;
 
-                // For audio we reuse body_text as transcript (when available).
-                const transcript = normalizedType === "audio" ? getBestText(m) : "";
+                const extractedText = (normalizedType === "audio" || normalizedType === "video" || normalizedType === "image")
+                  ? getBestText(m)
+                  : "";
+
                 const msgText = normalizedType === "text" ? getBestText(m) : "";
 
                 const inboundLabel = senderIsVendor ? "Vendedor" : "Cliente";
@@ -593,16 +600,104 @@ export function WhatsAppConversation({ caseId, className }: { caseId: string; cl
                         )}
                       >
                         {normalizedType === "image" && mediaUrl ? (
-                          <a href={mediaUrl} target="_blank" rel="noreferrer" className="block">
-                            <img
-                              src={mediaUrl}
-                              alt="Imagem"
+                          <div className="space-y-2">
+                            <a href={mediaUrl} target="_blank" rel="noreferrer" className="block">
+                              <img
+                                src={mediaUrl}
+                                alt="Imagem"
+                                className={cn(
+                                  "max-h-[240px] w-auto rounded-2xl border",
+                                  effectiveInbound ? "border-slate-200" : "border-white/25"
+                                )}
+                              />
+                            </a>
+
+                            <div className={cn("flex items-center justify-between gap-2", effectiveInbound ? "" : "")}
+                            >
+                              <div className={cn("text-sm font-medium", effectiveInbound ? "text-slate-900" : "text-white")}>Imagem</div>
+                              <Button
+                                type="button"
+                                variant="secondary"
+                                size="sm"
+                                className={cn(
+                                  "h-8 rounded-2xl px-3",
+                                  effectiveInbound ? "" : "border-white/25 bg-white/10 text-white hover:bg-white/15"
+                                )}
+                                onClick={() => analyzeMedia(m.id, "ocr")}
+                                disabled={Boolean(transcribingById[m.id]) || !mediaUrl || Boolean(extractedText?.trim())}
+                                title={
+                                  extractedText?.trim()
+                                    ? "Esta imagem já tem texto extraído"
+                                    : !mediaUrl
+                                      ? "Sem URL da imagem"
+                                      : "Extrair texto (OCR)"
+                                }
+                              >
+                                {transcribingById[m.id] ? "Extraindo…" : extractedText?.trim() ? "Extraído" : "Extrair texto"}
+                              </Button>
+                            </div>
+
+                            {extractedText?.trim() ? (
+                              <div
+                                className={cn(
+                                  "rounded-2xl p-3 text-sm leading-relaxed whitespace-pre-wrap",
+                                  effectiveInbound ? "bg-slate-50 text-slate-800" : "bg-white/10 text-white/95"
+                                )}
+                              >
+                                {extractedText}
+                              </div>
+                            ) : null}
+                          </div>
+                        ) : normalizedType === "video" ? (
+                          <div className="space-y-2">
+                            <div
                               className={cn(
-                                "max-h-[220px] w-auto rounded-2xl border",
-                                effectiveInbound ? "border-slate-200" : "border-white/25"
+                                "flex items-center justify-between gap-2 text-sm font-medium",
+                                effectiveInbound ? "text-slate-900" : "text-white"
                               )}
-                            />
-                          </a>
+                            >
+                              <span>Vídeo</span>
+                              <Button
+                                type="button"
+                                variant="secondary"
+                                size="sm"
+                                className={cn(
+                                  "h-8 rounded-2xl px-3",
+                                  effectiveInbound ? "" : "border-white/25 bg-white/10 text-white hover:bg-white/15"
+                                )}
+                                onClick={() => analyzeMedia(m.id, "transcribe")}
+                                disabled={Boolean(transcribingById[m.id]) || !mediaUrl || Boolean(extractedText?.trim())}
+                                title={
+                                  extractedText?.trim()
+                                    ? "Este vídeo já tem transcrição"
+                                    : !mediaUrl
+                                      ? "Sem URL do vídeo"
+                                      : "Transcrever áudio do vídeo"
+                                }
+                              >
+                                {transcribingById[m.id] ? "Transcrevendo…" : extractedText?.trim() ? "Transcrito" : "Transcrever"}
+                              </Button>
+                            </div>
+
+                            {mediaUrl ? (
+                              <video controls src={mediaUrl} className="w-full rounded-2xl" />
+                            ) : (
+                              <div className={cn("text-sm", effectiveInbound ? "text-slate-600" : "text-white/90")}>
+                                (sem URL do vídeo)
+                              </div>
+                            )}
+
+                            {extractedText?.trim() ? (
+                              <div
+                                className={cn(
+                                  "rounded-2xl p-3 text-sm leading-relaxed whitespace-pre-wrap",
+                                  effectiveInbound ? "bg-slate-50 text-slate-800" : "bg-white/10 text-white/95"
+                                )}
+                              >
+                                {extractedText}
+                              </div>
+                            ) : null}
+                          </div>
                         ) : normalizedType === "audio" ? (
                           <div className="space-y-2">
                             <div
@@ -620,17 +715,17 @@ export function WhatsAppConversation({ caseId, className }: { caseId: string; cl
                                   "h-8 rounded-2xl px-3",
                                   effectiveInbound ? "" : "border-white/25 bg-white/10 text-white hover:bg-white/15"
                                 )}
-                                onClick={() => transcribeAudio(m.id)}
-                                disabled={Boolean(transcribingById[m.id]) || !mediaUrl || Boolean(transcript?.trim())}
+                                onClick={() => analyzeMedia(m.id, "transcribe")}
+                                disabled={Boolean(transcribingById[m.id]) || !mediaUrl || Boolean(extractedText?.trim())}
                                 title={
-                                  transcript?.trim()
+                                  extractedText?.trim()
                                     ? "Este áudio já tem transcrição"
                                     : !mediaUrl
                                       ? "Sem URL do áudio"
                                       : "Transcrever áudio"
                                 }
                               >
-                                {transcribingById[m.id] ? "Transcrevendo…" : transcript?.trim() ? "Transcrito" : "Transcrever"}
+                                {transcribingById[m.id] ? "Transcrevendo…" : extractedText?.trim() ? "Transcrito" : "Transcrever"}
                               </Button>
                             </div>
 
@@ -642,14 +737,14 @@ export function WhatsAppConversation({ caseId, className }: { caseId: string; cl
                               </div>
                             )}
 
-                            {transcript?.trim() ? (
+                            {extractedText?.trim() ? (
                               <div
                                 className={cn(
-                                  "rounded-2xl p-3 text-sm leading-relaxed",
+                                  "rounded-2xl p-3 text-sm leading-relaxed whitespace-pre-wrap",
                                   effectiveInbound ? "bg-slate-50 text-slate-800" : "bg-white/10 text-white/95"
                                 )}
                               >
-                                {transcript}
+                                {extractedText}
                               </div>
                             ) : null}
                           </div>

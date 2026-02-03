@@ -84,6 +84,7 @@ function bestSnippet(m: WaMsgLite | null) {
   if (!m) return "";
   const t = String(m.type ?? "").toLowerCase();
   if (t.includes("image") || t.includes("photo")) return "📷 Imagem";
+  if (t.includes("video")) return "🎬 Vídeo";
   if (t.includes("audio") || t.includes("ptt") || t.includes("voice")) return "🎤 Áudio";
   if (t.includes("location")) return "📍 Localização";
   if (m.media_url) return "📎 Mídia";

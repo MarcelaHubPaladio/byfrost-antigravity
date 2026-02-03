@@ -4,7 +4,7 @@ import { createSupabaseAdmin } from "../_shared/supabaseAdmin.ts";
 import { normalizePhoneE164Like } from "../_shared/normalize.ts";
 import { clockPresencePunch, getPresenceTenantConfig, type PresencePunchType } from "../_shared/presence.ts";
 
-type InboundType = "text" | "image" | "audio" | "location";
+type InboundType = "text" | "image" | "audio" | "video" | "location";
 
 type WebhookDirection = "inbound" | "outbound";
 
@@ -209,6 +209,10 @@ function normalizeInbound(payload: any): {
       payload?.audio?.mimetype,
       payload?.data?.audio?.mimeType,
       payload?.data?.audio?.mimetype,
+      payload?.video?.mimeType,
+      payload?.video?.mimetype,
+      payload?.data?.video?.mimeType,
+      payload?.data?.video?.mimetype,
       payload?.document?.mimeType,
       payload?.document?.mimetype,
       payload?.data?.document?.mimeType,
@@ -218,15 +222,18 @@ function normalizeInbound(payload: any): {
 
   const isImageMime = mime.startsWith("image/") || mime.includes("jpeg") || mime.includes("png") || mime.includes("webp");
   const isAudioMime = mime.startsWith("audio/") || mime.includes("ogg") || mime.includes("opus") || mime.includes("mpeg");
+  const isVideoMime = mime.startsWith("video/") || mime.includes("mp4") || mime.includes("webm");
 
   const type: InboundType =
     rawType.includes("image") || rawType.includes("photo") || isImageMime
       ? "image"
-      : rawType.includes("audio") || rawType.includes("ptt") || isAudioMime || payload?.audio || payload?.data?.audio
-        ? "audio"
-        : rawType.includes("location")
-          ? "location"
-          : "text";
+      : rawType.includes("video") || isVideoMime || payload?.video || payload?.data?.video
+        ? "video"
+        : rawType.includes("audio") || rawType.includes("ptt") || isAudioMime || payload?.audio || payload?.data?.audio
+          ? "audio"
+          : rawType.includes("location")
+            ? "location"
+            : "text";
 
   // Z-API payloads vary; best-effort: accept chatId (ex: 5511...@c.us) too.
   // For call events, some providers store caller/callee in different fields.
@@ -285,6 +292,8 @@ function normalizeInbound(payload: any): {
     payload?.data?.media_url,
     payload?.audio?.audioUrl,
     payload?.data?.audio?.audioUrl,
+    payload?.video?.videoUrl,
+    payload?.data?.video?.videoUrl,
     payload?.sticker?.stickerUrl,
     payload?.data?.sticker?.stickerUrl,
     payload?.image?.imageUrl,
