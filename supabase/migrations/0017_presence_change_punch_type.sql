@@ -140,7 +140,11 @@ begin
         'bank_hour_ledger_adjusted',
         'admin',
         auth.uid(),
-        format('Banco de horas ajustado: %+s min (saldo: %s).', v_correction, v_balance),
+        format(
+          'Banco de horas ajustado: %s min (saldo: %s).',
+          case when v_correction >= 0 then '+' || v_correction::text else v_correction::text end,
+          v_balance
+        ),
         jsonb_build_object(
           'correction_minutes', v_correction,
           'balance_before', v_prev_balance,
