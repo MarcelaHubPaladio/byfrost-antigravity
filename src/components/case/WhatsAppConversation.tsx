@@ -168,6 +168,11 @@ function normalizeWaType(type: string, payload: any, mediaUrl: string | null): "
       payload?.video?.mimetype,
       payload?.data?.video?.mimeType,
       payload?.data?.video?.mimetype,
+      // IMPORTANT: Z-API images come under payload.image
+      payload?.image?.mimeType,
+      payload?.image?.mimetype,
+      payload?.data?.image?.mimeType,
+      payload?.data?.image?.mimetype,
       payload?.document?.mimeType,
       payload?.document?.mimetype,
       payload?.data?.document?.mimeType,
@@ -179,8 +184,10 @@ function normalizeWaType(type: string, payload: any, mediaUrl: string | null): "
   const isAudioMime = mime.startsWith("audio/") || mime.includes("ogg") || mime.includes("opus") || mime.includes("mpeg");
   const isVideoMime = mime.startsWith("video/") || mime.includes("mp4") || mime.includes("webm");
 
+  const hasImage = Boolean(payload?.image?.imageUrl || payload?.data?.image?.imageUrl || payload?.image?.thumbnailUrl || payload?.data?.image?.thumbnailUrl);
+
   if (t.includes("location")) return "location";
-  if (t.includes("image") || t.includes("photo") || isImageMime) return "image";
+  if (t.includes("image") || t.includes("photo") || isImageMime || hasImage) return "image";
   if (t.includes("video") || isVideoMime || payload?.video?.videoUrl || payload?.data?.video?.videoUrl) return "video";
   if (t.includes("audio") || t.includes("ptt") || t.includes("voice") || isAudioMime) return "audio";
 

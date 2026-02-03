@@ -205,14 +205,26 @@ function normalizeInbound(payload: any): {
       payload?.mimetype,
       payload?.data?.mimeType,
       payload?.data?.mimetype,
+
+      // Audio
       payload?.audio?.mimeType,
       payload?.audio?.mimetype,
       payload?.data?.audio?.mimeType,
       payload?.data?.audio?.mimetype,
+
+      // Video
       payload?.video?.mimeType,
       payload?.video?.mimetype,
       payload?.data?.video?.mimeType,
       payload?.data?.video?.mimetype,
+
+      // Image (IMPORTANT: Z-API sends image info under payload.image)
+      payload?.image?.mimeType,
+      payload?.image?.mimetype,
+      payload?.data?.image?.mimeType,
+      payload?.data?.image?.mimetype,
+
+      // Document
       payload?.document?.mimeType,
       payload?.document?.mimetype,
       payload?.data?.document?.mimeType,
@@ -224,8 +236,10 @@ function normalizeInbound(payload: any): {
   const isAudioMime = mime.startsWith("audio/") || mime.includes("ogg") || mime.includes("opus") || mime.includes("mpeg");
   const isVideoMime = mime.startsWith("video/") || mime.includes("mp4") || mime.includes("webm");
 
+  const hasImage = Boolean(payload?.image?.imageUrl || payload?.data?.image?.imageUrl || payload?.image?.thumbnailUrl || payload?.data?.image?.thumbnailUrl);
+
   const type: InboundType =
-    rawType.includes("image") || rawType.includes("photo") || isImageMime
+    rawType.includes("image") || rawType.includes("photo") || isImageMime || hasImage
       ? "image"
       : rawType.includes("video") || isVideoMime || payload?.video || payload?.data?.video
         ? "video"
@@ -277,6 +291,11 @@ function normalizeInbound(payload: any): {
       payload?.data?.message,
       payload?.caption,
       payload?.data?.caption,
+      // Z-API images/videos often have caption nested
+      payload?.image?.caption,
+      payload?.data?.image?.caption,
+      payload?.video?.caption,
+      payload?.data?.video?.caption,
       // Link preview fallbacks
       textTitle,
       textDescription,
