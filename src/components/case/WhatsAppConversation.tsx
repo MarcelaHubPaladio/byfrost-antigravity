@@ -160,9 +160,13 @@ function normalizeWaType(type: string, payload: any, mediaUrl: string | null): "
       payload?.mimetype,
       payload?.data?.mimeType,
       payload?.data?.mimetype,
+      payload?.audio?.mimeType,
       payload?.audio?.mimetype,
+      payload?.data?.audio?.mimeType,
       payload?.data?.audio?.mimetype,
+      payload?.document?.mimeType,
       payload?.document?.mimetype,
+      payload?.data?.document?.mimeType,
       payload?.data?.document?.mimetype
     ) ?? ""
   ).toLowerCase();
@@ -174,10 +178,31 @@ function normalizeWaType(type: string, payload: any, mediaUrl: string | null): "
   if (t.includes("image") || t.includes("photo") || isImageMime) return "image";
   if (t.includes("audio") || t.includes("ptt") || t.includes("voice") || isAudioMime) return "audio";
 
-  // Some providers send audio as "document" but include a media URL.
+  // Some providers send audio as "document" but include a media URL + mime.
   if (mediaUrl && (t.includes("document") || t.includes("file")) && isAudioMime) return "audio";
 
+  // Extra fallback: payload contains an audio object.
+  if (payload?.audio?.audioUrl || payload?.data?.audio?.audioUrl) return "audio";
+
   return "text";
+}
+
+function pickBestMediaUrl(m: { media_url: string | null; payload_json: any }) {
+  return (
+    pickFirstString(
+      m.media_url,
+      m.payload_json?.mediaUrl,
+      m.payload_json?.media_url,
+      m.payload_json?.url,
+      m.payload_json?.data?.mediaUrl,
+      m.payload_json?.data?.media_url,
+      m.payload_json?.data?.url,
+      m.payload_json?.audio?.audioUrl,
+      m.payload_json?.data?.audio?.audioUrl,
+      m.payload_json?.image?.imageUrl,
+      m.payload_json?.data?.image?.imageUrl
+    ) ?? null
+  );
 }
 
 export function WhatsAppConversation({ caseId, className }: { caseId: string; className?: string }) {
@@ -532,7 +557,8 @@ export function WhatsAppConversation({ caseId, className }: { caseId: string; cl
                       ? true
                       : m.direction === "inbound";
 
-                const normalizedType = normalizeWaType(m.type, m.payload_json, m.media_url);
+                const mediaUrl = pickBestMediaUrl(m);
+                const normalizedType = normalizeWaType(m.type, m.payload_json, mediaUrl);
 
                 const loc = normalizedType === "location" ? extractLocation(m.payload_json) : null;
                 const mapsUrl = loc ? `https://www.google.com/maps?q=${loc.lat},${loc.lng}` : null;
@@ -566,10 +592,10 @@ export function WhatsAppConversation({ caseId, className }: { caseId: string; cl
                             : "bg-[hsl(var(--byfrost-accent))] text-white"
                         )}
                       >
-                        {normalizedType === "image" && m.media_url ? (
-                          <a href={m.media_url} target="_blank" rel="noreferrer" className="block">
+                        {normalizedType === "image" && mediaUrl ? (
+                          <a href={mediaUrl} target="_blank" rel="noreferrer" className="block">
                             <img
-                              src={m.media_url}
+                              src={mediaUrl}
                               alt="Imagem"
                               className={cn(
                                 "max-h-[220px] w-auto rounded-2xl border",
@@ -595,11 +621,11 @@ export function WhatsAppConversation({ caseId, className }: { caseId: string; cl
                                   effectiveInbound ? "" : "border-white/25 bg-white/10 text-white hover:bg-white/15"
                                 )}
                                 onClick={() => transcribeAudio(m.id)}
-                                disabled={Boolean(transcribingById[m.id]) || !m.media_url || Boolean(transcript?.trim())}
+                                disabled={Boolean(transcribingById[m.id]) || !mediaUrl || Boolean(transcript?.trim())}
                                 title={
                                   transcript?.trim()
                                     ? "Este áudio já tem transcrição"
-                                    : !m.media_url
+                                    : !mediaUrl
                                       ? "Sem URL do áudio"
                                       : "Transcrever áudio"
                                 }
@@ -608,8 +634,8 @@ export function WhatsAppConversation({ caseId, className }: { caseId: string; cl
                               </Button>
                             </div>
 
-                            {m.media_url ? (
-                              <audio controls src={m.media_url} className="w-full" />
+                            {mediaUrl ? (
+                              <audio controls src={mediaUrl} className="w-full" crossOrigin="anonymous" />
                             ) : (
                               <div className={cn("text-sm", effectiveInbound ? "text-slate-600" : "text-white/90")}>
                                 (sem URL do áudio)

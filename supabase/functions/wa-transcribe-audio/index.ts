@@ -15,10 +15,28 @@ function inferMime(payload: any): string | null {
     payload?.mimetype,
     payload?.data?.mimeType,
     payload?.data?.mimetype,
+    payload?.audio?.mimeType,
     payload?.audio?.mimetype,
+    payload?.data?.audio?.mimeType,
     payload?.data?.audio?.mimetype,
+    payload?.document?.mimeType,
     payload?.document?.mimetype,
+    payload?.data?.document?.mimeType,
     payload?.data?.document?.mimetype
+  );
+}
+
+function pickMediaUrl(msg: any): string | null {
+  return pickFirstString(
+    msg?.media_url,
+    msg?.payload_json?.mediaUrl,
+    msg?.payload_json?.media_url,
+    msg?.payload_json?.url,
+    msg?.payload_json?.data?.mediaUrl,
+    msg?.payload_json?.data?.media_url,
+    msg?.payload_json?.data?.url,
+    msg?.payload_json?.audio?.audioUrl,
+    msg?.payload_json?.data?.audio?.audioUrl
   );
 }
 
@@ -134,7 +152,7 @@ serve(async (req) => {
       });
     }
 
-    const mediaUrl = pickFirstString((msg as any).media_url);
+    const mediaUrl = pickMediaUrl(msg);
     if (!mediaUrl) {
       return new Response(JSON.stringify({ ok: false, error: "missing_media_url" }), {
         status: 400,

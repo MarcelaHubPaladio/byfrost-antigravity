@@ -205,9 +205,13 @@ function normalizeInbound(payload: any): {
       payload?.mimetype,
       payload?.data?.mimeType,
       payload?.data?.mimetype,
+      payload?.audio?.mimeType,
       payload?.audio?.mimetype,
+      payload?.data?.audio?.mimeType,
       payload?.data?.audio?.mimetype,
+      payload?.document?.mimeType,
       payload?.document?.mimetype,
+      payload?.data?.document?.mimeType,
       payload?.data?.document?.mimetype
     ) ?? ""
   ).toLowerCase();
@@ -218,7 +222,7 @@ function normalizeInbound(payload: any): {
   const type: InboundType =
     rawType.includes("image") || rawType.includes("photo") || isImageMime
       ? "image"
-      : rawType.includes("audio") || rawType.includes("ptt") || isAudioMime
+      : rawType.includes("audio") || rawType.includes("ptt") || isAudioMime || payload?.audio || payload?.data?.audio
         ? "audio"
         : rawType.includes("location")
           ? "location"
