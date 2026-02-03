@@ -17,6 +17,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { showError, showSuccess } from "@/utils/toast";
 import { GeofenceMapPicker } from "@/components/presence/GeofenceMapPicker";
 import { PunchAdjustDialog, type PunchAdjustMode } from "@/components/presence/PunchAdjustDialog";
+import { PunchTypeChangeDialog } from "@/components/presence/PunchTypeChangeDialog";
 import {
   CalendarDays,
   ClipboardCheck,
@@ -295,6 +296,37 @@ export default function PresenceManage() {
   const today = useMemo(() => formatYmdInTimeZone(timeZone), [timeZone]);
   const [selectedDate, setSelectedDate] = useState<string>(today);
 
+  // Manager helper: open any case by UUID (even if you don't know the date)
+  const [openByIdDraft, setOpenByIdDraft] = useState("");
+  const openCaseById = async () => {
+    if (!activeTenantId || !manager) return;
+    const id = openByIdDraft.trim();
+    if (!id) return;
+
+    try {
+      const { data, error } = await supabase
+        .from("cases")
+        .select("id,case_date")
+        .eq("tenant_id", activeTenantId)
+        .eq("id", id)
+        .is("deleted_at", null)
+        .limit(1)
+        .maybeSingle();
+      if (error) throw error;
+      if (!data?.id) {
+        showError("Case não encontrado para este tenant.");
+        return;
+      }
+
+      const day = String((data as any).case_date ?? "").trim();
+      if (day) setSelectedDate(day);
+      setOpenCaseId(id);
+      showSuccess("Case aberto.");
+    } catch (e: any) {
+      showError(e?.message ?? "Falha ao abrir case");
+    }
+  };
+
   const casesQ = useQuery({
     queryKey: ["presence_manage_cases", activeTenantId, selectedDate, presenceEnabled],
     enabled: Boolean(activeTenantId && presenceEnabled),
@@ -470,6 +502,9 @@ export default function PresenceManage() {
   const [punchDialogOpen, setPunchDialogOpen] = useState(false);
   const [punchDialogMode, setPunchDialogMode] = useState<PunchAdjustMode | null>(null);
 
+  const [typeDialogOpen, setTypeDialogOpen] = useState(false);
+  const [typeDialogPunch, setTypeDialogPunch] = useState<{ id: string; type: PresencePunchType } | null>(null);
+
   const caseDetailQ = useQuery({
     queryKey: ["presence_manage_case_detail", activeTenantId, openCaseId, openCase?.entity_id],
     enabled: Boolean(activeTenantId && openCaseId && presenceEnabled),
@@ -552,6 +587,11 @@ export default function PresenceManage() {
     setPunchDialogOpen(true);
   };
 
+  const openTypeDialogForPunch = (p: any) => {
+    setTypeDialogPunch({ id: String(p.id), type: p.type as PresencePunchType });
+    setTypeDialogOpen(true);
+  };
+
   const openPunchDialogForAdd = (type: PresencePunchType) => {
     setPunchDialogMode({ mode: "add", type });
     setPunchDialogOpen(true);
@@ -599,6 +639,35 @@ export default function PresenceManage() {
       } else {
         showError(msg);
       }
+      throw e;
+    }
+  };
+
+  const submitPunchTypeChange = async ({ newType, note }: { newType: PresencePunchType; note: string }) => {
+    if (!activeTenantId || !openCaseId || !typeDialogPunch?.id) return;
+    if (!manager) {
+      showError("Apenas gestores podem reclassificar batidas.");
+      return;
+    }
+
+    try {
+      const { data, error } = await supabase.rpc("presence_admin_change_punch_type", {
+        p_punch_id: typeDialogPunch.id,
+        p_new_type: newType,
+        p_note: note,
+      });
+      if (error) throw error;
+      if (!(data as any)?.ok) throw new Error((data as any)?.error ?? "Falha ao reclassificar batida");
+      showSuccess("Tipo atualizado.");
+
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ["presence_manage_cases", activeTenantId] }),
+        qc.invalidateQueries({ queryKey: ["presence_manage_punches", activeTenantId] }),
+        qc.invalidateQueries({ queryKey: ["presence_manage_case_detail", activeTenantId, openCaseId] }),
+        qc.invalidateQueries({ queryKey: ["presence_manage_bank_ledger", activeTenantId] }),
+      ]);
+    } catch (e: any) {
+      showError(e?.message ?? "Falha ao reclassificar batida");
       throw e;
     }
   };
@@ -924,6 +993,21 @@ export default function PresenceManage() {
                 <p className="mt-1 text-sm text-slate-600">
                   {activeTenant?.slug ?? "—"} • fuso: <span className="font-medium">{timeZone}</span>
                 </p>
+
+                {manager && (
+                  <div className="mt-3 flex flex-wrap items-center gap-2 rounded-2xl border border-slate-200 bg-white/70 p-2">
+                    <Input
+                      value={openByIdDraft}
+                      onChange={(e) => setOpenByIdDraft(e.target.value)}
+                      placeholder="Abrir case_id (UUID)…"
+                      className="h-10 w-[340px] rounded-2xl"
+                    />
+                    <Button onClick={openCaseById} className="h-10 rounded-2xl">
+                      Abrir
+                    </Button>
+                    <div className="text-[11px] text-slate-500">Útil para auditoria/correções rápidas.</div>
+                  </div>
+                )}
               </div>
 
               <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-center">
@@ -1254,7 +1338,6 @@ export default function PresenceManage() {
                                 <SheetTitle>Presença do dia</SheetTitle>
                               </SheetHeader>
 
-                              {/* NOTE: SheetContent in shadcn doesn't scroll by default; enable overflow so this panel is usable on smaller screens. */}
                               <div className="pb-6">
                                 <div className="mt-4 grid gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-3">
                                   <div className="flex flex-wrap items-center justify-between gap-2">
@@ -1323,7 +1406,6 @@ export default function PresenceManage() {
                                           size="sm"
                                           variant="secondary"
                                           onClick={() => {
-                                            // default: try ENTRY first
                                             const has = new Set((caseDetailQ.data?.punches ?? []).map((p: any) => String(p.type)));
                                             const firstMissing = (["ENTRY", "BREAK_START", "BREAK_END", "EXIT"] as PresencePunchType[]).find(
                                               (t) => !has.has(t)
@@ -1380,15 +1462,25 @@ export default function PresenceManage() {
                                                 </div>
 
                                                 {manager && (
-                                                  <Button
-                                                    size="sm"
-                                                    variant="ghost"
-                                                    onClick={() => openPunchDialogForEdit(p)}
-                                                    className="h-9 rounded-2xl border border-slate-200 bg-white/70"
-                                                  >
-                                                    <Pencil className="mr-2 h-4 w-4" />
-                                                    Ajustar
-                                                  </Button>
+                                                  <div className="flex flex-col gap-2">
+                                                    <Button
+                                                      size="sm"
+                                                      variant="ghost"
+                                                      onClick={() => openPunchDialogForEdit(p)}
+                                                      className="h-9 rounded-2xl border border-slate-200 bg-white/70"
+                                                    >
+                                                      <Pencil className="mr-2 h-4 w-4" />
+                                                      Ajustar
+                                                    </Button>
+                                                    <Button
+                                                      size="sm"
+                                                      variant="outline"
+                                                      onClick={() => openTypeDialogForPunch(p)}
+                                                      className="h-9 rounded-2xl border-[hsl(var(--byfrost-accent)/0.35)] bg-white"
+                                                    >
+                                                      Reclassificar
+                                                    </Button>
+                                                  </div>
                                                 )}
                                               </div>
                                             </div>
@@ -1540,6 +1632,13 @@ export default function PresenceManage() {
                                   caseDate={String(c.case_date ?? selectedDate)}
                                   hasLedgerForCase={hasLedgerForOpenCase}
                                   onSubmit={submitPunchAdjust}
+                                />
+
+                                <PunchTypeChangeDialog
+                                  open={typeDialogOpen}
+                                  onOpenChange={setTypeDialogOpen}
+                                  currentType={typeDialogPunch?.type ?? null}
+                                  onSubmit={submitPunchTypeChange}
                                 />
                               </div>
                             </SheetContent>
