@@ -612,24 +612,25 @@ serve(async (req) => {
 
     const admin = createSupabaseAdmin();
 
-    // Membership check
-    const { data: member, error: memberErr } = await admin
-      .from("users_profile")
-      .select("user_id")
+    // Authorization (IMPORTANT): use the *user* client (RLS) to verify the caller can access this case.
+    // This avoids relying on a specific membership table that can diverge from the DB policies.
+    const { data: cUser, error: cUserErr } = await userClient
+      .from("cases")
+      .select("id,tenant_id,case_type")
       .eq("tenant_id", tenantId)
-      .eq("user_id", u.user.id)
-      .is("deleted_at", null)
-      .limit(1)
+      .eq("id", caseId)
       .maybeSingle();
 
-    if (memberErr) {
-      console.error(`[${fn}] users_profile check failed`, { memberErr });
-      return new Response(JSON.stringify({ ok: false, error: "membership_check_failed" }), {
+    if (cUserErr) {
+      console.error(`[${fn}] authz case check failed`, { cUserErr, tenantId, caseId, userId: u.user.id });
+      return new Response(JSON.stringify({ ok: false, error: "authz_check_failed" }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
-    if (!member?.user_id) {
+
+    if (!cUser?.id) {
+      console.warn(`[${fn}] forbidden`, { tenantId, caseId, userId: u.user.id });
       return new Response(JSON.stringify({ ok: false, error: "forbidden" }), {
         status: 403,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
