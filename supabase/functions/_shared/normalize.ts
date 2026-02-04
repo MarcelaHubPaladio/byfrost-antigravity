@@ -8,8 +8,16 @@ export function normalizePhoneE164Like(input: string | null | undefined) {
   // Returning null prevents creating customers/cases with bogus long numbers.
   if (raw.toLowerCase().includes("@lid")) return null;
 
-  const digits = raw.replace(/\D/g, "");
+  let digits = raw.replace(/\D/g, "");
   if (!digits) return null;
+
+  // Some providers prefix with 00 (international dialing). Strip it.
+  digits = digits.replace(/^00+/, "");
+
+  // Some providers include a leading trunk '0' (e.g. 0 + DDD + number). Strip a single leading 0.
+  if (digits.startsWith("0") && (digits.length === 11 || digits.length === 12)) {
+    digits = digits.slice(1);
+  }
 
   // Best-effort: if already includes country (55), keep it; otherwise assume BR.
   if (digits.startsWith("55")) return `+${digits}`;

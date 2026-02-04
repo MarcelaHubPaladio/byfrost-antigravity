@@ -649,6 +649,30 @@ serve(async (req) => {
     }
 
     const normalized = normalizeInbound(payload);
+
+    // Debug: if we failed to parse phones, log candidate fields (helps when providers change schemas).
+    if (!normalized.from || !normalized.to) {
+      console.warn(`[${fn}] normalize_inbound_missing_phones`, {
+        zapi_instance_id: normalized.zapiInstanceId ?? pathInstanceId ?? null,
+        raw_type: normalized.meta.rawType,
+        candidates: {
+          from: payload?.from,
+          data_from: payload?.data?.from,
+          sender_phone: payload?.sender?.phone,
+          data_sender_phone: payload?.data?.sender?.phone,
+          phone: payload?.phone,
+          chatId: payload?.chatId,
+          data_chatId: payload?.data?.chatId,
+          senderId: payload?.senderId,
+          data_senderId: payload?.data?.senderId,
+          to: payload?.to,
+          data_to: payload?.data?.to,
+          toPhone: payload?.toPhone,
+          data_toPhone: payload?.data?.toPhone,
+        },
+      });
+    }
+
     const effectiveInstanceId = normalized.zapiInstanceId ?? pathInstanceId;
 
     if (!effectiveInstanceId) {
@@ -772,6 +796,17 @@ serve(async (req) => {
       normalized.meta.isCallEvent && callCounterpartPhone ? callCounterpartPhone : normalized.from;
     const inboundToPhone =
       normalized.meta.isCallEvent && inboundFromPhone && instancePhoneNorm ? instancePhoneNorm : normalized.to;
+
+    if (!inboundFromPhone) {
+      console.warn(`[${fn}] inbound_missing_from_phone`, {
+        tenant_id: instance.tenant_id,
+        zapi_instance_id: effectiveInstanceId,
+        instance_phone: instancePhoneNorm,
+        normalized_from: normalized.from,
+        normalized_to: normalized.to,
+        raw_type: normalized.meta.rawType,
+      });
+    }
 
     if (normalized.meta.isCallEvent) {
       console.log(`[${fn}] call_event_detected`, {
@@ -1799,7 +1834,7 @@ serve(async (req) => {
         if (byHistory?.id) return byHistory as any;
       }
 
-      // 4) Fallback by meta_json stored phones (accept variants)
+      // 4) Fallback: open case by meta_json stored phones (accept variants)
       const keys = ["customer_phone", "counterpart_phone", "phone", "whatsapp"];
       for (const k of keys) {
         for (const p of phoneVariants.length ? phoneVariants : [inboundFromPhone]) {
@@ -1896,11 +1931,19 @@ serve(async (req) => {
 
       // Regra pedida: se já existe um case aberto para este número,
       // reaproveita. Se estiver deletado, reativa (MAS somente se não existir nenhum aberto ativo).
-      const existingActive = await findExistingOpenCase();
-      if (existingActive?.id) return existingActive as any;
+      const existing = await findExistingOpenCase();
+      if (existing?.id) {
+        console.log(`[${fn}] case_reuse_candidate`, {
+          case_id: String(existing.id),
+          deleted_at: (existing as any)?.deleted_at ?? null,
+          customer_id: customerId,
+        });
+        const bumped = await promoteOrBumpCaseToCrm(existing);
+        return { caseId: bumped.caseId, created: false as const, skippedReason: null };
+      }
 
       const existingDeleted = await findLatestDeletedOpenCase();
-      if (existingDeleted?.id) return existingDeleted as any;
+      if (existingDeleted?.id) return { caseId: existingDeleted.id as string, created: false as const, skippedReason: null };
 
       return null;
     };
@@ -2169,7 +2212,7 @@ serve(async (req) => {
           case_id: caseId,
           correlation_id: correlationId,
         });
-        await enqueueJob("VALIDATE_FIELDS", `VALIDATE_FIELDS:${caseId}`, {
+        await enqueueJob("VALIDATE_FIELDS", `VALIDATE_FIELDS:${caseId}:${Date.now()}`, {
           case_id: caseId,
           correlation_id: correlationId,
         });
