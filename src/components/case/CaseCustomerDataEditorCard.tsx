@@ -9,6 +9,8 @@ import { Separator } from "@/components/ui/separator";
 import { showError, showSuccess } from "@/utils/toast";
 import { cn } from "@/lib/utils";
 import { Banknote, IdCard, Save } from "lucide-react";
+import { useTenant } from "@/providers/TenantProvider";
+import { useSession } from "@/providers/SessionProvider";
 
 type FieldRow = {
   key: string;
@@ -42,6 +44,8 @@ export function CaseCustomerDataEditorCard(props: {
 }) {
   const { caseId, fields, className } = props;
   const qc = useQueryClient();
+  const { activeTenantId } = useTenant();
+  const { user } = useSession();
 
   const initial = useMemo(
     () => ({
@@ -211,6 +215,23 @@ export function CaseCustomerDataEditorCard(props: {
         onConflict: "case_id,key",
       });
       if (error) throw error;
+
+      // Audit trail: timeline event with user + timestamp
+      if (activeTenantId) {
+        await supabase.from("timeline_events").insert({
+          tenant_id: activeTenantId,
+          case_id: caseId,
+          event_type: "case_fields_manual_saved",
+          actor_type: "admin",
+          actor_id: user?.id ?? null,
+          message: "Dados do pedido preenchidos manualmente (campos editáveis).",
+          meta_json: {
+            keys_written: payload.map((p: any) => p.key),
+            keys_count: payload.length,
+          },
+          occurred_at: new Date().toISOString(),
+        });
+      }
 
       showSuccess("Dados salvos.");
       await qc.invalidateQueries({ queryKey: ["case_fields"] });
