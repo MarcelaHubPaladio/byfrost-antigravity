@@ -3,10 +3,12 @@ import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import { Separator } from "@/components/ui/separator";
 import { showError, showSuccess } from "@/utils/toast";
 import { cn } from "@/lib/utils";
-import { IdCard, Save } from "lucide-react";
+import { Banknote, IdCard, Save } from "lucide-react";
 
 type FieldRow = {
   key: string;
@@ -35,7 +37,9 @@ export function CaseCustomerDataEditorCard(props: {
 
   const initial = useMemo(
     () => ({
+      // Cliente
       name: getField(fields, "name"),
+      customer_code: getField(fields, "customer_code"),
       phone: getField(fields, "phone"),
       email: getField(fields, "email"),
       cpf: getField(fields, "cpf"),
@@ -47,6 +51,18 @@ export function CaseCustomerDataEditorCard(props: {
       cep: getField(fields, "cep"),
       state: getField(fields, "state"),
       uf: getField(fields, "uf"),
+
+      // Financeiro
+      payment_conditions: getField(fields, "payment_conditions"),
+      payment_value_1: getField(fields, "payment_value_1"),
+      payment_value_2: getField(fields, "payment_value_2"),
+      deal_signal_date_text: getField(fields, "deal_signal_date_text"),
+      financial_origin: getField(fields, "financial_origin"),
+      financial_local: getField(fields, "financial_local"),
+      due_date_text: getField(fields, "due_date_text"),
+      proposal_valid_until_text: getField(fields, "proposal_valid_until_text"),
+      expected_delivery_date_text: getField(fields, "expected_delivery_date_text"),
+      notes: getField(fields, "notes"),
     }),
     [fields]
   );
@@ -70,7 +86,9 @@ export function CaseCustomerDataEditorCard(props: {
     setSaving(true);
     try {
       const rows = [
+        // Cliente
         { key: "name", value_text: cleanOrNull(draft.name) },
+        { key: "customer_code", value_text: cleanOrNull(draft.customer_code) },
         { key: "phone", value_text: cleanOrNull(draft.phone) },
         { key: "email", value_text: cleanOrNull(draft.email) },
         { key: "cpf", value_text: cleanOrNull(draft.cpf) },
@@ -82,6 +100,18 @@ export function CaseCustomerDataEditorCard(props: {
         { key: "cep", value_text: cleanOrNull(draft.cep) },
         { key: "state", value_text: cleanOrNull(draft.state) },
         { key: "uf", value_text: cleanOrNull(draft.uf) },
+
+        // Financeiro
+        { key: "payment_conditions", value_text: cleanOrNull(draft.payment_conditions) },
+        { key: "payment_value_1", value_text: cleanOrNull(draft.payment_value_1) },
+        { key: "payment_value_2", value_text: cleanOrNull(draft.payment_value_2) },
+        { key: "deal_signal_date_text", value_text: cleanOrNull(draft.deal_signal_date_text) },
+        { key: "financial_origin", value_text: cleanOrNull(draft.financial_origin) },
+        { key: "financial_local", value_text: cleanOrNull(draft.financial_local) },
+        { key: "due_date_text", value_text: cleanOrNull(draft.due_date_text) },
+        { key: "proposal_valid_until_text", value_text: cleanOrNull(draft.proposal_valid_until_text) },
+        { key: "expected_delivery_date_text", value_text: cleanOrNull(draft.expected_delivery_date_text) },
+        { key: "notes", value_text: cleanOrNull(draft.notes) },
       ]
         .map((r) => ({
           case_id: caseId,
@@ -91,13 +121,39 @@ export function CaseCustomerDataEditorCard(props: {
           source: "admin",
           last_updated_by: "panel",
         }))
-        // Don’t write totally empty fields (keeps DB cleaner)
+        // Don't write totally empty fields (keeps DB cleaner)
         .filter((r) => r.value_text !== null);
 
       // If user cleared everything for a field, we still want to persist "null".
       // Do it explicitly for keys that exist already.
       const existingKeys = new Set((fields ?? []).map((f) => f.key));
-      const cleared = ["email", "cpf", "cnpj", "rg", "birth_date_text", "address", "city", "cep", "state", "uf"]
+      const clearable = [
+        // cliente
+        "customer_code",
+        "email",
+        "cpf",
+        "cnpj",
+        "rg",
+        "birth_date_text",
+        "address",
+        "city",
+        "cep",
+        "state",
+        "uf",
+        // financeiro
+        "payment_conditions",
+        "payment_value_1",
+        "payment_value_2",
+        "deal_signal_date_text",
+        "financial_origin",
+        "financial_local",
+        "due_date_text",
+        "proposal_valid_until_text",
+        "expected_delivery_date_text",
+        "notes",
+      ];
+
+      const cleared = clearable
         .filter((k) => existingKeys.has(k) && cleanOrNull((draft as any)[k]) === null)
         .map((k) => ({
           case_id: caseId,
@@ -119,7 +175,7 @@ export function CaseCustomerDataEditorCard(props: {
       });
       if (error) throw error;
 
-      showSuccess("Dados do cliente salvos.");
+      showSuccess("Dados salvos.");
       await qc.invalidateQueries({ queryKey: ["case_fields"] });
     } catch (e: any) {
       showError(`Falha ao salvar: ${e?.message ?? "erro"}`);
@@ -136,7 +192,7 @@ export function CaseCustomerDataEditorCard(props: {
             <IdCard className="h-4 w-4 text-slate-500" /> Dados do cliente
           </div>
           <div className="mt-1 text-xs text-slate-600">
-            Campos editáveis (não inclui fornecedor). Ao salvar, gravamos em <span className="font-mono">case_fields</span>.
+            Campos editáveis. Ao salvar, gravamos em <span className="font-mono">case_fields</span>.
           </div>
         </div>
       </div>
@@ -153,6 +209,18 @@ export function CaseCustomerDataEditorCard(props: {
             />
           </div>
           <div>
+            <Label className="text-xs">Código do cliente</Label>
+            <Input
+              value={draft.customer_code}
+              onChange={(e) => setDraft((p) => ({ ...p, customer_code: e.target.value }))}
+              className="mt-1 h-10 rounded-2xl"
+              placeholder="Ex: 12345"
+            />
+          </div>
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div>
             <Label className="text-xs">Telefone</Label>
             <Input
               value={draft.phone}
@@ -161,9 +229,6 @@ export function CaseCustomerDataEditorCard(props: {
               placeholder="(DD) 9xxxx-xxxx"
             />
           </div>
-        </div>
-
-        <div className="grid gap-3 sm:grid-cols-2">
           <div>
             <Label className="text-xs">Email</Label>
             <Input
@@ -173,6 +238,9 @@ export function CaseCustomerDataEditorCard(props: {
               placeholder="cliente@empresa.com"
             />
           </div>
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-2">
           <div>
             <Label className="text-xs">Data de nascimento</Label>
             <Input
@@ -182,9 +250,18 @@ export function CaseCustomerDataEditorCard(props: {
               placeholder="dd/mm/aaaa"
             />
           </div>
+          <div>
+            <Label className="text-xs">RG</Label>
+            <Input
+              value={draft.rg}
+              onChange={(e) => setDraft((p) => ({ ...p, rg: e.target.value }))}
+              className="mt-1 h-10 rounded-2xl"
+              placeholder="somente números"
+            />
+          </div>
         </div>
 
-        <div className="grid gap-3 sm:grid-cols-3">
+        <div className="grid gap-3 sm:grid-cols-2">
           <div>
             <Label className="text-xs">CPF</Label>
             <Input
@@ -199,15 +276,6 @@ export function CaseCustomerDataEditorCard(props: {
             <Input
               value={draft.cnpj}
               onChange={(e) => setDraft((p) => ({ ...p, cnpj: e.target.value }))}
-              className="mt-1 h-10 rounded-2xl"
-              placeholder="somente números"
-            />
-          </div>
-          <div>
-            <Label className="text-xs">RG</Label>
-            <Input
-              value={draft.rg}
-              onChange={(e) => setDraft((p) => ({ ...p, rg: e.target.value }))}
               className="mt-1 h-10 rounded-2xl"
               placeholder="somente números"
             />
@@ -261,9 +329,122 @@ export function CaseCustomerDataEditorCard(props: {
               value={draft.state}
               onChange={(e) => setDraft((p) => ({ ...p, state: e.target.value }))}
               className="mt-1 h-10 rounded-2xl"
-              placeholder="PR"
+              placeholder="Paraná"
             />
           </div>
+        </div>
+
+        <Separator className="my-1" />
+
+        <div className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+          <Banknote className="h-4 w-4 text-slate-500" /> Financeiro
+        </div>
+        <div className="text-xs text-slate-600">
+          Preencha manualmente quando a extração não conseguir ler as condições de pagamento.
+        </div>
+
+        <div>
+          <Label className="text-xs">Condições de pagamento</Label>
+          <Input
+            value={draft.payment_conditions}
+            onChange={(e) => setDraft((p) => ({ ...p, payment_conditions: e.target.value }))}
+            className="mt-1 h-10 rounded-2xl"
+            placeholder="Ex: À vista / 30 dias / 2x..."
+          />
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div>
+            <Label className="text-xs">Valor (R$) 1</Label>
+            <Input
+              value={draft.payment_value_1}
+              onChange={(e) => setDraft((p) => ({ ...p, payment_value_1: e.target.value }))}
+              className="mt-1 h-10 rounded-2xl"
+              placeholder="0,00"
+            />
+          </div>
+          <div>
+            <Label className="text-xs">Valor (R$) 2</Label>
+            <Input
+              value={draft.payment_value_2}
+              onChange={(e) => setDraft((p) => ({ ...p, payment_value_2: e.target.value }))}
+              className="mt-1 h-10 rounded-2xl"
+              placeholder="0,00"
+            />
+          </div>
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div>
+            <Label className="text-xs">Sinal de negócio em</Label>
+            <Input
+              value={draft.deal_signal_date_text}
+              onChange={(e) => setDraft((p) => ({ ...p, deal_signal_date_text: e.target.value }))}
+              className="mt-1 h-10 rounded-2xl"
+              placeholder="dd/mm/aaaa"
+            />
+          </div>
+          <div>
+            <Label className="text-xs">Com vencimento em</Label>
+            <Input
+              value={draft.due_date_text}
+              onChange={(e) => setDraft((p) => ({ ...p, due_date_text: e.target.value }))}
+              className="mt-1 h-10 rounded-2xl"
+              placeholder="dd/mm/aaaa"
+            />
+          </div>
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div>
+            <Label className="text-xs">Origem financeira</Label>
+            <Input
+              value={draft.financial_origin}
+              onChange={(e) => setDraft((p) => ({ ...p, financial_origin: e.target.value }))}
+              className="mt-1 h-10 rounded-2xl"
+              placeholder="Ex: cooperativa / banco / próprio"
+            />
+          </div>
+          <div>
+            <Label className="text-xs">Local (financeiro)</Label>
+            <Input
+              value={draft.financial_local}
+              onChange={(e) => setDraft((p) => ({ ...p, financial_local: e.target.value }))}
+              className="mt-1 h-10 rounded-2xl"
+              placeholder="Cidade/loja"
+            />
+          </div>
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div>
+            <Label className="text-xs">Validade da proposta</Label>
+            <Input
+              value={draft.proposal_valid_until_text}
+              onChange={(e) => setDraft((p) => ({ ...p, proposal_valid_until_text: e.target.value }))}
+              className="mt-1 h-10 rounded-2xl"
+              placeholder="dd/mm/aaaa"
+            />
+          </div>
+          <div>
+            <Label className="text-xs">Data prevista para entrega</Label>
+            <Input
+              value={draft.expected_delivery_date_text}
+              onChange={(e) => setDraft((p) => ({ ...p, expected_delivery_date_text: e.target.value }))}
+              className="mt-1 h-10 rounded-2xl"
+              placeholder="dd/mm/aaaa"
+            />
+          </div>
+        </div>
+
+        <div>
+          <Label className="text-xs">Obs.</Label>
+          <Textarea
+            value={draft.notes}
+            onChange={(e) => setDraft((p) => ({ ...p, notes: e.target.value }))}
+            className="mt-1 min-h-[92px] rounded-2xl"
+            placeholder="Observações do pedido"
+          />
         </div>
 
         <Button
@@ -271,7 +452,7 @@ export function CaseCustomerDataEditorCard(props: {
           disabled={saving}
           className="h-11 rounded-2xl bg-[hsl(var(--byfrost-accent))] text-white shadow-sm hover:bg-[hsl(var(--byfrost-accent)/0.92)]"
         >
-          {saving ? "Salvando…" : "Salvar dados do cliente"}
+          {saving ? "Salvando…" : "Salvar dados"}
           <Save className="ml-2 h-4 w-4" />
         </Button>
       </div>

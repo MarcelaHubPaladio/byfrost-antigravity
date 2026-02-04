@@ -807,7 +807,8 @@ serve(async (req) => {
           const extracted = extractFieldsFromText(cleanedText);
 
           // Dedupe (Agroforte sales_order):
-          // evita abrir mais de 1 caso com o MESMO cliente + MESMO total + MESMAS linhas de itens.
+          // evita abrir mais de 1 caso com o MESMO cliente + MESMO total + MESMA lista de itens.
+          // Regra: só considera itens estruturados quando tiver >= 1 item com descrição + qty + price.
           // Observação: só roda quando temos dados suficientes (para evitar falso-positivo).
           let targetCaseId = caseId;
           let mergedInto: string | null = null;
@@ -831,23 +832,75 @@ serve(async (req) => {
               extracted.name ||
               "";
 
-            const totalCents = extractTotalCents(cleanedText) ?? parsePtBrMoneyToCents(extracted.total_raw) ?? null;
+            // Prefer structured case_items for fingerprint when we have at least 1 complete row.
+            const { data: caseItems } = await supabase
+              .from("case_items")
+              .select("code,description,qty,price")
+              .eq("case_id", caseId)
+              .order("line_no", { ascending: true })
+              .limit(200);
+
+            const completeItems = (caseItems ?? []).filter((r: any) => {
+              const desc = String(r?.description ?? "").trim();
+              const qty = Number(r?.qty);
+              const price = Number(r?.price);
+              return desc && Number.isFinite(qty) && qty > 0 && Number.isFinite(price) && price >= 0;
+            });
+
+            const itemsSource = completeItems.length ? "case_items" : "ocr";
+
+            const itemLinesForFp = completeItems.length
+              ? completeItems.map((r: any) => {
+                  const code = String(r?.code ?? "").trim();
+                  const desc = String(r?.description ?? "").trim();
+                  const qty = Number(r?.qty);
+                  const price = Number(r?.price);
+                  return `${code ? `${code} ` : ""}${desc} | QTY:${qty} | PRICE:${price}`;
+                })
+              : (extracted.itemLines ?? []);
+
+            const totalCentsFromItems = completeItems.length
+              ? Math.round(
+                  completeItems.reduce((acc: number, r: any) => {
+                    const qty = Number(r?.qty);
+                    const price = Number(r?.price);
+                    return acc + (Number.isFinite(qty) && Number.isFinite(price) ? qty * price : 0);
+                  }, 0) * 100
+                )
+              : null;
+
+            const totalCents =
+              totalCentsFromItems ??
+              extractTotalCents(cleanedText) ??
+              parsePtBrMoneyToCents(extracted.total_raw) ??
+              null;
 
             const fingerprint =
               journeyKey === "sales_order" && looksAgroforte && clientKey && totalCents
                 ? await computeSalesOrderFingerprint({
                     clientKey,
                     totalCents,
-                    itemLines: extracted.itemLines ?? [],
+                    itemLines: itemLinesForFp,
                   })
                 : null;
 
             if (fingerprint) {
+              const salesOrderClientKey = extracted.customer_code
+                ? `customer_code:${normalizeKeyText(extracted.customer_code)}`
+                : extracted.cpf
+                  ? `cpf:${extracted.cpf}`
+                  : extracted.phone_raw
+                    ? `phone:${toDigits(extracted.phone_raw)}`
+                    : extracted.name
+                      ? `name:${normalizeKeyText(extracted.name)}`
+                      : null;
+
               const nextMeta = {
                 ...meta,
                 sales_order_fingerprint: fingerprint,
-                sales_order_client_key: extracted.cpf ? `cpf:${extracted.cpf}` : extracted.phone_raw ? `phone:${toDigits(extracted.phone_raw)}` : extracted.name ? `name:${normalizeKeyText(extracted.name)}` : null,
+                sales_order_client_key: salesOrderClientKey,
                 sales_order_total_cents: totalCents,
+                sales_order_items_source: itemsSource,
               };
 
               await supabase
