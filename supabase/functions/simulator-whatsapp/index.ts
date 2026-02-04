@@ -150,6 +150,12 @@ serve(async (req) => {
     const instanceIdRaw = body.instanceId as string | undefined; // wa_instances.id (opcional)
     const instanceId = instanceIdRaw ? String(instanceIdRaw).trim() : null;
 
+    // Optional: allow testing with a different journey
+    const journeyKeyRaw = body.journeyKey as string | undefined;
+    const journeyIdRaw = body.journeyId as string | undefined;
+    const journeyKey = journeyKeyRaw ? String(journeyKeyRaw).trim() : "";
+    const journeyIdOverride = journeyIdRaw ? String(journeyIdRaw).trim() : "";
+
     const type = (body.type as string | undefined) ?? "text";
     const from = normalizePhoneE164Like(body.from);
     const to = normalizePhoneE164Like(body.to);
@@ -187,12 +193,26 @@ serve(async (req) => {
       vendorId = createdVendor?.id ?? null;
     }
 
-    const journeyId = await ensureSalesOrderJourney(supabase);
+    // Decide which journey to use
+    let journeyId: string | null = null;
+    if (journeyIdOverride) {
+      const { data: j } = await supabase.from("journeys").select("id").eq("id", journeyIdOverride).maybeSingle();
+      journeyId = j?.id ?? null;
+    } else if (journeyKey) {
+      const { data: j } = await supabase.from("journeys").select("id").eq("key", journeyKey).maybeSingle();
+      journeyId = j?.id ?? null;
+    } else {
+      journeyId = await ensureSalesOrderJourney(supabase);
+    }
+
     if (!journeyId) {
-      return new Response(JSON.stringify({ ok: false, error: "Journey sales_order missing" }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return new Response(
+        JSON.stringify({ ok: false, error: journeyKey || journeyIdOverride ? "Journey not found" : "Journey sales_order missing" }),
+        {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
     }
 
     // Case creation flow (MVP)
@@ -205,7 +225,8 @@ serve(async (req) => {
           tenant_id: tenantId,
           journey_id: journeyId,
           case_type: "order",
-          status: "in_progress",
+          // NOTE: DB enforces cases_status_check; use the canonical status.
+          status: "open",
           state: "awaiting_ocr",
           created_by_channel: "api",
           created_by_vendor_id: vendorId,
@@ -424,7 +445,7 @@ serve(async (req) => {
       .eq("correlation_id", correlationId)
       .order("occurred_at", { ascending: true });
 
-    return new Response(JSON.stringify({ ok: true, correlationId, caseId, instanceId, outbox: outbox ?? [] }), {
+    return new Response(JSON.stringify({ ok: true, correlationId, caseId, instanceId, journeyId, outbox: outbox ?? [] }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (e) {

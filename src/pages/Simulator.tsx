@@ -35,6 +35,10 @@ export default function Simulator() {
   const [lat, setLat] = useState("-23.55052");
   const [lng, setLng] = useState("-46.633308");
   const [instanceId, setInstanceId] = useState<string>("");
+
+  // Optional: test with a different journey
+  const [journeyKey, setJourneyKey] = useState<string>("sales_order");
+
   const [result, setResult] = useState<any>(null);
   const [loading, setLoading] = useState(false);
 
@@ -92,6 +96,8 @@ export default function Simulator() {
         to,
         // Envia instanceId somente se existir (senão fica null no backend).
         ...(instId ? { instanceId: instId } : {}),
+        // Envia a journeyKey somente se preenchida (senão cai no default do backend)
+        ...(journeyKey.trim() ? { journeyKey: journeyKey.trim() } : {}),
       };
       if (type === "image") payload.mediaBase64 = mediaBase64;
       if (type === "text") payload.text = text;
@@ -160,6 +166,19 @@ export default function Simulator() {
                 <div>
                   <Label className="text-xs">To (número do tenant)</Label>
                   <Input value={to} onChange={(e) => setTo(e.target.value)} className="mt-1 rounded-2xl" />
+                </div>
+              </div>
+
+              <div>
+                <Label className="text-xs">Jornada (journeys.key)</Label>
+                <Input
+                  value={journeyKey}
+                  onChange={(e) => setJourneyKey(e.target.value)}
+                  placeholder="Ex: sales_order"
+                  className="mt-1 rounded-2xl"
+                />
+                <div className="mt-1 text-[11px] text-slate-500">
+                  Por padrão: <span className="font-medium">sales_order</span>. Se você criou outra jornada, coloque a key dela aqui.
                 </div>
               </div>
 
