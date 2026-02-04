@@ -37,8 +37,8 @@ export function SalesOrderReviewDialog(props: {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-[1000px] rounded-[24px] border-slate-200 bg-white p-0 shadow-xl">
-        <div className="grid max-h-[80vh] grid-rows-[auto_1fr] overflow-hidden">
+      <DialogContent className="h-[85vh] w-[95vw] max-w-none rounded-[24px] border-slate-200 bg-white p-0 shadow-xl sm:h-[85vh] sm:w-[90vw] lg:h-[80vh] lg:w-[80vw]">
+        <div className="grid h-full grid-rows-[auto_1fr] overflow-hidden">
           <DialogHeader className="px-5 pt-5">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
@@ -64,9 +64,9 @@ export function SalesOrderReviewDialog(props: {
             </div>
           </DialogHeader>
 
-          <div className="grid gap-0 overflow-hidden md:grid-cols-[1.05fr_0.95fr]">
-            {/* Left: image */}
-            <div className="relative overflow-hidden border-t border-slate-200 bg-slate-50 md:border-r">
+          <div className="grid h-full gap-0 overflow-hidden md:grid-cols-[3fr_2fr]">
+            {/* Left: image (60%) */}
+            <div className="relative h-full overflow-hidden border-t border-slate-200 bg-slate-50 md:border-r">
               {safeUrl ? (
                 <ZoomableImage src={safeUrl} alt="Anexo do pedido" className="h-full w-full" />
               ) : (
@@ -80,9 +80,9 @@ export function SalesOrderReviewDialog(props: {
               )}
             </div>
 
-            {/* Right: editable fields */}
-            <div className="border-t border-slate-200 bg-white">
-              <ScrollArea className="h-[60vh] md:h-[calc(80vh-88px)]">
+            {/* Right: editable fields (40%) */}
+            <div className="h-full border-t border-slate-200 bg-white">
+              <ScrollArea className="h-full">
                 <div className="p-4">
                   <CaseCustomerDataEditorCard caseId={caseId} fields={fields} />
                   <Separator className="my-4" />
