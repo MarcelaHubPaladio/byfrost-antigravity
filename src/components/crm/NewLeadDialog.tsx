@@ -42,6 +42,18 @@ function normalizeWhatsappOrThrow(raw: string) {
   return `+${d}`;
 }
 
+function getUserDisplayNameFromAuthUser(user: any) {
+  const md = user?.user_metadata ?? {};
+  const full = (md.full_name as string | undefined) ?? null;
+  const first = (md.first_name as string | undefined) ?? null;
+  const last = (md.last_name as string | undefined) ?? null;
+  const composed = [first, last].filter(Boolean).join(" ").trim();
+  if (full) return full;
+  if (composed) return composed;
+  const email = (user?.email as string | undefined) ?? "";
+  return email ? email.split("@")[0] : "Usuário";
+}
+
 export function NewLeadDialog({
   tenantId,
   journey,
@@ -75,6 +87,57 @@ export function NewLeadDialog({
     setEmail("");
   };
 
+  const ensureOwnerVendorId = async () => {
+    if (!tenantId || !actorUserId) throw new Error("Sessão inválida (sem usuário). Refaça login.");
+
+    const { data: profile, error: profErr } = await supabase
+      .from("users_profile")
+      .select("phone_e164,display_name,email")
+      .eq("tenant_id", tenantId)
+      .eq("user_id", actorUserId)
+      .is("deleted_at", null)
+      .maybeSingle();
+    if (profErr) throw profErr;
+
+    const phone = (profile as any)?.phone_e164 ? String((profile as any).phone_e164).trim() : "";
+    if (!phone) {
+      throw new Error(
+        "Seu usuário não tem phone_e164 cadastrado neste tenant. Cadastre o telefone do vendedor para atribuir a propriedade do lead."
+      );
+    }
+
+    const displayName =
+      (profile as any)?.display_name?.trim?.() ||
+      ((profile as any)?.email ? String((profile as any).email).split("@")[0] : "") ||
+      getUserDisplayNameFromAuthUser((await supabase.auth.getUser()).data.user);
+
+    const { data: existingVendor, error: vSelErr } = await supabase
+      .from("vendors")
+      .select("id")
+      .eq("tenant_id", tenantId)
+      .eq("phone_e164", phone)
+      .is("deleted_at", null)
+      .limit(1)
+      .maybeSingle();
+    if (vSelErr) throw vSelErr;
+
+    if ((existingVendor as any)?.id) return String((existingVendor as any).id);
+
+    const { data: createdVendor, error: vInsErr } = await supabase
+      .from("vendors")
+      .insert({
+        tenant_id: tenantId,
+        phone_e164: phone,
+        display_name: displayName,
+        active: true,
+      } as any)
+      .select("id")
+      .single();
+    if (vInsErr) throw vInsErr;
+
+    return String((createdVendor as any).id);
+  };
+
   const createLead = async () => {
     if (!tenantId || !journey?.id) return;
 
@@ -86,6 +149,8 @@ export function NewLeadDialog({
 
     setSaving(true);
     try {
+      const ownerVendorId = await ensureOwnerVendorId();
+
       const phoneE164 = normalizeWhatsappOrThrow(whatsapp);
       const emailNorm = email.trim().toLowerCase() || null;
 
@@ -109,6 +174,7 @@ export function NewLeadDialog({
             name: displayName,
             email: emailNorm,
             deleted_at: null,
+            assigned_vendor_id: ownerVendorId,
             meta_json: { lead_source: "panel_manual" },
           } as any)
           .eq("tenant_id", tenantId)
@@ -122,7 +188,7 @@ export function NewLeadDialog({
             phone_e164: phoneE164,
             name: displayName,
             email: emailNorm,
-            assigned_vendor_id: null,
+            assigned_vendor_id: ownerVendorId,
             meta_json: { lead_source: "panel_manual" },
           } as any)
           .select("id")
@@ -138,6 +204,7 @@ export function NewLeadDialog({
           tenant_id: tenantId,
           journey_id: journey.id,
           customer_id: customerId,
+          assigned_vendor_id: ownerVendorId,
           title: displayName,
           is_chat: false,
           state: firstState,
@@ -147,6 +214,8 @@ export function NewLeadDialog({
             lead_name: displayName,
             lead_email: emailNorm,
             lead_whatsapp_e164: phoneE164,
+            owner_vendor_id: ownerVendorId,
+            owner_source: "panel_manual_creator",
           },
         } as any)
         .select("id")
@@ -163,7 +232,7 @@ export function NewLeadDialog({
         actor_type: "admin",
         actor_id: actorUserId,
         message: "Lead criado manualmente no CRM.",
-        meta_json: { source: "panel_manual" },
+        meta_json: { source: "panel_manual", owner_vendor_id: ownerVendorId },
         occurred_at: new Date().toISOString(),
       });
 
