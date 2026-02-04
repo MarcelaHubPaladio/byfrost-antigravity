@@ -30,6 +30,7 @@ import {
 import { WhatsAppConversation } from "@/components/case/WhatsAppConversation";
 import { CaseTimeline, type CaseTimelineEvent } from "@/components/case/CaseTimeline";
 import { CaseTechnicalReportDialog } from "@/components/case/CaseTechnicalReportDialog";
+import { CaseCustomerDataEditorCard } from "@/components/case/CaseCustomerDataEditorCard";
 import {
   ArrowLeft,
   CheckCircle2,
@@ -271,7 +272,6 @@ export default function CaseDetail() {
       const { data, error } = await supabase
         .from("case_attachments")
         .select("id,kind,storage_path,created_at")
-        .eq("tenant_id", activeTenantId!)
         .eq("case_id", id!)
         .order("created_at", { ascending: false });
       if (error) throw error;
@@ -300,7 +300,6 @@ export default function CaseDetail() {
       const { data, error } = await supabase
         .from("pendencies")
         .select("id,type,assigned_to_role,question_text,required,status,created_at,answered_text")
-        .eq("tenant_id", activeTenantId!)
         .eq("case_id", id!)
         .order("created_at", { ascending: true });
       if (error) throw error;
@@ -589,6 +588,9 @@ export default function CaseDetail() {
           <div className="mt-5 grid gap-4 lg:grid-cols-[0.95fr_1.05fr]">
             {/* Left */}
             <div className="space-y-4">
+              {/* Dados do cliente (editável) */}
+              {id ? <CaseCustomerDataEditorCard caseId={id} fields={fieldsQ.data as any} /> : null}
+
               {/* Pendências */}
               <div className="rounded-[22px] border border-slate-200 bg-white p-4">
                 <div className="flex items-center justify-between">

@@ -841,11 +841,15 @@ serve(async (req) => {
         });
         if (!aErr) debug.created.attachments += 1;
       } else if (mediaBase64) {
+        // For simulator UX, store a data URL so the UI can preview the image immediately.
+        // (In real inbound flows we expect an actual URL from the provider.)
+        const dataUrl = `data:${mimeType};base64,${mediaBase64}`;
+
         const { error: aErr } = await supabase.from("case_attachments").insert({
           case_id: caseId,
           kind: "image",
-          storage_path: `inline://simulator/${correlationId}`,
-          meta_json: { source: "simulator", inline_base64: true, note: "inline image not stored" },
+          storage_path: dataUrl,
+          meta_json: { source: "simulator", inline_base64: true },
         });
         if (!aErr) debug.created.attachments += 1;
       }
@@ -1041,6 +1045,17 @@ serve(async (req) => {
           .update({ status: "answered", answered_text: "Localização enviada", answered_payload_json: location })
           .eq("case_id", caseId)
           .eq("type", "need_location");
+      }
+
+      // Include created pendencies in debug (helps simulator UX)
+      {
+        const { data: pendencies } = await supabase
+          .from("pendencies")
+          .select("id,type,assigned_to_role,question_text,required,status,created_at")
+          .eq("case_id", caseId)
+          .order("created_at", { ascending: true })
+          .limit(50);
+        debug.pendencies = pendencies ?? [];
       }
 
       const { data: outbox } = await supabase

@@ -278,7 +278,6 @@ export default function CrmCaseDetail() {
       const { data, error } = await supabase
         .from("case_attachments")
         .select("id,kind,storage_path,created_at")
-        .eq("tenant_id", activeTenantId!)
         .eq("case_id", id!)
         .order("created_at", { ascending: false });
       if (error) throw error;

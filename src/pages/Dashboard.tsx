@@ -478,7 +478,6 @@ export default function Dashboard() {
       const { data, error } = await supabase
         .from("pendencies")
         .select("case_id,type,status")
-        .eq("tenant_id", activeTenantId!)
         .in("case_id", ids)
         .eq("status", "open");
       if (error) throw error;
