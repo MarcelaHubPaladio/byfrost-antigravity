@@ -152,7 +152,11 @@ function readCfg(obj: any, path: string) {
   return cur;
 }
 
-function normalizeWaType(type: string, payload: any, mediaUrl: string | null): "text" | "image" | "audio" | "video" | "location" {
+function normalizeWaType(
+  type: string,
+  payload: any,
+  mediaUrl: string | null
+): "text" | "image" | "audio" | "video" | "location" {
   const t = String(type ?? "").toLowerCase();
   const mime = String(
     pickFirstString(
@@ -184,10 +188,29 @@ function normalizeWaType(type: string, payload: any, mediaUrl: string | null): "
   const isAudioMime = mime.startsWith("audio/") || mime.includes("ogg") || mime.includes("opus") || mime.includes("mpeg");
   const isVideoMime = mime.startsWith("video/") || mime.includes("mp4") || mime.includes("webm");
 
-  const hasImage = Boolean(payload?.image?.imageUrl || payload?.data?.image?.imageUrl || payload?.image?.thumbnailUrl || payload?.data?.image?.thumbnailUrl);
+  const hasImage = Boolean(
+    payload?.image?.imageUrl ||
+      payload?.data?.image?.imageUrl ||
+      payload?.image?.thumbnailUrl ||
+      payload?.data?.image?.thumbnailUrl
+  );
+
+  // Simulator support: inline Base64 payloads.
+  const hasInlineBase64 = Boolean(
+    pickFirstString(
+      payload?.mediaBase64,
+      payload?.media_base64,
+      payload?.imageBase64,
+      payload?.image_base64,
+      payload?.data?.mediaBase64,
+      payload?.data?.media_base64,
+      payload?.data?.imageBase64,
+      payload?.data?.image_base64
+    )
+  );
 
   if (t.includes("location")) return "location";
-  if (t.includes("image") || t.includes("photo") || isImageMime || hasImage) return "image";
+  if (t.includes("image") || t.includes("photo") || isImageMime || hasImage || hasInlineBase64) return "image";
   if (t.includes("video") || isVideoMime || payload?.video?.videoUrl || payload?.data?.video?.videoUrl) return "video";
   if (t.includes("audio") || t.includes("ptt") || t.includes("voice") || isAudioMime) return "audio";
 
@@ -198,7 +221,7 @@ function normalizeWaType(type: string, payload: any, mediaUrl: string | null): "
 }
 
 function pickBestMediaUrl(m: { media_url: string | null; payload_json: any }) {
-  return (
+  const direct =
     pickFirstString(
       m.media_url,
       m.payload_json?.mediaUrl,
@@ -213,8 +236,35 @@ function pickBestMediaUrl(m: { media_url: string | null; payload_json: any }) {
       m.payload_json?.data?.video?.videoUrl,
       m.payload_json?.image?.imageUrl,
       m.payload_json?.data?.image?.imageUrl
-    ) ?? null
-  );
+    ) ?? null;
+
+  if (direct) return direct;
+
+  // Simulator fallback: if we only have Base64, render as data URL.
+  const base64 =
+    pickFirstString(
+      m.payload_json?.mediaBase64,
+      m.payload_json?.media_base64,
+      m.payload_json?.imageBase64,
+      m.payload_json?.image_base64,
+      m.payload_json?.data?.mediaBase64,
+      m.payload_json?.data?.media_base64,
+      m.payload_json?.data?.imageBase64,
+      m.payload_json?.data?.image_base64
+    ) ?? null;
+
+  if (!base64) return null;
+  if (base64.trim().startsWith("data:")) return base64.trim();
+
+  const mime =
+    pickFirstString(
+      m.payload_json?.mimeType,
+      m.payload_json?.mimetype,
+      m.payload_json?.data?.mimeType,
+      m.payload_json?.data?.mimetype
+    ) ?? "image/jpeg";
+
+  return `data:${mime};base64,${base64}`;
 }
 
 export function WhatsAppConversation({ caseId, className }: { caseId: string; className?: string }) {
@@ -575,9 +625,10 @@ export function WhatsAppConversation({ caseId, className }: { caseId: string; cl
                 const loc = normalizedType === "location" ? extractLocation(m.payload_json) : null;
                 const mapsUrl = loc ? `https://www.google.com/maps?q=${loc.lat},${loc.lng}` : null;
 
-                const extractedText = (normalizedType === "audio" || normalizedType === "video" || normalizedType === "image")
-                  ? getBestText(m)
-                  : "";
+                const extractedText =
+                  normalizedType === "audio" || normalizedType === "video" || normalizedType === "image"
+                    ? getBestText(m)
+                    : "";
 
                 const msgText = normalizedType === "text" ? getBestText(m) : "";
 
@@ -613,15 +664,26 @@ export function WhatsAppConversation({ caseId, className }: { caseId: string; cl
                                 src={mediaUrl}
                                 alt="Imagem"
                                 className={cn(
-                                  "max-h-[240px] w-auto rounded-2xl border",
+                                  "max-h-[240px] max-w-full h-auto w-auto rounded-2xl border object-contain",
                                   effectiveInbound ? "border-slate-200" : "border-white/25"
                                 )}
                               />
                             </a>
 
-                            <div className={cn("flex items-center justify-between gap-2", effectiveInbound ? "" : "")}
+                            <div
+                              className={cn(
+                                "flex items-center justify-between gap-2",
+                                effectiveInbound ? "" : ""
+                              )}
                             >
-                              <div className={cn("text-sm font-medium", effectiveInbound ? "text-slate-900" : "text-white")}>Imagem</div>
+                              <div
+                                className={cn(
+                                  "text-sm font-medium",
+                                  effectiveInbound ? "text-slate-900" : "text-white"
+                                )}
+                              >
+                                Imagem
+                              </div>
                               <Button
                                 type="button"
                                 variant="secondary"
@@ -640,14 +702,18 @@ export function WhatsAppConversation({ caseId, className }: { caseId: string; cl
                                       : "Extrair texto (OCR)"
                                 }
                               >
-                                {transcribingById[m.id] ? "Extraindo…" : extractedText?.trim() ? "Extraído" : "Extrair texto"}
+                                {transcribingById[m.id]
+                                  ? "Extraindo…"
+                                  : extractedText?.trim()
+                                    ? "Extraído"
+                                    : "Extrair texto"}
                               </Button>
                             </div>
 
                             {extractedText?.trim() ? (
                               <div
                                 className={cn(
-                                  "rounded-2xl p-3 text-sm leading-relaxed whitespace-pre-wrap",
+                                  "rounded-2xl p-3 text-sm leading-relaxed whitespace-pre-wrap break-words",
                                   effectiveInbound ? "bg-slate-50 text-slate-800" : "bg-white/10 text-white/95"
                                 )}
                               >
@@ -682,12 +748,16 @@ export function WhatsAppConversation({ caseId, className }: { caseId: string; cl
                                       : "Transcrever áudio do vídeo"
                                 }
                               >
-                                {transcribingById[m.id] ? "Transcrevendo…" : extractedText?.trim() ? "Transcrito" : "Transcrever"}
+                                {transcribingById[m.id]
+                                  ? "Transcrevendo…"
+                                  : extractedText?.trim()
+                                    ? "Transcrito"
+                                    : "Transcrever"}
                               </Button>
                             </div>
 
                             {mediaUrl ? (
-                              <video controls src={mediaUrl} className="w-full rounded-2xl" />
+                              <video controls src={mediaUrl} className="w-full max-w-full rounded-2xl" />
                             ) : (
                               <div className={cn("text-sm", effectiveInbound ? "text-slate-600" : "text-white/90")}>
                                 (sem URL do vídeo)
@@ -697,7 +767,7 @@ export function WhatsAppConversation({ caseId, className }: { caseId: string; cl
                             {extractedText?.trim() ? (
                               <div
                                 className={cn(
-                                  "rounded-2xl p-3 text-sm leading-relaxed whitespace-pre-wrap",
+                                  "rounded-2xl p-3 text-sm leading-relaxed whitespace-pre-wrap break-words",
                                   effectiveInbound ? "bg-slate-50 text-slate-800" : "bg-white/10 text-white/95"
                                 )}
                               >
@@ -732,7 +802,11 @@ export function WhatsAppConversation({ caseId, className }: { caseId: string; cl
                                       : "Transcrever áudio"
                                 }
                               >
-                                {transcribingById[m.id] ? "Transcrevendo…" : extractedText?.trim() ? "Transcrito" : "Transcrever"}
+                                {transcribingById[m.id]
+                                  ? "Transcrevendo…"
+                                  : extractedText?.trim()
+                                    ? "Transcrito"
+                                    : "Transcrever"}
                               </Button>
                             </div>
 
@@ -747,7 +821,7 @@ export function WhatsAppConversation({ caseId, className }: { caseId: string; cl
                             {extractedText?.trim() ? (
                               <div
                                 className={cn(
-                                  "rounded-2xl p-3 text-sm leading-relaxed whitespace-pre-wrap",
+                                  "rounded-2xl p-3 text-sm leading-relaxed whitespace-pre-wrap break-words",
                                   effectiveInbound ? "bg-slate-50 text-slate-800" : "bg-white/10 text-white/95"
                                 )}
                               >
@@ -786,7 +860,7 @@ export function WhatsAppConversation({ caseId, className }: { caseId: string; cl
                         ) : (
                           <div
                             className={cn(
-                              "text-sm leading-relaxed",
+                              "text-sm leading-relaxed whitespace-pre-wrap break-words",
                               effectiveInbound ? "text-slate-900" : "text-white"
                             )}
                           >
