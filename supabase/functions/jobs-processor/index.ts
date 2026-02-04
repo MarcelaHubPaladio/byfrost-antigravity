@@ -93,6 +93,147 @@ function normalizeKeyText(s: string) {
     .trim();
 }
 
+function sanitizeExtractedValue(v: string) {
+  return String(v ?? "")
+    .replace(/[|]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function extractAgroforteCustomerFields(text: string) {
+  const lines = String(text ?? "")
+    .split(/\r?\n/)
+    .map((l) => l.replace(/\s+/g, " ").trim())
+    .filter(Boolean);
+
+  const start = lines.findIndex((l) => /^local\s*:/i.test(l));
+  if (start < 0) return null;
+
+  // The items table usually starts around "Cód." / "Descrição".
+  const endCandidates = [
+    lines.findIndex((l) => /^c[oó]d\.?\b/i.test(l)),
+    lines.findIndex((l) => /^descri[cç][aã]o\b/i.test(l)),
+  ].filter((n) => n >= 0);
+
+  const end = endCandidates.length ? Math.min(...endCandidates) : Math.min(lines.length, start + 18);
+  const block = lines.slice(start, end).join("\n");
+
+  const labels: Array<{ key: string; re: RegExp }> = [
+    { key: "order_local", re: /\bLocal\s*:\s*/i },
+    { key: "order_date_text", re: /\bData\s*:\s*/i },
+    { key: "name", re: /\bNome\s*:\s*/i },
+    { key: "customer_code", re: /\bC[oó]digo\s+do\s+Cliente\s*:\s*/i },
+    { key: "email", re: /\bE-?mail\s*:\s*/i },
+    { key: "birth_date_text", re: /\bData\s+de\s+Nascimento\s*:\s*/i },
+    { key: "address", re: /\bEndere[cç]o\s*:\s*/i },
+    { key: "phone_raw", re: /\bTelefone\s*:\s*/i },
+    { key: "city", re: /\bCidade\s*:\s*/i },
+    { key: "cep", re: /\bCEP\s*:\s*/i },
+    { key: "state", re: /\bEstado\s*:\s*/i },
+    { key: "inscr_est", re: /\bInscr\.?\s*Est\.?\s*:?\s*/i },
+    { key: "rg", re: /\bRG\s*:?\s*/i },
+    // In the form the label is "CNPJ/CPF" (bottom left)
+    { key: "cpf_cnpj_raw", re: /\bCNPJ\s*\/\s*CPF\b\s*:?\s*/i },
+    { key: "uf", re: /\bUF\b\s*:?\s*/i },
+  ];
+
+  // Collect all label hits with their positions.
+  const hits: Array<{ key: string; start: number; end: number }> = [];
+  for (const lb of labels) {
+    const re = new RegExp(lb.re.source, lb.re.flags.includes("g") ? lb.re.flags : lb.re.flags + "g");
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(block))) {
+      hits.push({ key: lb.key, start: m.index, end: m.index + m[0].length });
+      // only first hit for each key
+      break;
+    }
+  }
+
+  if (!hits.length) return null;
+  hits.sort((a, b) => a.start - b.start);
+
+  const out: Record<string, string> = {};
+  for (let i = 0; i < hits.length; i++) {
+    const cur = hits[i];
+    const next = hits[i + 1];
+    const slice = block.slice(cur.end, next ? next.start : block.length);
+    const value = sanitizeExtractedValue(slice);
+    if (value) out[cur.key] = value;
+  }
+
+  // Normalize CPF/CNPJ: keep digits only (we will still validate CPF length later).
+  const cpfCnpjDigits = out.cpf_cnpj_raw ? toDigits(out.cpf_cnpj_raw) : "";
+  if (cpfCnpjDigits) {
+    if (cpfCnpjDigits.length === 11) out.cpf = cpfCnpjDigits;
+    else out.cnpj = cpfCnpjDigits;
+  }
+
+  // Normalize UF/state to 2 letters when possible
+  if (out.uf) {
+    const uf = normalizeKeyText(out.uf).replace(/\s/g, "");
+    if (/^[A-Z]{2}$/.test(uf)) out.uf = uf;
+  }
+
+  return out;
+}
+
+function extractFieldsFromText(text: string) {
+  const agro = extractAgroforteCustomerFields(text) ?? {};
+
+  const cpfMatch = text.match(/\b(\d{3}\.?(\d{3})\.?(\d{3})-?(\d{2}))\b/);
+  const cpf = agro.cpf ?? (cpfMatch ? toDigits(cpfMatch[1]) : null);
+
+  const rgMatch = text.match(/\bRG\s*[:\-]?\s*(\d{6,12})\b/i) ?? text.match(/\b(\d{7,10})\b/);
+  const rg = agro.rg ? toDigits(agro.rg) : rgMatch ? toDigits(rgMatch[1]) : null;
+
+  const birthMatch = text.match(/\b(\d{2}[\/-]\d{2}[\/-]\d{2,4})\b/);
+  const birth_date_text = agro.birth_date_text ?? (birthMatch ? birthMatch[1] : null);
+
+  const phoneMatch =
+    text.match(/\bTelefone\s*[:\-]?\s*(\(?\d{2}\)?\s*9?\d{4}[-\s]?\d{4})\b/i) ??
+    text.match(/\b(\(?\d{2}\)?\s*9?\d{4}[-\s]?\d{4})\b/);
+  const phone_raw = agro.phone_raw ?? (phoneMatch ? phoneMatch[1] : null);
+
+  const totalMatch = text.match(/R\$\s*([0-9\.,]{2,})/);
+  const total_raw = totalMatch ? totalMatch[0] : null;
+
+  const nameMatch = text.match(/\bNome\s*[:\-]\s*(.+)/i);
+  const name = agro.name ?? (nameMatch ? nameMatch[1].trim().slice(0, 80) : null);
+
+  const signaturePresent = /assinatura/i.test(text);
+
+  // Items (very rough): lines with qty and value
+  const lines = text
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter(Boolean);
+  const itemLines = lines.filter((l) => /\b(\d+[\.,]?\d*)\b/.test(l) && /R\$/.test(l));
+
+  return {
+    name,
+    cpf,
+    // we store rg as digits-only (existing behavior)
+    rg,
+    birth_date_text,
+    phone_raw,
+    total_raw,
+    signaturePresent,
+    itemLines: itemLines.slice(0, 15),
+
+    // Agroforte-specific fields
+    customer_code: agro.customer_code ?? null,
+    email: agro.email ?? null,
+    address: agro.address ?? null,
+    city: agro.city ?? null,
+    cep: agro.cep ?? null,
+    state: agro.state ?? null,
+    uf: agro.uf ?? null,
+    order_local: agro.order_local ?? null,
+    order_date_text: agro.order_date_text ?? null,
+    inscr_est: agro.inscr_est ?? null,
+  };
+}
+
 function parsePtBrMoneyToCents(input: string | null | undefined) {
   const raw = String(input ?? "");
   const m = raw.match(/([0-9]{1,3}(?:\.[0-9]{3})*,[0-9]{2})/);
@@ -178,48 +319,6 @@ async function mergeDuplicateCase(args: {
     meta_json: { duplicate_case_id: duplicateCaseId, fingerprint },
     occurred_at: new Date().toISOString(),
   });
-}
-
-function extractFieldsFromText(text: string) {
-  const cpfMatch = text.match(/\b(\d{3}\.?(\d{3})\.?(\d{3})-?(\d{2}))\b/);
-  const cpf = cpfMatch ? toDigits(cpfMatch[1]) : null;
-
-  const rgMatch = text.match(/\bRG\s*[:\-]?\s*(\d{6,12})\b/i) ?? text.match(/\b(\d{7,10})\b/);
-  const rg = rgMatch ? toDigits(rgMatch[1]) : null;
-
-  const birthMatch = text.match(/\b(\d{2}[\/-]\d{2}[\/-]\d{2,4})\b/);
-  const birth_date_text = birthMatch ? birthMatch[1] : null;
-
-  const phoneMatch =
-    text.match(/\bTelefone\s*[:\-]?\s*(\(?\d{2}\)?\s*9?\d{4}[-\s]?\d{4})\b/i) ??
-    text.match(/\b(\(?\d{2}\)?\s*9?\d{4}[-\s]?\d{4})\b/);
-  const phone_raw = phoneMatch ? phoneMatch[1] : null;
-
-  const totalMatch = text.match(/R\$\s*([0-9\.,]{2,})/);
-  const total_raw = totalMatch ? totalMatch[0] : null;
-
-  const nameMatch = text.match(/\bNome\s*[:\-]\s*(.+)/i);
-  const name = nameMatch ? nameMatch[1].trim().slice(0, 80) : null;
-
-  const signaturePresent = /assinatura/i.test(text);
-
-  // Items (very rough): lines with qty and value
-  const lines = text
-    .split(/\r?\n/)
-    .map((l) => l.trim())
-    .filter(Boolean);
-  const itemLines = lines.filter((l) => /\b(\d+[\.,]?\d*)\b/.test(l) && /R\$/.test(l));
-
-  return {
-    name,
-    cpf,
-    rg,
-    birth_date_text,
-    phone_raw,
-    total_raw,
-    signaturePresent,
-    itemLines: itemLines.slice(0, 15),
-  };
 }
 
 async function runOcrGoogleVision(imageUrl: string) {
@@ -726,6 +825,7 @@ serve(async (req) => {
             const looksAgroforte = /\bagroforte\b/i.test(rawText);
 
             const clientKey =
+              extracted.customer_code ||
               extracted.cpf ||
               (extracted.phone_raw ? toDigits(extracted.phone_raw) : "") ||
               extracted.name ||
@@ -788,11 +888,22 @@ serve(async (req) => {
 
           // Se o case foi consolidado em outro, escrevemos os campos no case "keep".
           const upserts: any[] = [];
-          if (extracted.name) upserts.push({ tenant_id: tenantId, case_id: targetCaseId, key: "name", value_text: extracted.name, confidence: 0.7, source: "ocr", last_updated_by: "extract" });
-          if (extracted.cpf) upserts.push({ tenant_id: tenantId, case_id: targetCaseId, key: "cpf", value_text: extracted.cpf, confidence: extracted.cpf.length === 11 ? 0.8 : 0.4, source: "ocr", last_updated_by: "extract" });
-          if (extracted.rg) upserts.push({ tenant_id: tenantId, case_id: targetCaseId, key: "rg", value_text: extracted.rg, confidence: extracted.rg.length >= 7 ? 0.7 : 0.4, source: "ocr", last_updated_by: "extract" });
-          if (extracted.birth_date_text) upserts.push({ tenant_id: tenantId, case_id: targetCaseId, key: "birth_date_text", value_text: extracted.birth_date_text, confidence: 0.65, source: "ocr", last_updated_by: "extract" });
-          if (extracted.phone_raw) upserts.push({ tenant_id: tenantId, case_id: targetCaseId, key: "phone", value_text: extracted.phone_raw, confidence: 0.65, source: "ocr", last_updated_by: "extract" });
+          if (extracted.name) upserts.push({ tenant_id: tenantId, case_id: targetCaseId, key: "name", value_text: extracted.name, confidence: 0.75, source: "ocr", last_updated_by: "extract" });
+          if (extracted.customer_code) upserts.push({ tenant_id: tenantId, case_id: targetCaseId, key: "customer_code", value_text: extracted.customer_code, confidence: 0.8, source: "ocr", last_updated_by: "extract" });
+          if (extracted.email) upserts.push({ tenant_id: tenantId, case_id: targetCaseId, key: "email", value_text: extracted.email, confidence: 0.75, source: "ocr", last_updated_by: "extract" });
+          if (extracted.address) upserts.push({ tenant_id: tenantId, case_id: targetCaseId, key: "address", value_text: extracted.address, confidence: 0.7, source: "ocr", last_updated_by: "extract" });
+          if (extracted.city) upserts.push({ tenant_id: tenantId, case_id: targetCaseId, key: "city", value_text: extracted.city, confidence: 0.75, source: "ocr", last_updated_by: "extract" });
+          if (extracted.cep) upserts.push({ tenant_id: tenantId, case_id: targetCaseId, key: "cep", value_text: extracted.cep, confidence: 0.75, source: "ocr", last_updated_by: "extract" });
+          if (extracted.state) upserts.push({ tenant_id: tenantId, case_id: targetCaseId, key: "state", value_text: extracted.state, confidence: 0.7, source: "ocr", last_updated_by: "extract" });
+          if (extracted.uf) upserts.push({ tenant_id: tenantId, case_id: targetCaseId, key: "uf", value_text: extracted.uf, confidence: 0.85, source: "ocr", last_updated_by: "extract" });
+          if (extracted.order_local) upserts.push({ tenant_id: tenantId, case_id: targetCaseId, key: "order_local", value_text: extracted.order_local, confidence: 0.75, source: "ocr", last_updated_by: "extract" });
+          if (extracted.order_date_text) upserts.push({ tenant_id: tenantId, case_id: targetCaseId, key: "order_date_text", value_text: extracted.order_date_text, confidence: 0.65, source: "ocr", last_updated_by: "extract" });
+          if (extracted.inscr_est) upserts.push({ tenant_id: tenantId, case_id: targetCaseId, key: "inscr_est", value_text: extracted.inscr_est, confidence: 0.6, source: "ocr", last_updated_by: "extract" });
+
+          if (extracted.cpf) upserts.push({ tenant_id: tenantId, case_id: targetCaseId, key: "cpf", value_text: extracted.cpf, confidence: extracted.cpf.length === 11 ? 0.85 : 0.45, source: "ocr", last_updated_by: "extract" });
+          if (extracted.rg) upserts.push({ tenant_id: tenantId, case_id: targetCaseId, key: "rg", value_text: extracted.rg, confidence: extracted.rg.length >= 7 ? 0.75 : 0.45, source: "ocr", last_updated_by: "extract" });
+          if (extracted.birth_date_text) upserts.push({ tenant_id: tenantId, case_id: targetCaseId, key: "birth_date_text", value_text: extracted.birth_date_text, confidence: 0.75, source: "ocr", last_updated_by: "extract" });
+          if (extracted.phone_raw) upserts.push({ tenant_id: tenantId, case_id: targetCaseId, key: "phone", value_text: extracted.phone_raw, confidence: 0.75, source: "ocr", last_updated_by: "extract" });
           if (extracted.total_raw) upserts.push({ tenant_id: tenantId, case_id: targetCaseId, key: "total_raw", value_text: extracted.total_raw, confidence: 0.6, source: "ocr", last_updated_by: "extract" });
           upserts.push({ tenant_id: tenantId, case_id: targetCaseId, key: "signature_present", value_text: extracted.signaturePresent ? "yes" : "no", confidence: 0.5, source: "ocr", last_updated_by: "extract" });
 
