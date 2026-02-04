@@ -551,7 +551,7 @@ serve(async (req) => {
       if (!zapiInstanceId) return null;
       const { data, error } = await supabase
         .from("wa_instances")
-        .select("id, tenant_id, name, webhook_secret, default_journey_id, phone_number")
+        .select("id, tenant_id, name, webhook_secret, default_journey_id, phone_number, assigned_user_id")
         .eq("zapi_instance_id", zapiInstanceId)
         .maybeSingle();
       if (error) {
@@ -732,6 +732,32 @@ serve(async (req) => {
     // If this is a call event, we want to ensure we attach it to the "other" phone (caller/callee),
     // not to the instance phone.
     const instancePhoneNorm = normalizePhoneE164Like(instance.phone_number ?? null);
+
+    // NEW: For CRM ownership, prefer the instance's assigned_user_id (if present).
+    // This lets you keep the "owner" stable even if the WhatsApp number on the instance changes.
+    let sellerPhoneNorm = instancePhoneNorm;
+    let sellerDisplayName = String((instance as any)?.name ?? "").trim() || (sellerPhoneNorm ? `Vendedor ${sellerPhoneNorm}` : "Vendedor");
+
+    if ((instance as any)?.assigned_user_id) {
+      try {
+        const { data: up } = await supabase
+          .from("users_profile")
+          .select("phone_e164,display_name,email")
+          .eq("tenant_id", String((instance as any).tenant_id))
+          .eq("user_id", String((instance as any).assigned_user_id))
+          .is("deleted_at", null)
+          .maybeSingle();
+
+        const upPhone = normalizePhoneE164Like((up as any)?.phone_e164 ?? null);
+        if (upPhone) sellerPhoneNorm = upPhone;
+
+        const label = String((up as any)?.display_name ?? (up as any)?.email ?? "").trim();
+        if (label) sellerDisplayName = label;
+      } catch (e) {
+        console.warn(`[${fn}] Failed to load assigned_user profile (ignored)`, { e: String((e as any)?.message ?? e) });
+      }
+    }
+
     const callCounterpartPhone =
       normalized.meta.isCallEvent && instancePhoneNorm
         ? (normalized.from && normalized.from === instancePhoneNorm
@@ -1535,20 +1561,18 @@ serve(async (req) => {
     const defaultCrmJourney = crmJourneys[0] ?? null;
 
     // NEW: if we are opening a CRM case from inbound WhatsApp (customer -> vendor),
-    // link it to the vendor by the *instance phone number*.
-    const shouldAssignSellerToCrm = Boolean(!cfgSenderIsVendor && defaultCrmJourney?.id && instancePhoneNorm);
+    // link it to the vendor by the *assigned user* phone (preferred) OR instance phone (fallback).
+    const shouldAssignSellerToCrm = Boolean(!cfgSenderIsVendor && defaultCrmJourney?.id && sellerPhoneNorm);
 
     let sellerVendorId: string | null = null;
-    if (shouldAssignSellerToCrm && instancePhoneNorm) {
-      const displayName = String((instance as any)?.name ?? "").trim() || `Vendedor ${instancePhoneNorm}`;
-
+    if (shouldAssignSellerToCrm && sellerPhoneNorm) {
       const { data: v, error: vErr } = await supabase
         .from("vendors")
         .upsert(
           {
             tenant_id: instance.tenant_id,
-            phone_e164: instancePhoneNorm,
-            display_name: displayName,
+            phone_e164: sellerPhoneNorm,
+            display_name: sellerDisplayName,
             active: true,
             deleted_at: null,
           },
@@ -1883,7 +1907,13 @@ serve(async (req) => {
             contact_label: contactLabel,
             sender_is_vendor: cfgSenderIsVendor,
             ...(targetJourney?.is_crm && ownerVendorId
-              ? { owner_vendor_id: ownerVendorId, owner_source: "zapi_inbound_instance_phone", seller_phone: instancePhoneNorm }
+              ? {
+                  owner_vendor_id: ownerVendorId,
+                  owner_source: (instance as any)?.assigned_user_id ? "zapi_inbound_instance_assignee" : "zapi_inbound_instance_phone",
+                  seller_phone: sellerPhoneNorm,
+                  instance_phone: instancePhoneNorm,
+                  assigned_user_id: (instance as any)?.assigned_user_id ?? null,
+                }
               : {}),
             ...(cfgSenderIsVendor
               ? { vendor_phone: inboundFromPhone, vendor_required: cfgRequireVendor }
