@@ -47,6 +47,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { showError, showSuccess } from "@/utils/toast";
+import { getStateLabel } from "@/lib/journeyLabels";
 
 function ConfidencePill({ v }: { v: number | null | undefined }) {
   const pct = Math.round(Math.max(0, Math.min(1, Number(v ?? 0))) * 100);
@@ -259,7 +260,7 @@ export default function CaseDetail() {
 
       // timeline é registrada automaticamente via trigger no banco
 
-      showSuccess(`Estado atualizado para: ${next}`);
+      showSuccess(`Estado atualizado para: ${getStateLabel(caseQ.data?.journeys as any, next)}`);
       await Promise.all([
         qc.invalidateQueries({ queryKey: ["case", activeTenantId, id] }),
         qc.invalidateQueries({ queryKey: ["timeline", activeTenantId, id] }),
@@ -509,7 +510,7 @@ export default function CaseDetail() {
                     <SelectContent className="rounded-2xl">
                       {states.map((s) => (
                         <SelectItem key={s} value={s} className="rounded-xl">
-                          {s}
+                          {getStateLabel(c?.journeys as any, s)}
                         </SelectItem>
                       ))}
                     </SelectContent>

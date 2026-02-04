@@ -22,6 +22,8 @@ import {
 import { showError, showSuccess } from "@/utils/toast";
 import { Check, Clock, MapPin, RefreshCw, Search, Tags, UsersRound } from "lucide-react";
 import { ImportLeadsDialog } from "@/components/crm/ImportLeadsDialog";
+import { NewLeadDialog } from "@/components/crm/NewLeadDialog";
+import { getStateLabel } from "@/lib/journeyLabels";
 
 type CaseRow = {
   id: string;
@@ -457,11 +459,11 @@ export default function Crm() {
 
       return {
         key: st,
-        label: st === "__other__" ? "Outros" : titleizeState(st),
+        label: st === "__other__" ? "Outros" : getStateLabel(selectedJourney as any, st),
         items,
       };
     });
-  }, [filteredRows, states, unreadByCase, lastInboundAtByCase]);
+  }, [filteredRows, states, unreadByCase, lastInboundAtByCase, selectedJourney]);
 
   const updateCaseState = async (caseId: string, nextState: string) => {
     if (!activeTenantId) return;
@@ -476,7 +478,7 @@ export default function Crm() {
         .eq("id", caseId);
       if (error) throw error;
 
-      showSuccess(`Movido para ${titleizeState(nextState)}.`);
+      showSuccess(`Movido para ${getStateLabel(selectedJourney as any, nextState)}.`);
       await qc.invalidateQueries({ queryKey: ["crm_cases_by_tenant", activeTenantId] });
     } catch (e: any) {
       showError(`Falha ao mover: ${e?.message ?? "erro"}`);
@@ -593,6 +595,10 @@ export default function Crm() {
                 </div>
               </PopoverContent>
             </Popover>
+
+            {activeTenantId && selectedJourney ? (
+              <NewLeadDialog tenantId={activeTenantId} journey={selectedJourney as any} actorUserId={user?.id ?? null} />
+            ) : null}
 
             {activeTenantId && selectedJourney ? (
               <ImportLeadsDialog tenantId={activeTenantId} journey={selectedJourney as any} actorUserId={user?.id ?? null} />

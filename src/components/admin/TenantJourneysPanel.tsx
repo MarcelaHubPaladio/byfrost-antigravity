@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { showError, showSuccess } from "@/utils/toast";
 import { cn } from "@/lib/utils";
-import { ArrowDown, ArrowUp, Plus, Sparkles, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowUp, Plus, Sparkles, Trash2, Languages } from "lucide-react";
 
 // Default per-tenant config for optional journey: meta_content
 const META_CONTENT_DEFAULT_CONFIG = {
@@ -91,6 +91,11 @@ export function TenantJourneysPanel() {
   const [selectedJourneyId, setSelectedJourneyId] = useState<string | null>(null);
   const [configDraft, setConfigDraft] = useState<string>("{}");
   const [savingConfig, setSavingConfig] = useState(false);
+
+  // UI labels (catalog-level)
+  const [journeyNameDraft, setJourneyNameDraft] = useState<string>("");
+  const [stateLabelsDraft, setStateLabelsDraft] = useState<Record<string, string>>({});
+  const [savingUiLabels, setSavingUiLabels] = useState(false);
 
   // ---- Create sector/journey (catalog) ----
   const [creatingSector, setCreatingSector] = useState(false);
@@ -208,16 +213,47 @@ export function TenantJourneysPanel() {
     return (journeysQ.data ?? []).find((j) => j.id === selectedJourneyId) ?? null;
   }, [journeysQ.data, selectedJourneyId]);
 
-  const selectedTenantJourney = useMemo(() => {
-    if (!selectedJourneyId) return null;
-    return tenantJourneyByJourneyId.get(selectedJourneyId) ?? null;
-  }, [selectedJourneyId, tenantJourneyByJourneyId]);
-
   const journeyStates = useMemo(() => {
     const raw = (selectedJourney?.default_state_machine_json?.states ?? []) as any[];
     const list = Array.isArray(raw) ? raw.map((s) => String(s)).filter(Boolean) : [];
     return Array.from(new Set(list));
   }, [selectedJourney]);
+
+  // keep ui label drafts in sync with selection
+  useEffect(() => {
+    if (!selectedJourney) {
+      setJourneyNameDraft("");
+      setStateLabelsDraft({});
+      return;
+    }
+
+    setJourneyNameDraft(selectedJourney.name ?? "");
+
+    const labelsObj =
+      (selectedJourney.default_state_machine_json?.labels ??
+        selectedJourney.default_state_machine_json?.state_labels ??
+        {}) as any;
+
+    const next: Record<string, string> = {};
+    for (const k of journeyStates) {
+      const v = labelsObj?.[k];
+      next[k] = typeof v === "string" ? v : "";
+    }
+
+    // include labels for unknown keys too (if present)
+    if (labelsObj && typeof labelsObj === "object") {
+      for (const [k, v] of Object.entries(labelsObj)) {
+        if (!(k in next)) next[k] = typeof v === "string" ? v : "";
+      }
+    }
+
+    setStateLabelsDraft(next);
+  }, [selectedJourneyId, selectedJourney?.id, journeyStates.join(",")]);
+
+  const selectedTenantJourney = useMemo(() => {
+    if (!selectedJourneyId) return null;
+    return tenantJourneyByJourneyId.get(selectedJourneyId) ?? null;
+  }, [selectedJourneyId, tenantJourneyByJourneyId]);
 
   // keep draft in sync with selection
   useEffect(() => {
@@ -341,6 +377,43 @@ export function TenantJourneysPanel() {
       showError(`Falha ao atualizar catálogo (RLS): ${e?.message ?? "erro"}`);
     } finally {
       setSavingCatalogFlags(false);
+    }
+  };
+
+  const saveUiLabels = async () => {
+    if (!selectedJourney?.id) return;
+    if (!journeyNameDraft.trim()) {
+      showError("Informe um nome para a jornada.");
+      return;
+    }
+
+    setSavingUiLabels(true);
+    try {
+      const base = selectedJourney.default_state_machine_json ?? {};
+      const cleaned: Record<string, string> = {};
+      for (const [k, v] of Object.entries(stateLabelsDraft ?? {})) {
+        const vv = String(v ?? "").trim();
+        if (vv) cleaned[k] = vv;
+      }
+
+      const nextJson = { ...base, labels: cleaned };
+
+      const { error } = await supabase
+        .from("journeys")
+        .update({
+          name: journeyNameDraft.trim(),
+          default_state_machine_json: nextJson,
+        } as any)
+        .eq("id", selectedJourney.id);
+
+      if (error) throw error;
+
+      showSuccess("Nomes e rótulos salvos.");
+      await qc.invalidateQueries({ queryKey: ["journeys"] });
+    } catch (e: any) {
+      showError(`Falha ao salvar rótulos: ${e?.message ?? "erro"}`);
+    } finally {
+      setSavingUiLabels(false);
     }
   };
 
@@ -872,6 +945,70 @@ export function TenantJourneysPanel() {
 
                 <div className="mt-2 text-[11px] text-slate-500">
                   Essa flag é do <span className="font-medium">catálogo (journeys)</span> e é protegida por RLS (apenas super-admin).
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-slate-200 bg-white p-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <div className="text-xs font-semibold text-slate-900">Nomes amigáveis (UI)</div>
+                    <div className="mt-0.5 text-[11px] text-slate-600">
+                      Traduza os estados sem mudar as chaves técnicas. Esses rótulos também serão usados na timeline (estado alterado).
+                    </div>
+                  </div>
+                  <div className="grid h-10 w-10 place-items-center rounded-2xl bg-indigo-50 text-indigo-700">
+                    <Languages className="h-5 w-5" />
+                  </div>
+                </div>
+
+                <div className="mt-3 grid gap-3">
+                  <div>
+                    <Label className="text-xs">Nome da jornada</Label>
+                    <Input
+                      value={journeyNameDraft}
+                      onChange={(e) => setJourneyNameDraft(e.target.value)}
+                      className="mt-1 rounded-2xl"
+                      placeholder="Ex: CRM - Leads"
+                    />
+                  </div>
+
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                    <div className="text-[11px] font-semibold text-slate-700">Rótulos de estados</div>
+                    <div className="mt-1 text-[11px] text-slate-600">
+                      Deixe vazio para usar o fallback automático (title-case).
+                    </div>
+
+                    <div className="mt-3 grid gap-2">
+                      {(journeyStates.length ? journeyStates : Object.keys(stateLabelsDraft)).map((st) => (
+                        <div key={st} className="grid gap-2 sm:grid-cols-[180px_1fr] sm:items-center">
+                          <div className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-[11px] font-semibold text-slate-700">
+                            {st}
+                          </div>
+                          <Input
+                            value={stateLabelsDraft[st] ?? ""}
+                            onChange={(e) =>
+                              setStateLabelsDraft((prev) => ({ ...prev, [st]: e.target.value }))
+                            }
+                            className="h-10 rounded-2xl bg-white"
+                            placeholder="Ex: Em andamento"
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <Button
+                    type="button"
+                    onClick={saveUiLabels}
+                    disabled={savingUiLabels}
+                    className="h-11 rounded-2xl bg-indigo-600 text-white hover:bg-indigo-700"
+                  >
+                    {savingUiLabels ? "Salvando…" : "Salvar nomes e rótulos"}
+                  </Button>
+
+                  <div className="text-[11px] text-slate-500">
+                    Obs: isso atualiza o catálogo (<span className="font-mono">journeys</span>) e requer permissão de super-admin.
+                  </div>
                 </div>
               </div>
 

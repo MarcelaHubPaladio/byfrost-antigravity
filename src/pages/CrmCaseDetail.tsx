@@ -38,6 +38,7 @@ import { CaseTechnicalReportDialog } from "@/components/case/CaseTechnicalReport
 import { ArrowLeft, ClipboardList, Image as ImageIcon, MessagesSquare, Trash2, UsersRound } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { showError, showSuccess } from "@/utils/toast";
+import { getStateLabel } from "@/lib/journeyLabels";
 
 type CaseRow = {
   id: string;
@@ -224,7 +225,7 @@ export default function CrmCaseDetail() {
       if (error) throw error;
 
       // timeline é registrada automaticamente via trigger no banco
-      showSuccess(`Estado atualizado para: ${next}`);
+      showSuccess(`Estado atualizado para: ${getStateLabel(caseQ.data?.journeys as any, next)}`);
 
       await Promise.all([
         qc.invalidateQueries({ queryKey: ["case", activeTenantId, id] }),
@@ -372,7 +373,7 @@ export default function CrmCaseDetail() {
                     <SelectContent className="rounded-2xl">
                       {states.map((s) => (
                         <SelectItem key={s} value={s} className="rounded-xl">
-                          {s}
+                          {getStateLabel(c?.journeys as any, s)}
                         </SelectItem>
                       ))}
                     </SelectContent>

@@ -13,6 +13,7 @@ import { Input } from "@/components/ui/input";
 import { showError, showSuccess } from "@/utils/toast";
 import { Clock, MapPin, RefreshCw, Search, Sparkles, ShieldAlert, Plus } from "lucide-react";
 import { NewSalesOrderDialog } from "@/components/case/NewSalesOrderDialog";
+import { getStateLabel } from "@/lib/journeyLabels";
 
 type CaseRow = {
   id: string;
@@ -525,11 +526,11 @@ export default function Dashboard() {
 
       return {
         key: st,
-        label: st === "__other__" ? "Outros" : titleizeState(st),
+        label: st === "__other__" ? "Outros" : getStateLabel(selectedJourney as any, st),
         items,
       };
     });
-  }, [filteredRows, states, unreadByCase, lastInboundAtByCase]);
+  }, [filteredRows, states, unreadByCase, lastInboundAtByCase, selectedJourney]);
 
   const shouldShowInvalidJourneyBanner =
     Boolean(journeyKey) && Boolean(journeyQ.data?.length) && !selectedJourney;
@@ -570,7 +571,7 @@ export default function Dashboard() {
         .eq("id", caseId);
       if (error) throw error;
 
-      showSuccess(`Movido para ${titleizeState(nextState)}.`);
+      showSuccess(`Movido para ${getStateLabel(selectedJourney as any, nextState)}.`);
       await qc.invalidateQueries({ queryKey: ["cases_by_tenant", activeTenantId] });
     } catch (e: any) {
       showError(`Falha ao mover: ${e?.message ?? "erro"}`);
@@ -641,7 +642,7 @@ export default function Dashboard() {
                       ) : (
                         (journeyQ.data ?? []).map((j) => (
                           <option key={j.key} value={j.key}>
-                            {j.name}{j.is_crm ? " • CRM" : ""}
+                            {j.name}
                           </option>
                         ))
                       )}
@@ -658,41 +659,6 @@ export default function Dashboard() {
                     Principal
                   </Button>
                 </div>
-
-                {selectedKey && (
-                  <div className="mt-2 text-[11px] text-slate-500">
-                    {selectedKey}
-                    {selectedJourney?.id ? ` • ${selectedJourney.id.slice(0, 8)}…` : ""}
-                    {selectedJourney?.is_crm ? (
-                      <span className="ml-2 rounded-full bg-[hsl(var(--byfrost-accent)/0.12)] px-2 py-0.5 font-semibold text-[hsl(var(--byfrost-accent))]">
-                        CRM
-                      </span>
-                    ) : null}
-                    {typeof debugRpcQ.data?.cases_total === "number" ? (
-                      <span className="text-slate-400">
-                        {" "}• banco: {debugRpcQ.data.cases_total}
-                        {debugRpcQ.data.by_status?.length
-                          ? ` • ${debugRpcQ.data.by_status
-                              .map((s) => `${s.status}(${s.qty})`)
-                              .join(", ")}`
-                          : ""}
-                      </span>
-                    ) : null}
-                    {(casesQ.data?.length ?? 0) ? ` • UI(tenant): ${casesQ.data?.length ?? 0}` : ""}
-                    {` • UI(filtro): ${filteredRows.length}`}
-                    {statusCounts.length ? (
-                      <span className="text-slate-400">
-                        {" "}• UI status: {statusCounts.map(([s, n]) => `${s}(${n})`).join(", ")}
-                      </span>
-                    ) : null}
-                  </div>
-                )}
-
-                {debugRpcQ.isError && (
-                  <div className="mt-2 text-[11px] text-rose-700">
-                    Debug banco falhou: {(debugRpcQ.error as any)?.message ?? ""}
-                  </div>
-                )}
               </div>
             </div>
           </div>
@@ -706,22 +672,20 @@ export default function Dashboard() {
             />
           ) : null}
 
-          {isCrm && (
-            <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center">
-              <div className="relative flex-1">
-                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                <Input
-                  value={q}
-                  onChange={(e) => setQ(e.target.value)}
-                  placeholder="Buscar por título, vendedor ou telefone…"
-                  className="h-11 rounded-2xl pl-10"
-                />
-              </div>
-              <div className="rounded-2xl border border-slate-200 bg-white/70 px-3 py-2 text-xs text-slate-600 shadow-sm">
-                Arraste um card para mudar de status.
-              </div>
+          <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center">
+            <div className="relative flex-1">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <Input
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+                placeholder="Buscar por título, cliente, telefone, vendedor…"
+                className="h-11 rounded-2xl pl-10"
+              />
             </div>
-          )}
+            <div className="rounded-2xl border border-slate-200 bg-white/70 px-3 py-2 text-xs text-slate-600 shadow-sm">
+              Arraste um card para mudar de etapa.
+            </div>
+          </div>
 
           {shouldShowInvalidJourneyBanner && (
             <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
@@ -799,17 +763,12 @@ export default function Dashboard() {
                 {columns.map((col) => (
                   <div
                     key={col.key}
-                    className={cn(
-                      "w-[320px] flex-shrink-0",
-                      isCrm && col.key !== "__other__" ? "" : ""
-                    )}
+                    className="w-[320px] flex-shrink-0"
                     onDragOver={(e) => {
-                      if (!isCrm) return;
                       if (col.key === "__other__") return;
                       e.preventDefault();
                     }}
                     onDrop={(e) => {
-                      if (!isCrm) return;
                       if (col.key === "__other__") return;
                       const cid = e.dataTransfer.getData("text/caseId");
                       if (!cid) return;
@@ -827,9 +786,7 @@ export default function Dashboard() {
                     <div
                       className={cn(
                         "mt-2 space-y-3 rounded-[24px] p-2",
-                        isCrm && col.key !== "__other__"
-                          ? "bg-slate-50/60 border border-dashed border-slate-200"
-                          : ""
+                        col.key !== "__other__" ? "bg-slate-50/60 border border-dashed border-slate-200" : ""
                       )}
                     >
                       {col.items.map((c) => {
@@ -855,19 +812,18 @@ export default function Dashboard() {
                           <Link
                             key={c.id}
                             to={`/app/cases/${c.id}`}
-                            draggable={isCrm}
+                            draggable
                             onDragStart={(e) => {
-                              if (!isCrm) return;
                               e.dataTransfer.setData("text/caseId", c.id);
                               e.dataTransfer.effectAllowed = "move";
                             }}
                             className={cn(
                               "block rounded-[22px] border bg-white p-4 shadow-sm transition hover:shadow-md",
                               unread ? "border-rose-200 hover:border-rose-300" : "border-slate-200 hover:border-slate-300",
-                              isCrm ? "cursor-grab active:cursor-grabbing" : "",
+                              "cursor-grab active:cursor-grabbing",
                               isMoving ? "opacity-60" : ""
                             )}
-                            title={isCrm ? "Arraste para mudar de estado" : undefined}
+                            title="Arraste para mudar de etapa"
                           >
                             <div className="flex items-start justify-between gap-3">
                               <div className="min-w-0">
@@ -917,9 +873,7 @@ export default function Dashboard() {
 
                       {col.items.length === 0 && (
                         <div className="rounded-[22px] border border-dashed border-slate-200 bg-white/40 p-4 text-xs text-slate-500">
-                          {isCrm && col.key !== "__other__"
-                            ? "Solte um card aqui para mover."
-                            : "Sem cards aqui."}
+                          {col.key !== "__other__" ? "Solte um card aqui para mover." : "Sem cards aqui."}
                         </div>
                       )}
                     </div>
