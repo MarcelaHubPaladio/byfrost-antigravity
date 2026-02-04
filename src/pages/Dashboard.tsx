@@ -11,7 +11,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { showError, showSuccess } from "@/utils/toast";
-import { Clock, MapPin, RefreshCw, Search, Sparkles, ShieldAlert } from "lucide-react";
+import { Clock, MapPin, RefreshCw, Search, Sparkles, ShieldAlert, Plus } from "lucide-react";
+import { NewSalesOrderDialog } from "@/components/case/NewSalesOrderDialog";
 
 type CaseRow = {
   id: string;
@@ -113,6 +114,7 @@ export default function Dashboard() {
   const [refreshingToken, setRefreshingToken] = useState(false);
   const [q, setQ] = useState("");
   const [movingCaseId, setMovingCaseId] = useState<string | null>(null);
+  const [newSalesOrderOpen, setNewSalesOrderOpen] = useState(false);
 
   const instanceQ = useQuery({
     queryKey: ["wa_instance_active_first", activeTenantId],
@@ -177,6 +179,8 @@ export default function Dashboard() {
     if (!selectedKey) return null;
     return (journeyQ.data ?? []).find((j) => j.key === selectedKey) ?? null;
   }, [journeyQ.data, selectedKey]);
+
+  const isSalesOrderJourney = selectedKey === "sales_order";
 
   const isCrm = Boolean(selectedJourney?.is_crm);
 
@@ -593,6 +597,16 @@ export default function Dashboard() {
                 </div>
               </div>
 
+              {isSalesOrderJourney && activeTenantId && selectedJourney?.id ? (
+                <Button
+                  className="h-10 rounded-2xl bg-[hsl(var(--byfrost-accent))] text-white shadow-sm hover:bg-[hsl(var(--byfrost-accent)/0.92)]"
+                  onClick={() => setNewSalesOrderOpen(true)}
+                  title="Criar novo pedido (manual ou OCR)"
+                >
+                  <Plus className="mr-2 h-4 w-4" /> Novo pedido
+                </Button>
+              ) : null}
+
               <Button
                 variant="secondary"
                 className="h-10 rounded-2xl"
@@ -682,6 +696,15 @@ export default function Dashboard() {
               </div>
             </div>
           </div>
+
+          {isSalesOrderJourney && activeTenantId && selectedJourney?.id ? (
+            <NewSalesOrderDialog
+              open={newSalesOrderOpen}
+              onOpenChange={setNewSalesOrderOpen}
+              tenantId={activeTenantId}
+              journeyId={selectedJourney.id}
+            />
+          ) : null}
 
           {isCrm && (
             <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center">
