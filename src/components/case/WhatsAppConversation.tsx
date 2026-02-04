@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { useTenant } from "@/providers/TenantProvider";
 import { useSession } from "@/providers/SessionProvider";
+import { useChatInstanceAccess } from "@/hooks/useChatInstanceAccess";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { showError, showSuccess } from "@/utils/toast";
@@ -271,6 +272,7 @@ export function WhatsAppConversation({ caseId, className }: { caseId: string; cl
   const qc = useQueryClient();
   const { activeTenantId } = useTenant();
   const { user } = useSession();
+  const chatAccess = useChatInstanceAccess();
   const [tab, setTab] = useState<"messages" | "participants">("messages");
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
@@ -319,31 +321,17 @@ export function WhatsAppConversation({ caseId, className }: { caseId: string; cl
   const counterpartRoleLabel = senderIsVendor ? "vendedor" : "cliente";
 
   const instanceQ = useQuery({
-    queryKey: ["wa_instance_active_for_user", activeTenantId, user?.id],
-    enabled: Boolean(activeTenantId),
+    queryKey: ["wa_instance_for_chat_user", activeTenantId, chatAccess.instanceIds.join(",")],
+    enabled: Boolean(activeTenantId && chatAccess.instanceIds.length),
     staleTime: 30_000,
     queryFn: async () => {
-      // Prefer a WhatsApp instance explicitly assigned to this user.
-      if (user?.id) {
-        const { data, error } = await supabase
-          .from("wa_instances")
-          .select("id,phone_number")
-          .eq("tenant_id", activeTenantId!)
-          .eq("status", "active")
-          .eq("assigned_user_id", user.id)
-          .order("created_at", { ascending: true })
-          .limit(1)
-          .maybeSingle();
-        if (error) throw error;
-        if (data?.id) return data as WaInstanceRow;
-      }
-
-      // Fallback: first active instance of the tenant.
       const { data, error } = await supabase
         .from("wa_instances")
         .select("id,phone_number")
         .eq("tenant_id", activeTenantId!)
         .eq("status", "active")
+        .is("deleted_at", null)
+        .in("id", chatAccess.instanceIds)
         .order("created_at", { ascending: true })
         .limit(1)
         .maybeSingle();
@@ -416,7 +404,7 @@ export function WhatsAppConversation({ caseId, className }: { caseId: string; cl
     const to = counterpartPhone;
 
     if (!inst?.id) {
-      showError("Nenhuma instância WhatsApp ativa configurada para este tenant.");
+      showError("Nenhuma instância WhatsApp ativa está vinculada ao seu usuário neste tenant.");
       return;
     }
 
@@ -955,7 +943,7 @@ export function WhatsAppConversation({ caseId, className }: { caseId: string; cl
             </div>
 
             <div className="mt-2 text-[11px] text-slate-500">
-              Enter envia • Shift+Enter quebra linha • envio usa a instância ativa do tenant
+              Enter envia • Shift+Enter quebra linha • envio usa sua instância do tenant
             </div>
           </div>
         </div>

@@ -7,6 +7,8 @@ import { useTenant } from "@/providers/TenantProvider";
 import { useSession } from "@/providers/SessionProvider";
 import { supabase } from "@/lib/supabase";
 import { cn } from "@/lib/utils";
+import { samePhoneLoose } from "@/lib/phone";
+import { useChatInstanceAccess } from "@/hooks/useChatInstanceAccess";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -21,6 +23,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { WhatsAppConversation } from "@/components/case/WhatsAppConversation";
+import { AccessRedirect } from "@/components/AccessRedirect";
 import { showError, showSuccess } from "@/utils/toast";
 import { Clock, MessagesSquare, Search, Trash2, UserRound } from "lucide-react";
 
@@ -44,23 +47,7 @@ type WaMsgLite = {
   to_phone: string | null;
 };
 
-type WaInstanceRow = { id: string; phone_number: string | null };
-
 type CaseFieldRow = { case_id: string; key: string; value_text: string | null };
-
-function digitsTail(s: string | null | undefined, tail = 11) {
-  const d = String(s ?? "").replace(/\D/g, "");
-  if (!d) return "";
-  return d.length > tail ? d.slice(-tail) : d;
-}
-
-function samePhoneLoose(a: string | null | undefined, b: string | null | undefined) {
-  const da = digitsTail(a);
-  const db = digitsTail(b);
-  if (!da || !db) return false;
-  if (Math.min(da.length, db.length) < 10) return false;
-  return da === db;
-}
 
 function getMetaPhone(meta: any): string | null {
   if (!meta || typeof meta !== "object") return null;
@@ -99,6 +86,7 @@ export default function Chats() {
   const qc = useQueryClient();
   const { activeTenantId } = useTenant();
   const { user } = useSession();
+  const chatAccess = useChatInstanceAccess();
 
   const [deleting, setDeleting] = useState(false);
 
@@ -107,40 +95,50 @@ export default function Chats() {
     return (sp.get("q") ?? "").trim();
   }, [loc.search]);
 
-  const instanceQ = useQuery({
-    queryKey: ["wa_instance_active_first", activeTenantId],
-    enabled: Boolean(activeTenantId),
-    staleTime: 30_000,
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("wa_instances")
-        .select("id,phone_number")
-        .eq("tenant_id", activeTenantId!)
-        .eq("status", "active")
-        .order("created_at", { ascending: true })
-        .limit(1)
-        .maybeSingle();
-      if (error) throw error;
-      return (data ?? null) as WaInstanceRow | null;
-    },
-  });
+  const instanceIds = chatAccess.instanceIds;
+  const instancePhone = chatAccess.instances[0]?.phone_number ?? null;
 
   const chatsQ = useQuery({
-    queryKey: ["chat_cases", activeTenantId],
-    enabled: Boolean(activeTenantId),
+    queryKey: ["chat_cases", activeTenantId, instanceIds.join(",")],
+    enabled: Boolean(activeTenantId && chatAccess.hasAccess && instanceIds.length),
     refetchInterval: 5000,
     refetchOnWindowFocus: true,
     queryFn: async () => {
-      const { data, error } = await supabase
+      // 1) Find cases that have messages for *this user's instance(s)*
+      const { data: msgRows, error: msgErr } = await supabase
+        .from("wa_messages")
+        .select("case_id,occurred_at")
+        .eq("tenant_id", activeTenantId!)
+        .in("instance_id", instanceIds)
+        .not("case_id", "is", null)
+        .order("occurred_at", { ascending: false })
+        .limit(8000);
+      if (msgErr) throw msgErr;
+
+      const uniqueCaseIds: string[] = [];
+      const seen = new Set<string>();
+      for (const r of msgRows ?? []) {
+        const cid = String((r as any).case_id ?? "");
+        if (!cid || seen.has(cid)) continue;
+        seen.add(cid);
+        uniqueCaseIds.push(cid);
+        if (uniqueCaseIds.length >= 350) break;
+      }
+
+      if (uniqueCaseIds.length === 0) return [] as CaseRow[];
+
+      // 2) Load only chat-marked cases (and rely on RLS for tenant membership)
+      const { data: casesRows, error: caseErr } = await supabase
         .from("cases")
         .select("id,title,updated_at,meta_json")
         .eq("tenant_id", activeTenantId!)
         .eq("is_chat", true)
         .is("deleted_at", null)
-        .order("updated_at", { ascending: false })
-        .limit(300);
-      if (error) throw error;
-      return (data ?? []) as any as CaseRow[];
+        .in("id", uniqueCaseIds)
+        .limit(350);
+      if (caseErr) throw caseErr;
+
+      return (casesRows ?? []) as any as CaseRow[];
     },
   });
 
@@ -204,8 +202,8 @@ export default function Chats() {
   });
 
   const lastInboundQ = useQuery({
-    queryKey: ["chat_case_last_inbound", activeTenantId, caseIds.join(",")],
-    enabled: Boolean(activeTenantId && caseIds.length),
+    queryKey: ["chat_case_last_inbound", activeTenantId, instanceIds.join(","), caseIds.join(",")],
+    enabled: Boolean(activeTenantId && instanceIds.length && caseIds.length),
     refetchInterval: 5000,
     refetchOnWindowFocus: true,
     queryFn: async () => {
@@ -213,6 +211,7 @@ export default function Chats() {
         .from("wa_messages")
         .select("case_id,occurred_at,from_phone")
         .eq("tenant_id", activeTenantId!)
+        .in("instance_id", instanceIds)
         .eq("direction", "inbound")
         .in("case_id", caseIds)
         .order("occurred_at", { ascending: false })
@@ -223,8 +222,8 @@ export default function Chats() {
   });
 
   const lastMsgQ = useQuery({
-    queryKey: ["chat_case_last_message", activeTenantId, caseIds.join(",")],
-    enabled: Boolean(activeTenantId && caseIds.length),
+    queryKey: ["chat_case_last_message", activeTenantId, instanceIds.join(","), caseIds.join(",")],
+    enabled: Boolean(activeTenantId && instanceIds.length && caseIds.length),
     refetchInterval: 5000,
     refetchOnWindowFocus: true,
     queryFn: async () => {
@@ -232,6 +231,7 @@ export default function Chats() {
         .from("wa_messages")
         .select("case_id,occurred_at,direction,type,body_text,media_url,from_phone,to_phone")
         .eq("tenant_id", activeTenantId!)
+        .in("instance_id", instanceIds)
         .in("case_id", caseIds)
         .order("occurred_at", { ascending: false })
         .limit(8000);
@@ -248,16 +248,15 @@ export default function Chats() {
 
   const lastInboundAtByCase = useMemo(() => {
     const m = new Map<string, string>();
-    const instPhone = instanceQ.data?.phone_number ?? null;
 
     for (const row of lastInboundQ.data ?? []) {
       const cid = String((row as any).case_id ?? "");
       if (!cid) continue;
-      if (instPhone && samePhoneLoose(instPhone, (row as any).from_phone)) continue;
+      if (instancePhone && samePhoneLoose(instancePhone, (row as any).from_phone)) continue;
       if (!m.has(cid)) m.set(cid, (row as any).occurred_at);
     }
     return m;
-  }, [lastInboundQ.data, instanceQ.data?.phone_number]);
+  }, [lastInboundQ.data, instancePhone]);
 
   const unreadByCase = useMemo(() => {
     const s = new Set<string>();
@@ -350,10 +349,11 @@ export default function Chats() {
 
   // Default selection: if /app/chat without id, jump to the first chat.
   useEffect(() => {
+    if (!chatAccess.hasAccess) return;
     if (activeCaseId) return;
     const first = sortedChats[0];
     if (first?.id) nav(`/app/chat/${first.id}${loc.search || ""}`, { replace: true });
-  }, [activeCaseId, sortedChats, nav, loc.search]);
+  }, [chatAccess.hasAccess, activeCaseId, sortedChats, nav, loc.search]);
 
   // When selecting a chat, mark as read.
   useEffect(() => {
@@ -389,6 +389,27 @@ export default function Chats() {
 
   const hasSelection = Boolean(activeCaseId && activeCase);
 
+  if (!chatAccess.isLoading && !chatAccess.hasAccess) {
+    return (
+      <RequireAuth>
+        <AppShell>
+          <AccessRedirect
+            title="Chat indisponível"
+            description="Seu número de WhatsApp não está vinculado a nenhuma instância ativa deste tenant."
+            to="/tenants"
+            toLabel="Trocar tenant"
+            details={[
+              { label: "tenant", value: String(activeTenantId ?? "—") },
+              { label: "usuário", value: String(user?.id ?? "—") },
+              { label: "telefone", value: String(chatAccess.userPhone ?? "—") },
+            ]}
+            autoMs={1400}
+          />
+        </AppShell>
+      </RequireAuth>
+    );
+  }
+
   return (
     <RequireAuth>
       <AppShell hideTopBar>
@@ -408,7 +429,7 @@ export default function Chats() {
                   </div>
                   <div>
                     <div className="text-sm font-semibold text-slate-900">Chat</div>
-                    <div className="text-[11px] text-slate-500">Conversas fora de fluxo</div>
+                    <div className="text-[11px] text-slate-500">Conversas do seu número</div>
                   </div>
                 </div>
 
@@ -501,7 +522,7 @@ export default function Chats() {
 
                   {sortedChats.length === 0 && (
                     <div className="rounded-[22px] border border-dashed border-slate-200 bg-white/60 p-5 text-sm text-slate-600">
-                      Nenhuma conversa marcada como chat ainda.
+                      Nenhuma conversa do seu número marcada como chat ainda.
                       <div className="mt-2 text-xs text-slate-500">
                         Abra um case e ative o toggle <span className="font-semibold">"Somente chat"</span>.
                       </div>

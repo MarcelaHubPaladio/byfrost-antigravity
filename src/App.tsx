@@ -9,6 +9,7 @@ import { TenantProvider } from "@/providers/TenantProvider";
 import { ThemeProvider } from "@/providers/ThemeProvider";
 import { RequireTenantRole } from "@/components/RequireTenantRole";
 import { RequireRouteAccess } from "@/components/RequireRouteAccess";
+import { RequireChatInstanceAccess } from "@/components/RequireChatInstanceAccess";
 
 import Index from "@/pages/Index";
 import NotFound from "@/pages/NotFound";
@@ -80,7 +81,9 @@ const App = () => (
                   path="/app/chat"
                   element={
                     <RequireRouteAccess routeKey="app.chat">
-                      <Chats />
+                      <RequireChatInstanceAccess>
+                        <Chats />
+                      </RequireChatInstanceAccess>
                     </RequireRouteAccess>
                   }
                 />
@@ -88,7 +91,9 @@ const App = () => (
                   path="/app/chat/:id"
                   element={
                     <RequireRouteAccess routeKey="app.chat">
-                      <Chats />
+                      <RequireChatInstanceAccess>
+                        <Chats />
+                      </RequireChatInstanceAccess>
                     </RequireRouteAccess>
                   }
                 />

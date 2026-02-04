@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { useTenant } from "@/providers/TenantProvider";
 import { useSession } from "@/providers/SessionProvider";
+import { useChatInstanceAccess } from "@/hooks/useChatInstanceAccess";
 import {
   LayoutGrid,
   FlaskConical,
@@ -286,6 +287,7 @@ export function AppShell({
   const loc = useLocation();
   const { activeTenant, isSuperAdmin, activeTenantId } = useTenant();
   const { user } = useSession();
+  const chatAccess = useChatInstanceAccess();
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
@@ -331,6 +333,8 @@ export function AppShell({
     if (navAccessQ.isLoading || !navAccessQ.data) return true;
     return Boolean(navAccessQ.data[routeKey]);
   };
+
+  const showChatInNav = isSuperAdmin ? true : chatAccess.isLoading ? false : chatAccess.hasAccess;
 
   const crmEnabledQ = useQuery({
     queryKey: ["nav_has_crm", activeTenantId],
@@ -484,7 +488,7 @@ export function AppShell({
             <div className="p-3">
               <div className="grid gap-2">
                 <NavTile to="/app" icon={LayoutGrid} label="Dashboard" disabled={!can("app.dashboard")} />
-                <NavTile to="/app/chat" icon={MessagesSquare} label="Chat" disabled={!can("app.chat")} />
+                {showChatInNav && <NavTile to="/app/chat" icon={MessagesSquare} label="Chat" disabled={!can("app.chat")} />}
                 {hasCrm && <NavTile to="/app/crm" icon={LayoutDashboard} label="CRM" disabled={!can("app.crm")} />}
                 {hasMetaContent && (
                   <NavTile to="/app/content" icon={Clapperboard} label="Conteúdo" disabled={!can("app.content")} />
@@ -576,13 +580,15 @@ export function AppShell({
                               disabled={!can("app.dashboard")}
                               onNavigate={() => setMobileNavOpen(false)}
                             />
-                            <MobileNavItem
-                              to="/app/chat"
-                              icon={MessagesSquare}
-                              label="Chat"
-                              disabled={!can("app.chat")}
-                              onNavigate={() => setMobileNavOpen(false)}
-                            />
+                            {showChatInNav && (
+                              <MobileNavItem
+                                to="/app/chat"
+                                icon={MessagesSquare}
+                                label="Chat"
+                                disabled={!can("app.chat")}
+                                onNavigate={() => setMobileNavOpen(false)}
+                              />
+                            )}
                             {hasCrm && (
                               <MobileNavItem
                                 to="/app/crm"
