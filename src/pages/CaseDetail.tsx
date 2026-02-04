@@ -31,6 +31,7 @@ import { WhatsAppConversation } from "@/components/case/WhatsAppConversation";
 import { CaseTimeline, type CaseTimelineEvent } from "@/components/case/CaseTimeline";
 import { CaseTechnicalReportDialog } from "@/components/case/CaseTechnicalReportDialog";
 import { CaseCustomerDataEditorCard } from "@/components/case/CaseCustomerDataEditorCard";
+import { SalesOrderItemsEditorCard } from "@/components/case/SalesOrderItemsEditorCard";
 import {
   ArrowLeft,
   CheckCircle2,
@@ -64,6 +65,7 @@ function ConfidencePill({ v }: { v: number | null | undefined }) {
 type CaseRow = {
   id: string;
   tenant_id: string;
+  case_type: string;
   title: string | null;
   status: string;
   state: string;
@@ -97,7 +99,7 @@ export default function CaseDetail() {
       const { data, error } = await supabase
         .from("cases")
         .select(
-          "id,tenant_id,customer_id,title,status,state,created_at,updated_at,assigned_vendor_id,is_chat,vendors:vendors!cases_assigned_vendor_id_fkey(display_name,phone_e164),journeys:journeys!cases_journey_id_fkey(key,name,is_crm,default_state_machine_json)"
+          "id,tenant_id,case_type,customer_id,title,status,state,created_at,updated_at,assigned_vendor_id,is_chat,vendors:vendors!cases_assigned_vendor_id_fkey(display_name,phone_e164),journeys:journeys!cases_journey_id_fkey(key,name,is_crm,default_state_machine_json)"
         )
         .eq("tenant_id", activeTenantId!)
         .eq("id", id!)
@@ -462,6 +464,7 @@ export default function CaseDetail() {
   };
 
   const c = caseQ.data;
+  const isSalesOrder = c?.journeys?.key === "sales_order" || c?.case_type === "sales_order";
 
   return (
     <RequireAuth>
@@ -590,6 +593,9 @@ export default function CaseDetail() {
             <div className="space-y-4">
               {/* Dados do cliente (editável) */}
               {id ? <CaseCustomerDataEditorCard caseId={id} fields={fieldsQ.data as any} /> : null}
+
+              {/* Itens (sales_order) */}
+              {id && isSalesOrder ? <SalesOrderItemsEditorCard caseId={id} /> : null}
 
               {/* Pendências */}
               <div className="rounded-[22px] border border-slate-200 bg-white p-4">
