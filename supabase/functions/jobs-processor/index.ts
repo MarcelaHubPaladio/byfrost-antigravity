@@ -18,6 +18,41 @@ function toDigits(s: string) {
   return (s ?? "").replace(/\D/g, "");
 }
 
+function preprocessOcrTextSalesOrder(rawText: string) {
+  const text = String(rawText ?? "");
+  const lines = text
+    .split(/\r?\n/)
+    .map((l) => l.replace(/\s+/g, " ").trim())
+    .filter(Boolean);
+
+  // Heurística: em muitos pedidos (ex: Agroforte), o cabeçalho contém telefone/endereço da empresa,
+  // o que atrapalha a extração de telefone do cliente. Cortamos o texto até o início do formulário.
+  const startIdx = lines.findIndex((l) =>
+    /^\s*(local|nome|e-?mail|endere[cç]o|endere[cç]o\.|cidade|cep|estado|uf)\b/i.test(l)
+  );
+
+  const sliced = startIdx > 0 ? lines.slice(startIdx) : lines;
+
+  // Remove resíduos de cabeçalho que, às vezes, vazam para as primeiras linhas.
+  const filtered = sliced.filter((l, i) => {
+    if (i > 10) return true;
+    return !/(\bagroforte\b|\bcnpj\b|solu[cç]oes agr[ií]colas|\binscr\b|\bend(er)?e[cç]o\b.*\brua\b|\bfone\b)/i.test(
+      l
+    );
+  });
+
+  return filtered.join("\n").trim();
+}
+
+function normalizeOcrTextForExtraction(rawText: string) {
+  const text = String(rawText ?? "");
+  // Só aplica "corte do cabeçalho" quando o documento aparenta ser o formulário da Agroforte.
+  if (/\bagroforte\b/i.test(text) || (/\bcnpj\b/i.test(text) && /solu[cç]oes/i.test(text))) {
+    return preprocessOcrTextSalesOrder(text);
+  }
+  return text;
+}
+
 function extractFieldsFromText(text: string) {
   const cpfMatch = text.match(/\b(\d{3}\.?(\d{3})\.?(\d{3})-?(\d{2}))\b/);
   const cpf = cpfMatch ? toDigits(cpfMatch[1]) : null;
@@ -28,7 +63,9 @@ function extractFieldsFromText(text: string) {
   const birthMatch = text.match(/\b(\d{2}[\/-]\d{2}[\/-]\d{2,4})\b/);
   const birth_date_text = birthMatch ? birthMatch[1] : null;
 
-  const phoneMatch = text.match(/\b(\(?\d{2}\)?\s*9?\d{4}[-\s]?\d{4})\b/);
+  const phoneMatch =
+    text.match(/\bTelefone\s*[:\-]?\s*(\(?\d{2}\)?\s*9?\d{4}[-\s]?\d{4})\b/i) ??
+    text.match(/\b(\(?\d{2}\)?\s*9?\d{4}[-\s]?\d{4})\b/);
   const phone_raw = phoneMatch ? phoneMatch[1] : null;
 
   const totalMatch = text.match(/R\$\s*([0-9\.,]{2,})/);
@@ -540,7 +577,8 @@ serve(async (req) => {
             .maybeSingle();
 
           const text = (ocrField?.value_text as string | null) ?? "";
-          const extracted = extractFieldsFromText(text);
+          const cleanedText = normalizeOcrTextForExtraction(text);
+          const extracted = extractFieldsFromText(cleanedText);
 
           const upserts: any[] = [];
           if (extracted.name) upserts.push({ tenant_id: tenantId, case_id: caseId, key: "name", value_text: extracted.name, confidence: 0.7, source: "ocr", last_updated_by: "extract" });
@@ -560,7 +598,7 @@ serve(async (req) => {
             input_summary: "Texto OCR",
             output_summary: "Campos iniciais extraídos",
             reasoning_public: "Extração baseada em padrões (MVP). Se faltar algo, geraremos pendências ao vendedor.",
-            why_json: { extracted_keys: upserts.map((u) => u.key) },
+            why_json: { extracted_keys: upserts.map((u) => u.key), ocr_preprocess: cleanedText !== text ? "header_trim" : "none" },
             confidence_json: { overall: 0.65 },
             occurred_at: new Date().toISOString(),
           });

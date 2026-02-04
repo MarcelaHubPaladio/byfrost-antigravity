@@ -48,6 +48,23 @@ function parsePtBrDateFromText(s: string) {
   return `${dd}/${mm}/${yyyy}`;
 }
 
+function stripAgroforteHeaderLines(lines: string[]) {
+  // Heurística baseada no layout do pedido:
+  // O cabeçalho com logo/endereço/CNPJ aparece ANTES da seção "Local:".
+  const idx = lines.findIndex((l) => /\bLocal\b\s*[:\-]/i.test(l));
+  if (idx >= 0) return lines.slice(idx);
+
+  // Fallback: algumas capturas podem vir sem ":".
+  const idx2 = lines.findIndex((l) => /^\s*Local\b/i.test(l));
+  if (idx2 >= 0) return lines.slice(idx2);
+
+  // Último fallback: começa no primeiro "Nome:" (já dentro do formulário do cliente).
+  const idx3 = lines.findIndex((l) => /\bNome\b\s*[:\-]/i.test(l));
+  if (idx3 >= 0) return lines.slice(idx3);
+
+  return lines;
+}
+
 type ExtractedItem = {
   line_no: number;
   code: string | null;
@@ -112,10 +129,14 @@ type ExtractedFields = {
 function extractFieldsFromText(text: string) {
   // IMPORTANT: OCR text can contain multiple fields on the same line (forms).
   // Prefer "label -> value" parsing line-by-line; avoid generic digit matches (which often capture dates).
-  const lines = String(text ?? "")
+  const allLines = String(text ?? "")
     .split(/\r?\n/)
     .map(normalizeLine)
     .filter(Boolean);
+
+  // Para melhorar a leitura dos campos do pedido, ignoramos o topo (logo + dados da Agroforte).
+  // Isso evita, por exemplo, capturar o CNPJ do cabeçalho como se fosse CPF/CNPJ do cliente.
+  const lines = stripAgroforteHeaderLines(allLines);
 
   const pickByLineRegex = (re: RegExp) => {
     for (const line of lines) {
@@ -144,41 +165,8 @@ function extractFieldsFromText(text: string) {
   };
 
   const extracted: ExtractedFields = {
-    ocr_text_preview: lines.slice(0, 40).join("\n").slice(0, 1200),
+    ocr_text_preview: lines.slice(0, 50).join("\n").slice(0, 1400),
   };
-
-  // ----------------------
-  // Supplier (header)
-  // ----------------------
-  extracted.supplier_name = pickByLineRegex(/\bAGROFORTE\b.*\bLTDA\b\.?/i) ?? "AGROFORTE SOLUÇÕES AGRÍCOLAS LTDA.";
-
-  // Accept OCR punctuation after CNPJ ("CNPJ." / "CNPJ:" / "CNPJ -")
-  const supplierCnpj = pickByLineRegex(/\bCNPJ\b\s*[\.:\-]?\s*([0-9\.\/-]{11,18})/i);
-  extracted.supplier_cnpj = supplierCnpj ? toDigits(supplierCnpj) : null;
-
-  const supplierPhone =
-    pickByLineRegex(/\bFone\b\s*[:\-]?\s*(.+)/i) ?? pickByLineRegex(/\bFone\b\s*\(?\d{2}\)?\s*9?\s*\d{4}[-\s]?\d{4}/i);
-  if (supplierPhone) {
-    const m = supplierPhone.match(/(\(?\d{2}\)?\s*9?\s*\d{4}[-\s]?\d{4})/);
-    extracted.supplier_phone = m?.[1] ? normalizeLine(m[1]) : null;
-  }
-
-  // e.g. "Prudentópolis / PR" (return full string)
-  {
-    let cityUf: string | null = null;
-    for (const line of lines) {
-      const m = line.match(/\b([A-Za-zÀ-ÿ][A-Za-zÀ-ÿ\s'.-]{2,})\s*\/\s*([A-Z]{2})\b/);
-      if (m?.[1] && m?.[2]) {
-        const city = normalizeLine(m[1]);
-        const uf = normalizeLine(m[2]);
-        if (isMeaningfulValue(city) && isMeaningfulValue(uf)) {
-          cityUf = `${city} / ${uf}`;
-          break;
-        }
-      }
-    }
-    extracted.supplier_city_uf = cityUf;
-  }
 
   // ----------------------
   // Customer header fields
@@ -233,8 +221,8 @@ function extractFieldsFromText(text: string) {
   // Documents
   const cpfCnpjRaw =
     pickByLineRegex(/\bcpf\s*\/?\s*cnpj\b\s*[\.:\-]?\s*([0-9\.\/-]{11,18})/i) ??
-    pickByLineRegex(/\bcnpj\b\s*[\.:\-]?\s*([0-9\.\/-]{11,18})/i) ??
-    pickByLineRegex(/\bcpf\b\s*[\.:\-]?\s*([0-9\.\/-]{11,18})/i);
+    pickByLineRegex(/\bcnpj\s*\/?\s*cpf\b\s*[\.:\-]?\s*([0-9\.\/-]{11,18})/i) ??
+    pickByLineRegex(/\bcnpj\/?cpf\b\s*[\.:\-]?\s*([0-9\.\/-]{11,18})/i);
 
   const cpfCnpjDigits = cpfCnpjRaw ? toDigits(cpfCnpjRaw) : null;
   extracted.cpf = cpfCnpjDigits && cpfCnpjDigits.length === 11 ? cpfCnpjDigits : null;
@@ -392,7 +380,6 @@ function extractFieldsFromText(text: string) {
     for (let i = repCodeIdx - 1; i >= Math.max(0, repCodeIdx - 4); i--) {
       const cand = normalizeLine(lines[i]);
       if (!cand) continue;
-      if (/agroforte/i.test(cand)) continue;
       if (/condi[cç][oõ]es/i.test(cand)) continue;
       if (/cliente\s*:/i.test(cand)) continue;
       if (cand.length >= 3 && cand.length <= 40) {
@@ -433,7 +420,8 @@ function mapDocAiLabel(label: string) {
   if (l.startsWith("cep")) return "cep";
   if (l.startsWith("estado")) return "state";
   if (l === "uf" || l.startsWith("uf")) return "uf";
-  if (l.includes("cpf/cnpj") || l.includes("cnpj/cpf") || l === "cpf" || l === "cnpj") return "cpf_cnpj";
+  // Evita pegar o CNPJ do cabeçalho do fornecedor; preferimos o campo explícito CPF/CNPJ do formulário.
+  if (l.includes("cpf/cnpj") || l.includes("cnpj/cpf")) return "cpf_cnpj";
   if (l.includes("inscr") && l.includes("est")) return "ie";
   if (l === "rg") return "rg";
   if (l.includes("condições de pagamento")) return "payment_terms";
