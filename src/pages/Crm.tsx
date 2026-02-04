@@ -57,6 +57,8 @@ type WaMsgLite = { case_id: string | null; occurred_at: string; from_phone: stri
 
 type WaInstanceRow = { id: string; phone_number: string | null };
 
+type VendorOpt = { vendor_id: string; phone_e164: string | null; display_name: string | null };
+
 function minutesAgo(iso: string) {
   const diff = Date.now() - new Date(iso).getTime();
   return Math.max(0, Math.round(diff / 60000));
@@ -109,6 +111,9 @@ export default function Crm() {
   const [tagQuery, setTagQuery] = useState("");
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
 
+  const [vendorQuery, setVendorQuery] = useState("");
+  const [selectedVendorIds, setSelectedVendorIds] = useState<string[]>([]);
+
   const instanceQ = useQuery({
     queryKey: ["wa_instance_active_first", activeTenantId],
     enabled: Boolean(activeTenantId),
@@ -157,6 +162,46 @@ export default function Crm() {
       return opts;
     },
   });
+
+  const vendorsQ = useQuery({
+    queryKey: ["crm_assignable_vendors", activeTenantId],
+    enabled: Boolean(activeTenantId),
+    staleTime: 30_000,
+    refetchOnWindowFocus: true,
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("list_crm_assignable_vendors", { p_tenant_id: activeTenantId! });
+      if (error) throw error;
+      const rows = (data ?? []) as VendorOpt[];
+      rows.sort((a, b) => {
+        const al = String(a.display_name ?? a.phone_e164 ?? a.vendor_id).toLowerCase();
+        const bl = String(b.display_name ?? b.phone_e164 ?? b.vendor_id).toLowerCase();
+        return al.localeCompare(bl);
+      });
+      return rows;
+    },
+  });
+
+  const showVendorFilter = useMemo(() => {
+    // Regra simples: só faz sentido mostrar quando há mais de 1 vendedor possível.
+    // (vendor vê só ele mesmo; gestores/roles acima normalmente verão mais.)
+    return (vendorsQ.data?.length ?? 0) > 1;
+  }, [vendorsQ.data?.length]);
+
+  const visibleVendors = useMemo(() => {
+    const qq = vendorQuery.trim().toLowerCase();
+    const base = vendorsQ.data ?? [];
+    if (!qq) return base;
+    return base.filter((v) => {
+      const label = `${v.display_name ?? ""} ${v.phone_e164 ?? ""}`.toLowerCase();
+      return label.includes(qq);
+    });
+  }, [vendorsQ.data, vendorQuery]);
+
+  // If the allowed vendor list changes, drop selections that are no longer allowed.
+  useEffect(() => {
+    const allowed = new Set((vendorsQ.data ?? []).map((v) => v.vendor_id));
+    setSelectedVendorIds((prev) => prev.filter((id) => allowed.has(id)));
+  }, [vendorsQ.data]);
 
   // Sem seletor: pegamos o primeiro fluxo CRM habilitado.
   const selectedJourney = useMemo(() => {
@@ -389,8 +434,14 @@ export default function Crm() {
   const filteredRows = useMemo(() => {
     const qq = q.trim().toLowerCase();
     const tagSel = selectedTags;
+    const vendorSel = selectedVendorIds;
 
     return journeyRows.filter((r) => {
+      if (vendorSel.length) {
+        const vid = r.assigned_vendor_id;
+        if (!vid || !vendorSel.includes(vid)) return false;
+      }
+
       if (tagSel.length) {
         const tags = tagsByCase.get(r.id) ?? [];
         // AND: precisa conter todas
@@ -405,7 +456,7 @@ export default function Crm() {
       const t = `${r.title ?? ""} ${(r.vendors?.display_name ?? "")} ${(r.vendors?.phone_e164 ?? "")} ${cust?.name ?? ""} ${cust?.phone_e164 ?? ""} ${cust?.email ?? ""} ${metaPhone ?? ""} ${fieldPhone ?? ""}`.toLowerCase();
       return t.includes(qq);
     });
-  }, [journeyRows, q, selectedTags, customersQ.data, casePhoneQ.data, tagsByCase]);
+  }, [journeyRows, q, selectedTags, selectedVendorIds, customersQ.data, casePhoneQ.data, tagsByCase]);
 
   const pendQ = useQuery({
     queryKey: ["crm_pendencies_open", activeTenantId, filteredRows.map((c) => c.id).join(",")],
@@ -496,6 +547,7 @@ export default function Crm() {
     pendQ.refetch();
     lastInboundQ.refetch();
     readsQ.refetch();
+    vendorsQ.refetch();
   };
 
   const visibleTags = useMemo(() => {
@@ -519,6 +571,90 @@ export default function Crm() {
                 className="h-11 rounded-2xl pl-10"
               />
             </div>
+
+            {showVendorFilter && (
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="secondary" className="h-11 rounded-2xl">
+                    <UsersRound className="mr-2 h-4 w-4" /> Vendedores
+                    {selectedVendorIds.length ? (
+                      <span className="ml-2 rounded-full bg-white/70 px-2 py-0.5 text-[11px] font-semibold text-slate-700">
+                        {selectedVendorIds.length}
+                      </span>
+                    ) : null}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent align="end" className="w-[340px] rounded-2xl border-slate-200 bg-white p-2">
+                  <Command className="rounded-2xl border border-slate-200">
+                    <CommandInput
+                      value={vendorQuery}
+                      onValueChange={setVendorQuery}
+                      placeholder="Filtrar vendedores…"
+                      className="h-11"
+                    />
+                    <CommandList className="max-h-[260px]">
+                      <CommandEmpty>Nenhum vendedor</CommandEmpty>
+                      <CommandGroup heading="Vendedores (sua árvore)">
+                        {visibleVendors.map((v) => {
+                          const checked = selectedVendorIds.includes(v.vendor_id);
+                          const label = v.display_name?.trim() || v.phone_e164?.trim() || "Vendedor";
+                          return (
+                            <CommandItem
+                              key={v.vendor_id}
+                              value={`${label} ${v.phone_e164 ?? ""}`}
+                              onSelect={() => {
+                                setSelectedVendorIds((prev) =>
+                                  prev.includes(v.vendor_id)
+                                    ? prev.filter((x) => x !== v.vendor_id)
+                                    : [...prev, v.vendor_id]
+                                );
+                              }}
+                              className={cn(
+                                "rounded-xl",
+                                checked ? "bg-[hsl(var(--byfrost-accent)/0.10)]" : ""
+                              )}
+                            >
+                              <div
+                                className={cn(
+                                  "mr-2 grid h-5 w-5 place-items-center rounded-md border",
+                                  checked
+                                    ? "border-[hsl(var(--byfrost-accent)/0.35)] bg-[hsl(var(--byfrost-accent))] text-white"
+                                    : "border-slate-200 bg-white"
+                                )}
+                              >
+                                {checked ? <Check className="h-3.5 w-3.5" /> : null}
+                              </div>
+                              <div className="min-w-0">
+                                <div className="truncate text-sm font-medium text-slate-900">{label}</div>
+                                <div className="truncate text-[11px] text-slate-500">{v.phone_e164 ?? ""}</div>
+                              </div>
+                            </CommandItem>
+                          );
+                        })}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+
+                  <div className="mt-2 flex items-center justify-between gap-2">
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      className="h-9 flex-1 rounded-2xl"
+                      onClick={() => {
+                        setSelectedVendorIds([]);
+                        setVendorQuery("");
+                      }}
+                      disabled={!selectedVendorIds.length}
+                    >
+                      Limpar
+                    </Button>
+                    <Button type="button" variant="secondary" className="h-9 rounded-2xl" onClick={refresh}>
+                      <RefreshCw className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </PopoverContent>
+              </Popover>
+            )}
 
             <Popover>
               <PopoverTrigger asChild>
