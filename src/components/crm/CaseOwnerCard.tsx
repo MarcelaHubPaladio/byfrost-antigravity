@@ -26,11 +26,17 @@ type VendorRow = {
   deleted_at: string | null;
 };
 
+type AssignableVendorRow = {
+  vendor_id: string;
+  phone_e164: string;
+  display_name: string | null;
+};
+
 function isPresenceManagerRole(role: string | null | undefined) {
   return ["admin", "manager", "supervisor", "leader"].includes(String(role ?? "").toLowerCase());
 }
 
-function labelForVendor(v: VendorRow) {
+function labelForVendor(v: { display_name: string | null; phone_e164: string }) {
   const name = (v.display_name ?? "").trim();
   if (name) return `${name} • ${v.phone_e164}`;
   return v.phone_e164;
@@ -59,7 +65,7 @@ export function CaseOwnerCard(props: {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("users_profile")
-        .select("role,phone_e164")
+        .select("role")
         .eq("tenant_id", props.tenantId)
         .eq("user_id", user!.id)
         .is("deleted_at", null)
@@ -69,6 +75,7 @@ export function CaseOwnerCard(props: {
     },
   });
 
+  // Used to label the current owner and support the super-admin list.
   const vendorsQ = useQuery({
     queryKey: ["crm_vendors", props.tenantId],
     enabled: Boolean(props.tenantId),
@@ -85,6 +92,20 @@ export function CaseOwnerCard(props: {
     },
   });
 
+  // Main source of options: database decides based on org chart cascade (with fallback).
+  const assignableQ = useQuery({
+    queryKey: ["crm_assignable_vendors", props.tenantId],
+    enabled: Boolean(props.tenantId),
+    staleTime: 20_000,
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("list_crm_assignable_vendors", {
+        p_tenant_id: props.tenantId,
+      });
+      if (error) throw error;
+      return (data ?? []) as AssignableVendorRow[];
+    },
+  });
+
   const vendorById = useMemo(() => {
     const m = new Map<string, VendorRow>();
     for (const v of vendorsQ.data ?? []) m.set(v.id, v);
@@ -92,58 +113,26 @@ export function CaseOwnerCard(props: {
   }, [vendorsQ.data]);
 
   const myRole = String(profileQ.data?.role ?? activeTenant?.role ?? "");
-  const myPhone = (profileQ.data?.phone_e164 as string | null) ?? null;
-
-  const myVendorId = useMemo(() => {
-    const phone = (myPhone ?? "").trim();
-    if (!phone) return null;
-    return (vendorsQ.data ?? []).find((v) => v.phone_e164 === phone)?.id ?? null;
-  }, [vendorsQ.data, myPhone]);
-
-  const allowedVendors = useMemo(() => {
-    const all = vendorsQ.data ?? [];
-    if (isSuperAdmin) {
-      return [...all].sort((a, b) => labelForVendor(a).localeCompare(labelForVendor(b)));
-    }
-
-    const role = String(myRole ?? "").toLowerCase();
-
-    // Se não conseguimos mapear o usuário para um vendor, não dá pra calcular cascata.
-    if (!myVendorId) return [] as VendorRow[];
-
-    // Root de delegação:
-    // - vendor: pode delegar dentro da subárvore do supervisor (pai). Se não tiver pai, só ele mesmo.
-    // - supervisor/leader/manager/admin: subárvore do próprio vendor.
-    const myVendor = vendorById.get(myVendorId) ?? null;
-    const rootId = role === "vendor" ? (myVendor?.parent_vendor_id ?? myVendorId) : myVendorId;
-
-    const childrenByParent = new Map<string, string[]>();
-    for (const v of all) {
-      const p = v.parent_vendor_id;
-      if (!p) continue;
-      const cur = childrenByParent.get(p) ?? [];
-      cur.push(v.id);
-      childrenByParent.set(p, cur);
-    }
-
-    const visited = new Set<string>();
-    const stack = [rootId];
-    while (stack.length) {
-      const id = stack.pop()!;
-      if (visited.has(id)) continue;
-      visited.add(id);
-      const kids = childrenByParent.get(id) ?? [];
-      for (const k of kids) stack.push(k);
-    }
-
-    const list = all.filter((v) => visited.has(v.id));
-    list.sort((a, b) => labelForVendor(a).localeCompare(labelForVendor(b)));
-    return list;
-  }, [vendorsQ.data, isSuperAdmin, myRole, myVendorId, vendorById]);
 
   const currentOwner = props.assignedVendorId ? vendorById.get(props.assignedVendorId) ?? null : null;
 
   const canSetUnassigned = isSuperAdmin || isPresenceManagerRole(myRole);
+
+  const optionRows = useMemo(() => {
+    if (isSuperAdmin) {
+      const all = (vendorsQ.data ?? []).map((v) => ({
+        vendor_id: v.id,
+        phone_e164: v.phone_e164,
+        display_name: v.display_name,
+      }));
+      all.sort((a, b) => labelForVendor(a).localeCompare(labelForVendor(b)));
+      return all;
+    }
+
+    const rows = [...(assignableQ.data ?? [])];
+    rows.sort((a, b) => labelForVendor(a).localeCompare(labelForVendor(b)));
+    return rows;
+  }, [assignableQ.data, vendorsQ.data, isSuperAdmin]);
 
   const saveOwner = async () => {
     if (!props.tenantId || !props.caseId) return;
@@ -153,9 +142,9 @@ export function CaseOwnerCard(props: {
 
     // Guard client-side (o banco também barra)
     if (nextVendorId && !isSuperAdmin) {
-      const allowed = allowedVendors.some((v) => v.id === nextVendorId);
+      const allowed = optionRows.some((v) => v.vendor_id === nextVendorId);
       if (!allowed) {
-        showError("Você não tem permissão (pela cascata) para delegar para este vendedor.");
+        showError("Você não tem permissão (pela cascata) para atribuir para este vendedor.");
         return;
       }
     }
@@ -163,8 +152,12 @@ export function CaseOwnerCard(props: {
     setSaving(true);
     try {
       const prevVendorId = props.assignedVendorId;
-      const prevLabel = prevVendorId ? labelForVendor(vendorById.get(prevVendorId)!) : "(sem dono)";
-      const nextLabel = nextVendorId ? labelForVendor(vendorById.get(nextVendorId)!) : "(sem dono)";
+      const prevLabel = prevVendorId
+        ? labelForVendor(vendorById.get(prevVendorId) ?? { phone_e164: "(desconhecido)", display_name: null })
+        : "(sem dono)";
+      const nextLabel = nextVendorId
+        ? labelForVendor(vendorById.get(nextVendorId) ?? { phone_e164: "(desconhecido)", display_name: null })
+        : "(sem dono)";
 
       const { error } = await supabase
         .from("cases")
@@ -173,7 +166,6 @@ export function CaseOwnerCard(props: {
         .eq("id", props.caseId);
       if (error) throw error;
 
-      // Timeline
       const { error: tlErr } = await supabase.from("timeline_events").insert({
         tenant_id: props.tenantId,
         case_id: props.caseId,
@@ -205,7 +197,7 @@ export function CaseOwnerCard(props: {
     }
   };
 
-  const title = isPresenceManagerRole(myRole) || isSuperAdmin ? "Atribuir / reatribuir lead" : "Delegar lead";
+  const title = isPresenceManagerRole(myRole) || isSuperAdmin ? "Atribuir / reatribuir lead" : "Atribuição (limitada)";
 
   return (
     <Card className="rounded-[22px] border-slate-200 bg-white p-4">
@@ -219,7 +211,7 @@ export function CaseOwnerCard(props: {
                 : "bg-[hsl(var(--byfrost-accent)/0.12)] text-[hsl(var(--byfrost-accent))]"
             )}
           >
-            {(isPresenceManagerRole(myRole) || isSuperAdmin) ? (
+            {isPresenceManagerRole(myRole) || isSuperAdmin ? (
               <ShieldCheck className="h-4 w-4" />
             ) : (
               <UserRoundCog className="h-4 w-4" />
@@ -243,9 +235,7 @@ export function CaseOwnerCard(props: {
               <div className="truncate text-sm font-semibold text-slate-900">
                 {currentOwner ? labelForVendor(currentOwner) : "(sem dono)"}
               </div>
-              <div className="mt-0.5 text-[11px] text-slate-500">
-                {myVendorId ? "visibilidade por cascata ativa" : "atenção: seu usuário não está mapeado a um vendor"}
-              </div>
+              <div className="mt-0.5 text-[11px] text-slate-500">A permissão é validada no banco (organograma/cascata).</div>
             </div>
           </div>
         </div>
@@ -254,7 +244,7 @@ export function CaseOwnerCard(props: {
           <Button
             type="button"
             onClick={saveOwner}
-            disabled={saving || vendorsQ.isLoading || profileQ.isLoading}
+            disabled={saving || vendorsQ.isLoading || profileQ.isLoading || assignableQ.isLoading}
             className={cn(
               "h-11 rounded-2xl px-4 text-white",
               "bg-[hsl(var(--byfrost-accent))] hover:bg-[hsl(var(--byfrost-accent)/0.92)]"
@@ -269,7 +259,7 @@ export function CaseOwnerCard(props: {
           <Select
             value={selected}
             onValueChange={setSelected}
-            disabled={saving || vendorsQ.isLoading || profileQ.isLoading}
+            disabled={saving || vendorsQ.isLoading || profileQ.isLoading || assignableQ.isLoading}
           >
             <SelectTrigger className="mt-1 h-11 rounded-2xl bg-white">
               <SelectValue placeholder="Selecionar vendedor…" />
@@ -280,24 +270,23 @@ export function CaseOwnerCard(props: {
                   (sem dono)
                 </SelectItem>
               )}
-              {(isSuperAdmin ? (vendorsQ.data ?? []) : allowedVendors).map((v) => (
-                <SelectItem key={v.id} value={v.id} className="rounded-xl">
+              {optionRows.map((v) => (
+                <SelectItem key={v.vendor_id} value={v.vendor_id} className="rounded-xl">
                   {labelForVendor(v)}
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
 
-          {!isSuperAdmin && !myVendorId && (
-            <div className="mt-2 rounded-2xl border border-amber-200 bg-amber-50 p-3 text-[11px] text-amber-900">
-              Seu usuário não está mapeado para um <span className="font-medium">vendor</span> (por phone_e164),
-              então não dá para calcular sua cascata. Ajuste o cadastro em Admin → Usuários e garanta que exista
-              um registro correspondente em <span className="font-medium">vendors</span>.
+          {assignableQ.isError ? (
+            <div className="mt-2 rounded-2xl border border-rose-200 bg-rose-50 p-3 text-[11px] text-rose-900">
+              Erro ao carregar lista de atribuição: {(assignableQ.error as any)?.message ?? ""}
             </div>
-          )}
+          ) : null}
 
           <div className="mt-2 text-[11px] text-slate-500">
-            A permissão real é validada pelo banco (RLS) conforme a hierarquia em cascata.
+            Se você estiver no organograma (Admin → Organograma), a lista segue sua subárvore. Caso contrário, usa a hierarquia
+            de vendedores (legado).
           </div>
         </div>
       </div>
