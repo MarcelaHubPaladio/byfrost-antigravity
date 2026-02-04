@@ -89,7 +89,22 @@ async function mergeDuplicateCase(args: {
     .update({ case_id: keepCaseId })
     .eq("tenant_id", tenantId)
     .eq("case_id", duplicateCaseId);
-  await supabase.from("case_items").update({ case_id: keepCaseId }).eq("case_id", duplicateCaseId);
+
+  // IMPORTANT: don't duplicate items.
+  const { data: keepAnyItem } = await supabase
+    .from("case_items")
+    .select("id")
+    .eq("case_id", keepCaseId)
+    .limit(1)
+    .maybeSingle();
+
+  if ((keepAnyItem as any)?.id) {
+    await supabase.from("case_items").delete().eq("case_id", duplicateCaseId);
+  } else {
+    await supabase.from("case_items").update({ case_id: keepCaseId }).eq("case_id", duplicateCaseId);
+  }
+
+  // Keep case_fields history (may contain duplicates; acceptable for now)
   await supabase.from("case_fields").update({ case_id: keepCaseId }).eq("case_id", duplicateCaseId);
 
   // Soft-delete duplicate case

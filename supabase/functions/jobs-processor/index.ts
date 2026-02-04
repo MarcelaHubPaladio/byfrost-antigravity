@@ -295,10 +295,39 @@ async function mergeDuplicateCase(args: {
   const { supabase, tenantId, duplicateCaseId, keepCaseId, fingerprint } = args;
 
   // Move entities to the kept case (best-effort)
-  await supabase.from("wa_messages").update({ case_id: keepCaseId }).eq("tenant_id", tenantId).eq("case_id", duplicateCaseId);
-  await supabase.from("case_attachments").update({ case_id: keepCaseId }).eq("tenant_id", tenantId).eq("case_id", duplicateCaseId);
-  await supabase.from("pendencies").update({ case_id: keepCaseId }).eq("tenant_id", tenantId).eq("case_id", duplicateCaseId);
-  await supabase.from("case_items").update({ case_id: keepCaseId }).eq("case_id", duplicateCaseId);
+  await supabase
+    .from("wa_messages")
+    .update({ case_id: keepCaseId })
+    .eq("tenant_id", tenantId)
+    .eq("case_id", duplicateCaseId);
+  await supabase
+    .from("case_attachments")
+    .update({ case_id: keepCaseId })
+    .eq("tenant_id", tenantId)
+    .eq("case_id", duplicateCaseId);
+  await supabase
+    .from("pendencies")
+    .update({ case_id: keepCaseId })
+    .eq("tenant_id", tenantId)
+    .eq("case_id", duplicateCaseId);
+
+  // IMPORTANT: don't duplicate items.
+  // If the kept case already has items, we discard the duplicate case's items.
+  // If it doesn't, we move them.
+  const { data: keepAnyItem } = await supabase
+    .from("case_items")
+    .select("id")
+    .eq("case_id", keepCaseId)
+    .limit(1)
+    .maybeSingle();
+
+  if ((keepAnyItem as any)?.id) {
+    await supabase.from("case_items").delete().eq("case_id", duplicateCaseId);
+  } else {
+    await supabase.from("case_items").update({ case_id: keepCaseId }).eq("case_id", duplicateCaseId);
+  }
+
+  // Keep case_fields history (may contain duplicates; acceptable for now)
   await supabase.from("case_fields").update({ case_id: keepCaseId }).eq("case_id", duplicateCaseId);
 
   // Soft-delete duplicate case
