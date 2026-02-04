@@ -268,7 +268,16 @@ function pickBestMediaUrl(m: { media_url: string | null; payload_json: any }) {
   return `data:${mime};base64,${base64}`;
 }
 
-export function WhatsAppConversation({ caseId, className }: { caseId: string; className?: string }) {
+export function WhatsAppConversation({
+  caseId,
+  className,
+  instanceIds,
+}: {
+  caseId: string;
+  className?: string;
+  /** Se fornecido, usa essas instâncias como contexto (ex: "ver como usuário"). */
+  instanceIds?: string[];
+}) {
   const qc = useQueryClient();
   const { activeTenantId } = useTenant();
   const { user } = useSession();
@@ -279,6 +288,8 @@ export function WhatsAppConversation({ caseId, className }: { caseId: string; cl
   const [transcribingById, setTranscribingById] = useState<Record<string, boolean>>({});
 
   const scrollerRef = useRef<HTMLDivElement | null>(null);
+
+  const effectiveInstanceIds = instanceIds ?? chatAccess.instanceIds;
 
   const caseQ = useQuery({
     queryKey: ["case_lite_for_chat", activeTenantId, caseId],
@@ -321,8 +332,8 @@ export function WhatsAppConversation({ caseId, className }: { caseId: string; cl
   const counterpartRoleLabel = senderIsVendor ? "vendedor" : "cliente";
 
   const instanceQ = useQuery({
-    queryKey: ["wa_instance_for_chat_user", activeTenantId, chatAccess.instanceIds.join(",")],
-    enabled: Boolean(activeTenantId && chatAccess.instanceIds.length),
+    queryKey: ["wa_instance_for_chat_user", activeTenantId, effectiveInstanceIds.join(",")],
+    enabled: Boolean(activeTenantId && effectiveInstanceIds.length),
     staleTime: 30_000,
     queryFn: async () => {
       const { data, error } = await supabase
@@ -331,7 +342,7 @@ export function WhatsAppConversation({ caseId, className }: { caseId: string; cl
         .eq("tenant_id", activeTenantId!)
         .eq("status", "active")
         .is("deleted_at", null)
-        .in("id", chatAccess.instanceIds)
+        .in("id", effectiveInstanceIds)
         .order("created_at", { ascending: true })
         .limit(1)
         .maybeSingle();
@@ -404,7 +415,7 @@ export function WhatsAppConversation({ caseId, className }: { caseId: string; cl
     const to = counterpartPhone;
 
     if (!inst?.id) {
-      showError("Nenhuma instância WhatsApp ativa está vinculada ao seu usuário neste tenant.");
+      showError("Nenhuma instância WhatsApp ativa está vinculada ao contexto selecionado.");
       return;
     }
 
@@ -943,7 +954,7 @@ export function WhatsAppConversation({ caseId, className }: { caseId: string; cl
             </div>
 
             <div className="mt-2 text-[11px] text-slate-500">
-              Enter envia • Shift+Enter quebra linha • envio usa sua instância do tenant
+              Enter envia • Shift+Enter quebra linha • envio usa a instância do contexto selecionado
             </div>
           </div>
         </div>

@@ -11,6 +11,14 @@ import { samePhoneLoose } from "@/lib/phone";
 import { useChatInstanceAccess } from "@/hooks/useChatInstanceAccess";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -49,6 +57,15 @@ type WaMsgLite = {
 
 type CaseFieldRow = { case_id: string; key: string; value_text: string | null };
 
+type TenantUserLite = {
+  user_id: string;
+  display_name: string | null;
+  email: string | null;
+  phone_e164: string | null;
+  role: string;
+  deleted_at: string | null;
+};
+
 function getMetaPhone(meta: any): string | null {
   if (!meta || typeof meta !== "object") return null;
   const direct =
@@ -79,14 +96,22 @@ function bestSnippet(m: WaMsgLite | null) {
   return txt || "(sem texto)";
 }
 
+function userLabel(u: TenantUserLite) {
+  return (
+    u.display_name?.trim() ||
+    u.email?.trim() ||
+    (u.phone_e164 ? u.phone_e164 : null) ||
+    `${u.user_id.slice(0, 8)}…`
+  );
+}
+
 export default function Chats() {
   const { id } = useParams<{ id?: string }>();
   const nav = useNavigate();
   const loc = useLocation();
   const qc = useQueryClient();
-  const { activeTenantId } = useTenant();
+  const { activeTenantId, isSuperAdmin } = useTenant();
   const { user } = useSession();
-  const chatAccess = useChatInstanceAccess();
 
   const [deleting, setDeleting] = useState(false);
 
@@ -95,16 +120,73 @@ export default function Chats() {
     return (sp.get("q") ?? "").trim();
   }, [loc.search]);
 
+  const canPickUserQ = useQuery({
+    queryKey: ["chat_can_pick_user", activeTenantId, user?.id],
+    enabled: Boolean(activeTenantId && user?.id && !isSuperAdmin),
+    staleTime: 30_000,
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("is_presence_manager", { p_tenant_id: activeTenantId! });
+      if (error) throw error;
+      return Boolean(data);
+    },
+  });
+
+  const canPickUser = isSuperAdmin || Boolean(canPickUserQ.data);
+
+  const usersQ = useQuery({
+    queryKey: ["chat_tenant_users_for_picker", activeTenantId],
+    enabled: Boolean(activeTenantId && canPickUser),
+    staleTime: 30_000,
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("list_tenant_users_profiles", {
+        p_tenant_id: activeTenantId!,
+        p_include_deleted: false,
+      });
+      if (error) throw error;
+      return (data ?? []) as TenantUserLite[];
+    },
+  });
+
+  const usersById = useMemo(() => {
+    const m = new Map<string, TenantUserLite>();
+    for (const r of usersQ.data ?? []) m.set(r.user_id, r);
+    return m;
+  }, [usersQ.data]);
+
+  const [viewUserId, setViewUserId] = useState<string>(user?.id ?? "");
+
+  useEffect(() => {
+    if (!user?.id) return;
+    // First render: set to myself.
+    setViewUserId((prev) => (prev ? prev : user.id));
+  }, [user?.id]);
+
+  const viewUser = useMemo(() => (viewUserId ? usersById.get(viewUserId) ?? null : null), [usersById, viewUserId]);
+  const viewUserPhone = viewUser?.phone_e164 ?? null;
+
+  const chatAccess = useChatInstanceAccess({
+    asUserId: viewUserId || user?.id || null,
+    // Para o próprio usuário, deixe o hook resolver o telefone.
+    asUserPhone: viewUserId && user?.id && viewUserId === user.id ? undefined : viewUserPhone,
+  });
+
   const instanceIds = chatAccess.instanceIds;
   const instancePhone = chatAccess.instances[0]?.phone_number ?? null;
 
+  const viewLabel = useMemo(() => {
+    if (!canPickUser) return "seu número";
+    if (viewUserId && user?.id && viewUserId === user.id) return "seu número";
+    if (viewUser) return `de ${userLabel(viewUser)}`;
+    return "(selecione um usuário)";
+  }, [canPickUser, viewUserId, user?.id, viewUser]);
+
   const chatsQ = useQuery({
     queryKey: ["chat_cases", activeTenantId, instanceIds.join(",")],
-    enabled: Boolean(activeTenantId && chatAccess.hasAccess && instanceIds.length),
+    enabled: Boolean(activeTenantId && instanceIds.length),
     refetchInterval: 5000,
     refetchOnWindowFocus: true,
     queryFn: async () => {
-      // 1) Find cases that have messages for *this user's instance(s)*
+      // 1) Find cases that have messages for *this instance set*
       const { data: msgRows, error: msgErr } = await supabase
         .from("wa_messages")
         .select("case_id,occurred_at")
@@ -127,7 +209,7 @@ export default function Chats() {
 
       if (uniqueCaseIds.length === 0) return [] as CaseRow[];
 
-      // 2) Load only chat-marked cases (and rely on RLS for tenant membership)
+      // 2) Load only chat-marked cases (and rely on RLS for visibility)
       const { data: casesRows, error: caseErr } = await supabase
         .from("cases")
         .select("id,title,updated_at,meta_json")
@@ -184,6 +266,7 @@ export default function Chats() {
     return out;
   }, [fieldsQ.data]);
 
+  // Unread markers are always relative to the *current* user (case_message_reads is self-only by RLS).
   const readsQ = useQuery({
     queryKey: ["case_message_reads", activeTenantId, user?.id],
     enabled: Boolean(activeTenantId && user?.id),
@@ -349,13 +432,13 @@ export default function Chats() {
 
   // Default selection: if /app/chat without id, jump to the first chat.
   useEffect(() => {
-    if (!chatAccess.hasAccess) return;
+    if (!instanceIds.length) return;
     if (activeCaseId) return;
     const first = sortedChats[0];
     if (first?.id) nav(`/app/chat/${first.id}${loc.search || ""}`, { replace: true });
-  }, [chatAccess.hasAccess, activeCaseId, sortedChats, nav, loc.search]);
+  }, [instanceIds.length, activeCaseId, sortedChats, nav, loc.search]);
 
-  // When selecting a chat, mark as read.
+  // When selecting a chat, mark as read (for the current user).
   useEffect(() => {
     if (!activeTenantId || !activeCaseId || !user?.id) return;
     supabase
@@ -389,7 +472,8 @@ export default function Chats() {
 
   const hasSelection = Boolean(activeCaseId && activeCase);
 
-  if (!chatAccess.isLoading && !chatAccess.hasAccess) {
+  // If we can pick user, we don't want to block the whole page when there is no instance yet.
+  if (!chatAccess.isLoading && !chatAccess.hasAccess && !canPickUser) {
     return (
       <RequireAuth>
         <AppShell>
@@ -429,7 +513,7 @@ export default function Chats() {
                   </div>
                   <div>
                     <div className="text-sm font-semibold text-slate-900">Chat</div>
-                    <div className="text-[11px] text-slate-500">Conversas do seu número</div>
+                    <div className="text-[11px] text-slate-500">Conversas {viewLabel}</div>
                   </div>
                 </div>
 
@@ -437,6 +521,38 @@ export default function Chats() {
                   <Link to="/app">Voltar</Link>
                 </Button>
               </div>
+
+              {canPickUser && (
+                <div className="px-4 pb-3">
+                  <Label className="text-[11px] text-slate-600">Ver conversas do usuário</Label>
+                  <Select value={viewUserId} onValueChange={setViewUserId}>
+                    <SelectTrigger className="mt-1 h-11 rounded-2xl bg-white">
+                      <SelectValue placeholder={usersQ.isLoading ? "Carregando usuários…" : "Selecione um usuário"} />
+                    </SelectTrigger>
+                    <SelectContent className="rounded-2xl">
+                      {/* Eu */}
+                      {user?.id ? (
+                        <SelectItem value={user.id} className="rounded-xl">
+                          Meu usuário
+                        </SelectItem>
+                      ) : null}
+
+                      {(usersQ.data ?? [])
+                        .filter((u) => !u.deleted_at)
+                        .sort((a, b) => userLabel(a).localeCompare(userLabel(b)))
+                        .map((u) => (
+                          <SelectItem key={u.user_id} value={u.user_id} className="rounded-xl">
+                            {userLabel(u)}{u.phone_e164 ? ` • ${u.phone_e164}` : ""}
+                          </SelectItem>
+                        ))}
+                    </SelectContent>
+                  </Select>
+
+                  <div className="mt-1 text-[11px] text-slate-500">
+                    Filtra por instâncias <span className="font-medium">atribuídas</span> ou com <span className="font-medium">o mesmo número</span>.
+                  </div>
+                </div>
+              )}
 
               <div className="px-4 pb-3">
                 <div className="relative">
@@ -457,7 +573,7 @@ export default function Chats() {
               </div>
 
               <div className="px-2 pb-3">
-                <div className="max-h-[calc(100vh-200px)] overflow-y-auto px-2">
+                <div className="max-h-[calc(100vh-260px)] overflow-y-auto px-2">
                   {sortedChats.map((c) => {
                     const phone = phoneByCase.get(c.id) ?? getMetaPhone(c.meta_json) ?? null;
                     const primary = c.title ?? phone ?? "Conversa";
@@ -522,7 +638,9 @@ export default function Chats() {
 
                   {sortedChats.length === 0 && (
                     <div className="rounded-[22px] border border-dashed border-slate-200 bg-white/60 p-5 text-sm text-slate-600">
-                      Nenhuma conversa do seu número marcada como chat ainda.
+                      {instanceIds.length === 0 && canPickUser
+                        ? "Selecione um usuário acima para ver as conversas vinculadas ao número dele."
+                        : "Nenhuma conversa marcada como chat ainda."}
                       <div className="mt-2 text-xs text-slate-500">
                         Abra um case e ative o toggle <span className="font-semibold">"Somente chat"</span>.
                       </div>
@@ -592,7 +710,11 @@ export default function Chats() {
                   </div>
 
                   <div className="flex-1 px-3 pb-4 md:px-4">
-                    <WhatsAppConversation caseId={activeCaseId!} className="h-[calc(100vh-170px)]" />
+                    <WhatsAppConversation
+                      caseId={activeCaseId!}
+                      className="h-[calc(100vh-170px)]"
+                      instanceIds={instanceIds}
+                    />
                   </div>
                 </div>
               ) : (

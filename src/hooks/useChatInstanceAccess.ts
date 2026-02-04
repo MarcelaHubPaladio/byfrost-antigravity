@@ -20,13 +20,29 @@ function getUserPhoneFromAuthUser(user: any): string | null {
   return null;
 }
 
-export function useChatInstanceAccess() {
+export type UseChatInstanceAccessOptions = {
+  /**
+   * Quando definido, calcula instâncias como se estivéssemos "vendo como" esse usuário.
+   * OBS: para usuários que não são o auth.uid(), normalmente você também deve passar asUserPhone.
+   */
+  asUserId?: string | null;
+  /** Telefone do usuário selecionado (p/ match com wa_instances.phone_number). */
+  asUserPhone?: string | null;
+};
+
+export function useChatInstanceAccess(opts?: UseChatInstanceAccessOptions) {
   const { activeTenantId, isSuperAdmin } = useTenant();
   const { user } = useSession();
 
+  const effectiveUserId = opts?.asUserId ?? user?.id ?? null;
+  const isImpersonatingOtherUser = Boolean(effectiveUserId && user?.id && effectiveUserId !== user.id);
+
+  // Para o próprio usuário (não super-admin), tentamos buscar o telefone no users_profile.
+  // Para "ver como" outro usuário, o chamador deve fornecer asUserPhone (via RPC),
+  // porque users_profile tem RLS (self-only).
   const userPhoneQ = useQuery({
     queryKey: ["chat_user_phone", activeTenantId, user?.id],
-    enabled: Boolean(activeTenantId && user?.id && !isSuperAdmin),
+    enabled: Boolean(activeTenantId && user?.id && !isSuperAdmin && !isImpersonatingOtherUser),
     staleTime: 60_000,
     queryFn: async () => {
       const { data, error } = await supabase
@@ -40,14 +56,15 @@ export function useChatInstanceAccess() {
     },
   });
 
-  const userPhone = useMemo(() => {
+  const effectiveUserPhone = useMemo(() => {
+    if (opts?.asUserPhone !== undefined) return opts.asUserPhone;
     if (isSuperAdmin) return null;
     return userPhoneQ.data ?? getUserPhoneFromAuthUser(user) ?? null;
-  }, [isSuperAdmin, userPhoneQ.data, user]);
+  }, [opts?.asUserPhone, isSuperAdmin, userPhoneQ.data, user]);
 
   const instancesQ = useQuery({
-    queryKey: ["chat_user_instances", activeTenantId, user?.id, userPhone],
-    enabled: Boolean(activeTenantId && user?.id && !isSuperAdmin),
+    queryKey: ["chat_user_instances", activeTenantId, effectiveUserId, effectiveUserPhone, isSuperAdmin],
+    enabled: Boolean(activeTenantId && (isSuperAdmin || effectiveUserId)),
     staleTime: 15_000,
     queryFn: async () => {
       const { data, error } = await supabase
@@ -60,13 +77,23 @@ export function useChatInstanceAccess() {
       if (error) throw error;
 
       const rows = (data ?? []) as any as WaInstanceLite[];
-      const matched = rows.filter((r) => {
-        if (r.assigned_user_id && r.assigned_user_id === user!.id) return true;
-        if (!userPhone) return false;
-        return samePhoneLoose(r.phone_number, userPhone);
-      });
 
-      return matched;
+      // Super-admin: por padrão pode ver tudo; se escolheu um usuário, filtra como o usuário.
+      if (isSuperAdmin) {
+        if (!effectiveUserId) return rows;
+        return rows.filter((r) => {
+          if (r.assigned_user_id && r.assigned_user_id === effectiveUserId) return true;
+          if (!effectiveUserPhone) return false;
+          return samePhoneLoose(r.phone_number, effectiveUserPhone);
+        });
+      }
+
+      // Usuário normal (ou gestor "vendo como"): filtra pelas instâncias vinculadas.
+      return rows.filter((r) => {
+        if (r.assigned_user_id && effectiveUserId && r.assigned_user_id === effectiveUserId) return true;
+        if (!effectiveUserPhone) return false;
+        return samePhoneLoose(r.phone_number, effectiveUserPhone);
+      });
     },
   });
 
@@ -74,10 +101,10 @@ export function useChatInstanceAccess() {
   const instanceIds = useMemo(() => instances.map((i) => i.id), [instances]);
 
   const hasAccess = isSuperAdmin ? true : instanceIds.length > 0;
-  const isLoading = isSuperAdmin ? false : userPhoneQ.isLoading || instancesQ.isLoading;
+  const isLoading = (isSuperAdmin ? false : userPhoneQ.isLoading) || instancesQ.isLoading;
 
   return {
-    userPhone,
+    userPhone: effectiveUserPhone,
     instances,
     instanceIds,
     hasAccess,
