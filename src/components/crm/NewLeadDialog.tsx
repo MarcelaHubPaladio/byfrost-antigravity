@@ -106,36 +106,30 @@ export function NewLeadDialog({
       );
     }
 
+    const authUser = (await supabase.auth.getUser()).data.user;
+
     const displayName =
       (profile as any)?.display_name?.trim?.() ||
       ((profile as any)?.email ? String((profile as any).email).split("@")[0] : "") ||
-      getUserDisplayNameFromAuthUser((await supabase.auth.getUser()).data.user);
+      getUserDisplayNameFromAuthUser(authUser);
 
-    const { data: existingVendor, error: vSelErr } = await supabase
+    const { data, error } = await supabase
       .from("vendors")
-      .select("id")
-      .eq("tenant_id", tenantId)
-      .eq("phone_e164", phone)
-      .is("deleted_at", null)
-      .limit(1)
-      .maybeSingle();
-    if (vSelErr) throw vSelErr;
-
-    if ((existingVendor as any)?.id) return String((existingVendor as any).id);
-
-    const { data: createdVendor, error: vInsErr } = await supabase
-      .from("vendors")
-      .insert({
-        tenant_id: tenantId,
-        phone_e164: phone,
-        display_name: displayName,
-        active: true,
-      } as any)
+      .upsert(
+        {
+          tenant_id: tenantId,
+          phone_e164: phone,
+          display_name: displayName,
+          active: true,
+          deleted_at: null,
+        } as any,
+        { onConflict: "tenant_id,phone_e164" }
+      )
       .select("id")
       .single();
-    if (vInsErr) throw vInsErr;
 
-    return String((createdVendor as any).id);
+    if (error) throw error;
+    return String((data as any).id);
   };
 
   const createLead = async () => {
@@ -204,6 +198,8 @@ export function NewLeadDialog({
           tenant_id: tenantId,
           journey_id: journey.id,
           customer_id: customerId,
+          created_by_channel: "panel",
+          created_by_vendor_id: ownerVendorId,
           assigned_vendor_id: ownerVendorId,
           title: displayName,
           is_chat: false,

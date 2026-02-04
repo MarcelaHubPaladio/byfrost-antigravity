@@ -551,7 +551,7 @@ serve(async (req) => {
       if (!zapiInstanceId) return null;
       const { data, error } = await supabase
         .from("wa_instances")
-        .select("id, tenant_id, webhook_secret, default_journey_id, phone_number")
+        .select("id, tenant_id, name, webhook_secret, default_journey_id, phone_number")
         .eq("zapi_instance_id", zapiInstanceId)
         .maybeSingle();
       if (error) {
@@ -1131,7 +1131,7 @@ serve(async (req) => {
     const loadOpenCase = async (caseId: string, opts: { deleted: "exclude" | "only" }) => {
       let q = supabase
         .from("cases")
-        .select("id,journey_id,is_chat,deleted_at,updated_at")
+        .select("id,journey_id,is_chat,assigned_vendor_id,deleted_at,updated_at")
         .eq("tenant_id", instance.tenant_id)
         .eq("id", caseId)
         .eq("status", "open");
@@ -1534,6 +1534,36 @@ serve(async (req) => {
     const crmJourneyIds = crmJourneys.map((j) => j.id);
     const defaultCrmJourney = crmJourneys[0] ?? null;
 
+    // NEW: if we are opening a CRM case from inbound WhatsApp (customer -> vendor),
+    // link it to the vendor by the *instance phone number*.
+    const shouldAssignSellerToCrm = Boolean(!cfgSenderIsVendor && defaultCrmJourney?.id && instancePhoneNorm);
+
+    let sellerVendorId: string | null = null;
+    if (shouldAssignSellerToCrm && instancePhoneNorm) {
+      const displayName = String((instance as any)?.name ?? "").trim() || `Vendedor ${instancePhoneNorm}`;
+
+      const { data: v, error: vErr } = await supabase
+        .from("vendors")
+        .upsert(
+          {
+            tenant_id: instance.tenant_id,
+            phone_e164: instancePhoneNorm,
+            display_name: displayName,
+            active: true,
+            deleted_at: null,
+          },
+          { onConflict: "tenant_id,phone_e164" }
+        )
+        .select("id")
+        .single();
+
+      if (vErr) {
+        console.error(`[${fn}] Failed to ensure seller vendor`, { vErr });
+      } else {
+        sellerVendorId = (v as any)?.id ?? null;
+      }
+    }
+
     // Sempre tenta garantir customer (mesmo se a jornada roteada não for CRM),
     // para conseguir linkar mensagens por customer_id e evitar duplicação.
     let customerId: string | null = null;
@@ -1542,7 +1572,7 @@ serve(async (req) => {
     if (!cfgSenderIsVendor && inboundFromPhone) {
       const { data: existingCustomer, error: custErr } = await supabase
         .from("customer_accounts")
-        .select("id,phone_e164")
+        .select("id,phone_e164,assigned_vendor_id")
         .eq("tenant_id", instance.tenant_id)
         .in("phone_e164", phoneVariants.length ? phoneVariants : [inboundFromPhone])
         .is("deleted_at", null)
@@ -1553,6 +1583,16 @@ serve(async (req) => {
 
       if (existingCustomer?.id) {
         customerId = existingCustomer.id;
+
+        // If this is CRM, default the customer owner/vendor to the seller (instance phone) when not set.
+        if (shouldAssignSellerToCrm && sellerVendorId && !(existingCustomer as any).assigned_vendor_id) {
+          await supabase
+            .from("customer_accounts")
+            .update({ assigned_vendor_id: sellerVendorId })
+            .eq("tenant_id", instance.tenant_id)
+            .eq("id", existingCustomer.id)
+            .then(() => null);
+        }
       } else {
         const { data: createdCustomer, error: createCustErr } = await supabase
           .from("customer_accounts")
@@ -1560,6 +1600,7 @@ serve(async (req) => {
             tenant_id: instance.tenant_id,
             phone_e164: inboundFromPhone,
             name: contactLabel && contactLabel !== inboundFromPhone ? contactLabel : null,
+            assigned_vendor_id: shouldAssignSellerToCrm ? sellerVendorId : null,
             meta_json: { source: "whatsapp", correlation_id: correlationId },
           })
           .select("id")
@@ -1594,12 +1635,16 @@ serve(async (req) => {
 
       // Se está deletado: apenas reativa (NÃO muda estado/jornada).
       if (wasDeleted) {
+        const nextAssignedVendorId =
+          shouldAssignSellerToCrm && sellerVendorId && !c?.assigned_vendor_id ? sellerVendorId : c?.assigned_vendor_id ?? null;
+
         const { error: updErr } = await supabase
           .from("cases")
           .update({
             deleted_at: null,
             status: "open",
             customer_id: customerId,
+            assigned_vendor_id: nextAssignedVendorId,
             // mantém is_chat
             is_chat: isChat,
           })
@@ -1814,6 +1859,8 @@ serve(async (req) => {
 
       const title = contactLabel ?? inboundFromPhone;
 
+      const ownerVendorId = cfgSenderIsVendor ? vendorId : targetJourney?.is_crm ? sellerVendorId : null;
+
       const { data: createdCase, error: cErr } = await supabase
         .from("cases")
         .insert({
@@ -1824,8 +1871,8 @@ serve(async (req) => {
           status: "open",
           state: initial,
           created_by_channel: "whatsapp",
-          created_by_vendor_id: cfgSenderIsVendor ? vendorId : null,
-          assigned_vendor_id: cfgSenderIsVendor ? vendorId : null,
+          created_by_vendor_id: ownerVendorId,
+          assigned_vendor_id: ownerVendorId,
           title,
           meta_json: {
             correlation_id: correlationId,
@@ -1835,6 +1882,9 @@ serve(async (req) => {
             counterpart_phone: inboundFromPhone,
             contact_label: contactLabel,
             sender_is_vendor: cfgSenderIsVendor,
+            ...(targetJourney?.is_crm && ownerVendorId
+              ? { owner_vendor_id: ownerVendorId, owner_source: "zapi_inbound_instance_phone", seller_phone: instancePhoneNorm }
+              : {}),
             ...(cfgSenderIsVendor
               ? { vendor_phone: inboundFromPhone, vendor_required: cfgRequireVendor }
               : { customer_phone: inboundFromPhone }),

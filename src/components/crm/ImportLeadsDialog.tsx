@@ -738,7 +738,7 @@ export function ImportLeadsDialog({
     // transforma um case "chat" em um case do CRM, no estado inicial do fluxo
     const { data: existing, error: selErr } = await supabase
       .from("cases")
-      .select("id,meta_json,deleted_at")
+      .select("id,meta_json,deleted_at,created_by_vendor_id")
       .eq("tenant_id", tenantId)
       .eq("id", p.chatCaseId)
       .maybeSingle();
@@ -761,6 +761,8 @@ export function ImportLeadsDialog({
       ...(wasDeleted ? { reactivated_from_soft_delete: true } : {}),
     };
 
+    const createdByVendorId = (existing as any).created_by_vendor_id ?? p.assignedVendorId ?? null;
+
     const { error: updErr } = await supabase
       .from("cases")
       .update({
@@ -769,6 +771,8 @@ export function ImportLeadsDialog({
         journey_id: journey.id,
         state: firstState,
         customer_id: p.customerId,
+        created_by_channel: "panel",
+        created_by_vendor_id: createdByVendorId,
         assigned_vendor_id: p.assignedVendorId,
         meta_json: mergedMeta,
       } as any)
@@ -922,7 +926,7 @@ export function ImportLeadsDialog({
   }) => {
     const { data: existing, error: selErr } = await supabase
       .from("cases")
-      .select("id,meta_json")
+      .select("id,meta_json,created_by_vendor_id")
       .eq("tenant_id", tenantId)
       .eq("id", p.caseId)
       .maybeSingle();
@@ -942,6 +946,8 @@ export function ImportLeadsDialog({
       reactivated_from_soft_delete: true,
     };
 
+    const createdByVendorId = (existing as any).created_by_vendor_id ?? p.assignedVendorId ?? null;
+
     const { error: updErr } = await supabase
       .from("cases")
       .update({
@@ -950,6 +956,8 @@ export function ImportLeadsDialog({
         journey_id: journey.id,
         state: firstState,
         customer_id: p.customerId,
+        created_by_channel: "panel",
+        created_by_vendor_id: createdByVendorId,
         assigned_vendor_id: p.assignedVendorId,
         meta_json: mergedMeta,
       } as any)
@@ -992,8 +1000,8 @@ export function ImportLeadsDialog({
         customer_id: p.customerId,
         title: p.title,
         is_chat: false,
-        // NOTE: não setamos created_by_channel aqui para respeitar o CHECK constraint do banco.
-        // O default do banco (ex.: 'whatsapp') será aplicado.
+        created_by_channel: "panel",
+        created_by_vendor_id: p.assignedVendorId,
         assigned_vendor_id: p.assignedVendorId,
         state: firstState,
         meta_json: {
