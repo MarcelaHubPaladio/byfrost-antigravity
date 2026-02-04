@@ -18,6 +18,100 @@ function normalizeLine(s: string) {
   return (s ?? "").replace(/\s+/g, " ").trim();
 }
 
+function stripDiacritics(s: string) {
+  try {
+    return String(s ?? "")
+      .normalize("NFD")
+      .replace(/\p{Diacritic}/gu, "");
+  } catch {
+    return String(s ?? "");
+  }
+}
+
+function normalizeKeyText(s: string) {
+  return stripDiacritics(String(s ?? ""))
+    .toUpperCase()
+    .replace(/[^A-Z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+async function sha256Hex(text: string) {
+  const bytes = new TextEncoder().encode(text);
+  const hash = await crypto.subtle.digest("SHA-256", bytes);
+  const arr = Array.from(new Uint8Array(hash));
+  return arr.map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+async function computeSalesOrderFingerprint(args: {
+  clientKey: string;
+  totalCents: number;
+  itemLines: string[];
+}) {
+  const clientKey = normalizeKeyText(args.clientKey);
+  const totalCents = Number(args.totalCents);
+  const itemKey = args.itemLines
+    .map((l) => normalizeKeyText(l))
+    .filter(Boolean)
+    .join(" | ");
+
+  // Para evitar falso-positivo, só deduplica quando temos:
+  // - cliente (cpf/telefone/nome) + total + ao menos 1 linha de item
+  if (!clientKey || !Number.isFinite(totalCents) || totalCents <= 0) return null;
+  if (!itemKey || itemKey.length < 8) return null;
+
+  const base = `${clientKey}::${totalCents}::${itemKey}`;
+  return await sha256Hex(base);
+}
+
+async function mergeDuplicateCase(args: {
+  supabase: any;
+  tenantId: string;
+  duplicateCaseId: string;
+  keepCaseId: string;
+  fingerprint: string;
+}) {
+  const { supabase, tenantId, duplicateCaseId, keepCaseId, fingerprint } = args;
+
+  // Move entities to the kept case (best-effort)
+  await supabase
+    .from("wa_messages")
+    .update({ case_id: keepCaseId })
+    .eq("tenant_id", tenantId)
+    .eq("case_id", duplicateCaseId);
+  await supabase
+    .from("case_attachments")
+    .update({ case_id: keepCaseId })
+    .eq("tenant_id", tenantId)
+    .eq("case_id", duplicateCaseId);
+  await supabase
+    .from("pendencies")
+    .update({ case_id: keepCaseId })
+    .eq("tenant_id", tenantId)
+    .eq("case_id", duplicateCaseId);
+  await supabase.from("case_items").update({ case_id: keepCaseId }).eq("case_id", duplicateCaseId);
+  await supabase.from("case_fields").update({ case_id: keepCaseId }).eq("case_id", duplicateCaseId);
+
+  // Soft-delete duplicate case
+  await supabase
+    .from("cases")
+    .update({ deleted_at: new Date().toISOString() })
+    .eq("tenant_id", tenantId)
+    .eq("id", duplicateCaseId);
+
+  // Audit
+  await supabase.from("timeline_events").insert({
+    tenant_id: tenantId,
+    case_id: keepCaseId,
+    event_type: "duplicate_detected",
+    actor_type: "system",
+    actor_id: null,
+    message: "Pedido duplicado detectado. Consolidamos mensagens/anexos no caso existente.",
+    meta_json: { duplicate_case_id: duplicateCaseId, fingerprint, source: "simulator" },
+    occurred_at: new Date().toISOString(),
+  });
+}
+
 function isMeaningfulValue(s: string | null) {
   const v = normalizeLine(s ?? "");
   if (!v) return false;
@@ -1044,6 +1138,109 @@ serve(async (req) => {
             const { error: iErr } = await supabase.from("case_items").insert(rows);
             if (!iErr) debug.created.case_items += rows.length;
           }
+        }
+
+        // Dedupe (simulador) — mesma lógica do processor (jobs):
+        // se já existe um case com o mesmo fingerprint, consolidamos e devolvemos o case "keep".
+        try {
+          const looksAgroforte = /\bagroforte\b/i.test(ocrText);
+          const clientKey =
+            extracted.customer_code ||
+            extracted.cpf ||
+            (extracted.phone_raw ? toDigits(extracted.phone_raw) : "") ||
+            extracted.customer_name ||
+            "";
+
+          const totalCentsFromItems = Array.isArray(extracted.items)
+            ? Math.round(
+                extracted.items.reduce((acc: number, it: any) => acc + (Number(it?.value_num) || 0), 0) * 100
+              )
+            : 0;
+
+          const itemLinesForFp = Array.isArray(extracted.items)
+            ? extracted.items
+                .map((it: any) => {
+                  const code = String(it?.code ?? "").trim();
+                  const desc = String(it?.description ?? "").trim();
+                  const qty = Number(it?.qty ?? 0);
+                  const value = Number(it?.value_num ?? 0);
+                  return `${code ? `${code} ` : ""}${desc} | QTY:${qty} | VALUE:${value}`;
+                })
+                .filter(Boolean)
+            : [];
+
+          const fingerprint =
+            looksAgroforte && clientKey && totalCentsFromItems > 0 && itemLinesForFp.length
+              ? await computeSalesOrderFingerprint({
+                  clientKey,
+                  totalCents: totalCentsFromItems,
+                  itemLines: itemLinesForFp,
+                })
+              : null;
+
+          if (fingerprint) {
+            const { data: cRow } = await supabase
+              .from("cases")
+              .select("id, meta_json")
+              .eq("tenant_id", tenantId)
+              .eq("id", caseId)
+              .maybeSingle();
+
+            const meta = (cRow as any)?.meta_json ?? {};
+
+            const nextMeta = {
+              ...meta,
+              sales_order_fingerprint: fingerprint,
+              sales_order_total_cents: totalCentsFromItems,
+              sales_order_client_key: extracted.customer_code
+                ? `customer_code:${normalizeKeyText(extracted.customer_code)}`
+                : extracted.cpf
+                  ? `cpf:${extracted.cpf}`
+                  : extracted.phone_raw
+                    ? `phone:${toDigits(extracted.phone_raw)}`
+                    : extracted.customer_name
+                      ? `name:${normalizeKeyText(extracted.customer_name)}`
+                      : null,
+              sales_order_items_source: "simulator",
+            };
+
+            await supabase
+              .from("cases")
+              .update({ meta_json: nextMeta })
+              .eq("tenant_id", tenantId)
+              .eq("id", caseId);
+
+            const { data: existing } = await supabase
+              .from("cases")
+              .select("id,updated_at")
+              .eq("tenant_id", tenantId)
+              .is("deleted_at", null)
+              .contains("meta_json", { sales_order_fingerprint: fingerprint })
+              .neq("id", caseId)
+              .order("updated_at", { ascending: false })
+              .limit(1)
+              .maybeSingle();
+
+            const keepId = (existing as any)?.id ? String((existing as any).id) : null;
+
+            if (keepId) {
+              await mergeDuplicateCase({
+                supabase,
+                tenantId,
+                duplicateCaseId: caseId,
+                keepCaseId: keepId,
+                fingerprint,
+              });
+
+              debug.notes.push(`Dedupe: case consolidado em ${keepId}`);
+              debug.extracted = { ...debug.extracted, merged_into: keepId, sales_order_fingerprint: fingerprint };
+
+              // IMPORTANT: from here on, keep using the kept case id.
+              caseId = keepId;
+            }
+          }
+        } catch (e: any) {
+          console.warn(`[${fn}] dedupe_check_failed (ignored)`, { e: e?.message ?? String(e) });
         }
       }
 
