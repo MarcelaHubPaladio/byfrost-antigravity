@@ -2012,7 +2012,7 @@ serve(async (req) => {
 
       const ownerVendorId = cfgSenderIsVendor ? vendorId : targetJourney?.is_crm ? sellerVendorId : null;
 
-      const { data: createdCase, error: cErr } = await supabase
+      const insertRes = await supabase
         .from("cases")
         .insert({
           tenant_id: instance.tenant_id,
@@ -2050,8 +2050,39 @@ serve(async (req) => {
         .select("id")
         .single();
 
-      if (cErr || !createdCase?.id) {
-        console.error(`[${fn}] Failed to create case`, { cErr });
+      // If we hit a uniqueness constraint (provider duplicated webhook events),
+      // fall back to the existing case for this journey+phone.
+      if (insertRes.error) {
+        const msg = String((insertRes.error as any)?.message ?? "");
+        const code = String((insertRes.error as any)?.code ?? "");
+        const isUniqueViolation = code === "23505" || msg.toLowerCase().includes("duplicate key value") || msg.toLowerCase().includes("unique");
+
+        if (isUniqueViolation) {
+          const { data: existingByKey } = await supabase
+            .from("cases")
+            .select("id")
+            .eq("tenant_id", instance.tenant_id)
+            .eq("journey_id", targetJourney.id)
+            .eq("status", "open")
+            .contains("meta_json", { counterpart_phone: inboundFromPhone })
+            .is("deleted_at", null)
+            .order("updated_at", { ascending: false })
+            .limit(1)
+            .maybeSingle();
+
+          if ((existingByKey as any)?.id) {
+            return { caseId: String((existingByKey as any).id), created: false as const, skippedReason: null };
+          }
+        }
+
+        console.error(`[${fn}] Failed to create case`, { cErr: insertRes.error });
+        return { caseId: null as any, created: false as const, skippedReason: "create_case_failed" };
+      }
+
+      const createdCase = insertRes.data;
+
+      if (!createdCase?.id) {
+        console.error(`[${fn}] Failed to create case`, { cErr: insertRes.error });
         return { caseId: null as any, created: false as const, skippedReason: "create_case_failed" };
       }
 
