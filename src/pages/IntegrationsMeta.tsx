@@ -10,7 +10,16 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { showError, showSuccess } from "@/utils/toast";
-import { ArrowLeft, CalendarDays, CheckCircle2, Facebook, Instagram, Link2, RefreshCw, ShieldAlert } from "lucide-react";
+import {
+  ArrowLeft,
+  CalendarDays,
+  CheckCircle2,
+  Facebook,
+  Instagram,
+  Link2,
+  RefreshCw,
+  ShieldAlert,
+} from "lucide-react";
 
 const META_OAUTH_START_URL = "https://pryoirzeghatrgecwrci.supabase.co/functions/v1/meta-oauth-start";
 const META_OAUTH_CALLBACK_URL = "https://pryoirzeghatrgecwrci.supabase.co/functions/v1/meta-oauth-callback";
@@ -43,6 +52,11 @@ function daysUntil(iso: string | null) {
   if (Number.isNaN(t)) return null;
   const diffMs = t - Date.now();
   return Math.floor(diffMs / (1000 * 60 * 60 * 24));
+}
+
+function looksLikeSchemaCacheMissing(msg: string) {
+  const m = (msg ?? "").toLowerCase();
+  return m.includes("schema cache") || m.includes("could not find") || m.includes("meta_accounts");
 }
 
 export default function IntegrationsMeta() {
@@ -124,7 +138,7 @@ export default function IntegrationsMeta() {
 
       const json = await res.json().catch(() => null);
       if (!res.ok || !json?.ok) {
-        throw new Error(json?.error || `HTTP ${res.status}`);
+        throw new Error(json?.details || json?.error || `HTTP ${res.status}`);
       }
 
       setCandidates((json?.candidates ?? []) as Candidate[]);
@@ -164,7 +178,7 @@ export default function IntegrationsMeta() {
 
       const json = await res.json().catch(() => null);
       if (!res.ok || !json?.ok || !json?.url) {
-        throw new Error(json?.error || `HTTP ${res.status}`);
+        throw new Error(json?.details || json?.error || `HTTP ${res.status}`);
       }
 
       window.location.href = String(json.url);
@@ -195,7 +209,7 @@ export default function IntegrationsMeta() {
 
       const json = await res.json().catch(() => null);
       if (!res.ok || !json?.ok) {
-        throw new Error(json?.error || `HTTP ${res.status}`);
+        throw new Error(json?.details || json?.error || `HTTP ${res.status}`);
       }
 
       showSuccess("Conexão concluída.");
@@ -225,7 +239,7 @@ export default function IntegrationsMeta() {
       });
 
       const json = await res.json().catch(() => null);
-      if (!res.ok || !json?.ok) throw new Error(json?.error || `HTTP ${res.status}`);
+      if (!res.ok || !json?.ok) throw new Error(json?.details || json?.error || `HTTP ${res.status}`);
 
       showSuccess(isActive ? "Conta reativada." : "Conta desativada.");
       await qc.invalidateQueries({ queryKey: ["meta_accounts", activeTenantId] });
@@ -235,6 +249,10 @@ export default function IntegrationsMeta() {
       setUpdatingId(null);
     }
   };
+
+  const schemaCacheHint = accountsQ.isError
+    ? looksLikeSchemaCacheMissing((accountsQ.error as any)?.message ?? "")
+    : false;
 
   return (
     <RequireAuth>
@@ -286,6 +304,15 @@ export default function IntegrationsMeta() {
               </Button>
             </div>
           </div>
+
+          {schemaCacheHint ? (
+            <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+              Parece que as tabelas da integração Meta ainda não existem neste banco (ex.: <span className="font-mono">meta_accounts</span>).
+              <div className="mt-1 text-xs text-amber-900/80">
+                Aplique a migração <span className="font-mono">0008_meta_accounts_and_oauth_states.sql</span> no Supabase e recarregue a página.
+              </div>
+            </div>
+          ) : null}
 
           <div className="mt-4 grid gap-4 lg:grid-cols-[1fr_0.9fr]">
             <div className="rounded-[22px] border border-slate-200 bg-white p-4">

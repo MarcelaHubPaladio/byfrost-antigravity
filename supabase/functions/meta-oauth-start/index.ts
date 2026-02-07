@@ -9,8 +9,8 @@ function json(data: any, status = 200) {
   });
 }
 
-function err(message: string, status = 400) {
-  return json({ ok: false, error: message }, status);
+function err(message: string, status = 400, extra?: any) {
+  return json({ ok: false, error: message, ...(extra ?? {}) }, status);
 }
 
 serve(async (req) => {
@@ -30,7 +30,10 @@ serve(async (req) => {
     const appId = Deno.env.get("META_APP_ID") ?? "";
     const callbackUrl = Deno.env.get("META_OAUTH_CALLBACK_URL") ?? "";
     if (!appId || !callbackUrl) {
-      console.error("[meta-oauth-start] missing Meta env", { hasAppId: Boolean(appId), hasCallbackUrl: Boolean(callbackUrl) });
+      console.error("[meta-oauth-start] missing Meta env", {
+        hasAppId: Boolean(appId),
+        hasCallbackUrl: Boolean(callbackUrl),
+      });
       return err("missing_meta_oauth_env", 500);
     }
 
@@ -60,7 +63,8 @@ serve(async (req) => {
 
     // Super-admin bypass: membership might not exist.
     const isSuperAdmin = Boolean(
-      (userRes.user.app_metadata as any)?.byfrost_super_admin || (userRes.user.app_metadata as any)?.super_admin
+      (userRes.user.app_metadata as any)?.byfrost_super_admin ||
+        (userRes.user.app_metadata as any)?.super_admin
     );
 
     if (!membership && !isSuperAdmin) return err("forbidden", 403);
@@ -77,8 +81,11 @@ serve(async (req) => {
     });
 
     if (insErr) {
-      console.error("[meta-oauth-start] failed to insert oauth state", { error: insErr.message });
-      return err("failed_to_create_state", 500);
+      console.error("[meta-oauth-start] failed to insert oauth state", {
+        error: insErr.message,
+      });
+      // NOTE: returning details here is safe; it helps diagnose missing migrations/table.
+      return err("failed_to_create_state", 500, { details: insErr.message });
     }
 
     // Permissions (Phase 3/4 ready)
@@ -106,6 +113,6 @@ serve(async (req) => {
     return json({ ok: true, url });
   } catch (e: any) {
     console.error("[meta-oauth-start] unhandled", { error: e?.message ?? String(e) });
-    return err("internal_error", 500);
+    return err("internal_error", 500, { details: e?.message ?? String(e) });
   }
 });
