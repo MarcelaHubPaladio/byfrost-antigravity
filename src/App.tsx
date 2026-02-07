@@ -31,6 +31,7 @@ import PresenceManage from "@/pages/PresenceManage";
 import IntegrationsMeta from "@/pages/IntegrationsMeta";
 import Content from "@/pages/Content";
 import ContentDetail from "@/pages/ContentDetail";
+import Screen from "@/pages/Screen";
 
 const queryClient = new QueryClient();
 
@@ -49,6 +50,9 @@ const App = () => (
                 <Route path="/tenants" element={<TenantSelect />} />
                 <Route path="/auth/callback" element={<AuthCallback />} />
                 <Route path="/auth/reset" element={<ResetPassword />} />
+
+                {/* Public screen (no protection) */}
+                <Route path="/screen" element={<Screen />} />
 
                 {/* Dashboard por jornada (slug = journeys.key) */}
                 <Route
