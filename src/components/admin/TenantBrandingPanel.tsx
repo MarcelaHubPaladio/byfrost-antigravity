@@ -12,8 +12,6 @@ const BRANDING_URL =
   "https://pryoirzeghatrgecwrci.supabase.co/functions/v1/branding-extract-palette";
 const UPLOAD_URL =
   "https://pryoirzeghatrgecwrci.supabase.co/functions/v1/branding-upload-logo";
-const SET_PALETTE_URL =
-  "https://pryoirzeghatrgecwrci.supabase.co/functions/v1/branding-set-palette";
 
 type PaletteKey = "primary" | "secondary" | "tertiary" | "quaternary";
 
@@ -128,7 +126,7 @@ function ColorRow({
 
 export function TenantBrandingPanel() {
   const qc = useQueryClient();
-  const { activeTenantId, refresh } = useTenant();
+  const { activeTenantId, refresh, isSuperAdmin } = useTenant();
   const [uploading, setUploading] = useState(false);
   const [extracting, setExtracting] = useState(false);
   const [savingPalette, setSavingPalette] = useState(false);
@@ -286,41 +284,42 @@ export function TenantBrandingPanel() {
       return;
     }
 
+    if (!isSuperAdmin) {
+      showError(
+        "Sem permissão para salvar no tenant (RLS). Ative Super-admin (RLS) em Configurações e faça logout/login."
+      );
+      return;
+    }
+
     setSavingPalette(true);
     try {
-      const { data: sess } = await supabase.auth.getSession();
-      const token = sess.session?.access_token;
-      if (!token) throw new Error("Sessão inválida");
+      const current = tenantQ.data?.branding_json ?? {};
 
-      const res = await fetch(SET_PALETTE_URL, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          tenantId: activeTenantId,
-          palette: {
-            primary: { hex: draft.primary, text: bestTextOnHex(draft.primary) },
-            secondary: { hex: draft.secondary, text: bestTextOnHex(draft.secondary) },
-            tertiary: { hex: draft.tertiary, text: bestTextOnHex(draft.tertiary) },
-            quaternary: { hex: draft.quaternary, text: bestTextOnHex(draft.quaternary) },
-            source: "manual",
-          },
-        }),
-      });
+      const nextPalette = {
+        primary: { hex: draft.primary, text: bestTextOnHex(draft.primary) },
+        secondary: { hex: draft.secondary, text: bestTextOnHex(draft.secondary) },
+        tertiary: { hex: draft.tertiary, text: bestTextOnHex(draft.tertiary) },
+        quaternary: { hex: draft.quaternary, text: bestTextOnHex(draft.quaternary) },
+        source: "manual",
+      };
 
-      const json = await res.json().catch(() => null);
-      if (!res.ok || !json?.ok) {
-        throw new Error(json?.error || `HTTP ${res.status}`);
-      }
+      const next = { ...current, palette: nextPalette };
+
+      const { error } = await supabase
+        .from("tenants")
+        .update({ branding_json: next })
+        .eq("id", activeTenantId);
+
+      if (error) throw error;
 
       showSuccess("Cores do tenant atualizadas.");
       await qc.invalidateQueries({ queryKey: ["tenant_branding", activeTenantId] });
       await qc.invalidateQueries({ queryKey: ["tenant_settings", activeTenantId] });
       await refresh();
     } catch (e: any) {
-      showError(`Não foi possível salvar a paleta. (${e?.message ?? "erro"})`);
+      showError(
+        `Não foi possível salvar a paleta. (${e?.message ?? "erro"})`
+      );
     } finally {
       setSavingPalette(false);
     }
@@ -405,6 +404,13 @@ export function TenantBrandingPanel() {
             Tenant: {tenantQ.data?.name ?? "—"}
           </div>
 
+          {!isSuperAdmin && (
+            <div className="mt-3 rounded-2xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
+              Para <span className="font-medium">salvar</span> a paleta, seu token precisa ter permissão de super-admin (RLS).
+              Vá em <span className="font-medium">Config</span> → "Super-admin (RLS)", ative e faça logout/login.
+            </div>
+          )}
+
           <div className="mt-3 grid gap-4">
             <div className="rounded-2xl border border-slate-200 bg-white p-3">
               <div className="text-xs font-semibold text-slate-800">Editar cores</div>
@@ -454,8 +460,8 @@ export function TenantBrandingPanel() {
                 </Button>
                 <Button
                   onClick={savePalette}
-                  disabled={savingPalette}
-                  className="h-10 rounded-2xl bg-[hsl(var(--byfrost-accent))] text-white hover:bg-[hsl(var(--byfrost-accent)/0.92)]"
+                  disabled={savingPalette || !isSuperAdmin}
+                  className="h-10 rounded-2xl bg-[hsl(var(--byfrost-accent))] text-white hover:bg-[hsl(var(--byfrost-accent)/0.92)] disabled:opacity-60"
                 >
                   {savingPalette ? "Salvando…" : "Salvar paleta"}
                 </Button>
