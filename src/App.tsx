@@ -32,6 +32,7 @@ import IntegrationsMeta from "@/pages/IntegrationsMeta";
 import Content from "@/pages/Content";
 import ContentDetail from "@/pages/ContentDetail";
 import Screen from "@/pages/Screen";
+import PublicCampaignRanking from "@/pages/PublicCampaignRanking";
 
 const queryClient = new QueryClient();
 
@@ -53,6 +54,9 @@ const App = () => (
 
                 {/* Public screen (no protection) */}
                 <Route path="/screen" element={<Screen />} />
+
+                {/* Incentive Engine (public ranking; no auth) */}
+                <Route path="/incentives/:tenant/:campaign" element={<PublicCampaignRanking />} />
 
                 {/* Dashboard por jornada (slug = journeys.key) */}
                 <Route
