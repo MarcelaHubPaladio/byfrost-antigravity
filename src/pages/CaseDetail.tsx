@@ -34,6 +34,7 @@ import { CaseCustomerDataEditorCard } from "@/components/case/CaseCustomerDataEd
 import { SalesOrderItemsEditorCard } from "@/components/case/SalesOrderItemsEditorCard";
 import { SalesOrderReviewDialog } from "@/components/case/SalesOrderReviewDialog";
 import { SalesOrderAddAttachmentExtractDialog } from "@/components/case/SalesOrderAddAttachmentExtractDialog";
+import { TrelloCardDetails } from "@/components/trello/TrelloCardDetails";
 import {
   ArrowLeft,
   CheckCircle2,
@@ -473,6 +474,7 @@ export default function CaseDetail() {
 
   const c = caseQ.data;
   const isSalesOrder = c?.journeys?.key === "sales_order" || c?.case_type === "sales_order";
+  const isTrello = c?.journeys?.key === "trello" || c?.case_type === "TRELLO";
 
   const openReview = (url: string | null) => {
     setReviewImageUrl(url);
@@ -626,6 +628,10 @@ export default function CaseDetail() {
           <div className="mt-5 grid gap-4 lg:grid-cols-[0.95fr_1.05fr]">
             {/* Left */}
             <div className="space-y-4">
+              {id && isTrello && activeTenantId ? (
+                <TrelloCardDetails tenantId={activeTenantId} caseId={id} />
+              ) : null}
+
               {/* Editáveis: apenas sales_order */}
               {id && isSalesOrder ? (
                 <>
@@ -858,7 +864,7 @@ export default function CaseDetail() {
               </div>
 
               {/* Timeline por último (estilo do anexo) */}
-              <CaseTimeline events={timelineQ.data ?? []} />
+              {!isTrello ? <CaseTimeline events={timelineQ.data ?? []} /> : null}
             </div>
 
             {/* Right: Chat fixo ocupando o espaço */}

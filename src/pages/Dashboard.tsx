@@ -32,6 +32,7 @@ import {
   Download,
 } from "lucide-react";
 import { NewSalesOrderDialog } from "@/components/case/NewSalesOrderDialog";
+import { NewTrelloCardDialog } from "@/components/trello/NewTrelloCardDialog";
 import { getStateLabel } from "@/lib/journeyLabels";
 
 const DASHBOARD_VIEW_MODE_KEY_PREFIX = "dashboard_view_mode_v1:";
@@ -223,6 +224,7 @@ export default function Dashboard() {
   }, [journeyQ.data, selectedKey]);
 
   const isSalesOrderJourney = selectedKey === "sales_order";
+  const isTrelloJourney = selectedKey === "trello";
 
   const isCrm = Boolean(selectedJourney?.is_crm);
 
@@ -805,6 +807,10 @@ export default function Dashboard() {
                 >
                   <Plus className="mr-2 h-4 w-4" /> Novo pedido
                 </Button>
+              ) : null}
+
+              {isTrelloJourney && activeTenantId && selectedJourney?.id ? (
+                <NewTrelloCardDialog tenantId={activeTenantId} journeyId={selectedJourney.id} />
               ) : null}
 
               {canChooseListView ? (
