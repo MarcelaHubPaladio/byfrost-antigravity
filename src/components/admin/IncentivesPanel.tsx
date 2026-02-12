@@ -801,7 +801,18 @@ export function IncentivesPanel() {
         });
       }
 
+      async function probeColumns(table: string, columns: string) {
+        const { error } = await supabase.from(table).select(columns, { head: true }).limit(1);
+        if (!error) {
+          checks.push({ key: `${table}(${columns})`, ok: true });
+          return;
+        }
+        const msg = String((error as any)?.message ?? "");
+        checks.push({ key: `${table}(${columns})`, ok: false, hint: msg || "missing_or_no_access" });
+      }
+
       await probeTable("incentive_participants");
+      await probeColumns("incentive_participants", "cpf,whatsapp");
       await probeTable("participant_types");
       await probeTable("campaigns");
       await probeTable("campaign_participants");
@@ -1033,13 +1044,24 @@ export function IncentivesPanel() {
       await qc.invalidateQueries({ queryKey: ["incentives_participants", activeTenantId] });
     } catch (e: any) {
       const msg = String(e?.message ?? "erro");
-      if (msg.includes("schema cache") || msg.toLowerCase().includes("could not find the table")) {
+      const msgLower = msg.toLowerCase();
+
+      // PostgREST schema cache errors may refer to missing table OR missing columns.
+      if (msgLower.includes("schema cache") && msgLower.includes("column")) {
         showError(
-          "As migrations do Incentive Engine ainda não foram aplicadas no banco Supabase desta instância. Aplique as migrations 0021+ e recarregue."
+          "O banco ainda não tem as colunas obrigatórias (cpf/whatsapp) ou o schema cache não atualizou. Execute a migration 0025 e rode: notify pgrst, 'reload schema'."
         );
-      } else {
-        showError(`Falha ao criar participante: ${msg}`);
+        return;
       }
+
+      if (msgLower.includes("schema cache") || msgLower.includes("could not find the table")) {
+        showError(
+          "As migrations do Incentive Engine ainda não foram aplicadas neste Supabase (ou o app está apontando para outro projeto). Aplique 0021+ e rode: notify pgrst, 'reload schema'."
+        );
+        return;
+      }
+
+      showError(`Falha ao criar participante: ${msg}`);
     } finally {
       setCreatingParticipant(false);
     }
