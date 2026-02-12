@@ -39,26 +39,51 @@ export function NewTrelloCardDialog(props: { tenantId: string; journeyId: string
 
     setCreating(true);
     try {
-      const { data: ins, error } = await supabase
-        .from("cases")
-        .insert({
-          tenant_id: props.tenantId,
-          journey_id: props.journeyId,
-          case_type: "TRELLO",
-          created_by_channel: "panel",
-          title: t,
-          summary_text: description.trim() || null,
-          // IMPORTANT: o banco tem check constraint (cases_status_check). Em toda a base, o status inicial padrão é "open".
-          status: "open",
-          state: "BACKLOG",
-          meta_json: {
-            due_at: dueAtIso,
-          },
-        })
-        .select("id")
-        .single();
+      // Alguns ambientes têm um check constraint diferente em cases.status (ex.: 'OPEN' vs 'open').
+      // Para garantir compatibilidade, tentamos algumas variações e, se possível, deixamos o default do banco.
+      const basePayload: any = {
+        tenant_id: props.tenantId,
+        journey_id: props.journeyId,
+        case_type: "TRELLO",
+        created_by_channel: "panel",
+        title: t,
+        summary_text: description.trim() || null,
+        state: "BACKLOG",
+        meta_json: {
+          due_at: dueAtIso,
+        },
+      };
 
-      if (error) throw error;
+      const tryPayloads: any[] = [
+        // 1) Sem status (usa default do banco)
+        basePayload,
+        // 2) Lowercase
+        { ...basePayload, status: "open" },
+        // 3) Uppercase (alguns bancos usam enum/constraint em CAPS)
+        { ...basePayload, status: "OPEN" },
+      ];
+
+      let ins: any = null;
+      let lastErr: any = null;
+
+      for (const payload of tryPayloads) {
+        const res = await supabase.from("cases").insert(payload).select("id").single();
+        if (!res.error) {
+          ins = res.data;
+          lastErr = null;
+          break;
+        }
+        lastErr = res.error;
+
+        // Se não for problema de status, não faz sentido tentar outras variações.
+        const msg = String(res.error.message ?? "");
+        const details = String((res.error as any).details ?? "");
+        const hint = String((res.error as any).hint ?? "");
+        const combined = `${msg} ${details} ${hint}`.toLowerCase();
+        if (!combined.includes("cases_status_check") && !combined.includes("status")) break;
+      }
+
+      if (lastErr) throw lastErr;
 
       const caseId = String((ins as any)?.id ?? "");
       if (!caseId) throw new Error("Falha ao criar case (id vazio)");
@@ -132,11 +157,22 @@ export function NewTrelloCardDialog(props: { tenantId: string; journeyId: string
 
             <div>
               <Label className="text-xs">Prazo (opcional)</Label>
-              <Input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} className="mt-1 h-11 rounded-2xl" />
+              <Input
+                type="date"
+                value={dueDate}
+                onChange={(e) => setDueDate(e.target.value)}
+                className="mt-1 h-11 rounded-2xl"
+              />
             </div>
 
             <div className="flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-end">
-              <Button type="button" variant="secondary" className="h-11 rounded-2xl" onClick={() => setOpen(false)} disabled={creating}>
+              <Button
+                type="button"
+                variant="secondary"
+                className="h-11 rounded-2xl"
+                onClick={() => setOpen(false)}
+                disabled={creating}
+              >
                 Cancelar
               </Button>
               <Button
