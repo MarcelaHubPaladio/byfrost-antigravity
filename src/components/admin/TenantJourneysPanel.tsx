@@ -20,6 +20,23 @@ const META_CONTENT_DEFAULT_CONFIG = {
   calendar_import_export_enabled: true,
 } as const;
 
+// Standard journey catalog bootstrap: Trello (Byfrost)
+const TRELLO_SECTOR_NAME = "Operações";
+const TRELLO_JOURNEY_KEY = "trello";
+const TRELLO_JOURNEY_NAME = "Trello (Byfrost)";
+const TRELLO_DEFAULT_STATE_MACHINE = {
+  states: ["BACKLOG", "FAZER", "EM_ANDAMENTO", "BLOQUEADO", "REVISAO", "CONCLUIDO"],
+  default: "BACKLOG",
+  labels: {
+    BACKLOG: "Backlog",
+    FAZER: "Fazer",
+    EM_ANDAMENTO: "Em andamento",
+    BLOQUEADO: "Bloqueado",
+    REVISAO: "Revisão",
+    CONCLUIDO: "Concluído",
+  },
+} as const;
+
 type SectorRow = {
   id: string;
   name: string;
@@ -110,6 +127,7 @@ export function TenantJourneysPanel() {
   const [journeyIsCrm, setJourneyIsCrm] = useState(false);
 
   const [savingCatalogFlags, setSavingCatalogFlags] = useState(false);
+  const [bootstrappingTrello, setBootstrappingTrello] = useState(false);
 
   // state machine builder (UI)
   const [stateDraft, setStateDraft] = useState("");
@@ -310,6 +328,66 @@ export function TenantJourneysPanel() {
     (configObj as any)?.calendar_import_export_enabled ??
       META_CONTENT_DEFAULT_CONFIG.calendar_import_export_enabled
   );
+
+  const bootstrapTrelloJourney = async () => {
+    setBootstrappingTrello(true);
+    try {
+      // 1) sector: Operações
+      let sectorId: string | null = null;
+      const { data: sectorExisting, error: sectorSelErr } = await supabase
+        .from("sectors")
+        .select("id")
+        .eq("name", TRELLO_SECTOR_NAME)
+        .limit(1)
+        .maybeSingle();
+      if (sectorSelErr) throw sectorSelErr;
+
+      if (sectorExisting?.id) {
+        sectorId = sectorExisting.id;
+      } else {
+        const { data: sectorInserted, error: sectorInsErr } = await supabase
+          .from("sectors")
+          .insert({
+            name: TRELLO_SECTOR_NAME,
+            description: "Fluxos internos (estilo Trello / gerenciamento)",
+          })
+          .select("id")
+          .single();
+        if (sectorInsErr) throw sectorInsErr;
+        sectorId = sectorInserted.id;
+      }
+
+      // 2) journey: key=trello
+      const { data: journeyExisting, error: journeySelErr } = await supabase
+        .from("journeys")
+        .select("id")
+        .eq("key", TRELLO_JOURNEY_KEY)
+        .limit(1)
+        .maybeSingle();
+      if (journeySelErr) throw journeySelErr;
+
+      if (!journeyExisting?.id) {
+        const { error: journeyInsErr } = await supabase.from("journeys").insert({
+          sector_id: sectorId,
+          key: TRELLO_JOURNEY_KEY,
+          name: TRELLO_JOURNEY_NAME,
+          description:
+            "Jornada padrão (estilo Trello) para cards internos com responsável, tarefas, anexos, prazo e timeline.",
+          default_state_machine_json: TRELLO_DEFAULT_STATE_MACHINE,
+          is_crm: false,
+        });
+        if (journeyInsErr) throw journeyInsErr;
+      }
+
+      showSuccess("Catálogo Trello (Byfrost) criado/atualizado. Agora você pode ativar no tenant.");
+      await qc.invalidateQueries({ queryKey: ["sectors"] });
+      await qc.invalidateQueries({ queryKey: ["journeys"] });
+    } catch (e: any) {
+      showError(`Falha ao criar catálogo Trello: ${e?.message ?? "erro"}`);
+    } finally {
+      setBootstrappingTrello(false);
+    }
+  };
 
   const createSector = async () => {
     if (!sectorName.trim()) return;
@@ -792,8 +870,21 @@ export function TenantJourneysPanel() {
                 Use os toggles para habilitar setores e jornadas. Isso grava em <span className="font-medium">tenant_sectors</span> e <span className="font-medium">tenant_journeys</span>.
               </div>
             </div>
-            <div className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] text-slate-600">
-              tenant_id: <span className="font-medium text-slate-900">{activeTenantId.slice(0, 8)}…</span>
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={bootstrapTrelloJourney}
+                disabled={bootstrappingTrello}
+                className="h-9 rounded-2xl"
+                title="Cria o setor Operações e a jornada Trello (Byfrost) no catálogo caso a migration ainda não tenha sido aplicada."
+              >
+                <Sparkles className="mr-2 h-4 w-4" />
+                {bootstrappingTrello ? "Criando Trello…" : "Criar Trello (Byfrost)"}
+              </Button>
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] text-slate-600">
+                tenant_id: <span className="font-medium text-slate-900">{activeTenantId.slice(0, 8)}…</span>
+              </div>
             </div>
           </div>
 
