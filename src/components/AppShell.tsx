@@ -21,6 +21,7 @@ import {
   Clapperboard,
   Lock,
   Menu,
+  CalendarClock,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -140,6 +141,7 @@ function getPageName(pathname: string) {
   if (pathname.startsWith("/app/content")) return "Conteúdo";
   if (pathname.startsWith("/app/presence/manage")) return "Gestão de Presença";
   if (pathname.startsWith("/app/presence")) return "Ponto";
+  if (pathname.startsWith("/app/incentives/events")) return "Incentivos • Eventos";
   if (pathname.startsWith("/app/settings")) return "Configurações";
   if (pathname.startsWith("/app/me")) return "Meu usuário";
   if (pathname.startsWith("/app/admin")) return "Admin";
@@ -305,6 +307,7 @@ export function AppShell({
         "app.content",
         "app.presence",
         "app.presence_manage",
+        "app.incentives_events_manage",
         "app.simulator",
         "app.settings",
         "app.me",
@@ -502,6 +505,12 @@ export function AppShell({
                     disabled={!can("app.presence_manage")}
                   />
                 )}
+                <NavTile
+                  to="/app/incentives/events"
+                  icon={CalendarClock}
+                  label="Eventos"
+                  disabled={!can("app.incentives_events_manage")}
+                />
                 <NavTile to="/app/simulator" icon={FlaskConical} label="Simulador" disabled={!can("app.simulator")} />
                 {isSuperAdmin && <NavTile to="/app/admin" icon={Crown} label="Admin" disabled={!can("app.admin")} />}
                 <NavTile to="/app/settings" icon={Settings} label="Config" disabled={!can("app.settings")} />
@@ -625,6 +634,13 @@ export function AppShell({
                                 onNavigate={() => setMobileNavOpen(false)}
                               />
                             )}
+                            <MobileNavItem
+                              to="/app/incentives/events"
+                              icon={CalendarClock}
+                              label="Eventos"
+                              disabled={!can("app.incentives_events_manage")}
+                              onNavigate={() => setMobileNavOpen(false)}
+                            />
                             <MobileNavItem
                               to="/app/simulator"
                               icon={FlaskConical}
