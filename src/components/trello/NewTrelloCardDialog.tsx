@@ -48,7 +48,8 @@ export function NewTrelloCardDialog(props: { tenantId: string; journeyId: string
           created_by_channel: "panel",
           title: t,
           summary_text: description.trim() || null,
-          status: "in_progress",
+          // IMPORTANT: o banco tem check constraint (cases_status_check). Em toda a base, o status inicial padrão é "open".
+          status: "open",
           state: "BACKLOG",
           meta_json: {
             due_at: dueAtIso,
