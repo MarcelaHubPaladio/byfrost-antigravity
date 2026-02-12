@@ -12,6 +12,8 @@ const BRANDING_URL =
   "https://pryoirzeghatrgecwrci.supabase.co/functions/v1/branding-extract-palette";
 const UPLOAD_URL =
   "https://pryoirzeghatrgecwrci.supabase.co/functions/v1/branding-upload-logo";
+const SET_PALETTE_URL =
+  "https://pryoirzeghatrgecwrci.supabase.co/functions/v1/branding-set-palette";
 
 type PaletteKey = "primary" | "secondary" | "tertiary" | "quaternary";
 
@@ -286,33 +288,39 @@ export function TenantBrandingPanel() {
 
     setSavingPalette(true);
     try {
-      const current = tenantQ.data?.branding_json ?? {};
+      const { data: sess } = await supabase.auth.getSession();
+      const token = sess.session?.access_token;
+      if (!token) throw new Error("Sessão inválida");
 
-      const nextPalette = {
-        primary: { hex: draft.primary, text: bestTextOnHex(draft.primary) },
-        secondary: { hex: draft.secondary, text: bestTextOnHex(draft.secondary) },
-        tertiary: { hex: draft.tertiary, text: bestTextOnHex(draft.tertiary) },
-        quaternary: { hex: draft.quaternary, text: bestTextOnHex(draft.quaternary) },
-        source: "manual",
-      };
+      const res = await fetch(SET_PALETTE_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          tenantId: activeTenantId,
+          palette: {
+            primary: { hex: draft.primary, text: bestTextOnHex(draft.primary) },
+            secondary: { hex: draft.secondary, text: bestTextOnHex(draft.secondary) },
+            tertiary: { hex: draft.tertiary, text: bestTextOnHex(draft.tertiary) },
+            quaternary: { hex: draft.quaternary, text: bestTextOnHex(draft.quaternary) },
+            source: "manual",
+          },
+        }),
+      });
 
-      const next = { ...current, palette: nextPalette };
-
-      const { error } = await supabase
-        .from("tenants")
-        .update({ branding_json: next })
-        .eq("id", activeTenantId);
-
-      if (error) throw error;
+      const json = await res.json().catch(() => null);
+      if (!res.ok || !json?.ok) {
+        throw new Error(json?.error || `HTTP ${res.status}`);
+      }
 
       showSuccess("Cores do tenant atualizadas.");
       await qc.invalidateQueries({ queryKey: ["tenant_branding", activeTenantId] });
       await qc.invalidateQueries({ queryKey: ["tenant_settings", activeTenantId] });
       await refresh();
     } catch (e: any) {
-      showError(
-        `Não foi possível salvar a paleta (RLS). Verifique se seu token tem claim de super-admin. (${e?.message ?? "erro"})`
-      );
+      showError(`Não foi possível salvar a paleta. (${e?.message ?? "erro"})`);
     } finally {
       setSavingPalette(false);
     }
