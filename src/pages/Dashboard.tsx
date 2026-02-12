@@ -10,6 +10,14 @@ import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { showError, showSuccess } from "@/utils/toast";
 import { Clock, MapPin, RefreshCw, Search, Sparkles, ShieldAlert, Plus } from "lucide-react";
 import { NewSalesOrderDialog } from "@/components/case/NewSalesOrderDialog";
@@ -184,6 +192,9 @@ export default function Dashboard() {
   const isSalesOrderJourney = selectedKey === "sales_order";
 
   const isCrm = Boolean(selectedJourney?.is_crm);
+
+  // List view for a specific journey
+  const isFfFlowListJourney = selectedKey === "ff_flow_20260129200457";
 
   const pickFirstJourney = () => {
     const first = journeyQ.data?.[0];
@@ -532,6 +543,32 @@ export default function Dashboard() {
     });
   }, [filteredRows, states, unreadByCase, lastInboundAtByCase, selectedJourney]);
 
+  const listStateOptions = useMemo(() => {
+    const baseStates = states.length ? states : Array.from(new Set(filteredRows.map((r) => r.state)));
+    const known = new Set(baseStates);
+    const extras = Array.from(new Set(filteredRows.map((r) => r.state))).filter((s) => !known.has(s));
+    const all = Array.from(new Set([...baseStates, ...extras].filter(Boolean)));
+
+    return all.map((st) => ({
+      value: st,
+      label: getStateLabel(selectedJourney as any, st) || titleizeState(st),
+    }));
+  }, [states, filteredRows, selectedJourney]);
+
+  const listRows = useMemo(() => {
+    const sortCases = (a: CaseRow, b: CaseRow) => {
+      const au = unreadByCase.has(a.id);
+      const bu = unreadByCase.has(b.id);
+      if (au !== bu) return au ? -1 : 1;
+
+      const at = lastInboundAtByCase.get(a.id) ?? a.updated_at;
+      const bt = lastInboundAtByCase.get(b.id) ?? b.updated_at;
+      return new Date(bt).getTime() - new Date(at).getTime();
+    };
+
+    return [...filteredRows].sort(sortCases);
+  }, [filteredRows, unreadByCase, lastInboundAtByCase]);
+
   const shouldShowInvalidJourneyBanner =
     Boolean(journeyKey) && Boolean(journeyQ.data?.length) && !selectedJourney;
 
@@ -759,127 +796,267 @@ export default function Dashboard() {
 
           {selectedKey && (
             <div className="mt-4 overflow-x-auto pb-1">
-              <div className="flex min-w-[980px] gap-4">
-                {columns.map((col) => (
-                  <div
-                    key={col.key}
-                    className="w-[320px] flex-shrink-0"
-                    onDragOver={(e) => {
-                      if (col.key === "__other__") return;
-                      e.preventDefault();
-                    }}
-                    onDrop={(e) => {
-                      if (col.key === "__other__") return;
-                      const cid = e.dataTransfer.getData("text/caseId");
-                      if (!cid) return;
-                      if (movingCaseId) return;
-                      updateCaseState(cid, col.key);
-                    }}
-                  >
-                    <div className="flex items-center justify-between px-1">
-                      <div className="text-sm font-semibold text-slate-800">{col.label}</div>
-                      <div className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-600">
-                        {col.items.length}
-                      </div>
-                    </div>
+              {isFfFlowListJourney ? (
+                <div className="min-w-[980px]">
+                  <div className="rounded-[24px] border border-slate-200 bg-white">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="w-[34%]">Caso</TableHead>
+                          <TableHead className="w-[18%]">Vendedor</TableHead>
+                          <TableHead className="w-[20%]">Etapa</TableHead>
+                          <TableHead className="w-[10%]">Pendências</TableHead>
+                          <TableHead className="w-[10%]">Atualizado</TableHead>
+                          <TableHead className="w-[8%]">Status</TableHead>
+                        </TableRow>
+                      </TableHeader>
 
-                    <div
-                      className={cn(
-                        "mt-2 space-y-3 rounded-[24px] p-2",
-                        col.key !== "__other__" ? "bg-slate-50/60 border border-dashed border-slate-200" : ""
-                      )}
-                    >
-                      {col.items.map((c) => {
-                        const pend = pendQ.data?.get(c.id);
-                        const age = minutesAgo(c.updated_at);
-                        const isMoving = movingCaseId === c.id;
-                        const unread = unreadByCase.has(c.id);
-                        const cust = isCrm ? customersQ.data?.get(String((c as any).customer_id ?? "")) : null;
+                      <TableBody>
+                        {listRows.map((c) => {
+                          const pend = pendQ.data?.get(c.id);
+                          const unread = unreadByCase.has(c.id);
+                          const ageMin = minutesAgo(c.updated_at);
+                          const cust = isCrm ? customersQ.data?.get(String((c as any).customer_id ?? "")) : null;
 
-                        // Para CRM: o título do card vira o nome do cliente; se não tiver,
-                        // usa o WhatsApp relacionado ao case no ato de criação (case_fields/meta_json).
-                        const titlePrimary =
-                          isCrm
-                            ? (cust?.name ??
-                              casePhoneQ.data?.get(c.id) ??
-                              getMetaPhone((c as any).meta_json) ??
-                              cust?.phone_e164 ??
-                              c.title ??
-                              "Caso")
-                            : c.title ?? "Caso";
+                          const titlePrimary =
+                            isCrm
+                              ? (cust?.name ??
+                                casePhoneQ.data?.get(c.id) ??
+                                getMetaPhone((c as any).meta_json) ??
+                                cust?.phone_e164 ??
+                                c.title ??
+                                "Caso")
+                              : c.title ?? "Caso";
 
-                        return (
-                          <Link
-                            key={c.id}
-                            to={`/app/cases/${c.id}`}
-                            draggable
-                            onDragStart={(e) => {
-                              e.dataTransfer.setData("text/caseId", c.id);
-                              e.dataTransfer.effectAllowed = "move";
-                            }}
-                            className={cn(
-                              "block rounded-[22px] border bg-white p-4 shadow-sm transition hover:shadow-md",
-                              unread ? "border-rose-200 hover:border-rose-300" : "border-slate-200 hover:border-slate-300",
-                              "cursor-grab active:cursor-grabbing",
-                              isMoving ? "opacity-60" : ""
-                            )}
-                            title="Arraste para mudar de etapa"
-                          >
-                            <div className="flex items-start justify-between gap-3">
-                              <div className="min-w-0">
-                                <div className="truncate text-sm font-semibold text-slate-900">{titlePrimary}</div>
-                                <div className="mt-1 truncate text-xs text-slate-500">
-                                  {(c.vendors?.display_name ?? "Vendedor") +
-                                    (c.vendors?.phone_e164 ? ` • ${c.vendors.phone_e164}` : "")}
+                          return (
+                            <TableRow key={c.id} className="hover:bg-slate-50/70">
+                              <TableCell className="py-3">
+                                <div className="flex items-start gap-3">
+                                  <div className="pt-1">
+                                    {unread ? (
+                                      <span
+                                        className="block h-2.5 w-2.5 rounded-full bg-rose-600 ring-4 ring-rose-100"
+                                        title="Mensagem nova"
+                                        aria-label="Mensagem nova"
+                                      />
+                                    ) : (
+                                      <span className="block h-2.5 w-2.5 rounded-full bg-slate-200" />
+                                    )}
+                                  </div>
+                                  <div className="min-w-0">
+                                    <Link
+                                      to={`/app/cases/${c.id}`}
+                                      className="block truncate text-sm font-semibold text-slate-900 hover:underline"
+                                      title={titlePrimary}
+                                    >
+                                      {titlePrimary}
+                                    </Link>
+                                    <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
+                                      <span className="font-mono">{c.id.slice(0, 8)}…</span>
+                                      {pend?.need_location ? (
+                                        <span className="inline-flex items-center gap-1 rounded-full bg-rose-50 px-2 py-1 text-rose-700">
+                                          <MapPin className="h-3.5 w-3.5" /> localização
+                                        </span>
+                                      ) : null}
+                                    </div>
+                                  </div>
                                 </div>
-                              </div>
+                              </TableCell>
 
-                              <div className="flex flex-col items-end gap-2">
-                                {unread ? (
-                                  <span
-                                    className="h-2.5 w-2.5 rounded-full bg-rose-600 ring-4 ring-rose-100"
-                                    title="Mensagem nova"
-                                    aria-label="Mensagem nova"
-                                  />
-                                ) : null}
+                              <TableCell className="py-3">
+                                <div className="text-sm text-slate-800">
+                                  {c.vendors?.display_name ?? "—"}
+                                </div>
+                                <div className="mt-0.5 text-[11px] text-slate-500">
+                                  {c.vendors?.phone_e164 ?? ""}
+                                </div>
+                              </TableCell>
 
+                              <TableCell className="py-3">
+                                <select
+                                  value={c.state}
+                                  onChange={(e) => updateCaseState(c.id, e.target.value)}
+                                  disabled={Boolean(movingCaseId)}
+                                  className={cn(
+                                    "h-9 w-full rounded-xl border border-slate-200 bg-white px-2 text-sm text-slate-800 outline-none",
+                                    "focus:border-[hsl(var(--byfrost-accent)/0.45)]",
+                                    movingCaseId === c.id ? "opacity-60" : ""
+                                  )}
+                                >
+                                  {listStateOptions.map((opt) => (
+                                    <option key={opt.value} value={opt.value}>
+                                      {opt.label}
+                                    </option>
+                                  ))}
+                                </select>
+                              </TableCell>
+
+                              <TableCell className="py-3">
                                 {pend?.open ? (
                                   <Badge className="rounded-full border-0 bg-amber-100 text-amber-900 hover:bg-amber-100">
-                                    {pend.open} pend.
+                                    {pend.open}
                                   </Badge>
                                 ) : (
                                   <Badge className="rounded-full border-0 bg-emerald-100 text-emerald-900 hover:bg-emerald-100">
-                                    ok
+                                    0
                                   </Badge>
                                 )}
-                              </div>
-                            </div>
+                              </TableCell>
 
-                            <div className="mt-3 flex items-center justify-between gap-2 text-xs text-slate-600">
-                              <div className="flex items-center gap-1">
-                                <Clock className="h-3.5 w-3.5 text-slate-400" />
-                                {age} min
-                              </div>
-                              {pend?.need_location && (
-                                <div className="flex items-center gap-1 rounded-full bg-rose-50 px-2 py-1 text-rose-700">
-                                  <MapPin className="h-3.5 w-3.5" />
-                                  localização
+                              <TableCell className="py-3">
+                                <div className="inline-flex items-center gap-1 text-xs text-slate-600">
+                                  <Clock className="h-3.5 w-3.5 text-slate-400" />
+                                  {ageMin} min
                                 </div>
-                              )}
-                            </div>
-                          </Link>
-                        );
-                      })}
+                              </TableCell>
 
-                      {col.items.length === 0 && (
-                        <div className="rounded-[22px] border border-dashed border-slate-200 bg-white/40 p-4 text-xs text-slate-500">
-                          {col.key !== "__other__" ? "Solte um card aqui para mover." : "Sem cards aqui."}
-                        </div>
-                      )}
-                    </div>
+                              <TableCell className="py-3">
+                                <Badge className="rounded-full border-0 bg-slate-100 text-slate-700 hover:bg-slate-100">
+                                  {c.status}
+                                </Badge>
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
+
+                        {listRows.length === 0 ? (
+                          <TableRow>
+                            <TableCell colSpan={6} className="py-10 text-center text-sm text-slate-600">
+                              Nenhum caso encontrado.
+                            </TableCell>
+                          </TableRow>
+                        ) : null}
+                      </TableBody>
+                    </Table>
                   </div>
-                ))}
-              </div>
+
+                  <div className="mt-2 text-xs text-slate-500">
+                    Dica: use a busca acima para filtrar. Para abrir, clique no nome do caso.
+                  </div>
+                </div>
+              ) : (
+                <div className="flex min-w-[980px] gap-4">
+                  {columns.map((col) => (
+                    <div
+                      key={col.key}
+                      className="w-[320px] flex-shrink-0"
+                      onDragOver={(e) => {
+                        if (col.key === "__other__") return;
+                        e.preventDefault();
+                      }}
+                      onDrop={(e) => {
+                        if (col.key === "__other__") return;
+                        const cid = e.dataTransfer.getData("text/caseId");
+                        if (!cid) return;
+                        if (movingCaseId) return;
+                        updateCaseState(cid, col.key);
+                      }}
+                    >
+                      <div className="flex items-center justify-between px-1">
+                        <div className="text-sm font-semibold text-slate-800">{col.label}</div>
+                        <div className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-600">
+                          {col.items.length}
+                        </div>
+                      </div>
+
+                      <div
+                        className={cn(
+                          "mt-2 space-y-3 rounded-[24px] p-2",
+                          col.key !== "__other__" ? "bg-slate-50/60 border border-dashed border-slate-200" : ""
+                        )}
+                      >
+                        {col.items.map((c) => {
+                          const pend = pendQ.data?.get(c.id);
+                          const age = minutesAgo(c.updated_at);
+                          const isMoving = movingCaseId === c.id;
+                          const unread = unreadByCase.has(c.id);
+                          const cust = isCrm ? customersQ.data?.get(String((c as any).customer_id ?? "")) : null;
+
+                          // Para CRM: o título do card vira o nome do cliente; se não tiver,
+                          // usa o WhatsApp relacionado ao case no ato de criação (case_fields/meta_json).
+                          const titlePrimary =
+                            isCrm
+                              ? (cust?.name ??
+                                casePhoneQ.data?.get(c.id) ??
+                                getMetaPhone((c as any).meta_json) ??
+                                cust?.phone_e164 ??
+                                c.title ??
+                                "Caso")
+                              : c.title ?? "Caso";
+
+                          return (
+                            <Link
+                              key={c.id}
+                              to={`/app/cases/${c.id}`}
+                              draggable
+                              onDragStart={(e) => {
+                                e.dataTransfer.setData("text/caseId", c.id);
+                                e.dataTransfer.effectAllowed = "move";
+                              }}
+                              className={cn(
+                                "block rounded-[22px] border bg-white p-4 shadow-sm transition hover:shadow-md",
+                                unread ? "border-rose-200 hover:border-rose-300" : "border-slate-200 hover:border-slate-300",
+                                "cursor-grab active:cursor-grabbing",
+                                isMoving ? "opacity-60" : ""
+                              )}
+                              title="Arraste para mudar de etapa"
+                            >
+                              <div className="flex items-start justify-between gap-3">
+                                <div className="min-w-0">
+                                  <div className="truncate text-sm font-semibold text-slate-900">{titlePrimary}</div>
+                                  <div className="mt-1 truncate text-xs text-slate-500">
+                                    {(c.vendors?.display_name ?? "Vendedor") +
+                                      (c.vendors?.phone_e164 ? ` • ${c.vendors.phone_e164}` : "")}
+                                  </div>
+                                </div>
+
+                                <div className="flex flex-col items-end gap-2">
+                                  {unread ? (
+                                    <span
+                                      className="h-2.5 w-2.5 rounded-full bg-rose-600 ring-4 ring-rose-100"
+                                      title="Mensagem nova"
+                                      aria-label="Mensagem nova"
+                                    />
+                                  ) : null}
+
+                                  {pend?.open ? (
+                                    <Badge className="rounded-full border-0 bg-amber-100 text-amber-900 hover:bg-amber-100">
+                                      {pend.open} pend.
+                                    </Badge>
+                                  ) : (
+                                    <Badge className="rounded-full border-0 bg-emerald-100 text-emerald-900 hover:bg-emerald-100">
+                                      ok
+                                    </Badge>
+                                  )}
+                                </div>
+                              </div>
+
+                              <div className="mt-3 flex items-center justify-between gap-2 text-xs text-slate-600">
+                                <div className="flex items-center gap-1">
+                                  <Clock className="h-3.5 w-3.5 text-slate-400" />
+                                  {age} min
+                                </div>
+                                {pend?.need_location && (
+                                  <div className="flex items-center gap-1 rounded-full bg-rose-50 px-2 py-1 text-rose-700">
+                                    <MapPin className="h-3.5 w-3.5" />
+                                    localização
+                                  </div>
+                                )}
+                              </div>
+                            </Link>
+                          );
+                        })}
+
+                        {col.items.length === 0 && (
+                          <div className="rounded-[22px] border border-dashed border-slate-200 bg-white/40 p-4 text-xs text-slate-500">
+                            {col.key !== "__other__" ? "Solte um card aqui para mover." : "Sem cards aqui."}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 
