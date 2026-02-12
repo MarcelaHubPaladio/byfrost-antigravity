@@ -35,7 +35,7 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { showError, showSuccess } from "@/utils/toast";
 import { cn } from "@/lib/utils";
-import { Plus, Trophy, Users, Upload, Lock, CalendarClock } from "lucide-react";
+import { CalendarClock, Lock, Plus, Trophy, Upload, Users } from "lucide-react";
 
 const BUCKET = "tenant-assets";
 const UPLOAD_URL =
@@ -46,6 +46,8 @@ type ParticipantRow = {
   tenant_id: string;
   name: string;
   display_name: string | null;
+  cpf: string | null;
+  whatsapp: string | null;
   photo_url: string | null;
   active: boolean;
   created_at: string;
@@ -155,6 +157,18 @@ async function uploadTenantAsset(params: {
   };
 }
 
+function normalizeCpf(raw: string) {
+  return String(raw ?? "").replace(/\D/g, "").slice(0, 11);
+}
+
+function normalizeWhatsapp(raw: string) {
+  const s = String(raw ?? "").trim();
+  const hasPlus = s.startsWith("+");
+  const digits = s.replace(/\D/g, "");
+  if (!digits) return "";
+  return hasPlus ? `+${digits}` : digits;
+}
+
 export function IncentivesPanel() {
   const qc = useQueryClient();
   const { activeTenantId } = useTenant();
@@ -162,6 +176,8 @@ export function IncentivesPanel() {
   // ---- Participants ----
   const [pName, setPName] = useState("");
   const [pDisplayName, setPDisplayName] = useState("");
+  const [pCpf, setPCpf] = useState("");
+  const [pWhatsapp, setPWhatsapp] = useState("");
   const [creatingParticipant, setCreatingParticipant] = useState(false);
 
   // ---- Campaigns ----
@@ -189,7 +205,7 @@ export function IncentivesPanel() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("incentive_participants")
-        .select("id,tenant_id,name,display_name,photo_url,active,created_at")
+        .select("id,tenant_id,name,display_name,cpf,whatsapp,photo_url,active,created_at")
         .eq("tenant_id", activeTenantId!)
         .order("created_at", { ascending: false });
       if (error) throw error;
@@ -324,8 +340,20 @@ export function IncentivesPanel() {
 
   const createParticipant = async () => {
     if (!activeTenantId) return;
+
+    const cpf = normalizeCpf(pCpf);
+    const whatsapp = normalizeWhatsapp(pWhatsapp);
+
     if (!pName.trim()) {
       showError("Informe o nome.");
+      return;
+    }
+    if (cpf.length !== 11) {
+      showError("Informe um CPF válido (11 dígitos, sem pontuação).");
+      return;
+    }
+    if (!whatsapp) {
+      showError("Informe o WhatsApp.");
       return;
     }
 
@@ -335,14 +363,25 @@ export function IncentivesPanel() {
         tenant_id: activeTenantId,
         name: pName.trim(),
         display_name: pDisplayName.trim() || null,
+        cpf,
+        whatsapp,
       });
       if (error) throw error;
       setPName("");
       setPDisplayName("");
+      setPCpf("");
+      setPWhatsapp("");
       showSuccess("Participante criado.");
       await qc.invalidateQueries({ queryKey: ["incentives_participants", activeTenantId] });
     } catch (e: any) {
-      showError(`Falha ao criar participante: ${e?.message ?? "erro"}`);
+      const msg = String(e?.message ?? "erro");
+      if (msg.includes("schema cache") || msg.toLowerCase().includes("could not find the table")) {
+        showError(
+          "As migrations do Incentive Engine ainda não foram aplicadas no banco Supabase desta instância. Aplique as migrations 0021+ e recarregue."
+        );
+      } else {
+        showError(`Falha ao criar participante: ${msg}`);
+      }
     } finally {
       setCreatingParticipant(false);
     }
@@ -426,8 +465,12 @@ export function IncentivesPanel() {
       if (error) throw error;
       await qc.invalidateQueries({ queryKey: ["incentives_campaigns", activeTenantId] });
       if (manageCampaignId === campaignId) {
-        await qc.invalidateQueries({ queryKey: ["incentives_campaign_participants", activeTenantId, manageCampaignId] });
-        await qc.invalidateQueries({ queryKey: ["incentives_snapshots", activeTenantId, manageCampaignId] });
+        await qc.invalidateQueries({
+          queryKey: ["incentives_campaign_participants", activeTenantId, manageCampaignId],
+        });
+        await qc.invalidateQueries({
+          queryKey: ["incentives_snapshots", activeTenantId, manageCampaignId],
+        });
       }
     } catch (e: any) {
       showError(`Falha ao atualizar campanha: ${e?.message ?? "erro"}`);
@@ -569,12 +612,13 @@ export function IncentivesPanel() {
             <Card className="rounded-[22px] border-slate-200 bg-white p-4">
               <div className="text-sm font-semibold text-slate-900">Preparar participante</div>
               <div className="mt-1 text-xs text-slate-500">
-                Use <span className="font-medium">display_name</span> para o nome que aparece no ranking público.
+                Obrigatórios: <span className="font-medium">nome</span>, <span className="font-medium">CPF</span> e{" "}
+                <span className="font-medium">WhatsApp</span>. No ranking público, exibimos apenas display_name e foto.
               </div>
 
               <div className="mt-4 grid gap-3">
                 <div>
-                  <Label className="text-xs">Nome</Label>
+                  <Label className="text-xs">Nome (obrigatório)</Label>
                   <Input
                     value={pName}
                     onChange={(e) => setPName(e.target.value)}
@@ -582,6 +626,29 @@ export function IncentivesPanel() {
                     placeholder="Ex: Maria Silva"
                   />
                 </div>
+
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div>
+                    <Label className="text-xs">CPF (obrigatório)</Label>
+                    <Input
+                      value={pCpf}
+                      onChange={(e) => setPCpf(e.target.value)}
+                      className="mt-1 h-11 rounded-2xl"
+                      placeholder="Somente números"
+                      inputMode="numeric"
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-xs">WhatsApp (obrigatório)</Label>
+                    <Input
+                      value={pWhatsapp}
+                      onChange={(e) => setPWhatsapp(e.target.value)}
+                      className="mt-1 h-11 rounded-2xl"
+                      placeholder="Ex: +5511999999999"
+                    />
+                  </div>
+                </div>
+
                 <div>
                   <Label className="text-xs">Display name (opcional)</Label>
                   <Input
@@ -844,7 +911,7 @@ export function IncentivesPanel() {
               <DialogHeader>
                 <DialogTitle>Gerenciar campanha</DialogTitle>
                 <DialogDescription>
-                  Vincule participantes, confira o snapshot (após finalizar) e use o ranking público quando estiver em public.
+                  Vincule participantes e confira o snapshot (após finalizar). O snapshot é criado automaticamente.
                 </DialogDescription>
               </DialogHeader>
 
@@ -858,7 +925,9 @@ export function IncentivesPanel() {
                         <div className="text-sm font-semibold text-slate-900">{manageCampaign.name}</div>
                         <div className="mt-1 text-xs text-slate-600">
                           {manageCampaign.visibility} • {manageCampaign.ranking_type} • status {manageCampaign.status}
-                          {manageCampaign.finalized_at ? ` • finalized_at ${new Date(manageCampaign.finalized_at).toLocaleString()}` : ""}
+                          {manageCampaign.finalized_at
+                            ? ` • finalized_at ${new Date(manageCampaign.finalized_at).toLocaleString()}`
+                            : ""}
                         </div>
                       </div>
                       {manageCampaign.visibility === "public" && (
@@ -914,7 +983,9 @@ export function IncentivesPanel() {
                               >
                                 <div className="min-w-0">
                                   <div className="truncate text-sm font-medium text-slate-900">{name}</div>
-                                  <div className="mt-0.5 text-[11px] text-slate-500">joined {new Date(cp.joined_at).toLocaleString()}</div>
+                                  <div className="mt-0.5 text-[11px] text-slate-500">
+                                    joined {new Date(cp.joined_at).toLocaleString()}
+                                  </div>
                                 </div>
                                 <Button
                                   variant="secondary"
@@ -959,7 +1030,9 @@ export function IncentivesPanel() {
                                   className="flex items-center justify-between rounded-2xl border border-slate-200 bg-white px-3 py-2"
                                 >
                                   <div className="min-w-0">
-                                    <div className="truncate text-sm font-medium text-slate-900">#{s.final_position} • {name}</div>
+                                    <div className="truncate text-sm font-medium text-slate-900">
+                                      #{s.final_position} • {name}
+                                    </div>
                                     <div className="mt-0.5 text-[11px] text-slate-500">score {s.final_score}</div>
                                   </div>
                                 </div>
