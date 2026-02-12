@@ -105,7 +105,17 @@ export function NewTrelloCardDialog(props: { tenantId: string; journeyId: string
       setDescription("");
       setDueDate("");
     } catch (e: any) {
-      showError(`Falha ao criar card: ${e?.message ?? "erro"}`);
+      const parts = [
+        e?.message ? String(e.message) : null,
+        e?.details ? `details: ${String(e.details)}` : null,
+        e?.hint ? `hint: ${String(e.hint)}` : null,
+        e?.code ? `code: ${String(e.code)}` : null,
+      ].filter(Boolean);
+
+      // Ajuda a debugar diferenças de constraint entre ambientes.
+      console.error("[trello] Falha ao criar card", e);
+
+      showError(`Falha ao criar card: ${parts.join(" | ") || "erro"}`);
     } finally {
       setCreating(false);
     }
