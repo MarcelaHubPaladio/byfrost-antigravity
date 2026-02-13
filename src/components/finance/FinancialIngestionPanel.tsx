@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
+import { SUPABASE_URL_IN_USE } from "@/lib/supabase";
 import { useTenant } from "@/providers/TenantProvider";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -22,7 +23,12 @@ async function fileToBase64(file: File) {
 function helpForEdgeFunctionError(message: string) {
   const m = (message ?? "").toLowerCase();
   if (m.includes("failed to send a request") || m.includes("failed to fetch")) {
-    return "Verifique se a Edge Function 'financial-ingestion-upload' está deployada no mesmo projeto Supabase configurado no frontend (VITE_SUPABASE_URL).";
+    return (
+      "O navegador não conseguiu chamar a Edge Function. Checklist:\n" +
+      `• O frontend está apontando para o projeto correto? (Supabase: ${SUPABASE_URL_IN_USE})\n` +
+      "• A função 'financial-ingestion-upload' está deployada nesse mesmo projeto?\n" +
+      "• No Supabase, confirme que Edge Functions está habilitado e a função existe."
+    );
   }
   return null;
 }
@@ -68,7 +74,6 @@ export function FinancialIngestionPanel() {
         sizeKb: Math.round(file.size / 1024),
       });
 
-      // Use supabase.functions.invoke so the request always targets the same project as the current auth/session.
       const { data, error } = await supabase.functions.invoke("financial-ingestion-upload", {
         body: {
           tenantId: activeTenantId,
@@ -90,7 +95,7 @@ export function FinancialIngestionPanel() {
     } catch (e: any) {
       const msg = String(e?.message ?? "erro");
       const help = helpForEdgeFunctionError(msg);
-      showError(`Falha no upload: ${msg}${help ? `\n${help}` : ""}`);
+      showError(`Falha no upload: ${msg}${help ? `\n\n${help}` : ""}`);
     } finally {
       setUploading(false);
     }
@@ -101,6 +106,9 @@ export function FinancialIngestionPanel() {
       <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">Ingestão de extratos</div>
       <div className="mt-1 text-xs text-slate-600 dark:text-slate-400">
         Upload de CSV/OFX com processamento assíncrono (upload → parse → normalize → deduplicate → persist).
+      </div>
+      <div className="mt-2 text-[11px] text-slate-500 dark:text-slate-400">
+        Supabase: <span className="font-mono">{SUPABASE_URL_IN_USE}</span>
       </div>
 
       <div className="mt-4 grid gap-2">
