@@ -828,6 +828,317 @@ async function processFinancialIngestionJob(opts: {
   return { ok: true, inserted, parsedRows: parsed.rows.length, errors: errors.length };
 }
 
+async function getTenantTensionRule(supabase: any, tenantId: string, tensionType: string) {
+  const { data } = await supabase
+    .from("tenant_tension_rules")
+    .select("threshold,severity")
+    .eq("tenant_id", tenantId)
+    .eq("tension_type", tensionType)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  return data as any | null;
+}
+
+function clamp(n: number, a: number, b: number) {
+  return Math.max(a, Math.min(b, n));
+}
+
+function computeScores(opts: { impact: number; urgency: number; cascade: number }) {
+  const impact = clamp(opts.impact, 0, 100);
+  const urgency = clamp(opts.urgency, 0, 100);
+  const cascade = clamp(opts.cascade, 0, 100);
+  const final = clamp(impact * 0.5 + urgency * 0.35 + cascade * 0.15, 0, 100);
+  return { impact, urgency, cascade, final };
+}
+
+async function createTensionEventWithScore(opts: {
+  supabase: any;
+  tenantId: string;
+  tensionType: string;
+  referenceId?: string | null;
+  description: string;
+  scores: { impact: number; urgency: number; cascade: number; final: number };
+}) {
+  const { supabase, tenantId, tensionType, referenceId, description, scores } = opts;
+
+  // Avoid spamming: only one event per tenant+tension_type in the last 24h.
+  const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+  const { data: existing } = await supabase
+    .from("tension_events")
+    .select("id")
+    .eq("tenant_id", tenantId)
+    .eq("tension_type", tensionType)
+    .gte("detected_at", since)
+    .order("detected_at", { ascending: false })
+    .limit(1);
+
+  if ((existing ?? []).length) {
+    return { ok: true, skipped: true };
+  }
+
+  const { data: ev, error: evErr } = await supabase
+    .from("tension_events")
+    .insert({
+      tenant_id: tenantId,
+      tension_type: tensionType,
+      reference_id: referenceId ?? null,
+      description,
+      detected_at: new Date().toISOString(),
+    })
+    .select("id")
+    .maybeSingle();
+  if (evErr || !ev?.id) throw new Error(`tension_event_insert_failed:${evErr?.message ?? ""}`);
+
+  const { error: sErr } = await supabase.from("tension_scores").insert({
+    tension_event_id: ev.id,
+    impact_score: scores.impact,
+    urgency_score: scores.urgency,
+    cascade_score: scores.cascade,
+    final_score: scores.final,
+  });
+  if (sErr) throw new Error(`tension_score_insert_failed:${sErr.message}`);
+
+  // Reuse existing explanation log structure.
+  await supabase.from("decision_logs").insert({
+    tenant_id: tenantId,
+    case_id: null,
+    agent_id: null,
+    input_summary: `Tensão detectada: ${tensionType}`,
+    output_summary: `Score final ${scores.final.toFixed(1)}`,
+    reasoning_public: description,
+    why_json: {
+      kind: "financial_tension",
+      tension_type: tensionType,
+      reference_id: referenceId ?? null,
+      scores,
+    },
+    confidence_json: { overall: 0.8, method: "rules" },
+    occurred_at: new Date().toISOString(),
+  });
+
+  return { ok: true, eventId: ev.id };
+}
+
+async function runFinancialTensionChecks(opts: { supabase: any; tenantId: string }) {
+  const { supabase, tenantId } = opts;
+
+  // Gather needed aggregates
+  const { data: cash } = await supabase.rpc("financial_cash_projection", { p_tenant_id: tenantId });
+  const current = Number(cash?.current_balance ?? 0);
+  const projected = Number(cash?.projected_balance ?? current);
+  const receivablesPending = Number(cash?.receivables_pending ?? 0);
+  const payablesPending = Number(cash?.payables_pending ?? 0);
+
+  // 1) risco de caixa negativo (impacto real: projected < 0)
+  if (projected < 0) {
+    const rule = (await getTenantTensionRule(supabase, tenantId, "cash_negative")) ?? {
+      threshold: 0,
+      severity: "high",
+    };
+
+    const deficit = Math.abs(projected);
+    if (deficit > Number(rule.threshold ?? 0)) {
+      const impact = clamp((deficit / Math.max(1, Math.abs(current) + 1)) * 100, 25, 100);
+      const urgency = clamp(payablesPending > 0 ? 85 : 70, 0, 100);
+      const cascade = clamp(60 + Math.min(20, deficit / 1000), 0, 100);
+      const scores = computeScores({ impact, urgency, cascade });
+
+      const description = [
+        `Risco de caixa negativo (projeção < 0).`,
+        `Saldo atual: ${current.toFixed(2)}`,
+        `Recebíveis pendentes: ${receivablesPending.toFixed(2)}`,
+        `Pagáveis pendentes: ${payablesPending.toFixed(2)}`,
+        `Saldo projetado: ${projected.toFixed(2)} (déficit ${deficit.toFixed(2)})`,
+      ].join("\n");
+
+      await createTensionEventWithScore({
+        supabase,
+        tenantId,
+        tensionType: "cash_negative",
+        referenceId: null,
+        description,
+        scores,
+      });
+    }
+  }
+
+  // 2) runway baixo (impacto real: projected < threshold)
+  // Simple MVP: runway threshold is absolute projected balance.
+  {
+    const rule = (await getTenantTensionRule(supabase, tenantId, "runway_low")) ?? {
+      threshold: 1000,
+      severity: "medium",
+    };
+
+    const thr = Number(rule.threshold ?? 0);
+    if (thr > 0 && projected >= 0 && projected < thr) {
+      const gap = thr - projected;
+      const impact = clamp((gap / thr) * 100, 15, 90);
+      const urgency = clamp(projected < thr * 0.25 ? 80 : 60, 0, 100);
+      const cascade = clamp(45 + Math.min(25, gap / 1000), 0, 100);
+      const scores = computeScores({ impact, urgency, cascade });
+
+      const description = [
+        `Runway baixo: saldo projetado abaixo do limite configurado.`,
+        `Saldo projetado: ${projected.toFixed(2)}`,
+        `Limite (threshold): ${thr.toFixed(2)}`,
+        `Gap: ${gap.toFixed(2)}`,
+      ].join("\n");
+
+      await createTensionEventWithScore({
+        supabase,
+        tenantId,
+        tensionType: "runway_low",
+        referenceId: null,
+        description,
+        scores,
+      });
+    }
+  }
+
+  // 3) receita não recebida (impacto real: receivables overdue)
+  {
+    const { data: overdue, error } = await supabase
+      .from("financial_receivables")
+      .select("id,amount,due_date,description")
+      .eq("tenant_id", tenantId)
+      .eq("status", "overdue")
+      .order("due_date", { ascending: true })
+      .limit(50);
+
+    if (!error && (overdue ?? []).length) {
+      const total = (overdue ?? []).reduce((s: number, r: any) => s + Number(r.amount ?? 0), 0);
+      if (total > 0) {
+        const rule = (await getTenantTensionRule(supabase, tenantId, "revenue_not_received")) ?? {
+          threshold: 0,
+          severity: "high",
+        };
+        if (total > Number(rule.threshold ?? 0)) {
+          const oldest = overdue![0];
+          const impact = clamp(Math.min(100, (total / Math.max(1, receivablesPending + 1)) * 100), 20, 100);
+          const urgency = 85;
+          const cascade = clamp(50 + Math.min(30, total / 1000), 0, 100);
+          const scores = computeScores({ impact, urgency, cascade });
+
+          const sample = overdue!
+            .slice(0, 5)
+            .map((r: any) => `- ${r.due_date}: ${Number(r.amount ?? 0).toFixed(2)} • ${String(r.description ?? "").slice(0, 60)}`)
+            .join("\n");
+
+          const description = [
+            `Receita não recebida: há recebíveis em atraso.`,
+            `Total em atraso: ${total.toFixed(2)} • Itens: ${overdue!.length}`,
+            `Mais antigo: ${oldest.due_date}`,
+            sample ? `Exemplos:\n${sample}` : "",
+          ]
+            .filter(Boolean)
+            .join("\n");
+
+          await createTensionEventWithScore({
+            supabase,
+            tenantId,
+            tensionType: "revenue_not_received",
+            referenceId: oldest.id,
+            description,
+            scores,
+          });
+        }
+      }
+    }
+  }
+
+  // 4) desvio relevante do orçamento (impacto real: actual > expected * threshold)
+  {
+    // Consider only last 30 days for MVP
+    const sinceDate = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+
+    // Pull budgets
+    const { data: budgets, error: bErr } = await supabase
+      .from("financial_budgets")
+      .select("id,category_id,expected_amount,recurrence,scenario")
+      .eq("tenant_id", tenantId)
+      .limit(200);
+
+    if (!bErr && (budgets ?? []).length) {
+      // Pull transactions with category in last 30 days
+      const { data: txs, error: tErr } = await supabase
+        .from("financial_transactions")
+        .select("id,category_id,amount,type,transaction_date")
+        .eq("tenant_id", tenantId)
+        .gte("transaction_date", sinceDate)
+        .not("category_id", "is", null)
+        .limit(5000);
+
+      if (!tErr && (txs ?? []).length) {
+        const actualByCat = new Map<string, number>();
+        for (const t of txs ?? []) {
+          const cat = (t as any).category_id as string | null;
+          if (!cat) continue;
+          const amt = Number((t as any).amount ?? 0);
+          const sign = (t as any).type === "debit" ? 1 : -1; // expenses positive
+          actualByCat.set(cat, (actualByCat.get(cat) ?? 0) + amt * sign);
+        }
+
+        const rule = (await getTenantTensionRule(supabase, tenantId, "budget_deviation")) ?? {
+          threshold: 0.25,
+          severity: "medium",
+        };
+
+        const ratioThr = Number(rule.threshold ?? 0.25);
+
+        // Find worst deviation with impact
+        let worst: { categoryId: string; expected: number; actual: number; deviation: number } | null = null;
+
+        for (const b of budgets ?? []) {
+          const catId = (b as any).category_id as string;
+          const expected = Number((b as any).expected_amount ?? 0);
+          if (expected <= 0) continue;
+          const actual = actualByCat.get(catId) ?? 0;
+
+          // only consider overspend (actual > expected)
+          if (actual <= expected) continue;
+
+          const deviation = (actual - expected) / expected;
+          if (deviation < ratioThr) continue;
+
+          if (!worst || deviation > worst.deviation) worst = { categoryId: catId, expected, actual, deviation };
+        }
+
+        if (worst) {
+          const excess = worst.actual - worst.expected;
+          if (excess > 0) {
+            const impact = clamp(Math.min(100, worst.deviation * 100), 20, 100);
+            const urgency = clamp(worst.deviation > 0.75 ? 80 : 60, 0, 100);
+            const cascade = clamp(40 + Math.min(30, excess / 1000), 0, 100);
+            const scores = computeScores({ impact, urgency, cascade });
+
+            const description = [
+              `Desvio relevante do orçamento (últimos 30 dias).`,
+              `Categoria: ${worst.categoryId}`,
+              `Esperado: ${worst.expected.toFixed(2)}`,
+              `Real: ${worst.actual.toFixed(2)}`,
+              `Excesso: ${excess.toFixed(2)} • Desvio: ${(worst.deviation * 100).toFixed(1)}%`,
+              `Threshold: ${(ratioThr * 100).toFixed(1)}%`,
+            ].join("\n");
+
+            await createTensionEventWithScore({
+              supabase,
+              tenantId,
+              tensionType: "budget_deviation",
+              referenceId: null,
+              description,
+              scores,
+            });
+          }
+        }
+      }
+    }
+  }
+
+  return { ok: true };
+}
+
 serve(async (req) => {
   const fn = "jobs-processor";
   try {
@@ -887,6 +1198,13 @@ serve(async (req) => {
           if (!ingestionJobId || !bucket || !path) throw new Error("Missing payload (ingestion_job_id/storage_bucket/storage_path)");
 
           const out = await processFinancialIngestionJob({ supabase, tenantId, ingestionJobId, bucket, path });
+
+          // After persisting transactions, run simple financial tension checks.
+          try {
+            await runFinancialTensionChecks({ supabase, tenantId });
+          } catch (e) {
+            console.warn(`[${fn}] tension checks failed (ignored)`, { tenantId, e: String(e) });
+          }
 
           await supabase.from("job_queue").update({ status: "done" }).eq("id", job.id);
           results.push({ id: job.id, ok: true, type: job.type, result: out });
