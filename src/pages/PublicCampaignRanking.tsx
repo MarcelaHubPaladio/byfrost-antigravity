@@ -3,6 +3,7 @@ import { useParams } from "react-router-dom";
 import { Card } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
+import { supabase } from "@/lib/supabase";
 
 const RANKING_URL =
   "https://pryoirzeghatrgecwrci.supabase.co/functions/v1/public-campaign-ranking";
@@ -89,6 +90,8 @@ export default function PublicCampaignRanking() {
       try {
         setError(null);
         setErrorDetail(null);
+
+        // 1) Try Edge Function first (supports signed URLs for private photos)
         const url = new URL(RANKING_URL);
         url.searchParams.set("tenant_slug", tenant);
         url.searchParams.set("campaign_id", campaign);
@@ -96,18 +99,44 @@ export default function PublicCampaignRanking() {
         const res = await fetch(url.toString(), { method: "GET" });
         const json = await res.json().catch(() => null);
 
-        if (!res.ok || !json?.ok) {
-          const msg = String(json?.error ?? `HTTP ${res.status}`);
-          const detail = json?.detail ?? null;
-          // helpful for debugging in console
-          // eslint-disable-next-line no-console
-          console.error("public ranking failed", { status: res.status, msg, detail, url: url.toString() });
-          throw Object.assign(new Error(msg), { detail });
+        // If the function is not deployed in this Supabase project, Supabase often returns 404
+        // with a body that is either non-JSON or JSON that does NOT match our { ok, error } shape.
+        const looksLikeOurResponse =
+          Boolean(json) && typeof (json as any).ok === "boolean" && typeof (json as any).error === "string";
+        const shouldFallbackToRpc = res.status === 404 && !looksLikeOurResponse;
+
+        if (!shouldFallbackToRpc) {
+          if (!res.ok || !json?.ok) {
+            const msg = String(json?.error ?? `HTTP ${res.status}`);
+            const detail = json?.detail ?? null;
+            // eslint-disable-next-line no-console
+            console.error("public ranking failed", { status: res.status, msg, detail, url: url.toString() });
+            throw Object.assign(new Error(msg), { detail });
+          }
+
+          if (cancelled) return;
+          setItems((json.items ?? []) as Row[]);
+          setUpdatedAt(String(json.updated_at ?? new Date().toISOString()));
+          return;
+        }
+
+        // 2) Fallback: SQL RPC (does not require Edge Function deployment)
+        const { data, error: rpcErr } = await supabase.rpc("public_campaign_ranking", {
+          p_tenant_slug: tenant,
+          p_campaign_id: campaign,
+          p_limit: 10,
+        });
+
+        if (rpcErr) throw rpcErr;
+
+        if (!data?.ok) {
+          const msg = String(data?.error ?? "Erro");
+          throw Object.assign(new Error(msg), { detail: null });
         }
 
         if (cancelled) return;
-        setItems((json.items ?? []) as Row[]);
-        setUpdatedAt(String(json.updated_at ?? new Date().toISOString()));
+        setItems((data.items ?? []) as Row[]);
+        setUpdatedAt(String(data.updated_at ?? new Date().toISOString()));
       } catch (e: any) {
         if (cancelled) return;
         setError(String(e?.message ?? "Erro"));
@@ -129,6 +158,13 @@ export default function PublicCampaignRanking() {
   }, [tenant, campaign]);
 
   const helpText = useMemo(() => {
+    const e = String(error ?? "");
+    const el = e.toLowerCase();
+
+    if (el.includes("public_campaign_ranking") && (el.includes("could not find") || el.includes("does not exist"))) {
+      return "A função SQL de fallback não está instalada no seu Supabase. Execute a migration 0026_public_campaign_ranking_rpc.sql no SQL Editor.";
+    }
+
     switch (error) {
       case "tenant_not_found":
         return "Tenant não encontrado. Verifique o tenant_slug na URL.";
@@ -141,7 +177,7 @@ export default function PublicCampaignRanking() {
       case "participants_query_failed":
         return "Falha ao carregar participantes. Confirme se as tabelas do Incentive Engine existem e se o projeto tem a função configurada.";
       case "missing_params":
-        return "URL incompleta. Use /incentives/<tenant_slug>/<campaign_id>."
+        return "URL incompleta. Use /incentives/<tenant_slug>/<campaign_id>.";
       default:
         return null;
     }
