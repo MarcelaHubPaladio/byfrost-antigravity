@@ -36,6 +36,7 @@ import PublicCampaignRanking from "@/pages/PublicCampaignRanking";
 import IncentivesEventsManage from "@/pages/IncentivesEventsManage";
 import FinanceIngestion from "@/pages/FinanceIngestion";
 import FinancePlanning from "@/pages/FinancePlanning";
+import FinanceLedger from "@/pages/FinanceLedger";
 
 const queryClient = new QueryClient();
 
@@ -72,6 +73,14 @@ const App = () => (
                 />
 
                 {/* Financeiro */}
+                <Route
+                  path="/app/finance/ledger"
+                  element={
+                    <RequireRouteAccess routeKey="app.settings">
+                      <FinanceLedger />
+                    </RequireRouteAccess>
+                  }
+                />
                 <Route
                   path="/app/finance/ingestion"
                   element={

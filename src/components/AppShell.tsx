@@ -22,6 +22,7 @@ import {
   Lock,
   Menu,
   CalendarClock,
+  Wallet,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -141,6 +142,9 @@ function getPageName(pathname: string) {
   if (pathname.startsWith("/app/content")) return "Conteúdo";
   if (pathname.startsWith("/app/presence/manage")) return "Gestão de Presença";
   if (pathname.startsWith("/app/presence")) return "Ponto";
+  if (pathname.startsWith("/app/finance/ledger")) return "Financeiro • Lançamentos";
+  if (pathname.startsWith("/app/finance/ingestion")) return "Financeiro • Ingestão";
+  if (pathname.startsWith("/app/finance/planning")) return "Financeiro • Planejamento";
   if (pathname.startsWith("/app/incentives/events")) return "Incentivos • Eventos";
   if (pathname.startsWith("/app/settings")) return "Configurações";
   if (pathname.startsWith("/app/me")) return "Meu usuário";
@@ -521,6 +525,10 @@ export function AppShell({
                     disabled={!can("app.presence_manage")}
                   />
                 )}
+
+                {/* Financeiro */}
+                <NavTile to="/app/finance/ledger" icon={Wallet} label="Financeiro" disabled={!can("app.settings")} />
+
                 {hasIncentivesCampaigns && (
                   <NavTile
                     to="/app/incentives/events"
@@ -652,6 +660,16 @@ export function AppShell({
                                 onNavigate={() => setMobileNavOpen(false)}
                               />
                             )}
+
+                            {/* Financeiro */}
+                            <MobileNavItem
+                              to="/app/finance/ledger"
+                              icon={Wallet}
+                              label="Financeiro"
+                              disabled={!can("app.settings")}
+                              onNavigate={() => setMobileNavOpen(false)}
+                            />
+
                             {hasIncentivesCampaigns && (
                               <MobileNavItem
                                 to="/app/incentives/events"
