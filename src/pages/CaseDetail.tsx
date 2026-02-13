@@ -690,71 +690,73 @@ export default function CaseDetail() {
               </div>
 
               {/* Anexos */}
-              <div className="rounded-[22px] border border-slate-200 bg-white p-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2 text-sm font-semibold text-slate-900">
-                    <ImageIcon className="h-4 w-4 text-slate-500" /> Anexos
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {activeTenantId && id && isSalesOrder ? (
-                      <SalesOrderAddAttachmentExtractDialog tenantId={activeTenantId} caseId={id} />
-                    ) : null}
-                    <div className="text-xs text-slate-500">{attachmentsQ.data?.length ?? 0}</div>
-                  </div>
-                </div>
-
-                <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                  {(attachmentsQ.data ?? [])
-                    .filter((a: any) => a.kind === "image")
-                    .slice(0, 4)
-                    .map((a: any) => {
-                      const url = (a.storage_path ?? "").trim();
-                      return (
-                        <div
-                          key={a.id}
-                          className="group relative overflow-hidden rounded-2xl border border-slate-200 bg-slate-50"
-                        >
-                          <button
-                            type="button"
-                            onClick={() => (isSalesOrder ? openReview(url) : window.open(url, "_blank"))}
-                            className="block w-full"
-                            title={isSalesOrder ? "Revisar pedido" : "Abrir imagem"}
-                          >
-                            <img
-                              src={url}
-                              alt="Pedido"
-                              className="h-44 w-full object-cover transition group-hover:scale-[1.02]"
-                            />
-                          </button>
-
-                          <div className="pointer-events-none absolute inset-x-0 bottom-0 flex items-end justify-between gap-2 bg-gradient-to-t from-slate-900/50 to-transparent p-3">
-                            <div className="pointer-events-none text-xs font-semibold text-white/95">
-                              {isSalesOrder ? "Revisar" : "Abrir"}
-                            </div>
-
-                            <a
-                              href={url}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="pointer-events-auto inline-flex items-center gap-1 rounded-full bg-white/90 px-2 py-1 text-[11px] font-semibold text-slate-900 shadow-sm hover:bg-white"
-                              title="Abrir em nova aba"
-                              onClick={(e) => e.stopPropagation()}
-                            >
-                              <ExternalLink className="h-3.5 w-3.5" />
-                              Nova aba
-                            </a>
-                          </div>
-                        </div>
-                      );
-                    })}
-
-                  {(!attachmentsQ.data || attachmentsQ.data.length === 0) && (
-                    <div className="rounded-2xl border border-dashed border-slate-200 bg-white/60 p-4 text-xs text-slate-500">
-                      Sem anexos ainda.
+              {!isTrello ? (
+                <div className="rounded-[22px] border border-slate-200 bg-white p-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+                      <ImageIcon className="h-4 w-4 text-slate-500" /> Anexos
                     </div>
-                  )}
+                    <div className="flex items-center gap-2">
+                      {activeTenantId && id && isSalesOrder ? (
+                        <SalesOrderAddAttachmentExtractDialog tenantId={activeTenantId} caseId={id} />
+                      ) : null}
+                      <div className="text-xs text-slate-500">{attachmentsQ.data?.length ?? 0}</div>
+                    </div>
+                  </div>
+
+                  <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                    {(attachmentsQ.data ?? [])
+                      .filter((a: any) => a.kind === "image")
+                      .slice(0, 4)
+                      .map((a: any) => {
+                        const url = (a.storage_path ?? "").trim();
+                        return (
+                          <div
+                            key={a.id}
+                            className="group relative overflow-hidden rounded-2xl border border-slate-200 bg-slate-50"
+                          >
+                            <button
+                              type="button"
+                              onClick={() => (isSalesOrder ? openReview(url) : window.open(url, "_blank"))}
+                              className="block w-full"
+                              title={isSalesOrder ? "Revisar pedido" : "Abrir imagem"}
+                            >
+                              <img
+                                src={url}
+                                alt="Pedido"
+                                className="h-44 w-full object-cover transition group-hover:scale-[1.02]"
+                              />
+                            </button>
+
+                            <div className="pointer-events-none absolute inset-x-0 bottom-0 flex items-end justify-between gap-2 bg-gradient-to-t from-slate-900/50 to-transparent p-3">
+                              <div className="pointer-events-none text-xs font-semibold text-white/95">
+                                {isSalesOrder ? "Revisar" : "Abrir"}
+                              </div>
+
+                              <a
+                                href={url}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="pointer-events-auto inline-flex items-center gap-1 rounded-full bg-white/90 px-2 py-1 text-[11px] font-semibold text-slate-900 shadow-sm hover:bg-white"
+                                title="Abrir em nova aba"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <ExternalLink className="h-3.5 w-3.5" />
+                                Nova aba
+                              </a>
+                            </div>
+                          </div>
+                        );
+                      })}
+
+                    {(!attachmentsQ.data || attachmentsQ.data.length === 0) && (
+                      <div className="rounded-2xl border border-dashed border-slate-200 bg-white/60 p-4 text-xs text-slate-500">
+                        Sem anexos ainda.
+                      </div>
+                    )}
+                  </div>
                 </div>
-              </div>
+              ) : null}
 
               {/* Campos extraídos */}
               <div className="rounded-[22px] border border-slate-200 bg-white p-4">
