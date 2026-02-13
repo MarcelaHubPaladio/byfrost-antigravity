@@ -8,14 +8,25 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { showError, showSuccess } from "@/utils/toast";
 
 type BankAccountRow = { id: string; bank_name: string; account_name: string; currency: string };
 
+type CategoryType = "revenue" | "cost" | "fixed" | "variable" | "other";
+
 type CategoryRow = {
   id: string;
   name: string;
-  type: "revenue" | "cost" | "fixed" | "variable" | "other";
+  type: CategoryType;
 };
 
 function normalizeDescription(s: string) {
@@ -121,6 +132,45 @@ export function FinancialLedgerPanel() {
     for (const a of accountsQ.data ?? []) m.set(a.id, a);
     return m;
   }, [accountsQ.data]);
+
+  // --------------------------
+  // Category creation
+  // --------------------------
+  const [catDialogOpen, setCatDialogOpen] = useState(false);
+  const [newCatName, setNewCatName] = useState("");
+  const [newCatType, setNewCatType] = useState<CategoryType>("variable");
+
+  const createCategoryM = useMutation({
+    mutationFn: async () => {
+      if (!activeTenantId) throw new Error("Tenant inválido");
+      const name = newCatName.trim();
+      if (!name) throw new Error("Informe o nome da categoria");
+
+      const { data, error } = await supabase
+        .from("financial_categories")
+        .insert({ tenant_id: activeTenantId, name, type: newCatType })
+        .select("id")
+        .maybeSingle();
+      if (error) throw error;
+      return data as any;
+    },
+    onSuccess: async () => {
+      showSuccess("Categoria criada.");
+      setNewCatName("");
+      setNewCatType("variable");
+      setCatDialogOpen(false);
+      await qc.invalidateQueries({ queryKey: ["financial_categories", activeTenantId] });
+    },
+    onError: (e: any) => {
+      const msg = String(e?.message ?? "Falha ao criar categoria");
+      // Common case: unique(tenant_id, name)
+      if (msg.toLowerCase().includes("duplicate") || msg.toLowerCase().includes("unique")) {
+        showError("Já existe uma categoria com esse nome.");
+      } else {
+        showError(msg);
+      }
+    },
+  });
 
   // --------------------------
   // Manual transaction form
@@ -263,6 +313,89 @@ export function FinancialLedgerPanel() {
 
   return (
     <div className="grid gap-4">
+      <Card className="rounded-[22px] border-slate-200 bg-white/70 p-4 shadow-sm backdrop-blur dark:border-slate-800 dark:bg-slate-950/40">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">Categorias</div>
+            <div className="mt-1 text-xs text-slate-600 dark:text-slate-400">
+              Crie categorias para classificar lançamentos e treinar regras automáticas.
+            </div>
+          </div>
+
+          <Dialog open={catDialogOpen} onOpenChange={setCatDialogOpen}>
+            <DialogTrigger asChild>
+              <Button className="h-9 rounded-2xl" disabled={!activeTenantId}>
+                Nova categoria
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-[520px]">
+              <DialogHeader>
+                <DialogTitle>Nova categoria</DialogTitle>
+                <DialogDescription>
+                  Dica: use nomes curtos (ex.: "Marketing", "Combustível", "Recebíveis").
+                </DialogDescription>
+              </DialogHeader>
+
+              <div className="grid gap-3">
+                <div>
+                  <Label className="text-xs">Nome</Label>
+                  <Input
+                    className="mt-1 rounded-2xl"
+                    value={newCatName}
+                    onChange={(e) => setNewCatName(e.target.value)}
+                    placeholder="Ex: Marketing"
+                  />
+                </div>
+
+                <div>
+                  <Label className="text-xs">Tipo</Label>
+                  <Select value={newCatType} onValueChange={(v) => setNewCatType(v as CategoryType)}>
+                    <SelectTrigger className="mt-1 rounded-2xl">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="revenue">revenue (receita)</SelectItem>
+                      <SelectItem value="cost">cost (custo)</SelectItem>
+                      <SelectItem value="fixed">fixed (fixo)</SelectItem>
+                      <SelectItem value="variable">variable (variável)</SelectItem>
+                      <SelectItem value="other">other (outro)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <DialogFooter>
+                <Button variant="secondary" className="h-10 rounded-2xl" onClick={() => setCatDialogOpen(false)}>
+                  Cancelar
+                </Button>
+                <Button
+                  className="h-10 rounded-2xl"
+                  onClick={() => createCategoryM.mutate()}
+                  disabled={createCategoryM.isPending || !activeTenantId}
+                >
+                  {createCategoryM.isPending ? "Salvando…" : "Criar"}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        </div>
+
+        <div className="mt-3 flex flex-wrap gap-2">
+          {(categoriesQ.data ?? []).slice(0, 24).map((c) => (
+            <div
+              key={c.id}
+              className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs text-slate-700 dark:border-slate-800 dark:bg-slate-950/30 dark:text-slate-200"
+              title={c.id}
+            >
+              {c.name} <span className="text-slate-400">•</span> {c.type}
+            </div>
+          ))}
+          {!categoriesQ.isLoading && !(categoriesQ.data ?? []).length ? (
+            <div className="text-xs text-slate-500 dark:text-slate-400">Nenhuma categoria ainda.</div>
+          ) : null}
+        </div>
+      </Card>
+
       <Card className="rounded-[22px] border-slate-200 bg-white/70 p-4 shadow-sm backdrop-blur dark:border-slate-800 dark:bg-slate-950/40">
         <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">Novo lançamento</div>
         <div className="mt-1 text-xs text-slate-600 dark:text-slate-400">
