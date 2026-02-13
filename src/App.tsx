@@ -39,6 +39,7 @@ import FinancePlanning from "@/pages/FinancePlanning";
 import FinanceLedger from "@/pages/FinanceLedger";
 import FinanceTensions from "@/pages/FinanceTensions";
 import FinanceDecisions from "@/pages/FinanceDecisions";
+import FinanceControlTower from "@/pages/FinanceControlTower";
 
 const queryClient = new QueryClient();
 
@@ -75,6 +76,14 @@ const App = () => (
                 />
 
                 {/* Financeiro */}
+                <Route
+                  path="/app/finance"
+                  element={
+                    <RequireRouteAccess routeKey="app.settings">
+                      <FinanceControlTower />
+                    </RequireRouteAccess>
+                  }
+                />
                 <Route
                   path="/app/finance/ledger"
                   element={

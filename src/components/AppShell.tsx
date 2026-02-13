@@ -25,6 +25,7 @@ import {
   Wallet,
   AlertTriangle,
   ClipboardList,
+  Gauge,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -144,6 +145,7 @@ function getPageName(pathname: string) {
   if (pathname.startsWith("/app/content")) return "Conteúdo";
   if (pathname.startsWith("/app/presence/manage")) return "Gestão de Presença";
   if (pathname.startsWith("/app/presence")) return "Ponto";
+  if (pathname === "/app/finance" || pathname.startsWith("/app/finance/control")) return "Financeiro • Control Tower";
   if (pathname.startsWith("/app/finance/ledger")) return "Financeiro • Lançamentos";
   if (pathname.startsWith("/app/finance/tensions")) return "Financeiro • Tensões";
   if (pathname.startsWith("/app/finance/decisions")) return "Financeiro • Decisões";
@@ -531,7 +533,10 @@ export function AppShell({
                 )}
 
                 {/* Financeiro */}
-                <NavTile to="/app/finance/ledger" icon={Wallet} label="Financeiro" disabled={!can("app.settings")} />
+                <NavTile to="/app/finance" icon={Gauge} label="Cockpit" disabled={!can("app.settings")} />
+                <NavTile to="/app/finance/ledger" icon={Wallet} label="Lançamentos" disabled={!can("app.settings")} />
+                <NavTile to="/app/finance/planning" icon={ClipboardCheck} label="Plano" disabled={!can("app.settings")} />
+                <NavTile to="/app/finance/ingestion" icon={ArrowLeftRight} label="Ingestão" disabled={!can("app.settings")} />
                 <NavTile to="/app/finance/tensions" icon={AlertTriangle} label="Tensões" disabled={!can("app.settings")} />
                 <NavTile to="/app/finance/decisions" icon={ClipboardList} label="Decisões" disabled={!can("app.settings")} />
 
@@ -669,9 +674,30 @@ export function AppShell({
 
                             {/* Financeiro */}
                             <MobileNavItem
+                              to="/app/finance"
+                              icon={Gauge}
+                              label="Cockpit"
+                              disabled={!can("app.settings")}
+                              onNavigate={() => setMobileNavOpen(false)}
+                            />
+                            <MobileNavItem
                               to="/app/finance/ledger"
                               icon={Wallet}
-                              label="Financeiro"
+                              label="Lançamentos"
+                              disabled={!can("app.settings")}
+                              onNavigate={() => setMobileNavOpen(false)}
+                            />
+                            <MobileNavItem
+                              to="/app/finance/planning"
+                              icon={ClipboardCheck}
+                              label="Plano"
+                              disabled={!can("app.settings")}
+                              onNavigate={() => setMobileNavOpen(false)}
+                            />
+                            <MobileNavItem
+                              to="/app/finance/ingestion"
+                              icon={ArrowLeftRight}
+                              label="Ingestão"
                               disabled={!can("app.settings")}
                               onNavigate={() => setMobileNavOpen(false)}
                             />
