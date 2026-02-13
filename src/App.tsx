@@ -11,6 +11,7 @@ import { RequireTenantRole } from "@/components/RequireTenantRole";
 import { RequireRouteAccess } from "@/components/RequireRouteAccess";
 import { RequireChatInstanceAccess } from "@/components/RequireChatInstanceAccess";
 import { RequireFinanceEnabled } from "@/components/RequireFinanceEnabled";
+import { RequireSimulatorEnabled } from "@/components/RequireSimulatorEnabled";
 
 import Index from "@/pages/Index";
 import NotFound from "@/pages/NotFound";
@@ -264,9 +265,11 @@ const App = () => (
                 <Route
                   path="/app/simulator"
                   element={
-                    <RequireRouteAccess routeKey="app.simulator">
-                      <Simulator />
-                    </RequireRouteAccess>
+                    <RequireSimulatorEnabled>
+                      <RequireRouteAccess routeKey="app.simulator">
+                        <Simulator />
+                      </RequireRouteAccess>
+                    </RequireSimulatorEnabled>
                   }
                 />
 

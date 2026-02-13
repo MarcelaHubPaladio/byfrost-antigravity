@@ -10,9 +10,13 @@ function getFinanceEnabled(modulesJson: any) {
   return Boolean(modulesJson?.finance_enabled === true);
 }
 
-function setFinanceEnabled(modulesJson: any, enabled: boolean) {
+function getSimulatorEnabled(modulesJson: any) {
+  return Boolean(modulesJson?.simulator_enabled === true);
+}
+
+function setModuleFlag(modulesJson: any, key: string, enabled: boolean) {
   const base = (modulesJson ?? {}) as any;
-  return { ...base, finance_enabled: enabled };
+  return { ...base, [key]: enabled };
 }
 
 export function TenantModulesPanel() {
@@ -36,15 +40,16 @@ export function TenantModulesPanel() {
   });
 
   const financeEnabled = useMemo(() => getFinanceEnabled(tenantQ.data?.modules_json), [tenantQ.data]);
+  const simulatorEnabled = useMemo(() => getSimulatorEnabled(tenantQ.data?.modules_json), [tenantQ.data]);
 
-  const toggleFinance = async (next: boolean) => {
+  const toggleModule = async (key: string, next: boolean) => {
     if (!activeTenantId) return;
     setSaving(true);
     try {
-      const nextModules = setFinanceEnabled(tenantQ.data?.modules_json, next);
+      const nextModules = setModuleFlag(tenantQ.data?.modules_json, key, next);
       const { error } = await supabase.from("tenants").update({ modules_json: nextModules }).eq("id", activeTenantId);
       if (error) throw error;
-      showSuccess(`Financeiro ${next ? "habilitado" : "desabilitado"}.`);
+      showSuccess(`${key.replace(/_/g, " ")} ${next ? "habilitado" : "desabilitado"}.`);
       await qc.invalidateQueries({ queryKey: ["tenant_modules", activeTenantId] });
       await qc.invalidateQueries({ queryKey: ["nav_access", activeTenantId] });
       await qc.invalidateQueries({ queryKey: ["route_access", activeTenantId] });
@@ -79,7 +84,23 @@ export function TenantModulesPanel() {
                   Habilita Cockpit, Lançamentos, Ingestão, Planejamento, Decisões, Tensões e Quadro.
                 </div>
               </div>
-              <Switch checked={financeEnabled} disabled={saving || tenantQ.isLoading} onCheckedChange={toggleFinance} />
+              <Switch
+                checked={financeEnabled}
+                disabled={saving || tenantQ.isLoading}
+                onCheckedChange={(v) => toggleModule("finance_enabled", v)}
+              />
+            </div>
+
+            <div className="flex items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2">
+              <div>
+                <div className="text-xs font-semibold text-slate-900">Simulador</div>
+                <div className="mt-0.5 text-[11px] text-slate-600">Habilita a rota /app/simulator.</div>
+              </div>
+              <Switch
+                checked={simulatorEnabled}
+                disabled={saving || tenantQ.isLoading}
+                onCheckedChange={(v) => toggleModule("simulator_enabled", v)}
+              />
             </div>
 
             {tenantQ.isError && (

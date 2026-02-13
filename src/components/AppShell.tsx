@@ -303,8 +303,16 @@ function isActiveFinancePath(pathname: string) {
   return pathname === "/app/finance" || pathname.startsWith("/app/finance/");
 }
 
+function isActivePresencePath(pathname: string) {
+  return pathname === "/app/presence" || pathname.startsWith("/app/presence/");
+}
+
 function isFinanceEnabled(modulesJson: any) {
   return Boolean(modulesJson?.finance_enabled === true);
+}
+
+function isSimulatorEnabled(modulesJson: any) {
+  return Boolean(modulesJson?.simulator_enabled === true);
 }
 
 type FinanceNavChild = {
@@ -323,6 +331,24 @@ const FINANCE_NAV_CHILDREN: FinanceNavChild[] = [
   { to: "/app/finance/board", label: "Quadro", icon: KanbanSquare, routeKey: "app.finance.board" },
 ];
 
+type PresenceNavChild = {
+  to: string;
+  label: string;
+  icon: any;
+  routeKey: string;
+  enabled?: (ctx: { hasPresence: boolean; isPresenceManager: boolean }) => boolean;
+};
+
+const PRESENCE_NAV_CHILDREN: PresenceNavChild[] = [
+  {
+    to: "/app/presence/manage",
+    label: "Gestão",
+    icon: ClipboardCheck,
+    routeKey: "app.presence_manage",
+    enabled: ({ hasPresence, isPresenceManager }) => hasPresence && isPresenceManager,
+  },
+];
+
 export function AppShell({
   children,
   hideTopBar,
@@ -335,9 +361,11 @@ export function AppShell({
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [mobileFinanceOpen, setMobileFinanceOpen] = useState(false);
+  const [mobilePresenceOpen, setMobilePresenceOpen] = useState(false);
 
   const roleKey = String(activeTenant?.role ?? "");
   const financeEnabledForTenant = isSuperAdmin || isFinanceEnabled(activeTenant?.modules_json);
+  const simulatorEnabledForTenant = isSuperAdmin || isSimulatorEnabled(activeTenant?.modules_json);
 
   const navAccessQ = useQuery({
     queryKey: ["nav_access", activeTenantId, roleKey],
@@ -528,9 +556,10 @@ export function AppShell({
   const userEmail = user?.email ?? "";
   const avatarUrl = (user?.user_metadata as any)?.avatar_url ?? null;
 
-  // Keep mobile finance submenu in sync with current route
+  // Keep mobile finance/presence submenu in sync with current route
   useEffect(() => {
     if (isActiveFinancePath(loc.pathname)) setMobileFinanceOpen(true);
+    if (isActivePresencePath(loc.pathname)) setMobilePresenceOpen(true);
   }, [loc.pathname]);
 
   return (
@@ -584,14 +613,55 @@ export function AppShell({
                 {hasMetaContent && (
                   <NavTile to="/app/content" icon={Clapperboard} label="Conteúdo" disabled={!can("app.content")} />
                 )}
-                {hasPresence && <NavTile to="/app/presence" icon={Clock3} label="Ponto" disabled={!can("app.presence")} />}
-                {hasPresence && isPresenceManager && (
-                  <NavTile
-                    to="/app/presence/manage"
-                    icon={ClipboardCheck}
-                    label="Gestão"
-                    disabled={!can("app.presence_manage")}
-                  />
+
+                {/* Presença (desktop): Ponto principal + submenu no hover */}
+                {hasPresence && (
+                  <div className="group relative">
+                    <NavTile to="/app/presence" icon={Clock3} label="Ponto" disabled={!can("app.presence")} />
+
+                    <div
+                      className={cn(
+                        "pointer-events-none absolute left-[100%] top-0 z-[80] pl-2 opacity-0 transition",
+                        "group-hover:pointer-events-auto group-hover:opacity-100"
+                      )}
+                    >
+                      <div className="min-w-[220px] rounded-2xl border border-slate-200 bg-white/95 p-2 shadow-lg backdrop-blur dark:border-slate-800 dark:bg-slate-950/90">
+                        <div className="px-2 pb-1.5 text-[11px] font-semibold text-slate-500 dark:text-slate-400">
+                          Presença
+                        </div>
+                        <div className="grid gap-1">
+                          {PRESENCE_NAV_CHILDREN.filter((c) => (c.enabled ? c.enabled({ hasPresence, isPresenceManager }) : true)).map(
+                            ({ to, label, icon: Icon, routeKey }) => (
+                              <NavLink
+                                key={to}
+                                to={to}
+                                className={({ isActive }) =>
+                                  cn(
+                                    "flex items-center justify-between gap-2 rounded-xl px-2 py-2 text-sm font-semibold transition",
+                                    isActive || loc.pathname === to
+                                      ? "bg-[hsl(var(--byfrost-accent)/0.10)] text-[hsl(var(--byfrost-accent))]"
+                                      : "text-slate-800 hover:bg-slate-100 dark:text-slate-100 dark:hover:bg-slate-800/60",
+                                    !can(routeKey) && "pointer-events-none opacity-50 grayscale cursor-not-allowed"
+                                  )
+                                }
+                                title={can(routeKey) ? label : `${label} (sem permissão)`}
+                              >
+                                <div className="flex items-center gap-2">
+                                  <Icon className="h-4 w-4" />
+                                  <span>{label}</span>
+                                </div>
+                                {can(routeKey) ? (
+                                  <ChevronRight className="h-4 w-4 opacity-40" />
+                                ) : (
+                                  <Lock className="h-4 w-4 opacity-70" />
+                                )}
+                              </NavLink>
+                            )
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 )}
 
                 {/* Financeiro (desktop): Cockpit principal + submenu no hover */}
@@ -606,7 +676,7 @@ export function AppShell({
 
                     <div
                       className={cn(
-                        "pointer-events-none absolute left-[100%] top-0 z-50 pl-2 opacity-0 transition",
+                        "pointer-events-none absolute left-[100%] top-0 z-[80] pl-2 opacity-0 transition",
                         "group-hover:pointer-events-auto group-hover:opacity-100"
                       )}
                     >
@@ -656,7 +726,11 @@ export function AppShell({
                     disabled={!can("app.incentives_events_manage")}
                   />
                 )}
-                <NavTile to="/app/simulator" icon={FlaskConical} label="Simulador" disabled={!can("app.simulator")} />
+
+                {simulatorEnabledForTenant && (
+                  <NavTile to="/app/simulator" icon={FlaskConical} label="Simulador" disabled={!can("app.simulator")} />
+                )}
+
                 {isSuperAdmin && <NavTile to="/app/admin" icon={Crown} label="Admin" disabled={!can("app.admin")} />}
                 <NavTile to="/app/settings" icon={Settings} label="Config" disabled={!can("app.settings")} />
               </div>
@@ -761,23 +835,58 @@ export function AppShell({
                                 onNavigate={() => setMobileNavOpen(false)}
                               />
                             )}
+
+                            {/* Presença (mobile): Ponto + abrir filhos ao clicar */}
                             {hasPresence && (
-                              <MobileNavItem
-                                to="/app/presence"
-                                icon={Clock3}
-                                label="Ponto"
-                                disabled={!can("app.presence")}
-                                onNavigate={() => setMobileNavOpen(false)}
-                              />
-                            )}
-                            {hasPresence && isPresenceManager && (
-                              <MobileNavItem
-                                to="/app/presence/manage"
-                                icon={ClipboardCheck}
-                                label="Gestão"
-                                disabled={!can("app.presence_manage")}
-                                onNavigate={() => setMobileNavOpen(false)}
-                              />
+                              <Collapsible open={mobilePresenceOpen} onOpenChange={setMobilePresenceOpen}>
+                                <CollapsibleTrigger asChild>
+                                  <button
+                                    type="button"
+                                    className={cn(
+                                      "flex w-full items-center justify-between gap-3 rounded-2xl border px-4 py-3 transition",
+                                      isActivePresencePath(loc.pathname)
+                                        ? "border-[hsl(var(--byfrost-accent)/0.35)] bg-[hsl(var(--byfrost-accent)/0.10)] text-[hsl(var(--byfrost-accent))]"
+                                        : "border-slate-200 bg-white/75 text-slate-800 hover:border-slate-300 hover:bg-white",
+                                      "dark:border-slate-800 dark:bg-slate-950/40 dark:text-slate-100 dark:hover:bg-slate-950/60"
+                                    )
+                                    }
+                                    title="Presença"
+                                  >
+                                    <div className="flex items-center gap-3">
+                                      <Clock3 className="h-5 w-5" />
+                                      <span className="text-sm font-semibold tracking-tight">Ponto</span>
+                                    </div>
+                                    <ChevronRight
+                                      className={cn(
+                                        "h-5 w-5 opacity-70 transition",
+                                        mobilePresenceOpen && "rotate-90"
+                                      )}
+                                    />
+                                  </button>
+                                </CollapsibleTrigger>
+
+                                <CollapsibleContent className="mt-2 grid gap-2 pl-2">
+                                  <MobileNavItem
+                                    to="/app/presence"
+                                    icon={Clock3}
+                                    label="Ponto"
+                                    disabled={!can("app.presence")}
+                                    onNavigate={() => setMobileNavOpen(false)}
+                                  />
+                                  {PRESENCE_NAV_CHILDREN.filter((c) => (c.enabled ? c.enabled({ hasPresence, isPresenceManager }) : true)).map(
+                                    ({ to, label, icon, routeKey }) => (
+                                      <MobileNavItem
+                                        key={to}
+                                        to={to}
+                                        icon={icon}
+                                        label={label}
+                                        disabled={!can(routeKey)}
+                                        onNavigate={() => setMobileNavOpen(false)}
+                                      />
+                                    )
+                                  )}
+                                </CollapsibleContent>
+                              </Collapsible>
                             )}
 
                             {/* Financeiro (mobile): Cockpit + abrir filhos ao clicar */}
@@ -840,13 +949,17 @@ export function AppShell({
                                 onNavigate={() => setMobileNavOpen(false)}
                               />
                             )}
-                            <MobileNavItem
-                              to="/app/simulator"
-                              icon={FlaskConical}
-                              label="Simulador"
-                              disabled={!can("app.simulator")}
-                              onNavigate={() => setMobileNavOpen(false)}
-                            />
+
+                            {simulatorEnabledForTenant && (
+                              <MobileNavItem
+                                to="/app/simulator"
+                                icon={FlaskConical}
+                                label="Simulador"
+                                disabled={!can("app.simulator")}
+                                onNavigate={() => setMobileNavOpen(false)}
+                              />
+                            )}
+
                             {isSuperAdmin && (
                               <MobileNavItem
                                 to="/app/admin"
