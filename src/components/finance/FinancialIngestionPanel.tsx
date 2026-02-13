@@ -105,6 +105,10 @@ export function FinancialIngestionPanel() {
 
     setUploading(true);
     try {
+      const { data: sess } = await supabase.auth.getSession();
+      const accessToken = sess.session?.access_token ?? null;
+      if (!accessToken) throw new Error("Sessão inválida. Faça logout/login.");
+
       const b64 = await fileToBase64(file);
 
       const body = {
@@ -122,9 +126,17 @@ export function FinancialIngestionPanel() {
         tenantId: activeTenantId,
         fileName: file.name,
         sizeKb: Math.round(file.size / 1024),
+        tokenPrefix: `${accessToken.slice(0, 16)}…`,
       });
 
-      const { data, error } = await supabase.functions.invoke("financial-ingestion-upload", { body });
+      // IMPORTANT: pass the user access token explicitly.
+      // If invoke falls back to anon key, the function will see "Invalid JWT".
+      const { data, error } = await supabase.functions.invoke("financial-ingestion-upload", {
+        body,
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+      });
 
       if (error) {
         console.error("[finance-ingestion] invoke error", error);
