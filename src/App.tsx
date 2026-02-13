@@ -34,6 +34,7 @@ import ContentDetail from "@/pages/ContentDetail";
 import Screen from "@/pages/Screen";
 import PublicCampaignRanking from "@/pages/PublicCampaignRanking";
 import IncentivesEventsManage from "@/pages/IncentivesEventsManage";
+import FinanceIngestion from "@/pages/FinanceIngestion";
 
 const queryClient = new QueryClient();
 
@@ -65,6 +66,16 @@ const App = () => (
                   element={
                     <RequireRouteAccess routeKey="app.incentives_events_manage">
                       <IncentivesEventsManage />
+                    </RequireRouteAccess>
+                  }
+                />
+
+                {/* Financeiro */}
+                <Route
+                  path="/app/finance/ingestion"
+                  element={
+                    <RequireRouteAccess routeKey="app.settings">
+                      <FinanceIngestion />
                     </RequireRouteAccess>
                   }
                 />
@@ -218,10 +229,6 @@ const App = () => (
                   }
                 />
 
-                {/* Back-compat */}
-                <Route path="/dashboard" element={<Navigate to="/app" replace />} />
-
-                {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
                 <Route path="*" element={<NotFound />} />
               </Routes>
             </BrowserRouter>

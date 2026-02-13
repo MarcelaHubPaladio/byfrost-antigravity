@@ -1,7 +1,7 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { corsHeaders } from "../_shared/cors.ts";
 import { createSupabaseAdmin } from "../_shared/supabaseAdmin.ts";
-import { fetchAsBase64 } from "../_shared/crypto.ts";
+import { fetchAsBase64, sha256Hex } from "../_shared/crypto.ts";
 import { publishContentPublication } from "../_shared/metaPublish.ts";
 import { collectContentMetricsSnapshot } from "../_shared/metaMetrics.ts";
 import { buildPerformanceReport } from "../_shared/performanceAnalyst.ts";
@@ -491,6 +491,288 @@ function buildDailyTopics(text: string) {
   return top;
 }
 
+function normalizeDescription(s: string) {
+  const raw = String(s ?? "");
+  try {
+    return raw
+      .normalize("NFD")
+      .replace(/\p{Diacritic}/gu, "")
+      .toLowerCase()
+      .replace(/[^a-z0-9\s]/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+  } catch {
+    return raw
+      .toLowerCase()
+      .replace(/[^a-z0-9\s]/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+}
+
+function parseDateLoose(s: string): string | null {
+  const v = String(s ?? "").trim();
+  if (!v) return null;
+
+  // YYYY-MM-DD
+  if (/^\d{4}-\d{2}-\d{2}$/.test(v)) return v;
+
+  // DD/MM/YYYY or DD/MM/YY
+  const m = v.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
+  if (m) {
+    const dd = String(m[1]).padStart(2, "0");
+    const mm = String(m[2]).padStart(2, "0");
+    let yyyy = m[3];
+    if (yyyy.length === 2) yyyy = `20${yyyy}`;
+    return `${yyyy}-${mm}-${dd}`;
+  }
+
+  // fallback: try Date
+  const d = new Date(v);
+  if (!Number.isNaN(d.getTime())) {
+    const y = d.getUTCFullYear();
+    const mo = String(d.getUTCMonth() + 1).padStart(2, "0");
+    const da = String(d.getUTCDate()).padStart(2, "0");
+    return `${y}-${mo}-${da}`;
+  }
+
+  return null;
+}
+
+function parseCsv(text: string) {
+  const lines = String(text ?? "")
+    .replace(/^\uFEFF/, "")
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter((l) => l.length > 0);
+  if (lines.length < 2) return { headers: [] as string[], rows: [] as Record<string, string>[] };
+
+  const splitLine = (line: string) => {
+    // MVP: supports commas/semicolons, minimal quote support
+    const sep = line.includes(";") && !line.includes(",") ? ";" : ",";
+    const out: string[] = [];
+    let cur = "";
+    let inQ = false;
+    for (let i = 0; i < line.length; i++) {
+      const ch = line[i];
+      if (ch === '"') {
+        inQ = !inQ;
+        continue;
+      }
+      if (!inQ && ch === sep) {
+        out.push(cur);
+        cur = "";
+        continue;
+      }
+      cur += ch;
+    }
+    out.push(cur);
+    return out.map((s) => s.trim());
+  };
+
+  const headers = splitLine(lines[0]).map((h) => normalizeDescription(h).replace(/\s/g, "_"));
+  const rows: Record<string, string>[] = [];
+  for (const line of lines.slice(1)) {
+    const parts = splitLine(line);
+    const row: Record<string, string> = {};
+    for (let i = 0; i < headers.length; i++) {
+      row[headers[i]] = String(parts[i] ?? "").trim();
+    }
+    rows.push(row);
+  }
+  return { headers, rows };
+}
+
+function pickField(row: Record<string, string>, keys: string[]) {
+  for (const k of keys) {
+    if (row[k] != null && String(row[k]).trim() !== "") return String(row[k]);
+  }
+  return "";
+}
+
+function parseAmountLoose(s: string): number | null {
+  const v = String(s ?? "").trim();
+  if (!v) return null;
+
+  // Remove currency and spaces
+  let t = v.replace(/[^0-9,\.-]/g, "").trim();
+
+  // If it has both '.' and ',', decide decimal by last separator
+  const lastDot = t.lastIndexOf(".");
+  const lastComma = t.lastIndexOf(",");
+  if (lastDot >= 0 && lastComma >= 0) {
+    const decSep = lastDot > lastComma ? "." : ",";
+    const thouSep = decSep === "." ? "," : ".";
+    t = t.split(thouSep).join("");
+    if (decSep === ",") t = t.replace(",", ".");
+  } else if (lastComma >= 0 && lastDot < 0) {
+    // Assume comma is decimal
+    t = t.replace(/\./g, "").replace(",", ".");
+  }
+
+  const n = Number(t);
+  if (Number.isNaN(n)) return null;
+  return n;
+}
+
+async function processFinancialIngestionJob(opts: {
+  supabase: any;
+  tenantId: string;
+  ingestionJobId: string;
+  bucket: string;
+  path: string;
+}) {
+  const { supabase, tenantId, ingestionJobId, bucket, path } = opts;
+
+  await supabase.from("ingestion_jobs").update({ status: "processing", error_log: null }).eq("id", ingestionJobId);
+
+  // Fetch file
+  const { data: dl, error: dlErr } = await supabase.storage.from(bucket).download(path);
+  if (dlErr || !dl) throw new Error(`download_failed:${dlErr?.message ?? "unknown"}`);
+
+  const bytes = new Uint8Array(await dl.arrayBuffer());
+  const text = new TextDecoder().decode(bytes);
+
+  // PIPELINE: upload → parse → normalize → deduplicate → persist
+  const parsed = parseCsv(text);
+
+  // Ensure we have at least one bank account to attach transactions.
+  // If tenant has none, create a default one.
+  let accountId: string | null = null;
+  {
+    const { data: acc } = await supabase
+      .from("bank_accounts")
+      .select("id")
+      .eq("tenant_id", tenantId)
+      .order("created_at", { ascending: true })
+      .limit(1)
+      .maybeSingle();
+    accountId = (acc as any)?.id ?? null;
+  }
+
+  if (!accountId) {
+    const { data: created, error: cErr } = await supabase
+      .from("bank_accounts")
+      .insert({
+        tenant_id: tenantId,
+        bank_name: "Import",
+        account_name: "Conta padrão (import)",
+        account_type: "checking",
+        currency: "BRL",
+      })
+      .select("id")
+      .maybeSingle();
+    if (cErr || !created?.id) throw new Error(`failed_to_create_default_account:${cErr?.message ?? ""}`);
+    accountId = created.id;
+  }
+
+  const inserts: any[] = [];
+  const errors: string[] = [];
+
+  // Simple header mapping (works for common exports)
+  const dateKeys = ["data", "date", "transaction_date", "dt", "data_mov", "data_lancamento"];
+  const descKeys = ["descricao", "description", "historico", "memo", "narrativa", "desc"];
+  const amountKeys = ["valor", "amount", "montante", "value", "vlr"];
+  const creditKeys = ["credito", "credit"];
+  const debitKeys = ["debito", "debit"];
+
+  for (const row of parsed.rows) {
+    const dateRaw = pickField(row, dateKeys);
+    const txDate = parseDateLoose(dateRaw);
+    if (!txDate) {
+      errors.push(`invalid_date:${dateRaw}`);
+      continue;
+    }
+
+    const descRaw = pickField(row, descKeys);
+    const descNorm = normalizeDescription(descRaw);
+
+    // Amount can be in one column or split credit/debit
+    let amt = parseAmountLoose(pickField(row, amountKeys));
+    let inferredType: "credit" | "debit" = "debit";
+
+    if (amt == null) {
+      const cr = parseAmountLoose(pickField(row, creditKeys));
+      const db = parseAmountLoose(pickField(row, debitKeys));
+      if (cr != null) {
+        amt = Math.abs(cr);
+        inferredType = "credit";
+      } else if (db != null) {
+        amt = Math.abs(db);
+        inferredType = "debit";
+      }
+    }
+
+    if (amt == null) {
+      errors.push(`invalid_amount:${JSON.stringify(row)}`);
+      continue;
+    }
+
+    // Normalize sign
+    if (amt < 0) {
+      inferredType = "debit";
+      amt = Math.abs(amt);
+    }
+
+    const fingerprint = await sha256Hex(
+      JSON.stringify({
+        tenant_id: tenantId,
+        account_id: accountId,
+        transaction_date: txDate,
+        amount: Number(amt.toFixed(2)),
+        description: descNorm,
+      })
+    );
+
+    inserts.push({
+      tenant_id: tenantId,
+      account_id: accountId,
+      amount: Number(amt.toFixed(2)),
+      type: inferredType,
+      description: descRaw,
+      transaction_date: txDate,
+      competence_date: txDate,
+      status: "posted",
+      fingerprint,
+      source: "import",
+      raw_payload: row,
+    });
+  }
+
+  const chunkSize = 250;
+  let inserted = 0;
+
+  for (let i = 0; i < inserts.length; i += chunkSize) {
+    const chunk = inserts.slice(i, i + chunkSize);
+
+    const { data, error } = await supabase
+      .from("financial_transactions")
+      .upsert(chunk, { onConflict: "tenant_id,fingerprint", ignoreDuplicates: true })
+      .select("id");
+
+    if (error) {
+      // Most likely: missing columns / CSV mismatch
+      throw new Error(`persist_failed:${error.message}`);
+    }
+
+    inserted += (data ?? []).length;
+
+    await supabase
+      .from("ingestion_jobs")
+      .update({ processed_rows: inserted, status: "processing" })
+      .eq("id", ingestionJobId);
+  }
+
+  const errLog = errors.length ? errors.slice(0, 30).join("\n") : null;
+
+  await supabase
+    .from("ingestion_jobs")
+    .update({ status: "done", processed_rows: inserted, error_log: errLog })
+    .eq("id", ingestionJobId);
+
+  return { ok: true, inserted, parsedRows: parsed.rows.length, errors: errors.length };
+}
+
 serve(async (req) => {
   const fn = "jobs-processor";
   try {
@@ -541,6 +823,20 @@ serve(async (req) => {
       try {
         const tenantId = job.tenant_id;
         const caseId = job.payload_json?.case_id as string | undefined;
+
+        if (job.type === "FINANCIAL_INGESTION") {
+          const ingestionJobId = String(job.payload_json?.ingestion_job_id ?? "").trim();
+          const bucket = String(job.payload_json?.storage_bucket ?? "").trim();
+          const path = String(job.payload_json?.storage_path ?? "").trim();
+
+          if (!ingestionJobId || !bucket || !path) throw new Error("Missing payload (ingestion_job_id/storage_bucket/storage_path)");
+
+          const out = await processFinancialIngestionJob({ supabase, tenantId, ingestionJobId, bucket, path });
+
+          await supabase.from("job_queue").update({ status: "done" }).eq("id", job.id);
+          results.push({ id: job.id, ok: true, type: job.type, result: out });
+          continue;
+        }
 
         if (job.type === "META_PUBLISH_PUBLICATION") {
           const publicationId = String(job.payload_json?.publication_id ?? "").trim();
@@ -1231,10 +1527,21 @@ serve(async (req) => {
         // Unknown job type
         await supabase.from("job_queue").update({ status: "failed", attempts: job.attempts + 1 }).eq("id", job.id);
         results.push({ id: job.id, ok: false, error: `Unknown job type ${job.type}` });
-      } catch (e) {
-        console.error(`[${fn}] Job failed`, { jobId: job.id, e });
+      } catch (e: any) {
+        console.error(`[${fn}] job failed`, { id: job.id, type: job.type, error: e?.message ?? String(e) });
+
+        if (job.type === "FINANCIAL_INGESTION") {
+          const ingestionJobId = String(job.payload_json?.ingestion_job_id ?? "").trim();
+          if (ingestionJobId) {
+            await supabase
+              .from("ingestion_jobs")
+              .update({ status: "failed", error_log: String(e?.message ?? e) })
+              .eq("id", ingestionJobId);
+          }
+        }
+
         await supabase.from("job_queue").update({ status: "failed", attempts: job.attempts + 1 }).eq("id", job.id);
-        results.push({ id: job.id, ok: false, error: String(e) });
+        results.push({ id: job.id, ok: false, error: e?.message ?? String(e) });
       }
     }
 
@@ -1242,7 +1549,7 @@ serve(async (req) => {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (e) {
-    console.error(`[jobs-processor] Unhandled error`, { e });
+    console.error("[jobs-processor] unhandled", { error: (e as any)?.message ?? String(e) });
     return new Response("Internal error", { status: 500, headers: corsHeaders });
   }
 });
