@@ -10,7 +10,6 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -23,6 +22,7 @@ import { supabase } from "@/lib/supabase";
 import { showError, showSuccess } from "@/utils/toast";
 import { cn } from "@/lib/utils";
 import { Plus, UserRound } from "lucide-react";
+import { normalizeRichTextHtmlOrNull, RichTextEditor } from "@/components/RichTextEditor";
 
 type VendorRow = { id: string; phone_e164: string; display_name: string | null };
 
@@ -43,7 +43,7 @@ function parseDateInput(v: string): string | null {
 export function NewTrelloCardDialog(props: { tenantId: string; journeyId: string }) {
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
+  const [descriptionHtml, setDescriptionHtml] = useState("");
   const [dueDate, setDueDate] = useState("");
   const [responsibleId, setResponsibleId] = useState<string>("__unassigned__");
   const [creating, setCreating] = useState(false);
@@ -84,7 +84,7 @@ export function NewTrelloCardDialog(props: { tenantId: string; journeyId: string
         case_type: "TRELLO",
         created_by_channel: "panel",
         title: t,
-        summary_text: description.trim() || null,
+        summary_text: normalizeRichTextHtmlOrNull(descriptionHtml),
         state: "BACKLOG",
         ...(assigned_vendor_id ? { assigned_vendor_id } : {}),
         meta_json: {
@@ -140,7 +140,7 @@ export function NewTrelloCardDialog(props: { tenantId: string; journeyId: string
       showSuccess("Card criado.");
       setOpen(false);
       setTitle("");
-      setDescription("");
+      setDescriptionHtml("");
       setDueDate("");
       setResponsibleId("__unassigned__");
     } catch (e: any) {
@@ -196,12 +196,14 @@ export function NewTrelloCardDialog(props: { tenantId: string; journeyId: string
 
             <div>
               <Label className="text-xs">Descrição</Label>
-              <Textarea
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                className="mt-1 min-h-[120px] rounded-2xl"
-                placeholder="Contexto / links / critérios de aceite…"
-              />
+              <div className="mt-1">
+                <RichTextEditor
+                  value={descriptionHtml}
+                  onChange={setDescriptionHtml}
+                  placeholder="Contexto / links / critérios de aceite…"
+                  minHeightClassName="min-h-[140px]"
+                />
+              </div>
             </div>
 
             <div>

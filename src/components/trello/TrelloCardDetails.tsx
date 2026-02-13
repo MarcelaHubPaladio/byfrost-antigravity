@@ -4,7 +4,6 @@ import { supabase } from "@/lib/supabase";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { showError, showSuccess } from "@/utils/toast";
 import { cn } from "@/lib/utils";
@@ -12,6 +11,7 @@ import { CalendarDays, ClipboardList, Save, UserRound } from "lucide-react";
 import { TrelloResponsibleCard } from "@/components/trello/TrelloResponsibleCard";
 import { CaseTasksCard } from "@/components/crm/CaseTasksCard";
 import { CaseTimeline, type CaseTimelineEvent } from "@/components/case/CaseTimeline";
+import { normalizeRichTextHtmlOrNull, RichTextEditor } from "@/components/RichTextEditor";
 
 function fmtDateInput(iso: string | null) {
   if (!iso) return "";
@@ -94,7 +94,7 @@ export function TrelloCardDetails(props: { tenantId: string; caseId: string }) {
     const c = caseQ.data;
     return {
       title: c?.title ?? "",
-      description: c?.summary_text ?? "",
+      descriptionHtml: c?.summary_text ?? "",
       dueDate: fmtDateInput((c?.meta_json as any)?.due_at ?? null),
     };
   }, [caseQ.data]);
@@ -114,7 +114,7 @@ export function TrelloCardDetails(props: { tenantId: string; caseId: string }) {
     try {
       const payload: any = {
         title: form.title.trim() || null,
-        summary_text: form.description.trim() || null,
+        summary_text: normalizeRichTextHtmlOrNull(form.descriptionHtml),
         meta_json: {
           ...((caseQ.data as any)?.meta_json ?? {}),
           due_at: parseDateInput(form.dueDate),
@@ -181,12 +181,14 @@ export function TrelloCardDetails(props: { tenantId: string; caseId: string }) {
 
           <div>
             <div className="text-xs font-semibold text-slate-700">Descrição</div>
-            <Textarea
-              value={form.description}
-              onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))}
-              className="mt-1 min-h-[120px] rounded-2xl"
-              placeholder="Contexto, objetivo, links…"
-            />
+            <div className="mt-1">
+              <RichTextEditor
+                value={form.descriptionHtml}
+                onChange={(html) => setForm((p) => ({ ...p, descriptionHtml: html }))}
+                placeholder="Contexto, objetivo, links…"
+                minHeightClassName="min-h-[140px]"
+              />
+            </div>
           </div>
 
           <div className="grid gap-3 sm:grid-cols-2">
