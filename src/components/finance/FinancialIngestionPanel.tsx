@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
-import { SUPABASE_URL_IN_USE } from "@/lib/supabase";
+import { SUPABASE_ANON_KEY_IN_USE, SUPABASE_URL_IN_USE } from "@/lib/supabase";
 import { useTenant } from "@/providers/TenantProvider";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -28,6 +28,12 @@ function helpForEdgeFunctionError(message: string) {
       `• O frontend está apontando para o projeto correto? (Supabase: ${SUPABASE_URL_IN_USE})\n` +
       "• A função 'financial-ingestion-upload' está deployada nesse mesmo projeto?\n" +
       "• No Supabase, confirme que Edge Functions está habilitado e a função existe."
+    );
+  }
+  if (m.includes("invalid jwt")) {
+    return (
+      "JWT inválido geralmente significa sessão antiga/ambiente trocado.\n" +
+      "Tente: logout/login. Se você mudou o projeto Supabase recentemente, limpe a sessão do navegador."
     );
   }
   if (m.includes("non-2xx") || m.startsWith("http ")) {
@@ -58,6 +64,7 @@ async function postToIngestionFunction(params: { accessToken: string; body: any;
       method: "POST",
       headers: {
         "Content-Type": "application/json",
+        apikey: SUPABASE_ANON_KEY_IN_USE,
         Authorization: `Bearer ${params.accessToken}`,
       },
       body: JSON.stringify(params.body),
@@ -112,10 +119,6 @@ export function FinancialIngestionPanel() {
 
     setUploading(true);
     try {
-      const { data: sess } = await supabase.auth.getSession();
-      const accessToken = sess.session?.access_token ?? null;
-      if (!accessToken) throw new Error("Sessão inválida. Faça logout/login.");
-
       const b64 = await fileToBase64(file);
 
       const body = {
@@ -132,10 +135,27 @@ export function FinancialIngestionPanel() {
         tenantId: activeTenantId,
         fileName: file.name,
         sizeKb: Math.round(file.size / 1024),
-        tokenPrefix: `${accessToken.slice(0, 16)}…`,
       });
 
-      const { res, json, text } = await postToIngestionFunction({ accessToken, body });
+      // 1) Use current session token
+      let accessToken = (await supabase.auth.getSession()).data.session?.access_token ?? null;
+
+      // 2) If missing, try refresh
+      if (!accessToken) {
+        await supabase.auth.refreshSession();
+        accessToken = (await supabase.auth.getSession()).data.session?.access_token ?? null;
+      }
+      if (!accessToken) throw new Error("Sessão inválida. Faça logout/login.");
+
+      let { res, json, text } = await postToIngestionFunction({ accessToken, body });
+
+      // If token is rejected, attempt a refresh + retry once.
+      if (res.status === 401 && String(text).toLowerCase().includes("invalid jwt")) {
+        await supabase.auth.refreshSession();
+        accessToken = (await supabase.auth.getSession()).data.session?.access_token ?? null;
+        if (!accessToken) throw new Error("Sessão inválida. Faça logout/login.");
+        ({ res, json, text } = await postToIngestionFunction({ accessToken, body }));
+      }
 
       if (!res.ok) {
         const msg =
@@ -174,12 +194,7 @@ export function FinancialIngestionPanel() {
         <Label htmlFor="file" className="text-xs text-slate-700 dark:text-slate-300">
           Arquivo (.csv ou .ofx)
         </Label>
-        <Input
-          id="file"
-          type="file"
-          accept={accept}
-          onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-        />
+        <Input id="file" type="file" accept={accept} onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
         <div className="flex items-center gap-2">
           <Button onClick={onUpload} disabled={!file || uploading || !activeTenantId} className="h-10 rounded-2xl">
             {uploading ? "Enviando…" : "Enviar e processar"}

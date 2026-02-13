@@ -15,9 +15,10 @@ const envKey = env.SUPABASE_ANON_KEY;
 const useEnv = Boolean(envUrl && envKey);
 
 export const SUPABASE_URL_IN_USE = useEnv ? envUrl! : FALLBACK_SUPABASE_URL;
+export const SUPABASE_ANON_KEY_IN_USE = useEnv ? envKey! : FALLBACK_SUPABASE_ANON_KEY;
 
 const supabaseUrl = SUPABASE_URL_IN_USE;
-const supabaseAnonKey = useEnv ? envKey! : FALLBACK_SUPABASE_ANON_KEY;
+const supabaseAnonKey = SUPABASE_ANON_KEY_IN_USE;
 
 if (!useEnv) {
   console.warn(
