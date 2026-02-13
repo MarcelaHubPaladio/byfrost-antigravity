@@ -8,8 +8,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { showError, showSuccess } from "@/utils/toast";
 
-const UPLOAD_FN_URL = "https://pryoirzeghatrgecwrci.supabase.co/functions/v1/financial-ingestion-upload";
-
 async function fileToBase64(file: File) {
   const buf = await file.arrayBuffer();
   const bytes = new Uint8Array(buf);
@@ -50,27 +48,20 @@ export function FinancialIngestionPanel() {
 
     setUploading(true);
     try {
-      const { data: sess } = await supabase.auth.getSession();
-      const token = sess.session?.access_token;
-      if (!token) throw new Error("Sessão inválida");
-
       const b64 = await fileToBase64(file);
-      const res = await fetch(UPLOAD_FN_URL, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
+
+      // Use supabase.functions.invoke so the request always targets the same project as the current auth/session.
+      const { data, error } = await supabase.functions.invoke("financial-ingestion-upload", {
+        body: {
           tenantId: activeTenantId,
           fileName: file.name,
           contentType: file.type || "application/octet-stream",
           fileBase64: b64,
-        }),
+        },
       });
 
-      const json = await res.json().catch(() => null);
-      if (!res.ok) throw new Error(json?.error || `HTTP ${res.status}`);
+      if (error) throw error;
+      if (!data?.ok) throw new Error(String(data?.error ?? "Falha no upload"));
 
       showSuccess("Upload recebido. Processamento assíncrono iniciado.");
       setFile(null);

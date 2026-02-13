@@ -582,7 +582,7 @@ export function AppShell({
       <div className="w-full px-3 py-3 md:px-5 md:py-5">
         <div className="grid gap-3 md:grid-cols-[96px_1fr] md:gap-5">
           {/* Sidebar (desktop) */}
-          <aside className="hidden overflow-visible rounded-[28px] border border-slate-200 bg-white/65 shadow-sm backdrop-blur md:sticky md:top-5 md:block md:h-[calc(100vh-40px)] dark:border-slate-800 dark:bg-slate-950/40">
+          <aside className="relative z-20 hidden overflow-visible rounded-[28px] border border-slate-200 bg-white/65 shadow-sm backdrop-blur md:sticky md:top-5 md:block md:h-[calc(100vh-40px)] dark:border-slate-800 dark:bg-slate-950/40">
             {/* Top brand block */}
             <div className="bg-[hsl(var(--byfrost-accent))] px-2 pb-2 pt-1.5">
               <Link
@@ -738,7 +738,7 @@ export function AppShell({
           </aside>
 
           {/* Main */}
-          <div className="min-w-0">
+          <div className="relative z-0 min-w-0">
             {/* Content header (tenant accent border) */}
             {!hideTopBar && (
               <div className="overflow-hidden rounded-[28px] border border-slate-200 border-t-4 border-t-[hsl(var(--byfrost-accent))] bg-white/65 px-4 py-3 shadow-sm backdrop-blur dark:border-slate-800 dark:bg-slate-950/40">
