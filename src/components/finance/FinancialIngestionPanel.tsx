@@ -30,32 +30,38 @@ function helpForEdgeFunctionError(message: string) {
       "• No Supabase, confirme que Edge Functions está habilitado e a função existe."
     );
   }
-  if (m.includes("non-2xx")) {
+  if (m.includes("non-2xx") || m.startsWith("http ")) {
     return (
       "A Edge Function respondeu com erro (4xx/5xx). Normalmente é:\n" +
       "• bucket de Storage inexistente ('financial-ingestion')\n" +
       "• env vars ausentes na função\n" +
-      "• erro ao inserir em ingestion_jobs/job_queue\n" +
-      "Vou tentar buscar o erro detalhado na próxima tentativa."
+      "• erro ao inserir em ingestion_jobs/job_queue (RLS/constraints)\n" +
+      "Cheque o log da Edge Function no painel do Supabase para ver o stacktrace."
+    );
+  }
+  if (m.includes("timeout")) {
+    return (
+      "A chamada para a Edge Function demorou demais e foi cancelada.\n" +
+      "Cheque os logs da Edge Function no Supabase (pode estar travando em Storage/DB)."
     );
   }
   return null;
 }
 
-async function tryFetchFunctionError(params: { body: any }) {
-  const { data: sess } = await supabase.auth.getSession();
-  const token = sess.session?.access_token;
-  if (!token) return null;
-
+async function postToIngestionFunction(params: { accessToken: string; body: any; timeoutMs?: number }) {
   const url = `${SUPABASE_URL_IN_USE}/functions/v1/financial-ingestion-upload`;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), params.timeoutMs ?? 25_000);
+
   try {
     const res = await fetch(url, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
+        Authorization: `Bearer ${params.accessToken}`,
       },
       body: JSON.stringify(params.body),
+      signal: controller.signal,
     });
 
     const text = await res.text();
@@ -66,13 +72,14 @@ async function tryFetchFunctionError(params: { body: any }) {
       // ignore
     }
 
-    return {
-      status: res.status,
-      bodyText: text,
-      bodyJson: json,
-    };
-  } catch {
-    return null;
+    return { res, text, json };
+  } catch (e: any) {
+    if (e?.name === "AbortError") {
+      throw new Error("timeout");
+    }
+    throw e;
+  } finally {
+    clearTimeout(timeout);
   }
 }
 
@@ -118,45 +125,28 @@ export function FinancialIngestionPanel() {
         fileBase64: b64,
       };
 
-      // Debug: helps diagnose project mismatch / missing deploy.
       const baseUrl = (supabase as any)?.supabaseUrl as string | undefined;
-      console.log("[finance-ingestion] invoking edge function", {
+      console.log("[finance-ingestion] posting to edge function", {
         baseUrl,
-        endpoint: baseUrl ? `${baseUrl}/functions/v1/financial-ingestion-upload` : null,
+        endpoint: `${SUPABASE_URL_IN_USE}/functions/v1/financial-ingestion-upload`,
         tenantId: activeTenantId,
         fileName: file.name,
         sizeKb: Math.round(file.size / 1024),
         tokenPrefix: `${accessToken.slice(0, 16)}…`,
       });
 
-      // IMPORTANT: pass the user access token explicitly.
-      // If invoke falls back to anon key, the function will see "Invalid JWT".
-      const { data, error } = await supabase.functions.invoke("financial-ingestion-upload", {
-        body,
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-        },
-      });
+      const { res, json, text } = await postToIngestionFunction({ accessToken, body });
 
-      if (error) {
-        console.error("[finance-ingestion] invoke error", error);
-
-        // Attempt to fetch the function error body (helps a lot for non-2xx cases).
-        const details = await tryFetchFunctionError({ body });
-        if (details) {
-          console.log("[finance-ingestion] function error details", details);
-          const msg =
-            details.bodyJson?.error ||
-            details.bodyJson?.message ||
-            (details.bodyText ? details.bodyText.slice(0, 220) : null) ||
-            error.message;
-          throw new Error(`HTTP ${details.status}: ${msg}`);
-        }
-
-        throw error;
+      if (!res.ok) {
+        const msg =
+          json?.error ||
+          json?.message ||
+          (text ? text.slice(0, 220) : null) ||
+          `HTTP ${res.status}`;
+        throw new Error(`HTTP ${res.status}: ${msg}`);
       }
 
-      if (!data?.ok) throw new Error(String(data?.error ?? "Falha no upload"));
+      if (!json?.ok) throw new Error(String(json?.error ?? "Falha no upload"));
 
       showSuccess("Upload recebido. Processamento assíncrono iniciado.");
       setFile(null);
@@ -191,11 +181,7 @@ export function FinancialIngestionPanel() {
           onChange={(e) => setFile(e.target.files?.[0] ?? null)}
         />
         <div className="flex items-center gap-2">
-          <Button
-            onClick={onUpload}
-            disabled={!file || uploading || !activeTenantId}
-            className="h-10 rounded-2xl"
-          >
+          <Button onClick={onUpload} disabled={!file || uploading || !activeTenantId} className="h-10 rounded-2xl">
             {uploading ? "Enviando…" : "Enviar e processar"}
           </Button>
           <div className="text-xs text-slate-500 dark:text-slate-400">
