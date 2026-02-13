@@ -87,12 +87,12 @@ export function TrelloCardDetails(props: { tenantId: string; caseId: string }) {
 
   const attachmentsQ = useQuery({
     queryKey: ["case_attachments", props.tenantId, props.caseId],
-    enabled: Boolean(props.tenantId && props.caseId),
+    enabled: Boolean(props.caseId),
     queryFn: async () => {
+      // Compat: alguns ambientes não possuem tenant_id em case_attachments.
       const { data, error } = await supabase
         .from("case_attachments")
         .select("id,kind,storage_path,original_filename,created_at")
-        .eq("tenant_id", props.tenantId)
         .eq("case_id", props.caseId)
         .is("deleted_at", null)
         .order("created_at", { ascending: false })
@@ -275,11 +275,7 @@ export function TrelloCardDetails(props: { tenantId: string; caseId: string }) {
             <div className="mt-1 text-xs text-slate-500">Imagens (base64) e outros anexos vinculados ao case</div>
           </div>
           <div className="flex items-center gap-2">
-            <TrelloAddImageDialog
-              tenantId={props.tenantId}
-              caseId={props.caseId}
-              className="h-9"
-            />
+            <TrelloAddImageDialog tenantId={props.tenantId} caseId={props.caseId} className="h-9" />
             <Badge className="rounded-full border-0 bg-slate-100 text-slate-700 hover:bg-slate-100">
               {(attachmentsQ.data ?? []).length}
             </Badge>
@@ -311,9 +307,7 @@ export function TrelloCardDetails(props: { tenantId: string; caseId: string }) {
                     />
                     <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-slate-900/55 to-transparent p-3">
                       <div className="truncate text-xs font-semibold text-white/95">{label}</div>
-                      <div className="mt-0.5 text-[11px] text-white/80">
-                        {new Date(a.created_at).toLocaleString()}
-                      </div>
+                      <div className="mt-0.5 text-[11px] text-white/80">{new Date(a.created_at).toLocaleString()}</div>
                     </div>
                   </button>
                 );

@@ -84,7 +84,7 @@ export function TrelloAddImageDialog(props: {
   }, [file]);
 
   const save = async () => {
-    if (!props.tenantId || !props.caseId) return;
+    if (!props.caseId) return;
     if (!file || !dataUrl) {
       showError("Selecione uma imagem.");
       return;
@@ -92,8 +92,7 @@ export function TrelloAddImageDialog(props: {
 
     setSaving(true);
     try {
-      const { error } = await supabase.from("case_attachments").insert({
-        tenant_id: props.tenantId,
+      const basePayload: any = {
         case_id: props.caseId,
         kind: "image",
         // Primeira versão: data URL (base64) direto no campo.
@@ -104,19 +103,43 @@ export function TrelloAddImageDialog(props: {
           source: "inline_base64",
           size_bytes: file.size,
         },
-      });
-      if (error) throw error;
+      };
 
-      await supabase.from("timeline_events").insert({
-        tenant_id: props.tenantId,
-        case_id: props.caseId,
-        event_type: "attachment_added",
-        actor_type: "admin",
-        actor_id: null,
-        message: `Anexo adicionado: ${file.name}`,
-        meta_json: { kind: "image", source: "inline_base64", size_bytes: file.size },
-        occurred_at: new Date().toISOString(),
-      });
+      // Compat: alguns ambientes antigos não têm tenant_id em case_attachments.
+      const tryPayloads = [
+        { ...basePayload, tenant_id: props.tenantId },
+        basePayload,
+      ];
+
+      let lastErr: any = null;
+      for (const payload of tryPayloads) {
+        const res = await supabase.from("case_attachments").insert(payload);
+        if (!res.error) {
+          lastErr = null;
+          break;
+        }
+        lastErr = res.error;
+
+        const msg = String(res.error.message ?? "");
+        if (!msg.toLowerCase().includes("tenant_id") || !msg.toLowerCase().includes("schema cache")) {
+          break;
+        }
+      }
+      if (lastErr) throw lastErr;
+
+      // timeline_events sempre tem tenant_id
+      if (props.tenantId) {
+        await supabase.from("timeline_events").insert({
+          tenant_id: props.tenantId,
+          case_id: props.caseId,
+          event_type: "attachment_added",
+          actor_type: "admin",
+          actor_id: null,
+          message: `Anexo adicionado: ${file.name}`,
+          meta_json: { kind: "image", source: "inline_base64", size_bytes: file.size },
+          occurred_at: new Date().toISOString(),
+        });
+      }
 
       await Promise.all([
         qc.invalidateQueries({ queryKey: ["case_attachments", props.tenantId, props.caseId] }),
