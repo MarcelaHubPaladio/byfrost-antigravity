@@ -19,6 +19,14 @@ async function fileToBase64(file: File) {
   return btoa(binary);
 }
 
+function helpForEdgeFunctionError(message: string) {
+  const m = (message ?? "").toLowerCase();
+  if (m.includes("failed to send a request") || m.includes("failed to fetch")) {
+    return "Verifique se a Edge Function 'financial-ingestion-upload' está deployada no mesmo projeto Supabase configurado no frontend (VITE_SUPABASE_URL).";
+  }
+  return null;
+}
+
 export function FinancialIngestionPanel() {
   const { activeTenantId } = useTenant();
   const [file, setFile] = useState<File | null>(null);
@@ -50,6 +58,16 @@ export function FinancialIngestionPanel() {
     try {
       const b64 = await fileToBase64(file);
 
+      // Debug: helps diagnose project mismatch / missing deploy.
+      const baseUrl = (supabase as any)?.supabaseUrl as string | undefined;
+      console.log("[finance-ingestion] invoking edge function", {
+        baseUrl,
+        endpoint: baseUrl ? `${baseUrl}/functions/v1/financial-ingestion-upload` : null,
+        tenantId: activeTenantId,
+        fileName: file.name,
+        sizeKb: Math.round(file.size / 1024),
+      });
+
       // Use supabase.functions.invoke so the request always targets the same project as the current auth/session.
       const { data, error } = await supabase.functions.invoke("financial-ingestion-upload", {
         body: {
@@ -60,14 +78,19 @@ export function FinancialIngestionPanel() {
         },
       });
 
-      if (error) throw error;
+      if (error) {
+        console.error("[finance-ingestion] invoke error", error);
+        throw error;
+      }
       if (!data?.ok) throw new Error(String(data?.error ?? "Falha no upload"));
 
       showSuccess("Upload recebido. Processamento assíncrono iniciado.");
       setFile(null);
       await jobsQ.refetch();
     } catch (e: any) {
-      showError(`Falha no upload: ${e?.message ?? "erro"}`);
+      const msg = String(e?.message ?? "erro");
+      const help = helpForEdgeFunctionError(msg);
+      showError(`Falha no upload: ${msg}${help ? `\n${help}` : ""}`);
     } finally {
       setUploading(false);
     }
