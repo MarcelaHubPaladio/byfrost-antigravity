@@ -1,0 +1,127 @@
+Categorias,Tipo Padrão
+Receitas de Produção de Vídeos,revenue
+Receitas de Edição de Vídeos,revenue
+Receitas de Planejamento Estratégico,revenue
+Receitas de Consultorias de Marketing,revenue
+Receitas de Gestão de Tráfego Pago,revenue
+Receitas de Social Media / Gestão de Redes,revenue
+Receitas de Branding e Identidade Visual,revenue
+Receitas de Fotografia / Making Of,revenue
+Receitas de Cobertura de Eventos,revenue
+Receitas de Captação com Drone,revenue
+Receitas de Produção de Roteiros,revenue
+"Receitas de Pós-produção (Color, Som, Legendagem)",revenue
+Receitas de Pacotes Mensais,revenue
+Receitas de Clientes Recorrentes,revenue
+Receitas de Novos Contratos,revenue
+Receitas de Projetos Avulsos,revenue
+Receitas de Parcerias Comerciais,revenue
+Receitas de Licenciamento de Conteúdo,revenue
+"Receitas de Cursos, Mentorias ou Workshops",revenue
+Receitas de Campanhas Políticas ou Sazonais,revenue
+Juros Recebidos,other
+Rendimentos de Aplicações Financeiras,other
+Descontos Obtidos com Fornecedores,other
+Reembolso de Despesas,other
+Venda de Equipamentos / Ativos,other
+Entrada de Investidores / Sócios,other
+Aporte de Capital Próprio,other
+Reembolso de Custos por Clientes,cost
+Receitas de Afiliados ou Indicações,revenue
+Pagamento de Freelancers,other
+Locação de Equipamentos,other
+Compra de Equipamentos Audiovisuais,other
+"Licenciamento de Músicas, Trilhas e Imagens",other
+Custos de Software,fixed
+Custos de Estúdio / Espaço de Gravação,cost
+Deslocamento para Gravações,other
+Alimentação e Logística de Gravação,other
+"Figurino, Cenário e Maquiagem",other
+Produção de Roteiros e Storyboards,variable
+Transporte e Pedágios,other
+Manutenção de Equipamentos,other
+Backup e Armazenamento,other
+Aluguel da Sede / Escritório,fixed
+Condomínio e IPTU,other
+Energia Elétrica,fixed
+Água e Internet,fixed
+Telefonia / WhatsApp Business,other
+Limpeza e Conservação,other
+Segurança / Monitoramento,other
+Assinaturas de Softwares,fixed
+Assinaturas de IA / Ferramentas,fixed
+Manutenção de Computadores e Equipamentos,other
+Combustível e Transporte,variable
+Salários e Pró-Labore,fixed
+"Encargos Sociais (INSS, FGTS)",other
+"Benefícios (Vale, Alimentação, Transporte)",other
+13º Salário e Férias,fixed
+Comissões por Vendas,other
+Bônus e Premiações,other
+Treinamentos e Capacitações,other
+"Anúncios (Facebook Ads, Google Ads, TikTok Ads)",variable
+Impulsionamentos de Posts,other
+Produção de Material Promocional,variable
+Despesas com Eventos e Feiras,other
+Brindes e Presentes para Clientes,other
+"Café, Recepção e Hospitalidade",other
+Plataforma de E-mail Marketing,variable
+Ferramentas de Automação Comercial,other
+Contabilidade,fixed
+Assessoria Jurídica,other
+Consultorias,other
+Taxas Bancárias,other
+Tarifas de Maquininha,other
+Juros e Multas,other
+Despesas com Emissão de Boleto / PIX,other
+Custos de Certificação Digital,cost
+Licenças e Alvarás,fixed
+"Impostos (Simples Nacional, DAS, ISS, IRPJ, etc.)",variable
+Custos de Registro de Marca,cost
+Software de Gestão Financeira,fixed
+Assinaturas Diversas,fixed
+Reembolsos de Viagens e Alimentação,other
+Adiantamento a Sócios,other
+Retirada Extra de Lucros,other
+Despesas Pessoais Reembolsáveis,other
+Despesas de Representação,other
+Investimentos em Equipamentos de Longo Prazo,other
+Aportes em Outras Empresas,other
+Empréstimos Concedidos,other
+Pagamento de Empréstimos,other
+Doações e Patrocínios,other
+Multas Contratuais,other
+Compra de Novos Equipamentos,other
+Reformas / Ampliação de Espaço,other
+Desenvolvimento de Aplicativos / Sistemas,other
+Criação de Plataforma Própria,other
+Criação de Conteúdo de Marca,other
+Novos Projetos e Filiais,other
+Consultorias Estratégicas,other
+Marketing Institucional / Branding da Agência,variable
+Empréstimos Bancários,other
+Financiamentos de Equipamentos,fixed
+Parcelamentos de Compras,other
+Captação de Investidores,other
+Entradas de Sócios ou Aportes,other
+Cartão de Crédito,other
+Antecipação Cartão de Crédito,other
+AgroSamas,other
+Despesas Prédio,other
+Almoço / Café com Cliente,other
+Receita B12,revenue
+Rescição / Demissão / Acerto,other
+Fatura de Cartão,other
+Confraternização do Time,other
+Saída B12,other
+Assessoria de Imprensa ou Distribuição de Conteúdo,other
+Google,other
+Resgate Investimento,other
+Aplicação Financeira,other
+Associativismo,other
+Limbo,other
+Manutenção Escritório,fixed
+Financiamento de Capital de Giro,fixed
+Documentos / Reconhecimentos,other
+Devoluções,variable
+Advogados,fixed
