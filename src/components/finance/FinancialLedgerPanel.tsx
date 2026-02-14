@@ -18,7 +18,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { showError, showSuccess } from "@/utils/toast";
-import { Download, Upload } from "lucide-react";
+import { Download, Pencil, Upload } from "lucide-react";
 
 type BankAccountRow = { id: string; bank_name: string; account_name: string; currency: string };
 
@@ -125,9 +125,11 @@ function parseCategoryCsv(text: string) {
 
   // Only consider delimiter if the header *looks like* a multi-column CSV.
   const delimiter: "," | ";" | null =
-    header.includes(";") && (headerLower.includes("categoria") || headerLower.includes("nome") || headerLower.includes("tipo"))
+    header.includes(";") &&
+    (headerLower.includes("categoria") || headerLower.includes("nome") || headerLower.includes("tipo"))
       ? ";"
-      : header.includes(",") && (headerLower.includes("categoria") || headerLower.includes("nome") || headerLower.includes("tipo"))
+      : header.includes(",") &&
+          (headerLower.includes("categoria") || headerLower.includes("nome") || headerLower.includes("tipo"))
         ? ","
         : null;
 
@@ -305,6 +307,36 @@ export function FinancialLedgerPanel() {
         showError(msg);
       }
     },
+  });
+
+  // --------------------------
+  // Category type editing
+  // --------------------------
+  const [editTypesOpen, setEditTypesOpen] = useState(false);
+  const [editTypesFilter, setEditTypesFilter] = useState("");
+
+  const filteredCategories = useMemo(() => {
+    const q = editTypesFilter.trim().toLowerCase();
+    const rows = categoriesQ.data ?? [];
+    if (!q) return rows;
+    return rows.filter((c) => c.name.toLowerCase().includes(q));
+  }, [categoriesQ.data, editTypesFilter]);
+
+  const updateCategoryTypeM = useMutation({
+    mutationFn: async ({ id, type }: { id: string; type: CategoryType }) => {
+      if (!activeTenantId) throw new Error("Tenant inválido");
+      const { error } = await supabase
+        .from("financial_categories")
+        .update({ type })
+        .eq("tenant_id", activeTenantId)
+        .eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ["financial_categories", activeTenantId] });
+      showSuccess("Tipo atualizado.");
+    },
+    onError: (e: any) => showError(e?.message ?? "Falha ao atualizar tipo"),
   });
 
   // --------------------------
@@ -510,6 +542,92 @@ export function FinancialLedgerPanel() {
               </a>
             </Button>
 
+            <Dialog open={editTypesOpen} onOpenChange={setEditTypesOpen}>
+              <DialogTrigger asChild>
+                <Button variant="secondary" className="h-9 rounded-2xl" disabled={!activeTenantId}>
+                  <Pencil className="mr-2 h-4 w-4" />
+                  Editar tipos
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-[760px]">
+                <DialogHeader>
+                  <DialogTitle>Editar tipo das categorias</DialogTitle>
+                  <DialogDescription>
+                    Depois da importação, ajuste o tipo (revenue/cost/fixed/variable/other). As alterações são salvas na hora.
+                  </DialogDescription>
+                </DialogHeader>
+
+                <div className="grid gap-3">
+                  <div>
+                    <Label className="text-xs">Buscar</Label>
+                    <Input
+                      className="mt-1 rounded-2xl"
+                      value={editTypesFilter}
+                      onChange={(e) => setEditTypesFilter(e.target.value)}
+                      placeholder="Ex: impostos, marketing, salários…"
+                    />
+                  </div>
+
+                  <div className="overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-800">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Categoria</TableHead>
+                          <TableHead className="w-[220px]">Tipo</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {(filteredCategories ?? []).slice(0, 120).map((c) => (
+                          <TableRow key={c.id}>
+                            <TableCell className="font-medium text-slate-900 dark:text-slate-100">{c.name}</TableCell>
+                            <TableCell>
+                              <Select
+                                value={c.type}
+                                onValueChange={(v) =>
+                                  updateCategoryTypeM.mutate({ id: c.id, type: v as CategoryType })
+                                }
+                              >
+                                <SelectTrigger className="h-9 rounded-2xl">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="revenue">revenue</SelectItem>
+                                  <SelectItem value="cost">cost</SelectItem>
+                                  <SelectItem value="fixed">fixed</SelectItem>
+                                  <SelectItem value="variable">variable</SelectItem>
+                                  <SelectItem value="other">other</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+
+                        {!categoriesQ.isLoading && !(categoriesQ.data ?? []).length ? (
+                          <TableRow>
+                            <TableCell colSpan={2} className="text-slate-600 dark:text-slate-400">
+                              Nenhuma categoria ainda.
+                            </TableCell>
+                          </TableRow>
+                        ) : null}
+                      </TableBody>
+                    </Table>
+                  </div>
+
+                  {(filteredCategories ?? []).length > 120 ? (
+                    <div className="text-xs text-slate-500 dark:text-slate-400">
+                      Mostrando 120 de {(filteredCategories ?? []).length}. Use a busca para refinar.
+                    </div>
+                  ) : null}
+                </div>
+
+                <DialogFooter>
+                  <Button variant="secondary" className="h-10 rounded-2xl" onClick={() => setEditTypesOpen(false)}>
+                    Fechar
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+
             <Dialog
               open={importDialogOpen}
               onOpenChange={(v) => {
@@ -538,10 +656,7 @@ export function FinancialLedgerPanel() {
                 <div className="grid gap-3">
                   <div>
                     <Label className="text-xs">Tipo padrão (fallback)</Label>
-                    <Select
-                      value={importDefaultType}
-                      onValueChange={(v) => setImportDefaultType(v as CategoryType)}
-                    >
+                    <Select value={importDefaultType} onValueChange={(v) => setImportDefaultType(v as CategoryType)}>
                       <SelectTrigger className="mt-1 rounded-2xl">
                         <SelectValue />
                       </SelectTrigger>
@@ -582,7 +697,8 @@ export function FinancialLedgerPanel() {
                     />
                     {importPreview.length ? (
                       <div className="mt-2 text-xs text-slate-600 dark:text-slate-400">
-                        {importPreview.length} categorias detectadas. Ex.: {importPreview
+                        {importPreview.length} categorias detectadas. Ex.:{" "}
+                        {importPreview
                           .slice(0, 3)
                           .map((r) => `${r.name}${r.type ? ` (${r.type})` : ""}`)
                           .join(", ")}
@@ -593,11 +709,7 @@ export function FinancialLedgerPanel() {
                 </div>
 
                 <DialogFooter>
-                  <Button
-                    variant="secondary"
-                    className="h-10 rounded-2xl"
-                    onClick={() => setImportDialogOpen(false)}
-                  >
+                  <Button variant="secondary" className="h-10 rounded-2xl" onClick={() => setImportDialogOpen(false)}>
                     Cancelar
                   </Button>
                   <Button
