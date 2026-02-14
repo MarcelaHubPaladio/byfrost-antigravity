@@ -57,6 +57,59 @@ function stripOuterQuotes(s: string) {
   return t;
 }
 
+function splitCsvLine(line: string, delimiter: "," | ";") {
+  const out: string[] = [];
+  let cur = "";
+  let inQuotes = false;
+
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+
+    if (ch === '"') {
+      // Handle escaped quotes "" inside quoted field
+      if (inQuotes && line[i + 1] === '"') {
+        cur += '"';
+        i++;
+        continue;
+      }
+      inQuotes = !inQuotes;
+      continue;
+    }
+
+    if (!inQuotes && ch === delimiter) {
+      out.push(cur.trim());
+      cur = "";
+      continue;
+    }
+
+    cur += ch;
+  }
+
+  out.push(cur.trim());
+  return out.map(stripOuterQuotes);
+}
+
+function parseCategoryType(s: string | undefined | null): CategoryType | null {
+  const raw = String(s ?? "").trim();
+  if (!raw) return null;
+
+  const t = raw
+    .normalize?.("NFD")
+    ?.replace?.(/\p{Diacritic}/gu, "")
+    ?.toLowerCase?.() ?? raw.toLowerCase();
+
+  // Accept both system enums and common pt-BR labels.
+  if (["revenue", "receita", "receitas"].includes(t)) return "revenue";
+  if (["cost", "custo", "custos"].includes(t)) return "cost";
+  if (["fixed", "fixo", "fixos"].includes(t)) return "fixed";
+  if (["variable", "variavel", "variavel", "variaveis", "variaveis"].includes(t)) return "variable";
+  if (["other", "outro", "outros"].includes(t)) return "other";
+
+  return null;
+}
+
+type ParsedCategory = { name: string; type?: CategoryType };
+
 function parseCategoryCsv(text: string) {
   const raw = String(text ?? "");
   const lines = raw
@@ -65,29 +118,66 @@ function parseCategoryCsv(text: string) {
     .map((l) => l.trim())
     .filter(Boolean);
 
-  // Template uses a single column with header "Categorias".
-  const names: string[] = [];
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-    if (!line) continue;
+  if (!lines.length) return [] as ParsedCategory[];
 
-    const lower = line.toLowerCase();
-    if (i === 0 && (lower === "categorias" || lower === "categoria" || lower === "name")) continue;
+  const header = lines[0];
+  const headerLower = header.toLowerCase();
 
-    // If user exported as a CSV with delimiter, take the first cell.
-    const firstCell = line.includes(";") ? line.split(";")[0] : line.includes(",") ? line.split(",")[0] : line;
-    const name = stripOuterQuotes(firstCell);
-    if (name) names.push(name);
+  // Only consider delimiter if the header *looks like* a multi-column CSV.
+  const delimiter: "," | ";" | null =
+    header.includes(";") && (headerLower.includes("categoria") || headerLower.includes("nome") || headerLower.includes("tipo"))
+      ? ";"
+      : header.includes(",") && (headerLower.includes("categoria") || headerLower.includes("nome") || headerLower.includes("tipo"))
+        ? ","
+        : null;
+
+  // 1-column template: "Categorias" with one category per line.
+  if (!delimiter) {
+    const out: ParsedCategory[] = [];
+    for (let i = 0; i < lines.length; i++) {
+      const line = stripOuterQuotes(lines[i]);
+      const lower = line.toLowerCase();
+      if (i === 0 && (lower === "categorias" || lower === "categoria" || lower === "name" || lower === "nome")) continue;
+      if (!line) continue;
+      out.push({ name: line.trim() });
+    }
+
+    // de-dupe (case-insensitive) while preserving order
+    const seen = new Set<string>();
+    const deduped: ParsedCategory[] = [];
+    for (const row of out) {
+      const key = row.name.trim().toLowerCase();
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
+      deduped.push({ name: row.name.trim() });
+    }
+    return deduped;
   }
 
-  // de-dupe (case-insensitive) while preserving order
+  // Multi-column: at minimum, Categoria/Nome and optional Tipo/Type.
+  const headerCells = splitCsvLine(header, delimiter).map((c) => c.toLowerCase());
+  const nameIdx = headerCells.findIndex((c) => ["categoria", "categorias", "nome", "name"].includes(c));
+  const typeIdx = headerCells.findIndex((c) => ["tipo", "type"].includes(c));
+
+  const rows: ParsedCategory[] = [];
+  for (let i = 1; i < lines.length; i++) {
+    const cells = splitCsvLine(lines[i], delimiter);
+    const name = String(cells[nameIdx >= 0 ? nameIdx : 0] ?? "").trim();
+    if (!name) continue;
+
+    const typeRaw = String(cells[typeIdx >= 0 ? typeIdx : 1] ?? "").trim();
+    const parsedType = parseCategoryType(typeRaw) ?? undefined;
+
+    rows.push({ name, type: parsedType });
+  }
+
   const seen = new Set<string>();
-  const deduped: string[] = [];
-  for (const n of names) {
-    const key = n.trim().toLowerCase();
+  const deduped: ParsedCategory[] = [];
+  for (const r of rows) {
+    const key = r.name.trim().toLowerCase();
     if (!key || seen.has(key)) continue;
     seen.add(key);
-    deduped.push(n.trim());
+    deduped.push({ name: r.name.trim(), type: r.type });
   }
 
   return deduped;
@@ -223,7 +313,7 @@ export function FinancialLedgerPanel() {
   const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [importFile, setImportFile] = useState<File | null>(null);
   const [importDefaultType, setImportDefaultType] = useState<CategoryType>("variable");
-  const [importPreview, setImportPreview] = useState<string[]>([]);
+  const [importPreview, setImportPreview] = useState<ParsedCategory[]>([]);
 
   const importCategoriesM = useMutation({
     mutationFn: async () => {
@@ -231,10 +321,14 @@ export function FinancialLedgerPanel() {
       if (!importFile) throw new Error("Selecione um arquivo CSV");
 
       const text = await importFile.text();
-      const names = parseCategoryCsv(text);
-      if (names.length === 0) throw new Error("Nenhuma categoria encontrada no CSV");
+      const parsed = parseCategoryCsv(text);
+      if (parsed.length === 0) throw new Error("Nenhuma categoria encontrada no CSV");
 
-      const rows = names.map((name) => ({ tenant_id: activeTenantId, name, type: importDefaultType }));
+      const rows = parsed.map((r) => ({
+        tenant_id: activeTenantId,
+        name: r.name,
+        type: r.type ?? importDefaultType,
+      }));
 
       const { data, error } = await supabase
         .from("financial_categories")
@@ -243,7 +337,7 @@ export function FinancialLedgerPanel() {
       if (error) throw error;
 
       return {
-        total: names.length,
+        total: parsed.length,
         inserted: (data ?? []).length,
       };
     },
@@ -410,7 +504,7 @@ export function FinancialLedgerPanel() {
 
           <div className="flex flex-wrap items-center gap-2">
             <Button asChild variant="secondary" className="h-9 rounded-2xl">
-              <a href="/templates/categorias.csv" download>
+              <a href="/templates/categorias_com_tipo.csv" download>
                 <Download className="mr-2 h-4 w-4" />
                 Modelo CSV
               </a>
@@ -437,13 +531,13 @@ export function FinancialLedgerPanel() {
                 <DialogHeader>
                   <DialogTitle>Importar categorias (CSV)</DialogTitle>
                   <DialogDescription>
-                    Use o modelo "Categorias" (uma categoria por linha). Duplicadas serão ignoradas.
+                    Você pode usar 1 coluna (Categoria) ou 2 colunas (Categoria;Tipo). Se o Tipo estiver vazio, usamos o tipo padrão.
                   </DialogDescription>
                 </DialogHeader>
 
                 <div className="grid gap-3">
                   <div>
-                    <Label className="text-xs">Tipo padrão (para todas as importadas)</Label>
+                    <Label className="text-xs">Tipo padrão (fallback)</Label>
                     <Select
                       value={importDefaultType}
                       onValueChange={(v) => setImportDefaultType(v as CategoryType)}
@@ -459,6 +553,9 @@ export function FinancialLedgerPanel() {
                         <SelectItem value="other">other (outro)</SelectItem>
                       </SelectContent>
                     </Select>
+                    <div className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
+                      Valores aceitos em "Tipo": revenue/cost/fixed/variable/other (ou receita/custo/fixo/variável/outro).
+                    </div>
                   </div>
 
                   <div>
@@ -476,8 +573,8 @@ export function FinancialLedgerPanel() {
                         }
                         try {
                           const text = await f.text();
-                          const names = parseCategoryCsv(text);
-                          setImportPreview(names);
+                          const parsed = parseCategoryCsv(text);
+                          setImportPreview(parsed);
                         } catch {
                           setImportPreview([]);
                         }
@@ -485,7 +582,10 @@ export function FinancialLedgerPanel() {
                     />
                     {importPreview.length ? (
                       <div className="mt-2 text-xs text-slate-600 dark:text-slate-400">
-                        {importPreview.length} categorias detectadas. Ex.: {importPreview.slice(0, 3).join(", ")}
+                        {importPreview.length} categorias detectadas. Ex.: {importPreview
+                          .slice(0, 3)
+                          .map((r) => `${r.name}${r.type ? ` (${r.type})` : ""}`)
+                          .join(", ")}
                         {importPreview.length > 3 ? "…" : ""}
                       </div>
                     ) : null}

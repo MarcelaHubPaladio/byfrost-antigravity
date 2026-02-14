@@ -1,0 +1,6 @@
+Categoria;Tipo
+Marketing;variable
+Impostos;cost
+Salários;fixed
+Receita de Serviços;revenue
+Outros;other
