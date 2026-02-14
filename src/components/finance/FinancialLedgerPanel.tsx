@@ -18,6 +18,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { showError, showSuccess } from "@/utils/toast";
+import { Download, Upload } from "lucide-react";
 
 type BankAccountRow = { id: string; bank_name: string; account_name: string; currency: string };
 
@@ -46,6 +47,50 @@ function normalizeDescription(s: string) {
       .replace(/\s+/g, " ")
       .trim();
   }
+}
+
+function stripOuterQuotes(s: string) {
+  const t = String(s ?? "").trim();
+  if ((t.startsWith('"') && t.endsWith('"')) || (t.startsWith("'") && t.endsWith("'"))) {
+    return t.slice(1, -1).trim();
+  }
+  return t;
+}
+
+function parseCategoryCsv(text: string) {
+  const raw = String(text ?? "");
+  const lines = raw
+    .replace(/^\uFEFF/, "")
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter(Boolean);
+
+  // Template uses a single column with header "Categorias".
+  const names: string[] = [];
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    if (!line) continue;
+
+    const lower = line.toLowerCase();
+    if (i === 0 && (lower === "categorias" || lower === "categoria" || lower === "name")) continue;
+
+    // If user exported as a CSV with delimiter, take the first cell.
+    const firstCell = line.includes(";") ? line.split(";")[0] : line.includes(",") ? line.split(",")[0] : line;
+    const name = stripOuterQuotes(firstCell);
+    if (name) names.push(name);
+  }
+
+  // de-dupe (case-insensitive) while preserving order
+  const seen = new Set<string>();
+  const deduped: string[] = [];
+  for (const n of names) {
+    const key = n.trim().toLowerCase();
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    deduped.push(n.trim());
+  }
+
+  return deduped;
 }
 
 async function sha256Hex(input: string) {
@@ -170,6 +215,47 @@ export function FinancialLedgerPanel() {
         showError(msg);
       }
     },
+  });
+
+  // --------------------------
+  // Category import (CSV)
+  // --------------------------
+  const [importDialogOpen, setImportDialogOpen] = useState(false);
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [importDefaultType, setImportDefaultType] = useState<CategoryType>("variable");
+  const [importPreview, setImportPreview] = useState<string[]>([]);
+
+  const importCategoriesM = useMutation({
+    mutationFn: async () => {
+      if (!activeTenantId) throw new Error("Tenant inválido");
+      if (!importFile) throw new Error("Selecione um arquivo CSV");
+
+      const text = await importFile.text();
+      const names = parseCategoryCsv(text);
+      if (names.length === 0) throw new Error("Nenhuma categoria encontrada no CSV");
+
+      const rows = names.map((name) => ({ tenant_id: activeTenantId, name, type: importDefaultType }));
+
+      const { data, error } = await supabase
+        .from("financial_categories")
+        .upsert(rows as any, { onConflict: "tenant_id,name", ignoreDuplicates: true })
+        .select("id");
+      if (error) throw error;
+
+      return {
+        total: names.length,
+        inserted: (data ?? []).length,
+      };
+    },
+    onSuccess: async (res) => {
+      showSuccess(`Importação concluída. ${res.inserted} novas / ${res.total} no CSV.`);
+      setImportFile(null);
+      setImportPreview([]);
+      setImportDefaultType("variable");
+      setImportDialogOpen(false);
+      await qc.invalidateQueries({ queryKey: ["financial_categories", activeTenantId] });
+    },
+    onError: (e: any) => showError(e?.message ?? "Falha ao importar categorias"),
   });
 
   // --------------------------
@@ -322,62 +408,166 @@ export function FinancialLedgerPanel() {
             </div>
           </div>
 
-          <Dialog open={catDialogOpen} onOpenChange={setCatDialogOpen}>
-            <DialogTrigger asChild>
-              <Button className="h-9 rounded-2xl" disabled={!activeTenantId}>
-                Nova categoria
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="sm:max-w-[520px]">
-              <DialogHeader>
-                <DialogTitle>Nova categoria</DialogTitle>
-                <DialogDescription>
-                  Dica: use nomes curtos (ex.: "Marketing", "Combustível", "Recebíveis").
-                </DialogDescription>
-              </DialogHeader>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button asChild variant="secondary" className="h-9 rounded-2xl">
+              <a href="/templates/categorias.csv" download>
+                <Download className="mr-2 h-4 w-4" />
+                Modelo CSV
+              </a>
+            </Button>
 
-              <div className="grid gap-3">
-                <div>
-                  <Label className="text-xs">Nome</Label>
-                  <Input
-                    className="mt-1 rounded-2xl"
-                    value={newCatName}
-                    onChange={(e) => setNewCatName(e.target.value)}
-                    placeholder="Ex: Marketing"
-                  />
+            <Dialog
+              open={importDialogOpen}
+              onOpenChange={(v) => {
+                setImportDialogOpen(v);
+                if (!v) {
+                  setImportFile(null);
+                  setImportPreview([]);
+                  setImportDefaultType("variable");
+                }
+              }}
+            >
+              <DialogTrigger asChild>
+                <Button variant="secondary" className="h-9 rounded-2xl" disabled={!activeTenantId}>
+                  <Upload className="mr-2 h-4 w-4" />
+                  Importar CSV
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-[560px]">
+                <DialogHeader>
+                  <DialogTitle>Importar categorias (CSV)</DialogTitle>
+                  <DialogDescription>
+                    Use o modelo "Categorias" (uma categoria por linha). Duplicadas serão ignoradas.
+                  </DialogDescription>
+                </DialogHeader>
+
+                <div className="grid gap-3">
+                  <div>
+                    <Label className="text-xs">Tipo padrão (para todas as importadas)</Label>
+                    <Select
+                      value={importDefaultType}
+                      onValueChange={(v) => setImportDefaultType(v as CategoryType)}
+                    >
+                      <SelectTrigger className="mt-1 rounded-2xl">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="revenue">revenue (receita)</SelectItem>
+                        <SelectItem value="cost">cost (custo)</SelectItem>
+                        <SelectItem value="fixed">fixed (fixo)</SelectItem>
+                        <SelectItem value="variable">variable (variável)</SelectItem>
+                        <SelectItem value="other">other (outro)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div>
+                    <Label className="text-xs">Arquivo CSV</Label>
+                    <Input
+                      className="mt-1 rounded-2xl"
+                      type="file"
+                      accept=".csv,text/csv"
+                      onChange={async (e) => {
+                        const f = e.target.files?.[0] ?? null;
+                        setImportFile(f);
+                        if (!f) {
+                          setImportPreview([]);
+                          return;
+                        }
+                        try {
+                          const text = await f.text();
+                          const names = parseCategoryCsv(text);
+                          setImportPreview(names);
+                        } catch {
+                          setImportPreview([]);
+                        }
+                      }}
+                    />
+                    {importPreview.length ? (
+                      <div className="mt-2 text-xs text-slate-600 dark:text-slate-400">
+                        {importPreview.length} categorias detectadas. Ex.: {importPreview.slice(0, 3).join(", ")}
+                        {importPreview.length > 3 ? "…" : ""}
+                      </div>
+                    ) : null}
+                  </div>
                 </div>
 
-                <div>
-                  <Label className="text-xs">Tipo</Label>
-                  <Select value={newCatType} onValueChange={(v) => setNewCatType(v as CategoryType)}>
-                    <SelectTrigger className="mt-1 rounded-2xl">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="revenue">revenue (receita)</SelectItem>
-                      <SelectItem value="cost">cost (custo)</SelectItem>
-                      <SelectItem value="fixed">fixed (fixo)</SelectItem>
-                      <SelectItem value="variable">variable (variável)</SelectItem>
-                      <SelectItem value="other">other (outro)</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
+                <DialogFooter>
+                  <Button
+                    variant="secondary"
+                    className="h-10 rounded-2xl"
+                    onClick={() => setImportDialogOpen(false)}
+                  >
+                    Cancelar
+                  </Button>
+                  <Button
+                    className="h-10 rounded-2xl"
+                    disabled={!activeTenantId || importCategoriesM.isPending || !importFile}
+                    onClick={() => importCategoriesM.mutate()}
+                  >
+                    {importCategoriesM.isPending ? "Importando…" : "Importar"}
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
 
-              <DialogFooter>
-                <Button variant="secondary" className="h-10 rounded-2xl" onClick={() => setCatDialogOpen(false)}>
-                  Cancelar
+            <Dialog open={catDialogOpen} onOpenChange={setCatDialogOpen}>
+              <DialogTrigger asChild>
+                <Button className="h-9 rounded-2xl" disabled={!activeTenantId}>
+                  Nova categoria
                 </Button>
-                <Button
-                  className="h-10 rounded-2xl"
-                  onClick={() => createCategoryM.mutate()}
-                  disabled={createCategoryM.isPending || !activeTenantId}
-                >
-                  {createCategoryM.isPending ? "Salvando…" : "Criar"}
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-[520px]">
+                <DialogHeader>
+                  <DialogTitle>Nova categoria</DialogTitle>
+                  <DialogDescription>
+                    Dica: use nomes curtos (ex.: "Marketing", "Combustível", "Recebíveis").
+                  </DialogDescription>
+                </DialogHeader>
+
+                <div className="grid gap-3">
+                  <div>
+                    <Label className="text-xs">Nome</Label>
+                    <Input
+                      className="mt-1 rounded-2xl"
+                      value={newCatName}
+                      onChange={(e) => setNewCatName(e.target.value)}
+                      placeholder="Ex: Marketing"
+                    />
+                  </div>
+
+                  <div>
+                    <Label className="text-xs">Tipo</Label>
+                    <Select value={newCatType} onValueChange={(v) => setNewCatType(v as CategoryType)}>
+                      <SelectTrigger className="mt-1 rounded-2xl">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="revenue">revenue (receita)</SelectItem>
+                        <SelectItem value="cost">cost (custo)</SelectItem>
+                        <SelectItem value="fixed">fixed (fixo)</SelectItem>
+                        <SelectItem value="variable">variable (variável)</SelectItem>
+                        <SelectItem value="other">other (outro)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                <DialogFooter>
+                  <Button variant="secondary" className="h-10 rounded-2xl" onClick={() => setCatDialogOpen(false)}>
+                    Cancelar
+                  </Button>
+                  <Button
+                    className="h-10 rounded-2xl"
+                    onClick={() => createCategoryM.mutate()}
+                    disabled={createCategoryM.isPending || !activeTenantId}
+                  >
+                    {createCategoryM.isPending ? "Salvando…" : "Criar"}
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          </div>
         </div>
 
         <div className="mt-3 flex flex-wrap gap-2">
