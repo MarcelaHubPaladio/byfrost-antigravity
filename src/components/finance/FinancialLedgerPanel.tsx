@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/dialog";
 import { showError, showSuccess } from "@/utils/toast";
 import { Download, Pencil, Upload } from "lucide-react";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 type BankAccountRow = { id: string; bank_name: string; account_name: string; currency: string };
 
@@ -549,7 +550,7 @@ export function FinancialLedgerPanel() {
                   Editar tipos
                 </Button>
               </DialogTrigger>
-              <DialogContent className="sm:max-w-[760px]">
+              <DialogContent className="sm:max-w-[760px] max-h-[85vh] overflow-hidden">
                 <DialogHeader>
                   <DialogTitle>Editar tipo das categorias</DialogTitle>
                   <DialogDescription>
@@ -568,7 +569,7 @@ export function FinancialLedgerPanel() {
                     />
                   </div>
 
-                  <div className="overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-800">
+                  <ScrollArea className="h-[55vh] rounded-2xl border border-slate-200 dark:border-slate-800">
                     <Table>
                       <TableHeader>
                         <TableRow>
@@ -577,7 +578,7 @@ export function FinancialLedgerPanel() {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {(filteredCategories ?? []).slice(0, 120).map((c) => (
+                        {(filteredCategories ?? []).slice(0, 200).map((c) => (
                           <TableRow key={c.id}>
                             <TableCell className="font-medium text-slate-900 dark:text-slate-100">{c.name}</TableCell>
                             <TableCell>
@@ -611,11 +612,11 @@ export function FinancialLedgerPanel() {
                         ) : null}
                       </TableBody>
                     </Table>
-                  </div>
+                  </ScrollArea>
 
-                  {(filteredCategories ?? []).length > 120 ? (
+                  {(filteredCategories ?? []).length > 200 ? (
                     <div className="text-xs text-slate-500 dark:text-slate-400">
-                      Mostrando 120 de {(filteredCategories ?? []).length}. Use a busca para refinar.
+                      Mostrando 200 de {(filteredCategories ?? []).length}. Use a busca para refinar.
                     </div>
                   ) : null}
                 </div>
