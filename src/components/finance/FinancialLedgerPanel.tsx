@@ -236,9 +236,30 @@ function prettyAccountType(s: string) {
   return s;
 }
 
+function currentMonthRangeIso() {
+  const now = new Date();
+  const start = new Date(now.getFullYear(), now.getMonth(), 1);
+  const end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+  return {
+    start: start.toISOString().slice(0, 10),
+    end: end.toISOString().slice(0, 10),
+  };
+}
+
 export function FinancialLedgerPanel() {
   const { activeTenantId } = useTenant();
   const qc = useQueryClient();
+
+  const [txStartDate, setTxStartDate] = useState(() => currentMonthRangeIso().start);
+  const [txEndDate, setTxEndDate] = useState(() => currentMonthRangeIso().end);
+
+  useEffect(() => {
+    // Default filter always starts on current month when entering the screen / switching tenant.
+    if (!activeTenantId) return;
+    const r = currentMonthRangeIso();
+    setTxStartDate(r.start);
+    setTxEndDate(r.end);
+  }, [activeTenantId]);
 
   const accountsQ = useQuery({
     queryKey: ["bank_accounts", activeTenantId],
@@ -269,18 +290,24 @@ export function FinancialLedgerPanel() {
   });
 
   const transactionsQ = useQuery({
-    queryKey: ["financial_transactions", activeTenantId],
-    enabled: Boolean(activeTenantId),
+    queryKey: ["financial_transactions", activeTenantId, txStartDate, txEndDate],
+    enabled: Boolean(activeTenantId && txStartDate && txEndDate),
     queryFn: async () => {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(txStartDate) || !/^\d{4}-\d{2}-\d{2}$/.test(txEndDate)) {
+        throw new Error("Filtro de datas inválido");
+      }
+
       const { data, error } = await supabase
         .from("financial_transactions")
         .select(
           "id,tenant_id,account_id,amount,type,description,transaction_date,status,source,fingerprint,category_id,created_at"
         )
         .eq("tenant_id", activeTenantId!)
+        .gte("transaction_date", txStartDate)
+        .lte("transaction_date", txEndDate)
         .order("transaction_date", { ascending: false })
         .order("created_at", { ascending: false })
-        .limit(80);
+        .limit(500);
       if (error) throw error;
       return (data ?? []) as any[];
     },
@@ -791,14 +818,44 @@ export function FinancialLedgerPanel() {
         <Card className="rounded-[22px] border-slate-200 bg-white/70 p-4 shadow-sm backdrop-blur dark:border-slate-800 dark:bg-slate-950/40">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">Transações recentes</div>
-              <div className="mt-1 text-xs text-slate-600 dark:text-slate-400">
-                Ajuste a categoria para ensinar a regra (pattern = descrição normalizada).
-              </div>
+              <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">Transações</div>
+              <div className="mt-1 text-xs text-slate-600 dark:text-slate-400">Filtre por período (padrão: mês atual).</div>
             </div>
-            <Button variant="secondary" className="h-9 rounded-2xl" onClick={() => transactionsQ.refetch()}>
-              Atualizar
-            </Button>
+
+            <div className="flex flex-wrap items-end gap-2">
+              <div>
+                <Label className="text-[11px]">De</Label>
+                <Input
+                  className="mt-1 h-9 w-[160px] rounded-2xl"
+                  type="date"
+                  value={txStartDate}
+                  onChange={(e) => setTxStartDate(e.target.value)}
+                />
+              </div>
+              <div>
+                <Label className="text-[11px]">Até</Label>
+                <Input
+                  className="mt-1 h-9 w-[160px] rounded-2xl"
+                  type="date"
+                  value={txEndDate}
+                  onChange={(e) => setTxEndDate(e.target.value)}
+                />
+              </div>
+              <Button
+                variant="secondary"
+                className="h-9 rounded-2xl"
+                onClick={() => {
+                  const r = currentMonthRangeIso();
+                  setTxStartDate(r.start);
+                  setTxEndDate(r.end);
+                }}
+              >
+                Mês atual
+              </Button>
+              <Button variant="secondary" className="h-9 rounded-2xl" onClick={() => transactionsQ.refetch()}>
+                Atualizar
+              </Button>
+            </div>
           </div>
 
           <div className="mt-3 overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-800">
@@ -860,7 +917,7 @@ export function FinancialLedgerPanel() {
                 {!transactionsQ.isLoading && !(transactionsQ.data ?? []).length ? (
                   <TableRow>
                     <TableCell colSpan={6} className="text-slate-600 dark:text-slate-400">
-                      Nenhuma transação ainda.
+                      Nenhuma transação nesse período.
                     </TableCell>
                   </TableRow>
                 ) : null}
@@ -1180,7 +1237,7 @@ export function FinancialLedgerPanel() {
               <DialogContent className="sm:max-w-[560px]">
                 <DialogHeader>
                   <DialogTitle>{editingBank ? "Editar conta" : "Nova conta"}</DialogTitle>
-                  <DialogDescription>Use nomes claros (ex.: “Itaú PJ”, “Santander CC”, “Cartão Nubank”).</DialogDescription>
+                  <DialogDescription>Use nomes claros (ex.: "Itaú PJ", "Santander CC", "Cartão Nubank").</DialogDescription>
                 </DialogHeader>
 
                 <div className="grid gap-3">
