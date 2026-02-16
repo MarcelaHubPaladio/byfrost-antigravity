@@ -573,6 +573,12 @@ serve(async (req) => {
       const approvedAt = (fresh.data as any)?.approved_at ?? null;
       if (!approvedAt) return err("scope_not_approved", 403);
 
+      // BLOCK: do not create multiple signing links/documents.
+      const existingLink = String((fresh.data as any)?.autentique_json?.signing_link ?? "").trim();
+      if (existingLink) {
+        return json({ ok: true, signing_link: existingLink, already: true });
+      }
+
       const customer = getPartyCustomer((party as any).metadata ?? {});
       const signerName = String(customer?.legal_name ?? (party as any).display_name ?? "Cliente").trim();
       const signerEmail = String(customer?.email ?? "").trim();

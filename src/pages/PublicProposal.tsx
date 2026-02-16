@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { showError, showSuccess } from "@/utils/toast";
 import { SUPABASE_ANON_KEY_IN_USE, SUPABASE_URL_IN_USE, USING_FALLBACK_SUPABASE } from "@/lib/supabase";
+import { createClient } from "@supabase/supabase-js";
 
 const FN_URL = `${SUPABASE_URL_IN_USE}/functions/v1/public-proposal`;
 
@@ -32,6 +33,10 @@ type ApiData = {
     templates: any[];
   };
 };
+
+const publicSb = createClient(SUPABASE_URL_IN_USE, SUPABASE_ANON_KEY_IN_USE, {
+  auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+});
 
 function safe(s: any) {
   return String(s ?? "").trim();
@@ -80,6 +85,7 @@ export default function PublicProposal() {
   const [loading, setLoading] = useState(false);
   const [acting, setActing] = useState<"approve" | "sign" | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [tick, setTick] = useState(0);
 
   const load = async () => {
     if (!tenantSlug || !token) return;
@@ -143,6 +149,44 @@ export default function PublicProposal() {
       setLoading(false);
     }
   };
+
+  // Realtime + polling to reflect signature status updates (webhook or status polling)
+  useEffect(() => {
+    if (!tenantSlug || !token) return;
+
+    const channel = publicSb
+      .channel(`public-proposal:${tenantSlug}:${token}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "party_proposals",
+        },
+        () => {
+          // Best effort reload; the function will compute the latest status.
+          load();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      publicSb.removeChannel(channel);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tenantSlug, token]);
+
+  useEffect(() => {
+    // Poll every 1h (also useful if webhook is not configured)
+    const id = window.setInterval(() => setTick((t) => t + 1), 60 * 60 * 1000);
+    return () => window.clearInterval(id);
+  }, []);
+
+  useEffect(() => {
+    if (tick === 0) return;
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tick]);
 
   useEffect(() => {
     load();
