@@ -276,9 +276,22 @@ export function PartyCustomerEditorCard({
         }),
       });
 
-      const json = await res.json().catch(() => null);
+      const text = await res.text();
+      let json: any = null;
+      try {
+        json = JSON.parse(text);
+      } catch {
+        // ignore
+      }
+
       if (!res.ok || !json?.ok) {
-        throw new Error(String(json?.error ?? `HTTP ${res.status}`));
+        const msg = String(json?.error ?? text ?? `HTTP ${res.status}`);
+        if (res.status === 401) {
+          throw new Error(
+            `401 (unauthorized). Se você acabou de trocar de projeto Supabase, faça logout/login para renovar a sessão. Detalhe: ${msg}`
+          );
+        }
+        throw new Error(msg);
       }
 
       showSuccess("Logo do cliente enviada.");

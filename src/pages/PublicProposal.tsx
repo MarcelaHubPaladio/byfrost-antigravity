@@ -52,15 +52,23 @@ export default function PublicProposal() {
         method: "GET",
         headers: {
           apikey: SUPABASE_ANON_KEY_IN_USE,
-          // For public functions, Supabase accepts the anon key as bearer too.
-          Authorization: `Bearer ${SUPABASE_ANON_KEY_IN_USE}`,
         },
       });
-      const json = (await res.json().catch(() => null)) as ApiData | null;
-      if (!res.ok || !json?.ok) {
-        throw new Error(safe((json as any)?.error) || `HTTP ${res.status}`);
+
+      const text = await res.text();
+      let json: any = null;
+      try {
+        json = JSON.parse(text);
+      } catch {
+        // ignore
       }
-      setData(json);
+
+      if (!res.ok || !json?.ok) {
+        const detail = safe(json?.error) || (text ? safe(text) : "");
+        throw new Error(detail || `HTTP ${res.status}`);
+      }
+
+      setData(json as ApiData);
     } catch (e: any) {
       const msg = e?.message ?? "Erro ao carregar proposta";
       showError(msg);
@@ -112,13 +120,21 @@ export default function PublicProposal() {
         headers: {
           "Content-Type": "application/json",
           apikey: SUPABASE_ANON_KEY_IN_USE,
-          Authorization: `Bearer ${SUPABASE_ANON_KEY_IN_USE}`,
         },
         body: JSON.stringify({ action }),
       });
-      const json = await res.json().catch(() => null);
+
+      const text = await res.text();
+      let json: any = null;
+      try {
+        json = JSON.parse(text);
+      } catch {
+        // ignore
+      }
+
       if (!res.ok || !json?.ok) {
-        throw new Error(safe(json?.error) || `HTTP ${res.status}`);
+        const detail = safe(json?.error) || (text ? safe(text) : "");
+        throw new Error(detail || `HTTP ${res.status}`);
       }
 
       if (action === "approve") {
