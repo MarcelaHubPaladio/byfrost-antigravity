@@ -34,6 +34,11 @@ create index if not exists core_entities_tenant_type_idx
 create index if not exists core_entities_tenant_updated_idx
   on public.core_entities(tenant_id, updated_at desc);
 
+-- IMPORTANT: we use composite foreign keys (tenant_id, entity_id) in child tables.
+-- Postgres requires the referenced columns to be covered by a UNIQUE constraint/index.
+create unique index if not exists core_entities_tenant_id_id_uq
+  on public.core_entities(tenant_id, id);
+
 select public.byfrost_enable_rls('public.core_entities'::regclass);
 select public.byfrost_ensure_tenant_policies('public.core_entities'::regclass, 'tenant_id');
 select public.byfrost_ensure_updated_at_trigger('public.core_entities'::regclass, 'trg_core_entities_set_updated_at');
