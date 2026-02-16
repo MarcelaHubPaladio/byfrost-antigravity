@@ -30,6 +30,8 @@ import {
   ArrowDownUp,
   CalendarRange,
   KanbanSquare,
+  Boxes,
+  Handshake,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -49,6 +51,7 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { checkRouteAccess } from "@/lib/access";
+import { GlobalEntitySearchCommand } from "@/components/core/GlobalEntitySearchCommand";
 
 function hexToRgb(hex: string) {
   const h = hex.replace("#", "").trim();
@@ -148,6 +151,8 @@ function applyTenantFavicon(primaryHex: string | null) {
 function getPageName(pathname: string) {
   if (pathname === "/" || pathname === "/app" || pathname.startsWith("/app/j/")) return "Dashboard";
   if (pathname.startsWith("/app/chat")) return "Chat";
+  if (pathname.startsWith("/app/entities")) return "Entidades";
+  if (pathname.startsWith("/app/commitments")) return "Compromissos";
   if (pathname.startsWith("/app/crm")) return "CRM";
   if (pathname.startsWith("/app/content")) return "Conteúdo";
   if (pathname.startsWith("/app/presence/manage")) return "Gestão de Presença";
@@ -384,6 +389,9 @@ export function AppShell({
         "app.settings",
         "app.me",
         "app.admin",
+        // Core
+        "app.entities",
+        "app.commitments",
         // Finance
         "app.finance.cockpit",
         "app.finance.ledger",
@@ -563,7 +571,7 @@ export function AppShell({
   }, [loc.pathname]);
 
   return (
-    <div className="min-h-screen bg-[hsl(var(--byfrost-bg))]">
+    <div className="min-h-screen w-full">
       {/* Super-admin: floating tenant switch (top-right) */}
       {isSuperAdmin && (
         <Link
@@ -579,499 +587,478 @@ export function AppShell({
         </Link>
       )}
 
-      <div className="w-full px-3 py-3 md:px-5 md:py-5">
-        <div className="grid gap-3 md:grid-cols-[96px_1fr] md:gap-5">
-          {/* Sidebar (desktop) */}
-          <aside className="relative z-20 hidden overflow-visible rounded-[28px] border border-slate-200 bg-white/65 shadow-sm backdrop-blur md:sticky md:top-5 md:block md:h-[calc(100vh-40px)] dark:border-slate-800 dark:bg-slate-950/40">
-            {/* Top brand block */}
-            <div className="bg-[hsl(var(--byfrost-accent))] px-2 pb-2 pt-1.5">
-              <Link
-                to="/app"
-                className="mx-auto flex w-fit flex-col items-center"
-                title={activeTenant?.name ?? "Byfrost"}
-              >
-                <div className="flex h-[74px] w-[74px] items-center justify-center overflow-hidden rounded-[22px] bg-white p-1.5 shadow-sm ring-1 ring-white/40">
-                  {logoUrl ? (
-                    <img src={logoUrl} alt="Logo do tenant" className="h-full w-full object-contain" />
-                  ) : (
-                    <div className="flex h-full w-full items-center justify-center rounded-[18px] bg-[hsl(var(--byfrost-accent))] text-2xl font-semibold text-white">
-                      {(activeTenant?.name?.slice(0, 1) ?? "B").toUpperCase()}
-                    </div>
-                  )}
-                </div>
-                <div className="mt-2 max-w-[84px] truncate text-center text-[11px] font-semibold tracking-tight text-white/95">
-                  {activeTenant?.name ?? "Byfrost"}
-                </div>
-              </Link>
-            </div>
-
-            <div className="p-3">
-              <div className="grid gap-2">
-                <NavTile to="/app" icon={LayoutGrid} label="Dashboard" disabled={!can("app.dashboard")} />
-                {showChatInNav && <NavTile to="/app/chat" icon={MessagesSquare} label="Chat" disabled={!can("app.chat")} />}
-                {hasCrm && <NavTile to="/app/crm" icon={LayoutDashboard} label="CRM" disabled={!can("app.crm")} />}
-                {hasMetaContent && (
-                  <NavTile to="/app/content" icon={Clapperboard} label="Conteúdo" disabled={!can("app.content")} />
-                )}
-
-                {/* Presença (desktop): Ponto principal + submenu no hover */}
-                {hasPresence && (
-                  <div className="group relative">
-                    <NavTile to="/app/presence" icon={Clock3} label="Ponto" disabled={!can("app.presence")} />
-
-                    <div
-                      className={cn(
-                        "pointer-events-none absolute left-[100%] top-0 z-[80] pl-2 opacity-0 transition",
-                        "group-hover:pointer-events-auto group-hover:opacity-100"
-                      )}
-                    >
-                      <div className="min-w-[220px] rounded-2xl border border-slate-200 bg-white/95 p-2 shadow-lg backdrop-blur dark:border-slate-800 dark:bg-slate-950/90">
-                        <div className="px-2 pb-1.5 text-[11px] font-semibold text-slate-500 dark:text-slate-400">
-                          Presença
+      {!hideTopBar ? (
+        <div className="sticky top-0 z-40 border-b border-slate-200 bg-white/80 backdrop-blur dark:border-slate-800 dark:bg-slate-950/50">
+          <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-3">
+            <div className="flex items-center gap-2">
+              <Sheet open={mobileNavOpen} onOpenChange={setMobileNavOpen}>
+                <SheetTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    className="h-10 rounded-2xl px-3 md:hidden"
+                    title="Abrir menu"
+                  >
+                    <Menu className="h-5 w-5" />
+                  </Button>
+                </SheetTrigger>
+                <SheetContent side="left" className="w-[92vw] max-w-[420px] p-0">
+                  <div className="border-b border-slate-200 bg-[hsl(var(--byfrost-accent))] px-4 pb-4 pt-5 text-white dark:border-slate-800">
+                    <div className="flex items-start justify-between gap-3">
+                      <Link
+                        to="/app"
+                        onClick={() => setMobileNavOpen(false)}
+                        className="flex items-center gap-3"
+                      >
+                        <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-2xl bg-white/95 p-1 shadow-sm ring-1 ring-white/30">
+                          {logoUrl ? (
+                            <img src={logoUrl} alt="Logo do tenant" className="h-full w-full object-contain" />
+                          ) : (
+                            <div className="flex h-full w-full items-center justify-center rounded-xl bg-white/15 text-lg font-semibold text-white">
+                              {(activeTenant?.name?.slice(0, 1) ?? "B").toUpperCase()}
+                            </div>
+                          )}
                         </div>
-                        <div className="grid gap-1">
-                          {PRESENCE_NAV_CHILDREN.filter((c) => (c.enabled ? c.enabled({ hasPresence, isPresenceManager }) : true)).map(
-                            ({ to, label, icon: Icon, routeKey }) => (
-                              <NavLink
+                        <div className="min-w-0">
+                          <div className="truncate text-sm font-semibold leading-tight">{activeTenant?.name ?? "Byfrost"}</div>
+                          <div className="mt-0.5 truncate text-[11px] text-white/85">{activeTenant?.slug ?? ""}</div>
+                        </div>
+                      </Link>
+
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="secondary"
+                          className="h-10 rounded-2xl bg-white/15 text-white hover:bg-white/20"
+                          onClick={() => {
+                            setMobileNavOpen(false);
+                            nav("/tenants");
+                          }}
+                          title="Trocar tenant"
+                        >
+                          <ArrowLeftRight className="mr-2 h-4 w-4" />
+                          Trocar
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="p-4">
+                    <SheetHeader className="sr-only">
+                      <SheetTitle>Menu</SheetTitle>
+                    </SheetHeader>
+
+                    <div className="grid gap-2">
+                      <MobileNavItem
+                        to="/app"
+                        icon={LayoutGrid}
+                        label="Dashboard"
+                        disabled={!can("app.dashboard")}
+                        onNavigate={() => setMobileNavOpen(false)}
+                      />
+
+                      <MobileNavItem
+                        to="/app/entities"
+                        icon={Boxes}
+                        label="Entidades"
+                        disabled={!can("app.entities")}
+                        onNavigate={() => setMobileNavOpen(false)}
+                      />
+
+                      <MobileNavItem
+                        to="/app/commitments"
+                        icon={Handshake}
+                        label="Compromissos"
+                        disabled={!can("app.commitments")}
+                        onNavigate={() => setMobileNavOpen(false)}
+                      />
+
+                      {showChatInNav && (
+                        <MobileNavItem
+                          to="/app/chat"
+                          icon={MessagesSquare}
+                          label="Chat"
+                          disabled={!can("app.chat")}
+                          onNavigate={() => setMobileNavOpen(false)}
+                        />
+                      )}
+
+                      {hasCrm && (
+                        <MobileNavItem
+                          to="/app/crm"
+                          icon={LayoutDashboard}
+                          label="CRM"
+                          disabled={!can("app.crm")}
+                          onNavigate={() => setMobileNavOpen(false)}
+                        />
+                      )}
+
+                      {hasMetaContent && (
+                        <MobileNavItem
+                          to="/app/content"
+                          icon={Clapperboard}
+                          label="Conteúdo"
+                          disabled={!can("app.content")}
+                          onNavigate={() => setMobileNavOpen(false)}
+                        />
+                      )}
+
+                      {/* Presença (mobile): Ponto + abrir filhos ao clicar */}
+                      {hasPresence && (
+                        <Collapsible open={mobilePresenceOpen} onOpenChange={setMobilePresenceOpen}>
+                          <CollapsibleTrigger asChild>
+                            <button
+                              type="button"
+                              className={cn(
+                                "flex w-full items-center justify-between gap-3 rounded-2xl border px-4 py-3 transition",
+                                isActivePresencePath(loc.pathname)
+                                  ? "border-[hsl(var(--byfrost-accent)/0.35)] bg-[hsl(var(--byfrost-accent)/0.10)] text-[hsl(var(--byfrost-accent))]"
+                                  : "border-slate-200 bg-white/75 text-slate-800 hover:border-slate-300 hover:bg-white",
+                                "dark:border-slate-800 dark:bg-slate-950/40 dark:text-slate-100 dark:hover:bg-slate-950/60"
+                              )}
+                              title="Presença"
+                            >
+                              <div className="flex items-center gap-3">
+                                <Clock3 className="h-5 w-5" />
+                                <span className="text-sm font-semibold tracking-tight">Ponto</span>
+                              </div>
+                              <ChevronRight
+                                className={cn(
+                                  "h-5 w-5 opacity-70 transition",
+                                  mobilePresenceOpen && "rotate-90"
+                                )}
+                              />
+                            </button>
+                          </CollapsibleTrigger>
+
+                          <CollapsibleContent className="mt-2 grid gap-2 pl-2">
+                            <MobileNavItem
+                              to="/app/presence"
+                              icon={Clock3}
+                              label="Ponto"
+                              disabled={!can("app.presence")}
+                              onNavigate={() => setMobileNavOpen(false)}
+                            />
+                            {PRESENCE_NAV_CHILDREN.filter((c) => (c.enabled ? c.enabled({ hasPresence, isPresenceManager }) : true)).map(
+                              ({ to, label, icon, routeKey }) => (
+                                <MobileNavItem
+                                  key={to}
+                                  to={to}
+                                  icon={icon}
+                                  label={label}
+                                  disabled={!can(routeKey)}
+                                  onNavigate={() => setMobileNavOpen(false)}
+                                />
+                              )
+                            )}
+                          </CollapsibleContent>
+                        </Collapsible>
+                      )}
+
+                      {/* Financeiro (mobile): Cockpit + abrir filhos ao clicar */}
+                      {financeHasAnyAccess && (
+                        <Collapsible open={mobileFinanceOpen} onOpenChange={setMobileFinanceOpen}>
+                          <CollapsibleTrigger asChild>
+                            <button
+                              type="button"
+                              className={cn(
+                                "flex w-full items-center justify-between gap-3 rounded-2xl border px-4 py-3 transition",
+                                isActiveFinancePath(loc.pathname)
+                                  ? "border-[hsl(var(--byfrost-accent)/0.35)] bg-[hsl(var(--byfrost-accent)/0.10)] text-[hsl(var(--byfrost-accent))]"
+                                  : "border-slate-200 bg-white/75 text-slate-800 hover:border-slate-300 hover:bg-white",
+                                "dark:border-slate-800 dark:bg-slate-950/40 dark:text-slate-100 dark:hover:bg-slate-950/60"
+                              )}
+                              title="Financeiro"
+                            >
+                              <div className="flex items-center gap-3">
+                                <Gauge className="h-5 w-5" />
+                                <span className="text-sm font-semibold tracking-tight">Cockpit</span>
+                              </div>
+                              <ChevronRight
+                                className={cn(
+                                  "h-5 w-5 opacity-70 transition",
+                                  mobileFinanceOpen && "rotate-90"
+                                )}
+                              />
+                            </button>
+                          </CollapsibleTrigger>
+
+                          <CollapsibleContent className="mt-2 grid gap-2 pl-2">
+                            <MobileNavItem
+                              to="/app/finance"
+                              icon={Gauge}
+                              label="Cockpit"
+                              disabled={!can("app.finance.cockpit")}
+                              onNavigate={() => setMobileNavOpen(false)}
+                            />
+                            {FINANCE_NAV_CHILDREN.map(({ to, label, icon, routeKey }) => (
+                              <MobileNavItem
                                 key={to}
                                 to={to}
-                                className={({ isActive }) =>
-                                  cn(
-                                    "flex items-center justify-between gap-2 rounded-xl px-2 py-2 text-sm font-semibold transition",
-                                    isActive || loc.pathname === to
-                                      ? "bg-[hsl(var(--byfrost-accent)/0.10)] text-[hsl(var(--byfrost-accent))]"
-                                      : "text-slate-800 hover:bg-slate-100 dark:text-slate-100 dark:hover:bg-slate-800/60",
-                                    !can(routeKey) && "pointer-events-none opacity-50 grayscale cursor-not-allowed"
-                                  )
-                                }
-                                title={can(routeKey) ? label : `${label} (sem permissão)`}
-                              >
-                                <div className="flex items-center gap-2">
-                                  <Icon className="h-4 w-4" />
-                                  <span>{label}</span>
-                                </div>
-                                {can(routeKey) ? (
-                                  <ChevronRight className="h-4 w-4 opacity-40" />
-                                ) : (
-                                  <Lock className="h-4 w-4 opacity-70" />
-                                )}
-                              </NavLink>
-                            )
-                          )}
-                        </div>
-                      </div>
+                                icon={icon}
+                                label={label}
+                                disabled={!can(routeKey)}
+                                onNavigate={() => setMobileNavOpen(false)}
+                              />
+                            ))}
+                          </CollapsibleContent>
+                        </Collapsible>
+                      )}
+
+                      {hasIncentivesCampaigns && (
+                        <MobileNavItem
+                          to="/app/incentives/events"
+                          icon={CalendarClock}
+                          label="Eventos"
+                          disabled={!can("app.incentives_events_manage")}
+                          onNavigate={() => setMobileNavOpen(false)}
+                        />
+                      )}
+
+                      {simulatorEnabledForTenant && (
+                        <MobileNavItem
+                          to="/app/simulator"
+                          icon={FlaskConical}
+                          label="Simulador"
+                          disabled={!can("app.simulator")}
+                          onNavigate={() => setMobileNavOpen(false)}
+                        />
+                      )}
+
+                      {isSuperAdmin && (
+                        <MobileNavItem
+                          to="/app/admin"
+                          icon={Crown}
+                          label="Admin"
+                          disabled={!can("app.admin")}
+                          onNavigate={() => setMobileNavOpen(false)}
+                        />
+                      )}
+                      <MobileNavItem
+                        to="/app/settings"
+                        icon={Settings}
+                        label="Config"
+                        disabled={!can("app.settings")}
+                        onNavigate={() => setMobileNavOpen(false)}
+                      />
+                    </div>
+
+                    <div className="mt-3 rounded-2xl border border-slate-200 bg-white/70 p-3 text-[11px] text-slate-600 dark:border-slate-800 dark:bg-slate-950/40 dark:text-slate-300">
+                      Dica: itens com cadeado aparecem, mas ficam <span className="font-semibold">bloqueados</span> conforme sua matriz de acesso.
                     </div>
                   </div>
-                )}
+                </SheetContent>
+              </Sheet>
 
-                {/* Financeiro (desktop): Cockpit principal + submenu no hover */}
-                {financeHasAnyAccess && (
-                  <div className="group relative">
-                    <NavTile
-                      to="/app/finance"
-                      icon={Gauge}
-                      label="Cockpit"
-                      disabled={!can("app.finance.cockpit")}
-                    />
+              {isSuperAdmin && (
+                <div className="hidden sm:inline-flex items-center gap-1 rounded-full bg-[hsl(var(--byfrost-accent)/0.10)] px-2 py-1 text-[11px] font-semibold text-[hsl(var(--byfrost-accent))]">
+                  <ShieldCheck className="h-3.5 w-3.5" />
+                  super-admin
+                </div>
+              )}
+            </div>
 
-                    <div
+            <div className="flex items-center gap-2">
+              <GlobalEntitySearchCommand />
+              <DropdownMenu open={userMenuOpen} onOpenChange={setUserMenuOpen}>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    type="button"
+                    className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-white/75 px-2.5 py-2 text-left text-slate-900 shadow-sm transition hover:bg-white dark:border-slate-800 dark:bg-slate-950/40 dark:text-slate-100 dark:hover:bg-slate-950/60"
+                    onMouseEnter={() => setUserMenuOpen(true)}
+                    onMouseLeave={() => setUserMenuOpen(false)}
+                    title={userEmail}
+                  >
+                    <Avatar className="h-8 w-8 rounded-2xl">
+                      <AvatarImage src={avatarUrl ?? undefined} alt={userName} />
+                      <AvatarFallback className="rounded-2xl bg-[hsl(var(--byfrost-accent)/0.12)] text-[hsl(var(--byfrost-accent))]">
+                        {(userName?.slice(0, 1) ?? "U").toUpperCase()}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="hidden sm:block">
+                      <div className="max-w-[180px] truncate text-xs font-semibold text-slate-900 dark:text-slate-100">
+                        {userName}
+                      </div>
+                      <div className="max-w-[180px] truncate text-[11px] text-slate-500 dark:text-slate-400">{activeTenant?.slug}</div>
+                    </div>
+                    <User2 className="hidden h-4 w-4 text-slate-400 sm:block" />
+                  </button>
+                </DropdownMenuTrigger>
+
+                <DropdownMenuContent
+                  align="end"
+                  className="w-64 rounded-2xl border-slate-200 bg-white p-2 dark:border-slate-800 dark:bg-slate-950"
+                  onMouseEnter={() => setUserMenuOpen(true)}
+                  onMouseLeave={() => setUserMenuOpen(false)}
+                >
+                  <DropdownMenuLabel className="px-2 py-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="min-w-0">
+                        <div className="truncate text-xs font-semibold text-slate-900 dark:text-slate-100">{userName}</div>
+                        <div className="mt-0.5 truncate text-[11px] font-normal text-slate-600 dark:text-slate-400">{userEmail}</div>
+                      </div>
+                      {isSuperAdmin && (
+                        <div className="shrink-0 rounded-full bg-amber-100 px-2 py-1 text-[10px] font-semibold text-amber-900">
+                          super-admin
+                        </div>
+                      )}
+                    </div>
+                  </DropdownMenuLabel>
+                  <DropdownMenuSeparator className="bg-slate-200 dark:bg-slate-800" />
+
+                  <DropdownMenuItem
+                    className="cursor-pointer rounded-xl px-2 py-2 text-slate-700 focus:bg-slate-100 focus:text-slate-900 dark:text-slate-200 dark:focus:bg-slate-800"
+                    onSelect={(e) => {
+                      e.preventDefault();
+                      setUserMenuOpen(false);
+                      nav("/app/me");
+                    }}
+                  >
+                    <User2 className="mr-2 h-4 w-4" />
+                    Meu usuário
+                  </DropdownMenuItem>
+
+                  <DropdownMenuSeparator className="bg-slate-200 dark:bg-slate-800" />
+
+                  <DropdownMenuItem
+                    className="cursor-pointer rounded-xl px-2 py-2 text-rose-700 focus:bg-rose-50 focus:text-rose-800 dark:text-rose-300 dark:focus:bg-rose-950/30 dark:focus:text-rose-200"
+                    onSelect={(e) => {
+                      e.preventDefault();
+                      setUserMenuOpen(false);
+                      signOut();
+                    }}
+                  >
+                    <LogOut className="mr-2 h-4 w-4" />
+                    Sair
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      <div className="mx-auto grid max-w-7xl gap-4 px-4 py-5 lg:grid-cols-[220px_1fr]">
+        <aside className="hidden lg:block">
+          <div className="space-y-3">
+            <div className="grid grid-cols-2 gap-2">
+              <NavTile to="/app" icon={LayoutGrid} label="Dashboard" disabled={!can("app.dashboard")} />
+              {showChatInNav && <NavTile to="/app/chat" icon={MessagesSquare} label="Chat" disabled={!can("app.chat")} />}
+              {hasCrm && <NavTile to="/app/crm" icon={LayoutDashboard} label="CRM" disabled={!can("app.crm")} />}
+              {hasMetaContent && <NavTile to="/app/content" icon={Clapperboard} label="Conteúdo" disabled={!can("app.content")} />}
+
+              {/* Core */}
+              <NavTile to="/app/entities" icon={Boxes} label="Entidades" disabled={!can("app.entities")} />
+              <NavTile to="/app/commitments" icon={Handshake} label="Compromissos" disabled={!can("app.commitments")} />
+
+              {hasPresence && (
+                <Collapsible defaultOpen={isActivePresencePath(loc.pathname)}>
+                  <CollapsibleTrigger asChild>
+                    <button
+                      type="button"
                       className={cn(
-                        "pointer-events-none absolute left-[100%] top-0 z-[80] pl-2 opacity-0 transition",
-                        "group-hover:pointer-events-auto group-hover:opacity-100"
+                        "col-span-2 flex items-center justify-between rounded-2xl border px-3 py-2 text-left",
+                        isActivePresencePath(loc.pathname)
+                          ? "border-[hsl(var(--byfrost-accent)/0.35)] bg-[hsl(var(--byfrost-accent)/0.10)] text-[hsl(var(--byfrost-accent))]"
+                          : "border-slate-200 bg-white/70 text-slate-700 hover:border-slate-300 hover:bg-white"
                       )}
                     >
-                      <div className="min-w-[220px] rounded-2xl border border-slate-200 bg-white/95 p-2 shadow-lg backdrop-blur dark:border-slate-800 dark:bg-slate-950/90">
-                        <div className="px-2 pb-1.5 text-[11px] font-semibold text-slate-500 dark:text-slate-400">
-                          Financeiro
-                        </div>
-                        <div className="grid gap-1">
-                          {FINANCE_NAV_CHILDREN.map(({ to, label, icon: Icon, routeKey }) => (
-                            <NavLink
-                              key={to}
-                              to={to}
-                              className={({ isActive }) =>
-                                cn(
-                                  "flex items-center justify-between gap-2 rounded-xl px-2 py-2 text-sm font-semibold transition",
-                                  isActive || loc.pathname === to
-                                    ? "bg-[hsl(var(--byfrost-accent)/0.10)] text-[hsl(var(--byfrost-accent))]"
-                                    : "text-slate-800 hover:bg-slate-100 dark:text-slate-100 dark:hover:bg-slate-800/60",
-                                  !can(routeKey) &&
-                                    "pointer-events-none opacity-50 grayscale cursor-not-allowed"
-                                )
-                              }
-                              title={can(routeKey) ? label : `${label} (sem permissão)`}
-                            >
-                              <div className="flex items-center gap-2">
-                                <Icon className="h-4 w-4" />
-                                <span>{label}</span>
-                              </div>
-                              {can(routeKey) ? (
-                                <ChevronRight className="h-4 w-4 opacity-40" />
-                              ) : (
-                                <Lock className="h-4 w-4 opacity-70" />
-                              )}
-                            </NavLink>
-                          ))}
-                        </div>
+                      <div className="flex items-center gap-2">
+                        <Clock3 className="h-5 w-5" />
+                        <span className="text-sm font-semibold">Presença</span>
+                      </div>
+                      <ChevronRight className="h-4 w-4" />
+                    </button>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent className="mt-2 grid grid-cols-2 gap-2">
+                    <NavTile to="/app/presence" icon={Clock3} label="Ponto" disabled={!can("app.presence")} />
+                    {isPresenceManager && (
+                      <NavTile
+                        to="/app/presence/manage"
+                        icon={ClipboardCheck}
+                        label="Gestão"
+                        disabled={!can("app.presence_manage")}
+                      />
+                    )}
+                  </CollapsibleContent>
+                </Collapsible>
+              )}
+
+              {/* Financeiro (desktop): Cockpit principal + submenu no hover */}
+              {financeHasAnyAccess && (
+                <div className="group relative">
+                  <NavTile
+                    to="/app/finance"
+                    icon={Gauge}
+                    label="Cockpit"
+                    disabled={!can("app.finance.cockpit")}
+                  />
+
+                  <div
+                    className={cn(
+                      "pointer-events-none absolute left-[100%] top-0 z-[80] pl-2 opacity-0 transition",
+                      "group-hover:pointer-events-auto group-hover:opacity-100"
+                    )}
+                  >
+                    <div className="min-w-[220px] rounded-2xl border border-slate-200 bg-white/95 p-2 shadow-lg backdrop-blur dark:border-slate-800 dark:bg-slate-950/90">
+                      <div className="px-2 pb-1.5 text-[11px] font-semibold text-slate-500 dark:text-slate-400">
+                        Financeiro
+                      </div>
+                      <div className="grid gap-1">
+                        {FINANCE_NAV_CHILDREN.map(({ to, label, icon: Icon, routeKey }) => (
+                          <NavLink
+                            key={to}
+                            to={to}
+                            className={({ isActive }) =>
+                              cn(
+                                "flex items-center justify-between gap-2 rounded-xl px-2 py-2 text-sm font-semibold transition",
+                                isActive || loc.pathname === to
+                                  ? "bg-[hsl(var(--byfrost-accent)/0.10)] text-[hsl(var(--byfrost-accent))]"
+                                  : "text-slate-800 hover:bg-slate-100 dark:text-slate-100 dark:hover:bg-slate-800/60",
+                                !can(routeKey) &&
+                                  "pointer-events-none opacity-50 grayscale cursor-not-allowed"
+                              )
+                            }
+                            title={can(routeKey) ? label : `${label} (sem permissão)`}
+                          >
+                            <div className="flex items-center gap-2">
+                              <Icon className="h-4 w-4" />
+                              <span>{label}</span>
+                            </div>
+                            {can(routeKey) ? (
+                              <ChevronRight className="h-4 w-4 opacity-40" />
+                            ) : (
+                              <Lock className="h-4 w-4 opacity-70" />
+                            )}
+                          </NavLink>
+                        ))}
                       </div>
                     </div>
                   </div>
-                )}
-
-                {hasIncentivesCampaigns && (
-                  <NavTile
-                    to="/app/incentives/events"
-                    icon={CalendarClock}
-                    label="Eventos"
-                    disabled={!can("app.incentives_events_manage")}
-                  />
-                )}
-
-                {simulatorEnabledForTenant && (
-                  <NavTile to="/app/simulator" icon={FlaskConical} label="Simulador" disabled={!can("app.simulator")} />
-                )}
-
-                {isSuperAdmin && <NavTile to="/app/admin" icon={Crown} label="Admin" disabled={!can("app.admin")} />}
-                <NavTile to="/app/settings" icon={Settings} label="Config" disabled={!can("app.settings")} />
-              </div>
-            </div>
-          </aside>
-
-          {/* Main */}
-          <div className="relative z-0 min-w-0">
-            {/* Content header (tenant accent border) */}
-            {!hideTopBar && (
-              <div className="overflow-hidden rounded-[28px] border border-slate-200 border-t-4 border-t-[hsl(var(--byfrost-accent))] bg-white/65 px-4 py-3 shadow-sm backdrop-blur dark:border-slate-800 dark:bg-slate-950/40">
-                <div className="flex items-center justify-between gap-3">
-                  <div className="flex min-w-0 items-center gap-2">
-                    <Sheet open={mobileNavOpen} onOpenChange={setMobileNavOpen}>
-                      <SheetTrigger asChild>
-                        <Button
-                          type="button"
-                          variant="secondary"
-                          className="h-10 rounded-2xl px-3 md:hidden"
-                          title="Abrir menu"
-                        >
-                          <Menu className="h-5 w-5" />
-                        </Button>
-                      </SheetTrigger>
-                      <SheetContent side="left" className="w-[92vw] max-w-[420px] p-0">
-                        <div className="border-b border-slate-200 bg-[hsl(var(--byfrost-accent))] px-4 pb-4 pt-5 text-white dark:border-slate-800">
-                          <div className="flex items-start justify-between gap-3">
-                            <Link
-                              to="/app"
-                              onClick={() => setMobileNavOpen(false)}
-                              className="flex items-center gap-3"
-                            >
-                              <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-2xl bg-white/95 p-1 shadow-sm ring-1 ring-white/30">
-                                {logoUrl ? (
-                                  <img src={logoUrl} alt="Logo do tenant" className="h-full w-full object-contain" />
-                                ) : (
-                                  <div className="flex h-full w-full items-center justify-center rounded-xl bg-white/15 text-lg font-semibold text-white">
-                                    {(activeTenant?.name?.slice(0, 1) ?? "B").toUpperCase()}
-                                  </div>
-                                )}
-                              </div>
-                              <div className="min-w-0">
-                                <div className="truncate text-sm font-semibold leading-tight">{activeTenant?.name ?? "Byfrost"}</div>
-                                <div className="mt-0.5 truncate text-[11px] text-white/85">{activeTenant?.slug ?? ""}</div>
-                              </div>
-                            </Link>
-
-                            <div className="flex items-center gap-2">
-                              <Button
-                                variant="secondary"
-                                className="h-10 rounded-2xl bg-white/15 text-white hover:bg-white/20"
-                                onClick={() => {
-                                  setMobileNavOpen(false);
-                                  nav("/tenants");
-                                }}
-                                title="Trocar tenant"
-                              >
-                                <ArrowLeftRight className="mr-2 h-4 w-4" />
-                                Trocar
-                              </Button>
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="p-4">
-                          <SheetHeader className="sr-only">
-                            <SheetTitle>Menu</SheetTitle>
-                          </SheetHeader>
-
-                          <div className="grid gap-2">
-                            <MobileNavItem
-                              to="/app"
-                              icon={LayoutGrid}
-                              label="Dashboard"
-                              disabled={!can("app.dashboard")}
-                              onNavigate={() => setMobileNavOpen(false)}
-                            />
-                            {showChatInNav && (
-                              <MobileNavItem
-                                to="/app/chat"
-                                icon={MessagesSquare}
-                                label="Chat"
-                                disabled={!can("app.chat")}
-                                onNavigate={() => setMobileNavOpen(false)}
-                              />
-                            )}
-                            {hasCrm && (
-                              <MobileNavItem
-                                to="/app/crm"
-                                icon={LayoutDashboard}
-                                label="CRM"
-                                disabled={!can("app.crm")}
-                                onNavigate={() => setMobileNavOpen(false)}
-                              />
-                            )}
-                            {hasMetaContent && (
-                              <MobileNavItem
-                                to="/app/content"
-                                icon={Clapperboard}
-                                label="Conteúdo"
-                                disabled={!can("app.content")}
-                                onNavigate={() => setMobileNavOpen(false)}
-                              />
-                            )}
-
-                            {/* Presença (mobile): Ponto + abrir filhos ao clicar */}
-                            {hasPresence && (
-                              <Collapsible open={mobilePresenceOpen} onOpenChange={setMobilePresenceOpen}>
-                                <CollapsibleTrigger asChild>
-                                  <button
-                                    type="button"
-                                    className={cn(
-                                      "flex w-full items-center justify-between gap-3 rounded-2xl border px-4 py-3 transition",
-                                      isActivePresencePath(loc.pathname)
-                                        ? "border-[hsl(var(--byfrost-accent)/0.35)] bg-[hsl(var(--byfrost-accent)/0.10)] text-[hsl(var(--byfrost-accent))]"
-                                        : "border-slate-200 bg-white/75 text-slate-800 hover:border-slate-300 hover:bg-white",
-                                      "dark:border-slate-800 dark:bg-slate-950/40 dark:text-slate-100 dark:hover:bg-slate-950/60"
-                                    )
-                                    }
-                                    title="Presença"
-                                  >
-                                    <div className="flex items-center gap-3">
-                                      <Clock3 className="h-5 w-5" />
-                                      <span className="text-sm font-semibold tracking-tight">Ponto</span>
-                                    </div>
-                                    <ChevronRight
-                                      className={cn(
-                                        "h-5 w-5 opacity-70 transition",
-                                        mobilePresenceOpen && "rotate-90"
-                                      )}
-                                    />
-                                  </button>
-                                </CollapsibleTrigger>
-
-                                <CollapsibleContent className="mt-2 grid gap-2 pl-2">
-                                  <MobileNavItem
-                                    to="/app/presence"
-                                    icon={Clock3}
-                                    label="Ponto"
-                                    disabled={!can("app.presence")}
-                                    onNavigate={() => setMobileNavOpen(false)}
-                                  />
-                                  {PRESENCE_NAV_CHILDREN.filter((c) => (c.enabled ? c.enabled({ hasPresence, isPresenceManager }) : true)).map(
-                                    ({ to, label, icon, routeKey }) => (
-                                      <MobileNavItem
-                                        key={to}
-                                        to={to}
-                                        icon={icon}
-                                        label={label}
-                                        disabled={!can(routeKey)}
-                                        onNavigate={() => setMobileNavOpen(false)}
-                                      />
-                                    )
-                                  )}
-                                </CollapsibleContent>
-                              </Collapsible>
-                            )}
-
-                            {/* Financeiro (mobile): Cockpit + abrir filhos ao clicar */}
-                            {financeHasAnyAccess && (
-                              <Collapsible open={mobileFinanceOpen} onOpenChange={setMobileFinanceOpen}>
-                                <CollapsibleTrigger asChild>
-                                  <button
-                                    type="button"
-                                    className={cn(
-                                      "flex w-full items-center justify-between gap-3 rounded-2xl border px-4 py-3 transition",
-                                      isActiveFinancePath(loc.pathname)
-                                        ? "border-[hsl(var(--byfrost-accent)/0.35)] bg-[hsl(var(--byfrost-accent)/0.10)] text-[hsl(var(--byfrost-accent))]"
-                                        : "border-slate-200 bg-white/75 text-slate-800 hover:border-slate-300 hover:bg-white",
-                                      "dark:border-slate-800 dark:bg-slate-950/40 dark:text-slate-100 dark:hover:bg-slate-950/60"
-                                    )
-                                    }
-                                    title="Financeiro"
-                                  >
-                                    <div className="flex items-center gap-3">
-                                      <Gauge className="h-5 w-5" />
-                                      <span className="text-sm font-semibold tracking-tight">Cockpit</span>
-                                    </div>
-                                    <ChevronRight
-                                      className={cn(
-                                        "h-5 w-5 opacity-70 transition",
-                                        mobileFinanceOpen && "rotate-90"
-                                      )}
-                                    />
-                                  </button>
-                                </CollapsibleTrigger>
-
-                                <CollapsibleContent className="mt-2 grid gap-2 pl-2">
-                                  <MobileNavItem
-                                    to="/app/finance"
-                                    icon={Gauge}
-                                    label="Cockpit"
-                                    disabled={!can("app.finance.cockpit")}
-                                    onNavigate={() => setMobileNavOpen(false)}
-                                  />
-                                  {FINANCE_NAV_CHILDREN.map(({ to, label, icon, routeKey }) => (
-                                    <MobileNavItem
-                                      key={to}
-                                      to={to}
-                                      icon={icon}
-                                      label={label}
-                                      disabled={!can(routeKey)}
-                                      onNavigate={() => setMobileNavOpen(false)}
-                                    />
-                                  ))}
-                                </CollapsibleContent>
-                              </Collapsible>
-                            )}
-
-                            {hasIncentivesCampaigns && (
-                              <MobileNavItem
-                                to="/app/incentives/events"
-                                icon={CalendarClock}
-                                label="Eventos"
-                                disabled={!can("app.incentives_events_manage")}
-                                onNavigate={() => setMobileNavOpen(false)}
-                              />
-                            )}
-
-                            {simulatorEnabledForTenant && (
-                              <MobileNavItem
-                                to="/app/simulator"
-                                icon={FlaskConical}
-                                label="Simulador"
-                                disabled={!can("app.simulator")}
-                                onNavigate={() => setMobileNavOpen(false)}
-                              />
-                            )}
-
-                            {isSuperAdmin && (
-                              <MobileNavItem
-                                to="/app/admin"
-                                icon={Crown}
-                                label="Admin"
-                                disabled={!can("app.admin")}
-                                onNavigate={() => setMobileNavOpen(false)}
-                              />
-                            )}
-                            <MobileNavItem
-                              to="/app/settings"
-                              icon={Settings}
-                              label="Config"
-                              disabled={!can("app.settings")}
-                              onNavigate={() => setMobileNavOpen(false)}
-                            />
-                          </div>
-
-                          <div className="mt-3 rounded-2xl border border-slate-200 bg-white/70 p-3 text-[11px] text-slate-600 dark:border-slate-800 dark:bg-slate-950/40 dark:text-slate-300">
-                            Dica: itens com cadeado aparecem, mas ficam <span className="font-semibold">bloqueados</span> conforme sua matriz de acesso.
-                          </div>
-                        </div>
-                      </SheetContent>
-                    </Sheet>
-
-                    {isSuperAdmin && (
-                      <div className="hidden sm:inline-flex items-center gap-1 rounded-full bg-[hsl(var(--byfrost-accent)/0.10)] px-2 py-1 text-[11px] font-semibold text-[hsl(var(--byfrost-accent))]">
-                        <ShieldCheck className="h-3.5 w-3.5" />
-                        super-admin
-                      </div>
-                    )}
-                  </div>
-
-                  <DropdownMenu open={userMenuOpen} onOpenChange={setUserMenuOpen}>
-                    <DropdownMenuTrigger asChild>
-                      <button
-                        type="button"
-                        className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-white/75 px-2.5 py-2 text-left text-slate-900 shadow-sm transition hover:bg-white dark:border-slate-800 dark:bg-slate-950/40 dark:text-slate-100 dark:hover:bg-slate-950/60"
-                        onMouseEnter={() => setUserMenuOpen(true)}
-                        onMouseLeave={() => setUserMenuOpen(false)}
-                        title={userEmail}
-                      >
-                        <Avatar className="h-8 w-8 rounded-2xl">
-                          <AvatarImage src={avatarUrl ?? undefined} alt={userName} />
-                          <AvatarFallback className="rounded-2xl bg-[hsl(var(--byfrost-accent)/0.12)] text-[hsl(var(--byfrost-accent))]">
-                            {(userName?.slice(0, 1) ?? "U").toUpperCase()}
-                          </AvatarFallback>
-                        </Avatar>
-                        <div className="hidden sm:block">
-                          <div className="max-w-[180px] truncate text-xs font-semibold text-slate-900 dark:text-slate-100">
-                            {userName}
-                          </div>
-                          <div className="max-w-[180px] truncate text-[11px] text-slate-500 dark:text-slate-400">{activeTenant?.slug}</div>
-                        </div>
-                        <User2 className="hidden h-4 w-4 text-slate-400 sm:block" />
-                      </button>
-                    </DropdownMenuTrigger>
-
-                    <DropdownMenuContent
-                      align="end"
-                      className="w-64 rounded-2xl border-slate-200 bg-white p-2 dark:border-slate-800 dark:bg-slate-950"
-                      onMouseEnter={() => setUserMenuOpen(true)}
-                      onMouseLeave={() => setUserMenuOpen(false)}
-                    >
-                      <DropdownMenuLabel className="px-2 py-2">
-                        <div className="flex items-center justify-between gap-2">
-                          <div className="min-w-0">
-                            <div className="truncate text-xs font-semibold text-slate-900 dark:text-slate-100">{userName}</div>
-                            <div className="mt-0.5 truncate text-[11px] font-normal text-slate-600 dark:text-slate-400">{userEmail}</div>
-                          </div>
-                          {isSuperAdmin && (
-                            <div className="shrink-0 rounded-full bg-amber-100 px-2 py-1 text-[10px] font-semibold text-amber-900">
-                              super-admin
-                            </div>
-                          )}
-                        </div>
-                      </DropdownMenuLabel>
-                      <DropdownMenuSeparator className="bg-slate-200 dark:bg-slate-800" />
-
-                      <DropdownMenuItem
-                        className="cursor-pointer rounded-xl px-2 py-2 text-slate-700 focus:bg-slate-100 focus:text-slate-900 dark:text-slate-200 dark:focus:bg-slate-800"
-                        onSelect={(e) => {
-                          e.preventDefault();
-                          setUserMenuOpen(false);
-                          nav("/app/me");
-                        }}
-                      >
-                        <User2 className="mr-2 h-4 w-4" />
-                        Meu usuário
-                      </DropdownMenuItem>
-
-                      <DropdownMenuSeparator className="bg-slate-200 dark:bg-slate-800" />
-
-                      <DropdownMenuItem
-                        className="cursor-pointer rounded-xl px-2 py-2 text-rose-700 focus:bg-rose-50 focus:text-rose-800 dark:text-rose-300 dark:focus:bg-rose-950/30 dark:focus:text-rose-200"
-                        onSelect={(e) => {
-                          e.preventDefault();
-                          setUserMenuOpen(false);
-                          signOut();
-                        }}
-                      >
-                        <LogOut className="mr-2 h-4 w-4" />
-                        Sair
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
                 </div>
-              </div>
-            )}
+              )}
 
-            <div className={cn(hideTopBar ? "" : "mt-3 md:mt-5")}>{children}</div>
+              {hasIncentivesCampaigns && (
+                <NavTile
+                  to="/app/incentives/events"
+                  icon={CalendarClock}
+                  label="Eventos"
+                  disabled={!can("app.incentives_events_manage")}
+                />
+              )}
+
+              {simulatorEnabledForTenant && (
+                <NavTile to="/app/simulator" icon={FlaskConical} label="Simulador" disabled={!can("app.simulator")} />
+              )}
+
+              {isSuperAdmin && <NavTile to="/app/admin" icon={Crown} label="Admin" disabled={!can("app.admin")} />}
+              <NavTile to="/app/settings" icon={Settings} label="Config" disabled={!can("app.settings")} />
+            </div>
           </div>
+        </aside>
+
+        {/* Main */}
+        <div className="relative z-0 min-w-0">
+          <div className={cn(hideTopBar ? "" : "mt-3 md:mt-5")}>{children}</div>
         </div>
       </div>
     </div>

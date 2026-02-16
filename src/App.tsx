@@ -43,6 +43,10 @@ import FinanceTensions from "@/pages/FinanceTensions";
 import FinanceDecisions from "@/pages/FinanceDecisions";
 import FinanceControlTower from "@/pages/FinanceControlTower";
 import FinanceDecisionBoard from "@/pages/FinanceDecisionBoard";
+import Commitments from "@/pages/Commitments";
+import CommitmentDetail from "@/pages/CommitmentDetail";
+import Entities from "@/pages/Entities";
+import EntityDetail from "@/pages/EntityDetail";
 
 const queryClient = new QueryClient();
 
@@ -212,6 +216,40 @@ const App = () => (
                   element={
                     <RequireRouteAccess routeKey="app.content">
                       <ContentDetail />
+                    </RequireRouteAccess>
+                  }
+                />
+
+                {/* Core */}
+                <Route
+                  path="/app/entities"
+                  element={
+                    <RequireRouteAccess routeKey="app.entities">
+                      <Entities />
+                    </RequireRouteAccess>
+                  }
+                />
+                <Route
+                  path="/app/entities/:id"
+                  element={
+                    <RequireRouteAccess routeKey="app.entities">
+                      <EntityDetail />
+                    </RequireRouteAccess>
+                  }
+                />
+                <Route
+                  path="/app/commitments"
+                  element={
+                    <RequireRouteAccess routeKey="app.commitments">
+                      <Commitments />
+                    </RequireRouteAccess>
+                  }
+                />
+                <Route
+                  path="/app/commitments/:id"
+                  element={
+                    <RequireRouteAccess routeKey="app.commitments">
+                      <CommitmentDetail />
                     </RequireRouteAccess>
                   }
                 />
