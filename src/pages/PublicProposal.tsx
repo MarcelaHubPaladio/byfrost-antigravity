@@ -11,7 +11,13 @@ const FN_URL = `${SUPABASE_URL_IN_USE}/functions/v1/public-proposal`;
 
 type ApiData = {
   ok: boolean;
-  tenant: { name: string; slug: string; logo_url: string | null; company: any };
+  tenant: {
+    name: string;
+    slug: string;
+    logo_url: string | null;
+    company: any;
+    palette_primary_hex?: string | null;
+  };
   party: { display_name: string; logo_url: string | null; customer: any };
   proposal: {
     status: string;
@@ -29,6 +35,43 @@ type ApiData = {
 
 function safe(s: any) {
   return String(s ?? "").trim();
+}
+
+function isValidHex(hex: string) {
+  return /^#[0-9a-fA-F]{6}$/.test(hex);
+}
+
+function hexToRgb(hex: string) {
+  if (!isValidHex(hex)) return null;
+  const v = hex.replace("#", "");
+  const r = parseInt(v.slice(0, 2), 16);
+  const g = parseInt(v.slice(2, 4), 16);
+  const b = parseInt(v.slice(4, 6), 16);
+  return { r, g, b };
+}
+
+function rgbToHsl(rgb: { r: number; g: number; b: number }) {
+  const r = rgb.r / 255;
+  const g = rgb.g / 255;
+  const b = rgb.b / 255;
+
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const d = max - min;
+
+  let h = 0;
+  if (d !== 0) {
+    if (max === r) h = ((g - b) / d) % 6;
+    else if (max === g) h = (b - r) / d + 2;
+    else h = (r - g) / d + 4;
+    h *= 60;
+    if (h < 0) h += 360;
+  }
+
+  const l = (max + min) / 2;
+  const s = d === 0 ? 0 : d / (1 - Math.abs(2 * l - 1));
+
+  return { h: Math.round(h), s: Math.round(s * 100), l: Math.round(l * 100) };
 }
 
 export default function PublicProposal() {
@@ -162,6 +205,40 @@ export default function PublicProposal() {
   const tenant = data?.tenant;
   const party = data?.party;
   const proposal = data?.proposal;
+
+  useEffect(() => {
+    const hex = String(tenant?.palette_primary_hex ?? "").trim();
+    if (!isValidHex(hex)) return;
+
+    const rgb = hexToRgb(hex);
+    if (!rgb) return;
+
+    const { h, s, l } = rgbToHsl(rgb);
+
+    const root = document.documentElement;
+    const prev = {
+      tenantAccent: root.style.getPropertyValue("--tenant-accent"),
+      tenantBg: root.style.getPropertyValue("--tenant-bg"),
+      primary: root.style.getPropertyValue("--primary"),
+      ring: root.style.getPropertyValue("--ring"),
+    };
+
+    const accent = `${h} ${Math.max(35, Math.min(95, s))}% ${Math.max(25, Math.min(60, l))}%`;
+    const bg = `${h} 40% 97%`;
+
+    root.style.setProperty("--tenant-accent", accent);
+    root.style.setProperty("--tenant-bg", bg);
+    // Make shadcn primary match tenant accent on this public page.
+    root.style.setProperty("--primary", accent);
+    root.style.setProperty("--ring", accent);
+
+    return () => {
+      root.style.setProperty("--tenant-accent", prev.tenantAccent);
+      root.style.setProperty("--tenant-bg", prev.tenantBg);
+      root.style.setProperty("--primary", prev.primary);
+      root.style.setProperty("--ring", prev.ring);
+    };
+  }, [tenant?.palette_primary_hex]);
 
   return (
     <div className="min-h-screen bg-[hsl(var(--byfrost-bg))] px-4 py-6">

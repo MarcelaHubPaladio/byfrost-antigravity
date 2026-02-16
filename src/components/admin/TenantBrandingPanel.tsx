@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/lib/supabase";
+import { supabase, SUPABASE_ANON_KEY_IN_USE, SUPABASE_URL_IN_USE } from "@/lib/supabase";
 import { useTenant } from "@/providers/TenantProvider";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -8,10 +8,8 @@ import { Input } from "@/components/ui/input";
 import { showError, showSuccess } from "@/utils/toast";
 
 const BUCKET = "tenant-assets";
-const BRANDING_URL =
-  "https://pryoirzeghatrgecwrci.supabase.co/functions/v1/branding-extract-palette";
-const UPLOAD_URL =
-  "https://pryoirzeghatrgecwrci.supabase.co/functions/v1/branding-upload-logo";
+const BRANDING_URL = `${SUPABASE_URL_IN_USE}/functions/v1/branding-extract-palette`;
+const UPLOAD_URL = `${SUPABASE_URL_IN_USE}/functions/v1/branding-upload-logo`;
 
 type PaletteKey = "primary" | "secondary" | "tertiary" | "quaternary";
 
@@ -208,6 +206,7 @@ export function TenantBrandingPanel() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          apikey: SUPABASE_ANON_KEY_IN_USE,
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
@@ -250,6 +249,7 @@ export function TenantBrandingPanel() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          apikey: SUPABASE_ANON_KEY_IN_USE,
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
         body: JSON.stringify({

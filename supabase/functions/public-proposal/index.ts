@@ -352,6 +352,8 @@ serve(async (req) => {
     if (eErr || !party) return err("party_not_found", 404);
 
     const company = (tenant as any)?.branding_json?.company ?? {};
+    const palettePrimaryHex = (tenant as any)?.branding_json?.palette?.primary?.hex ?? null;
+
     const tenantLogoBucket = (tenant as any)?.branding_json?.logo?.bucket ?? null;
     const tenantLogoPath = (tenant as any)?.branding_json?.logo?.path ?? null;
     let tenantLogoUrl: string | null = null;
@@ -388,7 +390,7 @@ serve(async (req) => {
       commitments = cs ?? [];
 
       const { data: its, error: iErr } = await supabase
-        .from("commercial_commitment_items")
+        .from("commitment_items")
         .select("id,tenant_id,commitment_id,offering_entity_id,quantity,created_at")
         .eq("tenant_id", tenant.id)
         .in("commitment_id", commitmentIds)
@@ -446,6 +448,7 @@ serve(async (req) => {
           name: tenant.name,
           logo_url: tenantLogoUrl,
           company,
+          palette_primary_hex: palettePrimaryHex,
         },
         party: {
           id: party.id,
