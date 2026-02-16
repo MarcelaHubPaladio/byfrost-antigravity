@@ -34,6 +34,7 @@ import {
   Handshake,
   PackageCheck,
 } from "lucide-react";
+import * as HoverCardPrimitive from "@radix-ui/react-hover-card";
 import { cn } from "@/lib/utils";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
@@ -381,6 +382,70 @@ const CORE_NAV_CHILDREN: CoreNavChild[] = [
   { to: "/app/commitments", label: "Compromissos", icon: Handshake, routeKey: "app.commitments" },
 ];
 
+function DesktopHoverMenu({
+  trigger,
+  title,
+  children,
+}: {
+  trigger: React.ReactNode;
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <HoverCardPrimitive.Root openDelay={80} closeDelay={120}>
+      <HoverCardPrimitive.Trigger asChild>{trigger as any}</HoverCardPrimitive.Trigger>
+      <HoverCardPrimitive.Portal>
+        <HoverCardPrimitive.Content
+          side="right"
+          align="start"
+          sideOffset={12}
+          className={cn(
+            "z-[999] min-w-[220px] rounded-2xl border border-slate-200 bg-white/95 p-2 shadow-lg backdrop-blur",
+            "dark:border-slate-800 dark:bg-slate-950/90"
+          )}
+        >
+          <div className="px-2 pb-1.5 text-[11px] font-semibold text-slate-500 dark:text-slate-400">{title}</div>
+          <div className="grid gap-1">{children}</div>
+        </HoverCardPrimitive.Content>
+      </HoverCardPrimitive.Portal>
+    </HoverCardPrimitive.Root>
+  );
+}
+
+function DesktopHoverMenuLink({
+  to,
+  label,
+  icon: Icon,
+  active,
+  disabled,
+}: {
+  to: string;
+  label: string;
+  icon: any;
+  active: boolean;
+  disabled: boolean;
+}) {
+  return (
+    <NavLink
+      to={to}
+      className={cn(
+        "flex items-center justify-between gap-2 rounded-xl px-2 py-2 text-sm font-semibold transition",
+        active
+          ? "bg-[hsl(var(--byfrost-accent)/0.10)] text-[hsl(var(--byfrost-accent))]"
+          : "text-slate-800 hover:bg-slate-100 dark:text-slate-100 dark:hover:bg-slate-800/60",
+        disabled && "pointer-events-none opacity-50 grayscale cursor-not-allowed"
+      )}
+      title={disabled ? `${label} (sem permissão)` : label}
+    >
+      <div className="flex items-center gap-2">
+        <Icon className="h-4 w-4" />
+        <span>{label}</span>
+      </div>
+      {disabled ? <Lock className="h-4 w-4 opacity-70" /> : <ChevronRight className="h-4 w-4 opacity-40" />}
+    </NavLink>
+  );
+}
+
 export function AppShell({
   children,
   hideTopBar,
@@ -638,7 +703,7 @@ export function AppShell({
               </Link>
             </div>
 
-            <div className="flex-1 overflow-y-auto overflow-x-visible p-3">
+            <div className="flex-1 overflow-y-auto p-3">
               <div className="grid justify-items-center gap-2">
                 <NavTile to="/app" icon={LayoutGrid} label="Dashboard" disabled={!can("app.dashboard")} />
                 {showChatInNav && <NavTile to="/app/chat" icon={MessagesSquare} label="Chat" disabled={!can("app.chat")} />}
@@ -647,141 +712,63 @@ export function AppShell({
                   <NavTile to="/app/content" icon={Clapperboard} label="Conteúdo" disabled={!can("app.content")} />
                 )}
 
-                {/* Core (desktop): menu com filhos */}
+                {/* Core (desktop): hover menu */}
                 {coreHasAnyAccess && (
-                  <div className="group relative w-full">
-                    <NavTile to="/app/entities" icon={Building2} label="Core" disabled={!can("app.entities")} />
-
-                    <div className="absolute left-[100%] top-0 z-[999] hidden pl-2 group-hover:block">
-                      <div className="min-w-[220px] rounded-2xl border border-slate-200 bg-white/95 p-2 shadow-lg backdrop-blur dark:border-slate-800 dark:bg-slate-950/90">
-                        <div className="px-2 pb-1.5 text-[11px] font-semibold text-slate-500 dark:text-slate-400">
-                          Core
-                        </div>
-                        <div className="grid gap-1">
-                          {CORE_NAV_CHILDREN.map(({ to, label, icon: Icon, routeKey }) => (
-                            <NavLink
-                              key={to}
-                              to={to}
-                              className={({ isActive }) =>
-                                cn(
-                                  "flex items-center justify-between gap-2 rounded-xl px-2 py-2 text-sm font-semibold transition",
-                                  isActive || loc.pathname === to || loc.pathname.startsWith(to + "/")
-                                    ? "bg-[hsl(var(--byfrost-accent)/0.10)] text-[hsl(var(--byfrost-accent))]"
-                                    : "text-slate-800 hover:bg-slate-100 dark:text-slate-100 dark:hover:bg-slate-800/60",
-                                  !can(routeKey) && "pointer-events-none opacity-50 grayscale cursor-not-allowed"
-                                )
-                              }
-                              title={can(routeKey) ? label : `${label} (sem permissão)`}
-                            >
-                              <div className="flex items-center gap-2">
-                                <Icon className="h-4 w-4" />
-                                <span>{label}</span>
-                              </div>
-                              {can(routeKey) ? (
-                                <ChevronRight className="h-4 w-4 opacity-40" />
-                              ) : (
-                                <Lock className="h-4 w-4 opacity-70" />
-                              )}
-                            </NavLink>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
+                  <DesktopHoverMenu
+                    title="Core"
+                    trigger={<div className="w-full"><NavTile to="/app/entities" icon={Building2} label="Core" disabled={!can("app.entities")} /></div>}
+                  >
+                    {CORE_NAV_CHILDREN.map(({ to, label, icon, routeKey }) => (
+                      <DesktopHoverMenuLink
+                        key={to}
+                        to={to}
+                        label={label}
+                        icon={icon}
+                        active={loc.pathname === to || loc.pathname.startsWith(to + "/")}
+                        disabled={!can(routeKey)}
+                      />
+                    ))}
+                  </DesktopHoverMenu>
                 )}
 
-                {/* Presença (desktop): Ponto principal + submenu no hover */}
+                {/* Presença (desktop): hover menu */}
                 {hasPresence && (
-                  <div className="group relative w-full">
-                    <NavTile to="/app/presence" icon={Clock3} label="Ponto" disabled={!can("app.presence")} />
-
-                    <div className="absolute left-[100%] top-0 z-[999] hidden pl-2 group-hover:block">
-                      <div className="min-w-[220px] rounded-2xl border border-slate-200 bg-white/95 p-2 shadow-lg backdrop-blur dark:border-slate-800 dark:bg-slate-950/90">
-                        <div className="px-2 pb-1.5 text-[11px] font-semibold text-slate-500 dark:text-slate-400">
-                          Presença
-                        </div>
-                        <div className="grid gap-1">
-                          {PRESENCE_NAV_CHILDREN.filter((c) => (c.enabled ? c.enabled({ hasPresence, isPresenceManager }) : true)).map(
-                            ({ to, label, icon: Icon, routeKey }) => (
-                              <NavLink
-                                key={to}
-                                to={to}
-                                className={({ isActive }) =>
-                                  cn(
-                                    "flex items-center justify-between gap-2 rounded-xl px-2 py-2 text-sm font-semibold transition",
-                                    isActive || loc.pathname === to
-                                      ? "bg-[hsl(var(--byfrost-accent)/0.10)] text-[hsl(var(--byfrost-accent))]"
-                                      : "text-slate-800 hover:bg-slate-100 dark:text-slate-100 dark:hover:bg-slate-800/60",
-                                    !can(routeKey) && "pointer-events-none opacity-50 grayscale cursor-not-allowed"
-                                  )
-                                }
-                                title={can(routeKey) ? label : `${label} (sem permissão)`}
-                              >
-                                <div className="flex items-center gap-2">
-                                  <Icon className="h-4 w-4" />
-                                  <span>{label}</span>
-                                </div>
-                                {can(routeKey) ? (
-                                  <ChevronRight className="h-4 w-4 opacity-40" />
-                                ) : (
-                                  <Lock className="h-4 w-4 opacity-70" />
-                                )}
-                              </NavLink>
-                            )
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
+                  <DesktopHoverMenu
+                    title="Presença"
+                    trigger={<div className="w-full"><NavTile to="/app/presence" icon={Clock3} label="Ponto" disabled={!can("app.presence")} /></div>}
+                  >
+                    {PRESENCE_NAV_CHILDREN.filter((c) =>
+                      c.enabled ? c.enabled({ hasPresence, isPresenceManager }) : true
+                    ).map(({ to, label, icon, routeKey }) => (
+                      <DesktopHoverMenuLink
+                        key={to}
+                        to={to}
+                        label={label}
+                        icon={icon}
+                        active={loc.pathname === to || loc.pathname.startsWith(to + "/")}
+                        disabled={!can(routeKey)}
+                      />
+                    ))}
+                  </DesktopHoverMenu>
                 )}
 
-                {/* Financeiro (desktop): Cockpit principal + submenu no hover */}
+                {/* Financeiro (desktop): hover menu */}
                 {financeHasAnyAccess && (
-                  <div className="group relative w-full">
-                    <NavTile
-                      to="/app/finance"
-                      icon={Gauge}
-                      label="Cockpit"
-                      disabled={!can("app.finance.cockpit")}
-                    />
-
-                    <div className="absolute left-[100%] top-0 z-[999] hidden pl-2 group-hover:block">
-                      <div className="min-w-[220px] rounded-2xl border border-slate-200 bg-white/95 p-2 shadow-lg backdrop-blur dark:border-slate-800 dark:bg-slate-950/90">
-                        <div className="px-2 pb-1.5 text-[11px] font-semibold text-slate-500 dark:text-slate-400">
-                          Financeiro
-                        </div>
-                        <div className="grid gap-1">
-                          {FINANCE_NAV_CHILDREN.map(({ to, label, icon: Icon, routeKey }) => (
-                            <NavLink
-                              key={to}
-                              to={to}
-                              className={({ isActive }) =>
-                                cn(
-                                  "flex items-center justify-between gap-2 rounded-xl px-2 py-2 text-sm font-semibold transition",
-                                  isActive || loc.pathname === to
-                                    ? "bg-[hsl(var(--byfrost-accent)/0.10)] text-[hsl(var(--byfrost-accent))]"
-                                    : "text-slate-800 hover:bg-slate-100 dark:text-slate-100 dark:hover:bg-slate-800/60",
-                                  !can(routeKey) &&
-                                    "pointer-events-none opacity-50 grayscale cursor-not-allowed"
-                                )
-                              }
-                              title={can(routeKey) ? label : `${label} (sem permissão)`}
-                            >
-                              <div className="flex items-center gap-2">
-                                <Icon className="h-4 w-4" />
-                                <span>{label}</span>
-                              </div>
-                              {can(routeKey) ? (
-                                <ChevronRight className="h-4 w-4 opacity-40" />
-                              ) : (
-                                <Lock className="h-4 w-4 opacity-70" />
-                              )}
-                            </NavLink>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
+                  <DesktopHoverMenu
+                    title="Financeiro"
+                    trigger={<div className="w-full"><NavTile to="/app/finance" icon={Gauge} label="Cockpit" disabled={!can("app.finance.cockpit")} /></div>}
+                  >
+                    {FINANCE_NAV_CHILDREN.map(({ to, label, icon, routeKey }) => (
+                      <DesktopHoverMenuLink
+                        key={to}
+                        to={to}
+                        label={label}
+                        icon={icon}
+                        active={loc.pathname === to || loc.pathname.startsWith(to + "/")}
+                        disabled={!can(routeKey)}
+                      />
+                    ))}
+                  </DesktopHoverMenu>
                 )}
 
                 {hasIncentivesCampaigns && (
