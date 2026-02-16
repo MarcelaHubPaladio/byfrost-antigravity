@@ -140,7 +140,7 @@ async function autentiqueCreateDocument(params: {
     createDocument(document: $document, signers: $signers, file: $file) {
       id
       name
-      signatures { public_id name email }
+      signatures { public_id name email action { name } }
     }
   }`;
 
@@ -183,7 +183,7 @@ async function autentiqueCreateDocument(params: {
   return json.data.createDocument as {
     id: string;
     name?: string;
-    signatures?: Array<{ public_id: string; name: string; email: string }>;
+    signatures?: Array<{ public_id: string; name: string; email: string; action?: { name?: string } | null }>;
   };
 }
 
@@ -629,7 +629,15 @@ serve(async (req) => {
         signerEmail,
       });
 
-      const signerPublicId = String(created.signatures?.[0]?.public_id ?? "");
+      const sig =
+        (created.signatures ?? []).find(
+          (s) => String(s?.email ?? "").trim().toLowerCase() === signerEmail.toLowerCase() &&
+            String(s?.action?.name ?? "").toUpperCase() === "SIGN"
+        ) ??
+        (created.signatures ?? []).find((s) => String(s?.action?.name ?? "").toUpperCase() === "SIGN") ??
+        null;
+
+      const signerPublicId = String(sig?.public_id ?? "");
       if (!signerPublicId) return err("autentique_signer_missing", 500);
 
       const signingLink = await autentiqueCreateSignatureLink({ apiToken: apiToken2, signerPublicId });
