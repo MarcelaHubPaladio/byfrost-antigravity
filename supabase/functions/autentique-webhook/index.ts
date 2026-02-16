@@ -6,7 +6,8 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type, x-autentique-signature, x-autentique-timestamp, x-webhook-secret",
 };
 
 function createSupabaseAdmin() {
@@ -67,9 +68,16 @@ async function hmacSha256(secret: string, messageBytes: Uint8Array) {
 function parseTimestampToMs(tsRaw: string) {
   const n = Number(tsRaw);
   if (!Number.isFinite(n)) return null;
-  // 13 digits => ms; 10 digits => seconds
-  const ms = n > 1e12 ? n : n * 1000;
-  return ms;
+
+  // common formats:
+  // - seconds (10 digits)
+  // - ms (13 digits)
+  // - microseconds (16 digits)
+  // - nanoseconds (19 digits)
+  if (n > 1e18) return Math.floor(n / 1e6); // ns -> ms
+  if (n > 1e15) return Math.floor(n / 1e3); // µs -> ms
+  if (n > 1e12) return Math.floor(n); // ms
+  return Math.floor(n * 1000); // seconds -> ms
 }
 
 async function verifyAutentiqueWebhookSignature(params: {
@@ -151,9 +159,11 @@ serve(async (req) => {
   try {
     if (req.method !== "POST") return err("method_not_allowed", 405);
 
-    // Webhook signature validation (no custom headers required).
+    const url = new URL(req.url);
+
+    // Webhook signature validation.
+    // If Autentique plan does not allow custom headers, you can append ?secret=... to the webhook URL.
     // Configure AUTENTIQUE_WEBHOOK_SECRET in Supabase Edge Function secrets.
-    // Autentique will send: x-autentique-signature + x-autentique-timestamp
     const secret = (Deno.env.get("AUTENTIQUE_WEBHOOK_SECRET") ?? "").trim();
     const signatureHeader = String(req.headers.get("x-autentique-signature") ?? "").trim();
     const timestampHeader = String(req.headers.get("x-autentique-timestamp") ?? "").trim();
@@ -163,9 +173,11 @@ serve(async (req) => {
 
     // Backwards compatibility: if your plan supports custom headers, we still accept x-webhook-secret.
     const legacyHeaderSecret = String(req.headers.get("x-webhook-secret") ?? "").trim();
+    const querySecret = String(url.searchParams.get("secret") ?? url.searchParams.get("token") ?? "").trim();
 
     if (secret) {
       const legacyOk = legacyHeaderSecret && legacyHeaderSecret === secret;
+      const queryOk = querySecret && querySecret === secret;
       const signatureOk = await verifyAutentiqueWebhookSignature({
         secret,
         rawBody: raw,
@@ -173,11 +185,12 @@ serve(async (req) => {
         timestampHeader,
       });
 
-      if (!legacyOk && !signatureOk) {
+      if (!legacyOk && !queryOk && !signatureOk) {
         return err("unauthorized", 401, {
-          reason: "missing_or_invalid_signature",
+          reason: "missing_or_invalid_auth",
           hasSignature: !!signatureHeader,
           hasTimestamp: !!timestampHeader,
+          hasQuerySecret: !!querySecret,
         });
       }
     }
