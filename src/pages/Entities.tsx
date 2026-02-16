@@ -13,6 +13,13 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Plus } from "lucide-react";
 import { EntityUpsertDialog } from "@/components/core/EntityUpsertDialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 type EntityRow = {
   id: string;
@@ -24,23 +31,30 @@ type EntityRow = {
   metadata?: any;
 };
 
+type EntityTypeFilter = "all" | "party" | "offering";
+
 export default function Entities() {
   const { activeTenantId } = useTenant();
   const nav = useNavigate();
   const [q, setQ] = useState("");
+  const [typeFilter, setTypeFilter] = useState<EntityTypeFilter>("all");
   const [createOpen, setCreateOpen] = useState(false);
 
   const listQ = useQuery({
-    queryKey: ["entities", activeTenantId, q],
+    queryKey: ["entities", activeTenantId, q, typeFilter],
     enabled: Boolean(activeTenantId),
     queryFn: async () => {
-      const base = supabase
+      let base = supabase
         .from("core_entities")
         .select("id,entity_type,subtype,display_name,status,updated_at,metadata")
         .eq("tenant_id", activeTenantId!)
         .is("deleted_at", null)
         .order("updated_at", { ascending: false })
         .limit(200);
+
+      if (typeFilter !== "all") {
+        base = base.eq("entity_type", typeFilter);
+      }
 
       const term = q.trim();
       const { data, error } = term.length >= 2 ? await base.ilike("display_name", `%${term}%`) : await base;
@@ -73,8 +87,20 @@ export default function Entities() {
                   value={q}
                   onChange={(e) => setQ(e.target.value)}
                   placeholder="Buscar por nome… (min 2)"
-                  className="sm:w-[320px]"
+                  className="sm:w-[260px]"
                 />
+
+                <Select value={typeFilter} onValueChange={(v) => setTypeFilter(v as EntityTypeFilter)}>
+                  <SelectTrigger className="rounded-xl sm:w-[200px]">
+                    <SelectValue placeholder="Tipo" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todos os tipos</SelectItem>
+                    <SelectItem value="party">Party</SelectItem>
+                    <SelectItem value="offering">Offering</SelectItem>
+                  </SelectContent>
+                </Select>
+
                 <Button className="rounded-xl" onClick={() => setCreateOpen(true)} disabled={!activeTenantId}>
                   <Plus className="mr-2 h-4 w-4" />
                   Nova
