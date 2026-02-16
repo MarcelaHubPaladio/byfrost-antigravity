@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { Card } from "@/components/ui/card";
@@ -12,6 +12,67 @@ const PARTY_UPLOAD_LOGO_URL =
 
 function onlyDigits(s: string) {
   return String(s ?? "").replace(/\D/g, "");
+}
+
+function formatCpfCnpj(digitsRaw: string) {
+  const d = onlyDigits(digitsRaw).slice(0, 14);
+
+  // CPF: 000.000.000-00
+  if (d.length <= 11) {
+    const p1 = d.slice(0, 3);
+    const p2 = d.slice(3, 6);
+    const p3 = d.slice(6, 9);
+    const p4 = d.slice(9, 11);
+    let out = p1;
+    if (p2) out += "." + p2;
+    if (p3) out += "." + p3;
+    if (p4) out += "-" + p4;
+    return out;
+  }
+
+  // CNPJ: 00.000.000/0000-00
+  const p1 = d.slice(0, 2);
+  const p2 = d.slice(2, 5);
+  const p3 = d.slice(5, 8);
+  const p4 = d.slice(8, 12);
+  const p5 = d.slice(12, 14);
+  let out = p1;
+  if (p2) out += "." + p2;
+  if (p3) out += "." + p3;
+  if (p4) out += "/" + p4;
+  if (p5) out += "-" + p5;
+  return out;
+}
+
+function normalizeWhatsappDigits(digitsRaw: string) {
+  const d = onlyDigits(digitsRaw);
+  // Allow either:
+  // - 10/11 digits (DDD + number)
+  // - 13 digits with 55 prefix
+  if (d.startsWith("55") && d.length > 13) return d.slice(0, 13);
+  if (d.startsWith("55") && d.length <= 13) return d;
+  return d.slice(0, 11);
+}
+
+function formatWhatsappBr(digitsRaw: string) {
+  const d0 = normalizeWhatsappDigits(digitsRaw);
+
+  const has55 = d0.startsWith("55") && d0.length > 11;
+  const d = has55 ? d0.slice(2) : d0;
+
+  const dd = d.slice(0, 2);
+  const rest = d.slice(2);
+
+  const isMobile = rest.length >= 9;
+  const a = isMobile ? rest.slice(0, 5) : rest.slice(0, 4);
+  const b = isMobile ? rest.slice(5, 9) : rest.slice(4, 8);
+
+  let out = "";
+  if (has55) out += "+55 ";
+  if (dd) out += `(${dd}) `;
+  out += a;
+  if (b) out += "-" + b;
+  return out.trim();
 }
 
 async function fileToBase64(file: File) {
@@ -44,19 +105,22 @@ async function lookupCep(cepDigits: string) {
 export function PartyCustomerEditorCard({
   tenantId,
   partyId,
+  initialDisplayName,
   initialMetadata,
   onUpdated,
 }: {
   tenantId: string;
   partyId: string;
+  initialDisplayName: string;
   initialMetadata: any;
   onUpdated: () => void;
 }) {
   const qc = useQueryClient();
   const fileRef = useRef<HTMLInputElement | null>(null);
 
-  const customer = (initialMetadata?.customer ?? {}) as any;
-  const logoInfo = (initialMetadata?.logo ?? null) as
+  const md = (initialMetadata ?? {}) as any;
+
+  const logoInfo = (md?.logo ?? null) as
     | { bucket: string; path: string; updated_at?: string }
     | null;
 
@@ -73,47 +137,82 @@ export function PartyCustomerEditorCard({
   const [fetchingCep, setFetchingCep] = useState(false);
   const [uploadingLogo, setUploadingLogo] = useState(false);
 
-  const [legalName, setLegalName] = useState<string>(String(customer.legal_name ?? ""));
-  const [cnpj, setCnpj] = useState<string>(String(customer.cnpj ?? ""));
-  const [email, setEmail] = useState<string>(String(customer.email ?? ""));
-  const [phone, setPhone] = useState<string>(String(customer.phone ?? ""));
+  // IMPORTANT: respect existing top-level metadata fields.
+  // We DO NOT create metadata.customer.
+  const initialDocDigits = useMemo(() => {
+    return onlyDigits(String(md?.cpf_cnpj ?? md?.cpfCnpj ?? md?.document ?? "")).slice(0, 14);
+  }, [md?.cpf_cnpj, md?.cpfCnpj, md?.document]);
 
-  const [cep, setCep] = useState<string>(String(customer.cep ?? ""));
-  const [street, setStreet] = useState<string>(String(customer.street ?? ""));
-  const [number, setNumber] = useState<string>(String(customer.number ?? ""));
-  const [neighborhood, setNeighborhood] = useState<string>(String(customer.neighborhood ?? ""));
-  const [city, setCity] = useState<string>(String(customer.city ?? ""));
-  const [state, setState] = useState<string>(String(customer.state ?? ""));
+  const initialWhatsappDigits = useMemo(() => {
+    return normalizeWhatsappDigits(String(md?.whatsapp ?? md?.phone ?? md?.phone_e164 ?? ""));
+  }, [md?.whatsapp, md?.phone, md?.phone_e164]);
 
-  const addressLine = useMemo(() => {
-    const parts = [street, number, neighborhood, city, state, cep].map((p) => String(p ?? "").trim()).filter(Boolean);
-    return parts.join(" • ");
-  }, [street, number, neighborhood, city, state, cep]);
+  const initialEmail = useMemo(() => String(md?.email ?? ""), [md?.email]);
+
+  const initialCep = useMemo(() => String(md?.cep ?? ""), [md?.cep]);
+  const initialAddress = useMemo(() => String(md?.address ?? ""), [md?.address]);
+  const initialCity = useMemo(() => String(md?.city ?? ""), [md?.city]);
+  const initialUf = useMemo(() => String(md?.uf ?? md?.state ?? ""), [md?.uf, md?.state]);
+
+  const [displayName, setDisplayName] = useState<string>(String(initialDisplayName ?? ""));
+  const [docDigitsState, setDocDigitsState] = useState<string>(initialDocDigits);
+  const [whatsappDigitsState, setWhatsappDigitsState] = useState<string>(initialWhatsappDigits);
+  const [email, setEmail] = useState<string>(initialEmail);
+
+  const [cep, setCep] = useState<string>(initialCep);
+  const [address, setAddress] = useState<string>(initialAddress);
+  const [city, setCity] = useState<string>(initialCity);
+  const [uf, setUf] = useState<string>(initialUf);
+
+  // Keep UI in sync if entity was refreshed externally.
+  useEffect(() => {
+    setDisplayName(String(initialDisplayName ?? ""));
+    setDocDigitsState(initialDocDigits);
+    setWhatsappDigitsState(initialWhatsappDigits);
+    setEmail(initialEmail);
+    setCep(initialCep);
+    setAddress(initialAddress);
+    setCity(initialCity);
+    setUf(initialUf);
+  }, [
+    initialDisplayName,
+    initialDocDigits,
+    initialWhatsappDigits,
+    initialEmail,
+    initialCep,
+    initialAddress,
+    initialCity,
+    initialUf,
+  ]);
+
+  const docDigits = useMemo(() => onlyDigits(docDigitsState).slice(0, 14), [docDigitsState]);
+  const whatsappDigits = useMemo(() => normalizeWhatsappDigits(whatsappDigitsState), [whatsappDigitsState]);
+
+  const docDisplay = useMemo(() => formatCpfCnpj(docDigits), [docDigits]);
+  const whatsappDisplay = useMemo(() => formatWhatsappBr(whatsappDigits), [whatsappDigits]);
 
   const save = async () => {
     setSaving(true);
     try {
-      const nextMetadata = {
-        ...(initialMetadata ?? {}),
-        customer: {
-          legal_name: legalName.trim() || null,
-          cnpj: onlyDigits(cnpj).slice(0, 14) || null,
-          email: email.trim() || null,
-          phone: phone.trim() || null,
-          cep: onlyDigits(cep).slice(0, 8) || null,
-          street: street.trim() || null,
-          number: number.trim() || null,
-          neighborhood: neighborhood.trim() || null,
-          city: city.trim() || null,
-          state: state.trim() || null,
-          address_line: addressLine || null,
-          updated_at: new Date().toISOString(),
-        },
-      };
+      const nextMetadata = { ...(initialMetadata ?? {}) } as any;
+
+      // Respect the existing keys; default to the canonical ones.
+      nextMetadata.cpf_cnpj = docDigits || null;
+      nextMetadata.whatsapp = whatsappDigits || null;
+      nextMetadata.email = email.trim() || null;
+
+      nextMetadata.cep = onlyDigits(cep).slice(0, 8) || null;
+      nextMetadata.address = address.trim() || null;
+      nextMetadata.city = city.trim() || null;
+      // Use UF (2 letters) field; also keep legacy `state` untouched.
+      nextMetadata.uf = uf.trim().slice(0, 2).toUpperCase() || null;
 
       const { error } = await supabase
         .from("core_entities")
-        .update({ metadata: nextMetadata })
+        .update({
+          display_name: displayName.trim() || initialDisplayName,
+          metadata: nextMetadata,
+        })
         .eq("tenant_id", tenantId)
         .eq("id", partyId)
         .is("deleted_at", null);
@@ -124,7 +223,7 @@ export function PartyCustomerEditorCard({
       await qc.invalidateQueries({ queryKey: ["entity", tenantId, partyId] });
       onUpdated();
     } catch (e: any) {
-      showError(e?.message ?? "Erro ao salvar" );
+      showError(e?.message ?? "Erro ao salvar");
     } finally {
       setSaving(false);
     }
@@ -134,10 +233,10 @@ export function PartyCustomerEditorCard({
     setFetchingCep(true);
     try {
       const res = await lookupCep(cep);
-      if (res.street) setStreet(res.street);
-      if (res.neighborhood) setNeighborhood(res.neighborhood);
+      const line = [res.street, res.neighborhood].filter(Boolean).join(", ");
+      if (line) setAddress(line);
       if (res.city) setCity(res.city);
-      if (res.state) setState(res.state);
+      if (res.state) setUf(res.state);
       showSuccess("Endereço preenchido pelo CEP.");
     } catch (e: any) {
       showError(e?.message ?? "Erro ao buscar CEP");
@@ -197,24 +296,36 @@ export function PartyCustomerEditorCard({
       <div className="flex items-start justify-between gap-3">
         <div>
           <div className="text-sm font-semibold text-slate-900">Dados do cliente</div>
-          <div className="mt-1 text-xs text-slate-600">Salvo em core_entities.metadata.customer</div>
+          <div className="mt-1 text-xs text-slate-600">Edita campos já existentes em core_entities (display_name + metadata).</div>
         </div>
       </div>
 
       <div className="mt-4 grid gap-4">
         <div className="grid gap-2">
-          <Label>Nome (razão social)</Label>
-          <Input value={legalName} onChange={(e) => setLegalName(e.target.value)} className="rounded-xl" />
+          <Label>Nome</Label>
+          <Input value={displayName} onChange={(e) => setDisplayName(e.target.value)} className="rounded-xl" />
         </div>
 
         <div className="grid gap-4 md:grid-cols-2">
           <div className="grid gap-2">
-            <Label>CNPJ</Label>
-            <Input value={cnpj} onChange={(e) => setCnpj(e.target.value)} className="rounded-xl" />
+            <Label>CPF / CNPJ</Label>
+            <Input
+              value={docDisplay}
+              onChange={(e) => setDocDigitsState(onlyDigits(e.target.value).slice(0, 14))}
+              className="rounded-xl"
+              inputMode="numeric"
+              placeholder="000.000.000-00"
+            />
           </div>
           <div className="grid gap-2">
-            <Label>Telefone</Label>
-            <Input value={phone} onChange={(e) => setPhone(e.target.value)} className="rounded-xl" />
+            <Label>WhatsApp</Label>
+            <Input
+              value={whatsappDisplay}
+              onChange={(e) => setWhatsappDigitsState(normalizeWhatsappDigits(e.target.value))}
+              className="rounded-xl"
+              inputMode="tel"
+              placeholder="(DD) 9xxxx-xxxx"
+            />
           </div>
         </div>
 
@@ -245,66 +356,62 @@ export function PartyCustomerEditorCard({
           </div>
 
           <div className="grid gap-3 md:grid-cols-2">
-            <div className="grid gap-2">
-              <Label>Rua</Label>
-              <Input value={street} onChange={(e) => setStreet(e.target.value)} className="rounded-xl" />
-            </div>
-            <div className="grid gap-2">
-              <Label>Número</Label>
-              <Input value={number} onChange={(e) => setNumber(e.target.value)} className="rounded-xl" />
-            </div>
-          </div>
-
-          <div className="grid gap-3 md:grid-cols-2">
-            <div className="grid gap-2">
-              <Label>Bairro</Label>
-              <Input value={neighborhood} onChange={(e) => setNeighborhood(e.target.value)} className="rounded-xl" />
+            <div className="grid gap-2 md:col-span-2">
+              <Label>Endereço</Label>
+              <Input value={address} onChange={(e) => setAddress(e.target.value)} className="rounded-xl" />
             </div>
             <div className="grid gap-2">
               <Label>Cidade</Label>
               <Input value={city} onChange={(e) => setCity(e.target.value)} className="rounded-xl" />
             </div>
+            <div className="grid gap-2">
+              <Label>UF</Label>
+              <Input value={uf} onChange={(e) => setUf(e.target.value)} className="rounded-xl" />
+            </div>
           </div>
-
-          <div className="grid gap-2 md:w-[180px]">
-            <Label>UF</Label>
-            <Input value={state} onChange={(e) => setState(e.target.value)} className="rounded-xl" />
-          </div>
-
-          <div className="text-xs text-slate-600">Linha: {addressLine || "—"}</div>
         </div>
 
         <div className="grid gap-3 rounded-2xl border bg-white p-3">
-          <div className="text-xs font-semibold text-slate-700">Logo do cliente</div>
-
-          <div className="grid gap-2">
-            <Input
-              ref={fileRef}
-              type="file"
-              accept="image/*"
-              className="rounded-2xl file:rounded-xl file:border-0 file:bg-slate-100 file:px-3 file:py-2 file:text-xs file:font-medium file:text-slate-700"
-            />
-            <Button className="rounded-xl" onClick={uploadLogo} disabled={uploadingLogo}>
-              {uploadingLogo ? "Enviando…" : "Enviar logo"}
-            </Button>
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <div className="text-xs font-semibold text-slate-700">Logo</div>
+              <div className="mt-1 text-xs text-slate-600">Salvo em metadata.logo</div>
+            </div>
+            {logoUrl ? (
+              <a
+                href={logoUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="text-xs font-semibold text-slate-700 underline"
+              >
+                Abrir
+              </a>
+            ) : null}
           </div>
 
           {logoUrl ? (
-            <div className="overflow-hidden rounded-2xl border bg-slate-50">
-              <div className="px-3 py-2 text-[11px] font-medium text-slate-700">Preview</div>
-              <div className="p-3">
-                <img src={logoUrl} alt="Logo do cliente" className="h-16 w-auto max-w-full rounded-xl bg-white p-2 shadow-sm" />
-              </div>
+            <div className="mt-2 flex items-center gap-3">
+              <img src={logoUrl} alt="logo" className="h-10 w-10 rounded-xl border object-contain" />
+              <div className="min-w-0 text-xs text-slate-600 truncate">{logoInfo?.path}</div>
             </div>
           ) : (
-            <div className="text-xs text-slate-500">Nenhum logo cadastrado.</div>
+            <div className="mt-2 text-sm text-slate-600">Nenhum logo cadastrado.</div>
           )}
+
+          <div className="mt-3 grid gap-2 md:grid-cols-[1fr_160px]">
+            <Input ref={fileRef} type="file" accept="image/*" className="rounded-xl" />
+            <Button
+              type="button"
+              className="rounded-xl"
+              onClick={uploadLogo}
+              disabled={uploadingLogo}
+            >
+              {uploadingLogo ? "Enviando…" : "Enviar"}
+            </Button>
+          </div>
         </div>
 
-        <div className="flex justify-end gap-2">
-          <Button variant="outline" className="rounded-xl" onClick={onUpdated} disabled={saving}>
-            Recarregar
-          </Button>
+        <div className="flex justify-end">
           <Button className="rounded-xl" onClick={save} disabled={saving}>
             {saving ? "Salvando…" : "Salvar"}
           </Button>

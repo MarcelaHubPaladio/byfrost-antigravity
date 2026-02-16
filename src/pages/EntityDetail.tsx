@@ -196,6 +196,7 @@ export default function EntityDetail() {
                       <PartyCustomerEditorCard
                         tenantId={activeTenantId}
                         partyId={entityId}
+                        initialDisplayName={entityQ.data.display_name}
                         initialMetadata={entityQ.data.metadata ?? {}}
                         onUpdated={() => {
                           qc.invalidateQueries({ queryKey: ["entity", activeTenantId, entityId] });
