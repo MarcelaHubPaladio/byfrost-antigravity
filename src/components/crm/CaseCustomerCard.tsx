@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -7,12 +8,13 @@ import { Button } from "@/components/ui/button";
 import { supabase } from "@/lib/supabase";
 import { showError, showSuccess } from "@/utils/toast";
 import { cn } from "@/lib/utils";
-import { Phone, UserRound, Mail, Link2 } from "lucide-react";
+import { Phone, UserRound, Mail, Link2, ExternalLink } from "lucide-react";
 import { useSession } from "@/providers/SessionProvider";
 
 type CustomerRow = {
   id: string;
   tenant_id: string;
+  entity_id: string | null;
   phone_e164: string;
   name: string | null;
   email: string | null;
@@ -44,7 +46,7 @@ export function CaseCustomerCard(props: {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("customer_accounts")
-        .select("id,tenant_id,phone_e164,name,email,deleted_at")
+        .select("id,tenant_id,entity_id,phone_e164,name,email,deleted_at")
         .eq("tenant_id", props.tenantId)
         .eq("id", props.customerId!)
         .is("deleted_at", null)
@@ -188,6 +190,8 @@ export function CaseCustomerCard(props: {
     }
   };
 
+  const entityId = customerQ.data?.entity_id ?? null;
+
   return (
     <Card className="rounded-[22px] border-slate-200 bg-white p-4">
       <div className="flex items-start justify-between gap-3">
@@ -198,7 +202,7 @@ export function CaseCustomerCard(props: {
             </div>
             <div>
               <div className="text-sm font-semibold text-slate-900">Cliente</div>
-              <div className="mt-0.5 text-[11px] text-slate-500">
+              <div className="mt-0.5 flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
                 {props.customerId ? (
                   <span className="inline-flex items-center gap-1">
                     <Link2 className="h-3.5 w-3.5" /> vinculado
@@ -206,6 +210,16 @@ export function CaseCustomerCard(props: {
                 ) : (
                   "não vinculado"
                 )}
+
+                {entityId ? (
+                  <Link
+                    to={`/app/entities/${encodeURIComponent(entityId)}`}
+                    className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-2 py-0.5 font-semibold text-slate-700 hover:bg-slate-50"
+                    title="Abrir entidade"
+                  >
+                    entidade <ExternalLink className="h-3.5 w-3.5" />
+                  </Link>
+                ) : null}
               </div>
             </div>
           </div>
@@ -264,15 +278,14 @@ export function CaseCustomerCard(props: {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               className="h-11 rounded-2xl pl-10"
-              placeholder="maria@empresa.com"
-              inputMode="email"
+              placeholder="email@exemplo.com"
             />
           </div>
         </div>
       </div>
 
       <div className="mt-3 text-[11px] text-slate-500">
-        Dica: se já existir um cliente com esse WhatsApp, ao salvar o case será vinculado ao registro existente.
+        Dica: ao salvar, o cliente do CRM também fica sincronizado com o módulo Entidades (core_entities).
       </div>
     </Card>
   );

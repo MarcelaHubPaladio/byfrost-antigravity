@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -7,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { supabase } from "@/lib/supabase";
 import { showError, showSuccess } from "@/utils/toast";
 import { cn } from "@/lib/utils";
-import { BadgeDollarSign, Plus, Trash2 } from "lucide-react";
+import { BadgeDollarSign, ExternalLink, Plus, Trash2 } from "lucide-react";
 import { useSession } from "@/providers/SessionProvider";
 
 type CaseItemRow = {
@@ -18,6 +19,7 @@ type CaseItemRow = {
   qty: number | null;
   price: number | null;
   total: number | null;
+  offering_entity_id?: string | null;
   created_at: string;
 };
 
@@ -53,7 +55,8 @@ export function CaseProductsCard(props: { tenantId: string; caseId: string }) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("case_items")
-        .select("id,case_id,line_no,description,qty,price,total,created_at")
+        .select("id,case_id,line_no,description,qty,price,total,offering_entity_id,created_at")
+        .eq("tenant_id", props.tenantId)
         .eq("case_id", props.caseId)
         .order("line_no", { ascending: true })
         .limit(200);
@@ -105,6 +108,7 @@ export function CaseProductsCard(props: { tenantId: string; caseId: string }) {
     try {
       const qty = 1;
       const { error } = await supabase.from("case_items").insert({
+        tenant_id: props.tenantId,
         case_id: props.caseId,
         line_no: nextLineNo,
         description: d,
@@ -134,7 +138,11 @@ export function CaseProductsCard(props: { tenantId: string; caseId: string }) {
   const remove = async (id: string) => {
     try {
       const it = (itemsQ.data ?? []).find((x) => x.id === id);
-      const { error } = await supabase.from("case_items").delete().eq("id", id);
+      const { error } = await supabase
+        .from("case_items")
+        .delete()
+        .eq("tenant_id", props.tenantId)
+        .eq("id", id);
       if (error) throw error;
 
       await logTimeline(`Item removido: ${it?.description ?? `#${it?.line_no ?? ""}`}`, {
@@ -214,6 +222,8 @@ export function CaseProductsCard(props: { tenantId: string; caseId: string }) {
           const qty = it.qty ?? 1;
           const unit = it.price ?? 0;
           const total = it.total ?? qty * unit;
+          const entityId = it.offering_entity_id ?? null;
+
           return (
             <div
               key={it.id}
@@ -223,8 +233,20 @@ export function CaseProductsCard(props: { tenantId: string; caseId: string }) {
                 <div className="truncate text-sm font-semibold text-slate-900">
                   {it.description ?? `Item #${it.line_no}`}
                 </div>
-                <div className="mt-0.5 text-[11px] text-slate-600">
-                  {qty} × {toMoney(unit)} • <span className="font-semibold">{toMoney(total)}</span>
+                <div className="mt-0.5 flex flex-wrap items-center gap-2 text-[11px] text-slate-600">
+                  <span>
+                    {qty} × {toMoney(unit)} • <span className="font-semibold">{toMoney(total)}</span>
+                  </span>
+
+                  {entityId ? (
+                    <Link
+                      to={`/app/entities/${encodeURIComponent(entityId)}`}
+                      className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-2 py-0.5 font-semibold text-slate-700 hover:bg-slate-50"
+                      title="Abrir entidade do produto/serviço"
+                    >
+                      entidade <ExternalLink className="h-3.5 w-3.5" />
+                    </Link>
+                  ) : null}
                 </div>
               </div>
               <Button
@@ -245,6 +267,10 @@ export function CaseProductsCard(props: { tenantId: string; caseId: string }) {
             Adicione um produto ou serviço para estimar o valor desse case.
           </div>
         )}
+      </div>
+
+      <div className="mt-3 text-[11px] text-slate-500">
+        Observação: cada item do CRM também é sincronizado com o módulo Entidades (core_entities) como offering.
       </div>
     </Card>
   );
