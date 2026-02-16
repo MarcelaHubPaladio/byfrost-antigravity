@@ -189,7 +189,11 @@ async function autentiqueCreateDocument(params: {
 
 async function autentiqueCreateSignatureLink(params: { apiToken: string; signerPublicId: string }) {
   const url = getAutentiqueGraphqlUrl();
-  const query = `mutation { createLinkToSignature(public_id: \\\"${params.signerPublicId}\\\") { short_link } }`;
+
+  // Use variables to avoid GraphQL parsing/escaping issues.
+  const query = `mutation CreateLink($publicId: String!) {
+    createLinkToSignature(public_id: $publicId) { short_link }
+  }`;
 
   const res = await fetch(url, {
     method: "POST",
@@ -197,7 +201,7 @@ async function autentiqueCreateSignatureLink(params: { apiToken: string; signerP
       Authorization: `Bearer ${params.apiToken}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ query }),
+    body: JSON.stringify({ query, variables: { publicId: params.signerPublicId } }),
   });
 
   const text = await res.text();
@@ -221,7 +225,14 @@ async function autentiqueCreateSignatureLink(params: { apiToken: string; signerP
 async function autentiqueGetDocumentStatus(params: { apiToken: string; documentId: string }) {
   // Best-effort status check. Autentique recommends webhooks; keep this minimal.
   const url = getAutentiqueGraphqlUrl();
-  const query = `query { document(id: \\\"${params.documentId}\\\") { id signatures { public_id signed { created_at } rejected { created_at } } } }`;
+
+  // Use variables to avoid escaping issues.
+  const query = `query DocumentStatus($id: ID!) {
+    document(id: $id) {
+      id
+      signatures { public_id signed { created_at } rejected { created_at } }
+    }
+  }`;
 
   const res = await fetch(url, {
     method: "POST",
@@ -229,7 +240,7 @@ async function autentiqueGetDocumentStatus(params: { apiToken: string; documentI
       Authorization: `Bearer ${params.apiToken}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ query }),
+    body: JSON.stringify({ query, variables: { id: params.documentId } }),
   });
 
   const text = await res.text();
