@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { supabase, SUPABASE_ANON_KEY_IN_USE, SUPABASE_URL_IN_USE } from "@/lib/supabase";
+import { supabase, SUPABASE_ANON_KEY_IN_USE, SUPABASE_URL_IN_USE, USING_FALLBACK_SUPABASE } from "@/lib/supabase";
 import { Card } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
@@ -286,6 +286,12 @@ export function PartyCustomerEditorCard({
 
       if (!res.ok || !json?.ok) {
         const msg = String(json?.error ?? text ?? `HTTP ${res.status}`);
+        console.error("[PartyCustomerEditorCard] uploadLogo failed", {
+          status: res.status,
+          endpoint: PARTY_UPLOAD_LOGO_URL,
+          usingFallback: USING_FALLBACK_SUPABASE,
+          body: text?.slice?.(0, 500) ?? text,
+        });
         if (res.status === 401) {
           throw new Error(
             `401 (unauthorized). Detalhe: ${msg}.\n` +

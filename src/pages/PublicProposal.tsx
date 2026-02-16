@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { showError, showSuccess } from "@/utils/toast";
-import { SUPABASE_ANON_KEY_IN_USE, SUPABASE_URL_IN_USE } from "@/lib/supabase";
+import { SUPABASE_ANON_KEY_IN_USE, SUPABASE_URL_IN_USE, USING_FALLBACK_SUPABASE } from "@/lib/supabase";
 
 const FN_URL = `${SUPABASE_URL_IN_USE}/functions/v1/public-proposal`;
 
@@ -114,14 +114,23 @@ export default function PublicProposal() {
           safe(json?.error) ||
           (text ? safe(text) : "");
 
-        if (res.status === 401 && detailMsg.toLowerCase().includes("missing authorization header")) {
+        const msg = detailMsg || `HTTP ${res.status}`;
+
+        console.error("[PublicProposal] load failed", {
+          status: res.status,
+          endpoint: url.toString(),
+          usingFallback: USING_FALLBACK_SUPABASE,
+          body: text?.slice?.(0, 500) ?? text,
+        });
+
+        if (res.status === 401 && msg.toLowerCase().includes("missing authorization header")) {
           throw new Error(
             `401: Missing authorization header. Essa Edge Function provavelmente está com "Verify JWT" ligado no Supabase. ` +
               `Desative o Verify JWT para a função public-proposal (ela é pública). Endpoint: ${FN_URL}`
           );
         }
 
-        throw new Error(detailMsg || `HTTP ${res.status}`);
+        throw new Error(msg);
       }
 
       setData(json as ApiData);
@@ -189,8 +198,24 @@ export default function PublicProposal() {
       }
 
       if (!res.ok || !json?.ok) {
-        const detail = safe(json?.error) || (text ? safe(text) : "");
-        throw new Error(detail || `HTTP ${res.status}`);
+        const detailMsg =
+          safe(json?.detail?.message) ||
+          safe(json?.detail?.error) ||
+          safe(json?.message) ||
+          safe(json?.error) ||
+          (text ? safe(text) : "");
+
+        const msg = detailMsg || `HTTP ${res.status}`;
+
+        console.error("[PublicProposal] action failed", {
+          action,
+          status: res.status,
+          endpoint: url.toString(),
+          usingFallback: USING_FALLBACK_SUPABASE,
+          body: text?.slice?.(0, 500) ?? text,
+        });
+
+        throw new Error(msg);
       }
 
       if (action === "approve") {
@@ -286,6 +311,14 @@ export default function PublicProposal() {
             <div className="mt-4 grid gap-2 text-xs text-slate-700">
               <div>
                 <span className="font-semibold">Endpoint:</span> {FN_URL}
+              </div>
+              <div>
+                <span className="font-semibold">Supabase URL em uso:</span> {SUPABASE_URL_IN_USE}
+                {USING_FALLBACK_SUPABASE ? (
+                  <span className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-900">
+                    fallback
+                  </span>
+                ) : null}
               </div>
               <div>
                 <span className="font-semibold">tenantSlug:</span> {tenantSlug}
