@@ -1,6 +1,25 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
-import { corsHeaders } from "../_shared/cors.ts";
-import { createSupabaseAdmin } from "../_shared/supabaseAdmin.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+
+// NOTE: This function is intentionally self-contained.
+// Some Supabase deploy flows bundle only the function folder and do not include sibling imports like ../_shared/*.
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+};
+
+function createSupabaseAdmin() {
+  const url = Deno.env.get("SUPABASE_URL") ?? "";
+  const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+
+  if (!url || !serviceKey) {
+    throw new Error("Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY");
+  }
+
+  return createClient(url, serviceKey, {
+    auth: { persistSession: false },
+  });
+}
 
 const BUCKET = "tenant-assets";
 
@@ -109,7 +128,10 @@ serve(async (req) => {
 
     if (upErr) return err("upload_failed", 500, { message: upErr.message });
 
-    const nextMd = { ...((party as any).metadata ?? {}), logo: { bucket: BUCKET, path, updated_at: new Date().toISOString() } };
+    const nextMd = {
+      ...((party as any).metadata ?? {}),
+      logo: { bucket: BUCKET, path, updated_at: new Date().toISOString() },
+    };
 
     const { error: uErr } = await supabase
       .from("core_entities")

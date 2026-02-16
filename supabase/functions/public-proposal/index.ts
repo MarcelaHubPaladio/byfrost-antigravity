@@ -1,6 +1,25 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
-import { corsHeaders } from "../_shared/cors.ts";
-import { createSupabaseAdmin } from "../_shared/supabaseAdmin.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+
+// NOTE: This function is intentionally self-contained.
+// Some Supabase deploy flows bundle only the function folder and do not include sibling imports like ../_shared/*.
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+};
+
+function createSupabaseAdmin() {
+  const url = Deno.env.get("SUPABASE_URL") ?? "";
+  const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+
+  if (!url || !serviceKey) {
+    throw new Error("Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY");
+  }
+
+  return createClient(url, serviceKey, {
+    auth: { persistSession: false },
+  });
+}
 
 type ProposalRow = {
   id: string;
@@ -57,7 +76,7 @@ async function buildSimpleContractPdf(params: {
   const margin = 48;
   let y = 800;
 
-  const draw = (text: string, size = 11, bold = false) => {
+  const draw = (text: string, size = 11) => {
     const f = font;
     page.drawText(text, {
       x: margin,
@@ -152,7 +171,7 @@ async function autentiqueCreateDocument(params: {
 
 async function autentiqueCreateSignatureLink(params: { apiToken: string; signerPublicId: string }) {
   const url = "https://api.autentique.com.br/graphql";
-  const query = `mutation { createLinkToSignature(public_id: \"${params.signerPublicId}\") { short_link } }`;
+  const query = `mutation { createLinkToSignature(public_id: \\\"${params.signerPublicId}\\\") { short_link } }`;
 
   const res = await fetch(url, {
     method: "POST",
@@ -174,7 +193,7 @@ async function autentiqueCreateSignatureLink(params: { apiToken: string; signerP
 
 async function autentiqueGetDocumentStatus(params: { apiToken: string; documentPublicId: string }) {
   const url = "https://api.autentique.com.br/graphql";
-  const query = `query { document(public_id: \"${params.documentPublicId}\") { public_id status } }`;
+  const query = `query { document(public_id: \\\"${params.documentPublicId}\\\") { public_id status } }`;
 
   const res = await fetch(url, {
     method: "POST",
@@ -353,7 +372,6 @@ serve(async (req) => {
 
     // Load commitments + items + templates (scope)
     const commitmentIds = (pr.selected_commitment_ids ?? []).filter(Boolean);
-
     let commitments: any[] = [];
     let items: any[] = [];
     let templates: any[] = [];
@@ -362,56 +380,51 @@ serve(async (req) => {
     if (commitmentIds.length) {
       const { data: cs, error: cErr } = await supabase
         .from("commercial_commitments")
-        .select("id,commitment_type,status,total_value,created_at")
+        .select("id,tenant_id,customer_entity_id,commitment_type,status,created_at")
         .eq("tenant_id", tenant.id)
         .in("id", commitmentIds)
-        .is("deleted_at", null)
-        .order("created_at", { ascending: true });
+        .is("deleted_at", null);
       if (cErr) return err("commitments_load_failed", 500, { message: cErr.message });
       commitments = cs ?? [];
 
-      const { data: is, error: iErr } = await supabase
-        .from("commitment_items")
-        .select("id,commitment_id,offering_entity_id,quantity,price,requires_fulfillment")
+      const { data: its, error: iErr } = await supabase
+        .from("commercial_commitment_items")
+        .select("id,tenant_id,commitment_id,offering_entity_id,quantity,created_at")
         .eq("tenant_id", tenant.id)
         .in("commitment_id", commitmentIds)
-        .is("deleted_at", null)
-        .order("created_at", { ascending: true });
-      if (iErr) return err("commitment_items_load_failed", 500, { message: iErr.message });
-      items = is ?? [];
+        .is("deleted_at", null);
+      if (iErr) return err("items_load_failed", 500, { message: iErr.message });
+      items = its ?? [];
 
-      const offeringIds = Array.from(new Set((items ?? []).map((x: any) => String(x.offering_entity_id)).filter(Boolean)));
+      const offeringIds = Array.from(new Set(items.map((it: any) => String(it.offering_entity_id)).filter(Boolean)));
 
       if (offeringIds.length) {
         const { data: offs, error: oErr } = await supabase
           .from("core_entities")
-          .select("id,display_name,subtype")
+          .select("id,display_name,entity_type")
           .eq("tenant_id", tenant.id)
           .in("id", offeringIds)
           .is("deleted_at", null);
-        if (!oErr) {
-          for (const o of offs ?? []) offeringsById[String((o as any).id)] = o;
-        }
+        if (oErr) return err("offerings_load_failed", 500, { message: oErr.message });
+        offeringsById = Object.fromEntries((offs ?? []).map((o: any) => [String(o.id), o]));
 
         const { data: ts, error: tErr2 } = await supabase
           .from("deliverable_templates")
-          .select("id,offering_entity_id,name,estimated_minutes,required_resource_type")
+          .select("id,tenant_id,offering_entity_id,name,minutes,created_at")
           .eq("tenant_id", tenant.id)
           .in("offering_entity_id", offeringIds)
-          .is("deleted_at", null)
-          .order("created_at", { ascending: true });
+          .is("deleted_at", null);
         if (tErr2) return err("templates_load_failed", 500, { message: tErr2.message });
         templates = ts ?? [];
       }
     }
 
-    // Status check (best-effort) if Autentique info exists
-    const apiToken = Deno.env.get("AUTENTIQUE_API_TOKEN") ?? "";
-    const docPublicId = (pr.autentique_json?.document_public_id as string | undefined) ?? null;
-
+    // Autentique status best-effort
     let autentiqueStatus: string | null = null;
+    const apiToken = Deno.env.get("AUTENTIQUE_API_TOKEN") ?? "";
+    const docPublicId = pr.autentique_json?.document_public_id ?? null;
     if (apiToken && docPublicId) {
-      autentiqueStatus = await autentiqueGetDocumentStatus({ apiToken, documentPublicId: docPublicId });
+      autentiqueStatus = await autentiqueGetDocumentStatus({ apiToken, documentPublicId: String(docPublicId) });
       if (autentiqueStatus) {
         // Best effort: mirror into proposal
         await supabase
