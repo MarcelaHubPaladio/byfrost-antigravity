@@ -95,6 +95,23 @@ create table if not exists public.deliverables (
     on delete restrict
 );
 
+-- NOTE: Child tables reference deliverables via (tenant_id, id).
+-- Postgres requires the referenced columns to be covered by a UNIQUE/PK constraint.
+DO $do$
+begin
+  if not exists (
+    select 1
+      from pg_constraint
+     where conname = 'deliverables_tenant_id_id_uniq'
+  ) then
+    execute $$
+      alter table public.deliverables
+      add constraint deliverables_tenant_id_id_uniq unique (tenant_id, id)
+    $$;
+  end if;
+end
+$do$;
+
 create index if not exists deliverables_tenant_commitment_idx
   on public.deliverables(tenant_id, commitment_id);
 
