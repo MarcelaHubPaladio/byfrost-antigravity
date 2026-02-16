@@ -5,8 +5,9 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { showError, showSuccess } from "@/utils/toast";
+import { SUPABASE_URL_IN_USE } from "@/lib/supabase";
 
-const FN_URL = "https://pryoirzeghatrgecwrci.supabase.co/functions/v1/public-proposal";
+const FN_URL = `${SUPABASE_URL_IN_USE}/functions/v1/public-proposal`;
 
 type ApiData = {
   ok: boolean;
@@ -189,13 +190,13 @@ export default function PublicProposal() {
                 <span className="font-semibold">Nome:</span> {party?.display_name ?? "—"}
               </div>
               <div>
-                <span className="font-semibold">CNPJ:</span> {safe(party?.customer?.cnpj) || "—"}
+                <span className="font-semibold">CPF/CNPJ:</span> {safe(party?.customer?.document) || "—"}
               </div>
               <div>
                 <span className="font-semibold">Endereço:</span> {safe(party?.customer?.address_line) || "—"}
               </div>
               <div>
-                <span className="font-semibold">Telefone:</span> {safe(party?.customer?.phone) || "—"}
+                <span className="font-semibold">WhatsApp:</span> {safe(party?.customer?.whatsapp) || "—"}
               </div>
               <div>
                 <span className="font-semibold">Email:</span> {safe(party?.customer?.email) || "—"}

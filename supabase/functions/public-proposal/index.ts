@@ -191,6 +191,101 @@ async function autentiqueGetDocumentStatus(params: { apiToken: string; documentP
   return String(status);
 }
 
+function onlyDigits(s: string) {
+  return String(s ?? "").replace(/\D/g, "");
+}
+
+function formatCpfCnpj(digitsRaw: string) {
+  const d = onlyDigits(digitsRaw).slice(0, 14);
+
+  // CPF: 000.000.000-00
+  if (d.length <= 11) {
+    const p1 = d.slice(0, 3);
+    const p2 = d.slice(3, 6);
+    const p3 = d.slice(6, 9);
+    const p4 = d.slice(9, 11);
+    let out = p1;
+    if (p2) out += "." + p2;
+    if (p3) out += "." + p3;
+    if (p4) out += "-" + p4;
+    return out;
+  }
+
+  // CNPJ: 00.000.000/0000-00
+  const p1 = d.slice(0, 2);
+  const p2 = d.slice(2, 5);
+  const p3 = d.slice(5, 8);
+  const p4 = d.slice(8, 12);
+  const p5 = d.slice(12, 14);
+  let out = p1;
+  if (p2) out += "." + p2;
+  if (p3) out += "." + p3;
+  if (p4) out += "/" + p4;
+  if (p5) out += "-" + p5;
+  return out;
+}
+
+function normalizeWhatsappDigits(digitsRaw: string) {
+  const d = onlyDigits(digitsRaw);
+  if (d.startsWith("55") && d.length > 13) return d.slice(0, 13);
+  if (d.startsWith("55") && d.length <= 13) return d;
+  return d.slice(0, 11);
+}
+
+function formatWhatsappBr(digitsRaw: string) {
+  const d0 = normalizeWhatsappDigits(digitsRaw);
+  const has55 = d0.startsWith("55") && d0.length > 11;
+  const d = has55 ? d0.slice(2) : d0;
+
+  const dd = d.slice(0, 2);
+  const rest = d.slice(2);
+
+  const isMobile = rest.length >= 9;
+  const a = isMobile ? rest.slice(0, 5) : rest.slice(0, 4);
+  const b = isMobile ? rest.slice(5, 9) : rest.slice(4, 8);
+
+  let out = "";
+  if (has55) out += "+55 ";
+  if (dd) out += `(${dd}) `;
+  out += a;
+  if (b) out += "-" + b;
+  return out.trim();
+}
+
+function getPartyCustomer(meta: any) {
+  const md = (meta ?? {}) as any;
+  const legacy = (md.customer ?? {}) as any;
+
+  const docDigits =
+    onlyDigits(String(md.cpf_cnpj ?? md.cpfCnpj ?? md.document ?? legacy.cnpj ?? legacy.cpf ?? "")).slice(0, 14) ||
+    "";
+
+  const email = String(md.email ?? legacy.email ?? "").trim() || null;
+  const whatsapp = formatWhatsappBr(String(md.whatsapp ?? md.phone ?? md.phone_e164 ?? legacy.phone ?? "")) || null;
+
+  const addressLine =
+    String(md.address_line ?? legacy.address_line ?? "").trim() ||
+    [
+      String(md.address ?? "").trim(),
+      String(md.city ?? "").trim(),
+      String(md.uf ?? md.state ?? "").trim(),
+      String(md.cep ?? "").trim(),
+    ]
+      .filter(Boolean)
+      .join(" • ") ||
+    null;
+
+  const legalName = String(legacy.legal_name ?? md.legal_name ?? "").trim() || null;
+
+  return {
+    legal_name: legalName,
+    document: docDigits ? formatCpfCnpj(docDigits) : null,
+    email,
+    whatsapp,
+    address_line: addressLine,
+  };
+}
+
 serve(async (req) => {
   const fn = "public-proposal";
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
@@ -343,7 +438,7 @@ serve(async (req) => {
           id: party.id,
           display_name: (party as any).display_name,
           logo_url: partyLogoUrl,
-          customer: (party as any).metadata?.customer ?? {},
+          customer: getPartyCustomer((party as any).metadata ?? {}),
         },
         proposal: {
           id: pr.id,
@@ -409,7 +504,7 @@ serve(async (req) => {
       const approvedAt = (fresh.data as any)?.approved_at ?? null;
       if (!approvedAt) return err("scope_not_approved", 403);
 
-      const customer = (party as any).metadata?.customer ?? {};
+      const customer = getPartyCustomer((party as any).metadata ?? {});
       const signerName = String(customer?.legal_name ?? (party as any).display_name ?? "Cliente").trim();
       const signerEmail = String(customer?.email ?? "").trim();
       if (!signerEmail) return err("missing_customer_email", 400);
@@ -439,9 +534,9 @@ serve(async (req) => {
       };
 
       const partyCustomer = {
-        cnpj: customer?.cnpj ?? null,
+        cnpj: customer?.document ?? null,
         address_line: customer?.address_line ?? null,
-        phone: customer?.phone ?? null,
+        phone: customer?.whatsapp ?? null,
         email: customer?.email ?? null,
       };
 

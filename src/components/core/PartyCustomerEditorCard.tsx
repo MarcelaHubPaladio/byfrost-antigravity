@@ -1,14 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/lib/supabase";
+import { supabase, SUPABASE_URL_IN_USE } from "@/lib/supabase";
 import { Card } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { showError, showSuccess } from "@/utils/toast";
 
-const PARTY_UPLOAD_LOGO_URL =
-  "https://pryoirzeghatrgecwrci.supabase.co/functions/v1/party-upload-logo";
+const PARTY_UPLOAD_LOGO_URL = `${SUPABASE_URL_IN_USE}/functions/v1/party-upload-logo`;
 
 function onlyDigits(s: string) {
   return String(s ?? "").replace(/\D/g, "");
