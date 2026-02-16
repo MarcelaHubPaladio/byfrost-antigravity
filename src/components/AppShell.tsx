@@ -638,7 +638,7 @@ export function AppShell({
               </Link>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-3">
+            <div className="flex-1 overflow-y-auto overflow-x-visible p-3">
               <div className="grid justify-items-center gap-2">
                 <NavTile to="/app" icon={LayoutGrid} label="Dashboard" disabled={!can("app.dashboard")} />
                 {showChatInNav && <NavTile to="/app/chat" icon={MessagesSquare} label="Chat" disabled={!can("app.chat")} />}
@@ -652,12 +652,7 @@ export function AppShell({
                   <div className="group relative w-full">
                     <NavTile to="/app/entities" icon={Building2} label="Core" disabled={!can("app.entities")} />
 
-                    <div
-                      className={cn(
-                        "pointer-events-none absolute left-[100%] top-0 z-[80] pl-2 opacity-0 transition",
-                        "group-hover:pointer-events-auto group-hover:opacity-100"
-                      )}
-                    >
+                    <div className="absolute left-[100%] top-0 z-[999] hidden pl-2 group-hover:block">
                       <div className="min-w-[220px] rounded-2xl border border-slate-200 bg-white/95 p-2 shadow-lg backdrop-blur dark:border-slate-800 dark:bg-slate-950/90">
                         <div className="px-2 pb-1.5 text-[11px] font-semibold text-slate-500 dark:text-slate-400">
                           Core
@@ -700,12 +695,7 @@ export function AppShell({
                   <div className="group relative w-full">
                     <NavTile to="/app/presence" icon={Clock3} label="Ponto" disabled={!can("app.presence")} />
 
-                    <div
-                      className={cn(
-                        "pointer-events-none absolute left-[100%] top-0 z-[80] pl-2 opacity-0 transition",
-                        "group-hover:pointer-events-auto group-hover:opacity-100"
-                      )}
-                    >
+                    <div className="absolute left-[100%] top-0 z-[999] hidden pl-2 group-hover:block">
                       <div className="min-w-[220px] rounded-2xl border border-slate-200 bg-white/95 p-2 shadow-lg backdrop-blur dark:border-slate-800 dark:bg-slate-950/90">
                         <div className="px-2 pb-1.5 text-[11px] font-semibold text-slate-500 dark:text-slate-400">
                           Presença
@@ -755,12 +745,7 @@ export function AppShell({
                       disabled={!can("app.finance.cockpit")}
                     />
 
-                    <div
-                      className={cn(
-                        "pointer-events-none absolute left-[100%] top-0 z-[80] pl-2 opacity-0 transition",
-                        "group-hover:pointer-events-auto group-hover:opacity-100"
-                      )}
-                    >
+                    <div className="absolute left-[100%] top-0 z-[999] hidden pl-2 group-hover:block">
                       <div className="min-w-[220px] rounded-2xl border border-slate-200 bg-white/95 p-2 shadow-lg backdrop-blur dark:border-slate-800 dark:bg-slate-950/90">
                         <div className="px-2 pb-1.5 text-[11px] font-semibold text-slate-500 dark:text-slate-400">
                           Financeiro
