@@ -115,6 +115,15 @@ async function buildSimpleContractPdf(params: {
   return new Uint8Array(bytes);
 }
 
+function getAutentiqueGraphqlUrl() {
+  // Defaults to Autentique v2 endpoint.
+  // Some accounts use the corporate endpoint: https://api.autentique.com.br/v2/graphql/corporate
+  return (
+    (Deno.env.get("AUTENTIQUE_GQL_URL") ?? "").trim() ||
+    "https://api.autentique.com.br/v2/graphql"
+  );
+}
+
 async function autentiqueCreateDocument(params: {
   apiToken: string;
   filename: string;
@@ -123,7 +132,7 @@ async function autentiqueCreateDocument(params: {
   signerName: string;
   signerEmail: string;
 }) {
-  const url = "https://api.autentique.com.br/graphql";
+  const url = getAutentiqueGraphqlUrl();
 
   const query = `mutation CreateDocumentMutation($document: DocumentInput!, $signers: [SignerInput!]!, $file: Upload!) {
     createDocument(document: $document, signers: $signers, file: $file) {
@@ -156,9 +165,18 @@ async function autentiqueCreateDocument(params: {
     body: form,
   });
 
-  const json = await res.json().catch(() => null);
+  const text = await res.text();
+  let json: any = null;
+  try {
+    json = JSON.parse(text);
+  } catch {
+    // ignore
+  }
+
   if (!res.ok || !json?.data?.createDocument) {
-    throw new Error(String(json?.errors?.[0]?.message ?? `autentique_error_${res.status}`));
+    const gqlErr = String(json?.errors?.[0]?.message ?? "").trim();
+    const hint = res.status === 404 ? " (verifique AUTENTIQUE_GQL_URL: v2/graphql vs v2/graphql/corporate)" : "";
+    throw new Error(gqlErr || `autentique_http_${res.status}${hint}`);
   }
 
   return json.data.createDocument as {
@@ -170,7 +188,7 @@ async function autentiqueCreateDocument(params: {
 }
 
 async function autentiqueCreateSignatureLink(params: { apiToken: string; signerPublicId: string }) {
-  const url = "https://api.autentique.com.br/graphql";
+  const url = getAutentiqueGraphqlUrl();
   const query = `mutation { createLinkToSignature(public_id: \\\"${params.signerPublicId}\\\") { short_link } }`;
 
   const res = await fetch(url, {
@@ -182,17 +200,26 @@ async function autentiqueCreateSignatureLink(params: { apiToken: string; signerP
     body: JSON.stringify({ query }),
   });
 
-  const json = await res.json().catch(() => null);
+  const text = await res.text();
+  let json: any = null;
+  try {
+    json = JSON.parse(text);
+  } catch {
+    // ignore
+  }
+
   const link = json?.data?.createLinkToSignature?.short_link ?? null;
   if (!res.ok || !link) {
-    throw new Error(String(json?.errors?.[0]?.message ?? `autentique_link_error_${res.status}`));
+    const gqlErr = String(json?.errors?.[0]?.message ?? "").trim();
+    const hint = res.status === 404 ? " (verifique AUTENTIQUE_GQL_URL: v2/graphql vs v2/graphql/corporate)" : "";
+    throw new Error(gqlErr || `autentique_http_${res.status}${hint}`);
   }
 
   return String(link);
 }
 
 async function autentiqueGetDocumentStatus(params: { apiToken: string; documentPublicId: string }) {
-  const url = "https://api.autentique.com.br/graphql";
+  const url = getAutentiqueGraphqlUrl();
   const query = `query { document(public_id: \\\"${params.documentPublicId}\\\") { public_id status } }`;
 
   const res = await fetch(url, {
@@ -204,7 +231,14 @@ async function autentiqueGetDocumentStatus(params: { apiToken: string; documentP
     body: JSON.stringify({ query }),
   });
 
-  const json = await res.json().catch(() => null);
+  const text = await res.text();
+  let json: any = null;
+  try {
+    json = JSON.parse(text);
+  } catch {
+    // ignore
+  }
+
   const status = json?.data?.document?.status ?? null;
   if (!res.ok || !status) return null;
   return String(status);
@@ -611,7 +645,16 @@ serve(async (req) => {
 
     return err("invalid_action", 400);
   } catch (e: any) {
-    console.error(`[public-proposal] unhandled`, { fn, error: e?.message ?? String(e) });
-    return err("internal_error", 500, { message: e?.message ?? String(e) });
+    const msg = String(e?.message ?? String(e) ?? "internal_error").trim();
+
+    // Prefer returning the real message for known integration failures (helps UX and debugging).
+    const isAutentique = msg.startsWith("autentique_") || msg.startsWith("autentique-http") || msg.includes("autentique_");
+    if (isAutentique) {
+      console.error(`[public-proposal] autentique_error`, { message: msg });
+      return err(msg, 500, { message: msg });
+    }
+
+    console.error(`[public-proposal] unhandled`, { fn, error: msg });
+    return err("internal_error", 500, { message: msg });
   }
 });
