@@ -28,6 +28,23 @@ create table if not exists public.commercial_commitments (
     on delete restrict
 );
 
+-- NOTE: Several child tables reference commercial_commitments via (tenant_id, id).
+-- Postgres requires the referenced columns to be covered by a UNIQUE/PK constraint.
+DO $do$
+begin
+  if not exists (
+    select 1
+      from pg_constraint
+     where conname = 'commercial_commitments_tenant_id_id_uniq'
+  ) then
+    execute $$
+      alter table public.commercial_commitments
+      add constraint commercial_commitments_tenant_id_id_uniq unique (tenant_id, id)
+    $$;
+  end if;
+end
+$do$;
+
 create index if not exists commercial_commitments_tenant_type_idx
   on public.commercial_commitments(tenant_id, commitment_type);
 
