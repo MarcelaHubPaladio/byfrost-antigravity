@@ -10,6 +10,9 @@
 -- - We keep legacy tables (customer_accounts, cases.customer_id, case_items.description)
 --   to avoid breaking existing flows.
 -- - This migration backfills and adds triggers so new/updated CRM data stays in sync.
+--
+-- Compatibility:
+-- - Some older installs may have case_items without tenant_id. We normalize that first.
 
 -- -----------------------------------------------------------------------------
 -- 0) Helpers
@@ -30,6 +33,64 @@ immutable
 as $$
   select regexp_replace(coalesce(p, ''), '\\D', '', 'g');
 $$;
+
+-- -----------------------------------------------------------------------------
+-- 0.1) Normalize legacy case_items schema (ensure tenant_id exists)
+-- -----------------------------------------------------------------------------
+
+DO $do$
+declare
+  v_has_tenant_id boolean;
+  v_nulls bigint;
+begin
+  select exists(
+    select 1
+      from information_schema.columns
+     where table_schema='public'
+       and table_name='case_items'
+       and column_name='tenant_id'
+  ) into v_has_tenant_id;
+
+  if not v_has_tenant_id then
+    -- Add as nullable first, then backfill.
+    execute 'alter table public.case_items add column tenant_id uuid';
+
+    -- Backfill from cases
+    execute $$
+      update public.case_items ci
+         set tenant_id = c.tenant_id
+        from public.cases c
+       where ci.case_id = c.id
+         and ci.tenant_id is null
+    $$;
+
+    -- If everything was backfilled, enforce NOT NULL + FK
+    execute 'select count(*) from public.case_items where tenant_id is null' into v_nulls;
+
+    if v_nulls = 0 then
+      execute 'alter table public.case_items alter column tenant_id set not null';
+    end if;
+
+    -- Add FK to tenants if missing (only possible if tenant_id values exist)
+    if v_nulls = 0 then
+      if not exists (
+        select 1 from pg_constraint where conname = 'case_items_tenant_fk'
+      ) then
+        execute $$
+          alter table public.case_items
+            add constraint case_items_tenant_fk
+            foreign key (tenant_id)
+            references public.tenants(id)
+            on delete cascade
+        $$;
+      end if;
+    end if;
+
+    -- Add helpful index
+    execute 'create index if not exists case_items_tenant_id_idx on public.case_items(tenant_id)';
+  end if;
+end
+$do$;
 
 -- -----------------------------------------------------------------------------
 -- 1) customer_accounts.entity_id ↔ core_entities (party)
@@ -382,6 +443,17 @@ declare
   v_display text;
   v_entity_id uuid;
 begin
+  -- Safety: if tenant_id wasn't provided (legacy clients), derive from case.
+  if new.tenant_id is null and new.case_id is not null then
+    select c.tenant_id into new.tenant_id
+      from public.cases c
+     where c.id = new.case_id;
+  end if;
+
+  if new.tenant_id is null then
+    return new;
+  end if;
+
   if new.offering_entity_id is not null then
     return new;
   end if;
