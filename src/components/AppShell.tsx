@@ -744,8 +744,8 @@ export function AppShell({
             {/* Content header (tenant accent border) */}
             {!hideTopBar && (
               <div className="overflow-hidden rounded-[28px] border border-slate-200 border-t-4 border-t-[hsl(var(--byfrost-accent))] bg-white/65 px-4 py-3 shadow-sm backdrop-blur dark:border-slate-800 dark:bg-slate-950/40">
-                <div className="flex items-center justify-between gap-3">
-                  <div className="flex min-w-0 items-center gap-2">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div className="flex min-w-0 flex-1 items-center gap-2">
                     <Sheet open={mobileNavOpen} onOpenChange={setMobileNavOpen}>
                       <SheetTrigger asChild>
                         <Button
@@ -763,7 +763,7 @@ export function AppShell({
                             <Link
                               to="/app"
                               onClick={() => setMobileNavOpen(false)}
-                              className="flex items-center gap-3"
+                              className="flex min-w-0 items-center gap-3"
                             >
                               <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-full bg-white/95 p-1 shadow-sm ring-1 ring-white/30">
                                 {logoUrl ? (
@@ -784,7 +784,7 @@ export function AppShell({
                               </div>
                             </Link>
 
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center justify-end gap-2">
                               <Button
                                 variant="secondary"
                                 className="h-10 rounded-2xl bg-white/15 text-white hover:bg-white/20"
@@ -1014,7 +1014,7 @@ export function AppShell({
                     )}
                   </div>
 
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center justify-end gap-2">
                     {isSuperAdmin && (
                       <Button
                         type="button"
@@ -1034,24 +1034,24 @@ export function AppShell({
                       <DropdownMenuTrigger asChild>
                         <button
                           type="button"
-                          className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-white/75 px-2.5 py-2 text-left text-slate-900 shadow-sm transition hover:bg-white dark:border-slate-800 dark:bg-slate-950/40 dark:text-slate-100 dark:hover:bg-slate-950/60"
+                          className="flex max-w-full min-w-0 items-center gap-2 rounded-2xl border border-slate-200 bg-white/75 px-2.5 py-2 text-left text-slate-900 shadow-sm transition hover:bg-white dark:border-slate-800 dark:bg-slate-950/40 dark:text-slate-100 dark:hover:bg-slate-950/60"
                           onMouseEnter={() => setUserMenuOpen(true)}
                           onMouseLeave={() => setUserMenuOpen(false)}
                           title={userEmail}
                         >
-                          <Avatar className="h-8 w-8 rounded-2xl">
+                          <Avatar className="h-8 w-8 shrink-0 rounded-2xl">
                             <AvatarImage src={avatarUrl ?? undefined} alt={userName} />
                             <AvatarFallback className="rounded-2xl bg-[hsl(var(--byfrost-accent)/0.12)] text-[hsl(var(--byfrost-accent))]">
                               {(userName?.slice(0, 1) ?? "U").toUpperCase()}
                             </AvatarFallback>
                           </Avatar>
-                          <div className="hidden sm:block">
+                          <div className="hidden min-w-0 sm:block">
                             <div className="max-w-[180px] truncate text-xs font-semibold text-slate-900 dark:text-slate-100">
                               {userName}
                             </div>
                             <div className="max-w-[180px] truncate text-[11px] text-slate-500 dark:text-slate-400">{activeTenant?.slug}</div>
                           </div>
-                          <User2 className="hidden h-4 w-4 text-slate-400 sm:block" />
+                          <User2 className="hidden h-4 w-4 shrink-0 text-slate-400 sm:block" />
                         </button>
                       </DropdownMenuTrigger>
 
