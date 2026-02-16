@@ -313,6 +313,14 @@ function isActivePresencePath(pathname: string) {
   return pathname === "/app/presence" || pathname.startsWith("/app/presence/");
 }
 
+function isActiveCorePath(pathname: string) {
+  return (
+    pathname.startsWith("/app/entities") ||
+    pathname.startsWith("/app/commitments") ||
+    pathname.startsWith("/app/catalog/")
+  );
+}
+
 function isFinanceEnabled(modulesJson: any) {
   return Boolean(modulesJson?.finance_enabled === true);
 }
@@ -355,6 +363,24 @@ const PRESENCE_NAV_CHILDREN: PresenceNavChild[] = [
   },
 ];
 
+type CoreNavChild = {
+  to: string;
+  label: string;
+  icon: any;
+  routeKey: string;
+};
+
+const CORE_NAV_CHILDREN: CoreNavChild[] = [
+  { to: "/app/entities", label: "Entidades", icon: Building2, routeKey: "app.entities" },
+  {
+    to: "/app/catalog/deliverable-templates",
+    label: "Templates",
+    icon: PackageCheck,
+    routeKey: "app.entities",
+  },
+  { to: "/app/commitments", label: "Compromissos", icon: Handshake, routeKey: "app.commitments" },
+];
+
 export function AppShell({
   children,
   hideTopBar,
@@ -368,6 +394,7 @@ export function AppShell({
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [mobileFinanceOpen, setMobileFinanceOpen] = useState(false);
   const [mobilePresenceOpen, setMobilePresenceOpen] = useState(false);
+  const [mobileCoreOpen, setMobileCoreOpen] = useState(false);
 
   const roleKey = String(activeTenant?.role ?? "");
   const financeEnabledForTenant = isSuperAdmin || isFinanceEnabled(activeTenant?.modules_json);
@@ -442,6 +469,11 @@ export function AppShell({
     ];
     return keys.some((k) => can(k));
   }, [financeEnabledForTenant, isSuperAdmin, navAccessQ.isLoading, navAccessQ.data, activeTenantId, roleKey]);
+
+  const coreHasAnyAccess = useMemo(() => {
+    if (isSuperAdmin) return true;
+    return ["app.entities", "app.commitments"].some((k) => can(k));
+  }, [isSuperAdmin, navAccessQ.isLoading, navAccessQ.data, activeTenantId, roleKey]);
 
   const showChatInNav = isSuperAdmin ? true : chatAccess.isLoading ? false : chatAccess.hasAccess;
 
@@ -567,10 +599,11 @@ export function AppShell({
   const userEmail = user?.email ?? "";
   const avatarUrl = (user?.user_metadata as any)?.avatar_url ?? null;
 
-  // Keep mobile finance/presence submenu in sync with current route
+  // Keep mobile submenu in sync with current route
   useEffect(() => {
     if (isActiveFinancePath(loc.pathname)) setMobileFinanceOpen(true);
     if (isActivePresencePath(loc.pathname)) setMobilePresenceOpen(true);
+    if (isActiveCorePath(loc.pathname)) setMobileCoreOpen(true);
   }, [loc.pathname]);
 
   return (
@@ -614,9 +647,53 @@ export function AppShell({
                   <NavTile to="/app/content" icon={Clapperboard} label="Conteúdo" disabled={!can("app.content")} />
                 )}
 
-                <NavTile to="/app/entities" icon={Building2} label="Entidades" disabled={!can("app.entities")} />
-                <NavTile to="/app/catalog/deliverable-templates" icon={PackageCheck} label="Templates" disabled={!can("app.entities")} />
-                <NavTile to="/app/commitments" icon={Handshake} label="Compromissos" disabled={!can("app.commitments")} />
+                {/* Core (desktop): menu com filhos */}
+                {coreHasAnyAccess && (
+                  <div className="group relative w-full">
+                    <NavTile to="/app/entities" icon={Building2} label="Core" disabled={!can("app.entities")} />
+
+                    <div
+                      className={cn(
+                        "pointer-events-none absolute left-[100%] top-0 z-[80] pl-2 opacity-0 transition",
+                        "group-hover:pointer-events-auto group-hover:opacity-100"
+                      )}
+                    >
+                      <div className="min-w-[220px] rounded-2xl border border-slate-200 bg-white/95 p-2 shadow-lg backdrop-blur dark:border-slate-800 dark:bg-slate-950/90">
+                        <div className="px-2 pb-1.5 text-[11px] font-semibold text-slate-500 dark:text-slate-400">
+                          Core
+                        </div>
+                        <div className="grid gap-1">
+                          {CORE_NAV_CHILDREN.map(({ to, label, icon: Icon, routeKey }) => (
+                            <NavLink
+                              key={to}
+                              to={to}
+                              className={({ isActive }) =>
+                                cn(
+                                  "flex items-center justify-between gap-2 rounded-xl px-2 py-2 text-sm font-semibold transition",
+                                  isActive || loc.pathname === to || loc.pathname.startsWith(to + "/")
+                                    ? "bg-[hsl(var(--byfrost-accent)/0.10)] text-[hsl(var(--byfrost-accent))]"
+                                    : "text-slate-800 hover:bg-slate-100 dark:text-slate-100 dark:hover:bg-slate-800/60",
+                                  !can(routeKey) && "pointer-events-none opacity-50 grayscale cursor-not-allowed"
+                                )
+                              }
+                              title={can(routeKey) ? label : `${label} (sem permissão)`}
+                            >
+                              <div className="flex items-center gap-2">
+                                <Icon className="h-4 w-4" />
+                                <span>{label}</span>
+                              </div>
+                              {can(routeKey) ? (
+                                <ChevronRight className="h-4 w-4 opacity-40" />
+                              ) : (
+                                <Lock className="h-4 w-4 opacity-70" />
+                              )}
+                            </NavLink>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 {/* Presença (desktop): Ponto principal + submenu no hover */}
                 {hasPresence && (
@@ -844,27 +921,46 @@ export function AppShell({
                               />
                             )}
 
-                            <MobileNavItem
-                              to="/app/entities"
-                              icon={Building2}
-                              label="Entidades"
-                              disabled={!can("app.entities")}
-                              onNavigate={() => setMobileNavOpen(false)}
-                            />
-                            <MobileNavItem
-                              to="/app/catalog/deliverable-templates"
-                              icon={PackageCheck}
-                              label="Templates"
-                              disabled={!can("app.entities")}
-                              onNavigate={() => setMobileNavOpen(false)}
-                            />
-                            <MobileNavItem
-                              to="/app/commitments"
-                              icon={Handshake}
-                              label="Compromissos"
-                              disabled={!can("app.commitments")}
-                              onNavigate={() => setMobileNavOpen(false)}
-                            />
+                            {/* Core (mobile): menu com filhos */}
+                            {coreHasAnyAccess && (
+                              <Collapsible open={mobileCoreOpen} onOpenChange={setMobileCoreOpen}>
+                                <CollapsibleTrigger asChild>
+                                  <button
+                                    type="button"
+                                    className={cn(
+                                      "flex w-full items-center justify-between gap-3 rounded-2xl border px-4 py-3 transition",
+                                      isActiveCorePath(loc.pathname)
+                                        ? "border-[hsl(var(--byfrost-accent)/0.35)] bg-[hsl(var(--byfrost-accent)/0.10)] text-[hsl(var(--byfrost-accent))]"
+                                        : "border-slate-200 bg-white/75 text-slate-800 hover:border-slate-300 hover:bg-white",
+                                      "dark:border-slate-800 dark:bg-slate-950/40 dark:text-slate-100 dark:hover:bg-slate-950/60"
+                                    )
+                                    }
+                                    title="Core"
+                                  >
+                                    <div className="flex items-center gap-3">
+                                      <Building2 className="h-5 w-5" />
+                                      <span className="text-sm font-semibold tracking-tight">Core</span>
+                                    </div>
+                                    <ChevronRight
+                                      className={cn("h-5 w-5 opacity-70 transition", mobileCoreOpen && "rotate-90")}
+                                    />
+                                  </button>
+                                </CollapsibleTrigger>
+
+                                <CollapsibleContent className="mt-2 grid gap-2 pl-2">
+                                  {CORE_NAV_CHILDREN.map(({ to, label, icon, routeKey }) => (
+                                    <MobileNavItem
+                                      key={to}
+                                      to={to}
+                                      icon={icon}
+                                      label={label}
+                                      disabled={!can(routeKey)}
+                                      onNavigate={() => setMobileNavOpen(false)}
+                                    />
+                                  ))}
+                                </CollapsibleContent>
+                              </Collapsible>
+                            )}
 
                             {/* Presença (mobile): Ponto + abrir filhos ao clicar */}
                             {hasPresence && (
