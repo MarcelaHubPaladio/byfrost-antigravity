@@ -410,6 +410,18 @@ function partyAddressFull(customer: any) {
   return parts.join(" • ");
 }
 
+function inferOrigin(req: Request) {
+  const origin = String(req.headers.get("origin") ?? "").trim();
+  if (origin) return origin;
+  const ref = String(req.headers.get("referer") ?? "").trim();
+  if (!ref) return "";
+  try {
+    return new URL(ref).origin;
+  } catch {
+    return "";
+  }
+}
+
 const fn = "public-proposal";
 
 serve(async (req) => {
@@ -560,6 +572,9 @@ serve(async (req) => {
 
       const scopeBlock = scopeLines.length ? scopeLines.map((l) => `• ${l}`).join("\n") : "(sem itens)";
 
+      const origin = inferOrigin(req);
+      const portalLink = origin ? `${origin}/p/${encodeURIComponent(tenantSlug)}/${encodeURIComponent(pr.token)}` : "";
+
       const vars: Record<string, string> = {
         tenant_name: safeStr((tenant as any).name ?? tenantSlug),
         party_name: safeStr((party as any).display_name ?? "Cliente"),
@@ -568,15 +583,19 @@ serve(async (req) => {
         party_whatsapp: safeStr(customer?.whatsapp),
         party_email: safeStr(customer?.email),
         party_address_full: partyAddressFull(customer),
+        portal_link: portalLink,
         contract_term: safeStr((pr as any)?.approval_json?.contract_term),
         contract_total_value: safeStr((pr as any)?.approval_json?.contract_total_value),
         payment_method: safeStr((pr as any)?.approval_json?.payment_method),
         installments_due_date: safeStr((pr as any)?.approval_json?.installments_due_date),
+        scope_notes: safeStr((pr as any)?.approval_json?.scope_notes),
         scope_lines: scopeBlock,
         generated_at: new Date().toLocaleString("pt-BR"),
       };
 
-      const bodyText = chosenBody ? renderTemplate(chosenBody, vars) : renderTemplate("{{tenant_name}}\n{{party_name}}\n\n{{scope_lines}}", vars);
+      const bodyText = chosenBody
+        ? renderTemplate(chosenBody, vars)
+        : renderTemplate("{{tenant_name}}\n{{party_name}}\n{{portal_link}}\n\n{{scope_lines}}\n\n{{scope_notes}}", vars);
       const pdfBytes = await buildTextContractPdf({ bodyText });
 
       return new Response(pdfBytes, {
@@ -690,6 +709,9 @@ serve(async (req) => {
         const scopeBlock = scopeLines.length ? scopeLines.map((l) => `• ${l}`).join("\n") : "(sem itens)";
 
         const customerName = safeStr(customer?.legal_name ?? (party as any).display_name);
+        const origin = inferOrigin(req);
+        const portalLink = origin ? `${origin}/p/${encodeURIComponent(tenantSlug)}/${encodeURIComponent(pr.token)}` : "";
+
         const vars: Record<string, string> = {
           tenant_name: safeStr((tenant as any).name ?? tenantSlug),
           party_name: safeStr((party as any).display_name ?? "Cliente"),
@@ -698,6 +720,7 @@ serve(async (req) => {
           party_whatsapp: safeStr(customer?.whatsapp),
           party_email: safeStr(customer?.email),
           party_address_full: partyAddressFull(customer),
+          portal_link: portalLink,
           contract_term: safeStr((fresh.data as any)?.approval_json?.contract_term ?? (pr as any)?.approval_json?.contract_term),
           contract_total_value: safeStr(
             (fresh.data as any)?.approval_json?.contract_total_value ?? (pr as any)?.approval_json?.contract_total_value
@@ -706,6 +729,7 @@ serve(async (req) => {
           installments_due_date: safeStr(
             (fresh.data as any)?.approval_json?.installments_due_date ?? (pr as any)?.approval_json?.installments_due_date
           ),
+          scope_notes: safeStr((fresh.data as any)?.approval_json?.scope_notes ?? (pr as any)?.approval_json?.scope_notes),
           scope_lines: scopeBlock,
           generated_at: new Date().toLocaleString("pt-BR"),
         };

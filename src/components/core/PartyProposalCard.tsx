@@ -11,6 +11,7 @@ import { Separator } from "@/components/ui/separator";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Textarea } from "@/components/ui/textarea";
 import { showError, showSuccess } from "@/utils/toast";
 
 function randomToken() {
@@ -181,6 +182,7 @@ export function PartyProposalCard({
   const [contractTotalValue, setContractTotalValue] = useState<string>("");
   const [paymentMethod, setPaymentMethod] = useState<string>("");
   const [installmentsDueDate, setInstallmentsDueDate] = useState<string>("");
+  const [scopeNotes, setScopeNotes] = useState<string>("");
 
   useEffect(() => {
     if (!activeProposal) {
@@ -189,6 +191,7 @@ export function PartyProposalCard({
       setContractTotalValue("");
       setPaymentMethod("");
       setInstallmentsDueDate("");
+      setScopeNotes("");
       return;
     }
 
@@ -199,6 +202,7 @@ export function PartyProposalCard({
     setContractTotalValue(safe(activeProposal.approval_json?.contract_total_value));
     setPaymentMethod(safe(activeProposal.approval_json?.payment_method));
     setInstallmentsDueDate(safe(activeProposal.approval_json?.installments_due_date));
+    setScopeNotes(safe(activeProposal.approval_json?.scope_notes));
   }, [activeProposal?.id, templates.length]);
 
   const selectedIds = useMemo(() => {
@@ -279,6 +283,7 @@ export function PartyProposalCard({
         contract_total_value: contractTotalValue || null,
         payment_method: paymentMethod || null,
         installments_due_date: installmentsDueDate || null,
+        scope_notes: scopeNotes || null,
       };
 
       const { data, error } = await supabase
@@ -335,6 +340,7 @@ export function PartyProposalCard({
         contract_total_value: contractTotalValue || null,
         payment_method: paymentMethod || null,
         installments_due_date: installmentsDueDate || null,
+        scope_notes: scopeNotes || null,
       };
 
       const { error } = await supabase
@@ -381,15 +387,19 @@ export function PartyProposalCard({
       party_whatsapp: safe(md?.whatsapp ?? md?.phone ?? md?.phone_e164),
       party_email: safe(md?.email),
       party_address_full: partyAddressFull(md),
+      portal_link: safe(proposalUrl),
       contract_term: safe(contractTerm),
       contract_total_value: safe(contractTotalValue),
       payment_method: safe(paymentMethod),
       installments_due_date: safe(installmentsDueDate),
+      scope_notes: safe(scopeNotes),
       scope_lines: scopeBlock,
       generated_at: new Date().toLocaleString("pt-BR"),
     };
 
-    const body = safe(activeTemplate?.body) || `Tenant: {{tenant_name}}\nCliente: {{party_name}}\n\n{{scope_lines}}\n`;
+    const body =
+      safe(activeTemplate?.body) ||
+      `Tenant: {{tenant_name}}\nCliente: {{party_name}}\nPortal: {{portal_link}}\n\n{{scope_lines}}\n\nObs: {{scope_notes}}\n`;
     return renderTemplate(body, vars);
   }, [
     activeTemplate?.body,
@@ -397,6 +407,8 @@ export function PartyProposalCard({
     contractTotalValue,
     paymentMethod,
     installmentsDueDate,
+    proposalUrl,
+    scopeNotes,
     partyQ.data?.display_name,
     partyQ.data?.metadata,
     scopeQ.data?.scopeLines,
@@ -561,11 +573,24 @@ export function PartyProposalCard({
                     placeholder="Ex: todo dia 10"
                   />
                 </div>
+
+                <div className="grid gap-1 md:col-span-2">
+                  <Label className="text-xs">Observações do escopo</Label>
+                  <Textarea
+                    value={scopeNotes}
+                    onChange={(e) => setScopeNotes(e.target.value)}
+                    rows={4}
+                    className="rounded-xl"
+                    placeholder="Escreva observações livres (serão usadas em {{scope_notes}} no template)."
+                  />
+                </div>
               </div>
               <div className="mt-2 text-[11px] text-slate-500">
                 Variáveis: <span className="font-mono">{"{{contract_term}}"}</span>, <span className="font-mono">{"{{contract_total_value}}"}</span>,{" "}
-                <span className="font-mono">{"{{payment_method}}"}</span>, <span className="font-mono">{"{{installments_due_date}}"}</span>.
+                <span className="font-mono">{"{{payment_method}}"}</span>, <span className="font-mono">{"{{installments_due_date}}"}</span>,{" "}
+                <span className="font-mono">{"{{scope_notes}}"}</span>.
               </div>
+
             </div>
 
             <Separator className="my-3" />
@@ -616,7 +641,7 @@ export function PartyProposalCard({
             <DialogTitle>Prévia do contrato (texto)</DialogTitle>
           </DialogHeader>
           <div className="text-xs text-slate-600">
-            Isso é uma prévia renderizada do template selecionado com os dados atuais (inclui escopo e campos do contrato).
+            Isso é uma prévia renderizada do template selecionado com os dados atuais (inclui escopo, observações e link do portal).
           </div>
           <ScrollArea className="mt-3 max-h-[70vh] rounded-xl border bg-slate-50 p-3">
             <pre className="whitespace-pre-wrap break-words font-mono text-xs text-slate-900">{previewText}</pre>
