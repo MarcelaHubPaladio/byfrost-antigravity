@@ -326,28 +326,6 @@ export default function PublicProposal() {
                       Linha do tempo
                     </TabsTrigger>
                   </TabsList>
-
-                  <div className="flex flex-wrap items-center justify-start gap-2 lg:justify-end">
-                    {proposal?.signing_link ? (
-                      <Button variant="outline" className="rounded-2xl" onClick={openContract}>
-                        {isSigned ? "Ver contrato" : "Assinar contrato"}
-                      </Button>
-                    ) : (
-                      <Button
-                        variant="outline"
-                        className="rounded-2xl"
-                        onClick={() => act("sign")}
-                        disabled={loading || acting !== null || !proposal?.approved_at}
-                      >
-                        {acting === "sign" ? "Gerando…" : "Assinar contrato"}
-                      </Button>
-                    )}
-
-                    <Badge variant="secondary">{proposal?.status ?? (loading ? "carregando" : "—")}</Badge>
-                    {proposal?.autentique_status ? (
-                      <Badge variant="outline">Assinatura: {proposal.autentique_status}</Badge>
-                    ) : null}
-                  </div>
                 </div>
               </div>
             </Card>
@@ -432,46 +410,10 @@ export default function PublicProposal() {
               </div>
 
               <Card className="rounded-[28px] border-black/10 bg-white/85 p-5 shadow-sm">
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                  <div>
-                    <div className="text-sm font-semibold text-slate-900">Escopo a ser entregue</div>
-                    <div className="text-xs text-slate-600">
-                      Gerado a partir dos templates dos offerings nos compromissos selecionados.
-                    </div>
-                  </div>
-
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Button
-                      className="rounded-2xl"
-                      onClick={() => act("approve")}
-                      disabled={loading || acting !== null || Boolean(proposal?.approved_at)}
-                    >
-                      {proposal?.approved_at
-                        ? "Escopo aprovado"
-                        : acting === "approve"
-                          ? "Aprovando…"
-                          : "Aprovar o escopo"}
-                    </Button>
-
-                    {isSigned ? (
-                      <Button
-                        variant="outline"
-                        className="rounded-2xl"
-                        onClick={openContract}
-                        disabled={!proposal?.signing_link}
-                      >
-                        Ver contrato
-                      </Button>
-                    ) : (
-                      <Button
-                        variant="outline"
-                        className="rounded-2xl"
-                        onClick={() => act("sign")}
-                        disabled={loading || acting !== null || !proposal?.approved_at}
-                      >
-                        {acting === "sign" ? "Gerando…" : "Assinar contrato"}
-                      </Button>
-                    )}
+                <div>
+                  <div className="text-sm font-semibold text-slate-900">Escopo a ser entregue</div>
+                  <div className="text-xs text-slate-600">
+                    Gerado a partir dos templates dos offerings nos compromissos selecionados.
                   </div>
                 </div>
 
@@ -491,15 +433,44 @@ export default function PublicProposal() {
                   </div>
                 )}
 
-                {proposal?.signing_link ? (
-                  <div className="mt-4 rounded-2xl border border-black/10 bg-white px-3 py-3 text-sm">
-                    <div className="font-semibold text-slate-900">Contrato</div>
-                    <div className="mt-1 break-all text-xs text-slate-700">{proposal.signing_link}</div>
-                    <Button className="mt-3 rounded-2xl" onClick={openContract}>
-                      {isSigned ? "Ver contrato" : "Abrir assinatura"}
-                    </Button>
+                <Separator className="my-4" />
+
+                {/* Rodapé: botões + status ao lado */}
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                  <Button
+                    className="rounded-2xl"
+                    onClick={() => act("approve")}
+                    disabled={loading || acting !== null || Boolean(proposal?.approved_at)}
+                  >
+                    {proposal?.approved_at
+                      ? "Escopo aprovado"
+                      : acting === "approve"
+                        ? "Aprovando…"
+                        : "Aprovar o escopo"}
+                  </Button>
+
+                  <div className="flex flex-wrap items-center gap-2">
+                    {proposal?.signing_link && isSigned ? (
+                      <Button variant="outline" className="rounded-2xl" onClick={openContract}>
+                        Ver contrato
+                      </Button>
+                    ) : (
+                      <Button
+                        variant="outline"
+                        className="rounded-2xl"
+                        onClick={() => act("sign")}
+                        disabled={loading || acting !== null || !proposal?.approved_at}
+                      >
+                        {acting === "sign" ? "Gerando…" : "Assinar contrato"}
+                      </Button>
+                    )}
+
+                    <Badge variant="secondary">{proposal?.status ?? (loading ? "carregando" : "—")}</Badge>
+                    {proposal?.autentique_status ? (
+                      <Badge variant="outline">Assinatura: {proposal.autentique_status}</Badge>
+                    ) : null}
                   </div>
-                ) : null}
+                </div>
               </Card>
             </TabsContent>
 
