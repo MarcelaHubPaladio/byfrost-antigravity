@@ -49,6 +49,7 @@ import Entities from "@/pages/Entities";
 import EntityDetail from "@/pages/EntityDetail";
 import DeliverableTemplates from "@/pages/DeliverableTemplates";
 import PublicProposal from "@/pages/PublicProposal";
+import ContractTemplates from "@/pages/ContractTemplates";
 
 const queryClient = new QueryClient();
 
@@ -251,6 +252,14 @@ const App = () => (
                   }
                 />
                 <Route
+                  path="/app/catalog/contract-templates"
+                  element={
+                    <RequireRouteAccess routeKey="app.settings">
+                      <ContractTemplates />
+                    </RequireRouteAccess>
+                  }
+                />
+                <Route
                   path="/app/commitments"
                   element={
                     <RequireRouteAccess routeKey="app.commitments">
@@ -327,15 +336,26 @@ const App = () => (
                   }
                 />
 
-                {/* Legacy routes */}
                 <Route
-                  path="/app/case/:id"
+                  path="/crm/cases/:id"
                   element={
                     <RequireRouteAccess routeKey="app.crm">
+                      <CrmCaseDetail />
+                    </RequireRouteAccess>
+                  }
+                />
+
+                <Route
+                  path="/cases/:id"
+                  element={
+                    <RequireRouteAccess routeKey="app.dashboard">
                       <CaseDetail />
                     </RequireRouteAccess>
                   }
                 />
+
+                {/* Default redirects */}
+                <Route path="/app/*" element={<Navigate to="/app" replace />} />
                 <Route path="*" element={<NotFound />} />
               </Routes>
             </BrowserRouter>

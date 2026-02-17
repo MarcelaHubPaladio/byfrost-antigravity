@@ -9,7 +9,6 @@ import { supabase } from "@/lib/supabase";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { EntityTimeline } from "@/components/core/EntityTimeline";
 import { Button } from "@/components/ui/button";
 import { EntityUpsertDialog } from "@/components/core/EntityUpsertDialog";
 import { ConfirmDeleteDialog } from "@/components/core/ConfirmDeleteDialog";
@@ -17,6 +16,7 @@ import { showError, showSuccess } from "@/utils/toast";
 import { Pencil, Trash2 } from "lucide-react";
 import { PartyCustomerEditorCard } from "@/components/core/PartyCustomerEditorCard";
 import { PartyProposalCard } from "@/components/core/PartyProposalCard";
+import { EntityHistory } from "@/components/core/EntityHistory";
 
 type EntityRow = {
   id: string;
@@ -122,8 +122,7 @@ export default function EntityDetail() {
                 </div>
               </div>
               <div className="flex flex-wrap items-center gap-2">
-                <Button variant="outline" className="rounded-xl" onClick={() => nav("/app/entities")}
-                  >
+                <Button variant="outline" className="rounded-xl" onClick={() => nav("/app/entities")}>
                   Voltar
                 </Button>
                 <Button
@@ -161,7 +160,7 @@ export default function EntityDetail() {
                   <TabsTrigger value="overview">Visão geral</TabsTrigger>
                   {entityQ.data?.entity_type === "party" ? <TabsTrigger value="customer">Cliente</TabsTrigger> : null}
                   {entityQ.data?.entity_type === "party" ? <TabsTrigger value="proposal">Proposta</TabsTrigger> : null}
-                  <TabsTrigger value="timeline">Timeline</TabsTrigger>
+                  <TabsTrigger value="timeline">Linha do tempo</TabsTrigger>
                 </TabsList>
 
                 <TabsContent value="overview">
@@ -219,7 +218,7 @@ export default function EntityDetail() {
                 ) : null}
 
                 <TabsContent value="timeline">
-                  {activeTenantId ? <EntityTimeline tenantId={activeTenantId} entityId={entityId} /> : null}
+                  {activeTenantId ? <EntityHistory tenantId={activeTenantId} entityId={entityId} /> : null}
                 </TabsContent>
               </Tabs>
             )}
@@ -239,11 +238,11 @@ export default function EntityDetail() {
             <ConfirmDeleteDialog
               open={deleteOpen}
               onOpenChange={setDeleteOpen}
-              title="Excluir entidade?"
-              description="Isso fará soft delete (deleted_at). Você pode perder vínculos e rastreabilidade em telas futuras."
-              confirmLabel={deleting ? "Excluindo…" : "Excluir"}
+              title="Excluir entidade"
+              description="Esta ação faz soft delete. Você pode reverter via banco."
+              confirmText={deleting ? "Excluindo…" : "Excluir"}
+              confirmDisabled={deleting}
               onConfirm={onDelete}
-              disabled={deleting}
             />
           </div>
         </AppShell>

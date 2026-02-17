@@ -33,6 +33,7 @@ import {
   Building2,
   Handshake,
   PackageCheck,
+  FileSignature,
 } from "lucide-react";
 import * as HoverCardPrimitive from "@radix-ui/react-hover-card";
 import { cn } from "@/lib/utils";
@@ -378,6 +379,12 @@ const CORE_NAV_CHILDREN: CoreNavChild[] = [
     label: "Templates",
     icon: PackageCheck,
     routeKey: "app.entities",
+  },
+  {
+    to: "/app/catalog/contract-templates",
+    label: "Contratos",
+    icon: FileSignature,
+    routeKey: "app.settings",
   },
   { to: "/app/commitments", label: "Compromissos", icon: Handshake, routeKey: "app.commitments" },
 ];
