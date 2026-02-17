@@ -217,7 +217,7 @@ export function PartyProposalCard({
     queryFn: async () => {
       const { data: its, error: iErr } = await supabase
         .from("commitment_items")
-        .select("id,commitment_id,offering_entity_id")
+        .select("id,commitment_id,offering_entity_id,quantity")
         .eq("tenant_id", tenantId)
         .in("commitment_id", selectedIds)
         .is("deleted_at", null);
@@ -258,8 +258,13 @@ export function PartyProposalCard({
       for (const it of items) {
         const oid = String((it as any).offering_entity_id);
         const offName = String(offeringsById[oid]?.display_name ?? oid);
+        const qty = Number((it as any).quantity ?? 1);
         const ts2 = templatesByOffering.get(oid) ?? [];
-        for (const t of ts2) scopeLines.push(`${offName} — ${(t as any).name}`);
+        if (ts2.length === 0) {
+          scopeLines.push(`${offName} (qtd ${qty})`);
+        } else {
+          for (const t of ts2) scopeLines.push(`${offName} — ${(t as any).name} (qtd ${qty})`);
+        }
       }
 
       return { scopeLines };

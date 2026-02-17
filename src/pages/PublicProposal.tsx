@@ -72,6 +72,14 @@ export default function PublicProposal() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [tick, setTick] = useState(0);
 
+  const debug = useMemo(() => {
+    try {
+      return new URLSearchParams(window.location.search).get("debug") === "1";
+    } catch {
+      return false;
+    }
+  }, []);
+
   const load = async () => {
     if (!tenantSlug || !token) return;
 
@@ -194,9 +202,21 @@ export default function PublicProposal() {
     for (const it of items) {
       const oid = String(it.offering_entity_id);
       const offName = String(offs[oid]?.display_name ?? oid);
+      const qty = Number(it.quantity ?? 1);
       const ts = templatesByOffering.get(oid) ?? [];
-      for (const t of ts) lines.push(`${offName} — ${String(t.name)}`);
+
+      if (ts.length === 0) {
+        lines.push(`${offName} (qtd ${qty})`);
+      } else {
+        for (const t of ts) lines.push(`${offName} — ${String(t.name)} (qtd ${qty})`);
+      }
     }
+
+    // If there are selected commitments but no items returned, show a fallback.
+    if (!lines.length && (data?.proposal?.selected_commitment_ids ?? []).length) {
+      lines.push("(itens do escopo não encontrados para os compromissos selecionados)");
+    }
+
     return lines;
   }, [data]);
 
@@ -302,9 +322,7 @@ export default function PublicProposal() {
                     <div className="text-xs font-semibold" style={{ color: "var(--public-card-text)" as any }}>
                       Proposta pública
                     </div>
-                    <div className="mt-1 text-lg font-bold text-slate-900 line-clamp-1">
-                      {party?.display_name ?? "Cliente"}
-                    </div>
+                    <div className="mt-1 text-lg font-bold text-slate-900 line-clamp-1">{party?.display_name ?? "Cliente"}</div>
                     <div className="mt-1 text-xs text-slate-600">
                       {tenant?.name ?? tenantSlug} • token: {String(token ?? "").slice(0, 6)}…
                     </div>
@@ -362,6 +380,30 @@ export default function PublicProposal() {
             ) : null}
 
             <TabsContent value="scope" className="mt-4 space-y-4">
+              {debug ? (
+                <Card className="rounded-[28px] border-black/10 bg-white/85 p-5 shadow-sm">
+                  <div className="text-sm font-semibold text-slate-900">Debug (escopo)</div>
+                  <div className="mt-2 grid gap-2 text-xs text-slate-700">
+                    <div>
+                      <span className="font-semibold">selected_commitment_ids:</span>{" "}
+                      {JSON.stringify(data?.proposal?.selected_commitment_ids ?? [])}
+                    </div>
+                    <div>
+                      <span className="font-semibold">scope.commitments:</span> {(data?.scope?.commitments ?? []).length}
+                    </div>
+                    <div>
+                      <span className="font-semibold">scope.items:</span> {(data?.scope?.items ?? []).length}
+                    </div>
+                    <div>
+                      <span className="font-semibold">scope.templates:</span> {(data?.scope?.templates ?? []).length}
+                    </div>
+                    <div>
+                      <span className="font-semibold">scopeLines:</span> {scopeLines.length}
+                    </div>
+                  </div>
+                </Card>
+              ) : null}
+
               <div className="grid gap-4 lg:grid-cols-2">
                 <Card className="rounded-[28px] border-black/10 bg-white/85 p-5 shadow-sm">
                   <div className="text-sm font-semibold text-slate-900">Seu tenant</div>
@@ -409,12 +451,24 @@ export default function PublicProposal() {
                 </Card>
               </div>
 
+              {(data?.scope?.commitments ?? []).length ? (
+                <Card className="rounded-[28px] border-black/10 bg-white/85 p-5 shadow-sm">
+                  <div className="text-sm font-semibold text-slate-900">Compromissos selecionados</div>
+                  <div className="mt-2 grid gap-2">
+                    {(data?.scope?.commitments ?? []).map((c: any) => (
+                      <div key={c.id} className="rounded-2xl border bg-white px-3 py-2 text-sm text-slate-800">
+                        <div className="font-semibold">{String(c.commitment_type ?? "commitment")}</div>
+                        <div className="text-xs text-slate-600">id: {String(c.id).slice(0, 8)}… • status: {c.status ?? "—"}</div>
+                      </div>
+                    ))}
+                  </div>
+                </Card>
+              ) : null}
+
               <Card className="rounded-[28px] border-black/10 bg-white/85 p-5 shadow-sm">
                 <div>
                   <div className="text-sm font-semibold text-slate-900">Escopo a ser entregue</div>
-                  <div className="text-xs text-slate-600">
-                    Gerado a partir dos templates dos offerings nos compromissos selecionados.
-                  </div>
+                  <div className="text-xs text-slate-600">Itens derivados dos compromissos selecionados.</div>
                 </div>
 
                 <Separator className="my-4" />
@@ -442,11 +496,7 @@ export default function PublicProposal() {
                     onClick={() => act("approve")}
                     disabled={loading || acting !== null || Boolean(proposal?.approved_at)}
                   >
-                    {proposal?.approved_at
-                      ? "Escopo aprovado"
-                      : acting === "approve"
-                        ? "Aprovando…"
-                        : "Aprovar o escopo"}
+                    {proposal?.approved_at ? "Escopo aprovado" : acting === "approve" ? "Aprovando…" : "Aprovar o escopo"}
                   </Button>
 
                   <div className="flex flex-wrap items-center gap-2">
@@ -466,9 +516,7 @@ export default function PublicProposal() {
                     )}
 
                     <Badge variant="secondary">{proposal?.status ?? (loading ? "carregando" : "—")}</Badge>
-                    {proposal?.autentique_status ? (
-                      <Badge variant="outline">Assinatura: {proposal.autentique_status}</Badge>
-                    ) : null}
+                    {proposal?.autentique_status ? <Badge variant="outline">Assinatura: {proposal.autentique_status}</Badge> : null}
                   </div>
                 </div>
               </Card>

@@ -62,7 +62,8 @@ function safeStr(v: any) {
 function renderTemplate(body: string, vars: Record<string, string>) {
   let out = String(body ?? "");
   for (const [k, val] of Object.entries(vars)) {
-    out = out.replaceAll(`{{${k}}}`, String(val ?? ""));
+    // Avoid relying on String.prototype.replaceAll in older runtimes
+    out = out.split(`{{${k}}}`).join(String(val ?? ""));
   }
   return out;
 }
@@ -501,11 +502,22 @@ serve(async (req) => {
 
     // Load commitments + items + templates (scope)
     const commitmentIds = (pr.selected_commitment_ids ?? []).filter(Boolean);
+
+    let commitments: any[] = [];
     let items: any[] = [];
     let templates: any[] = [];
     let offeringsById: Record<string, any> = {};
 
     if (commitmentIds.length) {
+      const { data: cs, error: cErr } = await supabase
+        .from("commercial_commitments")
+        .select("id,tenant_id,customer_entity_id,commitment_type,status,created_at")
+        .eq("tenant_id", tenant.id)
+        .in("id", commitmentIds)
+        .is("deleted_at", null);
+      if (cErr) return err("commitments_load_failed", 500, { message: cErr.message });
+      commitments = cs ?? [];
+
       const { data: its, error: iErr } = await supabase
         .from("commitment_items")
         .select("id,tenant_id,commitment_id,offering_entity_id,quantity,created_at")
@@ -542,7 +554,19 @@ serve(async (req) => {
     // Contract PDF preview
     // ---------------------------------
     const url = new URL(req.url);
-    const action = url.searchParams.get("action") ?? "";
+    const actionFromQuery = url.searchParams.get("action") ?? "";
+
+    let actionFromBody = "";
+    if (req.method === "POST") {
+      try {
+        const body = await req.json().catch(() => null);
+        actionFromBody = String(body?.action ?? "").trim();
+      } catch {
+        // ignore
+      }
+    }
+
+    const action = actionFromBody || actionFromQuery;
 
     const customer = getPartyCustomer((party as any)?.metadata ?? {});
 
@@ -819,49 +843,53 @@ serve(async (req) => {
     // Default: GET payload
     // ---------------------
 
+    const partyAddressLine = partyAddressFull(customer);
+
     return json({
       ok: true,
       tenant: {
         id: (tenant as any)?.id,
         slug: (tenant as any)?.slug,
         name: (tenant as any)?.name,
-        palette: portalPalette,
         logo_url: tenantLogoUrl,
-      },
-      proposal: {
-        id: pr.id,
-        token: pr.token,
-        status: effectiveProposalStatus,
-        approved_at: pr.approved_at,
-        approval_json: pr.approval_json,
-        autentique_json: pr.autentique_json,
+        company,
       },
       party: {
         id: (party as any)?.id,
         display_name: (party as any)?.display_name,
-        metadata: (party as any)?.metadata ?? {},
         logo_url: partyLogoUrl,
         customer: {
-          name: safeStr((party as any)?.display_name),
-          legal_name: safeStr(customer?.legal_name) || null,
           document: safeStr(customer?.document) || null,
+          address_line: partyAddressLine || null,
           whatsapp: safeStr(customer?.whatsapp) || null,
           email: safeStr(customer?.email) || null,
-          address_full: partyAddressFull(customer) || null,
-          address: safeStr(customer?.address) || null,
-          city: safeStr(customer?.city) || null,
-          uf: safeStr(customer?.uf) || null,
-          cep: safeStr(customer?.cep) || null,
         },
       },
+      proposal: {
+        id: pr.id,
+        status: effectiveProposalStatus,
+        approved_at: pr.approved_at,
+        selected_commitment_ids: pr.selected_commitment_ids ?? [],
+        signing_link: safeStr(pr.autentique_json?.signing_link) || null,
+        autentique_status: safeStr(pr.autentique_json?.status) || null,
+      },
+      palette: portalPalette,
       report: {
         commitments_selected: commitmentIds.length,
-        commitment_items_selected: (items ?? []).length,
-        deliverable_templates_selected: (templates ?? []).length,
-        offerings_selected: Object.keys(offeringsById ?? {}).length,
+        deliverables_in_scope: templates.length,
+        cases_related: 0,
+        timeline_events: 0,
+        publications_scheduled: 0,
+        publications_published: 0,
       },
-      calendar: { items: [] },
+      calendar: { publications: [] },
       history: { cases: [], events: [] },
+      scope: {
+        commitments,
+        items,
+        offeringsById,
+        templates,
+      },
     });
   } catch (e: any) {
     const msg = String(e?.message ?? String(e) ?? "internal_error").trim();
