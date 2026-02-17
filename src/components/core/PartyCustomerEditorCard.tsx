@@ -484,7 +484,14 @@ export function PartyCustomerEditorCard({
 
       showSuccess("Paleta extraída do logo. Agora é só salvar.");
     } catch (e: any) {
-      showError(e?.message ?? "Falha ao extrair paleta");
+      const msg = String(e?.message ?? "Falha ao extrair paleta");
+      if (msg.toLowerCase().includes("failed to fetch")) {
+        showError(
+          "Falha ao chamar a função de extração de paleta. Normalmente isso acontece quando a Edge Function palette-extract ainda não foi publicada no seu projeto Supabase (ou a URL do Supabase está incorreta)."
+        );
+      } else {
+        showError(msg);
+      }
     } finally {
       setExtractingPalette(false);
     }
