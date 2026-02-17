@@ -51,6 +51,22 @@ function getInput(req: Request) {
   return { tenant_slug, token };
 }
 
+function ensureArray(v: any): any[] {
+  return Array.isArray(v) ? v : [];
+}
+
+function safeStr(v: any) {
+  return String(v ?? "").trim();
+}
+
+function renderTemplate(body: string, vars: Record<string, string>) {
+  let out = String(body ?? "");
+  for (const [k, val] of Object.entries(vars)) {
+    out = out.replaceAll(`{{${k}}}`, String(val ?? ""));
+  }
+  return out;
+}
+
 function toBase64(bytes: Uint8Array) {
   let bin = "";
   const chunk = 0x8000;
@@ -58,6 +74,83 @@ function toBase64(bytes: Uint8Array) {
     bin += String.fromCharCode(...bytes.slice(i, i + chunk));
   }
   return btoa(bin);
+}
+
+async function buildTextContractPdf(params: { bodyText: string }) {
+  const { PDFDocument, StandardFonts, rgb } = await import("https://esm.sh/pdf-lib@1.17.1");
+
+  const pdf = await PDFDocument.create();
+  let page = pdf.addPage([595.28, 841.89]); // A4
+  const font = await pdf.embedFont(StandardFonts.Helvetica);
+
+  const margin = 48;
+  const maxWidth = 595.28 - margin * 2;
+  const lineHeight = 16;
+
+  let y = 841.89 - margin;
+
+  const wrapLine = (line: string, size: number) => {
+    const words = String(line ?? "").split(/\s+/).filter(Boolean);
+    if (words.length === 0) return [""];
+
+    const out: string[] = [];
+    let current = "";
+    for (const w of words) {
+      const next = current ? `${current} ${w}` : w;
+      const width = font.widthOfTextAtSize(next, size);
+      if (width <= maxWidth) {
+        current = next;
+      } else {
+        if (current) out.push(current);
+        current = w;
+      }
+    }
+    if (current) out.push(current);
+    return out.length ? out : [""];
+  };
+
+  const drawLine = (line: string, size: number) => {
+    const lines = wrapLine(line, size);
+    for (const l of lines) {
+      if (y < margin + lineHeight) {
+        page = pdf.addPage([595.28, 841.89]);
+        y = 841.89 - margin;
+      }
+      page.drawText(l, {
+        x: margin,
+        y,
+        size,
+        font,
+        color: rgb(0.12, 0.12, 0.14),
+      });
+      y -= lineHeight;
+    }
+  };
+
+  const body = String(params.bodyText ?? "").replace(/\r\n/g, "\n");
+  const rawLines = body.split("\n");
+
+  for (const ln of rawLines) {
+    const trimmed = ln.trimEnd();
+
+    // Simple formatting: lines starting with "# " become titles.
+    if (trimmed.startsWith("# ")) {
+      drawLine(trimmed.replace(/^#\s+/, ""), 16);
+      y -= 4;
+      continue;
+    }
+
+    // Empty line
+    if (!trimmed.trim()) {
+      y -= 10;
+      continue;
+    }
+
+    drawLine(trimmed, 11);
+  }
+
+  const bytes = await pdf.save();
+  return new Uint8Array(bytes);
 }
 
 async function buildSimpleContractPdf(params: {
@@ -224,209 +317,92 @@ async function autentiqueCreateSignatureLink(params: { apiToken: string; signerP
 }
 
 async function autentiqueGetDocumentStatus(params: { apiToken: string; documentId: string }) {
-  // Best-effort status check. Autentique recommends webhooks; keep this minimal.
   const url = getAutentiqueGraphqlUrl();
 
-  async function runQuery(query: string) {
-    const res = await fetch(url, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${params.apiToken}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ query, variables: { id: params.documentId } }),
-    });
-
-    const text = await res.text();
-    let json: any = null;
-    try {
-      json = JSON.parse(text);
-    } catch {
-      // ignore
-    }
-    return { res, json };
-  }
-
-  // Query variant A (current)
-  const queryA = `query DocumentStatus($id: UUID!) {
-    document(id: $id) {
-      id
-      signatures { public_id signed { created_at } rejected { created_at } }
-    }
+  const query = `query DocumentStatus($id: UUID!) {
+    document(id: $id) { id status }
   }`;
 
-  let { res, json } = await runQuery(queryA);
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${params.apiToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ query, variables: { id: params.documentId } }),
+  });
 
-  // If schema differs, retry with accepted instead of signed.
-  const errMsg = String(json?.errors?.[0]?.message ?? "");
-  const needFallback = errMsg.toLowerCase().includes("cannot query field") && errMsg.includes("signed");
-  if ((!res.ok || json?.errors?.length) && needFallback) {
-    const queryB = `query DocumentStatus($id: UUID!) {
-      document(id: $id) {
-        id
-        signatures { public_id accepted { created_at } rejected { created_at } }
-      }
-    }`;
-    ({ res, json } = await runQuery(queryB));
+  const text = await res.text();
+  let json: any = null;
+  try {
+    json = JSON.parse(text);
+  } catch {
+    // ignore
   }
 
-  if (!res.ok) return null;
-
-  const doc = json?.data?.document ?? null;
-  const sigs = (doc?.signatures ?? []) as any[];
-  if (!Array.isArray(sigs) || sigs.length === 0) return null;
-
-  // If any signature has a rejection, treat as rejected.
-  if (sigs.some((s) => Boolean(s?.rejected?.created_at))) return "rejected";
-
-  // If any signature has been signed, treat as signed.
-  if (sigs.some((s) => Boolean(s?.signed?.created_at))) return "signed";
-
-  // Fallback field name: accepted
-  if (sigs.some((s) => Boolean(s?.accepted?.created_at))) return "signed";
-
-  return "pending";
-}
-
-function onlyDigits(s: string) {
-  return String(s ?? "").replace(/\D/g, "");
-}
-
-function formatCpfCnpj(digitsRaw: string) {
-  const d = onlyDigits(digitsRaw).slice(0, 14);
-
-  // CPF: 000.000.000-00
-  if (d.length <= 11) {
-    const p1 = d.slice(0, 3);
-    const p2 = d.slice(3, 6);
-    const p3 = d.slice(6, 9);
-    const p4 = d.slice(9, 11);
-    let out = p1;
-    if (p2) out += "." + p2;
-    if (p3) out += "." + p3;
-    if (p4) out += "-" + p4;
-    return out;
-  }
-
-  // CNPJ: 00.000.000/0000-00
-  const p1 = d.slice(0, 2);
-  const p2 = d.slice(2, 5);
-  const p3 = d.slice(5, 8);
-  const p4 = d.slice(8, 12);
-  const p5 = d.slice(12, 14);
-  let out = p1;
-  if (p2) out += "." + p2;
-  if (p3) out += "." + p3;
-  if (p4) out += "/" + p4;
-  if (p5) out += "-" + p5;
-  return out;
-}
-
-function normalizeWhatsappDigits(digitsRaw: string) {
-  const d = onlyDigits(digitsRaw);
-  if (d.startsWith("55") && d.length > 13) return d.slice(0, 13);
-  if (d.startsWith("55") && d.length <= 13) return d;
-  return d.slice(0, 11);
-}
-
-function formatWhatsappBr(digitsRaw: string) {
-  const d0 = normalizeWhatsappDigits(digitsRaw);
-  const has55 = d0.startsWith("55") && d0.length > 11;
-  const d = has55 ? d0.slice(2) : d0;
-
-  const dd = d.slice(0, 2);
-  const rest = d.slice(2);
-
-  const isMobile = rest.length >= 9;
-  const a = isMobile ? rest.slice(0, 5) : rest.slice(0, 4);
-  const b = isMobile ? rest.slice(5, 9) : rest.slice(4, 8);
-
-  let out = "";
-  if (has55) out += "+55 ";
-  if (dd) out += `(${dd}) `;
-  out += a;
-  if (b) out += "-" + b;
-  return out.trim();
-}
-
-function getPartyCustomer(meta: any) {
-  const md = (meta ?? {}) as any;
-  const legacy = (md.customer ?? {}) as any;
-
-  const docDigits =
-    onlyDigits(String(md.cpf_cnpj ?? md.cpfCnpj ?? md.document ?? legacy.cnpj ?? legacy.cpf ?? "")).slice(0, 14) ||
-    "";
-
-  const email = String(md.email ?? legacy.email ?? "").trim() || null;
-  const whatsapp = formatWhatsappBr(String(md.whatsapp ?? md.phone ?? md.phone_e164 ?? legacy.phone ?? "")) || null;
-
-  const addressLine =
-    String(md.address_line ?? legacy.address_line ?? "").trim() ||
-    [
-      String(md.address ?? "").trim(),
-      String(md.city ?? "").trim(),
-      String(md.uf ?? md.state ?? "").trim(),
-      String(md.cep ?? "").trim(),
-    ]
-      .filter(Boolean)
-      .join(" • ") ||
-    null;
-
-  const legalName = String(legacy.legal_name ?? md.legal_name ?? "").trim() || null;
-
-  return {
-    legal_name: legalName,
-    document: docDigits ? formatCpfCnpj(docDigits) : null,
-    email,
-    whatsapp,
-    address_line: addressLine,
-  };
+  const status = json?.data?.document?.status ?? null;
+  return status ? String(status).toLowerCase() : null;
 }
 
 function nowIso() {
   return new Date().toISOString();
 }
 
-async function insertTimelineEventOnce(admin: any, params: {
-  tenantId: string;
-  eventType: string;
-  actorType: "system" | "ai" | "vendor" | "leader" | "admin" | "customer";
-  message: string;
-  occurredAt?: string;
-  meta?: any;
-}) {
-  const occurred_at = params.occurredAt ?? nowIso();
-  const meta = params.meta ?? {};
-
-  // Best effort: avoid duplicates for proposal lifecycle events.
-  const proposalId = String(meta?.proposal_id ?? meta?.proposalId ?? "").trim();
-  if (proposalId) {
-    const { data: existing } = await admin
-      .from("timeline_events")
-      .select("id")
-      .eq("tenant_id", params.tenantId)
-      .eq("event_type", params.eventType)
-      .eq("meta_json->>proposal_id", proposalId)
-      .limit(1);
-
-    if ((existing ?? []).length) return;
+async function insertTimelineEventOnce(
+  supabase: any,
+  params: {
+    tenantId: string;
+    eventType: string;
+    actorType: string;
+    message: string;
+    occurredAt: string;
+    meta: any;
   }
+) {
+  const { tenantId, eventType, actorType, message, occurredAt, meta } = params;
 
-  await admin.from("timeline_events").insert({
-    tenant_id: params.tenantId,
+  // Check for duplicate by (event_type + proposal_id + occurred_at day)
+  // Keep it simple and only dedupe by event_type + proposal_id.
+  const proposalId = String(meta?.proposal_id ?? "");
+
+  const { data: existing } = await supabase
+    .from("timeline_events")
+    .select("id")
+    .eq("tenant_id", tenantId)
+    .is("case_id", null)
+    .eq("event_type", eventType)
+    .eq("meta_json->>proposal_id", proposalId)
+    .limit(1);
+
+  if ((existing ?? []).length) return;
+
+  await supabase.from("timeline_events").insert({
+    tenant_id: tenantId,
     case_id: null,
-    event_type: params.eventType,
-    actor_type: params.actorType,
+    event_type: eventType,
+    actor_type: actorType,
     actor_id: null,
-    message: params.message,
+    message,
     meta_json: meta,
-    occurred_at,
+    occurred_at: occurredAt,
   });
 }
 
+function getPartyCustomer(md: any) {
+  const c = md?.customer ?? {};
+  return {
+    legal_name: c?.legal_name ?? null,
+    document: c?.document ?? md?.cpf_cnpj ?? null,
+    address_line: c?.address_line ?? null,
+    whatsapp: c?.whatsapp ?? md?.whatsapp ?? null,
+    email: c?.email ?? md?.email ?? null,
+  };
+}
+
+const fn = "public-proposal";
+
 serve(async (req) => {
-  const fn = "public-proposal";
-  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   try {
     const { tenant_slug, token } = getInput(req);
@@ -776,7 +752,7 @@ serve(async (req) => {
       // Require approval before signing
       const fresh = await supabase
         .from("party_proposals")
-        .select("approved_at,autentique_json,status")
+        .select("approved_at,autentique_json,status,approval_json")
         .eq("tenant_id", tenant.id)
         .eq("id", pr.id)
         .maybeSingle();
@@ -796,7 +772,7 @@ serve(async (req) => {
       if (!signerEmail) return err("missing_customer_email", 400);
 
       // Scope lines
-      const lines: string[] = [];
+      const scopeLines: string[] = [];
       const templatesByOffering = new Map<string, any[]>();
       for (const t of templates ?? []) {
         const oid = String((t as any).offering_entity_id);
@@ -810,7 +786,7 @@ serve(async (req) => {
         const offName = String(off?.display_name ?? oid);
         const ts = templatesByOffering.get(oid) ?? [];
         for (const t of ts) {
-          lines.push(`${offName} — ${(t as any).name}`);
+          scopeLines.push(`${offName} — ${(t as any).name}`);
         }
       }
 
@@ -826,13 +802,39 @@ serve(async (req) => {
         email: customer?.email ?? null,
       };
 
-      const pdfBytes = await buildSimpleContractPdf({
-        tenantName: String((tenant as any).name ?? tenantSlug),
-        tenantCompany,
-        partyName: String((party as any).display_name ?? "Cliente"),
-        partyCustomer,
-        scopeLines: lines,
-      });
+      // ---------------------------------
+      // Contract template (per tenant)
+      // ---------------------------------
+      const tenantTemplates = ensureArray((tenant as any)?.branding_json?.contract_templates).filter(Boolean);
+      const chosenId =
+        safeStr((fresh.data as any)?.approval_json?.contract_template_id) ||
+        safeStr((pr as any)?.approval_json?.contract_template_id) ||
+        "";
+
+      const chosen = tenantTemplates.find((t: any) => safeStr(t?.id) === chosenId) ?? tenantTemplates[0] ?? null;
+      const chosenBody = safeStr(chosen?.body);
+
+      let pdfBytes: Uint8Array;
+      if (chosenBody) {
+        const scopeBlock = scopeLines.length ? scopeLines.map((l) => `• ${l}`).join("\n") : "(sem itens)";
+        const bodyText = renderTemplate(chosenBody, {
+          tenant_name: safeStr((tenant as any).name ?? tenantSlug),
+          party_name: safeStr((party as any).display_name ?? "Cliente"),
+          scope_lines: scopeBlock,
+          generated_at: new Date().toLocaleString("pt-BR"),
+        });
+
+        pdfBytes = await buildTextContractPdf({ bodyText });
+      } else {
+        // Fallback to the built-in PDF.
+        pdfBytes = await buildSimpleContractPdf({
+          tenantName: safeStr((tenant as any).name ?? tenantSlug),
+          tenantCompany,
+          partyName: safeStr((party as any).display_name ?? "Cliente"),
+          partyCustomer,
+          scopeLines,
+        });
+      }
 
       const filename = `contrato-${tenantSlug}-${String((party as any).id).slice(0, 8)}.pdf`;
       const documentName = `Contrato • ${String((tenant as any).name ?? tenantSlug)} • ${String((party as any).display_name ?? "Cliente")}`;
@@ -848,7 +850,8 @@ serve(async (req) => {
 
       const sig =
         (created.signatures ?? []).find(
-          (s) => String(s?.email ?? "").trim().toLowerCase() === signerEmail.toLowerCase() &&
+          (s) =>
+            String(s?.email ?? "").trim().toLowerCase() === signerEmail.toLowerCase() &&
             String(s?.action?.name ?? "").toUpperCase() === "SIGN"
         ) ??
         (created.signatures ?? []).find((s) => String(s?.action?.name ?? "").toUpperCase() === "SIGN") ??
@@ -867,6 +870,8 @@ serve(async (req) => {
         signing_link: signingLink,
         status: null,
         created_at: new Date().toISOString(),
+        contract_template_id: safeStr(chosen?.id) || null,
+        contract_template_name: safeStr(chosen?.name) || null,
         file_b64_sha256: crypto.subtle
           ? await crypto.subtle
               .digest("SHA-256", pdfBytes)
@@ -894,7 +899,6 @@ serve(async (req) => {
       });
 
       return json({ ok: true, signing_link: signingLink, document_id: created.id });
-
     }
 
     return err("invalid_action", 400);

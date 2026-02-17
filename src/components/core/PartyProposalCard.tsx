@@ -8,6 +8,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { showError, showSuccess } from "@/utils/toast";
 
 function randomToken() {
@@ -21,13 +22,25 @@ type ProposalRow = {
   token: string;
   status: string;
   approved_at: string | null;
+  approval_json: any;
   selected_commitment_ids: string[];
   autentique_json: any;
   created_at: string;
 };
 
+type ContractTemplate = {
+  id: string;
+  name: string;
+  body: string;
+  updated_at: string;
+};
+
 function safe(v: any) {
   return String(v ?? "").trim();
+}
+
+function ensureArray(v: any): any[] {
+  return Array.isArray(v) ? v : [];
 }
 
 export function PartyProposalCard({
@@ -43,13 +56,27 @@ export function PartyProposalCard({
   const [saving, setSaving] = useState(false);
   const [activeProposalId, setActiveProposalId] = useState<string | null>(null);
 
+  const tenantTemplatesQ = useQuery({
+    queryKey: ["tenant_contract_templates_for_proposal", tenantId],
+    enabled: Boolean(tenantId),
+    queryFn: async () => {
+      const { data, error } = await supabase.from("tenants").select("id,branding_json").eq("id", tenantId).maybeSingle();
+      if (error) throw error;
+      const bj = (data as any)?.branding_json ?? {};
+      return ensureArray(bj.contract_templates).filter(Boolean) as ContractTemplate[];
+    },
+    staleTime: 10_000,
+  });
+
+  const templates = tenantTemplatesQ.data ?? [];
+
   const proposalsQ = useQuery({
     queryKey: ["party_proposals", tenantId, partyId],
     enabled: Boolean(tenantId && partyId),
     queryFn: async () => {
       const { data, error } = await supabase
         .from("party_proposals")
-        .select("id,token,status,approved_at,selected_commitment_ids,autentique_json,created_at")
+        .select("id,token,status,approved_at,approval_json,selected_commitment_ids,autentique_json,created_at")
         .eq("tenant_id", tenantId)
         .eq("party_entity_id", partyId)
         .is("deleted_at", null)
@@ -107,6 +134,23 @@ export function PartyProposalCard({
     setSelected(map);
   }, [activeProposal?.id]);
 
+  const [templateId, setTemplateId] = useState<string>("");
+
+  useEffect(() => {
+    if (!activeProposal) {
+      setTemplateId(templates[0]?.id ? String(templates[0].id) : "");
+      return;
+    }
+
+    const currentId = safe(activeProposal.approval_json?.contract_template_id);
+    if (currentId) {
+      setTemplateId(currentId);
+      return;
+    }
+
+    setTemplateId(templates[0]?.id ? String(templates[0].id) : "");
+  }, [activeProposal?.id, templates.length]);
+
   const selectedIds = useMemo(() => {
     return Object.entries(selected)
       .filter(([, v]) => v)
@@ -123,6 +167,8 @@ export function PartyProposalCard({
 
     setSaving(true);
     try {
+      const initialApproval = templateId ? { contract_template_id: templateId } : {};
+
       const { data, error } = await supabase
         .from("party_proposals")
         .insert({
@@ -131,8 +177,9 @@ export function PartyProposalCard({
           token: randomToken(),
           selected_commitment_ids: selectedIds,
           status: "draft",
+          approval_json: initialApproval,
         })
-        .select("id,token,status,approved_at,selected_commitment_ids,autentique_json,created_at")
+        .select("id,token,status,approved_at,approval_json,selected_commitment_ids,autentique_json,created_at")
         .single();
 
       if (error) throw error;
@@ -169,9 +216,14 @@ export function PartyProposalCard({
 
     setSaving(true);
     try {
+      const nextApprovalJson = {
+        ...(activeProposal.approval_json ?? {}),
+        contract_template_id: templateId || null,
+      };
+
       const { error } = await supabase
         .from("party_proposals")
-        .update({ selected_commitment_ids: selectedIds })
+        .update({ selected_commitment_ids: selectedIds, approval_json: nextApprovalJson })
         .eq("tenant_id", tenantId)
         .eq("id", activeProposal.id)
         .is("deleted_at", null);
@@ -280,6 +332,42 @@ export function PartyProposalCard({
               >
                 {saving ? "Salvando…" : "Salvar escopo"}
               </Button>
+            </div>
+          </div>
+
+          <Separator className="my-3" />
+
+          <div className="rounded-2xl border bg-white p-3">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <div className="text-xs font-semibold text-slate-700">Template do contrato</div>
+                <div className="mt-0.5 text-xs text-slate-600">
+                  Esse modelo será usado quando você emitir/enviar o contrato para assinatura no Autentique.
+                </div>
+              </div>
+              <div className="min-w-[240px]">
+                <Select value={templateId} onValueChange={(v) => setTemplateId(v)}>
+                  <SelectTrigger className="h-10 rounded-xl">
+                    <SelectValue placeholder={templates.length ? "Selecione…" : "Sem templates"} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {templates.length === 0 ? (
+                      <SelectItem value="" disabled>
+                        Nenhum template cadastrado
+                      </SelectItem>
+                    ) : (
+                      templates.map((t) => (
+                        <SelectItem key={t.id} value={String(t.id)}>
+                          {t.name}
+                        </SelectItem>
+                      ))
+                    )}
+                  </SelectContent>
+                </Select>
+                <div className="mt-1 text-[11px] text-slate-500">
+                  Dica: cadastre/edite em "Contratos" (menu lateral) e use <span className="font-mono">{"{{scope_lines}}"}</span>.
+                </div>
+              </div>
             </div>
           </div>
 

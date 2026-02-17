@@ -1,9 +1,8 @@
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
-import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { cn } from "@/lib/utils";
+import { PublicEntityHistory, type PublicCase, type PublicTimelineEvent } from "@/components/public/PublicEntityHistory";
 
 type CaseRow = {
   id: string;
@@ -33,22 +32,6 @@ type CoreEntityEventRow = {
   actor_user_id: string | null;
   created_at: string;
 };
-
-function fmtDate(ts: string) {
-  try {
-    return new Date(ts).toLocaleDateString("pt-BR", { year: "numeric", month: "2-digit", day: "2-digit" });
-  } catch {
-    return ts;
-  }
-}
-
-function fmtTime(ts: string) {
-  try {
-    return new Date(ts).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
-  } catch {
-    return "";
-  }
-}
 
 function safe(s: any) {
   return String(s ?? "").trim();
@@ -130,12 +113,6 @@ export function EntityHistory({ tenantId, entityId }: { tenantId: string; entity
     staleTime: 5_000,
   });
 
-  const byCase = useMemo(() => {
-    const m = new Map<string, CaseRow>();
-    for (const c of casesQ.data ?? []) m.set(String(c.id), c);
-    return m;
-  }, [casesQ.data]);
-
   const allEvents = useMemo(() => {
     const entityAsTimeline: TimelineEventRow[] = (entityEventsQ.data ?? []).map((r) => ({
       id: `ce:${String(r.id)}`,
@@ -155,89 +132,43 @@ export function EntityHistory({ tenantId, entityId }: { tenantId: string; entity
 
   const isLoading = casesQ.isLoading || caseEventsQ.isLoading || entityEventsQ.isLoading || proposalEventsQ.isLoading;
 
+  const casesForRender: PublicCase[] = useMemo(() => {
+    return (casesQ.data ?? []) as any;
+  }, [casesQ.data]);
+
+  const eventsForRender: PublicTimelineEvent[] = useMemo(() => {
+    const base = allEvents.map((ev) => ({
+      ...(ev as any),
+      message: safe(ev.message) || "(sem mensagem)",
+    }));
+
+    if (isLoading && base.length === 0) {
+      return [
+        {
+          id: "loading",
+          case_id: null,
+          event_type: "loading",
+          actor_type: "system",
+          message: "Carregando…",
+          occurred_at: new Date().toISOString(),
+          meta_json: {},
+        },
+      ];
+    }
+
+    return base as any;
+  }, [allEvents, isLoading]);
+
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-2 text-sm">
-        <Badge variant="secondary">{(casesQ.data ?? []).length} caso(s)</Badge>
+        <Badge variant="secondary">{casesForRender.length} caso(s)</Badge>
         <Badge variant="secondary">{allEvents.length} evento(s)</Badge>
         {isLoading ? <span className="text-xs text-slate-500">Carregando…</span> : null}
       </div>
 
-      {/* Timeline layout: center line, alternating sides */}
-      <div className="relative rounded-[28px] border border-slate-200 bg-white p-4 shadow-sm">
-        <div className="absolute bottom-6 left-1/2 top-6 hidden w-px -translate-x-1/2 bg-slate-200 md:block" />
-
-        {allEvents.length === 0 && !isLoading ? (
-          <div className="p-4 text-sm text-slate-600">Sem eventos.</div>
-        ) : (
-          <div className="grid gap-6">
-            {(allEvents.length ? allEvents : [{
-              id: "loading",
-              case_id: null,
-              event_type: "loading",
-              actor_type: "system",
-              message: "Carregando…",
-              occurred_at: new Date().toISOString(),
-              meta_json: {},
-            } as TimelineEventRow]).map((ev, idx) => {
-              const c = ev.case_id ? byCase.get(String(ev.case_id)) : null;
-              const side: "left" | "right" = idx % 2 === 0 ? "left" : "right";
-
-              const dateBlock = (
-                <div className={cn("space-y-1", side === "left" ? "text-right" : "text-left")}>
-                  <div className="text-2xl font-extrabold tracking-tight md:text-3xl">{fmtDate(ev.occurred_at)}</div>
-                  <div className="text-xs font-semibold text-slate-500">{fmtTime(ev.occurred_at)}</div>
-                </div>
-              );
-
-              const contentBlock = (
-                <Card className="rounded-[26px] border-slate-200 bg-white p-4 shadow-sm">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Badge variant="outline">{safe(ev.event_type) || "evento"}</Badge>
-                    <span className="text-xs text-slate-500">actor: {safe(ev.actor_type) || "—"}</span>
-                  </div>
-
-                  <div className="mt-2 text-sm font-semibold text-slate-900">{safe(ev.message) || "(sem mensagem)"}</div>
-
-                  {c ? (
-                    <div className="mt-3 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700">
-                      <div className="font-semibold text-slate-900">
-                        {c.title || "(sem título)"} • {c.case_type}
-                      </div>
-                      <div className="mt-0.5 text-[11px] text-slate-600">
-                        status: {c.status} • state: {c.state} • atualizado: {fmtDate(c.updated_at)} {fmtTime(c.updated_at)}
-                      </div>
-                    </div>
-                  ) : null}
-                </Card>
-              );
-
-              return (
-                <div key={ev.id} className="relative">
-                  {/* Mobile: stack */}
-                  <div className="grid gap-2 md:hidden">
-                    {dateBlock}
-                    {contentBlock}
-                  </div>
-
-                  {/* Desktop: alternate sides around a center line */}
-                  <div className="hidden md:grid md:grid-cols-[1fr_56px_1fr] md:items-start md:gap-6">
-                    <div className="flex justify-end">{side === "left" ? dateBlock : contentBlock}</div>
-
-                    <div className="relative flex items-start justify-center">
-                      <div className="mt-3 h-3 w-3 rounded-full bg-[hsl(var(--byfrost-accent))] shadow-sm" />
-                      <div className="absolute left-1/2 top-[18px] hidden h-px w-6 -translate-x-[calc(100%+8px)] bg-slate-200 md:block" />
-                      <div className="absolute left-1/2 top-[18px] hidden h-px w-6 translate-x-[8px] bg-slate-200 md:block" />
-                    </div>
-
-                    <div className="flex justify-start">{side === "left" ? contentBlock : dateBlock}</div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
+      {/* IMPORTANT: keep the internal timeline using the exact same visual configuration as the public portal timeline. */}
+      <PublicEntityHistory cases={casesForRender} events={eventsForRender} />
     </div>
   );
 }
