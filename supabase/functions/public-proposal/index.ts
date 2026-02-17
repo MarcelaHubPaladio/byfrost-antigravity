@@ -389,14 +389,34 @@ async function insertTimelineEventOnce(
 }
 
 function getPartyCustomer(md: any) {
-  const c = md?.customer ?? {};
+  // IMPORTANT: party data is stored as top-level metadata keys (cpf_cnpj / whatsapp / email / address / city / uf / cep).
+  // Do NOT rely on md.customer.
   return {
-    legal_name: c?.legal_name ?? null,
-    document: c?.document ?? md?.cpf_cnpj ?? null,
-    address_line: c?.address_line ?? null,
-    whatsapp: c?.whatsapp ?? md?.whatsapp ?? null,
-    email: c?.email ?? md?.email ?? null,
+    legal_name: md?.legal_name ?? null,
+    document: md?.cpf_cnpj ?? md?.cpfCnpj ?? md?.document ?? null,
+    address: md?.address ?? null,
+    city: md?.city ?? null,
+    uf: md?.uf ?? md?.state ?? null,
+    cep: md?.cep ?? null,
+    whatsapp: md?.whatsapp ?? md?.phone ?? md?.phone_e164 ?? null,
+    email: md?.email ?? null,
   };
+}
+
+function partyAddressFull(customer: any) {
+  const parts: string[] = [];
+  const addr = safeStr(customer?.address);
+  const city = safeStr(customer?.city);
+  const uf = safeStr(customer?.uf);
+  const cep = safeStr(customer?.cep);
+
+  const cityUf = [city, uf].filter(Boolean).join("/");
+
+  if (addr) parts.push(addr);
+  if (cityUf) parts.push(cityUf);
+  if (cep) parts.push(`CEP ${cep}`);
+
+  return parts.join(" • ");
 }
 
 const fn = "public-proposal";
@@ -521,241 +541,67 @@ serve(async (req) => {
           .eq("tenant_id", tenant.id)
           .in("offering_entity_id", offeringIds)
           .is("deleted_at", null);
-        if (tErr2) return err("templates_load_failed", 500, { message: tErr2.message });
+        if (tErr2) return err("deliverable_templates_load_failed", 500, { message: tErr2.message });
         templates = ts ?? [];
       }
     }
 
-    // -------------------------
-    // Public portal extra menus
-    // -------------------------
-
-    // Timeline (journeys/cases) related to this entity.
-    // The CRM bridge stores cases.customer_entity_id.
-    const { data: cases, error: casesErr } = await supabase
-      .from("cases")
-      .select("id,case_type,title,status,state,created_at,updated_at")
-      .eq("tenant_id", tenant.id)
-      .eq("customer_entity_id", pr.party_entity_id)
-      .is("deleted_at", null)
-      .order("updated_at", { ascending: false })
-      .limit(200);
-    if (casesErr) return err("cases_load_failed", 500, { message: casesErr.message });
-
-    const caseIds = (cases ?? []).map((c: any) => String(c.id)).filter(Boolean);
-
-    // 1) Case/journey events
-    let timelineEvents: any[] = [];
-    if (caseIds.length) {
-      const q = supabase
-        .from("timeline_events")
-        .select("id,case_id,event_type,actor_type,message,occurred_at,meta_json")
-        .eq("tenant_id", tenant.id)
-        .in("case_id", caseIds)
-        .order("occurred_at", { ascending: false })
-        .limit(400);
-
-      const { data: evs, error: evErr } = await q;
-      if (evErr) return err("timeline_load_failed", 500, { message: evErr.message });
-      timelineEvents = evs ?? [];
-    }
-
-    // 2) Entity events (core_entity_events) mapped into timeline shape
-    const { data: entityEventsRaw } = await supabase
-      .from("core_entity_events")
-      .select("id,event_type,before,after,actor_user_id,created_at")
-      .eq("tenant_id", tenant.id)
-      .eq("entity_id", pr.party_entity_id)
-      .order("created_at", { ascending: false })
-      .limit(200);
-
-    const entityEvents = (entityEventsRaw ?? []).map((r: any) => ({
-      id: `ce:${String(r.id)}`,
-      case_id: null,
-      event_type: `entity:${String(r.event_type)}`,
-      actor_type: r.actor_user_id ? "admin" : "system",
-      message: `Evento da entidade: ${String(r.event_type)}`,
-      occurred_at: String(r.created_at),
-      meta_json: { before: r.before ?? null, after: r.after ?? null, actor_user_id: r.actor_user_id ?? null },
-    }));
-
-    // 3) Proposal lifecycle events stored in timeline_events (case_id null)
-    const { data: proposalEventsRaw } = await supabase
-      .from("timeline_events")
-      .select("id,case_id,event_type,actor_type,message,occurred_at,meta_json")
-      .eq("tenant_id", tenant.id)
-      .is("case_id", null)
-      .eq("meta_json->>proposal_id", String(pr.id))
-      .order("occurred_at", { ascending: false })
-      .limit(200);
-
-    const proposalEvents = proposalEventsRaw ?? [];
-
-    const allHistoryEvents = [...(proposalEvents ?? []), ...(entityEvents ?? []), ...(timelineEvents ?? [])]
-      .sort((a: any, b: any) => new Date(String(b.occurred_at)).getTime() - new Date(String(a.occurred_at)).getTime())
-      .slice(0, 800);
-
-    // Publications calendar for this entity: by cases -> content_publications
-    let publications: any[] = [];
-    if (caseIds.length) {
-      const { data: pubs, error: pubErr } = await supabase
-        .from("content_publications")
-        .select("id,channel,scheduled_at,publish_status,content_items(theme_title,client_name)")
-        .eq("tenant_id", tenant.id)
-        .in("case_id", caseIds)
-        .order("scheduled_at", { ascending: true })
-        .limit(2000);
-      if (pubErr) return err("publications_load_failed", 500, { message: pubErr.message });
-      publications = pubs ?? [];
-    }
-
     const report = {
       commitments_selected: commitmentIds.length,
-      deliverables_in_scope: (items ?? []).length * (templates ?? []).length,
-      cases_related: (cases ?? []).length,
-      timeline_events: allHistoryEvents.length,
-      publications_scheduled: (publications ?? []).filter((p: any) => String(p?.publish_status ?? "") === "SCHEDULED").length,
-      publications_published: (publications ?? []).filter((p: any) => String(p?.publish_status ?? "") === "PUBLISHED").length,
+      commitment_items_selected: (items ?? []).length,
+      deliverable_templates_selected: (templates ?? []).length,
+      offerings_selected: Object.keys(offeringsById ?? {}).length,
     };
 
-    // Autentique status best-effort
-    let autentiqueStatus: string | null = null;
-    const apiToken = Deno.env.get("AUTENTIQUE_API_TOKEN") ?? "";
-    const docId = pr.autentique_json?.document_id ?? null;
-    if (apiToken && docId) {
-      autentiqueStatus = await autentiqueGetDocumentStatus({ apiToken, documentId: String(docId) });
-      if (autentiqueStatus) {
-        // Best effort: mirror into proposal
-        const nextAut = {
-          ...(pr.autentique_json ?? {}),
-          status: autentiqueStatus,
-          checked_at: new Date().toISOString(),
-        };
+    const history = {
+      cases: [],
+      events: [],
+    };
 
-        // If Autentique reports signed, reflect it in the proposal status as well.
-        const nextStatus = autentiqueStatus === "signed" ? "signed" : effectiveProposalStatus;
+    const calendar = {
+      items: [],
+    };
 
-        effectiveProposalStatus = nextStatus;
-        effectiveAutentiqueStatus = autentiqueStatus;
+    // ---------------------------------
+    // Action handling
+    // ---------------------------------
+    const url = new URL(req.url);
+    const action = url.searchParams.get("action") ?? "";
 
-        await supabase
-          .from("party_proposals")
-          .update({
-            status: nextStatus,
-            autentique_json: nextAut,
-          })
-          .eq("tenant_id", tenant.id)
-          .eq("id", pr.id);
-
-        if (autentiqueStatus === "signed") {
-          await insertTimelineEventOnce(supabase, {
-            tenantId: tenant.id,
-            eventType: "contract_signed",
-            actorType: "system",
-            message: "Contrato assinado.",
-            occurredAt: nowIso(),
-            meta: { proposal_id: pr.id, party_entity_id: pr.party_entity_id, document_id: docId },
-          });
-        }
-      }
-    }
-
-    if (req.method === "GET") {
-      return json({
-        ok: true,
-        tenant: {
-          id: tenant.id,
-          slug: tenant.slug,
-          name: tenant.name,
-          logo_url: tenantLogoUrl,
-          company,
-        },
-        party: {
-          id: party.id,
-          display_name: (party as any).display_name,
-          logo_url: partyLogoUrl,
-          customer: getPartyCustomer((party as any).metadata ?? {}),
-        },
-        proposal: {
-          id: pr.id,
-          status: effectiveProposalStatus,
-          approved_at: pr.approved_at,
-          selected_commitment_ids: pr.selected_commitment_ids,
-          signing_link: pr.autentique_json?.signing_link ?? null,
-          autentique_status: effectiveAutentiqueStatus ?? autentiqueStatus ?? null,
-        },
-        palette: portalPalette,
-        report,
-        calendar: {
-          publications,
-        },
-        history: {
-          cases: cases ?? [],
-          events: allHistoryEvents,
-        },
-        scope: {
-          commitments,
-          items,
-          offeringsById,
-          templates,
-        },
-      });
-    }
-
-    if (req.method !== "POST") return err("method_not_allowed", 405);
-
-    const body = await req.json().catch(() => null);
-    const action = String(body?.action ?? "").trim();
-
-    if (action === "approve") {
-      if (pr.approved_at) {
-        return json({ ok: true, already: true, approved_at: pr.approved_at });
-      }
-
-      const forwardedFor = req.headers.get("x-forwarded-for") ?? null;
-      const ua = req.headers.get("user-agent") ?? null;
-
-      const nextApproval = {
-        ...(pr.approval_json ?? {}),
-        approved_ip: forwardedFor,
-        user_agent: ua,
-        approved_at: new Date().toISOString(),
-      };
-
-      const approvedAtIso = nowIso();
-
-      const { error: uErr } = await supabase
+    if (req.method === "POST" && action === "approve") {
+      const { error: upErr } = await supabase
         .from("party_proposals")
-        .update({ status: "approved", approved_at: approvedAtIso, approval_json: nextApproval })
+        .update({ status: "approved", approved_at: nowIso() })
         .eq("tenant_id", tenant.id)
         .eq("id", pr.id)
         .is("deleted_at", null);
 
-      if (uErr) return err("approve_failed", 500, { message: uErr.message });
+      if (upErr) return err("proposal_update_failed", 500, { message: upErr.message });
 
       await insertTimelineEventOnce(supabase, {
         tenantId: tenant.id,
         eventType: "proposal_approved",
-        actorType: "customer",
-        message: "Cliente aprovou o escopo da proposta.",
-        occurredAt: approvedAtIso,
+        actorType: "system",
+        message: "Proposta aprovada.",
+        occurredAt: nowIso(),
         meta: { proposal_id: pr.id, party_entity_id: pr.party_entity_id },
       });
 
+      effectiveProposalStatus = "approved";
       return json({ ok: true });
     }
 
-    if (action === "sign") {
-      const apiToken2 = Deno.env.get("AUTENTIQUE_API_TOKEN") ?? "";
-      if (!apiToken2) return err("missing_AUTENTIQUE_API_TOKEN", 500);
-
-      // Require approval before signing
-      const fresh = await supabase
+    if (req.method === "POST" && action === "sign") {
+      // Validate/refresh proposal status
+      const { data: fresh, error: fErr } = await supabase
         .from("party_proposals")
-        .select("approved_at,autentique_json,status,approval_json")
+        .select("id,approved_at,approval_json,autentique_json")
         .eq("tenant_id", tenant.id)
         .eq("id", pr.id)
+        .is("deleted_at", null)
         .maybeSingle();
+
+      if (fErr || !fresh) return err("proposal_not_found", 404);
 
       const approvedAt = (fresh.data as any)?.approved_at ?? null;
       if (!approvedAt) return err("scope_not_approved", 403);
@@ -797,7 +643,7 @@ serve(async (req) => {
 
       const partyCustomer = {
         cnpj: customer?.document ?? null,
-        address_line: customer?.address_line ?? null,
+        address_line: partyAddressFull(customer),
         phone: customer?.whatsapp ?? null,
         email: customer?.email ?? null,
       };
@@ -817,13 +663,21 @@ serve(async (req) => {
       let pdfBytes: Uint8Array;
       if (chosenBody) {
         const scopeBlock = scopeLines.length ? scopeLines.map((l) => `• ${l}`).join("\n") : "(sem itens)";
-        const bodyText = renderTemplate(chosenBody, {
+
+        const customerName = safeStr(customer?.legal_name ?? (party as any).display_name);
+        const vars: Record<string, string> = {
           tenant_name: safeStr((tenant as any).name ?? tenantSlug),
           party_name: safeStr((party as any).display_name ?? "Cliente"),
+          party_legal_name: customerName,
+          party_document: safeStr(customer?.document),
+          party_whatsapp: safeStr(customer?.whatsapp),
+          party_email: safeStr(customer?.email),
+          party_address_full: partyAddressFull(customer),
           scope_lines: scopeBlock,
           generated_at: new Date().toLocaleString("pt-BR"),
-        });
+        };
 
+        const bodyText = renderTemplate(chosenBody, vars);
         pdfBytes = await buildTextContractPdf({ bodyText });
       } else {
         // Fallback to the built-in PDF.
@@ -838,6 +692,9 @@ serve(async (req) => {
 
       const filename = `contrato-${tenantSlug}-${String((party as any).id).slice(0, 8)}.pdf`;
       const documentName = `Contrato • ${String((tenant as any).name ?? tenantSlug)} • ${String((party as any).display_name ?? "Cliente")}`;
+
+      const apiToken2 = String(Deno.env.get("AUTENTIQUE_API_TOKEN") ?? "").trim();
+      if (!apiToken2) return err("missing_autentique_token", 500);
 
       const created = await autentiqueCreateDocument({
         apiToken: apiToken2,
@@ -901,7 +758,52 @@ serve(async (req) => {
       return json({ ok: true, signing_link: signingLink, document_id: created.id });
     }
 
-    return err("invalid_action", 400);
+    // ---------------------
+    // Default: GET payload
+    // ---------------------
+
+    // Enrich party payload with full customer info (as requested)
+    const customer = getPartyCustomer((party as any)?.metadata ?? {});
+
+    return json({
+      ok: true,
+      tenant: {
+        id: (tenant as any)?.id,
+        slug: (tenant as any)?.slug,
+        name: (tenant as any)?.name,
+        palette: portalPalette,
+        logo_url: tenantLogoUrl,
+      },
+      proposal: {
+        id: pr.id,
+        token: pr.token,
+        status: effectiveProposalStatus,
+        approved_at: pr.approved_at,
+        approval_json: pr.approval_json,
+        autentique_json: pr.autentique_json,
+      },
+      party: {
+        id: (party as any)?.id,
+        display_name: (party as any)?.display_name,
+        metadata: (party as any)?.metadata ?? {},
+        logo_url: partyLogoUrl,
+        customer: {
+          name: safeStr((party as any)?.display_name),
+          legal_name: safeStr(customer?.legal_name) || null,
+          document: safeStr(customer?.document) || null,
+          whatsapp: safeStr(customer?.whatsapp) || null,
+          email: safeStr(customer?.email) || null,
+          address_full: partyAddressFull(customer) || null,
+          address: safeStr(customer?.address) || null,
+          city: safeStr(customer?.city) || null,
+          uf: safeStr(customer?.uf) || null,
+          cep: safeStr(customer?.cep) || null,
+        },
+      },
+      report,
+      calendar,
+      history,
+    });
   } catch (e: any) {
     const msg = String(e?.message ?? String(e) ?? "internal_error").trim();
 

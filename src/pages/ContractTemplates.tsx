@@ -34,7 +34,7 @@ function ensureArray(v: any): any[] {
   return Array.isArray(v) ? v : [];
 }
 
-const DEFAULT_BODY = `CONTRATO / PROPOSTA\n\nTenant: {{tenant_name}}\nCliente: {{party_name}}\n\nESCOPO (deliverables)\n{{scope_lines}}\n\nGerado em: {{generated_at}}\n`;
+const DEFAULT_BODY = `CONTRATO / PROPOSTA\n\nTenant: {{tenant_name}}\nCliente: {{party_name}}\n\nCliente (documento): {{party_document}}\nCliente (whatsapp): {{party_whatsapp}}\nCliente (email): {{party_email}}\nCliente (endereço): {{party_address_full}}\n\nESCOPO (deliverables)\n{{scope_lines}}\n\nGerado em: {{generated_at}}\n`;
 
 export default function ContractTemplates() {
   const qc = useQueryClient();
@@ -106,9 +106,24 @@ export default function ContractTemplates() {
     setSaving(true);
     try {
       const currentBj = tenantQ.data?.branding_json ?? {};
-      const nextTemplates = [...templates];
 
-      const idx = activeTemplate ? nextTemplates.findIndex((t) => String(t.id) === String(activeTemplate.id)) : -1;
+      // IMPORTANT: use the freshest branding_json to avoid lost updates when other screens change branding_json.
+      const { data: freshTenant, error: freshErr } = await supabase
+        .from("tenants")
+        .select("branding_json")
+        .eq("id", activeTenantId)
+        .maybeSingle();
+      if (freshErr) throw freshErr;
+
+      const freshestBj = (freshTenant as any)?.branding_json ?? currentBj;
+      const freshestTemplates = ensureArray(freshestBj.contract_templates).filter(Boolean) as ContractTemplate[];
+
+      const nextTemplates = [...freshestTemplates];
+
+      const idx = activeTemplate
+        ? nextTemplates.findIndex((t) => String(t.id) === String(activeTemplate.id))
+        : -1;
+
       const nextRow: ContractTemplate = {
         id: activeTemplate?.id ?? randomId(),
         name: draftName.trim(),
@@ -119,7 +134,7 @@ export default function ContractTemplates() {
       if (idx >= 0) nextTemplates[idx] = nextRow;
       else nextTemplates.unshift(nextRow);
 
-      const nextBj = { ...currentBj, contract_templates: nextTemplates };
+      const nextBj = { ...freshestBj, contract_templates: nextTemplates };
       const { error } = await supabase.from("tenants").update({ branding_json: nextBj }).eq("id", activeTenantId);
       if (error) throw error;
 
@@ -145,8 +160,17 @@ export default function ContractTemplates() {
 
     setSaving(true);
     try {
-      const currentBj = tenantQ.data?.branding_json ?? {};
-      const nextTemplates = templates.filter((t) => String(t.id) !== String(activeTemplate.id));
+      const { data: freshTenant, error: freshErr } = await supabase
+        .from("tenants")
+        .select("branding_json")
+        .eq("id", activeTenantId)
+        .maybeSingle();
+      if (freshErr) throw freshErr;
+
+      const currentBj = (freshTenant as any)?.branding_json ?? tenantQ.data?.branding_json ?? {};
+      const currentTemplates = ensureArray(currentBj.contract_templates).filter(Boolean) as ContractTemplate[];
+
+      const nextTemplates = currentTemplates.filter((t) => String(t.id) !== String(activeTemplate.id));
       const nextBj = { ...currentBj, contract_templates: nextTemplates };
       const { error } = await supabase.from("tenants").update({ branding_json: nextBj }).eq("id", activeTenantId);
       if (error) throw error;
@@ -182,6 +206,8 @@ export default function ContractTemplates() {
               <div className="mt-1 text-sm text-slate-600">
                 Modelos (por tenant) usados para gerar o PDF enviado ao Autentique. Variáveis suportadas: {" "}
                 <span className="font-mono">{"{{tenant_name}}"}</span>, <span className="font-mono">{"{{party_name}}"}</span>,{" "}
+                <span className="font-mono">{"{{party_document}}"}</span>, <span className="font-mono">{"{{party_whatsapp}}"}</span>,{" "}
+                <span className="font-mono">{"{{party_email}}"}</span>, <span className="font-mono">{"{{party_address_full}}"}</span>,{" "}
                 <span className="font-mono">{"{{scope_lines}}"}</span>, <span className="font-mono">{"{{generated_at}}"}</span>.
               </div>
             </div>
@@ -272,6 +298,24 @@ export default function ContractTemplates() {
                         </Button>
                         <Button type="button" variant="outline" size="sm" className="rounded-xl" onClick={() => insertVariable("party_name")}>
                           + {"{{party_name}}"}
+                        </Button>
+                        <Button type="button" variant="outline" size="sm" className="rounded-xl" onClick={() => insertVariable("party_document")}>
+                          + {"{{party_document}}"}
+                        </Button>
+                        <Button type="button" variant="outline" size="sm" className="rounded-xl" onClick={() => insertVariable("party_whatsapp")}>
+                          + {"{{party_whatsapp}}"}
+                        </Button>
+                        <Button type="button" variant="outline" size="sm" className="rounded-xl" onClick={() => insertVariable("party_email")}>
+                          + {"{{party_email}}"}
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="rounded-xl"
+                          onClick={() => insertVariable("party_address_full")}
+                        >
+                          + {"{{party_address_full}}"}
                         </Button>
                         <Button type="button" variant="outline" size="sm" className="rounded-xl" onClick={() => insertVariable("scope_lines")}>
                           + {"{{scope_lines}}"}

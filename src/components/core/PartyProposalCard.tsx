@@ -352,7 +352,7 @@ export function PartyProposalCard({
                   </SelectTrigger>
                   <SelectContent>
                     {templates.length === 0 ? (
-                      <SelectItem value="" disabled>
+                      <SelectItem value="__no_templates__" disabled>
                         Nenhum template cadastrado
                       </SelectItem>
                     ) : (
