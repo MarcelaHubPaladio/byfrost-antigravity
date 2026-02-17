@@ -54,6 +54,16 @@ function safe(s: any) {
   return String(s ?? "").trim();
 }
 
+function initials(name: string) {
+  const parts = String(name ?? "")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2);
+  const i = parts.map((p) => p[0]?.toUpperCase()).join("");
+  return i || "?";
+}
+
 export default function PublicProposal() {
   const { tenantSlug, token } = useParams();
   const [data, setData] = useState<ApiData | null>(null);
@@ -241,7 +251,7 @@ export default function PublicProposal() {
         showSuccess("Escopo aprovado.");
       } else {
         const link = safe(json?.signing_link);
-        showSuccess("Link de assinatura gerado.");
+        showSuccess("Link gerado.");
         if (link) window.open(link, "_blank", "noopener,noreferrer");
       }
 
@@ -257,81 +267,121 @@ export default function PublicProposal() {
   const party = data?.party;
   const proposal = data?.proposal;
 
+  const isSigned =
+    String(proposal?.status ?? "").toLowerCase() === "signed" ||
+    String(proposal?.autentique_status ?? "").toLowerCase() === "signed";
+
+  const openContract = () => {
+    const link = safe(proposal?.signing_link);
+    if (!link) {
+      showError("Link do contrato não disponível.");
+      return;
+    }
+    window.open(link, "_blank", "noopener,noreferrer");
+  };
+
   return (
     <PublicPortalShell palette={data?.palette}>
       {loading && !data ? (
         <PublicPortalLoading label="Carregando proposta…" />
       ) : (
         <div className="mx-auto max-w-5xl space-y-4">
-          <Card className="rounded-[34px] border-black/10 bg-white/85 p-5 shadow-sm backdrop-blur">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div className="min-w-0">
-                <div className="text-xs font-semibold" style={{ color: "var(--public-card-text)" as any }}>
-                  Proposta pública
-                </div>
-                <div className="mt-1 text-lg font-bold text-slate-900 line-clamp-1">
-                  {party?.display_name ?? "Cliente"}
-                </div>
-                <div className="mt-1 text-xs text-slate-600">
-                  {tenant?.name ?? tenantSlug} • token: {String(token ?? "").slice(0, 6)}…
-                </div>
-              </div>
+          <Tabs defaultValue="scope" className="w-full">
+            <Card className="rounded-[34px] border-black/10 bg-white/85 p-4 shadow-sm backdrop-blur">
+              <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                <div className="flex items-center gap-4">
+                  <div className="grid h-24 w-24 place-items-center overflow-hidden rounded-[30px] bg-white shadow-sm">
+                    {party?.logo_url ? (
+                      <img src={party.logo_url} alt="Logo" className="h-20 w-20 object-contain" />
+                    ) : (
+                      <div className="text-xl font-bold text-slate-700">{initials(party?.display_name ?? "")}</div>
+                    )}
+                  </div>
 
-              <div className="flex flex-wrap items-center gap-2">
-                <Badge variant="secondary">{proposal?.status ?? (loading ? "carregando" : "—")}</Badge>
-                {proposal?.autentique_status ? (
-                  <Badge variant="outline">Assinatura: {proposal.autentique_status}</Badge>
-                ) : null}
-              </div>
-            </div>
-          </Card>
+                  <div className="min-w-0">
+                    <div className="text-xs font-semibold" style={{ color: "var(--public-card-text)" as any }}>
+                      Proposta pública
+                    </div>
+                    <div className="mt-1 text-lg font-bold text-slate-900 line-clamp-1">
+                      {party?.display_name ?? "Cliente"}
+                    </div>
+                    <div className="mt-1 text-xs text-slate-600">
+                      {tenant?.name ?? tenantSlug} • token: {String(token ?? "").slice(0, 6)}…
+                    </div>
+                  </div>
+                </div>
 
-          {loadError ? (
-            <Card className="rounded-[34px] border-red-200 bg-white/85 p-5 shadow-sm backdrop-blur">
-              <div className="text-sm font-semibold text-red-800">Não foi possível carregar a proposta</div>
-              <div className="mt-2 text-sm text-red-800">{loadError}</div>
-              <div className="mt-4 grid gap-2 text-xs text-slate-700">
-                <div>
-                  <span className="font-semibold">Endpoint:</span> {FN_URL}
+                <div className="flex flex-col gap-3 lg:items-end">
+                  <TabsList className="flex h-auto flex-wrap justify-start gap-2 rounded-[24px] bg-white/70 p-2">
+                    <TabsTrigger value="scope" className="rounded-2xl">
+                      Proposta / Escopo
+                    </TabsTrigger>
+                    <TabsTrigger value="report" className="rounded-2xl">
+                      Relatório
+                    </TabsTrigger>
+                    <TabsTrigger value="calendar" className="rounded-2xl">
+                      Calendário
+                    </TabsTrigger>
+                    <TabsTrigger value="history" className="rounded-2xl">
+                      Linha do tempo
+                    </TabsTrigger>
+                  </TabsList>
+
+                  <div className="flex flex-wrap items-center justify-start gap-2 lg:justify-end">
+                    {proposal?.signing_link ? (
+                      <Button variant="outline" className="rounded-2xl" onClick={openContract}>
+                        {isSigned ? "Ver contrato" : "Assinar contrato"}
+                      </Button>
+                    ) : (
+                      <Button
+                        variant="outline"
+                        className="rounded-2xl"
+                        onClick={() => act("sign")}
+                        disabled={loading || acting !== null || !proposal?.approved_at}
+                      >
+                        {acting === "sign" ? "Gerando…" : "Assinar contrato"}
+                      </Button>
+                    )}
+
+                    <Badge variant="secondary">{proposal?.status ?? (loading ? "carregando" : "—")}</Badge>
+                    {proposal?.autentique_status ? (
+                      <Badge variant="outline">Assinatura: {proposal.autentique_status}</Badge>
+                    ) : null}
+                  </div>
                 </div>
-                <div>
-                  <span className="font-semibold">Supabase URL em uso:</span> {SUPABASE_URL_IN_USE}
-                  {USING_FALLBACK_SUPABASE ? (
-                    <span className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-900">
-                      fallback
-                    </span>
-                  ) : null}
-                </div>
-                <div>
-                  <span className="font-semibold">tenantSlug:</span> {tenantSlug}
-                </div>
-                <div>
-                  <span className="font-semibold">token:</span> {token}
-                </div>
-              </div>
-              <div className="mt-4 flex justify-end gap-2">
-                <Button variant="outline" className="rounded-2xl" onClick={load}>
-                  Tentar novamente
-                </Button>
               </div>
             </Card>
-          ) : null}
 
-          <Tabs defaultValue="scope" className="w-full">
-            <TabsList className="flex h-auto flex-wrap justify-start gap-2 rounded-[28px] bg-white/65 p-2">
-              <TabsTrigger value="scope" className="rounded-2xl">
-                Proposta / Escopo
-              </TabsTrigger>
-              <TabsTrigger value="report" className="rounded-2xl">
-                Relatório
-              </TabsTrigger>
-              <TabsTrigger value="calendar" className="rounded-2xl">
-                Calendário
-              </TabsTrigger>
-              <TabsTrigger value="history" className="rounded-2xl">
-                Linha do tempo
-              </TabsTrigger>
-            </TabsList>
+            {loadError ? (
+              <Card className="rounded-[34px] border-red-200 bg-white/85 p-5 shadow-sm backdrop-blur">
+                <div className="text-sm font-semibold text-red-800">Não foi possível carregar a proposta</div>
+                <div className="mt-2 text-sm text-red-800">{loadError}</div>
+                <div className="mt-4 grid gap-2 text-xs text-slate-700">
+                  <div>
+                    <span className="font-semibold">Endpoint:</span> {FN_URL}
+                  </div>
+                  <div>
+                    <span className="font-semibold">Supabase URL em uso:</span> {SUPABASE_URL_IN_USE}
+                    {USING_FALLBACK_SUPABASE ? (
+                      <span className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-900">
+                        fallback
+                      </span>
+                    ) : null}
+                  </div>
+                  <div>
+                    <span className="font-semibold">tenantSlug:</span> {tenantSlug}
+                  </div>
+                  <div>
+                    <span className="font-semibold">token:</span> {token}
+                  </div>
+                </div>
+                <div className="mt-4 flex justify-end gap-2">
+                  <Button variant="outline" className="rounded-2xl" onClick={load}>
+                    Tentar novamente
+                  </Button>
+                </div>
+              </Card>
+            ) : null}
 
             <TabsContent value="scope" className="mt-4 space-y-4">
               <div className="grid gap-4 lg:grid-cols-2">
@@ -382,14 +432,15 @@ export default function PublicProposal() {
               </div>
 
               <Card className="rounded-[28px] border-black/10 bg-white/85 p-5 shadow-sm">
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div>
                     <div className="text-sm font-semibold text-slate-900">Escopo a ser entregue</div>
                     <div className="text-xs text-slate-600">
                       Gerado a partir dos templates dos offerings nos compromissos selecionados.
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
+
+                  <div className="flex flex-wrap items-center gap-2">
                     <Button
                       className="rounded-2xl"
                       onClick={() => act("approve")}
@@ -401,14 +452,26 @@ export default function PublicProposal() {
                           ? "Aprovando…"
                           : "Aprovar o escopo"}
                     </Button>
-                    <Button
-                      variant="outline"
-                      className="rounded-2xl"
-                      onClick={() => act("sign")}
-                      disabled={loading || acting !== null || !proposal?.approved_at}
-                    >
-                      {acting === "sign" ? "Gerando…" : "Assinar contrato"}
-                    </Button>
+
+                    {isSigned ? (
+                      <Button
+                        variant="outline"
+                        className="rounded-2xl"
+                        onClick={openContract}
+                        disabled={!proposal?.signing_link}
+                      >
+                        Ver contrato
+                      </Button>
+                    ) : (
+                      <Button
+                        variant="outline"
+                        className="rounded-2xl"
+                        onClick={() => act("sign")}
+                        disabled={loading || acting !== null || !proposal?.approved_at}
+                      >
+                        {acting === "sign" ? "Gerando…" : "Assinar contrato"}
+                      </Button>
+                    )}
                   </div>
                 </div>
 
@@ -430,13 +493,10 @@ export default function PublicProposal() {
 
                 {proposal?.signing_link ? (
                   <div className="mt-4 rounded-2xl border border-black/10 bg-white px-3 py-3 text-sm">
-                    <div className="font-semibold text-slate-900">Link de assinatura</div>
+                    <div className="font-semibold text-slate-900">Contrato</div>
                     <div className="mt-1 break-all text-xs text-slate-700">{proposal.signing_link}</div>
-                    <Button
-                      className="mt-3 rounded-2xl"
-                      onClick={() => window.open(proposal.signing_link!, "_blank", "noopener,noreferrer")}
-                    >
-                      Abrir assinatura
+                    <Button className="mt-3 rounded-2xl" onClick={openContract}>
+                      {isSigned ? "Ver contrato" : "Abrir assinatura"}
                     </Button>
                   </div>
                 ) : null}
