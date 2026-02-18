@@ -866,9 +866,11 @@ serve(async (req) => {
     const direction: WebhookDirection =
       normalized.meta.isCallEvent && callCounterpartPhone
         ? (forced === "outbound" ? "outbound" : "inbound")
-        : forced && strongOutbound
-          ? "outbound"
-          : forced ?? inferred;
+        : (forced === "inbound")
+          ? "inbound" // [MOD] TRUST explicit inbound override
+          : (forced === "outbound")
+            ? "outbound"
+            : inferred;
 
     console.log(`[${fn}] direction_resolved`, {
       tenant_id: instance.tenant_id,
@@ -1503,12 +1505,10 @@ serve(async (req) => {
         tenant_id: instance.tenant_id,
         instance_id: instance.id,
         direction: "inbound",
-        from_phone: normalized.from, // likely the group ID or participant ID? Z-API sends participant in 'from' sometimes?
-        // Z-API Group: 'from' is group ID (1203...) if not specified otherwise? 
-        // Actually usually: from=1203...@g.us, participant=5511...@c.us
-        // normalized.from is the group id if we used standard normalization on 'from'.
-        // Let's trust normalized.from is the group ID here.
-        to_phone: normalized.to,
+        from_phone: normalized.from,
+        // [MOD] Store Group ID in to_phone for inbound group messages.
+        // This ensures the frontend 'to_phone' matching works for all group messages.
+        to_phone: groupId,
         type: normalized.type,
         body_text: normalized.text,
         media_url: normalized.mediaUrl,
