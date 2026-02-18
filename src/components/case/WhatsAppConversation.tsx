@@ -282,6 +282,7 @@ export function WhatsAppConversation({
   const { activeTenantId } = useTenant();
   const { user } = useSession();
   const chatAccess = useChatInstanceAccess();
+  const [conversationMode, setConversationMode] = useState<"direct" | "group">("direct");
   const [tab, setTab] = useState<"messages" | "participants">("messages");
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
@@ -298,16 +299,44 @@ export function WhatsAppConversation({
     queryFn: async () => {
       const { data, error } = await supabase
         .from("cases")
-        .select("id,journey_id")
+        .select("id,journey_id,customer_entity_id,meta_json")
         .eq("tenant_id", activeTenantId!)
         .eq("id", caseId)
         .maybeSingle();
       if (error) throw error;
       if (!data) throw new Error("Case não encontrado");
-      return data as CaseRowLite;
+      return data as CaseRowLite & { customer_entity_id: string | null, meta_json: any };
     },
   });
 
+  const entityQ = useQuery({
+    queryKey: ["case_entity_phone", activeTenantId, caseQ.data?.customer_entity_id],
+    enabled: Boolean(activeTenantId && caseQ.data?.customer_entity_id),
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("core_entities")
+        .select("metadata")
+        .eq("tenant_id", activeTenantId!)
+        .eq("id", caseQ.data!.customer_entity_id!)
+        .single();
+      if (error) return null;
+      const m = data.metadata;
+      return (m?.whatsapp || m?.phone || m?.phone_number || m?.celular)?.replace(/\D/g, "") || null;
+    }
+  });
+
+  const waGroupId = caseQ.data?.meta_json?.monitoring?.whatsapp_group_id;
+  const entityPhone = entityQ.data; // The entity's phone number
+
+  // If group mode is active but no group configured, fallback to direct
+  useEffect(() => {
+    if (conversationMode === "group" && !waGroupId) {
+      setConversationMode("direct");
+    }
+  }, [conversationMode, waGroupId]);
+
+
+  // ... (tenantJourneyCfgQ, senderIsVendor, counterpartRoleLabel, instanceQ - keep as is) ...
   const tenantJourneyCfgQ = useQuery({
     queryKey: ["tenant_journey_cfg", activeTenantId, caseQ.data?.journey_id],
     enabled: Boolean(activeTenantId && caseQ.data?.journey_id),
@@ -351,19 +380,41 @@ export function WhatsAppConversation({
     },
   });
 
+
   const waMsgsQ = useQuery({
-    queryKey: ["wa_messages_case", activeTenantId, caseId],
+    // Include mode in key to refetch when switching
+    queryKey: ["wa_messages_case", activeTenantId, caseId, conversationMode, entityPhone, waGroupId],
     enabled: Boolean(activeTenantId && caseId),
     refetchInterval: 5000,
     refetchOnWindowFocus: true,
     queryFn: async () => {
-      const { data, error } = await supabase
+      let q = supabase
         .from("wa_messages")
         .select("id,direction,type,from_phone,to_phone,body_text,media_url,payload_json,occurred_at")
-        .eq("tenant_id", activeTenantId!)
-        .eq("case_id", caseId)
+        .eq("tenant_id", activeTenantId!);
+
+      if (conversationMode === "group" && waGroupId) {
+        // Fetch by group ID in from_phone OR to_phone
+        // Note: Z-API usually puts GroupJID in from/to. 
+        // We use .or() syntax properly.
+        q = q.or(`from_phone.eq.${waGroupId},to_phone.eq.${waGroupId}`);
+      } else {
+        // Direct Mode: 'case_id' OR 'entity_phone'
+        // If we have entityPhone, we search loosely for history.
+        if (entityPhone) {
+          // We want: (case_id = id) OR (from_phone = entityPhone) OR (to_phone = entityPhone)
+          // Supabase .or() syntax: "case_id.eq.ID,from_phone.eq.PHONE,..."
+          q = q.or(`case_id.eq.${caseId},from_phone.eq.${entityPhone},to_phone.eq.${entityPhone}`);
+        } else {
+          // Fallback to just case_id if no entity phone
+          q = q.eq("case_id", caseId);
+        }
+      }
+
+      const { data, error } = await q
         .order("occurred_at", { ascending: true })
         .limit(200);
+
       if (error) throw error;
       return (data ?? []) as WaMessageRow[];
     },
@@ -372,20 +423,24 @@ export function WhatsAppConversation({
   const instancePhone = instanceQ.data?.phone_number ?? null;
 
   const counterpartPhone = useMemo(() => {
+    // If Group mode, the counterpart IS the group ID (conceptually)
+    if (conversationMode === "group") return waGroupId;
+
     const msgs = waMsgsQ.data ?? [];
-    if (!msgs.length) return null;
+    if (!msgs.length) return entityPhone || null; // Fallback to entity phone if no msgs
 
+    // Try to deduce from messages
     const last = msgs[msgs.length - 1];
-
     const effectiveOutbound =
       samePhoneLoose(instancePhone, last.from_phone) ||
       (last.direction === "outbound" && !samePhoneLoose(instancePhone, last.to_phone));
 
     const candidate = effectiveOutbound ? last.to_phone ?? null : last.from_phone ?? null;
     if (looksLikeGroupNumber(candidate)) return null;
-    return candidate;
-  }, [waMsgsQ.data, instancePhone]);
+    return candidate || entityPhone;
+  }, [waMsgsQ.data, instancePhone, conversationMode, waGroupId, entityPhone]);
 
+  // ... (participants, logTimeline - keep as is) ...
   const participants = useMemo(() => {
     const s = new Set<string>();
     for (const m of waMsgsQ.data ?? []) {
@@ -412,7 +467,12 @@ export function WhatsAppConversation({
   const sendText = async () => {
     if (!activeTenantId) return;
     const inst = instanceQ.data;
-    const to = counterpartPhone;
+
+    // Determine destination
+    let to = counterpartPhone;
+    if (conversationMode === "group" && waGroupId) {
+      to = waGroupId;
+    }
 
     if (!inst?.id) {
       showError("Nenhuma instância WhatsApp ativa está vinculada ao contexto selecionado.");
@@ -420,7 +480,7 @@ export function WhatsAppConversation({
     }
 
     if (!to) {
-      showError("Não consegui identificar o destinatário (sem mensagens no case). ");
+      showError("Não consegui identificar o destinatário.");
       return;
     }
 
@@ -442,22 +502,22 @@ export function WhatsAppConversation({
 
       if (error) throw error;
       if (!data?.ok) {
+        // ...
         throw new Error(data?.error || "Falha no envio");
       }
 
       setText("");
       showSuccess("Mensagem preparada/enfileirada.");
 
-      await logTimeline({
-        event_type: "whatsapp_outbound",
-        message: `Mensagem enviada para ${counterpartRoleLabel}.`,
-        meta_json: { to, kind: "panel_send", preview: trimmed.slice(0, 240) },
-      });
-
+      // Auto-refresh using the same keys
       await Promise.all([
-        qc.invalidateQueries({ queryKey: ["wa_messages_case", activeTenantId, caseId] }),
+        // ... existing invalidation
+        qc.invalidateQueries({ queryKey: ["wa_messages_case", activeTenantId, caseId] }), // old key just in case
+        qc.invalidateQueries({ queryKey: ["wa_messages_case", activeTenantId, caseId, conversationMode, entityPhone, waGroupId] }),
         qc.invalidateQueries({ queryKey: ["timeline", activeTenantId, caseId] }),
       ]);
+
+
     } catch (e: any) {
       showError(`Falha ao enviar: ${e?.message ?? "erro"}`);
     } finally {
@@ -518,6 +578,36 @@ export function WhatsAppConversation({
         </div>
 
         <div className="flex items-center gap-2">
+          {/* Conversation Mode Toggles */}
+          {waGroupId && (
+            <div className="flex bg-slate-100 rounded-lg p-1 mr-2">
+              <button
+                type="button"
+                onClick={() => setConversationMode("direct")}
+                className={cn(
+                  "px-3 py-1 text-xs font-medium rounded-md transition-all",
+                  conversationMode === "direct"
+                    ? "bg-white text-slate-900 shadow-sm"
+                    : "text-slate-500 hover:text-slate-700"
+                )}
+              >
+                Direta
+              </button>
+              <button
+                type="button"
+                onClick={() => setConversationMode("group")}
+                className={cn(
+                  "px-3 py-1 text-xs font-medium rounded-md transition-all",
+                  conversationMode === "group"
+                    ? "bg-white text-slate-900 shadow-sm"
+                    : "text-slate-500 hover:text-slate-700"
+                )}
+              >
+                Grupo
+              </button>
+            </div>
+          )}
+
           <Button
             type="button"
             variant={tab === "messages" ? "default" : "secondary"}

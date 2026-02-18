@@ -92,12 +92,15 @@ export default function PublicProposal() {
       url.searchParams.set("tenant_slug", tenantSlug);
       url.searchParams.set("token", token);
 
-      const res = await fetch(url.toString(), {
-        method: "GET",
-        headers: {
-          apikey: SUPABASE_ANON_KEY_IN_USE,
-        },
-      });
+      const [res, rpcRes] = await Promise.all([
+        fetch(url.toString(), {
+          method: "GET",
+          headers: {
+            apikey: SUPABASE_ANON_KEY_IN_USE,
+          },
+        }),
+        publicSb.rpc("public_get_portal_data", { p_token: token })
+      ]);
 
       const text = await res.text();
       let json: any = null;
@@ -132,6 +135,26 @@ export default function PublicProposal() {
         }
 
         throw new Error(msg);
+      }
+
+      // Merge RPC data (tasks, timeline) into the Edge Function response
+      // The RPC returns { valid: true, tasks: [], timeline: [], cases: [] }
+      if (rpcRes.data?.valid) {
+        json.tasks = rpcRes.data.tasks || [];
+        // We can merge history or overwrite. The EF might return empty history anyway.
+        // Let's rely on RPC for history as it's what we want to fix.
+        // We need mapping: RPC timeline -> PublicTimelineEvent
+        // RPC cases -> PublicCase
+
+        // RPC returns timeline with meta_json, EF expects specific fields? 
+        // PublicTimelineEvent = { id, event_type, message, occurred_at, meta_json? }
+        // My RPC returns exactly that structure (from timeline_events).
+        // And cases needs { id, title, status }. My RPC returns that.
+
+        json.history = {
+          cases: rpcRes.data.cases || [],
+          events: rpcRes.data.timeline || []
+        };
       }
 
       setData(json as ApiData);

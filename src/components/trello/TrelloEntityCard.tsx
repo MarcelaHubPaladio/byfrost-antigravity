@@ -123,6 +123,7 @@ export function TrelloEntityCard({ tenantId, caseId, customerEntityId, metaJson 
             // Update monitoring info
             if (selectedEntityId) {
                 nextMeta.monitoring.whatsapp_number = waNumber;
+                nextMeta.monitoring.whatsapp_group_id = waGroupId;
                 nextMeta.monitoring.wa_instance_id = waInstanceId;
             } else {
                 nextMeta.monitoring = {};
@@ -237,6 +238,11 @@ export function TrelloEntityCard({ tenantId, caseId, customerEntityId, metaJson 
                                 <div className="text-sm text-slate-700">
                                     {metaJson.monitoring.whatsapp_number || "-"}
                                 </div>
+                                {metaJson.monitoring.whatsapp_group_id && (
+                                    <div className="text-[10px] text-slate-400 mt-0.5">
+                                        Grupo: {metaJson.monitoring.whatsapp_group_id}
+                                    </div>
+                                )}
                             </div>
                             <div>
                                 <div className="text-xs text-slate-500">Instância Observadora</div>
@@ -275,14 +281,26 @@ export function TrelloEntityCard({ tenantId, caseId, customerEntityId, metaJson 
                 {selectedEntityId && (
                     <>
                         <div className="space-y-1.5">
-                            <Label>Número do WhatsApp</Label>
+                            <Label>Número do WhatsApp (Privado)</Label>
                             <Input
                                 placeholder="5511999999999"
                                 value={waNumber}
                                 onChange={(e) => setWaNumber(e.target.value)}
                             />
                             <p className="text-[10px] text-slate-500">
-                                Número exato que será monitorado (formato internacional, apenas dígitos).
+                                Para conversas diretas com o cliente (formato internacional, apenas dígitos).
+                            </p>
+                        </div>
+
+                        <div className="space-y-1.5">
+                            <Label>ID do Grupo WhatsApp (Opcional)</Label>
+                            <Input
+                                placeholder="1203630..."
+                                value={waGroupId}
+                                onChange={(e) => setWaGroupId(e.target.value)}
+                            />
+                            <p className="text-[10px] text-slate-500">
+                                Para monitorar um grupo específico. (ex: 1203...)
                             </p>
                         </div>
 
