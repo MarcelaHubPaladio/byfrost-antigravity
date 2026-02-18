@@ -47,8 +47,25 @@ begin
       and c.customer_entity_id = v_entity_id
       and c.deleted_at is null
       and t.deleted_at is null
-    order by t.due_at asc nulls last, t.created_at desc
-    limit 50
+    
+    UNION ALL
+    
+    -- Fallback: Treat Trello/Kanban cards (Cases) as "Tasks" for the portal
+    -- This handles the scenario where the user considers the card itself as the task.
+    select
+      c.id,
+      c.title,
+      c.description::text,
+      c.status,
+      null as due_at, -- or c.due_date if column exists?
+      c.created_at
+    from public.cases c
+    join public.journeys j on c.journey_id = j.id
+    where c.tenant_id = v_tenant_id
+      and c.customer_entity_id = v_entity_id
+      and c.deleted_at is null
+      and j.key = 'trello' -- Only for Trello journey cards
+      and c.status <> 'archived' -- Filter out archived/closed if needed
   ),
   
   -- 3. Fetch Timeline (History)
