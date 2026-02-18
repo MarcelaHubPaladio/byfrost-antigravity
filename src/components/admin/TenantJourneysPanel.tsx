@@ -11,31 +11,14 @@ import { showError, showSuccess } from "@/utils/toast";
 import { cn } from "@/lib/utils";
 import { ArrowDown, ArrowUp, Plus, Sparkles, Trash2, Languages } from "lucide-react";
 
-// Default per-tenant config for optional journey: meta_content
-const META_CONTENT_DEFAULT_CONFIG = {
-  meta_content_enabled: true,
-  meta_autopublish_stories: true,
-  meta_autopublish_feed: true,
-  meta_autopublish_reels: false,
-  calendar_import_export_enabled: true,
-} as const;
-
-// Standard journey catalog bootstrap: Trello (Byfrost)
-const TRELLO_SECTOR_NAME = "Operações";
-const TRELLO_JOURNEY_KEY = "trello";
-const TRELLO_JOURNEY_NAME = "Trello (Byfrost)";
-const TRELLO_DEFAULT_STATE_MACHINE = {
-  states: ["BACKLOG", "FAZER", "EM_ANDAMENTO", "BLOQUEADO", "REVISAO", "CONCLUIDO"],
-  default: "BACKLOG",
-  labels: {
-    BACKLOG: "Backlog",
-    FAZER: "Fazer",
-    EM_ANDAMENTO: "Em andamento",
-    BLOQUEADO: "Bloqueado",
-    REVISAO: "Revisão",
-    CONCLUIDO: "Concluído",
-  },
-} as const;
+import {
+  META_CONTENT_DEFAULT_CONFIG,
+  TRELLO_DEFAULT_STATE_MACHINE,
+  TRELLO_JOURNEY_KEY,
+  TRELLO_JOURNEY_NAME,
+  TRELLO_SECTOR_NAME,
+} from "@/lib/journeys/catalog";
+import { JourneyConfig } from "@/lib/journeys/types";
 
 type SectorRow = {
   id: string;
@@ -326,7 +309,7 @@ export function TenantJourneysPanel() {
   );
   const calendarImportExportEnabled = Boolean(
     (configObj as any)?.calendar_import_export_enabled ??
-      META_CONTENT_DEFAULT_CONFIG.calendar_import_export_enabled
+    META_CONTENT_DEFAULT_CONFIG.calendar_import_export_enabled
   );
 
   const bootstrapTrelloJourney = async () => {
