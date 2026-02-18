@@ -326,7 +326,8 @@ export function WhatsAppConversation({
   });
 
   const waGroupId = caseQ.data?.meta_json?.monitoring?.whatsapp_group_id;
-  const entityPhone = entityQ.data; // The entity's phone number
+  // Prefer entity phone, but fallback to case metadata (common in Trello cards)
+  const entityPhone = entityQ.data || (caseQ.data?.meta_json?.monitoring?.whatsapp_number as string)?.replace(/\D/g, "") || null;
 
   // If group mode is active but no group configured, fallback to direct
   useEffect(() => {
