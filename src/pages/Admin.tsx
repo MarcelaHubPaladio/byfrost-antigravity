@@ -195,6 +195,7 @@ export default function Admin() {
 
   const [superAdminEmail, setSuperAdminEmail] = useState("");
   const [settingSuperAdmin, setSettingSuperAdmin] = useState(false);
+  const [viewingInboxLog, setViewingInboxLog] = useState<any>(null);
 
   const ensureFreshTokenForRls = async () => {
     try {
@@ -1970,15 +1971,52 @@ export default function Admin() {
                                   </div>
 
                                   <div className="min-w-0">
-                                    <div className="text-xs text-slate-900 truncate">
-                                      {cid ? `case ${cid.slice(0, 8)}…` : "sem case"}
-                                      {j?.key ? ` • ${j.key}` : ""}
+                                    <div className="flex items-center justify-between gap-2">
+                                      <div className="text-xs text-slate-900 truncate">
+                                        {cid ? `case ${cid.slice(0, 8)}…` : "sem case"}
+                                        {j?.key ? ` • ${j.key}` : ""}
+                                      </div>
+                                      <Button
+                                        variant="ghost"
+                                        className="h-6 w-6 p-0 rounded-full"
+                                        onClick={() => setViewingInboxLog(it)}
+                                        title="Ver JSON completo"
+                                      >
+                                        <Smartphone className="h-3 w-3 text-slate-400" />
+                                      </Button>
                                     </div>
                                     <div className="mt-0.5 text-[11px] text-slate-500 truncate">{reason ? `motivo: ${reason}` : ""}</div>
                                   </div>
                                 </div>
                               );
                             })}
+
+                            {/* Dialog para ver JSON do Inbox */}
+                            <Dialog open={Boolean(viewingInboxLog)} onOpenChange={() => setViewingInboxLog(null)}>
+                              <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto rounded-[22px]">
+                                <DialogHeader>
+                                  <DialogTitle>Webhook Payload & Meta</DialogTitle>
+                                  <DialogDescription>Dados brutos recebidos e processamento interno.</DialogDescription>
+                                </DialogHeader>
+                                <div className="space-y-4 pt-2">
+                                  <div>
+                                    <div className="text-[11px] font-semibold text-slate-700 uppercase mb-1">Payload (Z-API)</div>
+                                    <pre className="p-3 bg-slate-50 rounded-xl text-[10px] text-slate-800 overflow-x-auto border border-slate-100">
+                                      {JSON.stringify(viewingInboxLog?.payload_json, null, 2)}
+                                    </pre>
+                                  </div>
+                                  <div>
+                                    <div className="text-[11px] font-semibold text-slate-700 uppercase mb-1">Meta & Diagnostics</div>
+                                    <pre className="p-3 bg-slate-50 rounded-xl text-[10px] text-slate-800 overflow-x-auto border border-slate-100">
+                                      {JSON.stringify(viewingInboxLog?.meta_json, null, 2)}
+                                    </pre>
+                                  </div>
+                                </div>
+                                <DialogFooter>
+                                  <Button onClick={() => setViewingInboxLog(null)} className="rounded-2xl">Fechar</Button>
+                                </DialogFooter>
+                              </DialogContent>
+                            </Dialog>
 
                             {waInboxQ.isError && (
                               <div className="px-3 py-3 text-sm text-rose-700">Erro ao carregar wa_webhook_inbox: {(waInboxQ.error as any)?.message ?? ""}</div>

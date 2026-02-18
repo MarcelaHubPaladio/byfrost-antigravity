@@ -1258,18 +1258,18 @@ serve(async (req) => {
       }
 
       if (!counterpart) {
+        const rawTo = pickFirst(payload?.chatId, payload?.data?.chatId, payload?.to, payload?.toPhone);
         await logInbox({
           instance,
           ok: false,
           http_status: 400,
-          reason: "missing_to_phone",
+          reason: rawTo ? `missing_to_phone: ${rawTo}` : "missing_to_phone",
           direction,
           meta: {
             forced_direction: forced ?? null,
             inferred_direction: inferred,
             strong_outbound: strongOutbound,
-            // [MOD] Add potential group ID to meta for debugging
-            raw_chat_id: pickFirst(payload?.chatId, payload?.data?.chatId, payload?.to, payload?.toPhone)
+            raw_chat_id: rawTo
           },
         });
         return new Response("Missing to", { status: 400, headers: corsHeaders });
@@ -1771,8 +1771,9 @@ serve(async (req) => {
       return new Response("Internal Server Error", { status: 500, headers: corsHeaders });
     }
 
-    const resData = (rpcResult as any)?.[0] ?? (rpcResult as any); // Handle single object or array return
-    const { ok: rpcOk, case_id: caseId, message_id: msgId, event: rpcEvent, details: rpcDetails } = resData || {};
+    const resData = (rpcResult as any)?.[0] ?? (rpcResult as any);
+    const { ok: rpcOk, case_id: rpcCaseId, message_id: msgId, event: rpcEvent, details: rpcDetails } = resData || {};
+    const caseId = rpcCaseId; // Alias for the rest of the code
 
     console.log(`[${fn}] RPC executed`, {
       resData,
