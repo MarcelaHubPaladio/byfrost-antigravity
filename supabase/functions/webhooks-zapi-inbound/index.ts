@@ -1432,11 +1432,12 @@ serve(async (req) => {
 
       if (!monitoredCase) {
         // Ignore unmonitored group message
+        // [MOD] Append groupId to reason for easier debugging in Admin UI
         await logInbox({
           instance,
           ok: true,
           http_status: 200,
-          reason: "group_message_ignored_unmonitored",
+          reason: `group_ignored_unmonitored: ${groupId}`,
           direction: "inbound",
           meta: { conversation_group_id: groupId },
         });
@@ -1470,6 +1471,16 @@ serve(async (req) => {
         console.error(`[${fn}] Failed to insert monitored group message`, { msgErr });
         return new Response("Failed to insert group message", { status: 500, headers: corsHeaders });
       }
+
+      await logInbox({
+        instance,
+        ok: true,
+        http_status: 200,
+        reason: `group_monitored: ${groupId}`,
+        direction: "inbound",
+        case_id: monitoredCase.id,
+        meta: { conversation_group_id: groupId, case_id: monitoredCase.id },
+      });
 
       return new Response(JSON.stringify({ ok: true, case_id: monitoredCase.id, group_monitored: true }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
