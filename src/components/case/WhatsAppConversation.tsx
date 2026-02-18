@@ -395,7 +395,10 @@ export function WhatsAppConversation({
 
       if (conversationMode === "group" && waGroupId) {
         // Fetch by group ID in from_phone OR to_phone
-        q = q.or(`from_phone.eq.${waGroupId},to_phone.eq.${waGroupId}`);
+        // We handle exact match OR partial match because sometimes group ID is stored with/without suffix
+        const cleanId = waGroupId.split("@")[0];
+        // We use ilike for a loose match on the ID part
+        q = q.or(`from_phone.ilike.%${cleanId}%,to_phone.ilike.%${cleanId}%`);
       } else {
         // Direct Mode: 'case_id' OR 'entity_phone'
         if (entityPhone) {

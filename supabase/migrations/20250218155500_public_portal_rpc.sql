@@ -21,8 +21,12 @@ begin
      and deleted_at is null;
 
   if v_entity_id is null then
-    return jsonb_build_object('valid', false);
+    return jsonb_build_object('valid', false, 'reason', 'entity_not_found');
   end if;
+
+  -- DEBUG: Include debug info in result
+  -- select count(*) from public.cases where customer_entity_id = v_entity_id into v_case_count;
+
 
   -- 2. Fetch Tasks (linked to cases of this entity)
   -- We assume tasks are linked to cases, and cases to the entity.
@@ -56,6 +60,7 @@ begin
       te.event_type,
       te.message,
       te.created_at,
+      te.occurred_at,
       te.meta_json
     from public.timeline_events te
     join public.cases c on te.case_id = c.id
@@ -83,7 +88,9 @@ begin
     'valid', true,
     'tasks', (select coalesce(jsonb_agg(to_jsonb(r)), '[]'::jsonb) from t_rows r),
     'timeline', (select coalesce(jsonb_agg(to_jsonb(r)), '[]'::jsonb) from tl_rows r),
-    'cases', (select coalesce(jsonb_agg(to_jsonb(r)), '[]'::jsonb) from c_rows r)
+    'cases', (select coalesce(jsonb_agg(to_jsonb(r)), '[]'::jsonb) from c_rows r),
+    'debug_entity_id', v_entity_id,
+    'debug_cases_found', (select count(*) from public.cases c where c.tenant_id = v_tenant_id and c.customer_entity_id = v_entity_id)
   ) into v_result;
 
   return v_result;
