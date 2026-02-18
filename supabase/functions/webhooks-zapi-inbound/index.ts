@@ -1239,6 +1239,14 @@ serve(async (req) => {
       // Some providers don't send an explicit `to`, only chatId/phone.
       let counterpart = normalized.to ?? inferOutboundCounterpart(payload);
 
+      // [MOD] If normalization failed but we have a group ID, use it as counterpart.
+      if (!counterpart) {
+        const rawTo = pickFirst(payload?.to, payload?.toPhone, payload?.chatId, payload?.data?.chatId);
+        if (looksLikeWhatsAppGroupId(rawTo)) {
+          counterpart = rawTo;
+        }
+      }
+
       // If normalization picked chatId as `from` (common), use it as counterpart.
       if ((!counterpart || (instPhone && counterpart === instPhone)) && normalized.from && normalized.from !== instPhone) {
         counterpart = normalized.from;
@@ -1256,7 +1264,13 @@ serve(async (req) => {
           http_status: 400,
           reason: "missing_to_phone",
           direction,
-          meta: { forced_direction: forced ?? null, inferred_direction: inferred, strong_outbound: strongOutbound },
+          meta: {
+            forced_direction: forced ?? null,
+            inferred_direction: inferred,
+            strong_outbound: strongOutbound,
+            // [MOD] Add potential group ID to meta for debugging
+            raw_chat_id: pickFirst(payload?.chatId, payload?.data?.chatId, payload?.to, payload?.toPhone)
+          },
         });
         return new Response("Missing to", { status: 400, headers: corsHeaders });
       }
@@ -1265,64 +1279,85 @@ serve(async (req) => {
       const fromPhone = instPhone ?? normalized.from ?? null;
 
       // Link outbound to an existing customer case when possible
-      const counterpartVariants = Array.from(buildBrPhoneVariantsE164(counterpart));
+      // [MOD] If counterpart is a group ID, don't try to format as phone, use it directly
+      const isGroup = looksLikeWhatsAppGroupId(counterpart);
+      const counterpartVariants = isGroup ? [counterpart] : Array.from(buildBrPhoneVariantsE164(counterpart));
       let caseId: string | null = null;
 
       try {
-        // 1) Find customer by phone variants
-        const { data: existingCustomer } = await supabase
-          .from("customer_accounts")
-          .select("id")
-          .eq("tenant_id", instance.tenant_id)
-          .in("phone_e164", counterpartVariants.length ? counterpartVariants : [counterpart])
-          .is("deleted_at", null)
-          .order("updated_at", { ascending: false })
-          .limit(1)
-          .maybeSingle();
-
-        const customerId = (existingCustomer as any)?.id ?? null;
-
-        if (customerId) {
-          // Prefer an open case for this customer.
-          const { data: c } = await supabase
+        // [MOD] Special handling for outbound group messages
+        if (isGroup) {
+          const { data: monCase } = await supabase
             .from("cases")
             .select("id")
             .eq("tenant_id", instance.tenant_id)
             .eq("status", "open")
-            .eq("customer_id", customerId)
+            .is("deleted_at", null)
+            .contains("meta_json", { monitoring: { whatsapp_group_id: counterpart } })
+            .limit(1)
+            .maybeSingle();
+
+          if (monCase) caseId = monCase.id;
+        } else {
+          // Normal individual phone logic
+          // 1) Find customer by phone variants
+          const { data: existingCustomer } = await supabase
+            .from("customer_accounts")
+            .select("id")
+            .eq("tenant_id", instance.tenant_id)
+            .in("phone_e164", counterpartVariants.length ? counterpartVariants : [counterpart])
             .is("deleted_at", null)
             .order("updated_at", { ascending: false })
             .limit(1)
             .maybeSingle();
-          caseId = (c as any)?.id ?? null;
-        }
 
-        // 2) Fallback: open case matching phone stored in meta_json
-        if (!caseId) {
-          const keys = ["customer_phone", "counterpart_phone", "phone", "whatsapp"];
-          for (const k of keys) {
-            for (const p of counterpartVariants.length ? counterpartVariants : [counterpart]) {
-              const { data: c } = await supabase
-                .from("cases")
-                .select("id")
-                .eq("tenant_id", instance.tenant_id)
-                .eq("status", "open")
-                .contains("meta_json", { [k]: p })
-                .is("deleted_at", null)
-                .order("updated_at", { ascending: false })
-                .limit(1)
-                .maybeSingle();
-              caseId = (c as any)?.id ?? null;
-              if (caseId) break;
-            }
-            if (caseId) break;
+          const customerId = (existingCustomer as any)?.id ?? null;
+
+          if (customerId) {
+            // Prefer an open case for this customer.
+            const { data: c } = await supabase
+              .from("cases")
+              .select("id")
+              .eq("tenant_id", instance.tenant_id)
+              .eq("status", "open")
+              .eq("customer_id", customerId)
+              .is("deleted_at", null)
+              .order("updated_at", { ascending: false })
+              .limit(1)
+              .maybeSingle();
+            caseId = (c as any)?.id ?? null;
           }
         }
 
-        // 3) Fallback: last case that already has message history with this phone
-        if (!caseId) {
-          const c = await findOpenCaseByRecentMessages(counterpartVariants.length ? counterpartVariants : [counterpart]);
-          caseId = c?.id ? String(c.id) : null;
+        // 2) Fallback: open case matching phone stored in meta_json (only if not already found and not group)
+        // 2) Fallback: open case matching phone stored in meta_json (only if not already found and not group)
+        if (!caseId && !isGroup) {
+          if (!caseId) {
+            const keys = ["customer_phone", "counterpart_phone", "phone", "whatsapp"];
+            for (const k of keys) {
+              for (const p of counterpartVariants.length ? counterpartVariants : [counterpart]) {
+                const { data: c } = await supabase
+                  .from("cases")
+                  .select("id")
+                  .eq("tenant_id", instance.tenant_id)
+                  .eq("status", "open")
+                  .contains("meta_json", { [k]: p })
+                  .is("deleted_at", null)
+                  .order("updated_at", { ascending: false })
+                  .limit(1)
+                  .maybeSingle();
+                caseId = (c as any)?.id ?? null;
+                if (caseId) break;
+              }
+              if (caseId) break;
+            }
+          }
+
+          // 3) Fallback: last case that already has message history with this phone
+          if (!caseId) {
+            const c = await findOpenCaseByRecentMessages(counterpartVariants.length ? counterpartVariants : [counterpart]);
+            caseId = c?.id ? String(c.id) : null;
+          }
         }
       } catch (e) {
         console.warn(`[${fn}] outbound_case_link_failed (ignored)`, { e: String((e as any)?.message ?? e) });
