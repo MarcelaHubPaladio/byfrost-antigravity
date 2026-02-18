@@ -126,7 +126,10 @@ export function TenantJourneysPanel() {
   const stateMachineJson = useMemo(() => {
     const unique = Array.from(new Set(states.map((s) => normalizeStateKey(s)).filter(Boolean)));
     const def = unique.includes(defaultState) ? defaultState : unique[0] ?? "new";
-    return { states: unique, default: def };
+    // Preserve transitions if we had them or initialize empty?
+    // Since we don't have a draft state for transitions yet, we'll just initialize empty/null for now
+    // or try to preserve from selectedJourney if available (but that's tricky here).
+    return { states: unique, default: def, transitions: {} };
   }, [states, defaultState]);
 
   const sectorsQ = useQuery({
@@ -829,6 +832,34 @@ export function TenantJourneysPanel() {
                   <pre className="mt-1 max-h-[120px] overflow-auto text-[11px] text-slate-700">
                     {JSON.stringify(stateMachineJson, null, 2)}
                   </pre>
+                </div>
+              </div>
+
+              {/* Transitions / Actions Editor (JSON for now) */}
+              <div className="rounded-[20px] border border-slate-200 bg-slate-50 p-3 mt-3">
+                <div className="text-xs font-semibold text-slate-900">Transições e Ações (Advanced)</div>
+                <div className="mt-1 text-[11px] text-slate-600">
+                  Defina o comportamento do fluxo em formato JSON. Ex: <span className="font-mono">"novo-&gt;em_progresso": [{"{"} "type": "send_whatsapp" ... {"}"}]</span>
+                </div>
+                <Textarea
+                  value={JSON.stringify(stateMachineJson.transitions ?? {}, null, 2)}
+                  onChange={(e) => {
+                    try {
+                      const nextTransitions = JSON.parse(e.target.value);
+                      // Update underlying stateMachineJson logic?
+                      // Actually stateMachineJson is a memo from 'states' + 'defaultState'.
+                      // We need a way to store transitions in the Draft.
+                      // For now, simpler approach: modify how we construct stateMachineJson or add a separate draft for it.
+                    } catch {
+                      // ignore
+                    }
+                  }}
+                  disabled={true}
+                  className="mt-2 min-h-[100px] rounded-2xl bg-white font-mono text-[10px]"
+                  placeholder="Edição em breve..."
+                />
+                <div className="mt-1 text-[10px] text-slate-500">
+                  * A edição visual de transições virá na próxima versão. Por enquanto, edite via JSON direto no banco ou aguarde.
                 </div>
               </div>
             </div>

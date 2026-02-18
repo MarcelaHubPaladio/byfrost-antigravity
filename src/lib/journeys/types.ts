@@ -3,6 +3,19 @@ export interface StateMachine {
   default: string;
   labels?: Record<string, string>;
   state_labels?: Record<string, string>; // Legacy support
+  transitions?: Record<string, ActionConfig[]>;
+}
+
+export type ActionType =
+  | 'send_whatsapp'
+  | 'create_trello_card'
+  | 'update_case_field'
+  | 'webhook';
+
+export interface ActionConfig {
+  type: ActionType;
+  params: Record<string, any>;
+  condition?: string; // ex: "case.amount > 1000"
 }
 
 export interface MetaContentConfig {

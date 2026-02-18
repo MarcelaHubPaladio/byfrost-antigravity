@@ -34,6 +34,8 @@ import {
 import { NewSalesOrderDialog } from "@/components/case/NewSalesOrderDialog";
 import { NewTrelloCardDialog } from "@/components/trello/NewTrelloCardDialog";
 import { getStateLabel } from "@/lib/journeyLabels";
+import { useJourneyTransition } from "@/hooks/useJourneyTransition";
+import { StateMachine } from "@/lib/journeys/types"
 
 const DASHBOARD_VIEW_MODE_KEY_PREFIX = "dashboard_view_mode_v1:";
 
@@ -759,23 +761,32 @@ export default function Dashboard() {
     }
   };
 
+  const { transitionState, updating: updatingCaseState } = useJourneyTransition();
+
   const updateCaseState = async (caseId: string, nextState: string) => {
     if (!activeTenantId) return;
     if (movingCaseId) return;
+    if (updatingCaseState) return;
+
+    // Find current state
+    const currentCase = filteredRows.find(c => c.id === caseId);
+    if (!currentCase) return;
+    const oldState = currentCase.state;
+    if (oldState === nextState) return;
+
     setMovingCaseId(caseId);
 
     try {
-      const { error } = await supabase
-        .from("cases")
-        .update({ state: nextState })
-        .eq("tenant_id", activeTenantId)
-        .eq("id", caseId);
-      if (error) throw error;
+      // Pass journeyConfig from selectedJourney (or from row if needed, but Dashboard assumes single journey context usually)
+      const journeyConfig = selectedJourney?.default_state_machine_json as unknown as StateMachine;
 
-      showSuccess(`Movido para ${getStateLabel(selectedJourney as any, nextState)}.`);
-      await qc.invalidateQueries({ queryKey: ["cases_by_tenant", activeTenantId] });
+      await transitionState(caseId, oldState, nextState, journeyConfig);
+
+      // Invalidation handled by hook, but Dashboard might need specific invalidations?
+      // Hook invalidates: case, timeline, cases_by_tenant, crm_cases_by_tenant.
+      // Dashboard uses: cases_by_tenant. So we are good.
     } catch (e: any) {
-      showError(`Falha ao mover: ${e?.message ?? "erro"}`);
+      // Toast already shown
     } finally {
       setMovingCaseId(null);
     }

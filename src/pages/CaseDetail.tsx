@@ -49,6 +49,8 @@ import {
 import { cn } from "@/lib/utils";
 import { showError, showSuccess } from "@/utils/toast";
 import { getStateLabel } from "@/lib/journeyLabels";
+import { useJourneyTransition } from "@/hooks/useJourneyTransition";
+import { StateMachine } from "@/lib/journeys/types";
 
 function ConfidencePill({ v }: { v: number | null | undefined }) {
   const pct = Math.round(Math.max(0, Math.min(1, Number(v ?? 0))) * 100);
@@ -94,7 +96,7 @@ export default function CaseDetail() {
   const [chatOnly, setChatOnly] = useState(false);
   const [updatingChatOnly, setUpdatingChatOnly] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const [updatingState, setUpdatingState] = useState(false);
+
 
   const [reviewOpen, setReviewOpen] = useState(false);
   const [reviewImageUrl, setReviewImageUrl] = useState<string | null>(null);
@@ -244,34 +246,19 @@ export default function CaseDetail() {
     return Array.from(new Set([...(arr.length ? arr : fallback)]));
   }, [caseQ.data?.journeys, caseQ.data?.state]);
 
+  const { transitionState, updating: updatingState } = useJourneyTransition();
+
   const updateState = async (next: string) => {
     if (!activeTenantId || !id) return;
     if (updatingState) return;
-    const prev = caseQ.data?.state ?? null;
+    const prev = caseQ.data?.state ?? "";
     if (!next || next === prev) return;
 
-    setUpdatingState(true);
     try {
-      const { error } = await supabase
-        .from("cases")
-        .update({ state: next })
-        .eq("tenant_id", activeTenantId)
-        .eq("id", id);
-      if (error) throw error;
-
-      // timeline é registrada automaticamente via trigger no banco
-
-      showSuccess(`Estado atualizado para: ${getStateLabel(caseQ.data?.journeys as any, next)}`);
-      await Promise.all([
-        qc.invalidateQueries({ queryKey: ["case", activeTenantId, id] }),
-        qc.invalidateQueries({ queryKey: ["timeline", activeTenantId, id] }),
-        qc.invalidateQueries({ queryKey: ["cases_by_tenant", activeTenantId] }),
-        qc.invalidateQueries({ queryKey: ["crm_cases_by_tenant", activeTenantId] }),
-      ]);
+      await transitionState(id, prev, next, caseQ.data?.journeys as unknown as StateMachine);
+      // Queries are invalidated inside the hook
     } catch (e: any) {
-      showError(`Falha ao atualizar estado: ${e?.message ?? "erro"}`);
-    } finally {
-      setUpdatingState(false);
+      // Error handled inside hook (toast shown)
     }
   };
 
@@ -396,26 +383,26 @@ export default function CaseDetail() {
         // Prefer instance assigned to this user (if configured)
         const instAssigned = user?.id
           ? await supabase
-              .from("wa_instances")
-              .select("id, phone_number")
-              .eq("tenant_id", activeTenantId)
-              .eq("status", "active")
-              .eq("assigned_user_id", user.id)
-              .order("created_at", { ascending: true })
-              .limit(1)
-              .maybeSingle()
+            .from("wa_instances")
+            .select("id, phone_number")
+            .eq("tenant_id", activeTenantId)
+            .eq("status", "active")
+            .eq("assigned_user_id", user.id)
+            .order("created_at", { ascending: true })
+            .limit(1)
+            .maybeSingle()
           : null;
 
         const { data: inst } = (instAssigned && (instAssigned as any).data)
           ? (instAssigned as any)
           : await supabase
-              .from("wa_instances")
-              .select("id, phone_number")
-              .eq("tenant_id", activeTenantId)
-              .eq("status", "active")
-              .order("created_at", { ascending: true })
-              .limit(1)
-              .maybeSingle();
+            .from("wa_instances")
+            .select("id, phone_number")
+            .eq("tenant_id", activeTenantId)
+            .eq("status", "active")
+            .order("created_at", { ascending: true })
+            .limit(1)
+            .maybeSingle();
 
         if (!inst?.id) throw new Error("Nenhuma instância WhatsApp ativa configurada.");
 
@@ -425,9 +412,8 @@ export default function CaseDetail() {
         const to = extractedCustomerPhone;
         if (!to) throw new Error("Telefone do cliente não encontrado nos campos extraídos.");
 
-        const text = `Olá! Recebemos seu pedido. O vendedor responsável foi avisado: ${vendorName}${
-          vendorPhone ? ` (${vendorPhone})` : ""
-        }. Precisa de mais algo?`;
+        const text = `Olá! Recebemos seu pedido. O vendedor responsável foi avisado: ${vendorName}${vendorPhone ? ` (${vendorPhone})` : ""
+          }. Precisa de mais algo?`;
 
         const url =
           "https://pryoirzeghatrgecwrci.supabase.co/functions/v1/integrations-zapi-send";
@@ -802,10 +788,10 @@ export default function CaseDetail() {
                       const hasJson = f.value_json !== null && f.value_json !== undefined;
                       return Boolean(vt) || hasJson;
                     }).length === 0 && (
-                    <div className="rounded-2xl border border-dashed border-slate-200 bg-white/60 p-4 text-xs text-slate-500">
-                      Ainda não há campos extraídos. Rode o processor (jobs) ou use o simulador.
-                    </div>
-                  )}
+                      <div className="rounded-2xl border border-dashed border-slate-200 bg-white/60 p-4 text-xs text-slate-500">
+                        Ainda não há campos extraídos. Rode o processor (jobs) ou use o simulador.
+                      </div>
+                    )}
                 </div>
               </div>
 
