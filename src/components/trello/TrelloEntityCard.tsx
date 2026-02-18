@@ -31,6 +31,9 @@ export function TrelloEntityCard({ tenantId, caseId, customerEntityId, metaJson 
     const [waInstanceId, setWaInstanceId] = useState(
         (metaJson?.monitoring?.wa_instance_id as string) || ""
     );
+    const [waGroupId, setWaGroupId] = useState(
+        (metaJson?.monitoring?.whatsapp_group_id as string) || ""
+    );
 
     // Sync state with props
     useMemo(() => {
@@ -128,6 +131,8 @@ export function TrelloEntityCard({ tenantId, caseId, customerEntityId, metaJson 
             } else {
                 nextMeta.monitoring = {};
             }
+
+            console.log("[TrelloEntityCard] Saving metadata:", nextMeta);
 
             const { error } = await supabase
                 .from("cases")

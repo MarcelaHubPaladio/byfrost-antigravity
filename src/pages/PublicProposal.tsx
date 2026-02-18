@@ -102,6 +102,8 @@ export default function PublicProposal() {
         publicSb.rpc("public_get_portal_data", { p_token: token })
       ]);
 
+      console.log("[PublicProposal] RPC Response:", rpcRes);
+
       const text = await res.text();
       let json: any = null;
       try {

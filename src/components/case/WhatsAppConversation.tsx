@@ -395,21 +395,28 @@ export function WhatsAppConversation({
 
       if (conversationMode === "group" && waGroupId) {
         // Fetch by group ID in from_phone OR to_phone
-        // Note: Z-API usually puts GroupJID in from/to. 
-        // We use .or() syntax properly.
         q = q.or(`from_phone.eq.${waGroupId},to_phone.eq.${waGroupId}`);
       } else {
         // Direct Mode: 'case_id' OR 'entity_phone'
-        // If we have entityPhone, we search loosely for history.
         if (entityPhone) {
+          // Remove non-digits to be safe, though Supabase stores as string it usually matches digits
+          const cleanPhone = entityPhone.replace(/\D/g, "");
           // We want: (case_id = id) OR (from_phone = entityPhone) OR (to_phone = entityPhone)
-          // Supabase .or() syntax: "case_id.eq.ID,from_phone.eq.PHONE,..."
-          q = q.or(`case_id.eq.${caseId},from_phone.eq.${entityPhone},to_phone.eq.${entityPhone}`);
+          // We also try to match with/without 55 prefix if possible, but let's stick to exact match first.
+          // Supabase OR syntax: column.eq.val,column2.eq.val
+          q = q.or(`case_id.eq.${caseId},from_phone.eq.${cleanPhone},to_phone.eq.${cleanPhone}`);
         } else {
-          // Fallback to just case_id if no entity phone
           q = q.eq("case_id", caseId);
         }
       }
+
+      console.log("[WhatsAppConversation] Querying messages:", {
+        caseId,
+        conversationMode,
+        entityPhone,
+        waGroupId,
+        qString: q['url'] ? q['url'].toString() : 'unknown'
+      });
 
       const { data, error } = await q
         .order("occurred_at", { ascending: true })
