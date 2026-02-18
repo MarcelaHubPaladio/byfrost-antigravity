@@ -62,7 +62,6 @@ begin
     where c.tenant_id = v_tenant_id
       and c.customer_entity_id = v_entity_id
       and c.deleted_at is null
-      and te.deleted_at is null
     order by te.occurred_at desc
     limit 50
   ),

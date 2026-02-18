@@ -1423,6 +1423,69 @@ serve(async (req) => {
 
     // -------------------- INBOUND routing below --------------------
 
+    // Group Message Handling
+    // Default: Ignore group messages unless they are explicitly monitored by an open case.
+    if (looksLikeWhatsAppGroupId(normalized.from) || looksLikeWhatsAppGroupId(normalized.to)) {
+      const groupId = looksLikeWhatsAppGroupId(normalized.from) ? normalized.from : normalized.to;
+
+      // Check if any open case is monitoring this group
+      // We look into meta_json->monitoring->whatsapp_group_id
+      const { data: monitoredCase } = await supabase
+        .from("cases")
+        .select("id")
+        .eq("tenant_id", instance.tenant_id)
+        .eq("status", "open")
+        .is("deleted_at", null)
+        .contains("meta_json", { monitoring: { whatsapp_group_id: groupId } })
+        .limit(1)
+        .maybeSingle();
+
+      if (!monitoredCase) {
+        // Ignore unmonitored group message
+        await logInbox({
+          instance,
+          ok: true,
+          http_status: 200,
+          reason: "group_message_ignored_unmonitored",
+          direction: "inbound",
+          meta: { conversation_group_id: groupId },
+        });
+        return new Response("Group message ignored", { status: 200, headers: corsHeaders });
+      }
+
+      console.log(`[${fn}] Monitored group message found`, { groupId, caseId: monitoredCase.id });
+
+      // Force linking to this case
+      // We insert directly to bypass the normal "find journey/customer" flow which expects individual numbers
+      const { error: msgErr } = await supabase.from("wa_messages").insert({
+        tenant_id: instance.tenant_id,
+        instance_id: instance.id,
+        direction: "inbound",
+        from_phone: normalized.from, // likely the group ID or participant ID? Z-API sends participant in 'from' sometimes?
+        // Z-API Group: 'from' is group ID (1203...) if not specified otherwise? 
+        // Actually usually: from=1203...@g.us, participant=5511...@c.us
+        // normalized.from is the group id if we used standard normalization on 'from'.
+        // Let's trust normalized.from is the group ID here.
+        to_phone: normalized.to,
+        type: normalized.type,
+        body_text: normalized.text,
+        media_url: normalized.mediaUrl,
+        payload_json: payload,
+        correlation_id: correlationId,
+        occurred_at: new Date().toISOString(),
+        case_id: monitoredCase.id,
+      });
+
+      if (msgErr) {
+        console.error(`[${fn}] Failed to insert monitored group message`, { msgErr });
+        return new Response("Failed to insert group message", { status: 500, headers: corsHeaders });
+      }
+
+      return new Response(JSON.stringify({ ok: true, case_id: monitoredCase.id, group_monitored: true }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     // Determine whether the inbound sender is a *vendor user* (users_profile.role='vendor').
     // This is used to support using the same WhatsApp instance for both:
     // - sales_order (vendor -> company number)
