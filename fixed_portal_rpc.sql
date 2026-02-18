@@ -11,10 +11,6 @@ declare
   v_tenant_id uuid;
   v_entity_id uuid;
   v_result jsonb;
-  v_cases_count int;
-  v_timeline_count int;
-  v_pubs_scheduled int;
-  v_pubs_published int;
 begin
   -- 1. Validate Token & Get Context
   select tenant_id, party_entity_id

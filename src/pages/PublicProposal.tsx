@@ -157,6 +157,13 @@ export default function PublicProposal() {
           cases: rpcRes.data.cases || [],
           events: rpcRes.data.timeline || []
         };
+
+        if (rpcRes.data.report) {
+          json.report = {
+            ...json.report,
+            ...rpcRes.data.report
+          };
+        }
       }
 
       setData(json as ApiData);
