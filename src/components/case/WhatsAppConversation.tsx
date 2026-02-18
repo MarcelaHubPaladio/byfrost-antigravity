@@ -191,9 +191,9 @@ function normalizeWaType(
 
   const hasImage = Boolean(
     payload?.image?.imageUrl ||
-      payload?.data?.image?.imageUrl ||
-      payload?.image?.thumbnailUrl ||
-      payload?.data?.image?.thumbnailUrl
+    payload?.data?.image?.imageUrl ||
+    payload?.image?.thumbnailUrl ||
+    payload?.data?.image?.thumbnailUrl
   );
 
   // Simulator support: inline Base64 payloads.
@@ -429,29 +429,20 @@ export function WhatsAppConversation({
 
     setSending(true);
     try {
-      const { data: sess } = await supabase.auth.getSession();
-      const token = sess.session?.access_token ?? null;
-
-      const url = "https://pryoirzeghatrgecwrci.supabase.co/functions/v1/integrations-zapi-send";
-      const res = await fetch(url, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify({
+      const { data, error } = await supabase.functions.invoke("integrations-zapi-send", {
+        body: {
           tenantId: activeTenantId,
           instanceId: inst.id,
           to,
           type: "text",
           text: trimmed,
           meta: { case_id: caseId },
-        }),
+        },
       });
 
-      const json = await res.json().catch(() => null);
-      if (!res.ok || !json?.ok) {
-        throw new Error(json?.error || `HTTP ${res.status}`);
+      if (error) throw error;
+      if (!data?.ok) {
+        throw new Error(data?.error || "Falha no envio");
       }
 
       setText("");
@@ -480,24 +471,14 @@ export function WhatsAppConversation({
 
     setTranscribingById((p) => ({ ...p, [msgId]: true }));
     try {
-      const { data: sess } = await supabase.auth.getSession();
-      const token = sess.session?.access_token;
-      if (!token) throw new Error("Sessão expirada. Faça login novamente.");
-
-      const url = "https://pryoirzeghatrgecwrci.supabase.co/functions/v1/wa-analyze-media";
-      const res = await fetch(url, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ tenantId: activeTenantId, messageId: msgId, mode }),
+      const { data, error } = await supabase.functions.invoke("wa-analyze-media", {
+        body: { tenantId: activeTenantId, messageId: msgId, mode },
       });
 
-      const json = await res.json().catch(() => null);
-      if (!res.ok || !json?.ok) {
-        const hint = json?.hint ? ` (${json.hint})` : "";
-        throw new Error(String(json?.error ?? `Falha (${res.status})`) + hint);
+      if (error) throw error;
+      if (!data?.ok) {
+        const hint = data?.hint ? ` (${data.hint})` : "";
+        throw new Error(String(data?.error ?? "Falha") + hint);
       }
 
       showSuccess(mode === "ocr" ? "Texto extraído da imagem." : "Mídia transcrita.");

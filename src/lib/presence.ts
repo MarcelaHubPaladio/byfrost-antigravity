@@ -1,4 +1,11 @@
-export type PresencePunchType = "ENTRY" | "BREAK_START" | "BREAK_END" | "BREAK2_START" | "BREAK2_END" | "EXIT";
+import {
+  type PresencePunchType,
+  inferNextPunchType,
+  getLocalYmd as formatYmdInTimeZone,
+} from "./presence-logic";
+
+export type { PresencePunchType };
+export { inferNextPunchType, formatYmdInTimeZone };
 
 export function titleizePunchType(t: PresencePunchType) {
   switch (t) {
@@ -17,23 +24,7 @@ export function titleizePunchType(t: PresencePunchType) {
   }
 }
 
-export function inferNextPunchType(last: PresencePunchType | null, breakRequired: boolean): PresencePunchType | null {
-  if (!last) return "ENTRY";
-  if (last === "ENTRY") return breakRequired ? "BREAK_START" : "EXIT";
-  if (last === "BREAK_START") return "BREAK_END";
-  if (last === "BREAK_END") return "EXIT";
-  return null;
-}
 
-export function formatYmdInTimeZone(timeZone: string, d = new Date()) {
-  const dtf = new Intl.DateTimeFormat("en-CA", {
-    timeZone,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  });
-  return dtf.format(d);
-}
 
 export function titleizeCaseState(s: string) {
   const map: Record<string, string> = {

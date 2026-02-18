@@ -1,7 +1,13 @@
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import {
+  type PresencePunchType,
+  type PresencePunchSource,
+  inferNextPunchType,
+  getLocalYmd,
+} from "./presence-logic.ts";
 
-export type PresencePunchType = "ENTRY" | "BREAK_START" | "BREAK_END" | "BREAK2_START" | "BREAK2_END" | "EXIT";
-export type PresencePunchSource = "APP" | "WHATSAPP";
+export type { PresencePunchType, PresencePunchSource };
+export { getLocalYmd, inferNextPunchType };
 
 type PresencePolicy = {
   id: string;
@@ -22,16 +28,6 @@ type PresenceEmployeeConfig = {
   scheduled_start_hhmm: string | null;
   planned_minutes: number | null;
 } | null;
-
-export function getLocalYmd(timeZone: string, d = new Date()) {
-  const dtf = new Intl.DateTimeFormat("en-CA", {
-    timeZone,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  });
-  return dtf.format(d); // YYYY-MM-DD
-}
 
 function getLocalHm(timeZone: string, d = new Date()) {
   const dtf = new Intl.DateTimeFormat("en-GB", {
@@ -77,12 +73,12 @@ export async function getPresenceTenantConfig(
   tenantId: string
 ): Promise<
   | {
-      enabled: boolean;
-      journeyId: string | null;
-      config: any;
-      flags: { presence_enabled: boolean; presence_allow_whatsapp_clocking: boolean };
-      presence: { time_zone: string; scheduled_start_hhmm: string; planned_minutes: number };
-    }
+    enabled: boolean;
+    journeyId: string | null;
+    config: any;
+    flags: { presence_enabled: boolean; presence_allow_whatsapp_clocking: boolean };
+    presence: { time_zone: string; scheduled_start_hhmm: string; planned_minutes: number };
+  }
   | { enabled: false; journeyId: null; config: any; flags: any; presence: any }
 > {
   const { data, error } = await supabase
@@ -158,13 +154,7 @@ export async function getPresenceEmployeeConfig(
   }
 }
 
-export function inferNextPunchType(last: PresencePunchType | null, breakRequired: boolean): PresencePunchType | null {
-  if (!last) return "ENTRY";
-  if (last === "ENTRY") return breakRequired ? "BREAK_START" : "EXIT";
-  if (last === "BREAK_START") return "BREAK_END";
-  if (last === "BREAK_END") return "EXIT";
-  return null;
-}
+
 
 export async function ensurePresenceDayCase(args: {
   supabase: SupabaseClient;
@@ -408,19 +398,19 @@ export async function clockPresencePunch(args: {
         day,
         policy: policy
           ? {
-              radius_meters: policy.radius_meters,
-              lateness_tolerance_minutes: policy.lateness_tolerance_minutes,
-              break_required: policy.break_required,
-              allow_outside_radius: policy.allow_outside_radius,
-              location_name: locationName,
-            }
+            radius_meters: policy.radius_meters,
+            lateness_tolerance_minutes: policy.lateness_tolerance_minutes,
+            break_required: policy.break_required,
+            allow_outside_radius: policy.allow_outside_radius,
+            location_name: locationName,
+          }
           : null,
         employee_config: employeeCfg
           ? {
-              scheduled_start_hhmm: scheduledStartHhmm,
-              scheduled_start_source: employeeCfg?.scheduled_start_hhmm ? "employee" : "tenant",
-              planned_minutes: employeeCfg?.planned_minutes ?? null,
-            }
+            scheduled_start_hhmm: scheduledStartHhmm,
+            scheduled_start_source: employeeCfg?.scheduled_start_hhmm ? "employee" : "tenant",
+            planned_minutes: employeeCfg?.planned_minutes ?? null,
+          }
           : null,
       },
     })

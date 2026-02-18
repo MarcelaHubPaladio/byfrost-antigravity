@@ -803,10 +803,10 @@ serve(async (req) => {
     const callCounterpartPhone =
       normalized.meta.isCallEvent && instancePhoneNorm
         ? (normalized.from && normalized.from === instancePhoneNorm
-            ? normalized.to
-            : normalized.to && normalized.to === instancePhoneNorm
-              ? normalized.from
-              : normalized.from) // default
+          ? normalized.to
+          : normalized.to && normalized.to === instancePhoneNorm
+            ? normalized.from
+            : normalized.from) // default
         : null;
 
     // For call events, treat the peer (caller/callee) as the effective sender for matching/case linking.
@@ -1431,14 +1431,14 @@ serve(async (req) => {
 
     const { data: vendorUserProfile, error: vendorUserErr } = inboundFromPhone
       ? await supabase
-          .from("users_profile")
-          .select("user_id,role,display_name,email,phone_e164")
-          .eq("tenant_id", instance.tenant_id)
-          .eq("role", "vendor")
-          .in("phone_e164", inboundFromVariants.length ? inboundFromVariants : [inboundFromPhone])
-          .is("deleted_at", null)
-          .limit(1)
-          .maybeSingle()
+        .from("users_profile")
+        .select("user_id,role,display_name,email,phone_e164")
+        .eq("tenant_id", instance.tenant_id)
+        .eq("role", "vendor")
+        .in("phone_e164", inboundFromVariants.length ? inboundFromVariants : [inboundFromPhone])
+        .is("deleted_at", null)
+        .limit(1)
+        .maybeSingle()
       : ({ data: null, error: null } as any);
 
     if (vendorUserErr) {
@@ -1590,6 +1590,21 @@ serve(async (req) => {
       ? (isSalesOrderJourney ? true : cfgRequireVendorRaw)
       : false;
 
+    const enqueueJob = async (type: string, idempotencyKey: string, payloadJson: any) => {
+      const { error } = await supabase.from("job_queue").insert({
+        tenant_id: instance.tenant_id,
+        type,
+        idempotency_key: idempotencyKey,
+        payload_json: payloadJson,
+        status: "pending",
+        run_after: new Date().toISOString(),
+      });
+      // Ignore conflict (idempotency)
+      if (error && !String(error.message ?? "").toLowerCase().includes("duplicate")) {
+        console.error(`[${fn}] Failed to enqueue job`, { type, error });
+      }
+    };
+
     // Contact label:
     // 1) wa_contacts.name (if stored)
     // 2) payload sender name
@@ -1609,793 +1624,120 @@ serve(async (req) => {
     const payloadLabel = inferContactLabel(payload, inboundFromPhone);
     const contactLabel = (waContactName && waContactName.trim()) ? waContactName : payloadLabel;
 
-    // Upsert WA contact (best-effort)
-    if (inboundFromPhone) {
-      const incomingName = typeof payloadLabel === "string" ? payloadLabel.trim() : "";
-      const nextName = incomingName && incomingName !== inboundFromPhone ? incomingName : waContactName;
-      await supabase
-        .from("wa_contacts")
-        .upsert(
-          {
-            tenant_id: instance.tenant_id,
-            phone_e164: inboundFromPhone,
-            name: nextName ?? null,
-            role_hint: cfgSenderIsVendor ? "vendor" : "customer",
-            meta_json: {
-              last_seen_at: new Date().toISOString(),
-              instance_id: instance.id,
-              zapi_instance_id: effectiveInstanceId,
-            },
-          },
-          { onConflict: "tenant_id,phone_e164" }
-        )
-        .then(() => null);
-    }
+    // Determine initial state based on type
+    const initialHint =
+      normalized.type === "image" ? cfgInitialStateOnImage : normalized.type === "location" ? cfgInitialStateOnLocation : cfgInitialStateOnText;
+    const initialState = pickInitialState(journey, initialHint);
 
-    // Vendor identification (by WhatsApp number) — only when configured.
-    let vendorId: string | null = null;
-    if (cfgSenderIsVendor && inboundFromPhone) {
-      // sales_order: only accept if sender is a vendor *user*.
-      if (isSalesOrderJourney && !isVendorUserSender) {
-        vendorId = null;
-      } else {
-        const { data: vendor } = await supabase
-          .from("vendors")
-          .select("id")
-          .eq("tenant_id", instance.tenant_id)
-          .eq("phone_e164", inboundFromPhone)
-          .maybeSingle();
-        if (vendor?.id) vendorId = vendor.id;
-
-        if (!vendorId && cfgAutoCreateVendor) {
-          const displayName =
-            String((vendorUserProfile as any)?.display_name ?? (vendorUserProfile as any)?.email ?? "").trim() ||
-            contactLabel;
-
-          // For sales_order we only auto-create vendor when the sender is a vendor user.
-          if (!isSalesOrderJourney || isVendorUserSender) {
-            const { data: createdVendor, error: vErr } = await supabase
-              .from("vendors")
-              .insert({
-                tenant_id: instance.tenant_id,
-                phone_e164: inboundFromPhone,
-                display_name: displayName,
-                active: true,
-              })
-              .select("id")
-              .single();
-            if (vErr) console.error(`[${fn}] Failed to create vendor`, { vErr });
-            vendorId = createdVendor?.id ?? null;
-          }
-        }
+    // Call RPC for atomic processing
+    const { data: rpcResult, error: rpcError } = await supabase.rpc("process_zapi_inbound_message", {
+      p_tenant_id: instance.tenant_id,
+      p_instance_id: instance.id,
+      p_zapi_instance_id: effectiveInstanceId,
+      p_direction: "inbound",
+      p_type: normalized.type,
+      p_from_phone: inboundFromPhone,
+      p_to_phone: inboundToPhone,
+      p_body_text: normalized.text,
+      p_media_url: normalized.mediaUrl,
+      p_payload_json: payload,
+      p_correlation_id: correlationId,
+      p_occurred_at: new Date().toISOString(),
+      p_journey_config: {
+        id: journey.id,
+        key: journey.key,
+        initial_state: initialState
+      },
+      p_sender_is_vendor: cfgSenderIsVendor,
+      p_contact_label: contactLabel,
+      p_options: {
+        create_case_on_text: cfgCreateCaseOnText,
+        create_case_on_location: cfgCreateCaseOnLocation,
+        pendencies_on_image: cfgPendenciesOnImage,
+        ocr_enabled: cfgOcrEnabled
       }
-    }
+    });
 
-    // Carrega jornadas CRM habilitadas (para linkar/puxar conversa pro CRM)
-    const crmJourneys: JourneyInfo[] = enabledJourneys.filter((j) => Boolean(j?.is_crm));
-
-    const crmJourneyIds = crmJourneys.map((j) => j.id);
-    const defaultCrmJourney = crmJourneys[0] ?? null;
-
-    // NEW: if we are opening a CRM case from inbound WhatsApp (customer -> vendor),
-    // link it to the vendor by the *assigned user* phone (preferred) OR instance phone (fallback).
-    const shouldAssignSellerToCrm = Boolean(!cfgSenderIsVendor && defaultCrmJourney?.id && sellerPhoneNorm);
-
-    let sellerVendorId: string | null = null;
-    if (shouldAssignSellerToCrm && sellerPhoneNorm) {
-      const { data: v, error: vErr } = await supabase
-        .from("vendors")
-        .upsert(
-          {
-            tenant_id: instance.tenant_id,
-            phone_e164: sellerPhoneNorm,
-            display_name: sellerDisplayName,
-            active: true,
-            deleted_at: null,
-          },
-          { onConflict: "tenant_id,phone_e164" }
-        )
-        .select("id")
-        .single();
-
-      if (vErr) {
-        console.error(`[${fn}] Failed to ensure seller vendor`, { vErr });
-      } else {
-        sellerVendorId = (v as any)?.id ?? null;
-      }
-    }
-
-    // Sempre tenta garantir customer (mesmo se a jornada roteada não for CRM),
-    // para conseguir linkar mensagens por customer_id e evitar duplicação.
-    let customerId: string | null = null;
-    const phoneVariants = inboundFromPhone ? Array.from(buildBrPhoneVariantsE164(inboundFromPhone)) : [];
-
-    if (!cfgSenderIsVendor && inboundFromPhone) {
-      const { data: existingCustomer, error: custErr } = await supabase
-        .from("customer_accounts")
-        .select("id,phone_e164,assigned_vendor_id")
-        .eq("tenant_id", instance.tenant_id)
-        .in("phone_e164", phoneVariants.length ? phoneVariants : [inboundFromPhone])
-        .is("deleted_at", null)
-        .order("updated_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      if (custErr) console.error(`[${fn}] Failed to load customer_accounts`, { custErr });
-
-      if (existingCustomer?.id) {
-        customerId = existingCustomer.id;
-
-        // If this is CRM, default the customer owner/vendor to the seller (instance phone) when not set.
-        if (shouldAssignSellerToCrm && sellerVendorId && !(existingCustomer as any).assigned_vendor_id) {
-          await supabase
-            .from("customer_accounts")
-            .update({ assigned_vendor_id: sellerVendorId })
-            .eq("tenant_id", instance.tenant_id)
-            .eq("id", existingCustomer.id)
-            .then(() => null);
-        }
-      } else {
-        const { data: createdCustomer, error: createCustErr } = await supabase
-          .from("customer_accounts")
-          .insert({
-            tenant_id: instance.tenant_id,
-            phone_e164: inboundFromPhone,
-            name: contactLabel && contactLabel !== inboundFromPhone ? contactLabel : null,
-            assigned_vendor_id: shouldAssignSellerToCrm ? sellerVendorId : null,
-            meta_json: { source: "whatsapp", correlation_id: correlationId },
-          })
-          .select("id")
-          .single();
-        if (createCustErr) console.error(`[${fn}] Failed to create customer_accounts`, { createCustErr });
-        customerId = createdCustomer?.id ?? null;
-      }
-    }
-
-    const getJourneyById = async (journeyId: string) => {
-      const { data, error } = await supabase
-        .from("journeys")
-        .select("id,key,name,is_crm,default_state_machine_json")
-        .eq("id", journeyId)
-        .maybeSingle();
-      if (error) {
-        console.error(`[${fn}] Failed to load journey by id`, { journeyId, error });
-        return null;
-      }
-      return (data as any as JourneyInfo) ?? null;
-    };
-
-    const promoteOrBumpCaseToCrm = async (c: any) => {
-      const isChat = Boolean(c?.is_chat);
-      const wasDeleted = Boolean(c?.deleted_at);
-
-      // Regra:
-      // - Se é "só mensagem" (is_chat=true) e NÃO está deletado => não mexe.
-      if (isChat && !wasDeleted) {
-        return { caseId: String(c.id), bumped: false };
-      }
-
-      // Se está deletado: apenas reativa (NÃO muda estado/jornada).
-      if (wasDeleted) {
-        const nextAssignedVendorId =
-          shouldAssignSellerToCrm && sellerVendorId && !c?.assigned_vendor_id ? sellerVendorId : c?.assigned_vendor_id ?? null;
-
-        const { error: updErr } = await supabase
-          .from("cases")
-          .update({
-            deleted_at: null,
-            status: "open",
-            customer_id: customerId,
-            assigned_vendor_id: nextAssignedVendorId,
-            // mantém is_chat
-            is_chat: isChat,
-          })
-          .eq("tenant_id", instance.tenant_id)
-          .eq("id", c.id);
-
-        if (updErr) {
-          console.error(`[${fn}] Failed to reactivate deleted case`, { updErr, case_id: c.id });
-          return { caseId: String(c.id), bumped: false };
-        }
-
-        await supabase.from("timeline_events").insert({
-          tenant_id: instance.tenant_id,
-          case_id: c.id,
-          event_type: "lead_reactivated",
-          actor_type: "system",
-          actor_id: null,
-          message: "Lead reativado automaticamente ao receber mensagem do WhatsApp.",
-          meta_json: { source: "zapi_inbound", correlation_id: correlationId },
-          occurred_at: new Date().toISOString(),
-        });
-
-        return { caseId: String(c.id), bumped: true };
-      }
-
-      // Caso já existe e está ativo: NÃO reseta estado para o início do CRM.
-      // Apenas reutiliza.
-      return { caseId: String(c.id), bumped: false };
-    };
-
-    const findExistingOpenCase = async () => {
-      if (!inboundFromPhone) return null;
-
-      // 1) Prefer CRM cases by customer_id
-      if (customerId && crmJourneyIds.length) {
-        const { data } = await supabase
-          .from("cases")
-          .select("id,journey_id,is_chat,deleted_at,updated_at")
-          .eq("tenant_id", instance.tenant_id)
-          .eq("status", "open")
-          .eq("customer_id", customerId)
-          .in("journey_id", crmJourneyIds)
-          .is("deleted_at", null)
-          .order("updated_at", { ascending: false })
-          .limit(1)
-          .maybeSingle();
-        if ((data as any)?.id) return data as any;
-      }
-
-      // 2) Any open case by customer_id (ACTIVE only)
-      if (customerId) {
-        const { data } = await supabase
-          .from("cases")
-          .select("id,journey_id,is_chat,deleted_at,updated_at")
-          .eq("tenant_id", instance.tenant_id)
-          .eq("status", "open")
-          .eq("customer_id", customerId)
-          .is("deleted_at", null)
-          .order("updated_at", { ascending: false })
-          .limit(1)
-          .maybeSingle();
-        if ((data as any)?.id) return data as any;
-      }
-
-      // 3) Fallback: last open case with message history (helps older cases that don't have meta_json phones)
-      {
-        const byHistory = await findOpenCaseByRecentMessages(phoneVariants.length ? phoneVariants : [inboundFromPhone]);
-        if (byHistory?.id) return byHistory as any;
-      }
-
-      // 4) Fallback: open case by meta_json stored phones (accept variants)
-      const keys = ["customer_phone", "counterpart_phone", "phone", "whatsapp"];
-      for (const k of keys) {
-        for (const p of phoneVariants.length ? phoneVariants : [inboundFromPhone]) {
-          const { data } = await supabase
-            .from("cases")
-            .select("id,journey_id,is_chat,deleted_at,updated_at")
-            .eq("tenant_id", instance.tenant_id)
-            .eq("status", "open")
-            .contains("meta_json", { [k]: p })
-            .is("deleted_at", null)
-            .order("updated_at", { ascending: false })
-            .limit(1)
-            .maybeSingle();
-          if ((data as any)?.id) return data as any;
-        }
-      }
-
-      return null;
-    };
-
-    const findLatestDeletedOpenCase = async () => {
-      if (!inboundFromPhone) return null;
-
-      // Only consider deleted cases if we couldn't find an active one.
-      if (customerId) {
-        const { data } = await supabase
-          .from("cases")
-          .select("id,journey_id,is_chat,deleted_at,updated_at")
-          .eq("tenant_id", instance.tenant_id)
-          .eq("status", "open")
-          .eq("customer_id", customerId)
-          .not("deleted_at", "is", null)
-          .order("updated_at", { ascending: false })
-          .limit(1)
-          .maybeSingle();
-        if ((data as any)?.id) return data as any;
-      }
-
-      // Fallback: deleted case by message history
-      const byHistory = await findDeletedOpenCaseByRecentMessages(phoneVariants.length ? phoneVariants : [inboundFromPhone]);
-      if (byHistory?.id) return byHistory as any;
-
-      // Fallback: deleted case by meta_json stored phone
-      const keys = ["customer_phone", "counterpart_phone", "phone", "whatsapp"];
-      for (const k of keys) {
-        for (const p of phoneVariants.length ? phoneVariants : [inboundFromPhone]) {
-          const { data } = await supabase
-            .from("cases")
-            .select("id,journey_id,is_chat,deleted_at,updated_at")
-            .eq("tenant_id", instance.tenant_id)
-            .eq("status", "open")
-            .contains("meta_json", { [k]: p })
-            .not("deleted_at", "is", null)
-            .order("updated_at", { ascending: false })
-            .limit(1)
-            .maybeSingle();
-          if ((data as any)?.id) return data as any;
-        }
-      }
-
-      return null;
-    };
-
-    const enqueueJob = async (type: string, idempotencyKey: string, payloadJson: any) => {
-      const { error } = await supabase.from("job_queue").insert({
-        tenant_id: instance.tenant_id,
-        type,
-        idempotency_key: idempotencyKey,
-        payload_json: payloadJson,
-        status: "pending",
-        run_after: new Date().toISOString(),
-      });
-      // Ignore conflict (idempotency)
-      if (error && !String(error.message ?? "").toLowerCase().includes("duplicate")) {
-        console.error(`[${fn}] Failed to enqueue job`, { type, error });
-      }
-    };
-
-    const findLatestActiveCase = async () => {
-      // Prefer vendor assignment (legacy flows)
-      if (vendorId) {
-        const { data } = await supabase
-          .from("cases")
-          .select("id,journey_id,is_chat,deleted_at,state,status,updated_at")
-          .eq("tenant_id", instance.tenant_id)
-          .eq("journey_id", journey!.id)
-          .eq("assigned_vendor_id", vendorId)
-          .eq("status", "open")
-          .order("updated_at", { ascending: false })
-          .limit(1)
-          .maybeSingle();
-        return (data as any) ?? null;
-      }
-
-      // Regra pedida: se já existe um case aberto para este número,
-      // reaproveita. Se estiver deletado, reativa (MAS somente se não existir nenhum aberto ativo).
-      const existing = await findExistingOpenCase();
-      if (existing?.id) {
-        console.log(`[${fn}] case_reuse_candidate`, {
-          case_id: String(existing.id),
-          deleted_at: (existing as any)?.deleted_at ?? null,
-          customer_id: customerId,
-        });
-        const bumped = await promoteOrBumpCaseToCrm(existing);
-        return { caseId: bumped.caseId, created: false as const, skippedReason: null };
-      }
-
-      const existingDeleted = await findLatestDeletedOpenCase();
-      if (existingDeleted?.id) return { caseId: existingDeleted.id as string, created: false as const, skippedReason: null };
-
-      return null;
-    };
-
-    const ensureCase = async (mode: "image" | "text" | "location") => {
-      // Reuse existing open case when possible (keeps conversation inside a single case)
-      const existing = await findLatestActiveCase();
-      if (existing?.id) {
-        console.log(`[${fn}] case_reuse_candidate`, {
-          case_id: String(existing.id),
-          deleted_at: (existing as any)?.deleted_at ?? null,
-          customer_id: customerId,
-        });
-        const bumped = await promoteOrBumpCaseToCrm(existing);
-        return { caseId: bumped.caseId, created: false as const, skippedReason: null };
-      }
-
-      if (mode === "text" && !cfgCreateCaseOnText) {
-        return { caseId: null as any, created: false as const, skippedReason: "create_case_disabled_text" };
-      }
-      if (mode === "location" && !cfgCreateCaseOnLocation) {
-        return { caseId: null as any, created: false as const, skippedReason: "create_case_disabled_location" };
-      }
-
-      // If we require vendor, enforce it; otherwise allow opening based on phone.
-      if (cfgRequireVendor && !vendorId) {
-        return { caseId: null as any, created: false as const, skippedReason: "missing_vendor_required" };
-      }
-
-      if (!inboundFromPhone) {
-        return { caseId: null as any, created: false as const, skippedReason: "missing_from_phone" };
-      }
-
-      // Ao criar case novo:
-      // - Se for customer->company (sender_is_vendor=false) e existir CRM padrão habilitado, cria no CRM.
-      // - Se for vendor->company (sender_is_vendor=true), mantém a jornada roteada (ex: sales_order).
-      const targetJourney = !cfgSenderIsVendor && defaultCrmJourney ? defaultCrmJourney : journey!;
-
-      const initialHint =
-        mode === "image" ? cfgInitialStateOnImage : mode === "location" ? cfgInitialStateOnLocation : cfgInitialStateOnText;
-      const initial = pickInitialState(targetJourney, initialHint);
-
-      const title = contactLabel ?? inboundFromPhone;
-
-      const ownerVendorId = cfgSenderIsVendor ? vendorId : targetJourney?.is_crm ? sellerVendorId : null;
-
-      const insertRes = await supabase
-        .from("cases")
-        .insert({
-          tenant_id: instance.tenant_id,
-          journey_id: targetJourney.id,
-          customer_id: customerId,
-          case_type: "order",
-          status: "open",
-          state: initial,
-          created_by_channel: "whatsapp",
-          created_by_vendor_id: ownerVendorId,
-          assigned_vendor_id: ownerVendorId,
-          title,
-          meta_json: {
-            correlation_id: correlationId,
-            journey_key: targetJourney.key,
-            zapi_instance: effectiveInstanceId,
-            opened_by: mode,
-            counterpart_phone: inboundFromPhone,
-            contact_label: contactLabel,
-            sender_is_vendor: cfgSenderIsVendor,
-            ...(targetJourney?.is_crm && ownerVendorId
-              ? {
-                  owner_vendor_id: ownerVendorId,
-                  owner_source: (instance as any)?.assigned_user_id ? "zapi_inbound_instance_assignee" : "zapi_inbound_instance_phone",
-                  seller_phone: sellerPhoneNorm,
-                  instance_phone: instancePhoneNorm,
-                  assigned_user_id: (instance as any)?.assigned_user_id ?? null,
-                }
-              : {}),
-            ...(cfgSenderIsVendor
-              ? { vendor_phone: inboundFromPhone, vendor_required: cfgRequireVendor }
-              : { customer_phone: inboundFromPhone }),
-          },
-        })
-        .select("id")
-        .single();
-
-      // If we hit a uniqueness constraint (provider duplicated webhook events),
-      // fall back to the existing case for this journey+phone.
-      if (insertRes.error) {
-        const msg = String((insertRes.error as any)?.message ?? "");
-        const code = String((insertRes.error as any)?.code ?? "");
-        const isUniqueViolation = code === "23505" || msg.toLowerCase().includes("duplicate key value") || msg.toLowerCase().includes("unique");
-
-        if (isUniqueViolation) {
-          const { data: existingByKey } = await supabase
-            .from("cases")
-            .select("id")
-            .eq("tenant_id", instance.tenant_id)
-            .eq("journey_id", targetJourney.id)
-            .eq("status", "open")
-            .contains("meta_json", { counterpart_phone: inboundFromPhone })
-            .is("deleted_at", null)
-            .order("updated_at", { ascending: false })
-            .limit(1)
-            .maybeSingle();
-
-          if ((existingByKey as any)?.id) {
-            return { caseId: String((existingByKey as any).id), created: false as const, skippedReason: null };
-          }
-        }
-
-        console.error(`[${fn}] Failed to create case`, { cErr: insertRes.error });
-        return { caseId: null as any, created: false as const, skippedReason: "create_case_failed" };
-      }
-
-      const createdCase = insertRes.data;
-
-      if (!createdCase?.id) {
-        console.error(`[${fn}] Failed to create case`, { cErr: insertRes.error });
-        return { caseId: null as any, created: false as const, skippedReason: "create_case_failed" };
-      }
-
-      await supabase.from("timeline_events").insert({
-        tenant_id: instance.tenant_id,
-        case_id: createdCase.id,
-        event_type: "case_opened",
-        actor_type: "system",
-        actor_id: null,
-        message: `Case aberto automaticamente (${mode}).`,
-        meta_json: { correlation_id: correlationId, journey_key: targetJourney.key },
-        occurred_at: new Date().toISOString(),
-      });
-
-      await supabase.rpc("append_audit_ledger", {
-        p_tenant_id: instance.tenant_id,
-        p_payload: {
-          kind: "case_opened",
-          correlation_id: correlationId,
-          case_id: createdCase.id,
-          from: inboundFromPhone,
-          instance: effectiveInstanceId,
-          journey_id: targetJourney.id,
-          journey_key: targetJourney.key,
-          mode,
-        },
-      });
-
-      return { caseId: createdCase.id as string, created: true as const, skippedReason: null };
-    };
-
-    // Decide case for this inbound
-    let caseId: string | null = null;
-    let skippedReason: string | null = null;
-
-    if (normalized.type === "image") {
-      const res = await ensureCase("image");
-      caseId = res.caseId ?? null;
-      skippedReason = (res as any).skippedReason ?? null;
-    } else if (normalized.type === "location") {
-      const res = await ensureCase("location");
-      caseId = res.caseId ?? null;
-      skippedReason = (res as any).skippedReason ?? null;
-    } else {
-      // text/audio
-      const res = await ensureCase("text");
-      caseId = res.caseId ?? null;
-      skippedReason = (res as any).skippedReason ?? null;
-    }
-
-    console.log(`[${fn}] ensureCase`, { case_id: caseId, skippedReason, wa_type: normalized.type });
-
-    // Write inbound message (always)
-    const { data: insertedMsg, error: msgErr } = await supabase
-      .from("wa_messages")
-      .insert({
-        tenant_id: instance.tenant_id,
-        instance_id: instance.id,
-        direction: "inbound",
-        from_phone: inboundFromPhone,
-        to_phone: inboundToPhone,
-        type: normalized.type,
-        body_text: normalized.text,
-        media_url: normalized.mediaUrl,
-        payload_json: payload,
-        correlation_id: correlationId,
-        occurred_at: new Date().toISOString(),
-        case_id: caseId,
-      })
-      .select("id")
-      .single();
-
-    if (msgErr) {
-      console.error(`[${fn}] Failed to insert wa_message`, { msgErr });
+    if (rpcError) {
+      console.error(`[${fn}] RPC process_zapi_inbound_message failed`, { rpcError });
       await logInbox({
         instance,
         ok: false,
         http_status: 500,
-        reason: "wa_message_insert_failed",
+        reason: "rpc_failed",
         journey_id: journey.id,
-        case_id: caseId,
         direction,
+        meta: { error: rpcError }
       });
-      return new Response("Failed to insert message", { status: 500, headers: corsHeaders });
+      return new Response("Internal Server Error", { status: 500, headers: corsHeaders });
     }
 
-    // Usage event
-    await supabase.from("usage_events").insert({
-      tenant_id: instance.tenant_id,
-      type: "message",
-      qty: 1,
-      ref_type: "wa_message",
-      ref_id: insertedMsg?.id ?? null,
-      meta_json: { direction: "inbound", wa_type: normalized.type },
-      occurred_at: new Date().toISOString(),
+    const resData = (rpcResult as any)?.[0] ?? (rpcResult as any); // Handle single object or array return
+    const { ok: rpcOk, case_id: caseId, message_id: msgId, event: rpcEvent, details: rpcDetails } = resData || {};
+
+    console.log(`[${fn}] RPC executed`, {
+      resData,
+      case_id: caseId,
+      event: rpcEvent
     });
+
+    // Post-processing: OCR Jobs
+    // The RPC already creates the message and case attachments, 
+    // but the complex job enqueuing for OCR (which relies on Queues/Edge Functions) 
+    // is best kept here or moved to a database trigger.
+    // Given the previous code enqueued jobs:
+    if (caseId && cfgOcrEnabled && normalized.type === "image") {
+      await enqueueJob("OCR_IMAGE", `OCR_IMAGE:${caseId}`, {
+        case_id: caseId,
+        correlation_id: correlationId,
+      });
+      await enqueueJob("VALIDATE_FIELDS", `VALIDATE_FIELDS:${caseId}:${Date.now()}`, {
+        case_id: caseId,
+        correlation_id: correlationId,
+      });
+      // ASK_PENDENCIES is often redundant if the RPC already created pendencies, 
+      // but the job might be "Answer Pendenicies via AI". Keeping for compatibility.
+      await enqueueJob("ASK_PENDENCIES", `ASK_PENDENCIES:${caseId}:${Date.now()}`, {
+        case_id: caseId,
+        correlation_id: correlationId,
+      });
+    } else if (caseId && cfgOcrEnabled && (normalized.type === "text" || normalized.type === "audio")) {
+      // Validation jobs for text
+      await enqueueJob("VALIDATE_FIELDS", `VALIDATE_FIELDS:${caseId}:${Date.now()}`, {
+        case_id: caseId,
+        correlation_id: correlationId,
+      });
+      await enqueueJob("ASK_PENDENCIES", `ASK_PENDENCIES:${caseId}:${Date.now()}`, {
+        case_id: caseId,
+        correlation_id: correlationId,
+      });
+    }
 
     // Always log inbox for observability
     await logInbox({
       instance,
       ok: true,
       http_status: 200,
-      reason: skippedReason,
+      reason: (rpcDetails as any)?.skipped_reason,
       journey_id: journey.id,
       case_id: caseId,
       direction,
       meta: {
         journey_key: journey.key,
-        default_journey_id: instance.default_journey_id ?? null,
         create_case_on_text: cfgCreateCaseOnText,
         sender_is_vendor: cfgSenderIsVendor,
-        require_vendor: cfgRequireVendor,
-        auto_create_vendor: cfgAutoCreateVendor,
-        vendor_id: vendorId,
-        forced_direction: forced ?? null,
-        inferred_direction: inferred,
-        strong_outbound: strongOutbound,
+        rpc_event: rpcEvent,
+        rpc_details: rpcDetails
       },
     });
 
-    // Routing
-    if (normalized.type === "image") {
-      // Attach image to the active case
-      if (caseId && normalized.mediaUrl) {
-        await supabase.from("case_attachments").insert({
-          tenant_id: instance.tenant_id,
-          case_id: caseId,
-          kind: "image",
-          storage_path: normalized.mediaUrl,
-          original_filename: payload?.fileName ?? null,
-          content_type: payload?.mimeType ?? null,
-          meta_json: { source: "zapi", correlation_id: correlationId },
-        });
-      }
-
-      if (caseId) {
-        await supabase.from("timeline_events").insert({
-          tenant_id: instance.tenant_id,
-          case_id: caseId,
-          event_type: "inbound_image",
-          actor_type: cfgSenderIsVendor ? "vendor" : "customer",
-          actor_id: vendorId,
-          message: cfgOcrEnabled
-            ? "Imagem recebida. OCR será executado conforme configuração do fluxo."
-            : "Imagem recebida via WhatsApp.",
-          meta_json: { correlation_id: correlationId, journey_key: journey.key },
-          occurred_at: new Date().toISOString(),
-        });
-      }
-
-      // Default pendencies (configurable) — only when a case exists
-      if (caseId && cfgPendenciesOnImage) {
-        await supabase.from("pendencies").insert([
-          {
-            tenant_id: instance.tenant_id,
-            case_id: caseId,
-            type: "need_location",
-            assigned_to_role: "vendor",
-            question_text: "Envie sua localização (WhatsApp: Compartilhar localização).",
-            required: true,
-            status: "open",
-            due_at: new Date(Date.now() + 4 * 60 * 60 * 1000).toISOString(),
-          },
-          {
-            tenant_id: instance.tenant_id,
-            case_id: caseId,
-            type: "need_more_pages",
-            assigned_to_role: "vendor",
-            question_text: "Tem mais alguma folha desse pedido? Se sim, envie as próximas fotos. Se não, responda: última folha.",
-            required: false,
-            status: "open",
-            due_at: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
-          },
-        ]);
-      }
-
-      // OCR pipeline (configurable)
-      if (caseId && cfgOcrEnabled) {
-        await enqueueJob("OCR_IMAGE", `OCR_IMAGE:${caseId}`, {
-          case_id: caseId,
-          correlation_id: correlationId,
-        });
-        await enqueueJob("VALIDATE_FIELDS", `VALIDATE_FIELDS:${caseId}:${Date.now()}`, {
-          case_id: caseId,
-          correlation_id: correlationId,
-        });
-        await enqueueJob("ASK_PENDENCIES", `ASK_PENDENCIES:${caseId}:${Date.now()}`, {
-          case_id: caseId,
-          correlation_id: correlationId,
-        });
-      }
-
-      if (caseId) {
-        await supabase.rpc("append_audit_ledger", {
-          p_tenant_id: instance.tenant_id,
-          p_payload: {
-            kind: "wa_inbound_routed",
-            correlation_id: correlationId,
-            case_id: caseId,
-            from: normalized.from,
-            instance: effectiveInstanceId,
-            journey_id: journey.id,
-            journey_key: journey.key,
-            cfg_ocr_enabled: cfgOcrEnabled,
-          },
-        });
-      }
-
-      return new Response(JSON.stringify({ ok: true, correlation_id: correlationId, case_id: caseId }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    if (normalized.type === "location") {
-      if (!normalized.location) {
-        return new Response("Missing location", { status: 400, headers: corsHeaders });
-      }
-
-      if (!caseId) {
-        return new Response(JSON.stringify({ ok: true, note: "No open case" }), {
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-
-      await supabase.from("case_fields")
-        .upsert({
-          case_id: caseId,
-          key: "location",
-          value_json: normalized.location,
-          value_text: `${normalized.location.lat},${normalized.location.lng}`,
-          confidence: 1,
-          source: cfgSenderIsVendor ? "vendor" : "customer",
-          last_updated_by: "whatsapp_location",
-        });
-
-      // (Optional) answer a standard pendency if present
-      await supabase
-        .from("pendencies")
-        .update({ status: "answered", answered_text: "Localização enviada", answered_payload_json: normalized.location })
-        .eq("tenant_id", instance.tenant_id)
-        .eq("case_id", caseId)
-        .eq("type", "need_location")
-        .eq("status", "open");
-
-      await supabase.from("timeline_events").insert({
-        tenant_id: instance.tenant_id,
-        case_id: caseId,
-        event_type: "location_received",
-        actor_type: cfgSenderIsVendor ? "vendor" : "customer",
-        actor_id: vendorId,
-        message: "Localização recebida via WhatsApp.",
-        meta_json: { correlation_id: correlationId, ...normalized.location, journey_key: journey.key },
-        occurred_at: new Date().toISOString(),
-      });
-
-      if (cfgLocationNextState && safeStates(journey).includes(cfgLocationNextState)) {
-        await supabase.from("cases").update({ state: cfgLocationNextState }).eq("id", caseId);
-      }
-
-      return new Response(JSON.stringify({ ok: true, correlation_id: correlationId, case_id: caseId }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    // text/audio
-    if (normalized.type === "text" || normalized.type === "audio") {
-      if (!caseId) {
-        return new Response(JSON.stringify({ ok: true, note: "No open case" }), {
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-
-      const answerText = normalized.type === "audio" ? "(áudio recebido - transcrição pendente)" : normalized.text;
-
-      // Minimal behavior: if there is an open vendor pendency, answer it.
-      const { data: pendency } = await supabase
-        .from("pendencies")
-        .select("id")
-        .eq("tenant_id", instance.tenant_id)
-        .eq("case_id", caseId)
-        .eq("assigned_to_role", "vendor")
-        .eq("status", "open")
-        .order("created_at", { ascending: true })
-        .limit(1)
-        .maybeSingle();
-
-      if (pendency?.id) {
-        await supabase
-          .from("pendencies")
-          .update({ status: "answered", answered_text: answerText, answered_payload_json: payload })
-          .eq("id", pendency.id);
-      }
-
-      // Obs: não salvamos um evento de timeline por mensagem (será resumido diariamente).
-
-      // If OCR pipeline is enabled for this journey, keep validating/asking.
-      if (cfgOcrEnabled) {
-        await enqueueJob("VALIDATE_FIELDS", `VALIDATE_FIELDS:${caseId}:${Date.now()}`, {
-          case_id: caseId,
-          correlation_id: correlationId,
-        });
-        await enqueueJob("ASK_PENDENCIES", `ASK_PENDENCIES:${caseId}:${Date.now()}`, {
-          case_id: caseId,
-          correlation_id: correlationId,
-        });
-      }
-
-      return new Response(JSON.stringify({ ok: true, correlation_id: correlationId, case_id: caseId }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    return new Response(JSON.stringify({ ok: true, note: "Ignored" }), {
+    return new Response(JSON.stringify({
+      ok: true,
+      correlation_id: correlationId,
+      case_id: caseId,
+      message_id: msgId,
+      event: rpcEvent
+    }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (e) {

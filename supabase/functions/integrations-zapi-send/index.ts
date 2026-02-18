@@ -82,35 +82,83 @@ serve(async (req) => {
       occurred_at: new Date().toISOString(),
     });
 
-    // Optional external call (best-effort)
-    const baseUrl = Deno.env.get("ZAPI_BASE_URL") ?? "";
-    const shouldCall = Boolean(baseUrl);
+    // External call (best-effort)
+    const zapiDomain = (Deno.env.get("ZAPI_DOMAIN") ?? "https://api.z-api.io").replace(/\/$/, "");
+    const zapiInstanceId = inst.zapi_instance_id;
+    const zapiToken = inst.zapi_token_encrypted; // Assuming this is the raw token despite the name
+
+    // If we don't have instance/token, we can't send.
+    const shouldCall = Boolean(zapiInstanceId && zapiToken);
 
     let external: any = null;
     if (shouldCall) {
       try {
-        // Endpoint format differs between Z-API accounts. This is a conservative best-effort:
-        // POST {baseUrl}/send with instanceId/token in body.
-        const res = await fetch(`${baseUrl.replace(/\/$/, "")}/send`, {
+        let endpoint = "send-text";
+        let bodyPayload: any = { phone: to };
+
+        if (type === "text") {
+          endpoint = "send-text";
+          bodyPayload.message = text;
+        } else if (type === "image") {
+          endpoint = "send-image";
+          bodyPayload.image = mediaUrl;
+          if (text) bodyPayload.caption = text;
+        } else if (type === "audio") {
+          endpoint = "send-audio";
+          bodyPayload.audio = mediaUrl;
+        } else if (type === "location") {
+          endpoint = "send-location";
+          // Location payload requires latitude/longitude.
+          // We expect these in `payloadMeta` or `body`.
+          const lat = payloadMeta?.latitude ?? body.latitude;
+          const lng = payloadMeta?.longitude ?? body.longitude;
+          if (lat && lng) {
+            bodyPayload.latitude = lat;
+            bodyPayload.longitude = lng;
+            if (text) bodyPayload.title = text;
+          } else {
+            throw new Error("Missing latitude/longitude for location message");
+          }
+        } else {
+          // Fallback or other types (video, document, etc) - implement as needed.
+          // For now, treat unknown as text if text is present, or error.
+          if (text) {
+            endpoint = "send-text";
+            bodyPayload.message = text;
+          } else {
+            throw new Error(`Unsupported message type: ${type}`);
+          }
+        }
+
+        const url = `${zapiDomain}/instances/${zapiInstanceId}/token/${zapiToken}/${endpoint}`;
+
+        console.log(`[${fn}] Sending to Z-API`, { url, type });
+
+        const res = await fetch(url, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            instanceId: inst.zapi_instance_id,
-            token: inst.zapi_token_encrypted,
-            to,
-            type,
-            text,
-            mediaUrl,
-          }),
+          body: JSON.stringify(bodyPayload),
         });
-        external = { ok: res.ok, status: res.status, body: await res.text() };
-        console.log(`[${fn}] External send attempted`, { ok: res.ok, status: res.status });
+
+        const resText = await res.text();
+        let resJson: any = null;
+        try {
+          resJson = JSON.parse(resText);
+        } catch { }
+
+        external = {
+          ok: res.ok,
+          status: res.status,
+          body: resJson ?? resText,
+        };
+        console.log(`[${fn}] External send result`, { ok: res.ok, status: res.status });
+
       } catch (e) {
         console.warn(`[${fn}] External send failed (ignored)`, { e });
         external = { ok: false, error: String(e) };
       }
     } else {
-      console.log(`[${fn}] ZAPI_BASE_URL not set; message prepared only (outbox).`);
+      console.log(`[${fn}] Z-API credentials missing (instance_id/token); message prepared only (outbox).`);
     }
 
     await supabase.rpc("append_audit_ledger", {
