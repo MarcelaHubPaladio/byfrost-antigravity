@@ -32,14 +32,19 @@ export function TrelloEntityCard({ tenantId, caseId, customerEntityId, metaJson 
         (metaJson?.monitoring?.wa_instance_id as string) || ""
     );
 
-    // Fetch Entity Display Name and Metadata if we have an ID
+    // Sync state with props
+    useMemo(() => {
+        setSelectedEntityId(customerEntityId);
+    }, [customerEntityId]);
+
+    // Fetch Entity Display Name and Metadata from core_entities (the master table)
     const entityQ = useQuery({
         queryKey: ["core_entity_lite", tenantId, customerEntityId],
         enabled: Boolean(tenantId && customerEntityId),
         queryFn: async () => {
             const { data, error } = await supabase
                 .from("core_entities")
-                .select("display_name, entity_type, subtype") // We might need more fields if we want to check something else
+                .select("display_name, entity_type, subtype, metadata")
                 .eq("tenant_id", tenantId)
                 .eq("id", customerEntityId!)
                 .single();
@@ -48,62 +53,52 @@ export function TrelloEntityCard({ tenantId, caseId, customerEntityId, metaJson 
         },
     });
 
-    // Fetch full entity details for auto-fill when editing
+    // Fetch full entity details for auto-fill when editing (checks core_entities metadata)
     const entityDetailsQ = useQuery({
-        queryKey: ["core_entity_input_details", tenantId, selectedEntityId],
+        queryKey: ["core_entity_metadata_details", tenantId, selectedEntityId],
         enabled: Boolean(tenantId && selectedEntityId && editing),
         queryFn: async () => {
-            // We need to fetch from the specific table based on type/subtype, but for 'party' it is usually 'customer' or 'vendor'.
-            // Ideally we use a view or function. But let's try 'customer_accounts' or similar if we can guess.
-            // ACTUALLY, 'core_entities' doesn't have phone. We need to join.
-            // However, the prompt says "when I select entity...".
-            // Let's assume we can fetch from 'identities' or 'customers' view?
-            // Let's try to fetch from 'parties' view if it exists or 'customers' table using the entity_id?
-            // Wait, `core_entity.id` maps to... what?
-            // Based on `0039_core_entities.sql`, `core_entities` is the master table.
-            // Specific data is in `customers` (if it's a customer).
-            // Let's try to query `customers` by `entity_id` (if that column exists) OR `id` (if they share ID?).
-            // Looking at `0046_crm_entities_bridge.sql`, `customer_accounts` has `entity_id`.
-            // Let's try querying `customer_accounts` first.
-
             const { data, error } = await supabase
-                .from("customer_accounts")
-                .select("id, whatsapp, phone")
+                .from("core_entities")
+                .select("metadata")
                 .eq("tenant_id", tenantId)
-                .eq("entity_id", selectedEntityId!)
-                .maybeSingle();
+                .eq("id", selectedEntityId!)
+                .single();
 
-            if (!error && data) return data;
-            return null;
+            if (error) {
+                console.error("Failed to fetch entity metadata", error);
+                return null;
+            }
+            return data?.metadata as any;
         },
     });
 
-    // Auto-fill effect
-    // We only auto-fill if the input is empty to avoid overwriting user input.
-    useMemo(() => {
-        if (entityDetailsQ.data && !waNumber) {
-            const num = entityDetailsQ.data.whatsapp || entityDetailsQ.data.phone;
-            if (num) setWaNumber(String(num).replace(/\D/g, ""));
-        }
-    }, [entityDetailsQ.data, waNumber]);
-    // Warning: adding waNumber to deps might cause loop if we don't check !waNumber.
-    // Actually, useMemo is not for side effects. useEffect is better.
-
-    // Refactored auto-fill
+    // Auto-fill logic
     const [autoFilled, setAutoFilled] = useState(false);
 
-    if (entityDetailsQ.data && !waNumber && !autoFilled) {
-        const num = entityDetailsQ.data.whatsapp || entityDetailsQ.data.phone;
-        if (num) {
-            setWaNumber(String(num).replace(/\D/g, ""));
-            setAutoFilled(true);
-        }
-    }
-
-    // Reset auto-filled flag when entity changes
+    // Reset auto-filled flag when entity selection changes
     useMemo(() => {
         setAutoFilled(false);
     }, [selectedEntityId]);
+
+    // Effect to perform auto-fill
+    const details = entityDetailsQ.data;
+    if (details && !waNumber && !autoFilled && selectedEntityId) {
+        // Try to find a phone number in metadata
+        // Metadata structure for parties usually has 'whatsapp', 'phone', 'celular' or 'phone_number'.
+        // Based on migration 0046, it sets 'whatsapp' or 'source_customer_account_id'.
+        const phone = details.whatsapp || details.phone || details.phone_number || details.celular;
+        if (phone) {
+            const digits = String(phone).replace(/\D/g, "");
+            if (digits) {
+                // Using setTimeout to avoid render loop warnings, although condition checks prevent it.
+                setTimeout(() => {
+                    setWaNumber((prev) => (!prev ? digits : prev));
+                    setAutoFilled(true);
+                }, 0);
+            }
+        }
+    }
 
     // Load instances for selection
     const instancesQ = useQuery({
