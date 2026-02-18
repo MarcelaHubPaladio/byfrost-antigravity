@@ -12,6 +12,7 @@ import { PublicPortalShell, type PublicPalette } from "@/components/public/Publi
 import { PublicReport, type PublicReportData } from "@/components/public/PublicReport";
 import { PublicPostsCalendar, type PublicPublication } from "@/components/public/PublicPostsCalendar";
 import { PublicEntityHistory, type PublicCase, type PublicTimelineEvent } from "@/components/public/PublicEntityHistory";
+import { PublicEntityTasks, type PublicTask } from "@/components/public/PublicEntityTasks";
 import { PublicPortalLoading } from "@/components/public/PublicPortalLoading";
 
 const FN_URL = `${SUPABASE_URL_IN_USE}/functions/v1/public-proposal`;
@@ -38,6 +39,7 @@ type ApiData = {
   report: PublicReportData;
   calendar: { publications: PublicPublication[] };
   history: { cases: PublicCase[]; events: PublicTimelineEvent[] };
+  tasks: PublicTask[]; // New field for open trello tasks
   scope: {
     commitments: any[];
     items: any[];
@@ -125,7 +127,7 @@ export default function PublicProposal() {
         if (res.status === 401 && msg.toLowerCase().includes("missing authorization header")) {
           throw new Error(
             `401: Missing authorization header. Essa Edge Function provavelmente está com "Verify JWT" ligado no Supabase. ` +
-              `Desative o Verify JWT para a função public-proposal (ela é pública). Endpoint: ${FN_URL}`
+            `Desative o Verify JWT para a função public-proposal (ela é pública). Endpoint: ${FN_URL}`
           );
         }
 
@@ -340,6 +342,9 @@ export default function PublicProposal() {
                     <TabsTrigger value="calendar" className="rounded-2xl">
                       Calendário
                     </TabsTrigger>
+                    <TabsTrigger value="tasks" className="rounded-2xl">
+                      Tarefas
+                    </TabsTrigger>
                     <TabsTrigger value="history" className="rounded-2xl">
                       Linha do tempo
                     </TabsTrigger>
@@ -550,6 +555,10 @@ export default function PublicProposal() {
 
             <TabsContent value="calendar" className="mt-4">
               <PublicPostsCalendar publications={data?.calendar?.publications ?? []} />
+            </TabsContent>
+
+            <TabsContent value="tasks" className="mt-4">
+              <PublicEntityTasks tasks={data?.tasks ?? []} />
             </TabsContent>
 
             <TabsContent value="history" className="mt-4">
