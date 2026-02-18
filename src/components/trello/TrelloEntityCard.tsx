@@ -1,0 +1,244 @@
+import { useState, useMemo } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { supabase } from "@/lib/supabase";
+import { Card } from "@/components/ui/card";
+import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Loader2, Link as LinkIcon, Save, X } from "lucide-react";
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
+import { AsyncSelect } from "@/components/ui/async-select";
+import { showSuccess, showError } from "@/utils/toast";
+
+type Props = {
+    tenantId: string;
+    caseId: string;
+    customerEntityId: string | null;
+    metaJson: any;
+};
+
+export function TrelloEntityCard({ tenantId, caseId, customerEntityId, metaJson }: Props) {
+    const qc = useQueryClient();
+    const [editing, setEditing] = useState(false);
+    const [selectedEntityId, setSelectedEntityId] = useState<string | null>(customerEntityId);
+    const [waNumber, setWaNumber] = useState((metaJson?.monitoring?.whatsapp_number as string) || "");
+    const [waInstanceId, setWaInstanceId] = useState(
+        (metaJson?.monitoring?.wa_instance_id as string) || ""
+    );
+
+    // Fetch Entity Display Name if we have an ID
+    const entityQ = useQuery({
+        queryKey: ["core_entity_lite", tenantId, customerEntityId],
+        enabled: Boolean(tenantId && customerEntityId),
+        queryFn: async () => {
+            const { data, error } = await supabase
+                .from("core_entities")
+                .select("display_name")
+                .eq("tenant_id", tenantId)
+                .eq("id", customerEntityId!)
+                .single();
+            if (error) throw error;
+            return data;
+        },
+    });
+
+    // Load instances for selection
+    const instancesQ = useQuery({
+        queryKey: ["wa_instances_all", tenantId],
+        enabled: Boolean(tenantId && editing),
+        queryFn: async () => {
+            const { data, error } = await supabase
+                .from("wa_instances")
+                .select("id, name, phone_number")
+                .eq("tenant_id", tenantId)
+                .eq("status", "active");
+            if (error) throw error;
+            return data;
+        },
+    });
+
+    const saveMutation = useMutation({
+        mutationFn: async () => {
+            const nextMeta = { ...metaJson };
+            if (!nextMeta.monitoring) nextMeta.monitoring = {};
+
+            // Update monitoring info
+            if (selectedEntityId) {
+                nextMeta.monitoring.whatsapp_number = waNumber;
+                nextMeta.monitoring.wa_instance_id = waInstanceId;
+            } else {
+                // If no entity, maybe clear monitoring? 
+                // Keeping it simple: if entity is removed, we just update the ID.
+                // But let's clear monitoring if user clears entity to avoid stale state.
+                nextMeta.monitoring = {};
+            }
+
+            const { error } = await supabase
+                .from("cases")
+                .update({
+                    customer_entity_id: selectedEntityId,
+                    meta_json: nextMeta,
+                })
+                .eq("id", caseId)
+                .eq("tenant_id", tenantId);
+
+            if (error) throw error;
+        },
+        onSuccess: () => {
+            qc.invalidateQueries({ queryKey: ["trello_case", tenantId, caseId] });
+            showSuccess("Vinculação salva com sucesso.");
+            setEditing(false);
+        },
+        onError: (e: any) => {
+            showError(`Erro ao salvar: ${e.message}`);
+        },
+    });
+
+    const searchEntities = async (term: string) => {
+        const { data, error } = await supabase
+            .from("core_entities")
+            .select("id, display_name")
+            .eq("tenant_id", tenantId)
+            .eq("entity_type", "party") // Only Parties (people/companies)
+            .ilike("display_name", `%${term}%`)
+            .limit(20);
+
+        if (error) {
+            console.error(error);
+            return [];
+        }
+        return (data ?? []).map((d) => ({
+            value: d.id,
+            label: d.display_name,
+        }));
+    };
+
+    const handleEntitySelect = (val: string | null) => {
+        setSelectedEntityId(val);
+        if (!val) {
+            setWaNumber("");
+            setWaInstanceId("");
+        }
+    };
+
+    if (!editing) {
+        return (
+            <Card className="rounded-[22px] border-slate-200 bg-white p-4">
+                <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                        <LinkIcon className="h-4 w-4 text-slate-500" />
+                        <span className="text-sm font-semibold text-slate-700">
+                            Vínculo & Monitoramento
+                        </span>
+                    </div>
+                    <Button variant="ghost" size="sm" onClick={() => setEditing(true)}>
+                        Editar
+                    </Button>
+                </div>
+
+                <div className="mt-3 space-y-3">
+                    <div>
+                        <div className="text-xs text-slate-500">Entidade (Cliente/Link)</div>
+                        <div className="text-sm font-medium text-slate-900">
+                            {customerEntityId ? (
+                                entityQ.isLoading ? "Carregando..." : entityQ.data?.display_name || "Desconhecido"
+                            ) : (
+                                <span className="italic text-slate-400">Nenhuma entidade vinculada</span>
+                            )}
+                        </div>
+                    </div>
+
+                    {customerEntityId && metaJson?.monitoring && (
+                        <div className="grid grid-cols-2 gap-4">
+                            <div>
+                                <div className="text-xs text-slate-500">WhatsApp Monitorado</div>
+                                <div className="text-sm text-slate-700">
+                                    {metaJson.monitoring.whatsapp_number || "-"}
+                                </div>
+                            </div>
+                            <div>
+                                <div className="text-xs text-slate-500">Instância Observadora</div>
+                                <div className="text-sm text-slate-700 truncate" title={metaJson.monitoring.wa_instance_id}>
+                                    {metaJson.monitoring.wa_instance_id ? "Selecionada" : "-"}
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            </Card>
+        );
+    }
+
+    return (
+        <Card className="rounded-[22px] border-slate-200 bg-white p-4">
+            <div className="flex items-center justify-between mb-4">
+                <h4 className="text-sm font-semibold text-slate-900">Editar Vínculo</h4>
+                <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setEditing(false)}>
+                    <X className="h-4 w-4" />
+                </Button>
+            </div>
+
+            <div className="space-y-4">
+                <div className="space-y-1.5">
+                    <Label>Buscar Entidade</Label>
+                    <AsyncSelect
+                        placeholder="Busque por nome..."
+                        loadOptions={searchEntities}
+                        value={selectedEntityId}
+                        onChange={handleEntitySelect}
+                        defaultOptions
+                    />
+                </div>
+
+                {selectedEntityId && (
+                    <>
+                        <div className="space-y-1.5">
+                            <Label>Número do WhatsApp</Label>
+                            <Input
+                                placeholder="5511999999999"
+                                value={waNumber}
+                                onChange={(e) => setWaNumber(e.target.value)}
+                            />
+                            <p className="text-[10px] text-slate-500">
+                                Número exato que será monitorado (formato internacional, apenas dígitos).
+                            </p>
+                        </div>
+
+                        <div className="space-y-1.5">
+                            <Label>Instância Observadora</Label>
+                            <Select value={waInstanceId} onValueChange={setWaInstanceId}>
+                                <SelectTrigger>
+                                    <SelectValue placeholder="Selecione a instância..." />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {instancesQ.data?.map((inst) => (
+                                        <SelectItem key={inst.id} value={inst.id}>
+                                            {inst.name || inst.phone_number || inst.id}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    </>
+                )}
+
+                <div className="pt-2 flex justify-end gap-2">
+                    <Button variant="outline" size="sm" onClick={() => setEditing(false)}>
+                        Cancelar
+                    </Button>
+                    <Button size="sm" onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending}>
+                        {saveMutation.isPending && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
+                        <Save className="mr-2 h-3 w-3" />
+                        Salvar
+                    </Button>
+                </div>
+            </div>
+        </Card>
+    );
+}

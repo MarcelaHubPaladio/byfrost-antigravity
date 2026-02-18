@@ -9,6 +9,7 @@ import { showError, showSuccess } from "@/utils/toast";
 import { cn } from "@/lib/utils";
 import { CalendarDays, ClipboardList, Save, UserRound } from "lucide-react";
 import { TrelloResponsibleCard } from "@/components/trello/TrelloResponsibleCard";
+import { TrelloEntityCard } from "@/components/trello/TrelloEntityCard";
 import { CaseTasksCard } from "@/components/crm/CaseTasksCard";
 import { CaseTimeline, type CaseTimelineEvent } from "@/components/case/CaseTimeline";
 import { normalizeRichTextHtmlOrNull, RichTextEditor } from "@/components/RichTextEditor";
@@ -52,7 +53,7 @@ export function TrelloCardDetails(props: { tenantId: string; caseId: string }) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("cases")
-        .select("id,tenant_id,title,summary_text,assigned_vendor_id,meta_json")
+        .select("id,tenant_id,title,summary_text,assigned_vendor_id,customer_entity_id,meta_json")
         .eq("tenant_id", props.tenantId)
         .eq("id", props.caseId)
         .maybeSingle();
@@ -64,6 +65,7 @@ export function TrelloCardDetails(props: { tenantId: string; caseId: string }) {
         title: string | null;
         summary_text: string | null;
         assigned_vendor_id: string | null;
+        customer_entity_id: string | null;
         meta_json: any;
       };
     },
@@ -257,6 +259,13 @@ export function TrelloCardDetails(props: { tenantId: string; caseId: string }) {
           ) : null}
         </div>
       </Card>
+
+      <TrelloEntityCard
+        tenantId={props.tenantId}
+        caseId={props.caseId}
+        customerEntityId={caseQ.data?.customer_entity_id ?? null}
+        metaJson={caseQ.data?.meta_json ?? {}}
+      />
 
       <TrelloResponsibleCard
         tenantId={props.tenantId}

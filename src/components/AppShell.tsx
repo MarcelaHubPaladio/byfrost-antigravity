@@ -616,6 +616,25 @@ export function AppShell({
     },
   });
 
+  const trelloEnabledQ = useQuery({
+    queryKey: ["nav_has_trello", activeTenantId],
+    enabled: Boolean(activeTenantId),
+    staleTime: 30_000,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("tenant_journeys")
+        .select("id, journeys(key)")
+        .eq("tenant_id", activeTenantId!)
+        .eq("enabled", true)
+        .eq("journeys.key", "trello")
+        .limit(1);
+      if (error) throw error;
+      return (data ?? []).length > 0;
+    },
+  });
+
+  const hasTrello = Boolean(trelloEnabledQ.data);
+
   const hasCrm = Boolean(crmEnabledQ.data);
   const hasPresence = Boolean(presenceEnabledQ.data);
   const hasMetaContent = Boolean(metaContentEnabledQ.data);
@@ -714,6 +733,7 @@ export function AppShell({
               <div className="grid justify-items-center gap-2">
                 <NavTile to="/app" icon={LayoutGrid} label="Dashboard" disabled={!can("app.dashboard")} />
                 {showChatInNav && <NavTile to="/app/chat" icon={MessagesSquare} label="Chat" disabled={!can("app.chat")} />}
+                {hasTrello && <NavTile to="/app/j/trello" icon={KanbanSquare} label="Tarefas" disabled={!can("app.dashboard")} />}
                 {hasCrm && <NavTile to="/app/crm" icon={LayoutDashboard} label="CRM" disabled={!can("app.crm")} />}
                 {hasMetaContent && (
                   <NavTile to="/app/content" icon={Clapperboard} label="Conteúdo" disabled={!can("app.content")} />
