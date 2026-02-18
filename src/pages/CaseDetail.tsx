@@ -255,7 +255,12 @@ export default function CaseDetail() {
     if (!next || next === prev) return;
 
     try {
-      await transitionState(id, prev, next, caseQ.data?.journeys as unknown as StateMachine);
+      await transitionState(
+        id,
+        prev,
+        next,
+        caseQ.data?.journeys?.default_state_machine_json as unknown as StateMachine
+      );
       // Queries are invalidated inside the hook
     } catch (e: any) {
       // Error handled inside hook (toast shown)

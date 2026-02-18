@@ -27,6 +27,7 @@ export function useJourneyTransition() {
         setUpdating(true);
         try {
             // 1. Atualiza estado no banco
+            // O Trigger 'trg_journey_transition' irá detectar a mudança e chamar a Edge Function via pg_net.
             const { error } = await supabase
                 .from("cases")
                 .update({ state: newState })
@@ -35,31 +36,20 @@ export function useJourneyTransition() {
 
             if (error) throw error;
 
-            // 2. Executa ações de automação (client-side / optimistic for now)
-            if (journeyConfig) {
-                await executeTransitionActions(
-                    activeTenantId,
-                    caseId,
-                    oldState,
-                    newState,
-                    journeyConfig,
-                    user ? { id: user.id } : undefined
-                );
-            }
-
             const label = getStateLabel(journeyConfig as any, newState);
             showSuccess(`Movido para ${label}.`);
 
-            // 3. Invalida queries
+            // 2. Invalida queries para refletir mudança de estado
             await Promise.all([
                 qc.invalidateQueries({ queryKey: ["case", activeTenantId, caseId] }),
-                qc.invalidateQueries({ queryKey: ["timeline", activeTenantId, caseId] }),
+                qc.invalidateQueries({ queryKey: ["timeline", activeTenantId, caseId] }), // Timeline updates async, but we invalidate anyway
                 qc.invalidateQueries({ queryKey: ["cases_by_tenant", activeTenantId] }),
                 qc.invalidateQueries({ queryKey: ["crm_cases_by_tenant", activeTenantId] }),
             ]);
 
         } catch (e: any) {
             showError(`Falha ao mover: ${e?.message ?? "erro"}`);
+            // Revert optimistic update? (Not implemented here, rely on react-query re-fetch on error if needed)
             throw e;
         } finally {
             setUpdating(false);

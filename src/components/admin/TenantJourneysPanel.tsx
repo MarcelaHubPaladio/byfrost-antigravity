@@ -95,6 +95,7 @@ export function TenantJourneysPanel() {
   // UI labels (catalog-level)
   const [journeyNameDraft, setJourneyNameDraft] = useState<string>("");
   const [stateLabelsDraft, setStateLabelsDraft] = useState<Record<string, string>>({});
+  const [transitionsDraft, setTransitionsDraft] = useState<string>("{}");
   const [savingUiLabels, setSavingUiLabels] = useState(false);
 
   // ---- Create sector/journey (catalog) ----
@@ -228,6 +229,7 @@ export function TenantJourneysPanel() {
     if (!selectedJourney) {
       setJourneyNameDraft("");
       setStateLabelsDraft({});
+      setTransitionsDraft("{}");
       return;
     }
 
@@ -252,6 +254,8 @@ export function TenantJourneysPanel() {
     }
 
     setStateLabelsDraft(next);
+    const trans = selectedJourney.default_state_machine_json?.transitions ?? {};
+    setTransitionsDraft(JSON.stringify(trans, null, 2));
   }, [selectedJourneyId, selectedJourney?.id, journeyStates.join(",")]);
 
   const selectedTenantJourney = useMemo(() => {
@@ -460,7 +464,14 @@ export function TenantJourneysPanel() {
         if (vv) cleaned[k] = vv;
       }
 
-      const nextJson = { ...base, labels: cleaned };
+      let trans = {};
+      try {
+        trans = JSON.parse(transitionsDraft);
+      } catch (e) {
+        throw new Error("JSON de transições inválido.");
+      }
+
+      const nextJson = { ...base, labels: cleaned, transitions: trans };
 
       const { error } = await supabase
         .from("journeys")
@@ -1114,6 +1125,23 @@ export function TenantJourneysPanel() {
                   <div className="text-[11px] text-slate-500">
                     Obs: isso atualiza o catálogo (<span className="font-mono">journeys</span>) e requer permissão de super-admin.
                   </div>
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-slate-200 bg-white p-3">
+                <div className="text-xs font-semibold text-slate-900">Transições (Global/Catalog)</div>
+                <div className="mt-1 text-[11px] text-slate-600">
+                  Defina automações que valem para todos os tenants.
+                  Ex: <span className="font-mono">"novo-&gt;em_progresso": [{"{"} "type": "webhook", ... {"}"}]</span>
+                </div>
+                <Textarea
+                  value={transitionsDraft}
+                  onChange={(e) => setTransitionsDraft(e.target.value)}
+                  className="mt-3 min-h-[150px] rounded-2xl bg-white font-mono text-[11px]"
+                  placeholder="{}"
+                />
+                <div className="mt-2 text-[10px] text-slate-500">
+                  * Salve usando o botão "Salvar nomes e rótulos" acima.
                 </div>
               </div>
 
