@@ -509,21 +509,21 @@ function readCfg(obj: any, path: string) {
 }
 
 function inferOutboundCounterpart(payload: any) {
-  return normalizePhoneE164Like(
-    pickFirst(
-      payload?.to,
-      payload?.data?.to,
-      payload?.toPhone,
-      payload?.data?.toPhone,
-      // In some providers, chatId is the conversation target (e.g. 5511...@c.us)
-      payload?.chatId,
-      payload?.data?.chatId,
-      payload?.phone,
-      payload?.data?.phone,
-      payload?.recipient,
-      payload?.data?.recipient
-    )
+  const raw = pickFirst(
+    payload?.to,
+    payload?.data?.to,
+    payload?.toPhone,
+    payload?.data?.toPhone,
+    payload?.chatId,
+    payload?.data?.chatId,
+    payload?.phone,
+    payload?.data?.phone,
+    payload?.recipient,
+    payload?.data?.recipient,
+    payload?.peer
   );
+  if (looksLikeWhatsAppGroupId(raw)) return raw;
+  return normalizePhoneE164Like(raw);
 }
 
 function inferContactLabel(payload: any, fallbackPhone: string | null) {
@@ -1258,7 +1258,16 @@ serve(async (req) => {
       }
 
       if (!counterpart) {
-        const rawTo = pickFirst(payload?.chatId, payload?.data?.chatId, payload?.to, payload?.toPhone);
+        const rawTo = pickFirst(
+          payload?.chatId,
+          payload?.data?.chatId,
+          payload?.to,
+          payload?.toPhone,
+          payload?.phone,
+          payload?.data?.phone,
+          payload?.recipient,
+          payload?.peer
+        );
         await logInbox({
           instance,
           ok: false,
