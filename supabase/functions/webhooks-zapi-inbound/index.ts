@@ -911,25 +911,15 @@ serve(async (req) => {
       looksLikeWhatsAppGroupId(normalized.to) ||
       looksLikeWhatsAppGroupId(normalized.from);
 
+    // EARLY GROUP CHECK REMOVED:
+    // We used to block all groups here, but we now support monitoring specific groups (see below).
+    // The specific logic at line ~1426 handles ignoring unmonitored groups.
+    /*
     if (groupLike) {
-      await logInbox({
-        instance,
-        ok: true,
-        http_status: 200,
-        reason: "group_ignored",
-        direction,
-        meta: {
-          forced_direction: forced ?? null,
-          inferred_direction: inferred,
-          strong_outbound: strongOutbound,
-          chat_id: pickFirst(payload?.chatId, payload?.data?.chatId),
-        },
-      });
-
-      return new Response(JSON.stringify({ ok: true, ignored: true, reason: "group_ignored" }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      await logInbox({ ... });
+      return ...;
     }
+    */
 
     // Ignore provider callbacks/receipts (delivery/read/ack/etc) that carry no user content.
     // These events must never open cases.

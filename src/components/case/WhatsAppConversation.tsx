@@ -403,12 +403,16 @@ export function WhatsAppConversation({
       } else {
         // Direct Mode: 'case_id' OR 'entity_phone'
         if (entityPhone) {
-          // Remove non-digits to be safe, though Supabase stores as string it usually matches digits
+          // Remove non-digits to be safe
           const cleanPhone = entityPhone.replace(/\D/g, "");
-          // We want: (case_id = id) OR (from_phone = entityPhone) OR (to_phone = entityPhone)
-          // We also try to match with/without 55 prefix if possible, but let's stick to exact match first.
-          // Supabase OR syntax: column.eq.val,column2.eq.val
-          q = q.or(`case_id.eq.${caseId},from_phone.eq.${cleanPhone},to_phone.eq.${cleanPhone}`);
+          // Support E.164 (+55...) by using ilike or checking both variants. 
+          // Using ilike '%cleanPhone' matches '+55...' and '55...'
+          // But safer to just construct the variants.
+          const variants = [cleanPhone, `+${cleanPhone}`];
+          const checks = variants.flatMap(v => [`from_phone.eq.${v}`, `to_phone.eq.${v}`]);
+          // Combine with case_id check
+          const orClause = [`case_id.eq.${caseId}`, ...checks].join(",");
+          q = q.or(orClause);
         } else {
           q = q.eq("case_id", caseId);
         }
