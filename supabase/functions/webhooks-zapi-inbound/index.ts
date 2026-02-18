@@ -1459,8 +1459,15 @@ serve(async (req) => {
 
     // Group Message Handling
     // Default: Ignore group messages unless they are explicitly monitored by an open case.
-    if (looksLikeWhatsAppGroupId(normalized.from) || looksLikeWhatsAppGroupId(normalized.to)) {
-      const groupId = looksLikeWhatsAppGroupId(normalized.from) ? normalized.from : normalized.to;
+    const effectiveGroupId = pickFirst(
+      looksLikeWhatsAppGroupId(payload?.chatId) ? payload?.chatId : null,
+      looksLikeWhatsAppGroupId(payload?.data?.chatId) ? payload?.data?.chatId : null,
+      looksLikeWhatsAppGroupId(normalized.from) ? normalized.from : null,
+      looksLikeWhatsAppGroupId(normalized.to) ? normalized.to : null
+    );
+
+    if (effectiveGroupId) {
+      const groupId = effectiveGroupId as string;
 
       // Check if any open case is monitoring this group
       // We look into meta_json->monitoring->whatsapp_group_id

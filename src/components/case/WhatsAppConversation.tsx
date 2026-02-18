@@ -406,9 +406,14 @@ export function WhatsAppConversation({
           // Remove non-digits to be safe
           const cleanPhone = entityPhone.replace(/\D/g, "");
           // Support E.164 (+55...) by using ilike or checking both variants. 
-          // Using ilike '%cleanPhone' matches '+55...' and '55...'
-          // But safer to just construct the variants.
           const variants = [cleanPhone, `+${cleanPhone}`];
+
+          // [MOD] If monitoring a group, add the group ID to variants too
+          const monitoredGroupId = caseQ.data?.meta_json?.monitoring?.whatsapp_group_id as string;
+          if (monitoredGroupId) {
+            variants.push(monitoredGroupId);
+          }
+
           const checks = variants.flatMap(v => [`from_phone.eq.${v}`, `to_phone.eq.${v}`]);
           // Combine with case_id check
           const orClause = [`case_id.eq.${caseId}`, ...checks].join(",");
