@@ -1059,7 +1059,7 @@ export default function Dashboard() {
                                   </div>
                                   <div className="min-w-0">
                                     <Link
-                                      to={`/app/cases/${c.id}`}
+                                      to={`/cases/${c.id}`}
                                       className="block truncate text-sm font-semibold text-slate-900 hover:underline"
                                       title={titlePrimary}
                                     >
@@ -1201,7 +1201,7 @@ export default function Dashboard() {
                           return (
                             <Link
                               key={c.id}
-                              to={`/app/cases/${c.id}`}
+                              to={`/cases/${c.id}`}
                               draggable
                               onDragStart={(e) => {
                                 e.dataTransfer.setData("text/caseId", c.id);
