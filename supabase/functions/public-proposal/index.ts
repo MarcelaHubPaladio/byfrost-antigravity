@@ -612,7 +612,7 @@ serve(async (req) => {
           const finalQty = typeof overrideQty === "number" ? overrideQty : (itemQty * baseQty);
 
           if (finalQty > 0) {
-            scopeLines.push(`  └─ Entregável: ${(t as any).name} (qtd ${finalQty})`);
+            scopeLines.push(`  - Entregável: ${(t as any).name} (qtd ${finalQty})`);
           }
         }
       }
@@ -722,7 +722,7 @@ serve(async (req) => {
           const finalQty = typeof overrideQty === "number" ? overrideQty : (itemQty * baseQty);
 
           if (finalQty > 0) {
-            scopeLines.push(`  └─ Entregável: ${(t as any).name} (qtd ${finalQty})`);
+            scopeLines.push(`  - Entregável: ${(t as any).name} (qtd ${finalQty})`);
           }
         }
       }
