@@ -179,10 +179,29 @@ function normalizeInbound(payload: any): {
   mediaUrl: string | null;
   location: { lat: number; lng: number } | null;
   externalMessageId: string | null;
-  meta: { isCallEvent: boolean; callStatus: string | null; rawType: string };
+  meta: { isCallEvent: boolean; callStatus: string | null; rawType: string; isGroup: boolean; participant: string | null };
   raw: any;
 } {
   const zapiInstanceId = pickFirst<string>(payload?.instanceId, payload?.instance_id, payload?.instance);
+
+  const isGroup = Boolean(
+    payload?.isGroup ||
+    payload?.isGroupMsg ||
+    payload?.data?.isGroup ||
+    payload?.data?.isGroupMsg ||
+    String(payload?.from ?? "").includes("@g.us") ||
+    String(payload?.chatId ?? "").includes("@g.us")
+  );
+
+  const participantRaw = pickFirst(
+    payload?.participant,
+    payload?.data?.participant,
+    payload?.author,
+    payload?.data?.author,
+    payload?.sender,
+    payload?.data?.sender
+  );
+  const participant = normalizePhoneE164Like(participantRaw);
 
   const rawType = String(
     pickFirst(
@@ -362,7 +381,7 @@ function normalizeInbound(payload: any): {
     mediaUrl: mediaUrl ?? null,
     location,
     externalMessageId,
-    meta: { isCallEvent, callStatus: callInfo.status, rawType },
+    meta: { isCallEvent, callStatus: callInfo.status, rawType, isGroup, participant },
     raw: payload,
   };
 }
@@ -776,30 +795,29 @@ serve(async (req) => {
     // not to the instance phone.
     const instancePhoneNorm = normalizePhoneE164Like(instance.phone_number ?? null);
 
-    // NEW: For CRM ownership, prefer the instance's assigned_user_id (if present).
-    // This lets you keep the "owner" stable even if the WhatsApp number on the instance changes.
-    let sellerPhoneNorm = instancePhoneNorm;
-    let sellerDisplayName = String((instance as any)?.name ?? "").trim() || (sellerPhoneNorm ? `Vendedor ${sellerPhoneNorm}` : "Vendedor");
+    const effectiveGroupId = pickFirst(
+      looksLikeWhatsAppGroupId(payload?.chatId) ? payload?.chatId : null,
+      looksLikeWhatsAppGroupId(payload?.data?.chatId) ? payload?.data?.chatId : null,
+      looksLikeWhatsAppGroupId(normalized.from) ? normalized.from : null,
+      looksLikeWhatsAppGroupId(normalized.to) ? normalized.to : null
+    );
 
-    if ((instance as any)?.assigned_user_id) {
-      try {
-        const { data: up } = await supabase
-          .from("users_profile")
-          .select("phone_e164,display_name,email")
-          .eq("tenant_id", String((instance as any).tenant_id))
-          .eq("user_id", String((instance as any).assigned_user_id))
-          .is("deleted_at", null)
-          .maybeSingle();
+    const inferred = inferDirection({
+      payload,
+      normalized: { from: normalized.from, to: normalized.to },
+      instancePhone: instance.phone_number ?? null,
+    });
 
-        const upPhone = normalizePhoneE164Like((up as any)?.phone_e164 ?? null);
-        if (upPhone) sellerPhoneNorm = upPhone;
+    const explicitFromMe = detectFromMe(payload);
 
-        const label = String((up as any)?.display_name ?? (up as any)?.email ?? "").trim();
-        if (label) sellerDisplayName = label;
-      } catch (e) {
-        console.warn(`[${fn}] Failed to load assigned_user profile (ignored)`, { e: String((e as any)?.message ?? e) });
-      }
-    }
+    const strongOutbound =
+      (inferred === "outbound" || explicitFromMe) &&
+      (payload?.fromMe === true ||
+        payload?.data?.fromMe === true ||
+        payload?.isFromMe === true ||
+        payload?.data?.isFromMe === true ||
+        explicitFromMe ||
+        (instancePhoneNorm && normalized.from === instancePhoneNorm));
 
     const callCounterpartPhone =
       normalized.meta.isCallEvent && instancePhoneNorm
@@ -810,15 +828,29 @@ serve(async (req) => {
             : normalized.from) // default
         : null;
 
+    const direction: WebhookDirection =
+      normalized.meta.isCallEvent && callCounterpartPhone
+        ? (forced === "outbound" ? "outbound" : "inbound")
+        : (strongOutbound)
+          ? "outbound"
+          : (forced ?? inferred);
+
     // For call events, treat the peer (caller/callee) as the effective sender for matching/case linking.
     const inboundFromPhone =
-      normalized.meta.isCallEvent && callCounterpartPhone ? callCounterpartPhone : normalized.from;
+      normalized.meta.isCallEvent && callCounterpartPhone
+        ? callCounterpartPhone
+        : (normalized.meta.isGroup && normalized.meta.participant)
+          ? normalized.meta.participant
+          : normalized.from;
 
     // If provider doesn't send an explicit "to", assume the connected instance phone for inbound.
+    // MOD: For group messages, 'to' should be the Group ID for better querying.
     const inboundToPhone =
-      normalized.meta.isCallEvent && inboundFromPhone && instancePhoneNorm
-        ? instancePhoneNorm
-        : (normalized.to ?? instancePhoneNorm);
+      effectiveGroupId && direction === "inbound"
+        ? String(effectiveGroupId)
+        : (normalized.meta.isCallEvent && inboundFromPhone && instancePhoneNorm
+          ? instancePhoneNorm
+          : (normalized.to ?? instancePhoneNorm));
 
     if (!inboundFromPhone) {
       console.warn(`[${fn}] inbound_missing_from_phone`, {
@@ -844,32 +876,30 @@ serve(async (req) => {
       });
     }
 
-    const inferred = inferDirection({
-      payload,
-      normalized: { from: normalized.from, to: normalized.to },
-      instancePhone: instance.phone_number ?? null,
-    });
+    // NEW: For CRM ownership, prefer the instance's assigned_user_id (if present).
+    // This lets you keep the "owner" stable even if the WhatsApp number on the instance changes.
+    let sellerPhoneNorm = instancePhoneNorm;
+    let sellerDisplayName = String((instance as any)?.name ?? "").trim() || (sellerPhoneNorm ? `Vendedor ${sellerPhoneNorm}` : "Vendedor");
 
-    const explicitFromMe = detectFromMe(payload);
+    if ((instance as any)?.assigned_user_id) {
+      try {
+        const { data: up } = await supabase
+          .from("users_profile")
+          .select("phone_e164,display_name,email")
+          .eq("tenant_id", String((instance as any).tenant_id))
+          .eq("user_id", String((instance as any).assigned_user_id))
+          .is("deleted_at", null)
+          .maybeSingle();
 
-    // Hygiene: Sometimes the webhook is configured with a forced dir=inbound URL, but provider still
-    // sends outbound events to that same endpoint. If we can strongly infer outbound, prefer it.
-    const strongOutbound =
-      (inferred === "outbound" || explicitFromMe) &&
-      (payload?.fromMe === true ||
-        payload?.data?.fromMe === true ||
-        payload?.isFromMe === true ||
-        payload?.data?.isFromMe === true ||
-        explicitFromMe ||
-        (instancePhoneNorm && normalized.from === instancePhoneNorm));
+        const upPhone = normalizePhoneE164Like((up as any)?.phone_e164 ?? null);
+        if (upPhone) sellerPhoneNorm = upPhone;
 
-    // For call events, if we could identify a counterpart phone, treat them as inbound by default.
-    const direction: WebhookDirection =
-      normalized.meta.isCallEvent && callCounterpartPhone
-        ? (forced === "outbound" ? "outbound" : "inbound")
-        : (strongOutbound)
-          ? "outbound"
-          : (forced ?? inferred);
+        const label = String((up as any)?.display_name ?? (up as any)?.email ?? "").trim();
+        if (label) sellerDisplayName = label;
+      } catch (e) {
+        console.warn(`[${fn}] Failed to load assigned_user profile (ignored)`, { e: String((e as any)?.message ?? e) });
+      }
+    }
 
     console.log(`[${fn}] direction_resolved`, {
       tenant_id: instance.tenant_id,
@@ -1460,13 +1490,6 @@ serve(async (req) => {
 
     // Group Message Handling
     // Default: Ignore group messages unless they are explicitly monitored by an open case.
-    const effectiveGroupId = pickFirst(
-      looksLikeWhatsAppGroupId(payload?.chatId) ? payload?.chatId : null,
-      looksLikeWhatsAppGroupId(payload?.data?.chatId) ? payload?.data?.chatId : null,
-      looksLikeWhatsAppGroupId(normalized.from) ? normalized.from : null,
-      looksLikeWhatsAppGroupId(normalized.to) ? normalized.to : null
-    );
-
     if (effectiveGroupId) {
       const groupId = effectiveGroupId as string;
 
@@ -1487,7 +1510,7 @@ serve(async (req) => {
           tenant_id: instance.tenant_id,
           instance_id: instance.id,
           direction: direction,
-          from_phone: normalized.from,
+          from_phone: (direction === "inbound" && normalized.meta.participant) ? normalized.meta.participant : normalized.from,
           to_phone: direction === "inbound" ? groupId : normalized.to,
           type: normalized.type,
           body_text: normalized.text,
@@ -1503,35 +1526,15 @@ serve(async (req) => {
           return new Response("Failed to insert group message", { status: 500, headers: corsHeaders });
         }
 
-        await logInbox({
-          instance,
-          ok: true,
-          http_status: 200,
-          reason: `group_monitored: ${groupId}`,
-          direction,
-          case_id: monitoredCase.id,
-          meta: { conversation_group_id: groupId, case_id: monitoredCase.id },
-        });
-
         return new Response(JSON.stringify({ ok: true, case_id: monitoredCase.id, group_monitored: true }), {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
-      } else {
-        // If it's INBOUND and NOT monitored, we ignore it.
-        // If it's OUTBOUND and NOT monitored, we proceed to standard routing below 
-        // (to allow linking one-off outbound group messages by history/customer if they exist).
-        if (direction === "inbound") {
-          await logInbox({
-            instance,
-            ok: true,
-            http_status: 200,
-            reason: `group_ignored_unmonitored: ${groupId}`,
-            direction,
-            meta: { conversation_group_id: groupId },
-          });
-          return new Response("Group message ignored", { status: 200, headers: corsHeaders });
-        }
       }
+
+      // If it reaches here, it's a group message but NOT explicitly monitored by a case meta_json.
+      // We no longer 'return' here. We let it fall through to standard inbound routing.
+      // This allows it to link to a customer's open case based on their participant phone.
+      console.log(`[${fn}] Group message fallthrough (not explicitly monitored)`, { groupId, direction });
     }
 
     // Determine whether the inbound sender is a *vendor user* (users_profile.role='vendor').
