@@ -177,12 +177,12 @@ async function buildSimpleContractPdf(params: {
 
   draw("CONTRATO / PROPOSTA", 16);
   draw(`Tenant: ${params.tenantName}`, 11);
-  if (params.tenantCompany?.cnpj) draw(`CNPJ: ${params.tenantCompany.cnpj}`, 11);
+  if (params.tenantCompany?.cnpj) draw(`CNPJ: ${formatDocument(params.tenantCompany.cnpj)}`, 11);
   if (params.tenantCompany?.address_line) draw(`Endereço: ${params.tenantCompany.address_line}`, 11);
   draw("", 8);
 
   draw(`Cliente: ${params.partyName}`, 11);
-  if (params.partyCustomer?.cnpj) draw(`CNPJ: ${params.partyCustomer.cnpj}`, 11);
+  if (params.partyCustomer?.cnpj) draw(`CNPJ: ${formatDocument(params.partyCustomer.cnpj)}`, 11);
   if (params.partyCustomer?.address_line) draw(`Endereço: ${params.partyCustomer.address_line}`, 11);
   if (params.partyCustomer?.phone) draw(`Telefone: ${params.partyCustomer.phone}`, 11);
   if (params.partyCustomer?.email) draw(`Email: ${params.partyCustomer.email}`, 11);
@@ -413,6 +413,17 @@ function partyAddressFull(customer: any) {
   return parts.join(" • ");
 }
 
+function formatDocument(v: any) {
+  const s = String(v ?? "").replace(/\D/g, "");
+  if (s.length === 11) {
+    return s.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4");
+  }
+  if (s.length === 14) {
+    return s.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, "$1.$2.$3/$4-$5");
+  }
+  return String(v ?? "");
+}
+
 function inferOrigin(req: Request) {
   const origin = String(req.headers.get("origin") ?? "").trim();
   if (origin) return origin;
@@ -618,9 +629,10 @@ serve(async (req) => {
 
       const vars: Record<string, string> = {
         tenant_name: safeStr((tenant as any).name ?? tenantSlug),
+        tenant_cnpj: formatDocument(company?.cnpj),
         party_name: safeStr((party as any).display_name ?? "Cliente"),
         party_legal_name: safeStr(customer?.legal_name ?? (party as any).display_name),
-        party_document: safeStr(customer?.document),
+        party_document: formatDocument(customer?.document),
         party_whatsapp: safeStr(customer?.whatsapp),
         party_email: safeStr(customer?.email),
         party_address_full: partyAddressFull(customer),
@@ -751,9 +763,10 @@ serve(async (req) => {
 
       const vars: Record<string, string> = {
         tenant_name: safeStr((tenant as any).name ?? tenantSlug),
+        tenant_cnpj: formatDocument(company?.cnpj),
         party_name: safeStr((party as any).display_name ?? "Cliente"),
         party_legal_name: customerName,
-        party_document: safeStr(customer?.document),
+        party_document: formatDocument(customer?.document),
         party_whatsapp: safeStr(customer?.whatsapp),
         party_email: safeStr(customer?.email),
         party_address_full: partyAddressFull(customer),

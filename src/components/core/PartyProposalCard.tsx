@@ -67,6 +67,17 @@ function partyAddressFull(md: any) {
   return parts.join(" • ");
 }
 
+function formatDocument(v: any) {
+  const s = String(v ?? "").replace(/\D/g, "");
+  if (s.length === 11) {
+    return s.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4");
+  }
+  if (s.length === 14) {
+    return s.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, "$1.$2.$3/$4-$5");
+  }
+  return String(v ?? "");
+}
+
 export function PartyProposalCard({
   tenantId,
   partyId,
@@ -564,7 +575,7 @@ export function PartyProposalCard({
     const vars: Record<string, string> = {
       tenant_name: safe(tenantName || tenantSlug),
       party_name: safe(partyQ.data?.display_name || "Cliente"),
-      party_document: safe(md?.cpf_cnpj ?? md?.cpfCnpj ?? md?.document),
+      party_document: formatDocument(md?.cpf_cnpj ?? md?.cpfCnpj ?? md?.document),
       party_whatsapp: safe(md?.whatsapp ?? md?.phone ?? md?.phone_e164),
       party_email: safe(md?.email),
       party_address_full: partyAddressFull(md),
