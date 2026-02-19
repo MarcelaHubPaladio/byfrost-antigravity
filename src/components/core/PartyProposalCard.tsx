@@ -13,8 +13,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Textarea } from "@/components/ui/textarea";
 import { showError, showSuccess } from "@/utils/toast";
-import { Loader2, Plus, Search, Trash2, Package, ShoppingCart } from "lucide-react";
+import { Loader2, Plus, Search, Trash2, Package, ShoppingCart, Info } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { CommitmentDeliverablesPreview } from "./CommitmentDeliverablesPreview";
 
 function randomToken() {
   // simple + url-safe
@@ -320,6 +321,20 @@ export function PartyProposalCard({
       .filter(([, v]) => v)
       .map(([k]) => k);
   }, [selected]);
+
+  const selectedItemsForPreview = useMemo(() => {
+    const list: any[] = [];
+    const commitments = (commitmentsQ.data ?? []).filter(c => selectedIds.includes(String(c.id)));
+    for (const c of commitments) {
+      for (const it of (c.items ?? [])) {
+        list.push({
+          offering_entity_id: it.offering_entity_id,
+          quantity: it.quantity
+        });
+      }
+    }
+    return list;
+  }, [commitmentsQ.data, selectedIds]);
 
   const scopeQ = useQuery({
     queryKey: ["proposal_scope_lines_preview", tenantId, selectedIds.join(",")],
@@ -711,10 +726,10 @@ export function PartyProposalCard({
 
             <div className="rounded-2xl border bg-white p-3">
               <div className="flex items-center justify-between gap-3">
-                <div className="text-xs font-semibold text-slate-700">Produtos / Serviços e Entregas</div>
+                <div className="text-xs font-semibold text-slate-700">Escopo Comercial (Produtos e Serviços)</div>
                 <div className="flex items-center gap-1 text-[11px] text-slate-500">
                   <ShoppingCart className="h-3 w-3" />
-                  <span>Escopo da Proposta</span>
+                  <span>O que está sendo vendido</span>
                 </div>
               </div>
 
@@ -836,6 +851,22 @@ export function PartyProposalCard({
                   })
                 )}
               </div>
+
+              {selectedItemsForPreview.length > 0 && (
+                <div className="mt-6 border-t pt-4">
+                  <div className="flex items-center gap-2 mb-3 px-1">
+                    <Info className="h-4 w-4 text-[hsl(var(--byfrost-accent))]" />
+                    <div className="text-xs font-semibold text-slate-700">Detalhamento de Entregáveis (Execução)</div>
+                  </div>
+                  <CommitmentDeliverablesPreview
+                    tenantId={tenantId}
+                    items={selectedItemsForPreview}
+                  />
+                  <div className="mt-2 px-1 text-[10px] text-slate-500 border-l-2 border-slate-100 pl-3">
+                    Estes entregáveis são baseados nos templates configurados para cada produto/serviço no módulo "Entregas".
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="mt-4 rounded-2xl border bg-white p-3">

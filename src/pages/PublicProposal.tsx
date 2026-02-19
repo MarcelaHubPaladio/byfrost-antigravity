@@ -514,12 +514,24 @@ export default function PublicProposal() {
                 <Card className="rounded-[28px] border-black/10 bg-white/85 p-5 shadow-sm">
                   <div className="text-sm font-semibold text-slate-900">Compromissos selecionados</div>
                   <div className="mt-2 grid gap-2">
-                    {(data?.scope?.commitments ?? []).map((c: any) => (
-                      <div key={c.id} className="rounded-2xl border bg-white px-3 py-2 text-sm text-slate-800">
-                        <div className="font-semibold">{String(c.commitment_type ?? "commitment")}</div>
-                        <div className="text-xs text-slate-600">id: {String(c.id).slice(0, 8)}… • status: {c.status ?? "—"}</div>
-                      </div>
-                    ))}
+                    {(data?.scope?.commitments ?? []).map((c: any) => {
+                      const cid = String(c.id);
+                      const items = (data?.scope?.items ?? []).filter((it: any) => String(it.commitment_id) === cid);
+                      const offerings = items.map((it: any) => {
+                        const oid = String(it.offering_entity_id);
+                        return data?.scope?.offeringsById?.[oid]?.display_name || "Item";
+                      });
+                      const label = offerings.length ? offerings.join(", ") : String(c.commitment_type ?? "compromisso");
+
+                      return (
+                        <div key={c.id} className="rounded-2xl border bg-white px-3 py-2 text-sm text-slate-800">
+                          <div className="font-semibold capitalize text-slate-900">{label}</div>
+                          <div className="text-[11px] text-slate-500">
+                            {c.commitment_type} • status: {c.status ?? "—"} • {new Date(c.created_at).toLocaleDateString("pt-BR")}
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 </Card>
               ) : null}
