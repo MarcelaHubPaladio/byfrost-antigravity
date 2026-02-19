@@ -522,7 +522,7 @@ serve(async (req) => {
 
       const { data: its, error: iErr } = await supabase
         .from("commitment_items")
-        .select("id,tenant_id,commitment_id,offering_entity_id,quantity,created_at")
+        .select("id,tenant_id,commitment_id,offering_entity_id,quantity,metadata,created_at")
         .eq("tenant_id", tenant.id)
         .in("commitment_id", commitmentIds)
         .is("deleted_at", null);

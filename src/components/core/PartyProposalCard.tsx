@@ -163,6 +163,7 @@ export function PartyProposalCard({
             id,
             offering_entity_id,
             quantity,
+            metadata,
             offering:core_entities(display_name)
           )
         `)
@@ -375,7 +376,7 @@ export function PartyProposalCard({
     queryFn: async () => {
       const { data: its, error: iErr } = await supabase
         .from("commitment_items")
-        .select("id,commitment_id,offering_entity_id,quantity")
+        .select("id,commitment_id,offering_entity_id,quantity,metadata")
         .eq("tenant_id", tenantId)
         .in("commitment_id", selectedIds)
         .is("deleted_at", null);
