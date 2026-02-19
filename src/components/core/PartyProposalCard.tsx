@@ -828,66 +828,72 @@ export function PartyProposalCard({
                   </div>
                 ) : (
                   (commitmentsQ.data ?? []).map((c: any) => {
-                    const firstItem = c.items?.[0];
-                    const offeringName = firstItem?.offering?.display_name ?? "Item sem nome";
-                    const qty = firstItem?.quantity ?? 1;
                     const isSelected = Boolean(selected[c.id]);
 
                     return (
                       <div
                         key={c.id}
                         className={cn(
-                          "group flex items-center justify-between gap-3 rounded-xl border p-3 transition",
+                          "group flex flex-col gap-3 rounded-xl border p-3 transition",
                           isSelected ? "border-slate-300 bg-slate-50/50" : "border-slate-100 bg-white"
                         )}
                       >
-                        <div className="flex items-center gap-3 min-w-0">
-                          <Checkbox
-                            checked={isSelected}
-                            onCheckedChange={(v) => setSelected((prev) => ({ ...prev, [c.id]: Boolean(v) }))}
-                          />
-                          <div className="min-w-0">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex items-center gap-3 min-w-0">
+                            <Checkbox
+                              checked={isSelected}
+                              onCheckedChange={(v) => setSelected((prev) => ({ ...prev, [c.id]: Boolean(v) }))}
+                            />
                             <div className="flex items-center gap-2">
                               {c.commitment_type === "order" ? (
                                 <Package className="h-3.5 w-3.5 text-slate-400 shrink-0" />
                               ) : (
                                 <ShoppingCart className="h-3.5 w-3.5 text-slate-400 shrink-0" />
                               )}
-                              <div className="truncate text-sm font-semibold text-slate-900">
-                                {offeringName}
+                              <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                                {c.commitment_type} • {new Date(c.created_at).toLocaleDateString("pt-BR")}
                               </div>
-                            </div>
-                            <div className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-slate-500">
-                              <div className="flex items-center gap-1">
-                                <span className="font-medium text-slate-700">Qtd:</span>
-                                <input
-                                  type="number"
-                                  min={1}
-                                  value={qty}
-                                  onClick={(e) => e.stopPropagation()}
-                                  onChange={(e) => handleUpdateItemQuantity(c.id, firstItem.id, Number(e.target.value))}
-                                  className="w-12 h-6 rounded border bg-transparent text-center focus:outline-none focus:ring-1 focus:ring-slate-300 font-semibold text-slate-900"
-                                />
-                              </div>
-                              <span>•</span>
-                              <span className="capitalize">{c.commitment_type}</span>
-                              <span>•</span>
-                              <span>{new Date(c.created_at).toLocaleDateString("pt-BR")}</span>
                             </div>
                           </div>
+                          <div className="flex items-center gap-2">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 opacity-0 group-hover:opacity-100 transition"
+                              onClick={() => handleDeleteCommitment(c.id)}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                            <Badge variant={c.status === "active" ? "default" : "outline"} className="hidden sm:inline-flex capitalize">
+                              {c.status}
+                            </Badge>
+                          </div>
                         </div>
-                        <div className="flex items-center gap-2">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 opacity-0 group-hover:opacity-100 transition"
-                            onClick={() => handleDeleteCommitment(c.id)}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                          <Badge variant={c.status === "active" ? "default" : "outline"} className="hidden sm:inline-flex capitalize">
-                            {c.status}
-                          </Badge>
+
+                        <div className="ml-8 space-y-3">
+                          {(c.items ?? []).map((it: any) => {
+                            const offeringName = it.offering?.display_name ?? "Item sem nome";
+                            const qty = it.quantity ?? 1;
+
+                            return (
+                              <div key={it.id} className="flex items-center justify-between gap-4 p-2 rounded-lg bg-white border border-slate-100 shadow-sm">
+                                <div className="truncate text-sm font-semibold text-slate-900">
+                                  {offeringName}
+                                </div>
+                                <div className="flex items-center gap-1.5 shrink-0">
+                                  <span className="text-[10px] font-medium text-slate-500 uppercase">Qtd:</span>
+                                  <input
+                                    type="number"
+                                    min={1}
+                                    value={qty}
+                                    onClick={(e) => e.stopPropagation()}
+                                    onChange={(e) => handleUpdateItemQuantity(c.id, it.id, Number(e.target.value))}
+                                    className="w-12 h-6 rounded border bg-transparent text-center focus:outline-none focus:ring-1 focus:ring-slate-300 font-semibold text-slate-900"
+                                  />
+                                </div>
+                              </div>
+                            );
+                          })}
                         </div>
                       </div>
                     );
