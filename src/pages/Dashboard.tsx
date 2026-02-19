@@ -161,21 +161,35 @@ export default function Dashboard() {
   const [newSalesOrderOpen, setNewSalesOrderOpen] = useState(false);
   const [exportingCsv, setExportingCsv] = useState(false);
 
+  // Filtros jornada Auditoria
+  const [instanceFilterId, setInstanceFilterId] = useState<string>("all");
+  const [startDate, setStartDate] = useState<string>("");
+  const [endDate, setEndDate] = useState<string>("");
+
+  const allInstancesQ = useQuery({
+    queryKey: ["wa_instances_all", activeTenantId],
+    enabled: Boolean(activeTenantId),
+    staleTime: 60_000,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("wa_instances")
+        .select("id,name,phone_number")
+        .eq("tenant_id", activeTenantId!)
+        .eq("status", "active")
+        .is("deleted_at", null)
+        .order("name", { ascending: true });
+      if (error) throw error;
+      return (data ?? []) as Array<{ id: string; name: string; phone_number: string | null }>;
+    },
+  });
+
   const instanceQ = useQuery({
     queryKey: ["wa_instance_active_first", activeTenantId],
     enabled: Boolean(activeTenantId),
     staleTime: 30_000,
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("wa_instances")
-        .select("id,phone_number")
-        .eq("tenant_id", activeTenantId!)
-        .eq("status", "active")
-        .order("created_at", { ascending: true })
-        .limit(1)
-        .maybeSingle();
-      if (error) throw error;
-      return (data ?? null) as WaInstanceRow | null;
+      const data = allInstancesQ.data?.[0] ?? null;
+      return data as WaInstanceRow | null;
     },
   });
 
@@ -518,19 +532,55 @@ export default function Dashboard() {
     },
   });
 
-  // 3) Busca
+  // 3) Busca + Filtros Extras (Instância e Data)
   const filteredRows = useMemo(() => {
-    const qq = q.trim().toLowerCase();
-    if (!qq) return journeyRows;
+    let base = journeyRows;
 
-    return journeyRows.filter((r) => {
+    // Filtro de Instância
+    if (instanceFilterId !== "all") {
+      base = base.filter((r) => {
+        // Cases table does not have instance_id directly sometimes, but it might be in meta_json.
+        // However, wa_messages (recent inbound) is linked to instance.
+        // For audit, if a case was opened by an instance, we should ideally know which one.
+        const instId = (r.meta_json as any)?.instance_id || (r.meta_json as any)?.wa_instance_id;
+        return instId === instanceFilterId;
+      });
+    }
+
+    // Filtro de Datas
+    if (startDate) {
+      const start = new Date(startDate).getTime();
+      base = base.filter((r) => new Date(r.created_at).getTime() >= start);
+    }
+    if (endDate) {
+      // End date normally inclusive of the day
+      const end = new Date(endDate);
+      end.setHours(23, 59, 59, 999);
+      const endMs = end.getTime();
+      base = base.filter((r) => new Date(r.created_at).getTime() <= endMs);
+    }
+
+    const qq = q.trim().toLowerCase();
+    if (!qq) return base;
+
+    return base.filter((r) => {
       const cust = isCrm ? customersQ.data?.get(String((r as any).customer_id ?? "")) : null;
       const metaPhone = getMetaPhone(r.meta_json);
       const fieldPhone = isCrm ? casePhoneQ.data?.get(r.id) : null;
+
       const t = `${r.title ?? ""} ${(r.vendors?.display_name ?? "")} ${(r.vendors?.phone_e164 ?? "")} ${cust?.name ?? ""} ${cust?.phone_e164 ?? ""} ${cust?.email ?? ""} ${metaPhone ?? ""} ${fieldPhone ?? ""}`.toLowerCase();
+
+      // Busca por número exata ou parcial sem formatação
+      const cleanQ = qq.replace(/\D/g, "");
+      if (cleanQ && (
+        (metaPhone || "").replace(/\D/g, "").includes(cleanQ) ||
+        (fieldPhone || "").replace(/\D/g, "").includes(cleanQ) ||
+        (cust?.phone_e164 || "").replace(/\D/g, "").includes(cleanQ)
+      )) return true;
+
       return t.includes(qq);
     });
-  }, [journeyRows, q, isCrm, customersQ.data, casePhoneQ.data]);
+  }, [journeyRows, q, isCrm, customersQ.data, casePhoneQ.data, instanceFilterId, startDate, endDate]);
 
   const visibleCaseIds = useMemo(() => filteredRows.map((r) => r.id), [filteredRows]);
 
@@ -934,18 +984,62 @@ export default function Dashboard() {
             />
           ) : null}
 
-          <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center">
+          <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-end">
             <div className="relative flex-1">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-              <Input
-                value={q}
-                onChange={(e) => setQ(e.target.value)}
-                placeholder="Buscar por título, cliente, telefone, vendedor…"
-                className="h-11 rounded-2xl pl-10"
-              />
+              <div className="mb-1 text-[11px] font-semibold text-slate-700">Busca rápida</div>
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                <Input
+                  value={q}
+                  onChange={(e) => setQ(e.target.value)}
+                  placeholder="Título, telefone, vendedor…"
+                  className="h-11 rounded-2xl pl-10"
+                />
+              </div>
             </div>
-            <div className="rounded-2xl border border-slate-200 bg-white/70 px-3 py-2 text-xs text-slate-600 shadow-sm">
-              Arraste um card para mudar de etapa.
+
+            {selectedKey === "ff_flow_20260129200457" && (
+              <>
+                <div className="flex flex-col gap-1">
+                  <div className="text-[11px] font-semibold text-slate-700">Instância</div>
+                  <select
+                    value={instanceFilterId}
+                    onChange={(e) => setInstanceFilterId(e.target.value)}
+                    className="h-11 rounded-2xl border border-slate-200 bg-white px-3 text-sm text-slate-800 outline-none focus:border-[hsl(var(--byfrost-accent)/0.45)]"
+                  >
+                    <option value="all">Todas as instâncias</option>
+                    {(allInstancesQ.data ?? []).map((inst) => (
+                      <option key={inst.id} value={inst.id}>
+                        {inst.name} ({inst.phone_number})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="flex flex-col gap-1">
+                  <div className="text-[11px] font-semibold text-slate-700">Data Inicial</div>
+                  <input
+                    type="date"
+                    value={startDate}
+                    onChange={(e) => setStartDate(e.target.value)}
+                    className="h-11 rounded-2xl border border-slate-200 bg-white px-3 text-sm text-slate-800 outline-none focus:border-[hsl(var(--byfrost-accent)/0.45)]"
+                  />
+                </div>
+
+                <div className="flex flex-col gap-1">
+                  <div className="text-[11px] font-semibold text-slate-700">Data Final</div>
+                  <input
+                    type="date"
+                    value={endDate}
+                    onChange={(e) => setEndDate(e.target.value)}
+                    className="h-11 rounded-2xl border border-slate-200 bg-white px-3 text-sm text-slate-800 outline-none focus:border-[hsl(var(--byfrost-accent)/0.45)]"
+                  />
+                </div>
+              </>
+            )}
+
+            <div className="hidden rounded-2xl border border-slate-200 bg-white/70 px-3 py-2 text-xs text-slate-600 shadow-sm md:block">
+              Arraste para mudar de etapa.
             </div>
           </div>
 
