@@ -198,8 +198,12 @@ function normalizeInbound(payload: any): {
     payload?.data?.participant,
     payload?.author,
     payload?.data?.author,
+    payload?.sender?.phone,
+    payload?.data?.sender?.phone,
     payload?.sender,
-    payload?.data?.sender
+    payload?.data?.sender,
+    payload?.senderId,
+    payload?.data?.senderId
   );
   const participant = normalizePhoneE164Like(participantRaw);
 
@@ -837,20 +841,24 @@ serve(async (req) => {
 
     // For call events, treat the peer (caller/callee) as the effective sender for matching/case linking.
     const inboundFromPhone =
-      normalized.meta.isCallEvent && callCounterpartPhone
-        ? callCounterpartPhone
-        : (normalized.meta.isGroup && normalized.meta.participant)
-          ? normalized.meta.participant
-          : normalized.from;
+      direction === "outbound"
+        ? instancePhoneNorm
+        : (normalized.meta.isCallEvent && callCounterpartPhone
+          ? callCounterpartPhone
+          : (normalized.meta.isGroup && normalized.meta.participant)
+            ? normalized.meta.participant
+            : normalized.from);
 
     // If provider doesn't send an explicit "to", assume the connected instance phone for inbound.
     // MOD: For group messages, 'to' should be the Group ID for better querying.
     const inboundToPhone =
-      effectiveGroupId && direction === "inbound"
-        ? String(effectiveGroupId)
-        : (normalized.meta.isCallEvent && inboundFromPhone && instancePhoneNorm
-          ? instancePhoneNorm
-          : (normalized.to ?? instancePhoneNorm));
+      direction === "outbound"
+        ? (effectiveGroupId ? String(effectiveGroupId) : (normalized.to ?? normalized.from))
+        : (effectiveGroupId
+          ? String(effectiveGroupId)
+          : (normalized.meta.isCallEvent && inboundFromPhone && instancePhoneNorm
+            ? instancePhoneNorm
+            : (normalized.to ?? instancePhoneNorm)));
 
     if (!inboundFromPhone) {
       console.warn(`[${fn}] inbound_missing_from_phone`, {
@@ -1744,11 +1752,24 @@ serve(async (req) => {
     const initialState = pickInitialState(journey, initialHint);
 
     // Call RPC for atomic processing
+    if (!inboundFromPhone) {
+      console.error(`[${fn}] Aborting RPC: missing inboundFromPhone`, { direction, isGroup: normalized.meta.isGroup, participant: normalized.meta.participant });
+      await logInbox({
+        instance,
+        ok: false,
+        http_status: 422,
+        reason: "missing_sender_phone",
+        direction,
+        meta: { isGroup: normalized.meta.isGroup, participant: normalized.meta.participant }
+      });
+      return new Response("Missing sender phone", { status: 422, headers: corsHeaders });
+    }
+
     const { data: rpcResult, error: rpcError } = await supabase.rpc("process_zapi_inbound_message", {
       p_tenant_id: instance.tenant_id,
       p_instance_id: instance.id,
       p_zapi_instance_id: effectiveInstanceId,
-      p_direction: "inbound",
+      p_direction: direction,
       p_type: normalized.type,
       p_from_phone: inboundFromPhone,
       p_to_phone: inboundToPhone,
