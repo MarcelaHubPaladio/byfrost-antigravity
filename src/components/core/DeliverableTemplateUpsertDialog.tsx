@@ -63,6 +63,7 @@ export function DeliverableTemplateUpsertDialog({
   const [offeringId, setOfferingId] = useState<string>("");
   const [name, setName] = useState<string>("");
   const [estimatedMinutes, setEstimatedMinutes] = useState<string>("");
+  const [quantity, setQuantity] = useState<string>("1");
   const [resourceType, setResourceType] = useState<string>("");
 
   useEffect(() => {
@@ -73,6 +74,8 @@ export function DeliverableTemplateUpsertDialog({
 
     const mins = initial?.estimated_minutes;
     setEstimatedMinutes(mins === null || mins === undefined ? "" : String(mins));
+
+    setQuantity(String((initial as any)?.quantity ?? "1"));
 
     setResourceType(String(initial?.required_resource_type ?? ""));
   }, [open, initial?.id, defaultOfferingId]);
@@ -108,6 +111,7 @@ export function DeliverableTemplateUpsertDialog({
         offering_entity_id: offeringId,
         name: name.trim(),
         estimated_minutes: minutesNumber,
+        quantity: Math.max(1, Math.round(Number(quantity) || 1)),
         required_resource_type: resourceType.trim() ? resourceType.trim() : null,
       };
 
@@ -188,15 +192,28 @@ export function DeliverableTemplateUpsertDialog({
             </div>
 
             <div className="grid gap-2">
-              <Label>Tipo de recurso</Label>
+              <Label>Quantidade base</Label>
               <Input
-                value={resourceType}
-                onChange={(e) => setResourceType(e.target.value)}
-                placeholder="Ex.: tecnico, designer, analista…"
+                value={quantity}
+                onChange={(e) => setQuantity(e.target.value)}
+                type="number"
+                min={1}
+                placeholder="Ex.: 1"
                 className="rounded-xl"
               />
-              <div className="text-xs text-slate-500">Opcional. Ajuda a somar capacidade por tipo.</div>
+              <div className="text-xs text-slate-500">Número de repetições por venda.</div>
             </div>
+          </div>
+
+          <div className="grid gap-2">
+            <Label>Tipo de recurso</Label>
+            <Input
+              value={resourceType}
+              onChange={(e) => setResourceType(e.target.value)}
+              placeholder="Ex.: tecnico, designer, analista…"
+              className="rounded-xl"
+            />
+            <div className="text-xs text-slate-500">Opcional. Ajuda a somar capacidade por tipo.</div>
           </div>
         </div>
 

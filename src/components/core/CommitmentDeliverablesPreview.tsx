@@ -17,6 +17,7 @@ type TemplateRow = {
   name: string;
   estimated_minutes: number | null;
   required_resource_type: string | null;
+  quantity?: number;
 };
 
 export function CommitmentDeliverablesPreview({
@@ -41,7 +42,7 @@ export function CommitmentDeliverablesPreview({
       queryFn: async () => {
         const { data, error } = await supabase
           .from("deliverable_templates")
-          .select("id,name,estimated_minutes,required_resource_type")
+          .select("id,name,estimated_minutes,required_resource_type,quantity")
           .eq("tenant_id", tenantId)
           .eq("offering_entity_id", offeringId)
           .is("deleted_at", null)
@@ -95,7 +96,9 @@ export function CommitmentDeliverablesPreview({
       const k = String(x.template.required_resource_type ?? "(sem tipo)");
       const templateId = x.template.id;
       const overrideQty = x.item.metadata?.deliverable_overrides?.[templateId]?.quantity;
-      const qty = typeof overrideQty === "number" ? overrideQty : Number(x.item.quantity ?? 1);
+      const baseQty = Number(x.template.quantity ?? 1);
+      const itemMultiplier = Number(x.item.quantity ?? 1);
+      const qty = typeof overrideQty === "number" ? overrideQty : (baseQty * itemMultiplier);
       const m = Number(x.template.estimated_minutes ?? 0) * qty;
       byType.set(k, (byType.get(k) ?? 0) + m);
     }
@@ -127,7 +130,9 @@ export function CommitmentDeliverablesPreview({
               {flat.map((x) => {
                 const templateId = x.template.id;
                 const overrideQty = x.item.metadata?.deliverable_overrides?.[templateId]?.quantity;
-                const qty = typeof overrideQty === "number" ? overrideQty : Number(x.item.quantity ?? 1);
+                const baseQty = Number(x.template.quantity ?? 1);
+                const itemMultiplier = Number(x.item.quantity ?? 1);
+                const qty = typeof overrideQty === "number" ? overrideQty : (baseQty * itemMultiplier);
 
                 return (
                   <div key={`${x.item.id}:${templateId}`} className="group flex items-center justify-between gap-3 px-3 py-2.5 hover:bg-slate-50 transition">

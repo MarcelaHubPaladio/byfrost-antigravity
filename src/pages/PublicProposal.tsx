@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { FileText, Zap } from "lucide-react";
 import { useParams } from "react-router-dom";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -220,7 +221,7 @@ export default function PublicProposal() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tenantSlug, token]);
 
-  const scopeLines = useMemo(() => {
+  const { scopeLines, deliverableLines } = useMemo(() => {
     const templates = data?.scope?.templates ?? [];
     const items = data?.scope?.items ?? [];
     const offs = data?.scope?.offeringsById ?? {};
@@ -232,7 +233,9 @@ export default function PublicProposal() {
       templatesByOffering.get(oid)!.push(t);
     }
 
-    const lines: string[] = [];
+    const scopeLines: string[] = [];
+    const deliverableLines: string[] = [];
+
     for (const it of items) {
       const oid = String(it.offering_entity_id);
       const offName = String(offs[oid]?.display_name ?? oid);
@@ -240,28 +243,29 @@ export default function PublicProposal() {
       const ts = templatesByOffering.get(oid) ?? [];
       const overrides = it.metadata?.deliverable_overrides ?? {};
 
-      if (ts.length === 0) {
-        lines.push(`${offName} (qtd ${itemQty})`);
-      } else {
-        for (const t of ts) {
-          const tId = String(t.id);
-          const overrideQty = overrides[tId]?.quantity;
-          const finalQty = typeof overrideQty === "number" ? overrideQty : itemQty;
+      // Always show the product in the scope
+      scopeLines.push(`${offName} (qtd ${itemQty})`);
 
-          if (finalQty > 0) {
-            lines.push(`${offName} — ${String(t.name)} (qtd ${finalQty})`);
-          }
+      // Show deliverables separately if they exist
+      for (const t of ts) {
+        const tId = String(t.id);
+        const overrideQty = overrides[tId]?.quantity;
+        const baseQty = Number(t.quantity ?? 1);
+        const finalQty = typeof overrideQty === "number" ? overrideQty : (itemQty * baseQty);
+
+        if (finalQty > 0) {
+          deliverableLines.push(`${String(t.name)} (qtd ${finalQty})`);
         }
       }
     }
 
     // If there are selected commitments but no items returned, show a fallback.
-    if (!lines.length && (data?.proposal?.selected_commitment_ids ?? []).length) {
-      lines.push("(itens do escopo não encontrados para os compromissos selecionados)");
+    if (!scopeLines.length && (data?.proposal?.selected_commitment_ids ?? []).length) {
+      scopeLines.push("(itens do escopo não encontrados para os compromissos selecionados)");
     }
 
-    return lines;
-  }, [data]);
+    return { scopeLines, deliverableLines };
+  }, [data?.scope]);
 
   const act = async (action: "approve" | "sign" | "sign_force") => {
     if (!tenantSlug || !token) return;
@@ -546,26 +550,45 @@ export default function PublicProposal() {
               ) : null}
 
               <Card className="rounded-[28px] border-black/10 bg-white/85 p-5 shadow-sm">
-                <div>
-                  <div className="text-sm font-semibold text-slate-900">Escopo a ser entregue</div>
-                  <div className="text-xs text-slate-600">Itens derivados dos compromissos selecionados.</div>
-                </div>
-
-                <Separator className="my-4" />
-
-                {loading ? (
-                  <div className="text-sm text-slate-600">Carregando…</div>
-                ) : scopeLines.length === 0 ? (
-                  <div className="text-sm text-slate-600">Nenhum item no escopo.</div>
-                ) : (
-                  <div className="grid gap-2">
-                    {scopeLines.map((l, idx) => (
-                      <div key={idx} className="rounded-2xl border bg-white px-3 py-2 text-sm text-slate-800">
-                        {l}
+                <div className="space-y-6">
+                  {/* Escopo Comercial */}
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2">
+                      <div className="p-1.5 rounded-lg bg-slate-100 text-slate-600">
+                        <FileText className="w-4 h-4" />
                       </div>
-                    ))}
+                      <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider">Escopo Comercial</h3>
+                    </div>
+                    <div className="grid gap-2">
+                      {scopeLines.map((l, idx) => (
+                        <div key={idx} className="flex items-start gap-3 p-3 rounded-2xl border bg-white/50 text-sm text-slate-800 shadow-sm">
+                          <div className="w-1.5 h-1.5 rounded-full bg-slate-400 mt-1.5" />
+                          <span className="font-semibold">{l}</span>
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                )}
+
+                  {/* Plano de Entrega */}
+                  {deliverableLines.length > 0 && (
+                    <div className="space-y-3 pt-4 border-t border-slate-100">
+                      <div className="flex items-center gap-2">
+                        <div className="p-1.5 rounded-lg bg-blue-50 text-blue-600">
+                          <Zap className="w-4 h-4" />
+                        </div>
+                        <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider">Plano de Entrega</h3>
+                      </div>
+                      <div className="grid gap-2">
+                        {deliverableLines.map((l, idx) => (
+                          <div key={idx} className="flex items-start gap-3 p-2.5 px-3 rounded-xl bg-slate-50/50 border border-slate-100/50 text-xs text-slate-600">
+                            <div className="w-1.5 h-1.5 rounded-full bg-blue-400 mt-1.5" />
+                            <span>{l}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
 
                 <Separator className="my-4" />
 

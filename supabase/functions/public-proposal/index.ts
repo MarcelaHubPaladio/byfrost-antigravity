@@ -589,17 +589,17 @@ serve(async (req) => {
         const ts = templatesByOffering.get(oid) ?? [];
         const overrides = (it as any).metadata?.deliverable_overrides ?? {};
 
-        if (ts.length === 0) {
-          scopeLines.push(`${offName} (qtd ${itemQty})`);
-        } else {
-          for (const t of ts) {
-            const tId = String((t as any).id);
-            const overrideQty = overrides[tId]?.quantity;
-            const finalQty = typeof overrideQty === "number" ? overrideQty : itemQty;
+        // Product name
+        scopeLines.push(`${offName} [PRODUTO] (qtd ${itemQty})`);
 
-            if (finalQty > 0) {
-              scopeLines.push(`${offName} — ${(t as any).name} (qtd ${finalQty})`);
-            }
+        for (const t of ts) {
+          const tId = String((t as any).id);
+          const overrideQty = overrides[tId]?.quantity;
+          const baseQty = Number((t as any).quantity ?? 1);
+          const finalQty = typeof overrideQty === "number" ? overrideQty : (itemQty * baseQty);
+
+          if (finalQty > 0) {
+            scopeLines.push(`  └─ Entregável: ${(t as any).name} (qtd ${finalQty})`);
           }
         }
       }
@@ -696,17 +696,17 @@ serve(async (req) => {
         const ts = templatesByOffering.get(oid) ?? [];
         const overrides = (it as any).metadata?.deliverable_overrides ?? {};
 
-        if (ts.length === 0) {
-          scopeLines.push(`${offName} (qtd ${itemQty})`);
-        } else {
-          for (const t of ts) {
-            const tId = String((t as any).id);
-            const overrideQty = overrides[tId]?.quantity;
-            const finalQty = typeof overrideQty === "number" ? overrideQty : itemQty;
+        // Product name
+        scopeLines.push(`${offName} [PRODUTO] (qtd ${itemQty})`);
 
-            if (finalQty > 0) {
-              scopeLines.push(`${offName} — ${(t as any).name} (qtd ${finalQty})`);
-            }
+        for (const t of ts) {
+          const tId = String((t as any).id);
+          const overrideQty = overrides[tId]?.quantity;
+          const baseQty = Number((t as any).quantity ?? 1);
+          const finalQty = typeof overrideQty === "number" ? overrideQty : (itemQty * baseQty);
+
+          if (finalQty > 0) {
+            scopeLines.push(`  └─ Entregável: ${(t as any).name} (qtd ${finalQty})`);
           }
         }
       }

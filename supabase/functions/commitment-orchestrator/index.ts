@@ -106,7 +106,7 @@ serve(async (req) => {
 
       const { data: templates, error: tErr } = await supabase
         .from("deliverable_templates")
-        .select("id, name, estimated_minutes, required_resource_type")
+        .select("id, name, estimated_minutes, required_resource_type, quantity")
         .eq("tenant_id", tenantId)
         .eq("offering_entity_id", offeringEntityId)
         .is("deleted_at", null)
@@ -122,8 +122,10 @@ serve(async (req) => {
         const overrides = it.metadata?.deliverable_overrides ?? {};
         const overrideQty = overrides[templateId]?.quantity;
 
-        // Final quantity: override if present, else use item quantity (multiplier)
-        const finalQty = typeof overrideQty === "number" ? overrideQty : Number(it.quantity ?? 1);
+        // Final quantity: override if present, else use multipliers: item.quantity * template.quantity
+        const baseQty = Number(tpl.quantity ?? 1);
+        const itemMultiplier = Number(it.quantity ?? 1);
+        const finalQty = typeof overrideQty === "number" ? overrideQty : (baseQty * itemMultiplier);
 
         for (let q = 0; q < Math.max(0, finalQty); q++) {
           const { data: inserted, error: dErr } = await supabase
