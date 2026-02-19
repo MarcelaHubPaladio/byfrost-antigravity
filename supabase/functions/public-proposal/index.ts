@@ -543,7 +543,7 @@ serve(async (req) => {
 
         const { data: ts, error: tErr2 } = await supabase
           .from("deliverable_templates")
-          .select("id,tenant_id,offering_entity_id,name,estimated_minutes,required_resource_type,created_at")
+          .select("id,tenant_id,offering_entity_id,name,estimated_minutes,required_resource_type,quantity,created_at")
           .eq("tenant_id", tenant.id)
           .in("offering_entity_id", offeringIds)
           .is("deleted_at", null);
@@ -584,7 +584,9 @@ serve(async (req) => {
       for (const it of items ?? []) {
         const oid = String((it as any).offering_entity_id);
         const off = offeringsById[oid];
-        const offName = String(off?.display_name ?? oid);
+        if (!off) continue; // Skip items pointing to deleted or missing offerings
+
+        const offName = String(off.display_name ?? oid);
         const itemQty = Number((it as any).quantity ?? 1);
         const ts = templatesByOffering.get(oid) ?? [];
         const overrides = (it as any).metadata?.deliverable_overrides ?? {};
@@ -691,7 +693,9 @@ serve(async (req) => {
       for (const it of items ?? []) {
         const oid = String((it as any).offering_entity_id);
         const off = offeringsById[oid];
-        const offName = String(off?.display_name ?? oid);
+        if (!off) continue; // Skip items pointing to deleted or missing offerings
+
+        const offName = String(off.display_name ?? oid);
         const itemQty = Number((it as any).quantity ?? 1);
         const ts = templatesByOffering.get(oid) ?? [];
         const overrides = (it as any).metadata?.deliverable_overrides ?? {};

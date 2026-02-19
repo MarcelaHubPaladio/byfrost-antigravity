@@ -238,7 +238,10 @@ export default function PublicProposal() {
 
     for (const it of items) {
       const oid = String(it.offering_entity_id);
-      const offName = String(offs[oid]?.display_name ?? oid);
+      const off = offs[oid];
+      if (!off) continue; // Skip ghost entities
+
+      const offName = String(off.display_name ?? oid);
       const itemQty = Number(it.quantity ?? 1);
       const ts = templatesByOffering.get(oid) ?? [];
       const overrides = it.metadata?.deliverable_overrides ?? {};
@@ -529,7 +532,11 @@ export default function PublicProposal() {
                   <div className="mt-2 grid gap-2">
                     {(data?.scope?.commitments ?? []).map((c: any) => {
                       const cid = String(c.id);
-                      const items = (data?.scope?.items ?? []).filter((it: any) => String(it.commitment_id) === cid);
+                      const items = (data?.scope?.items ?? []).filter((it: any) => {
+                        const isForComm = String(it.commitment_id) === cid;
+                        const hasOffering = Boolean(data?.scope?.offeringsById?.[it.offering_entity_id]);
+                        return isForComm && hasOffering;
+                      });
                       const offerings = items.map((it: any) => {
                         const oid = String(it.offering_entity_id);
                         return data?.scope?.offeringsById?.[oid]?.display_name || "Item";

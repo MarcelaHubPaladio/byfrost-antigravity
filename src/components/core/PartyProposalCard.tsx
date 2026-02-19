@@ -399,7 +399,7 @@ export function PartyProposalCard({
 
       const { data: ts, error: tErr } = await supabase
         .from("deliverable_templates")
-        .select("id,offering_entity_id,name")
+        .select("id,offering_entity_id,name,quantity")
         .eq("tenant_id", tenantId)
         .in("offering_entity_id", offeringIds)
         .is("deleted_at", null);
@@ -416,13 +416,30 @@ export function PartyProposalCard({
       const scopeLines: string[] = [];
       for (const it of items) {
         const oid = String((it as any).offering_entity_id);
-        const offName = String(offeringsById[oid]?.display_name ?? oid);
-        const qty = Number((it as any).quantity ?? 1);
+        const off = offeringsById[oid];
+        if (!off) continue; // Skip ghost entities
+
+        const offName = String(off.display_name ?? oid);
+        const itemQty = Number((it as any).quantity ?? 1);
         const ts2 = templatesByOffering.get(oid) ?? [];
+        const overrides = (it as any).metadata?.deliverable_overrides ?? {};
+
         if (ts2.length === 0) {
-          scopeLines.push(`${offName} (qtd ${qty})`);
+          scopeLines.push(`${offName} (qtd ${itemQty})`);
         } else {
-          for (const t of ts2) scopeLines.push(`${offName} — ${(t as any).name} (qtd ${qty})`);
+          // Add the product itself to scope
+          scopeLines.push(`${offName} (qtd ${itemQty})`);
+          // Then its deliverables
+          for (const t of ts2) {
+            const tId = String((t as any).id);
+            const overrideQty = overrides[tId]?.quantity;
+            const baseQty = Number((t as any).quantity ?? 1);
+            const finalQty = typeof overrideQty === "number" ? overrideQty : (itemQty * baseQty);
+
+            if (finalQty > 0) {
+              scopeLines.push(`  └─ Entregável: ${(t as any).name} (qtd ${finalQty})`);
+            }
+          }
         }
       }
 
