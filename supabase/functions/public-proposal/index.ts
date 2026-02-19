@@ -585,13 +585,22 @@ serve(async (req) => {
         const oid = String((it as any).offering_entity_id);
         const off = offeringsById[oid];
         const offName = String(off?.display_name ?? oid);
-        const qty = Number((it as any).quantity ?? 1);
+        const itemQty = Number((it as any).quantity ?? 1);
         const ts = templatesByOffering.get(oid) ?? [];
+        const overrides = (it as any).metadata?.deliverable_overrides ?? {};
 
         if (ts.length === 0) {
-          scopeLines.push(`${offName} (qtd ${qty})`);
+          scopeLines.push(`${offName} (qtd ${itemQty})`);
         } else {
-          for (const t of ts) scopeLines.push(`${offName} — ${(t as any).name} (qtd ${qty})`);
+          for (const t of ts) {
+            const tId = String((t as any).id);
+            const overrideQty = overrides[tId]?.quantity;
+            const finalQty = typeof overrideQty === "number" ? overrideQty : itemQty;
+
+            if (finalQty > 0) {
+              scopeLines.push(`${offName} — ${(t as any).name} (qtd ${finalQty})`);
+            }
+          }
         }
       }
 
@@ -683,13 +692,22 @@ serve(async (req) => {
         const oid = String((it as any).offering_entity_id);
         const off = offeringsById[oid];
         const offName = String(off?.display_name ?? oid);
-        const qty = Number((it as any).quantity ?? 1);
+        const itemQty = Number((it as any).quantity ?? 1);
         const ts = templatesByOffering.get(oid) ?? [];
+        const overrides = (it as any).metadata?.deliverable_overrides ?? {};
 
         if (ts.length === 0) {
-          scopeLines.push(`${offName} (qtd ${qty})`);
+          scopeLines.push(`${offName} (qtd ${itemQty})`);
         } else {
-          for (const t of ts) scopeLines.push(`${offName} — ${(t as any).name} (qtd ${qty})`);
+          for (const t of ts) {
+            const tId = String((t as any).id);
+            const overrideQty = overrides[tId]?.quantity;
+            const finalQty = typeof overrideQty === "number" ? overrideQty : itemQty;
+
+            if (finalQty > 0) {
+              scopeLines.push(`${offName} — ${(t as any).name} (qtd ${finalQty})`);
+            }
+          }
         }
       }
 
@@ -793,8 +811,8 @@ serve(async (req) => {
         contract_template_name: safeStr(chosen?.name) || null,
         file_b64_sha256: crypto.subtle
           ? await crypto.subtle
-              .digest("SHA-256", pdfBytes)
-              .then((h) => Array.from(new Uint8Array(h)).map((b) => b.toString(16).padStart(2, "0")).join(""))
+            .digest("SHA-256", pdfBytes)
+            .then((h) => Array.from(new Uint8Array(h)).map((b) => b.toString(16).padStart(2, "0")).join(""))
           : null,
         file_base64: null,
       };

@@ -118,48 +118,66 @@ serve(async (req) => {
       }
 
       for (const tpl of (templates ?? []) as any[]) {
-        const { data: inserted, error: dErr } = await supabase
-          .from("deliverables")
-          .insert({
-            tenant_id: tenantId,
-            commitment_id: commitmentId,
+        const templateId = String(tpl.id);
+        const overrides = it.metadata?.deliverable_overrides ?? {};
+        const overrideQty = overrides[templateId]?.quantity;
+
+        // Final quantity: override if present, else use item quantity (multiplier)
+        const finalQty = typeof overrideQty === "number" ? overrideQty : Number(it.quantity ?? 1);
+
+        for (let q = 0; q < Math.max(0, finalQty); q++) {
+          const { data: inserted, error: dErr } = await supabase
+            .from("deliverables")
+            .insert({
+              tenant_id: tenantId,
+              commitment_id: commitmentId,
+              entity_id: offeringEntityId,
+              status: "planned",
+              owner_user_id: null,
+              due_date: null,
+              // Keep track of index/template for debugging and dependencies
+              metadata: {
+                template_id: templateId,
+                commitment_item_id: itemId,
+                seq: q + 1,
+                total: finalQty
+              }
+            })
+            .select("id")
+            .maybeSingle();
+
+          if (dErr || !inserted) {
+            console.error(`[${fn}] deliverable insert failed`, { dErr, tenantId, commitmentId, offeringEntityId, templateId });
+            return err("deliverable_insert_failed", 500, { message: dErr?.message ?? "insert_failed" });
+          }
+
+          const deliverableId = String((inserted as any).id);
+          createdDeliverables.push({
+            id: deliverableId,
             entity_id: offeringEntityId,
-            status: "planned",
-            owner_user_id: null,
-            due_date: null,
-          })
-          .select("id")
-          .maybeSingle();
+            template_id: templateId,
+            template_name: String(tpl.name ?? ""),
+            item_id: itemId,
+          });
 
-        if (dErr || !inserted) {
-          console.error(`[${fn}] deliverable insert failed`, { dErr, tenantId, commitmentId, offeringEntityId, templateId: tpl.id });
-          return err("deliverable_insert_failed", 500, { message: dErr?.message ?? "insert_failed" });
+          // Extra explicit event (strong audit trail of generation intent)
+          await supabase.rpc("log_deliverable_event", {
+            p_tenant_id: tenantId,
+            p_deliverable_id: deliverableId,
+            p_event_type: "deliverable_generated_from_template",
+            p_before: null,
+            p_after: {
+              template_id: tpl.id,
+              template_name: tpl.name,
+              estimated_minutes: tpl.estimated_minutes ?? null,
+              required_resource_type: tpl.required_resource_type ?? null,
+              commitment_item_id: itemId,
+              offering_entity_id: offeringEntityId,
+              seq: q + 1,
+              total: finalQty
+            },
+          });
         }
-
-        const deliverableId = String((inserted as any).id);
-        createdDeliverables.push({
-          id: deliverableId,
-          entity_id: offeringEntityId,
-          template_id: String(tpl.id),
-          template_name: String(tpl.name ?? ""),
-          item_id: itemId,
-        });
-
-        // Extra explicit event (strong audit trail of generation intent)
-        await supabase.rpc("log_deliverable_event", {
-          p_tenant_id: tenantId,
-          p_deliverable_id: deliverableId,
-          p_event_type: "deliverable_generated_from_template",
-          p_before: null,
-          p_after: {
-            template_id: tpl.id,
-            template_name: tpl.name,
-            estimated_minutes: tpl.estimated_minutes ?? null,
-            required_resource_type: tpl.required_resource_type ?? null,
-            commitment_item_id: itemId,
-            offering_entity_id: offeringEntityId,
-          },
-        });
       }
     }
 

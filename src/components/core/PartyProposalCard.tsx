@@ -295,6 +295,37 @@ export function PartyProposalCard({
     }
   };
 
+  const handleUpdateItemQuantity = async (commitmentId: string, itemId: string, qty: number) => {
+    if (!tenantId) return;
+    try {
+      const { error } = await supabase
+        .from("commitment_items")
+        .update({ quantity: qty })
+        .eq("tenant_id", tenantId)
+        .eq("id", itemId)
+        .eq("commitment_id", commitmentId);
+      if (error) throw error;
+      await qc.invalidateQueries({ queryKey: ["party_commitments_with_items", tenantId, partyId] });
+    } catch (e: any) {
+      showError(e?.message ?? "Erro ao atualizar quantidade");
+    }
+  };
+
+  const handleUpdateItemMetadata = async (itemId: string, metadata: any) => {
+    if (!tenantId) return;
+    try {
+      const { error } = await supabase
+        .from("commitment_items")
+        .update({ metadata })
+        .eq("tenant_id", tenantId)
+        .eq("id", itemId);
+      if (error) throw error;
+      await qc.invalidateQueries({ queryKey: ["party_commitments_with_items", tenantId, partyId] });
+    } catch (e: any) {
+      showError(e?.message ?? "Erro ao atualizar metadados");
+    }
+  };
+
   useEffect(() => {
     if (!activeProposal) {
       setTemplateId(templates[0]?.id ? String(templates[0].id) : "");
@@ -328,8 +359,10 @@ export function PartyProposalCard({
     for (const c of commitments) {
       for (const it of (c.items ?? [])) {
         list.push({
+          id: it.id,
           offering_entity_id: it.offering_entity_id,
-          quantity: it.quantity
+          quantity: it.quantity,
+          metadata: it.metadata
         });
       }
     }
@@ -824,8 +857,18 @@ export function PartyProposalCard({
                                 {offeringName}
                               </div>
                             </div>
-                            <div className="mt-0.5 flex items-center gap-2 text-xs text-slate-500">
-                              <span className="font-medium text-slate-700">Qtd: {qty}</span>
+                            <div className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-slate-500">
+                              <div className="flex items-center gap-1">
+                                <span className="font-medium text-slate-700">Qtd:</span>
+                                <input
+                                  type="number"
+                                  min={1}
+                                  value={qty}
+                                  onClick={(e) => e.stopPropagation()}
+                                  onChange={(e) => handleUpdateItemQuantity(c.id, firstItem.id, Number(e.target.value))}
+                                  className="w-12 h-6 rounded border bg-transparent text-center focus:outline-none focus:ring-1 focus:ring-slate-300 font-semibold text-slate-900"
+                                />
+                              </div>
                               <span>•</span>
                               <span className="capitalize">{c.commitment_type}</span>
                               <span>•</span>
@@ -861,6 +904,7 @@ export function PartyProposalCard({
                   <CommitmentDeliverablesPreview
                     tenantId={tenantId}
                     items={selectedItemsForPreview}
+                    onUpdateMetadata={handleUpdateItemMetadata}
                   />
                   <div className="mt-2 px-1 text-[10px] text-slate-500 border-l-2 border-slate-100 pl-3">
                     Estes entregáveis são baseados nos templates configurados para cada produto/serviço no módulo "Entregas".

@@ -236,13 +236,22 @@ export default function PublicProposal() {
     for (const it of items) {
       const oid = String(it.offering_entity_id);
       const offName = String(offs[oid]?.display_name ?? oid);
-      const qty = Number(it.quantity ?? 1);
+      const itemQty = Number(it.quantity ?? 1);
       const ts = templatesByOffering.get(oid) ?? [];
+      const overrides = it.metadata?.deliverable_overrides ?? {};
 
       if (ts.length === 0) {
-        lines.push(`${offName} (qtd ${qty})`);
+        lines.push(`${offName} (qtd ${itemQty})`);
       } else {
-        for (const t of ts) lines.push(`${offName} — ${String(t.name)} (qtd ${qty})`);
+        for (const t of ts) {
+          const tId = String(t.id);
+          const overrideQty = overrides[tId]?.quantity;
+          const finalQty = typeof overrideQty === "number" ? overrideQty : itemQty;
+
+          if (finalQty > 0) {
+            lines.push(`${offName} — ${String(t.name)} (qtd ${finalQty})`);
+          }
+        }
       }
     }
 

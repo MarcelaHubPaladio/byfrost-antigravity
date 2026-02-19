@@ -3,10 +3,13 @@ import { useQueries } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 
-export type CommitmentItemDraft = {
+export type CommitmentItemRow = {
+  id: string;
   offering_entity_id: string;
   quantity: number;
+  metadata?: any;
 };
 
 type TemplateRow = {
@@ -19,9 +22,11 @@ type TemplateRow = {
 export function CommitmentDeliverablesPreview({
   tenantId,
   items,
+  onUpdateMetadata,
 }: {
   tenantId: string;
-  items: CommitmentItemDraft[];
+  items: CommitmentItemRow[];
+  onUpdateMetadata?: (itemId: string, metadata: any) => void;
 }) {
   const uniqueOfferings = useMemo(() => {
     const s = new Set<string>();
@@ -57,22 +62,41 @@ export function CommitmentDeliverablesPreview({
       if (v?.offeringId) m.set(String(v.offeringId), (v.rows ?? []) as TemplateRow[]);
     }
     return m;
-  }, [qs.map((q) => q.data)]);
+  }, [qs]);
 
   const flat = useMemo(() => {
-    const out: Array<{ offeringId: string; template: TemplateRow }> = [];
+    const out: Array<{ item: CommitmentItemRow; template: TemplateRow }> = [];
     for (const it of items) {
       const rows = templatesByOffering.get(it.offering_entity_id) ?? [];
-      for (const t of rows) out.push({ offeringId: it.offering_entity_id, template: t });
+      for (const t of rows) out.push({ item: it, template: t });
     }
     return out;
   }, [items, templatesByOffering]);
+
+  const handleUpdateQty = (itemId: string, templateId: string, val: number) => {
+    const it = items.find((i) => i.id === itemId);
+    if (!it || !onUpdateMetadata) return;
+
+    const currentMetadata = it.metadata ?? {};
+    const overrides = currentMetadata.deliverable_overrides ?? {};
+
+    onUpdateMetadata(itemId, {
+      ...currentMetadata,
+      deliverable_overrides: {
+        ...overrides,
+        [templateId]: { quantity: val },
+      },
+    });
+  };
 
   const totals = useMemo(() => {
     const byType = new Map<string, number>();
     for (const x of flat) {
       const k = String(x.template.required_resource_type ?? "(sem tipo)");
-      const m = Number(x.template.estimated_minutes ?? 0);
+      const templateId = x.template.id;
+      const overrideQty = x.item.metadata?.deliverable_overrides?.[templateId]?.quantity;
+      const qty = typeof overrideQty === "number" ? overrideQty : Number(x.item.quantity ?? 1);
+      const m = Number(x.template.estimated_minutes ?? 0) * qty;
       byType.set(k, (byType.get(k) ?? 0) + m);
     }
     return Array.from(byType.entries()).sort((a, b) => b[1] - a[1]);
@@ -92,23 +116,42 @@ export function CommitmentDeliverablesPreview({
           <div className="space-y-3">
             <div className="grid gap-2 md:grid-cols-2">
               {totals.map(([rt, mins]) => (
-                <div key={rt} className="flex items-center justify-between rounded-xl border bg-white px-3 py-2">
+                <div key={rt} className="flex items-center justify-between rounded-xl border bg-white px-3 py-2 shadow-sm">
                   <div className="text-sm font-semibold text-slate-800">{rt}</div>
-                  <div className="text-sm text-slate-700">{mins} min</div>
+                  <div className="text-sm font-medium text-[hsl(var(--byfrost-accent))]">{mins} min</div>
                 </div>
               ))}
             </div>
 
-            <div className="divide-y rounded-xl border bg-white">
-              {flat.map((x) => (
-                <div key={`${x.offeringId}:${x.template.id}`} className="flex items-center justify-between gap-3 px-3 py-2">
-                  <div className="min-w-0">
-                    <div className="truncate text-sm font-semibold text-slate-900">{x.template.name}</div>
-                    <div className="text-xs text-slate-600">{x.template.required_resource_type ?? "—"}</div>
+            <div className="divide-y rounded-xl border bg-white shadow-sm overflow-hidden">
+              {flat.map((x) => {
+                const templateId = x.template.id;
+                const overrideQty = x.item.metadata?.deliverable_overrides?.[templateId]?.quantity;
+                const qty = typeof overrideQty === "number" ? overrideQty : Number(x.item.quantity ?? 1);
+
+                return (
+                  <div key={`${x.item.id}:${templateId}`} className="group flex items-center justify-between gap-3 px-3 py-2.5 hover:bg-slate-50 transition">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-14">
+                        <Input
+                          type="number"
+                          min={0}
+                          value={qty}
+                          onChange={(e) => handleUpdateQty(x.item.id, templateId, Number(e.target.value))}
+                          className="h-8 rounded-lg text-center px-1 font-semibold"
+                        />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="truncate text-sm font-semibold text-slate-900">{x.template.name}</div>
+                        <div className="text-[10px] text-slate-500 uppercase font-medium">{x.template.required_resource_type ?? "Geral"}</div>
+                      </div>
+                    </div>
+                    <div className="text-sm font-medium text-slate-600 shrink-0">
+                      {Number(x.template.estimated_minutes ?? 0) * qty} min
+                    </div>
                   </div>
-                  <div className="text-sm text-slate-700">{Number(x.template.estimated_minutes ?? 0)} min</div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         )}
