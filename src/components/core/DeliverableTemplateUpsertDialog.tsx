@@ -33,6 +33,7 @@ export type DeliverableTemplateRow = {
   offering_entity_id: string;
   name: string;
   estimated_minutes: number | null;
+  quantity: number;
   required_resource_type: string | null;
   created_at: string;
   deleted_at: string | null;

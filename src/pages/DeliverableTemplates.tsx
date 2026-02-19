@@ -35,6 +35,7 @@ type TemplateRow = {
   offering_entity_id: string;
   name: string;
   estimated_minutes: number | null;
+  quantity: number;
   required_resource_type: string | null;
   created_at: string;
   deleted_at: string | null;
@@ -84,7 +85,7 @@ export default function DeliverableTemplates() {
       let query = supabase
         .from("deliverable_templates")
         .select(
-          "id,tenant_id,offering_entity_id,name,estimated_minutes,required_resource_type,created_at,deleted_at"
+          "id,tenant_id,offering_entity_id,name,estimated_minutes,quantity,required_resource_type,created_at,deleted_at"
         )
         .eq("tenant_id", activeTenantId!)
         .is("deleted_at", null)
@@ -154,7 +155,7 @@ export default function DeliverableTemplates() {
 
               <div className="flex flex-wrap items-center gap-2">
                 <Button variant="outline" className="rounded-xl" onClick={() => nav("/app/entities")}
-                  >
+                >
                   Voltar
                 </Button>
                 <Button className="rounded-xl" onClick={() => setCreateOpen(true)} disabled={!activeTenantId}>
@@ -220,6 +221,9 @@ export default function DeliverableTemplates() {
                             {off?.subtype ? ` • ${off.subtype}` : ""}
                             {t.estimated_minutes !== null && t.estimated_minutes !== undefined
                               ? ` • ${t.estimated_minutes} min`
+                              : ""}
+                            {t.quantity !== undefined && t.quantity !== 1
+                              ? ` • qtd ${t.quantity}`
                               : ""}
                           </div>
                         </div>
