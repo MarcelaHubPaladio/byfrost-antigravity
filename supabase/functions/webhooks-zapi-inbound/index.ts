@@ -376,18 +376,19 @@ function isNonMessageCallbackEvent(args: {
 
   // We only ignore when we have strong evidence this is a status/receipt callback (not user content).
   const looksCallback =
-    t.includes("callback") ||
-    t.includes("ack") ||
-    t.includes("receipt") ||
-    t.includes("delivered") ||
-    t.includes("delivery") ||
-    t.includes("read") ||
-    t.includes("seen") ||
-    t.includes("status") ||
-    t.includes("presence") ||
-    t.includes("connection") ||
-    t.includes("connected") ||
-    t.includes("disconnected");
+    (t.includes("ack") ||
+      t.includes("receipt") ||
+      t.includes("delivered") ||
+      t.includes("delivery") ||
+      t.includes("read") ||
+      t.includes("seen") ||
+      t.includes("status") ||
+      t.includes("presence") ||
+      t.includes("connection") ||
+      t.includes("connected") ||
+      t.includes("disconnected")) &&
+    !t.includes("received") &&
+    !t.includes("sent");
 
   if (!looksCallback) return false;
 
@@ -866,11 +867,9 @@ serve(async (req) => {
     const direction: WebhookDirection =
       normalized.meta.isCallEvent && callCounterpartPhone
         ? (forced === "outbound" ? "outbound" : "inbound")
-        : (forced === "inbound")
-          ? "inbound" // [MOD] TRUST explicit inbound override
-          : (forced === "outbound")
-            ? "outbound"
-            : inferred;
+        : (strongOutbound)
+          ? "outbound"
+          : (forced ?? inferred);
 
     console.log(`[${fn}] direction_resolved`, {
       tenant_id: instance.tenant_id,
@@ -1471,8 +1470,6 @@ serve(async (req) => {
     if (effectiveGroupId) {
       const groupId = effectiveGroupId as string;
 
-      // Check if any open case is monitoring this group
-      // We look into meta_json->monitoring->whatsapp_group_id
       const { data: monitoredCase } = await supabase
         .from("cases")
         .select("id")
@@ -1483,59 +1480,58 @@ serve(async (req) => {
         .limit(1)
         .maybeSingle();
 
-      if (!monitoredCase) {
-        // Ignore unmonitored group message
-        // [MOD] Append groupId to reason for easier debugging in Admin UI
+      if (monitoredCase) {
+        console.log(`[${fn}] Monitored group message found`, { groupId, caseId: monitoredCase.id, direction });
+
+        const { error: msgErr } = await supabase.from("wa_messages").insert({
+          tenant_id: instance.tenant_id,
+          instance_id: instance.id,
+          direction: direction,
+          from_phone: normalized.from,
+          to_phone: direction === "inbound" ? groupId : normalized.to,
+          type: normalized.type,
+          body_text: normalized.text,
+          media_url: normalized.mediaUrl,
+          payload_json: payload,
+          correlation_id: correlationId,
+          occurred_at: new Date().toISOString(),
+          case_id: monitoredCase.id,
+        });
+
+        if (msgErr) {
+          console.error(`[${fn}] Failed to insert monitored group message`, { msgErr });
+          return new Response("Failed to insert group message", { status: 500, headers: corsHeaders });
+        }
+
         await logInbox({
           instance,
           ok: true,
           http_status: 200,
-          reason: `group_ignored_unmonitored: ${groupId}`,
-          direction: "inbound",
-          meta: { conversation_group_id: groupId },
+          reason: `group_monitored: ${groupId}`,
+          direction,
+          case_id: monitoredCase.id,
+          meta: { conversation_group_id: groupId, case_id: monitoredCase.id },
         });
-        return new Response("Group message ignored", { status: 200, headers: corsHeaders });
+
+        return new Response(JSON.stringify({ ok: true, case_id: monitoredCase.id, group_monitored: true }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      } else {
+        // If it's INBOUND and NOT monitored, we ignore it.
+        // If it's OUTBOUND and NOT monitored, we proceed to standard routing below 
+        // (to allow linking one-off outbound group messages by history/customer if they exist).
+        if (direction === "inbound") {
+          await logInbox({
+            instance,
+            ok: true,
+            http_status: 200,
+            reason: `group_ignored_unmonitored: ${groupId}`,
+            direction,
+            meta: { conversation_group_id: groupId },
+          });
+          return new Response("Group message ignored", { status: 200, headers: corsHeaders });
+        }
       }
-
-      console.log(`[${fn}] Monitored group message found`, { groupId, caseId: monitoredCase.id });
-
-      // Force linking to this case
-      // We insert directly to bypass the normal "find journey/customer" flow which expects individual numbers
-      const { error: msgErr } = await supabase.from("wa_messages").insert({
-        tenant_id: instance.tenant_id,
-        instance_id: instance.id,
-        direction: "inbound",
-        from_phone: normalized.from,
-        // [MOD] Store Group ID in to_phone for inbound group messages.
-        // This ensures the frontend 'to_phone' matching works for all group messages.
-        to_phone: groupId,
-        type: normalized.type,
-        body_text: normalized.text,
-        media_url: normalized.mediaUrl,
-        payload_json: payload,
-        correlation_id: correlationId,
-        occurred_at: new Date().toISOString(),
-        case_id: monitoredCase.id,
-      });
-
-      if (msgErr) {
-        console.error(`[${fn}] Failed to insert monitored group message`, { msgErr });
-        return new Response("Failed to insert group message", { status: 500, headers: corsHeaders });
-      }
-
-      await logInbox({
-        instance,
-        ok: true,
-        http_status: 200,
-        reason: `group_monitored: ${groupId}`,
-        direction: "inbound",
-        case_id: monitoredCase.id,
-        meta: { conversation_group_id: groupId, case_id: monitoredCase.id },
-      });
-
-      return new Response(JSON.stringify({ ok: true, case_id: monitoredCase.id, group_monitored: true }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
     }
 
     // Determine whether the inbound sender is a *vendor user* (users_profile.role='vendor').
