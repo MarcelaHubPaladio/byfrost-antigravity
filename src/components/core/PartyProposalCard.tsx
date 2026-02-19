@@ -13,6 +13,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Textarea } from "@/components/ui/textarea";
 import { showError, showSuccess } from "@/utils/toast";
+import { Loader2, Plus, Search, Trash2, Package, ShoppingCart } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 function randomToken() {
   // simple + url-safe
@@ -146,12 +148,23 @@ export function PartyProposalCard({
   }, [activeProposalId, proposals]);
 
   const commitmentsQ = useQuery({
-    queryKey: ["party_commitments", tenantId, partyId],
+    queryKey: ["party_commitments_with_items", tenantId, partyId],
     enabled: Boolean(tenantId && partyId),
     queryFn: async () => {
       const { data, error } = await supabase
         .from("commercial_commitments")
-        .select("id,commitment_type,status,created_at")
+        .select(`
+          id,
+          commitment_type,
+          status,
+          created_at,
+          items:commitment_items(
+            id,
+            offering_entity_id,
+            quantity,
+            offering:core_entities(display_name)
+          )
+        `)
         .eq("tenant_id", tenantId)
         .eq("customer_entity_id", partyId)
         .is("deleted_at", null)
@@ -183,6 +196,103 @@ export function PartyProposalCard({
   const [paymentMethod, setPaymentMethod] = useState<string>("");
   const [installmentsDueDate, setInstallmentsDueDate] = useState<string>("");
   const [scopeNotes, setScopeNotes] = useState<string>("");
+
+  // Product search state
+  const [searchQuery, setSearchQuery] = useState("");
+  const [isSearching, setIsSearching] = useState(false);
+  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [addingItem, setAddingItem] = useState(false);
+  const [itemQty, setItemQty] = useState<number>(1);
+
+  const searchOfferings = async (term: string) => {
+    if (term.trim().length < 2) {
+      setSearchResults([]);
+      return;
+    }
+    setIsSearching(true);
+    try {
+      const { data, error } = await supabase
+        .from("core_entities")
+        .select("id,display_name,subtype")
+        .eq("tenant_id", tenantId)
+        .eq("entity_type", "offering")
+        .is("deleted_at", null)
+        .ilike("display_name", `%${term}%`)
+        .limit(10);
+      if (error) throw error;
+      setSearchResults(data ?? []);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  const handleAddItem = async (offering: any) => {
+    if (!tenantId || !partyId) return;
+    setAddingItem(true);
+    try {
+      // 1. Create a commercial commitment of type 'order'
+      const { data: comm, error: cErr } = await supabase
+        .from("commercial_commitments")
+        .insert({
+          tenant_id: tenantId,
+          commitment_type: "order",
+          customer_entity_id: partyId,
+          status: "draft",
+        })
+        .select("id")
+        .single();
+
+      if (cErr) throw cErr;
+
+      // 2. Create commitment item
+      const { error: iErr } = await supabase.from("commitment_items").insert({
+        tenant_id: tenantId,
+        commitment_id: comm.id,
+        offering_entity_id: offering.id,
+        quantity: itemQty,
+      });
+
+      if (iErr) throw iErr;
+
+      showSuccess(`${offering.display_name} (${itemQty}x) adicionado.`);
+      setSearchQuery("");
+      setSearchResults([]);
+      setItemQty(1);
+
+      // Auto-select the new item for the proposal
+      setSelected(prev => ({ ...prev, [comm.id]: true }));
+
+      await qc.invalidateQueries({ queryKey: ["party_commitments_with_items", tenantId, partyId] });
+    } catch (e: any) {
+      showError(e?.message ?? "Erro ao adicionar item");
+    } finally {
+      setAddingItem(false);
+    }
+  };
+
+  const handleDeleteCommitment = async (id: string) => {
+    if (!confirm("Deseja remover este item?")) return;
+    try {
+      const { error } = await supabase
+        .from("commercial_commitments")
+        .update({ deleted_at: new Date().toISOString() })
+        .eq("id", id)
+        .eq("tenant_id", tenantId);
+      if (error) throw error;
+
+      showSuccess("Item removido.");
+      setSelected(prev => {
+        const next = { ...prev };
+        delete next[id];
+        return next;
+      });
+      await qc.invalidateQueries({ queryKey: ["party_commitments_with_items", tenantId, partyId] });
+    } catch (e: any) {
+      showError(e?.message ?? "Erro ao remover item");
+    }
+  };
 
   useEffect(() => {
     if (!activeProposal) {
@@ -458,9 +568,8 @@ export function PartyProposalCard({
                       key={p.id}
                       type="button"
                       onClick={() => setActiveProposalId(p.id)}
-                      className={`w-full rounded-xl border px-3 py-2 text-left transition ${
-                        isActive ? "border-slate-900 bg-slate-50" : "border-slate-200 bg-white hover:bg-slate-50"
-                      }`}
+                      className={`w-full rounded-xl border px-3 py-2 text-left transition ${isActive ? "border-slate-900 bg-slate-50" : "border-slate-200 bg-white hover:bg-slate-50"
+                        }`}
                     >
                       <div className="flex items-center justify-between gap-2">
                         <div className="truncate text-sm font-semibold text-slate-900">{p.status}</div>
@@ -601,25 +710,130 @@ export function PartyProposalCard({
             <Separator className="my-3" />
 
             <div className="rounded-2xl border bg-white p-3">
-              <div className="text-xs font-semibold text-slate-700">Compromissos do cliente</div>
-              <div className="mt-2 grid gap-2">
-                {(commitmentsQ.data ?? []).length === 0 ? (
-                  <div className="text-sm text-slate-600">Nenhum compromisso encontrado para este cliente.</div>
+              <div className="flex items-center justify-between gap-3">
+                <div className="text-xs font-semibold text-slate-700">Produtos / Serviços e Entregas</div>
+                <div className="flex items-center gap-1 text-[11px] text-slate-500">
+                  <ShoppingCart className="h-3 w-3" />
+                  <span>Escopo da Proposta</span>
+                </div>
+              </div>
+
+              <div className="mt-3">
+                <div className="flex gap-2">
+                  <div className="relative flex-1">
+                    <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                    <Input
+                      placeholder="Buscar produto ou serviço para adicionar..."
+                      className="h-11 rounded-xl pl-10"
+                      value={searchQuery}
+                      onChange={(e) => {
+                        setSearchQuery(e.target.value);
+                        searchOfferings(e.target.value);
+                      }}
+                    />
+                    {isSearching && (
+                      <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                        <Loader2 className="h-4 w-4 animate-spin text-slate-400" />
+                      </div>
+                    )}
+                  </div>
+                  <div className="w-[100px]">
+                    <Input
+                      type="number"
+                      min={1}
+                      value={itemQty}
+                      onChange={(e) => setItemQty(Number(e.target.value))}
+                      className="h-11 rounded-xl"
+                      title="Quantidade"
+                    />
+                  </div>
+                </div>
+
+                {searchResults.length > 0 && (
+                  <div className="mt-1 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-lg">
+                    {searchResults.map((res) => (
+                      <button
+                        key={res.id}
+                        type="button"
+                        onClick={() => handleAddItem(res)}
+                        className="flex w-full items-center justify-between px-3 py-2 text-left hover:bg-slate-50 transition"
+                      >
+                        <div>
+                          <div className="text-sm font-semibold text-slate-900">{res.display_name}</div>
+                          {res.subtype && <div className="text-[10px] text-slate-500">{res.subtype}</div>}
+                        </div>
+                        <Plus className="h-4 w-4 text-slate-400" />
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="mt-4 grid gap-2">
+                {commitmentsQ.isLoading ? (
+                  <div className="flex items-center justify-center p-8">
+                    <Loader2 className="h-6 w-6 animate-spin text-slate-300" />
+                  </div>
+                ) : (commitmentsQ.data ?? []).length === 0 ? (
+                  <div className="rounded-xl border border-dashed border-slate-200 p-6 text-center text-sm text-slate-500">
+                    Nenhum item adicionado ao escopo. Busque acima para começar.
+                  </div>
                 ) : (
-                  (commitmentsQ.data ?? []).map((c: any) => (
-                    <label key={c.id} className="flex items-center justify-between gap-3 rounded-xl border bg-white px-3 py-2">
-                      <div className="flex items-center gap-3">
-                        <Checkbox checked={Boolean(selected[c.id])} onCheckedChange={(v) => setSelected((prev) => ({ ...prev, [c.id]: Boolean(v) }))} />
-                        <div className="min-w-0">
-                          <div className="truncate text-sm font-semibold text-slate-900">
-                            {String(c.commitment_type)} • {String(c.id).slice(0, 8)}
+                  (commitmentsQ.data ?? []).map((c: any) => {
+                    const firstItem = c.items?.[0];
+                    const offeringName = firstItem?.offering?.display_name ?? "Item sem nome";
+                    const qty = firstItem?.quantity ?? 1;
+                    const isSelected = Boolean(selected[c.id]);
+
+                    return (
+                      <div
+                        key={c.id}
+                        className={cn(
+                          "group flex items-center justify-between gap-3 rounded-xl border p-3 transition",
+                          isSelected ? "border-slate-300 bg-slate-50/50" : "border-slate-100 bg-white"
+                        )}
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                          <Checkbox
+                            checked={isSelected}
+                            onCheckedChange={(v) => setSelected((prev) => ({ ...prev, [c.id]: Boolean(v) }))}
+                          />
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2">
+                              {c.commitment_type === "order" ? (
+                                <Package className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                              ) : (
+                                <ShoppingCart className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                              )}
+                              <div className="truncate text-sm font-semibold text-slate-900">
+                                {offeringName}
+                              </div>
+                            </div>
+                            <div className="mt-0.5 flex items-center gap-2 text-xs text-slate-500">
+                              <span className="font-medium text-slate-700">Qtd: {qty}</span>
+                              <span>•</span>
+                              <span className="capitalize">{c.commitment_type}</span>
+                              <span>•</span>
+                              <span>{new Date(c.created_at).toLocaleDateString("pt-BR")}</span>
+                            </div>
                           </div>
-                          <div className="text-xs text-slate-600">status: {c.status ?? "—"}</div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 opacity-0 group-hover:opacity-100 transition"
+                            onClick={() => handleDeleteCommitment(c.id)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                          <Badge variant={c.status === "active" ? "default" : "outline"} className="hidden sm:inline-flex capitalize">
+                            {c.status}
+                          </Badge>
                         </div>
                       </div>
-                      <Badge variant="outline">{new Date(c.created_at).toLocaleDateString("pt-BR")}</Badge>
-                    </label>
-                  ))
+                    );
+                  })
                 )}
               </div>
             </div>
