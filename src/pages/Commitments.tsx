@@ -12,7 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { CommitmentDeliverablesPreview, type CommitmentItemDraft } from "@/components/core/CommitmentDeliverablesPreview";
+import { CommitmentDeliverablesPreview, type CommitmentItemRow } from "@/components/core/CommitmentDeliverablesPreview";
 import { CapacitySemaphore } from "@/components/core/CapacitySemaphore";
 import { showError, showSuccess } from "@/utils/toast";
 
@@ -99,18 +99,52 @@ export default function Commitments() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("commercial_commitments")
-        .select("id,commitment_type,status,total_value,customer_entity_id,created_at")
+        .select(`
+          id,
+          commitment_type,
+          status,
+          total_value,
+          customer_entity_id,
+          created_at,
+          customer:core_entities!commercial_commitments_customer_fk(display_name),
+          items:commitment_items(
+            id,
+            offering_entity_id,
+            quantity,
+            offering:core_entities(display_name)
+          )
+        `)
         .eq("tenant_id", activeTenantId!)
         .is("deleted_at", null)
         .order("created_at", { ascending: false })
         .limit(50);
       if (error) throw error;
-      return (data ?? []) as CommitmentRow[];
+      return (data ?? []) as any[];
     },
     staleTime: 5_000,
   });
 
-  const previewItems: CommitmentItemDraft[] = useMemo(() => {
+  const handleDelete = async (e: React.MouseEvent, id: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!window.confirm("Tem certeza que deseja excluir este compromisso? Isso removerá itens e deliverables relacionados.")) return;
+
+    try {
+      const { error } = await supabase
+        .from("commercial_commitments")
+        .update({ deleted_at: new Date().toISOString() })
+        .eq("tenant_id", activeTenantId!)
+        .eq("id", id);
+
+      if (error) throw error;
+      showSuccess("Compromisso excluído.");
+      await qc.invalidateQueries({ queryKey: ["commitments", activeTenantId] });
+    } catch (err: any) {
+      showError(err.message ?? "Erro ao excluir");
+    }
+  };
+
+  const previewItems: CommitmentItemRow[] = useMemo(() => {
     return items
       .filter((it) => Boolean(it.offering_entity_id))
       .map((it) => ({ offering_entity_id: it.offering_entity_id, quantity: Number(it.quantity ?? 1) }));
@@ -353,30 +387,60 @@ export default function Commitments() {
 
             <Card className="rounded-2xl border-slate-200 p-0">
               <div className="border-b px-4 py-3 text-sm font-semibold text-slate-900">Recentes</div>
-              <div className="divide-y">
+              <div className="divide-y overflow-hidden rounded-b-2xl">
                 {listQ.isLoading ? (
                   <div className="p-4 text-sm text-slate-600">Carregando…</div>
                 ) : (listQ.data ?? []).length === 0 ? (
                   <div className="p-4 text-sm text-slate-600">Nenhum compromisso.</div>
                 ) : (
-                  (listQ.data ?? []).map((c) => (
-                    <Link key={c.id} to={`/app/commitments/${c.id}`} className="block px-4 py-3 hover:bg-slate-50">
-                      <div className="flex items-center justify-between gap-3">
-                        <div>
-                          <div className="font-semibold text-slate-900">{c.commitment_type}</div>
-                          <div className="text-xs text-slate-600">
-                            status: {c.status ?? "—"} • customer: {c.customer_entity_id}
+                  (listQ.data ?? []).map((c) => {
+                    const customerName = c.customer?.display_name ?? "Cliente s/ nome";
+                    const itemSummary = (c.items ?? [])
+                      .map((it: any) => `${it.offering?.display_name ?? "Item"} (x${it.quantity})`)
+                      .join(", ");
+
+                    return (
+                      <Link key={c.id} to={`/app/commitments/${c.id}`} className="group block px-4 py-3 hover:bg-slate-50 transition">
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2">
+                              <span className="font-bold text-slate-900 capitalize">{c.commitment_type}</span>
+                              <Badge variant={c.status === "active" ? "default" : "secondary"} className="h-5 px-1.5 text-[10px] uppercase">
+                                {c.status ?? "draft"}
+                              </Badge>
+                            </div>
+                            <div className="mt-0.5 truncate text-sm font-medium text-slate-700">
+                              {customerName}
+                            </div>
+                            <div className="mt-1 flex items-center gap-2 text-[11px] text-slate-500">
+                              <span className="shrink-0">{new Date(c.created_at).toLocaleDateString("pt-BR")}</span>
+                              <span className="text-slate-300">•</span>
+                              <span className="truncate">{itemSummary || "Sem itens"}</span>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-8 w-8 p-0 text-slate-400 hover:text-rose-600 opacity-0 group-hover:opacity-100 transition"
+                              onClick={(e) => handleDelete(e, c.id)}
+                            >
+                              <span className="text-lg">×</span>
+                            </Button>
+                            <Badge variant="outline" className="font-mono text-[10px] text-slate-400">
+                              {c.id.slice(0, 8)}
+                            </Badge>
                           </div>
                         </div>
-                        <Badge variant="secondary">{c.id.slice(0, 8)}</Badge>
-                      </div>
-                    </Link>
-                  ))
+                      </Link>
+                    );
+                  })
                 )}
               </div>
             </Card>
           </div>
         </AppShell>
+
       </RequireRouteAccess>
     </RequireAuth>
   );
