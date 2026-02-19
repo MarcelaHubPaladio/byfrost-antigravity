@@ -479,22 +479,7 @@ export default function PublicProposal() {
                 </Card>
               ) : null}
 
-              <div className="grid gap-4 lg:grid-cols-2">
-                <Card className="rounded-[28px] border-black/10 bg-white/85 p-5 shadow-sm">
-                  <div className="text-sm font-semibold text-slate-900">Seu tenant</div>
-                  <div className="mt-2 text-sm text-slate-700">
-                    <div>
-                      <span className="font-semibold">Nome:</span> {tenant?.name ?? "—"}
-                    </div>
-                    <div>
-                      <span className="font-semibold">CNPJ:</span> {safe(tenant?.company?.cnpj) || "—"}
-                    </div>
-                    <div>
-                      <span className="font-semibold">Endereço:</span> {safe(tenant?.company?.address_line) || "—"}
-                    </div>
-                  </div>
-                </Card>
-
+              <div className="grid gap-4">
                 <Card className="rounded-[28px] border-black/10 bg-white/85 p-5 shadow-sm">
                   <div className="flex items-center justify-between gap-3">
                     <div className="text-sm font-semibold text-slate-900">Cliente</div>
@@ -525,36 +510,6 @@ export default function PublicProposal() {
                   </div>
                 </Card>
               </div>
-
-              {(data?.scope?.commitments ?? []).length ? (
-                <Card className="rounded-[28px] border-black/10 bg-white/85 p-5 shadow-sm">
-                  <div className="text-sm font-semibold text-slate-900">Compromissos selecionados</div>
-                  <div className="mt-2 grid gap-2">
-                    {(data?.scope?.commitments ?? []).map((c: any) => {
-                      const cid = String(c.id);
-                      const items = (data?.scope?.items ?? []).filter((it: any) => {
-                        const isForComm = String(it.commitment_id) === cid;
-                        const hasOffering = Boolean(data?.scope?.offeringsById?.[it.offering_entity_id]);
-                        return isForComm && hasOffering;
-                      });
-                      const offerings = items.map((it: any) => {
-                        const oid = String(it.offering_entity_id);
-                        return data?.scope?.offeringsById?.[oid]?.display_name || "Item";
-                      });
-                      const label = offerings.length ? offerings.join(", ") : String(c.commitment_type ?? "compromisso");
-
-                      return (
-                        <div key={c.id} className="rounded-2xl border bg-white px-3 py-2 text-sm text-slate-800">
-                          <div className="font-semibold capitalize text-slate-900">{label}</div>
-                          <div className="text-[11px] text-slate-500">
-                            {c.commitment_type} • status: {c.status ?? "—"} • {new Date(c.created_at).toLocaleDateString("pt-BR")}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </Card>
-              ) : null}
 
               <Card className="rounded-[28px] border-black/10 bg-white/85 p-5 shadow-sm">
                 <div className="space-y-6">
