@@ -156,11 +156,21 @@ serve(async (req) => {
         const chatId = pickFirst(payload?.chatId, payload?.data?.chatId, normalized.from, normalized.to);
         const isGroup = looksLikeWhatsAppGroupId(chatId);
 
+        const groupId = isGroup ? String(chatId) : null;
+
+        // For Audit/Conversation purposes:
+        // In a group, we want a single conversation record for the entire group.
+        // By passing participantPhone = null for groups, our unique constraint 
+        // (tenant_id, participant_phone, group_id) will always hit the same row for that group.
         const participantPhone = isGroup
-            ? (fromMe ? instPhone : normalized.participant || normalized.from)
+            ? null
             : (fromMe ? normalized.to : normalized.from);
 
-        const groupId = isGroup ? String(chatId) : null;
+        // However, we still want to know WHICH person in the group sent/received the message
+        // for individual auditing or case tracking.
+        const msgParticipantPhone = isGroup
+            ? (fromMe ? instPhone : normalized.participant || normalized.from)
+            : participantPhone;
 
         // 4. Atomic Ingestion via RPC (ONLY for messages/chat events)
         let auditResult = { conversation_id: null, message_id: null, case_id: null, journey_id: null, ok: true, event: "none" };
@@ -169,15 +179,19 @@ serve(async (req) => {
         const looksLikeChatEvent = Boolean(normalized.text || normalized.mediaUrl || normalized.externalMessageId || isGroup);
 
         if (instance.enable_v2_audit && looksLikeChatEvent) {
+            // For the message itself, we want to know the sender/receiver
+            const fromPhone = direction === "inbound" ? msgParticipantPhone : instPhone;
+            const toPhone = direction === "outbound" ? (isGroup ? groupId : normalized.to) : (isGroup ? groupId : instPhone);
+
             const { data: rpcResult, error: rpcError } = await supabase.rpc("ingest_whatsapp_audit_message", {
                 p_tenant_id: instance.tenant_id,
                 p_instance_id: instance.id,
                 p_zapi_instance_id: zapiId,
                 p_direction: direction,
                 p_type: normalized.type,
-                p_from_phone: normalized.from,
-                p_to_phone: normalized.to,
-                p_participant_phone: participantPhone,
+                p_from_phone: fromPhone,
+                p_to_phone: toPhone,
+                p_participant_phone: participantPhone, // NULL for groups to unify conversation
                 p_group_id: groupId,
                 p_body_text: normalized.text,
                 p_media_url: normalized.mediaUrl,
@@ -206,8 +220,8 @@ serve(async (req) => {
                 zapi_instance_id: zapiId,
                 direction: direction,
                 wa_type: normalized.type,
-                from_phone: normalized.from,
-                to_phone: normalized.to,
+                from_phone: direction === "inbound" ? msgParticipantPhone : instPhone,
+                to_phone: direction === "outbound" ? (isGroup ? groupId : normalized.to) : (isGroup ? groupId : instPhone),
                 ok: ingestOk !== false,
                 http_status: ingestOk !== false ? 200 : 500,
                 reason: ingestEvent || (looksLikeChatEvent ? (ingestOk !== false ? "ingested" : "failed") : "event_received"),
@@ -220,7 +234,7 @@ serve(async (req) => {
                     message_id,
                     external_message_id: normalized.externalMessageId,
                     is_group: isGroup,
-                    participant: participantPhone,
+                    participant: msgParticipantPhone,
                     raw_type: payload?.type || payload?.event
                 },
                 received_at: new Date().toISOString()
