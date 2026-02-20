@@ -154,7 +154,7 @@ serve(async (req) => {
         const groupId = isGroup ? String(chatId) : null;
 
         // 4. Atomic Ingestion via RPC (V2 - AUDIT)
-        let auditResult = { conversation_id: null, message_id: null };
+        let auditResult = { conversation_id: null, message_id: null, case_id: null, ok: true, event: "none" };
         if (instance.enable_v2_audit) {
             const { data: rpcResult, error: rpcError } = await supabase.rpc("ingest_whatsapp_audit_message", {
                 p_tenant_id: instance.tenant_id,
@@ -187,16 +187,42 @@ serve(async (req) => {
             console.log(`[${fn}] V1 Business logic enabled for instance ${instance.id}`);
         }
 
-        const { conversation_id, message_id } = auditResult;
+        const { conversation_id, message_id, case_id, ok: ingestOk, event: ingestEvent } = auditResult;
 
-        // 5. DECIDE JOURNEY (POST-STORAGE)
-        // Here we can trigger logic for specific journeys like the "ff_flow_20260129200457"
-        // For now, we just log that it was ingested globally.
+        // 5. DIAGNOSTIC LOGGING (wa_webhook_inbox)
+        try {
+            await supabase.from("wa_webhook_inbox").insert({
+                tenant_id: instance.tenant_id,
+                instance_id: instance.id,
+                zapi_instance_id: zapiId,
+                direction: direction,
+                wa_type: normalized.type,
+                from_phone: normalized.from,
+                to_phone: normalized.to,
+                ok: ingestOk !== false,
+                http_status: ingestOk !== false ? 200 : 500,
+                reason: ingestEvent || (ingestOk !== false ? "ingested" : "failed"),
+                payload_json: payload,
+                meta_json: {
+                    case_id,
+                    conversation_id,
+                    message_id,
+                    external_message_id: normalized.externalMessageId,
+                    is_group: normalized.isGroup,
+                    participant: normalized.participant
+                },
+                received_at: new Date().toISOString()
+            });
+        } catch (e) {
+            console.error(`[${fn}] Diagnostic logging failed`, e);
+            // Non-blocking
+        }
 
         return new Response(JSON.stringify({
             ok: true,
             conversation_id,
             message_id,
+            case_id,
             direction
         }), {
             headers: { ...corsHeaders, "Content-Type": "application/json" },

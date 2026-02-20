@@ -45,7 +45,10 @@ import {
   MessagesSquare,
   Trash2,
   ExternalLink,
+  Terminal,
 } from "lucide-react";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { AuditLogsPanel } from "@/components/case/AuditLogsPanel";
 import { cn } from "@/lib/utils";
 import { showError, showSuccess } from "@/utils/toast";
 import { getStateLabel } from "@/lib/journeyLabels";
@@ -466,6 +469,253 @@ export default function CaseDetail() {
   const c = caseQ.data;
   const isSalesOrder = c?.journeys?.key === "sales_order" || c?.case_type === "sales_order";
   const isTrello = c?.journeys?.key === "trello" || c?.case_type === "TRELLO";
+  const isAuditJourney =
+    c?.journeys?.key === "ff_flow_20260129200457" ||
+    c?.journeys?.key === "auditoria-de-whatsapp" ||
+    c?.journeys?.key === "auditoria-de-whatsaoo";
+
+  const renderMainContent = () => {
+    return (
+      <>
+        {id && isTrello && activeTenantId ? (
+          <TrelloCardDetails tenantId={activeTenantId} caseId={id} />
+        ) : null}
+
+        {/* Editáveis: apenas sales_order */}
+        {id && isSalesOrder ? (
+          <>
+            <CaseCustomerDataEditorCard caseId={id} fields={fieldsQ.data as any} />
+            <SalesOrderItemsEditorCard caseId={id} />
+          </>
+        ) : null}
+
+        {/* Pendências */}
+        <div className="rounded-[22px] border border-slate-200 bg-white p-4">
+          <div className="flex items-center justify-between">
+            <div className="text-sm font-semibold text-slate-900">Pendências</div>
+            <div className="text-xs text-slate-500">{pendQ.data?.length ?? 0}</div>
+          </div>
+          <div className="mt-3 space-y-2">
+            {(pendQ.data ?? []).map((p: any) => (
+              <div key={p.id} className="rounded-2xl border border-slate-200 bg-white px-3 py-2">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <div className="text-xs font-semibold truncate text-slate-900">
+                      {p.question_text}
+                    </div>
+                    <div className="mt-0.5 text-[11px] text-slate-500">
+                      {p.assigned_to_role} • {p.type} • {p.required ? "obrigatória" : "opcional"}
+                    </div>
+                  </div>
+                  <Badge
+                    className={cn(
+                      "rounded-full border-0",
+                      p.status === "open"
+                        ? "bg-amber-100 text-amber-900"
+                        : p.status === "answered"
+                          ? "bg-emerald-100 text-emerald-900"
+                          : "bg-slate-100 text-slate-700"
+                    )}
+                  >
+                    {p.status}
+                  </Badge>
+                </div>
+                {p.answered_text && (
+                  <div className="mt-2 text-xs text-slate-600">
+                    <span className="font-medium">Resposta:</span> {p.answered_text}
+                  </div>
+                )}
+              </div>
+            ))}
+            {(pendQ.data ?? []).length === 0 && (
+              <div className="rounded-2xl border border-dashed border-slate-200 bg-white/60 p-4 text-xs text-slate-500">
+                Sem pendências.
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Anexos */}
+        {!isTrello ? (
+          <div className="rounded-[22px] border border-slate-200 bg-white p-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+                <ImageIcon className="h-4 w-4 text-slate-500" /> Anexos
+              </div>
+              <div className="flex items-center gap-2">
+                {activeTenantId && id && isSalesOrder ? (
+                  <SalesOrderAddAttachmentExtractDialog tenantId={activeTenantId} caseId={id} />
+                ) : null}
+                <div className="text-xs text-slate-500">{attachmentsQ.data?.length ?? 0}</div>
+              </div>
+            </div>
+
+            <div className="mt-3 grid gap-3 sm:grid-cols-2">
+              {(attachmentsQ.data ?? [])
+                .filter((a: any) => a.kind === "image")
+                .slice(0, 4)
+                .map((a: any) => {
+                  const url = (a.storage_path ?? "").trim();
+                  return (
+                    <div
+                      key={a.id}
+                      className="group relative overflow-hidden rounded-2xl border border-slate-200 bg-slate-50"
+                    >
+                      <button
+                        type="button"
+                        onClick={() =>
+                          isSalesOrder ? openReview(url) : window.open(url, "_blank")
+                        }
+                        className="block w-full"
+                        title={isSalesOrder ? "Revisar pedido" : "Abrir imagem"}
+                      >
+                        <img
+                          src={url}
+                          alt="Pedido"
+                          className="h-44 w-full object-cover transition group-hover:scale-[1.02]"
+                        />
+                      </button>
+
+                      <div className="pointer-events-none absolute inset-x-0 bottom-0 flex items-end justify-between gap-2 bg-gradient-to-t from-slate-900/50 to-transparent p-3">
+                        <div className="pointer-events-none text-xs font-semibold text-white/95">
+                          {isSalesOrder ? "Revisar" : "Abrir"}
+                        </div>
+
+                        <a
+                          href={url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="pointer-events-auto inline-flex items-center gap-1 rounded-full bg-white/90 px-2 py-1 text-[11px] font-semibold text-slate-900 shadow-sm hover:bg-white"
+                          title="Abrir em nova aba"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <ExternalLink className="h-3.5 w-3.5" />
+                          Nova aba
+                        </a>
+                      </div>
+                    </div>
+                  );
+                })}
+
+              {(!attachmentsQ.data || attachmentsQ.data.length === 0) && (
+                <div className="rounded-2xl border border-dashed border-slate-200 bg-white/60 p-4 text-xs text-slate-500">
+                  Sem anexos ainda.
+                </div>
+              )}
+            </div>
+          </div>
+        ) : null}
+
+        {/* Campos extraídos */}
+        <div className="rounded-[22px] border border-slate-200 bg-white p-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+              <ClipboardList className="h-4 w-4 text-slate-500" /> Campos extraídos
+            </div>
+            <div className="text-xs text-slate-500">com confiança</div>
+          </div>
+
+          <div className="mt-3 space-y-2">
+            {(fieldsQ.data ?? [])
+              .filter((f: any) => {
+                if (f.key === "ocr_text") return false;
+                const vt = typeof f.value_text === "string" ? f.value_text.trim() : "";
+                const hasJson = f.value_json !== null && f.value_json !== undefined;
+                return Boolean(vt) || hasJson;
+              })
+              .sort((a: any, b: any) => a.key.localeCompare(b.key))
+              .map((f: any) => (
+                <div
+                  key={f.key}
+                  className="flex items-start justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2"
+                >
+                  <div className="min-w-0">
+                    <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                      {f.key}
+                    </div>
+                    <div className="truncate text-sm font-medium text-slate-900">
+                      {f.value_text ?? (f.value_json ? JSON.stringify(f.value_json) : "—")}
+                    </div>
+                    <div className="mt-0.5 text-[11px] text-slate-500">fonte: {f.source}</div>
+                  </div>
+                  <ConfidencePill v={f.confidence} />
+                </div>
+              ))}
+
+            {(fieldsQ.data ?? [])
+              .filter((f: any) => {
+                if (f.key === "ocr_text") return false;
+                const vt = typeof f.value_text === "string" ? f.value_text.trim() : "";
+                const hasJson = f.value_json !== null && f.value_json !== undefined;
+                return Boolean(vt) || hasJson;
+              }).length === 0 && (
+                <div className="rounded-2xl border border-dashed border-slate-200 bg-white/60 p-4 text-xs text-slate-500">
+                  Ainda não há campos extraídos. Rode o processor (jobs) ou use o simulador.
+                </div>
+              )}
+          </div>
+        </div>
+
+        {/* Decisões IA */}
+        <div className="rounded-[22px] border border-slate-200 bg-white p-4">
+          <div className="flex items-center justify-between">
+            <div className="text-sm font-semibold text-slate-900">Decisões da IA (WHY)</div>
+            <div className="text-xs text-slate-500">explicável</div>
+          </div>
+
+          <div className="mt-3 space-y-2">
+            {(decisionQ.data ?? []).slice(0, 8).map((d: any) => (
+              <div key={d.id} className="rounded-2xl border border-slate-200 bg-white px-3 py-2">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="text-xs font-semibold truncate text-slate-900">
+                      {d.output_summary ?? "Decisão"}
+                    </div>
+                    <div className="mt-0.5 text-[11px] text-slate-500">
+                      {new Date(d.occurred_at).toLocaleString()}
+                    </div>
+                  </div>
+                  <Badge className="rounded-full border-0 bg-[hsl(var(--byfrost-accent)/0.10)] text-[hsl(var(--byfrost-accent))] hover:bg-[hsl(var(--byfrost-accent)/0.10)]">
+                    WHY
+                  </Badge>
+                </div>
+
+                {d.reasoning_public && (
+                  <div className="mt-2 text-xs leading-relaxed text-slate-600">
+                    {d.reasoning_public}
+                  </div>
+                )}
+
+                <div className="mt-2 grid gap-2 md:grid-cols-2">
+                  <div className="rounded-2xl bg-slate-50 p-2">
+                    <div className="text-[11px] font-semibold text-slate-700">why_json</div>
+                    <pre className="mt-1 max-h-24 overflow-auto text-[11px] text-slate-600">
+                      {JSON.stringify(d.why_json ?? {}, null, 2)}
+                    </pre>
+                  </div>
+                  <div className="rounded-2xl bg-slate-50 p-2">
+                    <div className="text-[11px] font-semibold text-slate-700">confidence_json</div>
+                    <pre className="mt-1 max-h-24 overflow-auto text-[11px] text-slate-600">
+                      {JSON.stringify(d.confidence_json ?? {}, null, 2)}
+                    </pre>
+                  </div>
+                </div>
+              </div>
+            ))}
+
+            {(decisionQ.data ?? []).length === 0 && (
+              <div className="rounded-2xl border border-dashed border-slate-200 bg-white/60 p-4 text-xs text-slate-500">
+                Sem decision logs ainda.
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Timeline por último (estilo do anexo) */}
+        {!isTrello ? <CaseTimeline events={timelineQ.data ?? []} /> : null}
+      </>
+    );
+  };
 
   const openReview = (url: string | null) => {
     setReviewImageUrl(url);
@@ -619,245 +869,38 @@ export default function CaseDetail() {
           <div className="mt-5 grid gap-4 lg:grid-cols-[0.95fr_1.05fr]">
             {/* Left */}
             <div className="space-y-4">
-              {id && isTrello && activeTenantId ? (
-                <TrelloCardDetails tenantId={activeTenantId} caseId={id} />
-              ) : null}
-
-              {/* Editáveis: apenas sales_order */}
-              {id && isSalesOrder ? (
-                <>
-                  <CaseCustomerDataEditorCard caseId={id} fields={fieldsQ.data as any} />
-                  <SalesOrderItemsEditorCard caseId={id} />
-                </>
-              ) : null}
-
-              {/* Pendências */}
-              <div className="rounded-[22px] border border-slate-200 bg-white p-4">
-                <div className="flex items-center justify-between">
-                  <div className="text-sm font-semibold text-slate-900">Pendências</div>
-                  <div className="text-xs text-slate-500">{pendQ.data?.length ?? 0}</div>
-                </div>
-                <div className="mt-3 space-y-2">
-                  {(pendQ.data ?? []).map((p: any) => (
-                    <div
-                      key={p.id}
-                      className="rounded-2xl border border-slate-200 bg-white px-3 py-2"
-                    >
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="min-w-0">
-                          <div className="text-xs font-semibold text-slate-900 truncate">
-                            {p.question_text}
-                          </div>
-                          <div className="mt-0.5 text-[11px] text-slate-500">
-                            {p.assigned_to_role} • {p.type} • {p.required ? "obrigatória" : "opcional"}
-                          </div>
-                        </div>
-                        <Badge
-                          className={cn(
-                            "rounded-full border-0",
-                            p.status === "open"
-                              ? "bg-amber-100 text-amber-900"
-                              : p.status === "answered"
-                                ? "bg-emerald-100 text-emerald-900"
-                                : "bg-slate-100 text-slate-700"
-                          )}
-                        >
-                          {p.status}
-                        </Badge>
+              {isAuditJourney ? (
+                <Tabs defaultValue="overview" className="w-full">
+                  <TabsList className="grid w-full grid-cols-2 rounded-2xl bg-slate-100 p-1 h-12">
+                    <TabsTrigger value="overview" className="rounded-xl data-[state=active]:shadow-sm">
+                      <div className="flex items-center gap-2">
+                        <ClipboardList className="h-4 w-4" />
+                        <span className="font-semibold">Dados do Caso</span>
                       </div>
-                      {p.answered_text && (
-                        <div className="mt-2 text-xs text-slate-600">
-                          <span className="font-medium">Resposta:</span> {p.answered_text}
-                        </div>
+                    </TabsTrigger>
+                    <TabsTrigger value="logs" className="rounded-xl data-[state=active]:shadow-sm">
+                      <div className="flex items-center gap-2">
+                        <Terminal className="h-4 w-4" />
+                        <span className="font-semibold">Logs de Auditoria</span>
+                      </div>
+                    </TabsTrigger>
+                  </TabsList>
+
+                  <TabsContent value="overview" className="mt-4 space-y-4">
+                    {renderMainContent()}
+                  </TabsContent>
+
+                  <TabsContent value="logs" className="mt-4">
+                    <div className="rounded-[22px] border border-slate-200 bg-white p-4">
+                      {id && activeTenantId && (
+                        <AuditLogsPanel caseId={id} tenantId={activeTenantId} />
                       )}
                     </div>
-                  ))}
-                  {(pendQ.data ?? []).length === 0 && (
-                    <div className="rounded-2xl border border-dashed border-slate-200 bg-white/60 p-4 text-xs text-slate-500">
-                      Sem pendências.
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Anexos */}
-              {!isTrello ? (
-                <div className="rounded-[22px] border border-slate-200 bg-white p-4">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2 text-sm font-semibold text-slate-900">
-                      <ImageIcon className="h-4 w-4 text-slate-500" /> Anexos
-                    </div>
-                    <div className="flex items-center gap-2">
-                      {activeTenantId && id && isSalesOrder ? (
-                        <SalesOrderAddAttachmentExtractDialog tenantId={activeTenantId} caseId={id} />
-                      ) : null}
-                      <div className="text-xs text-slate-500">{attachmentsQ.data?.length ?? 0}</div>
-                    </div>
-                  </div>
-
-                  <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                    {(attachmentsQ.data ?? [])
-                      .filter((a: any) => a.kind === "image")
-                      .slice(0, 4)
-                      .map((a: any) => {
-                        const url = (a.storage_path ?? "").trim();
-                        return (
-                          <div
-                            key={a.id}
-                            className="group relative overflow-hidden rounded-2xl border border-slate-200 bg-slate-50"
-                          >
-                            <button
-                              type="button"
-                              onClick={() => (isSalesOrder ? openReview(url) : window.open(url, "_blank"))}
-                              className="block w-full"
-                              title={isSalesOrder ? "Revisar pedido" : "Abrir imagem"}
-                            >
-                              <img
-                                src={url}
-                                alt="Pedido"
-                                className="h-44 w-full object-cover transition group-hover:scale-[1.02]"
-                              />
-                            </button>
-
-                            <div className="pointer-events-none absolute inset-x-0 bottom-0 flex items-end justify-between gap-2 bg-gradient-to-t from-slate-900/50 to-transparent p-3">
-                              <div className="pointer-events-none text-xs font-semibold text-white/95">
-                                {isSalesOrder ? "Revisar" : "Abrir"}
-                              </div>
-
-                              <a
-                                href={url}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="pointer-events-auto inline-flex items-center gap-1 rounded-full bg-white/90 px-2 py-1 text-[11px] font-semibold text-slate-900 shadow-sm hover:bg-white"
-                                title="Abrir em nova aba"
-                                onClick={(e) => e.stopPropagation()}
-                              >
-                                <ExternalLink className="h-3.5 w-3.5" />
-                                Nova aba
-                              </a>
-                            </div>
-                          </div>
-                        );
-                      })}
-
-                    {(!attachmentsQ.data || attachmentsQ.data.length === 0) && (
-                      <div className="rounded-2xl border border-dashed border-slate-200 bg-white/60 p-4 text-xs text-slate-500">
-                        Sem anexos ainda.
-                      </div>
-                    )}
-                  </div>
-                </div>
-              ) : null}
-
-              {/* Campos extraídos */}
-              <div className="rounded-[22px] border border-slate-200 bg-white p-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2 text-sm font-semibold text-slate-900">
-                    <ClipboardList className="h-4 w-4 text-slate-500" /> Campos extraídos
-                  </div>
-                  <div className="text-xs text-slate-500">com confiança</div>
-                </div>
-
-                <div className="mt-3 space-y-2">
-                  {(fieldsQ.data ?? [])
-                    .filter((f: any) => {
-                      if (f.key === "ocr_text") return false;
-                      const vt = typeof f.value_text === "string" ? f.value_text.trim() : "";
-                      const hasJson = f.value_json !== null && f.value_json !== undefined;
-                      return Boolean(vt) || hasJson;
-                    })
-                    .sort((a: any, b: any) => a.key.localeCompare(b.key))
-                    .map((f: any) => (
-                      <div
-                        key={f.key}
-                        className="flex items-start justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2"
-                      >
-                        <div className="min-w-0">
-                          <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-                            {f.key}
-                          </div>
-                          <div className="truncate text-sm font-medium text-slate-900">
-                            {f.value_text ??
-                              (f.value_json ? JSON.stringify(f.value_json) : "—")}
-                          </div>
-                          <div className="mt-0.5 text-[11px] text-slate-500">fonte: {f.source}</div>
-                        </div>
-                        <ConfidencePill v={f.confidence} />
-                      </div>
-                    ))}
-
-                  {(fieldsQ.data ?? [])
-                    .filter((f: any) => {
-                      if (f.key === "ocr_text") return false;
-                      const vt = typeof f.value_text === "string" ? f.value_text.trim() : "";
-                      const hasJson = f.value_json !== null && f.value_json !== undefined;
-                      return Boolean(vt) || hasJson;
-                    }).length === 0 && (
-                      <div className="rounded-2xl border border-dashed border-slate-200 bg-white/60 p-4 text-xs text-slate-500">
-                        Ainda não há campos extraídos. Rode o processor (jobs) ou use o simulador.
-                      </div>
-                    )}
-                </div>
-              </div>
-
-              {/* Decisões IA */}
-              <div className="rounded-[22px] border border-slate-200 bg-white p-4">
-                <div className="flex items-center justify-between">
-                  <div className="text-sm font-semibold text-slate-900">Decisões da IA (WHY)</div>
-                  <div className="text-xs text-slate-500">explicável</div>
-                </div>
-
-                <div className="mt-3 space-y-2">
-                  {(decisionQ.data ?? []).slice(0, 8).map((d: any) => (
-                    <div
-                      key={d.id}
-                      className="rounded-2xl border border-slate-200 bg-white px-3 py-2"
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <div className="text-xs font-semibold text-slate-900 truncate">
-                            {d.output_summary ?? "Decisão"}
-                          </div>
-                          <div className="mt-0.5 text-[11px] text-slate-500">
-                            {new Date(d.occurred_at).toLocaleString()}
-                          </div>
-                        </div>
-                        <Badge className="rounded-full border-0 bg-[hsl(var(--byfrost-accent)/0.10)] text-[hsl(var(--byfrost-accent))] hover:bg-[hsl(var(--byfrost-accent)/0.10)]">
-                          WHY
-                        </Badge>
-                      </div>
-
-                      {d.reasoning_public && (
-                        <div className="mt-2 text-xs leading-relaxed text-slate-600">{d.reasoning_public}</div>
-                      )}
-
-                      <div className="mt-2 grid gap-2 md:grid-cols-2">
-                        <div className="rounded-2xl bg-slate-50 p-2">
-                          <div className="text-[11px] font-semibold text-slate-700">why_json</div>
-                          <pre className="mt-1 max-h-24 overflow-auto text-[11px] text-slate-600">
-                            {JSON.stringify(d.why_json ?? {}, null, 2)}
-                          </pre>
-                        </div>
-                        <div className="rounded-2xl bg-slate-50 p-2">
-                          <div className="text-[11px] font-semibold text-slate-700">confidence_json</div>
-                          <pre className="mt-1 max-h-24 overflow-auto text-[11px] text-slate-600">
-                            {JSON.stringify(d.confidence_json ?? {}, null, 2)}
-                          </pre>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-
-                  {(decisionQ.data ?? []).length === 0 && (
-                    <div className="rounded-2xl border border-dashed border-slate-200 bg-white/60 p-4 text-xs text-slate-500">
-                      Sem decision logs ainda.
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Timeline por último (estilo do anexo) */}
-              {!isTrello ? <CaseTimeline events={timelineQ.data ?? []} /> : null}
+                  </TabsContent>
+                </Tabs>
+              ) : (
+                renderMainContent()
+              )}
             </div>
 
             {/* Right: Chat fixo ocupando o espaço */}
