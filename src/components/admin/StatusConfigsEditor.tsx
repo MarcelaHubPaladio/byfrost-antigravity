@@ -9,6 +9,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Paperclip } from "lucide-react";
 
 interface Props {
     tenantId: string;
@@ -20,18 +21,36 @@ interface Props {
 export function StatusConfigsEditor({ tenantId, states, statusConfigsJson, onChange }: Props) {
     const [selectedState, setSelectedState] = useState<string>(states[0] ?? "");
 
-    // vendors are mapped as "users/roles" to assign responsibles to
-    const vendorsQ = useQuery({
-        queryKey: ["vendors", tenantId],
+    // users are fetched from tenant_users view
+    const usersQ = useQuery({
+        queryKey: ["tenant_users", tenantId],
         enabled: Boolean(tenantId),
         queryFn: async () => {
             const { data, error } = await supabase
-                .from("vendors")
-                .select("id,display_name,role_id")
+                .from("tenant_users")
+                .select("user_id, email, display_name")
                 .eq("tenant_id", tenantId)
-                .order("display_name", { ascending: true });
+                .order("email", { ascending: true });
             if (error) throw error;
             return data ?? [];
+        },
+    });
+
+    // case fields autocomplete
+    const caseFieldsQ = useQuery({
+        queryKey: ["case_fields_suggestions", tenantId],
+        enabled: Boolean(tenantId),
+        queryFn: async () => {
+            // Ideally an RPC to get distinct keys, but for now we fetch recent case_fields and distinct them
+            const { data, error } = await supabase
+                .from("case_fields")
+                .select("key")
+                .eq("tenant_id", tenantId)
+                .order("created_at", { ascending: false })
+                .limit(500);
+            if (error) throw error;
+            const unique = Array.from(new Set(data.map(d => d.key)));
+            return unique.sort();
         },
     });
 
@@ -62,6 +81,7 @@ export function StatusConfigsEditor({ tenantId, states, statusConfigsJson, onCha
 
     const [newTaskDesc, setNewTaskDesc] = useState("");
     const [newTaskRequired, setNewTaskRequired] = useState(true);
+    const [newTaskRequireAttachment, setNewTaskRequireAttachment] = useState(false);
     const [newFieldName, setNewFieldName] = useState("");
 
     const addTask = () => {
@@ -69,10 +89,12 @@ export function StatusConfigsEditor({ tenantId, states, statusConfigsJson, onCha
         const newTask: TaskConfig = {
             id: "task_" + Math.random().toString(36).substr(2, 9),
             description: newTaskDesc.trim(),
-            required: newTaskRequired
+            required: newTaskRequired,
+            require_attachment: newTaskRequireAttachment,
         };
         updateConfig(selectedState, { mandatory_tasks: [...currentTasks, newTask] });
         setNewTaskDesc("");
+        setNewTaskRequireAttachment(false);
     };
 
     const removeTask = (taskId: string) => {
@@ -129,8 +151,8 @@ export function StatusConfigsEditor({ tenantId, states, statusConfigsJson, onCha
                             </SelectTrigger>
                             <SelectContent className="rounded-2xl">
                                 <SelectItem value="none">Nenhum</SelectItem>
-                                {(vendorsQ.data ?? []).map((v) => (
-                                    <SelectItem key={v.id} value={v.id}>{v.display_name}</SelectItem>
+                                {(usersQ.data ?? []).map((u) => (
+                                    <SelectItem key={u.user_id} value={u.user_id}>{u.display_name || u.email}</SelectItem>
                                 ))}
                             </SelectContent>
                         </Select>
@@ -156,13 +178,21 @@ export function StatusConfigsEditor({ tenantId, states, statusConfigsJson, onCha
                         </div>
 
                         <div className="mt-3 flex items-center gap-2">
-                            <Input
-                                value={newFieldName}
-                                onChange={e => setNewFieldName(e.target.value)}
-                                onKeyDown={e => e.key === "Enter" && addField()}
-                                placeholder="Ex: telefone"
-                                className="h-9 w-[200px] rounded-xl bg-white text-xs"
-                            />
+                            <div className="relative">
+                                <Input
+                                    value={newFieldName}
+                                    onChange={e => setNewFieldName(e.target.value)}
+                                    onKeyDown={e => e.key === "Enter" && addField()}
+                                    placeholder="Ex: telefone"
+                                    className="h-9 w-[200px] rounded-xl bg-white text-xs"
+                                    list="case-fields-suggestions"
+                                />
+                                <datalist id="case-fields-suggestions">
+                                    {(caseFieldsQ.data ?? []).filter(f => !currentFields.includes(f)).map(f => (
+                                        <option key={f} value={f} />
+                                    ))}
+                                </datalist>
+                            </div>
                             <Button onClick={addField} variant="secondary" className="h-9 rounded-xl text-xs"><Plus className="mr-1 h-3.5 w-3.5" /> Adicionar campo</Button>
                         </div>
                     </div>
@@ -180,7 +210,14 @@ export function StatusConfigsEditor({ tenantId, states, statusConfigsJson, onCha
                                 <div key={t.id} className="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-sm">
                                     <div>
                                         <div className="text-xs font-medium text-slate-900">{t.description}</div>
-                                        <div className="mt-0.5 text-[10px] uppercase text-slate-500">{t.required ? "Pendente Obrigatória" : "Opcional"}</div>
+                                        <div className="mt-0.5 flex items-center gap-2 text-[10px] uppercase text-slate-500">
+                                            {t.required ? "Pendente Obrigatória" : "Opcional"}
+                                            {t.require_attachment && (
+                                                <span className="flex items-center gap-1 text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded font-medium">
+                                                    <Paperclip className="h-3 w-3" /> Anexo exigido
+                                                </span>
+                                            )}
+                                        </div>
                                     </div>
                                     <button onClick={() => removeTask(t.id)} className="text-slate-400 hover:text-red-500 transition-colors">
                                         <Trash2 className="h-5 w-5" />
@@ -200,9 +237,17 @@ export function StatusConfigsEditor({ tenantId, states, statusConfigsJson, onCha
                                 placeholder="Ex: Conferir documento da empresa"
                                 className="h-9 flex-1 rounded-xl bg-white text-xs"
                             />
-                            <div className="flex items-center gap-2">
-                                <Switch checked={newTaskRequired} onCheckedChange={setNewTaskRequired} />
-                                <span className="text-[11px] text-indigo-900 font-medium">Obrigatória</span>
+                            <div className="flex items-center gap-4 border-l border-indigo-200 pl-4">
+                                <div className="flex items-center gap-2">
+                                    <Switch checked={newTaskRequired} onCheckedChange={setNewTaskRequired} />
+                                    <span className="text-[11px] text-indigo-900 font-medium">Obrigatória</span>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <Switch checked={newTaskRequireAttachment} onCheckedChange={setNewTaskRequireAttachment} />
+                                    <span className="text-[11px] text-indigo-900 font-medium flex items-center gap-1">
+                                        <Paperclip className="h-3 w-3" /> Exigir Anexo
+                                    </span>
+                                </div>
                             </div>
                             <Button onClick={addTask} className="h-9 rounded-xl bg-indigo-600 text-white hover:bg-indigo-700 text-xs">
                                 <Plus className="mr-1 h-4 w-4" /> Adicionar

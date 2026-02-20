@@ -2,6 +2,7 @@ export interface TaskConfig {
   id: string;
   description: string;
   required: boolean;
+  require_attachment?: boolean;
 }
 
 export interface StatusConfig {

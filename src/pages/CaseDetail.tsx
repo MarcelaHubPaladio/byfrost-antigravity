@@ -284,6 +284,19 @@ export default function CaseDetail() {
       return;
     }
 
+    // 3. Check closed required pendencies that require attachments but have no attachments
+    const missingAttachments = (pendQ.data ?? []).filter((p: any) => {
+      const requireAtt = p.metadata_json?.require_attachment === true;
+      const hasAtts = Array.isArray(p.attachments) && p.attachments.length > 0;
+      // It must be required to attach AND not have attachments (even if closed, because the user could have closed it without attaching if the UI didn't block it yet)
+      return p.required && requireAtt && !hasAtts;
+    });
+
+    if (missingAttachments.length > 0) {
+      showError("Verifique as pendências obrigatórias, algumas exigem anexos que não foram enviados.");
+      return;
+    }
+
     try {
       await transitionState(
         id,

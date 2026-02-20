@@ -101,6 +101,7 @@ serve(async (req) => {
                     question_text: task.description,
                     required: task.required !== false,
                     status: "open",
+                    metadata_json: task.require_attachment ? { require_attachment: true } : {},
                 }));
 
                 const { error: pendErr } = await supabaseClient.from("pendencies").insert(pendenciesToInsert);
