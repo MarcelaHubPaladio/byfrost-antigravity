@@ -21,10 +21,20 @@ create table if not exists public.wa_webhook_inbox (
 );
 
 -- Ensure columns exist if table was created previously without them
-alter table public.wa_webhook_inbox add column if not exists journey_id uuid references public.journeys(id) on delete set null;
 alter table public.wa_webhook_inbox add column if not exists tenant_id uuid references public.tenants(id) on delete cascade;
-alter table public.wa_webhook_inbox add column if not exists meta_json jsonb not null default '{}'::jsonb;
+alter table public.wa_webhook_inbox add column if not exists instance_id uuid references public.wa_instances(id) on delete cascade;
+alter table public.wa_webhook_inbox add column if not exists zapi_instance_id text;
+alter table public.wa_webhook_inbox add column if not exists direction text check (direction in ('inbound','outbound'));
+alter table public.wa_webhook_inbox add column if not exists wa_type text;
+alter table public.wa_webhook_inbox add column if not exists from_phone text;
+alter table public.wa_webhook_inbox add column if not exists to_phone text;
+alter table public.wa_webhook_inbox add column if not exists ok boolean default true;
+alter table public.wa_webhook_inbox add column if not exists http_status int;
 alter table public.wa_webhook_inbox add column if not exists reason text;
+alter table public.wa_webhook_inbox add column if not exists payload_json jsonb not null default '{}'::jsonb;
+alter table public.wa_webhook_inbox add column if not exists journey_id uuid references public.journeys(id) on delete set null;
+alter table public.wa_webhook_inbox add column if not exists meta_json jsonb not null default '{}'::jsonb;
+alter table public.wa_webhook_inbox add column if not exists received_at timestamptz not null default now();
 
 -- Index for global debugging
 create index if not exists wa_webhook_inbox_tenant_journey_idx on public.wa_webhook_inbox(tenant_id, journey_id, received_at desc);
