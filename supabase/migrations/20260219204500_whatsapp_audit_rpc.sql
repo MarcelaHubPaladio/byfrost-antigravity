@@ -57,13 +57,13 @@ begin
         updated_at = now()
     returning id into v_conv_id;
 
-    -- 3. Case Management for Global Audit (ff_flow_20260129200457)
+    -- 3. Case Management for Global Audit (ff_flow_20260129200457 or auditoria-de-whatsapp)
     -- We'll try to find an open case for this conversation in the global audit journey.
     select id into v_case_id from public.cases
     where tenant_id = p_tenant_id
       and status = 'open'
       and deleted_at is null
-      and journey_id = (select id from public.journeys where key = 'ff_flow_20260129200457' limit 1)
+      and journey_id in (select id from public.journeys where key in ('ff_flow_20260129200457', 'auditoria-de-whatsapp'))
       and (
         (p_group_id is not null and meta_json->>'whatsapp_group_id' = p_group_id)
         or (p_group_id is null and (customer_id = (select id from public.customer_accounts where tenant_id = p_tenant_id and phone_e164 = p_participant_phone limit 1) or meta_json->>'counterpart_phone' = p_participant_phone))
@@ -76,7 +76,7 @@ begin
             tenant_id, journey_id, status, state, title, created_by_channel, meta_json
         ) values (
             p_tenant_id, 
-            (select id from public.journeys where key = 'ff_flow_20260129200457' limit 1),
+            (select id from public.journeys where key in ('ff_flow_20260129200457', 'auditoria-de-whatsapp') order by (key = 'auditoria-de-whatsapp') desc limit 1),
             'open', 'new', 
             coalesce(p_group_id, p_participant_phone),
             'whatsapp',

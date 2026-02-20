@@ -245,14 +245,15 @@ export default function Dashboard() {
   const isCrm = Boolean(selectedJourney?.is_crm);
 
   // List view (only implemented for this journey right now)
-  const canChooseListView = selectedKey === "ff_flow_20260129200457";
+  const canChooseListView = selectedKey === "ff_flow_20260129200457" || selectedKey === "auditoria-de-whatsapp";
   const [viewMode, setViewMode] = useState<"kanban" | "list">("kanban");
 
   useEffect(() => {
     if (!selectedKey) return;
 
     // Default mode
-    const defaultMode: "kanban" | "list" = selectedKey === "ff_flow_20260129200457" ? "list" : "kanban";
+    const isAudit = selectedKey === "ff_flow_20260129200457" || selectedKey === "auditoria-de-whatsapp";
+    const defaultMode: "kanban" | "list" = isAudit ? "list" : "kanban";
 
     try {
       const saved = localStorage.getItem(DASHBOARD_VIEW_MODE_KEY_PREFIX + selectedKey);
@@ -998,7 +999,7 @@ export default function Dashboard() {
               </div>
             </div>
 
-            {selectedKey === "ff_flow_20260129200457" && (
+            {(selectedKey === "ff_flow_20260129200457" || selectedKey === "auditoria-de-whatsapp") && (
               <>
                 <div className="flex flex-col gap-1">
                   <div className="text-[11px] font-semibold text-slate-700">Instância</div>
