@@ -20,6 +20,12 @@ create table if not exists public.wa_webhook_inbox (
   received_at timestamptz not null default now()
 );
 
+-- Ensure columns exist if table was created previously without them
+alter table public.wa_webhook_inbox add column if not exists journey_id uuid references public.journeys(id) on delete set null;
+alter table public.wa_webhook_inbox add column if not exists tenant_id uuid references public.tenants(id) on delete cascade;
+alter table public.wa_webhook_inbox add column if not exists meta_json jsonb not null default '{}'::jsonb;
+alter table public.wa_webhook_inbox add column if not exists reason text;
+
 -- Index for global debugging
 create index if not exists wa_webhook_inbox_tenant_journey_idx on public.wa_webhook_inbox(tenant_id, journey_id, received_at desc);
 create index if not exists wa_webhook_inbox_tenant_received_idx on public.wa_webhook_inbox(tenant_id, received_at desc);
