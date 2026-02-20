@@ -153,12 +153,11 @@ serve(async (req) => {
         const direction: WebhookDirection = fromMe ? "outbound" : "inbound";
 
         // For Audit/Conversation purposes:
-        const chatId = pickFirst(payload?.chatId, payload?.data?.chatId, normalized.from, normalized.to);
-        const isGroup = looksLikeWhatsAppGroupId(chatId);
+        // Use raw IDs for group detection and extraction, as normalized phones might be null for group IDs
+        const rawChatId = pickFirst(payload?.chatId, payload?.data?.chatId, payload?.from, payload?.phone, payload?.senderId);
+        const isGroup = normalized.isGroup || looksLikeWhatsAppGroupId(rawChatId);
+        const groupId = isGroup ? String(rawChatId) : null;
 
-        const groupId = isGroup ? String(chatId) : null;
-
-        // For Audit/Conversation purposes:
         // In a group, we want a single conversation record for the entire group.
         // By passing participantPhone = null for groups, our unique constraint 
         // (tenant_id, participant_phone, group_id) will always hit the same row for that group.
