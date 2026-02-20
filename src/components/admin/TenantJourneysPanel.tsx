@@ -98,6 +98,11 @@ export function TenantJourneysPanel() {
   const [transitionsDraft, setTransitionsDraft] = useState<string>("{}");
   const [savingUiLabels, setSavingUiLabels] = useState(false);
 
+  // Edit Journey States Draft
+  const [editStatesDraft, setEditStatesDraft] = useState<string[]>([]);
+  const [editDefaultStateDraft, setEditDefaultStateDraft] = useState<string>("");
+  const [editNewStateInput, setEditNewStateInput] = useState<string>("");
+
   // ---- Create sector/journey (catalog) ----
   const [creatingSector, setCreatingSector] = useState(false);
   const [sectorName, setSectorName] = useState("");
@@ -267,6 +272,15 @@ export function TenantJourneysPanel() {
     }
 
     setStateLabelsDraft(next);
+
+    // Set edit drafts for states
+    const statesRaw = (selectedJourney.default_state_machine_json?.states ?? []) as any[];
+    const statesList = Array.isArray(statesRaw) ? statesRaw.map((s) => String(s)).filter(Boolean) : [];
+    const defState = selectedJourney.default_state_machine_json?.default ?? statesList[0] ?? "new";
+
+    setEditStatesDraft(statesList);
+    setEditDefaultStateDraft(defState);
+
     const trans = selectedJourney.default_state_machine_json?.transitions ?? {};
     setTransitionsDraft(JSON.stringify(trans, null, 2));
   }, [selectedJourneyId, selectedJourney?.id, journeyStates.join(",")]);
@@ -549,7 +563,13 @@ export function TenantJourneysPanel() {
         throw new Error("JSON de transições inválido.");
       }
 
-      const nextJson = { ...base, labels: cleaned, transitions: trans };
+      const nextJson = {
+        ...base,
+        states: editStatesDraft,
+        default: editDefaultStateDraft || editStatesDraft[0] || "new",
+        labels: cleaned,
+        transitions: trans
+      };
 
       const { error } = await supabase
         .from("journeys")
@@ -561,12 +581,29 @@ export function TenantJourneysPanel() {
 
       if (error) throw error;
 
-      showSuccess("Nomes e rótulos salvos.");
+      showSuccess("Estados e rótulos salvos.");
       await qc.invalidateQueries({ queryKey: ["journeys"] });
     } catch (e: any) {
       showError(`Falha ao salvar rótulos: ${e?.message ?? "erro"}`);
     } finally {
       setSavingUiLabels(false);
+    }
+  };
+
+  const addEditState = () => {
+    const key = normalizeStateKey(editNewStateInput);
+    if (!key) return;
+    setEditStatesDraft((prev) => {
+      if (prev.includes(key)) return prev;
+      return [...prev, key];
+    });
+    setEditNewStateInput("");
+  };
+
+  const removeEditState = (s: string) => {
+    setEditStatesDraft((prev) => prev.filter((x) => x !== s));
+    if (editDefaultStateDraft === s) {
+      setEditDefaultStateDraft((editStatesDraft[0] ?? "new"));
     }
   };
 
@@ -1269,23 +1306,87 @@ export function TenantJourneysPanel() {
                   <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
                     <div className="text-[11px] font-semibold text-slate-700">Rótulos de estados</div>
                     <div className="mt-1 text-[11px] text-slate-600">
-                      Deixe vazio para usar o fallback automático (title-case).
+                      Deixe vazio para usar o fallback automático (title-case). Adicione, remova ou reordene os estados abaixo.
+                    </div>
+
+                    <div className="mt-3 flex gap-2">
+                      <Input
+                        value={editNewStateInput}
+                        onChange={(e) => setEditNewStateInput(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            addEditState();
+                          }
+                        }}
+                        className="h-9 flex-1 rounded-2xl bg-white text-xs"
+                        placeholder="novo estado (ex: concluido)"
+                      />
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        className="h-9 rounded-2xl text-xs"
+                        onClick={addEditState}
+                        disabled={!normalizeStateKey(editNewStateInput)}
+                      >
+                        <Plus className="mr-2 h-3 w-3" /> Adicionar
+                      </Button>
                     </div>
 
                     <div className="mt-3 grid gap-2">
-                      {(journeyStates.length ? journeyStates : Object.keys(stateLabelsDraft)).map((st) => (
-                        <div key={st} className="grid gap-2 sm:grid-cols-[180px_1fr] sm:items-center">
-                          <div className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-[11px] font-semibold text-slate-700">
-                            {st}
+                      {editStatesDraft.map((st, idx) => (
+                        <div key={st} className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                          <div className={cn(
+                            "flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-2 text-[11px] font-semibold",
+                            editDefaultStateDraft === st ? "bg-emerald-50 text-emerald-900 border-emerald-200" : "bg-white text-slate-700"
+                          )}>
+                            <button
+                              type="button"
+                              onClick={() => setEditDefaultStateDraft(st)}
+                              title="Definir como estado inicial"
+                              className={cn(
+                                "h-2.5 w-2.5 rounded-full",
+                                editDefaultStateDraft === st ? "bg-emerald-600" : "bg-slate-300 hover:bg-slate-400"
+                              )}
+                            />
+                            <span className="w-28 truncate">{st}</span>
                           </div>
                           <Input
                             value={stateLabelsDraft[st] ?? ""}
                             onChange={(e) =>
                               setStateLabelsDraft((prev) => ({ ...prev, [st]: e.target.value }))
                             }
-                            className="h-10 rounded-2xl bg-white"
+                            className="h-9 flex-1 rounded-xl bg-white text-xs"
                             placeholder="Ex: Em andamento"
                           />
+                          <div className="flex items-center gap-1">
+                            <Button
+                              type="button"
+                              variant="secondary"
+                              className="h-8 w-8 rounded-xl p-0"
+                              disabled={idx === 0}
+                              onClick={() => setEditStatesDraft((prev) => move(prev, idx, idx - 1))}
+                            >
+                              <ArrowUp className="h-4 w-4 text-slate-500" />
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="secondary"
+                              className="h-8 w-8 rounded-xl p-0"
+                              disabled={idx === editStatesDraft.length - 1}
+                              onClick={() => setEditStatesDraft((prev) => move(prev, idx, idx + 1))}
+                            >
+                              <ArrowDown className="h-4 w-4 text-slate-500" />
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="secondary"
+                              className="h-8 w-8 rounded-xl p-0 hover:bg-red-100 hover:text-red-600"
+                              onClick={() => removeEditState(st)}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
                         </div>
                       ))}
                     </div>
