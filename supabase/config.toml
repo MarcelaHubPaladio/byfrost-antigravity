@@ -12,3 +12,9 @@ verify_jwt = false
 
 [functions.party-upload-logo]
 verify_jwt = false
+
+[functions.webhooks-zapi-inbound]
+verify_jwt = false
+
+[functions.whatsapp-inbound-ingest]
+verify_jwt = false
