@@ -732,9 +732,9 @@ serve(async (req) => {
       return new Response("Missing instanceId", { status: 400, headers: corsHeaders });
     }
 
-    const secretHeader = req.headers.get("x-webhook-secret") ?? req.headers.get("x-byfrost-webhook-secret");
+    const secretHeader = req.headers.get("x-webhook-secret") ?? req.headers.get("x-byfrost-webhook-secret") ?? req.headers.get("client-token") ?? req.headers.get("x-zapi-secret");
     const secretQuery = new URL(req.url).searchParams.get("secret");
-    const providedSecret = secretHeader ?? secretQuery ?? pathSecret;
+    const providedSecret = secretHeader ?? secretQuery ?? pathSecret ?? payload?.securityToken ?? payload?.ClientToken ?? payload?.secret;
 
     const correlationId = String(payload?.correlation_id ?? normalized.externalMessageId ?? crypto.randomUUID());
 

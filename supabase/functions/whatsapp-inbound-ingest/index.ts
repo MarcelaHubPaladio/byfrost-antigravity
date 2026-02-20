@@ -142,7 +142,9 @@ serve(async (req) => {
         if (!instance) return new Response("Unknown instance", { status: 404, headers: corsHeaders });
 
         // 2. Secret Validation
-        const secret = req.headers.get("x-webhook-secret") || new URL(req.url).searchParams.get("secret");
+        const secretHeader = req.headers.get("x-webhook-secret") ?? req.headers.get("x-byfrost-webhook-secret") ?? req.headers.get("client-token") ?? req.headers.get("x-zapi-secret");
+        const secretQuery = new URL(req.url).searchParams.get("secret");
+        const secret = secretHeader ?? secretQuery ?? payload?.securityToken ?? payload?.ClientToken ?? payload?.secret;
         if (secret && secret !== instance.webhook_secret) {
             return new Response("Unauthorized", { status: 401, headers: corsHeaders });
         }
