@@ -563,11 +563,15 @@ function inferContactLabel(payload: any, fallbackPhone: string | null) {
 
 serve(async (req) => {
   const fn = "webhooks-zapi-inbound";
+  const { pathInstanceId, pathSecret } = extractPathAuth(req.url);
+  const forced = forceDirectionFromUrl(req.url);
+
+  let instance: any = null;
+  let direction: WebhookDirection = forced ?? "inbound";
+  let effectiveInstanceId: string | null = pathInstanceId;
+
   try {
     if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
-
-    const { pathInstanceId, pathSecret } = extractPathAuth(req.url);
-    const forced = forceDirectionFromUrl(req.url);
 
     const supabase = createSupabaseAdmin();
 
@@ -715,7 +719,7 @@ serve(async (req) => {
       });
     }
 
-    const effectiveInstanceId = normalized.zapiInstanceId ?? pathInstanceId;
+    effectiveInstanceId = normalized.zapiInstanceId ?? pathInstanceId;
 
     if (!effectiveInstanceId) {
       console.warn(`[${fn}] Missing instance id`, { keys: Object.keys(payload ?? {}) });
@@ -779,7 +783,7 @@ serve(async (req) => {
       }
     };
 
-    const instance = await lookupInstanceByZapiId(effectiveInstanceId);
+    instance = await lookupInstanceByZapiId(effectiveInstanceId);
 
     if (!instance) {
       await logInboxLite({
@@ -832,7 +836,7 @@ serve(async (req) => {
             : normalized.from) // default
         : null;
 
-    const direction: WebhookDirection =
+    direction =
       normalized.meta.isCallEvent && callCounterpartPhone
         ? (forced === "outbound" ? "outbound" : "inbound")
         : (strongOutbound)
@@ -1876,8 +1880,25 @@ serve(async (req) => {
     }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
-  } catch (e) {
+  } catch (e: any) {
     console.error(`[webhooks-zapi-inbound] Unhandled error`, { e });
+    // Attempt to log the crash if we have basic info
+    try {
+      const supabase = createSupabaseAdmin();
+      await supabase.from("wa_webhook_inbox").insert({
+        tenant_id: (instance as any)?.tenant_id ?? null,
+        instance_id: (instance as any)?.id ?? null,
+        zapi_instance_id: effectiveInstanceId,
+        direction: (direction as any) ?? "inbound",
+        ok: false,
+        http_status: 500,
+        reason: e?.message || "unhandled_crash",
+        meta_json: { error: String(e), stack: e?.stack },
+        received_at: new Date().toISOString(),
+      });
+    } catch (logErr) {
+      console.error(`[webhooks-zapi-inbound] Failed to log unhandled error`, logErr);
+    }
     return new Response("Internal error", { status: 500, headers: corsHeaders });
   }
 });

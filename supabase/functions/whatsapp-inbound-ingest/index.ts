@@ -30,6 +30,12 @@ function looksLikeWhatsAppGroupId(v: any) {
     return false;
 }
 
+function pickInitialState(j: any, hint?: string | null) {
+    const states = j?.default_state_machine_json?.states ?? [];
+    if (hint && states.find((s: any) => s.key === hint)) return hint;
+    return states[0]?.key ?? "novo";
+}
+
 function normalizeInbound(payload: any) {
     const zapiInstanceId = pickFirst<string>(payload?.instanceId, payload?.instance_id, payload?.instance);
     const isGroup = Boolean(
@@ -175,12 +181,87 @@ serve(async (req) => {
 
         // 4. Atomic Ingestion via RPC (ONLY for messages/chat events)
         let auditResult = { conversation_id: null, message_id: null, case_id: null, journey_id: null, ok: true, event: "none" };
+        let crmResult = null;
 
-        // We only call the audit storage if it looks like a message or a chat event AND it's an OUTBOUND message.
-        // Inbound messages are processed by the much richer `webhooks-zapi-inbound` which handles proper CRM journey routing.
         const looksLikeChatEvent = Boolean(normalized.text || normalized.mediaUrl || normalized.externalMessageId || isGroup);
 
-        if (instance.enable_v2_audit && looksLikeChatEvent && direction === "outbound") {
+        // Hybrid Routing Logic:
+        // If enable_v1_business is true AND it's INBOUND, we try the CRM flow first.
+        if (instance.enable_v1_business && direction === "inbound" && looksLikeChatEvent) {
+            try {
+                // Load active journeys once
+                const { data: enabledTjRows } = await supabase
+                    .from("tenant_journeys")
+                    .select("journey_id, journeys(id,key,name,is_crm,default_state_machine_json)")
+                    .eq("tenant_id", instance.tenant_id)
+                    .eq("enabled", true)
+                    .order("created_at", { ascending: true });
+
+                const enabledJourneys = (enabledTjRows ?? []).map((r: any) => r.journeys).filter(Boolean);
+                const firstEnabledJourney = enabledJourneys[0] ?? null;
+                const firstCrmJourney = enabledJourneys.find((j: any) => j.is_crm) ?? null;
+
+                let targetJourney = null;
+                if (instance.default_journey_id) {
+                    const { data: j } = await supabase.from("journeys").select("*").eq("id", instance.default_journey_id).maybeSingle();
+                    if (j) targetJourney = j;
+                }
+                if (!targetJourney) targetJourney = firstCrmJourney ?? firstEnabledJourney;
+
+                if (targetJourney) {
+                    const initialState = pickInitialState(targetJourney);
+                    const { data: rpcRes, error: rpcErr } = await supabase.rpc("process_zapi_inbound_message", {
+                        p_tenant_id: instance.tenant_id,
+                        p_instance_id: instance.id,
+                        p_zapi_instance_id: zapiId,
+                        p_direction: direction,
+                        p_type: normalized.type,
+                        p_from_phone: normalized.from || instPhone,
+                        p_to_phone: instPhone,
+                        p_body_text: normalized.text,
+                        p_media_url: normalized.mediaUrl,
+                        p_payload_json: payload,
+                        p_correlation_id: normalized.externalMessageId || crypto.randomUUID(),
+                        p_occurred_at: new Date().toISOString(),
+                        p_journey_config: {
+                            id: targetJourney.id,
+                            key: targetJourney.key,
+                            initial_state: initialState
+                        },
+                        p_sender_is_vendor: false,
+                        p_contact_label: normalized.from,
+                        p_options: {
+                            create_case_on_text: true,
+                            create_case_on_location: true,
+                            pendencies_on_image: true,
+                            ocr_enabled: true
+                        }
+                    });
+
+                    if (!rpcErr) {
+                        crmResult = (rpcRes as any)?.[0] ?? rpcRes;
+                        if (crmResult?.ok) {
+                            auditResult = {
+                                conversation_id: crmResult.details?.conversation_id ?? null,
+                                message_id: crmResult.message_id,
+                                case_id: crmResult.case_id,
+                                journey_id: targetJourney.id,
+                                ok: true,
+                                event: crmResult.event || "crm_ingested"
+                            };
+                        }
+                    } else {
+                        console.error(`[${fn}] CRM RPC failed`, rpcErr);
+                    }
+                }
+            } catch (e) {
+                console.error(`[${fn}] CRM flow critical error`, e);
+            }
+        }
+
+        // 5. Audit Fallback (V2) or Outbound
+        // If it's outbound, or if CRM didn't handle it, we call the audit ingest.
+        if (instance.enable_v2_audit && looksLikeChatEvent && (direction === "outbound" || !crmResult?.ok)) {
             // For the message itself, we want to know the sender/receiver
             // Since this block only runs for outbound messages (direction === "outbound"):
             const fromPhone = instPhone;
@@ -215,7 +296,7 @@ serve(async (req) => {
 
         const { conversation_id, message_id, case_id, journey_id, ok: ingestOk, event: ingestEvent } = auditResult;
 
-        // 5. DIAGNOSTIC LOGGING (wa_webhook_inbox) - REGISTRA TUDO
+        // 6. DIAGNOSTIC LOGGING (wa_webhook_inbox) - REGISTRA TUDO
         try {
             const inboxRecord = {
                 tenant_id: instance.tenant_id,
