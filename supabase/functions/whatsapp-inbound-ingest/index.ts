@@ -67,10 +67,19 @@ function normalizeInbound(payload: any) {
         payload?.toPhone
     );
 
-    const rawType = String(pickFirst(payload?.type, payload?.messageType, payload?.event) ?? "text").toLowerCase();
+    const rawType = String(pickFirst(payload?.type, payload?.messageType, payload?.event, payload?.data?.type, payload?.hookType) ?? "unknown").toLowerCase();
 
     // Basic type mapping (simplified for Audit)
-    const type: InboundType = rawType.includes("image") ? "image" : rawType.includes("audio") ? "audio" : rawType.includes("video") ? "video" : rawType.includes("location") ? "location" : "text";
+    const type: InboundType = rawType.includes("image") ? "image" :
+        rawType.includes("audio") ? "audio" :
+            rawType.includes("video") ? "video" :
+                rawType.includes("location") ? "location" :
+                    "text";
+
+    const isMessage = Boolean(
+        payload?.text || payload?.body || payload?.chatId || payload?.phone ||
+        payload?.messageId || payload?.image || payload?.audio || payload?.video
+    );
 
     const messageText = pickFirst<string>(
         payload?.text?.message,
@@ -153,9 +162,13 @@ serve(async (req) => {
 
         const groupId = isGroup ? String(chatId) : null;
 
-        // 4. Atomic Ingestion via RPC (V2 - AUDIT)
+        // 4. Atomic Ingestion via RPC (ONLY for messages/chat events)
         let auditResult = { conversation_id: null, message_id: null, case_id: null, journey_id: null, ok: true, event: "none" };
-        if (instance.enable_v2_audit) {
+
+        // We only call the audit storage if it looks like a message or a chat event
+        const looksLikeChatEvent = Boolean(normalized.text || normalized.mediaUrl || normalized.externalMessageId || isGroup);
+
+        if (instance.enable_v2_audit && looksLikeChatEvent) {
             const { data: rpcResult, error: rpcError } = await supabase.rpc("ingest_whatsapp_audit_message", {
                 p_tenant_id: instance.tenant_id,
                 p_instance_id: instance.id,
@@ -175,21 +188,17 @@ serve(async (req) => {
 
             if (rpcError) {
                 console.error(`[${fn}] RPC failed`, rpcError);
-                return new Response("Internal Error", { status: 500, headers: corsHeaders });
+                // Continue to diagnostic logging anyway
+                auditResult.ok = false;
+                auditResult.event = "rpc_failed";
+            } else {
+                auditResult = rpcResult?.[0] || rpcResult || auditResult;
             }
-            auditResult = rpcResult?.[0] || rpcResult || auditResult;
-        }
-
-        // 5. V1 BUSINESS LOGIC
-        if (instance.enable_v1_business) {
-            // In the future, we would call the legacy business processing logic here.
-            // For now, it stays within its own webhook path or we bridge it here.
-            console.log(`[${fn}] V1 Business logic enabled for instance ${instance.id}`);
         }
 
         const { conversation_id, message_id, case_id, journey_id, ok: ingestOk, event: ingestEvent } = auditResult;
 
-        // 5. DIAGNOSTIC LOGGING (wa_webhook_inbox)
+        // 5. DIAGNOSTIC LOGGING (wa_webhook_inbox) - REGISTRA TUDO
         try {
             await supabase.from("wa_webhook_inbox").insert({
                 tenant_id: instance.tenant_id,
@@ -201,7 +210,7 @@ serve(async (req) => {
                 to_phone: normalized.to,
                 ok: ingestOk !== false,
                 http_status: ingestOk !== false ? 200 : 500,
-                reason: ingestEvent || (ingestOk !== false ? "ingested" : "failed"),
+                reason: ingestEvent || (looksLikeChatEvent ? (ingestOk !== false ? "ingested" : "failed") : "event_received"),
                 payload_json: payload,
                 journey_id: journey_id || instance.default_journey_id,
                 meta_json: {
@@ -210,14 +219,14 @@ serve(async (req) => {
                     conversation_id,
                     message_id,
                     external_message_id: normalized.externalMessageId,
-                    is_group: normalized.isGroup,
-                    participant: normalized.participant
+                    is_group: isGroup,
+                    participant: participantPhone,
+                    raw_type: payload?.type || payload?.event
                 },
                 received_at: new Date().toISOString()
             });
         } catch (e) {
             console.error(`[${fn}] Diagnostic logging failed`, e);
-            // Non-blocking
         }
 
         return new Response(JSON.stringify({

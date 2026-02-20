@@ -43,9 +43,10 @@ const PAGE_SIZE = 15;
 export function GlobalJourneyLogsDialog({ journeyId, journeyName, tenantId }: GlobalJourneyLogsDialogProps) {
     const [open, setOpen] = useState(false);
     const [viewingLog, setViewingLog] = useState<UnifiedLog | null>(null);
+    const [showAll, setShowAll] = useState(false);
 
     const logsQ = useInfiniteQuery({
-        queryKey: ["global_journey_logs", tenantId, journeyId],
+        queryKey: ["global_journey_logs", tenantId, journeyId, showAll],
         enabled: open && Boolean(tenantId && journeyId),
         initialPageParam: 0,
         queryFn: async ({ pageParam = 0 }) => {
@@ -53,24 +54,34 @@ export function GlobalJourneyLogsDialog({ journeyId, journeyName, tenantId }: Gl
             const to = from + PAGE_SIZE - 1;
 
             // Fetch webhooks
-            const { data: inboxData, error: inboxError } = await supabase
+            let inboxQuery = supabase
                 .from("wa_webhook_inbox")
                 .select("*")
                 .eq("tenant_id", tenantId)
-                .eq("journey_id", journeyId)
                 .order("received_at", { ascending: false })
                 .range(from, to);
 
+            if (!showAll) {
+                inboxQuery = inboxQuery.eq("journey_id", journeyId);
+            }
+
+            const { data: inboxData, error: inboxError } = await inboxQuery;
+
             if (inboxError) throw inboxError;
 
-            // Fetch messages linked to this journey
-            const { data: msgData, error: msgError } = await supabase
+            // Fetch messages
+            let msgQuery = supabase
                 .from("wa_messages")
                 .select("*")
                 .eq("tenant_id", tenantId)
-                .eq("journey_id", journeyId)
                 .order("occurred_at", { ascending: false })
                 .range(from, to);
+
+            if (!showAll) {
+                msgQuery = msgQuery.eq("journey_id", journeyId);
+            }
+
+            const { data: msgData, error: msgError } = await msgQuery;
 
             if (msgError) throw msgError;
 
@@ -85,7 +96,7 @@ export function GlobalJourneyLogsDialog({ journeyId, journeyName, tenantId }: Gl
                     status: it.http_status,
                     reason: it.reason,
                     direction: it.direction,
-                    wa_type: it.wa_type,
+                    wa_type: it.wa_type || it.meta_json?.raw_type || 'event',
                     from: it.from_phone,
                     to: it.to_phone,
                     caseId: it.meta_json?.case_id,
@@ -112,7 +123,7 @@ export function GlobalJourneyLogsDialog({ journeyId, journeyName, tenantId }: Gl
             return unified.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
         },
         getNextPageParam: (lastPage, allPages) => {
-            return lastPage.length === PAGE_SIZE * 2 ? allPages.length : undefined; // Rough estimate
+            return lastPage.length >= PAGE_SIZE ? allPages.length : undefined;
         }
     });
 
@@ -145,17 +156,38 @@ export function GlobalJourneyLogsDialog({ journeyId, journeyName, tenantId }: Gl
 
             <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col rounded-[28px] border-slate-200 p-0 shadow-2xl">
                 <DialogHeader className="p-6 border-b border-slate-100 bg-slate-50/50">
-                    <div className="flex items-center gap-3">
-                        <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-slate-900 text-white shadow-lg">
-                            <Terminal className="h-5 w-5 text-emerald-400" />
+                    <div className="flex items-center justify-between gap-4">
+                        <div className="flex items-center gap-3">
+                            <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-slate-900 text-white shadow-lg">
+                                <Terminal className="h-5 w-5 text-emerald-400" />
+                            </div>
+                            <div>
+                                <DialogTitle className="text-xl font-bold text-slate-900">
+                                    Debugger: {showAll ? "Todos os eventos do tenant" : journeyName}
+                                </DialogTitle>
+                                <DialogDescription className="text-xs font-medium text-slate-500">
+                                    Acompanhe o processamento técnico em tempo real.
+                                </DialogDescription>
+                            </div>
                         </div>
-                        <div>
-                            <DialogTitle className="text-xl font-bold text-slate-900">
-                                Debugger Global: {journeyName}
-                            </DialogTitle>
-                            <DialogDescription className="text-xs font-medium text-slate-500">
-                                Acompanhe o roteamento e processamento de todas as mensagens nesta jornada.
-                            </DialogDescription>
+
+                        <div className="flex items-center gap-2 rounded-xl bg-white border border-slate-200 p-1 shadow-sm">
+                            <Button
+                                variant={!showAll ? "secondary" : "ghost"}
+                                size="sm"
+                                className={cn("h-7 rounded-lg text-[10px] font-bold px-3", !showAll && "bg-slate-900 text-white hover:bg-slate-800")}
+                                onClick={() => setShowAll(false)}
+                            >
+                                JORNADA
+                            </Button>
+                            <Button
+                                variant={showAll ? "secondary" : "ghost"}
+                                size="sm"
+                                className={cn("h-7 rounded-lg text-[10px] font-bold px-3", showAll && "bg-rose-600 text-white hover:bg-rose-500")}
+                                onClick={() => setShowAll(true)}
+                            >
+                                VER TUDO
+                            </Button>
                         </div>
                     </div>
                 </DialogHeader>
