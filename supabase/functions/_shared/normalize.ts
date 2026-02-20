@@ -10,32 +10,37 @@ export function normalizePhoneE164Like(input: string | null | undefined) {
     return raw;
   }
 
-  // Z-API sometimes emits LID identifiers (e.g. "1864...@lid"). These are NOT phone numbers.
-  // Returning null prevents creating customers/cases with bogus long numbers.
-  if (raw.toLowerCase().includes("@lid")) return null;
-
+  // Extract digits (ignoring @lid or other artifacts)
   let digits = raw.replace(/\D/g, "");
   if (!digits) return null;
 
   // Some providers prefix with 00 (international dialing). Strip it.
   digits = digits.replace(/^00+/, "");
 
-  // Some providers include a leading trunk '0' (e.g. 0 + DDD + number). Strip a single leading 0.
+  // Trunk code removal for BR specifically (starts with 0 + 11 or 12 digits, meaning 011999999999)
   if (digits.startsWith("0") && (digits.length === 11 || digits.length === 12)) {
     digits = digits.slice(1);
   }
 
-  // If it includes country code (55), ensure it's a plausible BR phone length.
+  // BR validation (starts with 55)
   if (digits.startsWith("55")) {
-    // 55 + 10 (landline) = 12, 55 + 11 (mobile) = 13
     if (digits.length !== 12 && digits.length !== 13) return null;
     return `+${digits}`;
   }
 
-  // If it's not a plausible BR local phone length, treat as unknown (avoid +55 + random long ids).
-  if (digits.length !== 10 && digits.length !== 11) return null;
+  // Other country codes support
+  // If the number doesn't start with 55, it might already include a valid country code. 
+  // Global numbers generally have between 10 and 15 digits.
+  if (digits.length >= 10 && digits.length <= 15) {
+    // If it looks like a BR number without 55 (10-11 digits), prepend 55.
+    if (digits.length === 10 || digits.length === 11) {
+      return `+55${digits}`;
+    }
+    // Otherwise, assume it's an international number that already includes its country code.
+    return `+${digits}`;
+  }
 
-  return `+55${digits}`;
+  return null;
 }
 
 export function nowIso() {

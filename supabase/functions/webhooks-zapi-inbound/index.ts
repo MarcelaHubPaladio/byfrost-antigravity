@@ -824,7 +824,7 @@ serve(async (req) => {
         (instancePhoneNorm && normalized.from === instancePhoneNorm));
 
     const callCounterpartPhone =
-      normalized.meta.isCallEvent && instancePhoneNorm
+      normalized.meta.isCallEvent && instancePhoneNorm && instancePhoneNorm.length > 5
         ? (normalized.from && normalized.from === instancePhoneNorm
           ? normalized.to
           : normalized.to && normalized.to === instancePhoneNorm
@@ -842,7 +842,7 @@ serve(async (req) => {
     // For call events, treat the peer (caller/callee) as the effective sender for matching/case linking.
     const inboundFromPhone =
       direction === "outbound"
-        ? instancePhoneNorm
+        ? (instancePhoneNorm && instancePhoneNorm.length > 5 ? instancePhoneNorm : normalized.from)
         : (normalized.meta.isCallEvent && callCounterpartPhone
           ? callCounterpartPhone
           : (normalized.meta.isGroup && normalized.meta.participant)
@@ -856,9 +856,9 @@ serve(async (req) => {
         ? (effectiveGroupId ? String(effectiveGroupId) : (normalized.to ?? normalized.from))
         : (effectiveGroupId
           ? String(effectiveGroupId)
-          : (normalized.meta.isCallEvent && inboundFromPhone && instancePhoneNorm
+          : (normalized.meta.isCallEvent && inboundFromPhone && instancePhoneNorm && instancePhoneNorm.length > 5
             ? instancePhoneNorm
-            : (normalized.to ?? instancePhoneNorm)));
+            : (normalized.to ?? (instancePhoneNorm && instancePhoneNorm.length > 5 ? instancePhoneNorm : null))));
 
     if (!inboundFromPhone) {
       console.warn(`[${fn}] inbound_missing_from_phone`, {
