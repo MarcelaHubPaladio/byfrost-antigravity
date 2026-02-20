@@ -1724,26 +1724,52 @@ export default function Admin() {
 
                                   <AccordionContent className="pb-3">
                                     <div className="flex items-center justify-between gap-2 rounded-2xl border border-slate-200 bg-white/70 p-2">
-                                      <div className="min-w-0">
+                                      <div className="min-w-0 flex-1">
                                         <div className="text-[11px] font-semibold text-slate-700">webhook_secret</div>
                                         <div className="mt-0.5 truncate text-[11px] text-slate-600">{i.webhook_secret}</div>
                                       </div>
 
-                                      <div className="flex items-center gap-2">
+                                      <div className="flex items-center gap-1.5">
+                                        <Button
+                                          variant="ghost"
+                                          size="icon"
+                                          className="h-7 w-7 rounded-lg text-slate-400 hover:text-indigo-600"
+                                          title="Gerar novo segredo (Reset)"
+                                          onClick={async () => {
+                                            const next = crypto.randomUUID();
+                                            if (confirm("Gerar novo segredo? Você precisará atualizar a URL no Z-API.")) {
+                                              try {
+                                                await ensureFreshTokenForRls();
+                                                const { error } = await supabase
+                                                  .from("wa_instances")
+                                                  .update({ webhook_secret: next })
+                                                  .eq("id", i.id);
+                                                if (error) throw error;
+                                                showSuccess("Secret atualizado.");
+                                                qc.invalidateQueries({ queryKey: ["admin_instances", activeTenantId] });
+                                              } catch (e: any) {
+                                                showError("Falha ao atualizar secret.");
+                                              }
+                                            }
+                                          }}
+                                        >
+                                          <Settings2 className="h-3.5 w-3.5" />
+                                        </Button>
+
                                         {!isDisabled && (
                                           <Button
                                             variant="secondary"
                                             className={cn(
-                                              "h-9 rounded-2xl px-3 shadow-sm",
+                                              "h-7 rounded-lg px-2 text-[10px] shadow-sm",
                                               isActive
                                                 ? "border border-amber-200 bg-amber-50 text-amber-900 hover:bg-amber-100"
                                                 : "border border-emerald-200 bg-emerald-50 text-emerald-900 hover:bg-emerald-100"
                                             )}
                                             disabled={Boolean(updatingInstanceId) || deletingInstanceId === i.id}
                                             onClick={() => setInstanceStatus(i.id, isActive ? "paused" : "active")}
-                                            title={isActive ? "Inativar instância" : "Ativar instância"}
                                           >
-                                            {isActive ? <PauseCircle className="h-4 w-4" /> : <PlayCircle className="h-4 w-4" />}
+                                            {isActive ? <PauseCircle className="h-3.5 w-3.5 mr-1" /> : <PlayCircle className="h-3.5 w-3.5 mr-1" />}
+                                            {isActive ? "Pausar" : "Ativar"}
                                           </Button>
                                         )}
 
@@ -1751,11 +1777,11 @@ export default function Admin() {
                                           <AlertDialogTrigger asChild>
                                             <Button
                                               variant="secondary"
-                                              className="h-9 rounded-2xl border border-rose-200 bg-rose-50 px-3 text-rose-800 shadow-sm hover:bg-rose-100 hover:text-rose-900"
+                                              className="h-7 rounded-lg border border-rose-200 bg-rose-50 px-2 text-[10px] text-rose-800 shadow-sm hover:bg-rose-100"
                                               disabled={deletingInstanceId === i.id || Boolean(updatingInstanceId)}
-                                              title="Excluir instância"
                                             >
-                                              <Trash2 className="h-4 w-4" />
+                                              <Trash2 className="h-3.5 w-3.5 mr-1" />
+                                              Excluir
                                             </Button>
                                           </AlertDialogTrigger>
                                           <AlertDialogContent className="rounded-[22px]">
@@ -2129,6 +2155,6 @@ export default function Admin() {
           </div>
         </div>
       </AppShell>
-    </RequireAuth>
+    </RequireAuth >
   );
 }
