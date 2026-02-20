@@ -5,7 +5,8 @@ export function normalizePhoneE164Like(input: string | null | undefined) {
   if (!raw) return null;
 
   // Preserve WhatsApp Group and Broadcast IDs
-  if (raw.toLowerCase().includes("@g.us") || raw.toLowerCase().includes("@broadcast")) {
+  const lower = raw.toLowerCase();
+  if (lower.includes("@g.us") || lower.includes("@broadcast") || lower.includes("-") || (lower.startsWith("1203") && lower.length > 15)) {
     return raw;
   }
 

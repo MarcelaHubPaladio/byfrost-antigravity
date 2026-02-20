@@ -136,7 +136,7 @@ function looksLikeGroupNumber(v: string | null | undefined) {
   const s = String(v ?? "").trim().toLowerCase();
   if (!s) return false;
   if (s.includes("status@broadcast")) return true;
-  if (s.includes("@g.us") || s.includes("g.us")) return true;
+  if (s.includes("@g.us") || s.includes("g.us") || s.includes("-")) return true;
   const digits = s.replace(/\D/g, "");
   if (!digits) return false;
   const d = digits.startsWith("55") ? digits.slice(2) : digits;
@@ -531,7 +531,7 @@ export function WhatsAppConversation({
       if (error) throw error;
       if (!data?.ok) throw new Error(data?.error || "Falha no envio");
 
-      showSuccess(`${type === "image" ? "Imagem" : "Arquivo"} enviado.`);
+      showSuccess(`${type === "image" ? "Imagem" : "Arquivo"} enviado para: ${data?.debug?.to || to}`);
 
       await Promise.all([
         qc.invalidateQueries({ queryKey: ["wa_messages_case", activeTenantId, caseId, conversationMode, entityPhone, waGroupId] }),
@@ -586,7 +586,7 @@ export function WhatsAppConversation({
       }
 
       setText("");
-      showSuccess("Mensagem enviada.");
+      showSuccess(`Mensagem enviada para: ${data?.debug?.to || to}`);
 
       await Promise.all([
         qc.invalidateQueries({ queryKey: ["wa_messages_case", activeTenantId, caseId, conversationMode, entityPhone, waGroupId] }),

@@ -31,7 +31,7 @@ export type UseChatInstanceAccessOptions = {
 };
 
 export function useChatInstanceAccess(opts?: UseChatInstanceAccessOptions) {
-  const { activeTenantId, isSuperAdmin } = useTenant();
+  const { activeTenantId, activeTenant, isSuperAdmin } = useTenant();
   const { user } = useSession();
 
   const effectiveUserId = opts?.asUserId ?? user?.id ?? null;
@@ -63,7 +63,7 @@ export function useChatInstanceAccess(opts?: UseChatInstanceAccessOptions) {
   }, [opts?.asUserPhone, isSuperAdmin, userPhoneQ.data, user]);
 
   const instancesQ = useQuery({
-    queryKey: ["chat_user_instances", activeTenantId, effectiveUserId, effectiveUserPhone, isSuperAdmin],
+    queryKey: ["chat_user_instances", activeTenantId, effectiveUserId, effectiveUserPhone, isSuperAdmin, activeTenant?.role],
     enabled: Boolean(activeTenantId && (isSuperAdmin || effectiveUserId)),
     staleTime: 15_000,
     queryFn: async () => {
@@ -77,9 +77,14 @@ export function useChatInstanceAccess(opts?: UseChatInstanceAccessOptions) {
       if (error) throw error;
 
       const rows = (data ?? []) as any as WaInstanceLite[];
+      const isTenantAdmin = activeTenant?.role === "admin";
 
-      // Super-admin: por padrão pode ver tudo; se escolheu um usuário, filtra como o usuário.
-      if (isSuperAdmin) {
+      // Super-admin ou Tenant Admin: por padrão pode ver tudo; se escolheu um usuário para "ver como", filtra.
+      if ((isSuperAdmin || isTenantAdmin) && !isImpersonatingOtherUser) {
+        return rows;
+      }
+
+      if (isSuperAdmin || isTenantAdmin) {
         if (!effectiveUserId) return rows;
         return rows.filter((r) => {
           if (r.assigned_user_id && r.assigned_user_id === effectiveUserId) return true;
