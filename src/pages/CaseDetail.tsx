@@ -257,6 +257,33 @@ export default function CaseDetail() {
     const prev = caseQ.data?.state ?? "";
     if (!next || next === prev) return;
 
+    // --- Validation (leaving `prev`) ---
+    const sm = caseQ.data?.journeys?.default_state_machine_json as any;
+    const statusConfigs = sm?.status_configs ?? {};
+    const configForPrev = statusConfigs[prev] ?? {};
+
+    // 1. Check required fields
+    const requiredFields = Array.isArray(configForPrev.required_case_fields) ? configForPrev.required_case_fields : [];
+    if (requiredFields.length > 0) {
+      const missingFields = requiredFields.filter((reqKey: string) => {
+        const field = fieldsQ.data?.find((f: any) => f.key === reqKey);
+        const val = typeof field?.value_text === "string" ? field.value_text.trim() : "";
+        const hasJson = field?.value_json !== null && field?.value_json !== undefined;
+        return !val && !hasJson;
+      });
+      if (missingFields.length > 0) {
+        showError(`Preencha os campos obrigatórios antes de avançar: ${missingFields.join(", ")}`);
+        return;
+      }
+    }
+
+    // 2. Check open required pendencies
+    const openRequiredPendencies = (pendQ.data ?? []).filter((p: any) => p.required && p.status === "open");
+    if (openRequiredPendencies.length > 0) {
+      showError("Existem pendências obrigatórias em aberto. Responda-as antes de avançar.");
+      return;
+    }
+
     try {
       await transitionState(
         id,

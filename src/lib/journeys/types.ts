@@ -1,9 +1,22 @@
+export interface TaskConfig {
+  id: string;
+  description: string;
+  required: boolean;
+}
+
+export interface StatusConfig {
+  responsible_id?: string;
+  mandatory_tasks?: TaskConfig[];
+  required_case_fields?: string[];
+}
+
 export interface StateMachine {
   states: string[];
   default: string;
   labels?: Record<string, string>;
   state_labels?: Record<string, string>; // Legacy support
   transitions?: Record<string, ActionConfig[]>;
+  status_configs?: Record<string, StatusConfig>;
 }
 
 export type ActionType =

@@ -67,8 +67,62 @@ serve(async (req) => {
 
         const journeyConfig = caseData.journeys?.default_state_machine_json as StateMachine;
 
+        // --- Execute Status Configs Logic ---
+        const statusConfigs = (journeyConfig as any)?.status_configs || {};
+        const configForNext = statusConfigs[newState];
+
+        if (configForNext && oldState !== newState) {
+            console.log(`[JourneyTransition] Applying status_configs for state: ${newState}`);
+
+            // 1. Update responsible_id
+            if (configForNext.responsible_id) {
+                await supabaseClient.from("cases").update({
+                    assigned_vendor_id: configForNext.responsible_id
+                }).eq("id", caseId);
+
+                await supabaseClient.from("timeline_events").insert({
+                    tenant_id,
+                    case_id: caseId,
+                    event_type: "case_updated",
+                    actor_type: "system",
+                    message: `Responsável atualizado automaticamente pela entrada no status ${newState}.`,
+                    meta_json: { responsible_id: configForNext.responsible_id },
+                    occurred_at: new Date().toISOString(),
+                });
+            }
+
+            // 2. Create mandatory tasks as pendencies
+            if (Array.isArray(configForNext.mandatory_tasks) && configForNext.mandatory_tasks.length > 0) {
+                const pendenciesToInsert = configForNext.mandatory_tasks.map((task: any) => ({
+                    tenant_id,
+                    case_id: caseId,
+                    type: "text",
+                    assigned_to_role: "admin",
+                    question_text: task.description,
+                    required: task.required !== false,
+                    status: "open",
+                }));
+
+                const { error: pendErr } = await supabaseClient.from("pendencies").insert(pendenciesToInsert);
+                if (pendErr) {
+                    console.error("Failed to create mandatory pendencies", pendErr);
+                } else {
+                    await supabaseClient.from("timeline_events").insert({
+                        tenant_id,
+                        case_id: caseId,
+                        event_type: "automation_executed",
+                        actor_type: "system",
+                        message: `Tarefas obrigatórias criadas para o status ${newState}.`,
+                        meta_json: { task_count: configForNext.mandatory_tasks.length },
+                        occurred_at: new Date().toISOString(),
+                    });
+                }
+            }
+        }
+        // --- End Status Configs Logic ---
+
         if (!journeyConfig?.transitions) {
-            return new Response(JSON.stringify({ message: "No transitions configured" }), { headers: { "Content-Type": "application/json" } });
+            return new Response(JSON.stringify({ message: "Processed status_configs. No transitions configured." }), { headers: { "Content-Type": "application/json" } });
         }
 
         // Action Logic (Ported from actions.ts)
@@ -81,7 +135,7 @@ serve(async (req) => {
         ];
 
         if (actions.length === 0) {
-            return new Response(JSON.stringify({ message: "No actions for this transition" }), { headers: { "Content-Type": "application/json" } });
+            return new Response(JSON.stringify({ message: "Processed status_configs. No actions for this transition" }), { headers: { "Content-Type": "application/json" } });
         }
 
         console.log(`[JourneyTransition] Executing ${actions.length} actions...`);

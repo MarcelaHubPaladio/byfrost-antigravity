@@ -96,6 +96,7 @@ export function TenantJourneysPanel() {
   const [journeyNameDraft, setJourneyNameDraft] = useState<string>("");
   const [stateLabelsDraft, setStateLabelsDraft] = useState<Record<string, string>>({});
   const [transitionsDraft, setTransitionsDraft] = useState<string>("{}");
+  const [statusConfigsDraft, setStatusConfigsDraft] = useState<string>("{}");
   const [savingUiLabels, setSavingUiLabels] = useState(false);
 
   // Edit Journey States Draft
@@ -283,6 +284,9 @@ export function TenantJourneysPanel() {
 
     const trans = selectedJourney.default_state_machine_json?.transitions ?? {};
     setTransitionsDraft(JSON.stringify(trans, null, 2));
+
+    const statusCfgs = selectedJourney.default_state_machine_json?.status_configs ?? {};
+    setStatusConfigsDraft(JSON.stringify(statusCfgs, null, 2));
   }, [selectedJourneyId, selectedJourney?.id, journeyStates.join(",")]);
 
   const selectedTenantJourney = useMemo(() => {
@@ -563,12 +567,20 @@ export function TenantJourneysPanel() {
         throw new Error("JSON de transições inválido.");
       }
 
+      let sConfigs = {};
+      try {
+        sConfigs = JSON.parse(statusConfigsDraft);
+      } catch (e) {
+        throw new Error("JSON de configurações de status inválido.");
+      }
+
       const nextJson = {
         ...base,
         states: editStatesDraft,
         default: editDefaultStateDraft || editStatesDraft[0] || "new",
         labels: cleaned,
-        transitions: trans
+        transitions: trans,
+        status_configs: sConfigs
       };
 
       const { error } = await supabase
@@ -1484,6 +1496,23 @@ export function TenantJourneysPanel() {
                 <Textarea
                   value={transitionsDraft}
                   onChange={(e) => setTransitionsDraft(e.target.value)}
+                  className="mt-3 min-h-[150px] rounded-2xl bg-white font-mono text-[11px]"
+                  placeholder="{}"
+                />
+                <div className="mt-2 text-[10px] text-slate-500">
+                  * Salve usando o botão "Salvar nomes e rótulos" acima.
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-slate-200 bg-white p-3">
+                <div className="text-xs font-semibold text-slate-900">Configurações por Status (status_configs)</div>
+                <div className="mt-1 text-[11px] text-slate-600">
+                  Defina responsáveis, tarefas e campos obrigatórios.
+                  Ex: <span className="font-mono">"em_progresso": {"{"} "responsible_id": "...", "mandatory_tasks": [...] {"}"}</span>
+                </div>
+                <Textarea
+                  value={statusConfigsDraft}
+                  onChange={(e) => setStatusConfigsDraft(e.target.value)}
                   className="mt-3 min-h-[150px] rounded-2xl bg-white font-mono text-[11px]"
                   placeholder="{}"
                 />
