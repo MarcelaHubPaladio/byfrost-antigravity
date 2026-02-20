@@ -36,6 +36,7 @@ import { NewTrelloCardDialog } from "@/components/trello/NewTrelloCardDialog";
 import { getStateLabel } from "@/lib/journeyLabels";
 import { useJourneyTransition } from "@/hooks/useJourneyTransition";
 import { StateMachine } from "@/lib/journeys/types"
+import { GlobalJourneyLogsDialog } from "@/components/case/GlobalJourneyLogsDialog";
 
 const DASHBOARD_VIEW_MODE_KEY_PREFIX = "dashboard_view_mode_v1:";
 
@@ -939,27 +940,39 @@ export default function Dashboard() {
 
               <div className="rounded-2xl border border-slate-200 bg-white/70 px-3 py-2 shadow-sm">
                 <div className="flex items-end justify-between gap-3">
-                  <div>
-                    <div className="text-[11px] font-semibold text-slate-700">Jornada</div>
-                    <select
-                      value={selectedKey}
-                      onChange={(e) => {
-                        const nextKey = e.target.value;
-                        if (!nextKey) return;
-                        nav(`/app/j/${encodeURIComponent(nextKey)}`);
-                      }}
-                      className="mt-1 h-9 w-full min-w-[260px] rounded-xl border border-slate-200 bg-white px-2 text-sm text-slate-800 outline-none focus:border-[hsl(var(--byfrost-accent)/0.45)]"
-                    >
-                      {(journeyQ.data ?? []).length === 0 ? (
-                        <option value="">(nenhuma jornada habilitada)</option>
-                      ) : (
-                        (journeyQ.data ?? []).map((j) => (
-                          <option key={j.key} value={j.key}>
-                            {j.name}
-                          </option>
-                        ))
-                      )}
-                    </select>
+                  <div className="flex items-center gap-2">
+                    <div className="flex-1">
+                      <div className="text-[11px] font-semibold text-slate-700">Jornada</div>
+                      <select
+                        value={selectedKey}
+                        onChange={(e) => {
+                          const nextKey = e.target.value;
+                          if (!nextKey) return;
+                          nav(`/app/j/${encodeURIComponent(nextKey)}`);
+                        }}
+                        className="mt-1 h-9 w-full min-w-[260px] rounded-xl border border-slate-200 bg-white px-2 text-sm text-slate-800 outline-none focus:border-[hsl(var(--byfrost-accent)/0.45)]"
+                      >
+                        {(journeyQ.data ?? []).length === 0 ? (
+                          <option value="">(nenhuma jornada habilitada)</option>
+                        ) : (
+                          (journeyQ.data ?? []).map((j) => (
+                            <option key={j.key} value={j.key}>
+                              {j.name}
+                            </option>
+                          ))
+                        )}
+                      </select>
+                    </div>
+
+                    {selectedJourney && activeTenantId && (
+                      <div className="mt-5">
+                        <GlobalJourneyLogsDialog
+                          journeyId={selectedJourney.id}
+                          journeyName={selectedJourney.name}
+                          tenantId={activeTenantId}
+                        />
+                      </div>
+                    )}
                   </div>
 
                   <Button

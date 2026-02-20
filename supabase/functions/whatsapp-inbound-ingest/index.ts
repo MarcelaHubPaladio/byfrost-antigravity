@@ -154,7 +154,7 @@ serve(async (req) => {
         const groupId = isGroup ? String(chatId) : null;
 
         // 4. Atomic Ingestion via RPC (V2 - AUDIT)
-        let auditResult = { conversation_id: null, message_id: null, case_id: null, ok: true, event: "none" };
+        let auditResult = { conversation_id: null, message_id: null, case_id: null, journey_id: null, ok: true, event: "none" };
         if (instance.enable_v2_audit) {
             const { data: rpcResult, error: rpcError } = await supabase.rpc("ingest_whatsapp_audit_message", {
                 p_tenant_id: instance.tenant_id,
@@ -187,7 +187,7 @@ serve(async (req) => {
             console.log(`[${fn}] V1 Business logic enabled for instance ${instance.id}`);
         }
 
-        const { conversation_id, message_id, case_id, ok: ingestOk, event: ingestEvent } = auditResult;
+        const { conversation_id, message_id, case_id, journey_id, ok: ingestOk, event: ingestEvent } = auditResult;
 
         // 5. DIAGNOSTIC LOGGING (wa_webhook_inbox)
         try {
@@ -203,8 +203,10 @@ serve(async (req) => {
                 http_status: ingestOk !== false ? 200 : 500,
                 reason: ingestEvent || (ingestOk !== false ? "ingested" : "failed"),
                 payload_json: payload,
+                journey_id: journey_id || instance.default_journey_id,
                 meta_json: {
                     case_id,
+                    journey_id,
                     conversation_id,
                     message_id,
                     external_message_id: normalized.externalMessageId,

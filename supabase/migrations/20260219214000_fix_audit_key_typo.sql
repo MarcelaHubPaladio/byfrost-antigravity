@@ -26,6 +26,7 @@ returns table (
     conversation_id uuid,
     message_id uuid,
     case_id uuid,
+    journey_id uuid,
     event text
 )
 language plpgsql
@@ -36,6 +37,7 @@ declare
     v_conv_id uuid;
     v_msg_id uuid;
     v_case_id uuid;
+    v_journey_id uuid;
     v_lock_key bigint;
     v_audit_journey_keys text[] := array['ff_flow_20260129200457', 'auditoria-de-whatsapp', 'auditoria-de-whatsaoo'];
 begin
@@ -61,7 +63,11 @@ begin
         updated_at = now()
     returning id into v_conv_id;
 
-    -- 3. Case Management for Global Audit
+    -- Localiza ou cria o caso de auditoria
+    select id into v_journey_id from public.journeys 
+    where key = any(v_audit_journey_keys) 
+    order by (key = 'auditoria-de-whatsapp') desc, (key = 'auditoria-de-whatsaoo') desc limit 1;
+
     select id into v_case_id from public.cases
     where tenant_id = p_tenant_id
       and status = 'open'
@@ -106,9 +112,9 @@ begin
     )
     returning id into v_msg_id;
 
-    return query select true, v_conv_id, v_msg_id, v_case_id, 'ingested'::text;
+    return query select true, v_conv_id, v_msg_id, v_case_id, v_journey_id, 'ingested'::text;
 
 exception when others then
-    return query select false, null::uuid, null::uuid, null::uuid, SQLERRM;
+    return query select false, null::uuid, null::uuid, null::uuid, null::uuid, SQLERRM;
 end;
 $$;
