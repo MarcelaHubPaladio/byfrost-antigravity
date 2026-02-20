@@ -139,7 +139,7 @@ serve(async (req) => {
         // 1. Lookup Instance
         const { data: instance } = await supabase
             .from("wa_instances")
-            .select("id, tenant_id, phone_number, webhook_secret, enable_v1_business, enable_v2_audit")
+            .select("id, tenant_id, phone_number, webhook_secret, enable_v1_business, enable_v2_audit, default_journey_id")
             .eq("zapi_instance_id", zapiId)
             .eq("status", "active")
             .is("deleted_at", null)
@@ -166,22 +166,17 @@ serve(async (req) => {
         const isGroup = normalized.isGroup || looksLikeWhatsAppGroupId(rawChatId);
         const groupId = isGroup ? String(rawChatId) : null;
 
-        // In a group, we want a single conversation record for the entire group.
-        // By passing participantPhone = null for groups, our unique constraint 
-        // (tenant_id, participant_phone, group_id) will always hit the same row for that group.
         const participantPhone = isGroup
             ? null
             : (fromMe ? normalized.to : normalized.from);
 
-        // However, we still want to know WHICH person in the group sent/received the message
-        // for individual auditing or case tracking.
         const msgParticipantPhone = isGroup
             ? (fromMe ? instPhone : normalized.participant || normalized.from)
             : participantPhone;
 
         // 4. Atomic Ingestion via RPC (ONLY for messages/chat events)
         let auditResult = { conversation_id: null, message_id: null, case_id: null, journey_id: null, ok: true, event: "none" };
-        let crmResult = null;
+        let crmResult: any = null;
 
         const looksLikeChatEvent = Boolean(normalized.text || normalized.mediaUrl || normalized.externalMessageId || isGroup);
 
@@ -189,7 +184,6 @@ serve(async (req) => {
         // If enable_v1_business is true AND it's INBOUND, we try the CRM flow first.
         if (instance.enable_v1_business && direction === "inbound" && looksLikeChatEvent) {
             try {
-                // Load active journeys once
                 const { data: enabledTjRows } = await supabase
                     .from("tenant_journeys")
                     .select("journey_id, journeys(id,key,name,is_crm,default_state_machine_json)")
@@ -252,18 +246,17 @@ serve(async (req) => {
                         }
                     } else {
                         console.error(`[${fn}] CRM RPC failed`, rpcErr);
+                        crmResult = { ok: false, error: rpcErr };
                     }
                 }
-            } catch (e) {
+            } catch (e: any) {
                 console.error(`[${fn}] CRM flow critical error`, e);
+                crmResult = { ok: false, error: e?.message || String(e) };
             }
         }
 
         // 5. Audit Fallback (V2) or Outbound
-        // If it's outbound, or if CRM didn't handle it, we call the audit ingest.
         if (instance.enable_v2_audit && looksLikeChatEvent && (direction === "outbound" || !crmResult?.ok)) {
-            // For the message itself, we want to know the sender/receiver
-            // Since this block only runs for outbound messages (direction === "outbound"):
             const fromPhone = instPhone;
             const toPhone = isGroup ? groupId : normalized.to;
 
@@ -275,7 +268,7 @@ serve(async (req) => {
                 p_type: normalized.type,
                 p_from_phone: fromPhone,
                 p_to_phone: toPhone,
-                p_participant_phone: participantPhone, // NULL for groups to unify conversation
+                p_participant_phone: participantPhone,
                 p_group_id: groupId,
                 p_body_text: normalized.text,
                 p_media_url: normalized.mediaUrl,
@@ -286,7 +279,6 @@ serve(async (req) => {
 
             if (rpcError) {
                 console.error(`[${fn}] RPC failed`, rpcError);
-                // Continue to diagnostic logging anyway
                 auditResult.ok = false;
                 auditResult.event = "rpc_failed";
             } else {
@@ -296,7 +288,7 @@ serve(async (req) => {
 
         const { conversation_id, message_id, case_id, journey_id, ok: ingestOk, event: ingestEvent } = auditResult;
 
-        // 6. DIAGNOSTIC LOGGING (wa_webhook_inbox) - REGISTRA TUDO
+        // 6. DIAGNOSTIC LOGGING (wa_webhook_inbox)
         try {
             const inboxRecord = {
                 tenant_id: instance.tenant_id,
@@ -319,20 +311,13 @@ serve(async (req) => {
                     external_message_id: normalized.externalMessageId,
                     is_group: isGroup,
                     participant: msgParticipantPhone,
-                    raw_type: payload?.type || payload?.event
+                    raw_type: payload?.type || payload?.event,
+                    crm_result: crmResult
                 },
                 received_at: new Date().toISOString()
             };
 
-            console.log(`[${fn}] Inserting diagnostic log for tenant ${instance.tenant_id}, reason: ${inboxRecord.reason}`);
-
-            const { error: inboxErr } = await supabase.from("wa_webhook_inbox").insert(inboxRecord);
-
-            if (inboxErr) {
-                console.error(`[${fn}] Database insert failed for wa_webhook_inbox`, inboxErr);
-            } else {
-                console.log(`[${fn}] Diagnostic log inserted successfully`);
-            }
+            await supabase.from("wa_webhook_inbox").insert(inboxRecord);
         } catch (e) {
             console.error(`[${fn}] Diagnostic logging critical failure`, e);
         }
