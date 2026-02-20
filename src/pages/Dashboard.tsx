@@ -542,9 +542,9 @@ export default function Dashboard() {
     if (instanceFilterId !== "all") {
       base = base.filter((r) => {
         // Cases table does not have instance_id directly sometimes, but it might be in meta_json.
-        // However, wa_messages (recent inbound) is linked to instance.
-        // For audit, if a case was opened by an instance, we should ideally know which one.
-        const instId = (r.meta_json as any)?.instance_id || (r.meta_json as any)?.wa_instance_id;
+        // For audit, it's top-level. For Trello/other, it might be in monitoring.
+        const meta = r.meta_json as any;
+        const instId = meta?.instance_id || meta?.wa_instance_id || meta?.monitoring?.wa_instance_id || meta?.monitoring?.instance_id;
         return instId === instanceFilterId;
       });
     }
@@ -795,7 +795,7 @@ export default function Dashboard() {
   );
 
   const mismatch =
-    selectedKey && debugRpcQ.data && debugRpcQ.data.cases_total > 0 && filteredRows.length === 0;
+    selectedKey && debugRpcQ.data && debugRpcQ.data.cases_total > 0 && journeyRows.length === 0;
 
   const refreshToken = async () => {
     setRefreshingToken(true);
