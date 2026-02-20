@@ -1624,8 +1624,8 @@ serve(async (req) => {
       }
     }
 
-    if (!journey && firstEnabledJourney?.id) {
-      journey = firstEnabledJourney;
+    if (!journey && (firstCrmJourney?.id || firstEnabledJourney?.id)) {
+      journey = firstCrmJourney ?? firstEnabledJourney;
     }
 
     if (!journey && (salesOrderJourney as any)?.id) {
