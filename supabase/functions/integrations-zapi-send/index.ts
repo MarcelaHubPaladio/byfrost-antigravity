@@ -39,6 +39,11 @@ serve(async (req) => {
       to = `${to}@g.us`;
     }
 
+    // [HOTFIX] Remove "-group" suffix if present (seen in some malformed IDs)
+    if (to && to.includes("-group@")) {
+      to = to.replace("-group@", "@");
+    }
+
     if (!to) {
       return new Response(JSON.stringify({ ok: false, error: "Invalid recipient phone number" }), {
         status: 200,
@@ -63,7 +68,7 @@ serve(async (req) => {
     }
 
     // Persistir Audit Outbound
-    await supabase.from("wa_messages").insert({
+    const { error: msgInsertError } = await supabase.from("wa_messages").insert({
       tenant_id: tenantId,
       instance_id: inst.id,
       case_id: body.caseId ?? meta?.case_id ?? null,
@@ -76,6 +81,10 @@ serve(async (req) => {
       correlation_id: correlationId,
       occurred_at: new Date().toISOString(),
     });
+
+    if (msgInsertError) {
+      console.error(`[${fn}] Failed to insert wa_messages:`, msgInsertError);
+    }
 
     // Validar credenciais Z-API
     const zapiInstanceId = inst.zapi_instance_id;
@@ -182,7 +191,7 @@ serve(async (req) => {
       ok: res.ok,
       correlationId,
       external,
-      debug: { to, url: url.replace(zapiToken, "REDACTED") },
+      debug: { to, url: url.replace(zapiToken, "REDACTED"), dbError: msgInsertError },
       error: res.ok ? null : (resJson?.message || resText)
     }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },

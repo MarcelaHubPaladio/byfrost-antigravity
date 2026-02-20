@@ -585,8 +585,12 @@ export function WhatsAppConversation({
         throw new Error(data?.error || "Falha no envio");
       }
 
+      let successMsg = `Mensagem enviada para: ${data?.debug?.to || to}`;
+      if (data?.debug?.dbError) {
+        successMsg += ` (Erro ao salvar: ${data.debug.dbError.message || "DB Error"})`;
+      }
       setText("");
-      showSuccess(`Mensagem enviada para: ${data?.debug?.to || to}`);
+      showSuccess(successMsg);
 
       await Promise.all([
         qc.invalidateQueries({ queryKey: ["wa_messages_case", activeTenantId, caseId, conversationMode, entityPhone, waGroupId] }),
