@@ -176,13 +176,15 @@ serve(async (req) => {
         // 4. Atomic Ingestion via RPC (ONLY for messages/chat events)
         let auditResult = { conversation_id: null, message_id: null, case_id: null, journey_id: null, ok: true, event: "none" };
 
-        // We only call the audit storage if it looks like a message or a chat event
+        // We only call the audit storage if it looks like a message or a chat event AND it's an OUTBOUND message.
+        // Inbound messages are processed by the much richer `webhooks-zapi-inbound` which handles proper CRM journey routing.
         const looksLikeChatEvent = Boolean(normalized.text || normalized.mediaUrl || normalized.externalMessageId || isGroup);
 
-        if (instance.enable_v2_audit && looksLikeChatEvent) {
+        if (instance.enable_v2_audit && looksLikeChatEvent && direction === "outbound") {
             // For the message itself, we want to know the sender/receiver
-            const fromPhone = direction === "inbound" ? msgParticipantPhone : instPhone;
-            const toPhone = direction === "outbound" ? (isGroup ? groupId : normalized.to) : (isGroup ? groupId : instPhone);
+            // Since this block only runs for outbound messages (direction === "outbound"):
+            const fromPhone = instPhone;
+            const toPhone = isGroup ? groupId : normalized.to;
 
             const { data: rpcResult, error: rpcError } = await supabase.rpc("ingest_whatsapp_audit_message", {
                 p_tenant_id: instance.tenant_id,
