@@ -113,6 +113,19 @@ export function TenantJourneysPanel() {
   const [savingCatalogFlags, setSavingCatalogFlags] = useState(false);
   const [bootstrappingTrello, setBootstrappingTrello] = useState(false);
 
+  // ---- Edit modes ----
+  const [editingSectorId, setEditingSectorId] = useState<string | null>(null);
+  const [editingJourneyId, setEditingJourneyId] = useState<string | null>(null);
+
+  const [editSectorName, setEditSectorName] = useState("");
+  const [editSectorDesc, setEditSectorDesc] = useState("");
+
+  const [editJourneyName, setEditJourneyName] = useState("");
+  const [editJourneyDesc, setEditJourneyDesc] = useState("");
+  const [editJourneySectorId, setEditJourneySectorId] = useState<string>("");
+  const [editJourneyIsCrm, setEditJourneyIsCrm] = useState(false);
+  const [editJourneyKey, setEditJourneyKey] = useState("");
+
   // state machine builder (UI)
   const [stateDraft, setStateDraft] = useState("");
   const [states, setStates] = useState<string[]>([
@@ -430,6 +443,71 @@ export function TenantJourneysPanel() {
       showError(`Falha ao criar jornada: ${e?.message ?? "erro"}`);
     } finally {
       setCreatingJourney(false);
+    }
+  };
+
+  const deleteSector = async (id: string) => {
+    if (!confirm("Excluir este setor do catálogo? Isso não afetará os tenants que já o utilizam, mas ele não poderá mais ser ativado em novos.")) return;
+    try {
+      const { error } = await supabase.from("sectors").delete().eq("id", id);
+      if (error) throw error;
+      showSuccess("Setor excluído.");
+      await qc.invalidateQueries({ queryKey: ["sectors"] });
+    } catch (e: any) {
+      showError(`Falha ao excluir setor: ${e?.message ?? "erro"}`);
+    }
+  };
+
+  const updateSectorInCatalog = async () => {
+    if (!editingSectorId || !editSectorName.trim()) return;
+    try {
+      const { error } = await supabase
+        .from("sectors")
+        .update({
+          name: editSectorName.trim(),
+          description: editSectorDesc.trim() || null,
+        })
+        .eq("id", editingSectorId);
+      if (error) throw error;
+      showSuccess("Setor atualizado no catálogo.");
+      setEditingSectorId(null);
+      await qc.invalidateQueries({ queryKey: ["sectors"] });
+    } catch (e: any) {
+      showError(`Falha ao atualizar setor: ${e?.message ?? "erro"}`);
+    }
+  };
+
+  const deleteJourney = async (id: string) => {
+    if (!confirm("Excluir esta jornada do catálogo?")) return;
+    try {
+      const { error } = await supabase.from("journeys").delete().eq("id", id);
+      if (error) throw error;
+      showSuccess("Jornada excluída.");
+      await qc.invalidateQueries({ queryKey: ["journeys"] });
+    } catch (e: any) {
+      showError(`Falha ao excluir jornada: ${e?.message ?? "erro"}`);
+    }
+  };
+
+  const updateJourneyGeneralCatalog = async () => {
+    if (!editingJourneyId || !editJourneyName.trim()) return;
+    try {
+      const { error } = await supabase
+        .from("journeys")
+        .update({
+          name: editJourneyName.trim(),
+          description: editJourneyDesc.trim() || null,
+          sector_id: editJourneySectorId || null,
+          is_crm: editJourneyIsCrm,
+          key: editJourneyKey.trim(),
+        })
+        .eq("id", editingJourneyId);
+      if (error) throw error;
+      showSuccess("Jornada atualizada no catálogo.");
+      setEditingJourneyId(null);
+      await qc.invalidateQueries({ queryKey: ["journeys"] });
+    } catch (e: any) {
+      showError(`Falha ao atualizar jornada: ${e?.message ?? "erro"}`);
     }
   };
 
@@ -923,9 +1001,67 @@ export function TenantJourneysPanel() {
                 <div key={s.id} className="rounded-[20px] border border-slate-200 bg-slate-50 p-3">
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <div className="truncate text-sm font-semibold text-slate-900">{s.name}</div>
-                      {s.description && (
-                        <div className="mt-0.5 text-xs text-slate-600">{s.description}</div>
+                      {editingSectorId === s.id ? (
+                        <div className="grid gap-2">
+                          <Input
+                            value={editSectorName}
+                            onChange={(e) => setEditSectorName(e.target.value)}
+                            className="h-8 rounded-xl text-xs"
+                            placeholder="Nome do setor"
+                          />
+                          <Input
+                            value={editSectorDesc}
+                            onChange={(e) => setEditSectorDesc(e.target.value)}
+                            className="h-8 rounded-xl text-xs"
+                            placeholder="Descrição"
+                          />
+                          <div className="flex gap-2">
+                            <Button
+                              size="sm"
+                              className="h-7 rounded-lg text-[10px]"
+                              onClick={updateSectorInCatalog}
+                            >
+                              Salvar
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-7 rounded-lg text-[10px]"
+                              onClick={() => setEditingSectorId(null)}
+                            >
+                              Cancelar
+                            </Button>
+                          </div>
+                        </div>
+                      ) : (
+                        <>
+                          <div className="flex items-center gap-2">
+                            <div className="truncate text-sm font-semibold text-slate-900">{s.name}</div>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-6 w-6 rounded-lg text-slate-400 hover:text-indigo-600"
+                              onClick={() => {
+                                setEditingSectorId(s.id);
+                                setEditSectorName(s.name);
+                                setEditSectorDesc(s.description ?? "");
+                              }}
+                            >
+                              <ArrowUp className="h-3 w-3 rotate-45" /> {/* Using ArrowUp just as a placeholder for edit, actually Pencil would be better but not imported */}
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-6 w-6 rounded-lg text-slate-400 hover:text-rose-600"
+                              onClick={() => deleteSector(s.id)}
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </Button>
+                          </div>
+                          {s.description && (
+                            <div className="mt-0.5 text-xs text-slate-600">{s.description}</div>
+                          )}
+                        </>
                       )}
                     </div>
                     <div className="flex items-center gap-2">
@@ -941,33 +1077,46 @@ export function TenantJourneysPanel() {
                       const selected = selectedJourneyId === j.id;
 
                       return (
-                        <button
+                        <div
                           key={j.id}
-                          type="button"
-                          onClick={() => setSelectedJourneyId(j.id)}
                           className={cn(
-                            "flex items-center justify-between gap-3 rounded-2xl border px-3 py-2 text-left transition",
+                            "flex items-center justify-between gap-3 rounded-2xl border px-3 py-2 transition",
                             selected
                               ? "border-[hsl(var(--byfrost-accent)/0.45)] bg-white"
                               : "border-slate-200 bg-white/60 hover:bg-white"
                           )}
                         >
-                          <div className="min-w-0">
-                            <div className="flex items-center gap-2">
-                              <div className="truncate text-xs font-semibold text-slate-900">{j.name}</div>
-                              {j.is_crm ? (
-                                <span className="rounded-full bg-[hsl(var(--byfrost-accent)/0.12)] px-2 py-0.5 text-[10px] font-semibold text-[hsl(var(--byfrost-accent))]">
-                                  CRM
-                                </span>
-                              ) : null}
+                          <button
+                            type="button"
+                            onClick={() => setSelectedJourneyId(j.id)}
+                            className="flex-1 min-w-0 text-left"
+                          >
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-2">
+                                <div className="truncate text-xs font-semibold text-slate-900">{j.name}</div>
+                                {j.is_crm ? (
+                                  <span className="rounded-full bg-[hsl(var(--byfrost-accent)/0.12)] px-2 py-0.5 text-[10px] font-semibold text-[hsl(var(--byfrost-accent))]">
+                                    CRM
+                                  </span>
+                                ) : null}
+                              </div>
+                              <div className="mt-0.5 truncate text-[11px] text-slate-500">key: {j.key}</div>
                             </div>
-                            <div className="mt-0.5 truncate text-[11px] text-slate-500">key: {j.key}</div>
-                          </div>
-                          <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                          </button>
+
+                          <div className="flex items-center gap-2">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-6 w-6 rounded-lg text-slate-400 hover:text-rose-600"
+                              onClick={() => deleteJourney(j.id)}
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </Button>
                             <span className="text-[11px] text-slate-500">on</span>
                             <Switch checked={enabled} onCheckedChange={(v) => toggleJourney(j.id, v)} />
                           </div>
-                        </button>
+                        </div>
                       );
                     })}
 
@@ -1086,6 +1235,22 @@ export function TenantJourneysPanel() {
                       className="mt-1 rounded-2xl"
                       placeholder="Ex: CRM - Leads"
                     />
+                    <div className="mt-2 flex gap-2">
+                      <Button
+                        variant="link"
+                        className="h-6 p-0 text-[11px] text-indigo-600"
+                        onClick={() => {
+                          setEditingJourneyId(selectedJourney.id);
+                          setEditJourneyName(selectedJourney.name);
+                          setEditJourneyDesc(selectedJourney.description ?? "");
+                          setEditJourneySectorId(selectedJourney.sector_id ?? "");
+                          setEditJourneyIsCrm(Boolean(selectedJourney.is_crm));
+                          setEditJourneyKey(selectedJourney.key);
+                        }}
+                      >
+                        Editar configurações gerais (catálogo)
+                      </Button>
+                    </div>
                   </div>
 
                   <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
@@ -1127,6 +1292,74 @@ export function TenantJourneysPanel() {
                   </div>
                 </div>
               </div>
+
+              {editingJourneyId === selectedJourney.id && (
+                <div className="rounded-2xl border border-indigo-200 bg-indigo-50/50 p-3">
+                  <div className="text-xs font-semibold text-indigo-900">Editar Jornada (Catálogo)</div>
+                  <div className="mt-3 grid gap-3">
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <div>
+                        <Label className="text-xs">Chave (Técnica)</Label>
+                        <Input
+                          value={editJourneyKey}
+                          onChange={(e) => setEditJourneyKey(e.target.value)}
+                          className="mt-1 h-9 rounded-xl bg-white text-xs"
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-xs">Nome</Label>
+                        <Input
+                          value={editJourneyName}
+                          onChange={(e) => setEditJourneyName(e.target.value)}
+                          className="mt-1 h-9 rounded-xl bg-white text-xs"
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <Label className="text-xs">Descrição</Label>
+                      <Input
+                        value={editJourneyDesc}
+                        onChange={(e) => setEditJourneyDesc(e.target.value)}
+                        className="mt-1 h-9 rounded-xl bg-white text-xs"
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-xs">Setor</Label>
+                      <select
+                        value={editJourneySectorId}
+                        onChange={(e) => setEditJourneySectorId(e.target.value)}
+                        className="mt-1 h-9 w-full rounded-xl border border-slate-200 bg-white px-3 text-xs outline-none"
+                      >
+                        <option value="">Sem setor</option>
+                        {sectors.map((s) => (
+                          <option key={s.id} value={s.id}>
+                            {s.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="text-xs font-medium text-slate-900">Habilitar CRM</div>
+                      <Switch checked={editJourneyIsCrm} onCheckedChange={setEditJourneyIsCrm} />
+                    </div>
+                    <div className="flex gap-2">
+                      <Button
+                        className="h-9 flex-1 rounded-xl bg-indigo-600 text-white hover:bg-indigo-700"
+                        onClick={updateJourneyGeneralCatalog}
+                      >
+                        Salvar Alterações
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        className="h-9 rounded-xl"
+                        onClick={() => setEditingJourneyId(null)}
+                      >
+                        Cancelar
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               <div className="rounded-2xl border border-slate-200 bg-white p-3">
                 <div className="text-xs font-semibold text-slate-900">Transições (Global/Catalog)</div>
