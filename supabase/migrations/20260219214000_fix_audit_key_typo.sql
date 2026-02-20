@@ -1,6 +1,9 @@
 -- FIX: RETORNANDO CASE_ID PARA LOGS DE DIAGNÓSTICO
 -- Esta migração atualiza a RPC para retornar o case_id, permitindo que a Edge Function logue o roteamento corretamente.
 
+-- REMOVENDO VERSÃO ANTERIOR PARA PERMITIR MUDANÇA NA ASSINATURA DE RETORNO (ERRO 42P13)
+drop function if exists public.ingest_whatsapp_audit_message(uuid, uuid, text, text, text, text, text, text, text, text, text, jsonb, text, timestamptz, jsonb);
+
 create or replace function public.ingest_whatsapp_audit_message(
     p_tenant_id uuid,
     p_instance_id uuid,
