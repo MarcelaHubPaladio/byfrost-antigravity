@@ -19,6 +19,7 @@ import {
   TRELLO_SECTOR_NAME,
 } from "@/lib/journeys/catalog";
 import { JourneyConfig } from "@/lib/journeys/types";
+import { StatusConfigsEditor } from "@/components/admin/StatusConfigsEditor";
 
 type SectorRow = {
   id: string;
@@ -1508,16 +1509,17 @@ export function TenantJourneysPanel() {
                 <div className="text-xs font-semibold text-slate-900">Configurações por Status (status_configs)</div>
                 <div className="mt-1 text-[11px] text-slate-600">
                   Defina responsáveis, tarefas e campos obrigatórios.
-                  Ex: <span className="font-mono">"em_progresso": {"{"} "responsible_id": "...", "mandatory_tasks": [...] {"}"}</span>
                 </div>
-                <Textarea
-                  value={statusConfigsDraft}
-                  onChange={(e) => setStatusConfigsDraft(e.target.value)}
-                  className="mt-3 min-h-[150px] rounded-2xl bg-white font-mono text-[11px]"
-                  placeholder="{}"
-                />
-                <div className="mt-2 text-[10px] text-slate-500">
-                  * Salve usando o botão "Salvar nomes e rótulos" acima.
+                <div className="mt-4">
+                  <StatusConfigsEditor
+                    tenantId={activeTenantId}
+                    states={editStatesDraft}
+                    statusConfigsJson={statusConfigsDraft}
+                    onChange={setStatusConfigsDraft}
+                  />
+                </div>
+                <div className="mt-4 text-[10px] text-slate-500">
+                  * Salve usando o botão "Salvar nomes e rótulos" acima para aplicar no catálogo.
                 </div>
               </div>
 
