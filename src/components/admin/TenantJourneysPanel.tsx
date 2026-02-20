@@ -1140,33 +1140,46 @@ export function TenantJourneysPanel() {
                     const selected = selectedJourneyId === j.id;
 
                     return (
-                      <button
+                      <div
                         key={j.id}
-                        type="button"
-                        onClick={() => setSelectedJourneyId(j.id)}
                         className={cn(
-                          "flex items-center justify-between gap-3 rounded-2xl border px-3 py-2 text-left transition",
+                          "flex items-center justify-between gap-3 rounded-2xl border px-3 py-2 transition",
                           selected
                             ? "border-[hsl(var(--byfrost-accent)/0.45)] bg-white"
                             : "border-slate-200 bg-white/60 hover:bg-white"
                         )}
                       >
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-2">
-                            <div className="truncate text-xs font-semibold text-slate-900">{j.name}</div>
-                            {j.is_crm ? (
-                              <span className="rounded-full bg-[hsl(var(--byfrost-accent)/0.12)] px-2 py-0.5 text-[10px] font-semibold text-[hsl(var(--byfrost-accent))]">
-                                CRM
-                              </span>
-                            ) : null}
+                        <button
+                          type="button"
+                          onClick={() => setSelectedJourneyId(j.id)}
+                          className="flex-1 min-w-0 text-left"
+                        >
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2">
+                              <div className="truncate text-xs font-semibold text-slate-900">{j.name}</div>
+                              {j.is_crm ? (
+                                <span className="rounded-full bg-[hsl(var(--byfrost-accent)/0.12)] px-2 py-0.5 text-[10px] font-semibold text-[hsl(var(--byfrost-accent))]">
+                                  CRM
+                                </span>
+                              ) : null}
+                            </div>
+                            <div className="mt-0.5 truncate text-[11px] text-slate-500">key: {j.key}</div>
                           </div>
-                          <div className="mt-0.5 truncate text-[11px] text-slate-500">key: {j.key}</div>
-                        </div>
-                        <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                        </button>
+
+                        <div className="flex items-center gap-2">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-6 w-6 rounded-lg text-slate-400 hover:text-rose-600"
+                            onClick={() => deleteJourney(j.id)}
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </Button>
                           <span className="text-[11px] text-slate-500">on</span>
                           <Switch checked={enabled} onCheckedChange={(v) => toggleJourney(j.id, v)} />
                         </div>
-                      </button>
+                      </div>
                     );
                   })}
                 </div>
