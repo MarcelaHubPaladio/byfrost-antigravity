@@ -46,7 +46,8 @@ import { AccessMatrixPanel } from "@/components/admin/AccessMatrixPanel";
 import { OrgChartPanel } from "@/components/admin/OrgChartPanel";
 import { IncentivesPanel } from "@/components/admin/IncentivesPanel";
 import { TenantModulesPanel } from "@/components/admin/TenantModulesPanel";
-import { Trash2, PauseCircle, PlayCircle, ChevronLeft, ChevronRight, UsersRound, Smartphone, Copy, Shield } from "lucide-react";
+import { Trash2, PauseCircle, PlayCircle, ChevronLeft, ChevronRight, UsersRound, Smartphone, Copy, Shield, Settings2 } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
 
 type UserRole = string;
 
@@ -72,6 +73,8 @@ type WaInstanceRow = {
   webhook_secret: string;
   default_journey_id: string | null;
   assigned_user_id: string | null;
+  enable_v1_business: boolean;
+  enable_v2_audit: boolean;
   created_at: string;
 };
 
@@ -686,7 +689,7 @@ export default function Admin() {
       const { data, error } = await supabase
         .from("wa_instances")
         .select(
-          "id,name,status,zapi_instance_id,phone_number,webhook_secret,default_journey_id,assigned_user_id,created_at"
+          "id,name,status,zapi_instance_id,phone_number,webhook_secret,default_journey_id,assigned_user_id,enable_v1_business,enable_v2_audit,created_at"
         )
         .eq("tenant_id", activeTenantId!)
         .is("deleted_at", null)
@@ -728,6 +731,27 @@ export default function Admin() {
       await qc.invalidateQueries({ queryKey: ["admin_instances", activeTenantId] });
     } catch (e: any) {
       showError(`Falha ao atualizar usuário responsável: ${e?.message ?? "erro"}`);
+    }
+  };
+
+  const setInstanceVersionToggle = async (
+    instanceId: string,
+    field: "enable_v1_business" | "enable_v2_audit",
+    enabled: boolean
+  ) => {
+    if (!activeTenantId) return;
+    try {
+      await ensureFreshTokenForRls();
+      const { error } = await supabase
+        .from("wa_instances")
+        .update({ [field]: enabled })
+        .eq("tenant_id", activeTenantId)
+        .eq("id", instanceId);
+      if (error) throw error;
+      showSuccess("Configuração de fluxo atualizada.");
+      await qc.invalidateQueries({ queryKey: ["admin_instances", activeTenantId] });
+    } catch (e: any) {
+      showError(`Falha ao atualizar configuração: ${e?.message ?? "erro"}`);
     }
   };
 
@@ -1779,6 +1803,44 @@ export default function Admin() {
                                         </div>
                                         <div className="mt-1 text-[11px] text-indigo-700/70">
                                           Recomendado. Captura <span className="font-semibold text-indigo-900">tudo</span> (in/out) para Auditoria e Conversas.
+                                        </div>
+                                      </div>
+                                    </div>
+
+                                    <div className="mt-3 grid gap-2 lg:grid-cols-2">
+                                      <div className="flex flex-col gap-2 rounded-2xl border border-slate-200 bg-white/70 p-3">
+                                        <div className="flex items-center justify-between">
+                                          <div className="flex items-center gap-2">
+                                            <div className="grid h-7 w-7 place-items-center rounded-lg bg-indigo-50 text-indigo-700">
+                                              <Settings2 className="h-4 w-4" />
+                                            </div>
+                                            <div>
+                                              <div className="text-[11px] font-bold text-slate-900 uppercase tracking-wider">Fluxo V1 - Negócio</div>
+                                              <div className="text-[10px] text-slate-500">Regras, Pedidos e OCR</div>
+                                            </div>
+                                          </div>
+                                          <Switch
+                                            checked={i.enable_v1_business}
+                                            onCheckedChange={(checked) => setInstanceVersionToggle(i.id, "enable_v1_business", checked)}
+                                          />
+                                        </div>
+                                      </div>
+
+                                      <div className="flex flex-col gap-2 rounded-2xl border border-indigo-100 bg-indigo-50/30 p-3">
+                                        <div className="flex items-center justify-between">
+                                          <div className="flex items-center gap-2">
+                                            <div className="grid h-7 w-7 place-items-center rounded-lg bg-indigo-600 text-white shadow-sm">
+                                              <Shield className="h-4 w-4" />
+                                            </div>
+                                            <div>
+                                              <div className="text-[11px] font-bold text-indigo-900 uppercase tracking-wider">Fluxo V2 - Auditoria</div>
+                                              <div className="text-[10px] text-indigo-700/70">Histórico Global e Conversas</div>
+                                            </div>
+                                          </div>
+                                          <Switch
+                                            checked={i.enable_v2_audit}
+                                            onCheckedChange={(checked) => setInstanceVersionToggle(i.id, "enable_v2_audit", checked)}
+                                          />
                                         </div>
                                       </div>
                                     </div>

@@ -124,7 +124,7 @@ serve(async (req) => {
         // 1. Lookup Instance
         const { data: instance } = await supabase
             .from("wa_instances")
-            .select("id, tenant_id, phone_number, webhook_secret")
+            .select("id, tenant_id, phone_number, webhook_secret, enable_v1_business, enable_v2_audit")
             .eq("zapi_instance_id", zapiId)
             .eq("status", "active")
             .is("deleted_at", null)
@@ -144,8 +144,6 @@ serve(async (req) => {
         const direction: WebhookDirection = fromMe ? "outbound" : "inbound";
 
         // For Audit/Conversation purposes:
-        // If it's a group, the "Thread" is the Group ID.
-        // If it's private, the "Thread" is the contact phone.
         const chatId = pickFirst(payload?.chatId, payload?.data?.chatId, normalized.from, normalized.to);
         const isGroup = looksLikeWhatsAppGroupId(chatId);
 
@@ -155,30 +153,41 @@ serve(async (req) => {
 
         const groupId = isGroup ? String(chatId) : null;
 
-        // 4. Atomic Ingestion via RPC
-        const { data: rpcResult, error: rpcError } = await supabase.rpc("ingest_whatsapp_audit_message", {
-            p_tenant_id: instance.tenant_id,
-            p_instance_id: instance.id,
-            p_zapi_instance_id: zapiId,
-            p_direction: direction,
-            p_type: normalized.type,
-            p_from_phone: normalized.from,
-            p_to_phone: normalized.to,
-            p_participant_phone: participantPhone,
-            p_group_id: groupId,
-            p_body_text: normalized.text,
-            p_media_url: normalized.mediaUrl,
-            p_payload_json: payload,
-            p_correlation_id: normalized.externalMessageId || crypto.randomUUID(),
-            p_occurred_at: new Date().toISOString()
-        });
+        // 4. Atomic Ingestion via RPC (V2 - AUDIT)
+        let auditResult = { conversation_id: null, message_id: null };
+        if (instance.enable_v2_audit) {
+            const { data: rpcResult, error: rpcError } = await supabase.rpc("ingest_whatsapp_audit_message", {
+                p_tenant_id: instance.tenant_id,
+                p_instance_id: instance.id,
+                p_zapi_instance_id: zapiId,
+                p_direction: direction,
+                p_type: normalized.type,
+                p_from_phone: normalized.from,
+                p_to_phone: normalized.to,
+                p_participant_phone: participantPhone,
+                p_group_id: groupId,
+                p_body_text: normalized.text,
+                p_media_url: normalized.mediaUrl,
+                p_payload_json: payload,
+                p_correlation_id: normalized.externalMessageId || crypto.randomUUID(),
+                p_occurred_at: new Date().toISOString()
+            });
 
-        if (rpcError) {
-            console.error(`[${fn}] RPC failed`, rpcError);
-            return new Response("Internal Error", { status: 500, headers: corsHeaders });
+            if (rpcError) {
+                console.error(`[${fn}] RPC failed`, rpcError);
+                return new Response("Internal Error", { status: 500, headers: corsHeaders });
+            }
+            auditResult = rpcResult?.[0] || rpcResult || auditResult;
         }
 
-        const { conversation_id, message_id } = rpcResult?.[0] || rpcResult || {};
+        // 5. V1 BUSINESS LOGIC
+        if (instance.enable_v1_business) {
+            // In the future, we would call the legacy business processing logic here.
+            // For now, it stays within its own webhook path or we bridge it here.
+            console.log(`[${fn}] V1 Business logic enabled for instance ${instance.id}`);
+        }
+
+        const { conversation_id, message_id } = auditResult;
 
         // 5. DECIDE JOURNEY (POST-STORAGE)
         // Here we can trigger logic for specific journeys like the "ff_flow_20260129200457"
