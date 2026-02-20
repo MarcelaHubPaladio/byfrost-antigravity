@@ -1755,19 +1755,30 @@ export default function Admin() {
                                       </div>
                                     </div>
 
-                                    <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                                    <div className="mt-3 grid gap-2 md:grid-cols-3">
                                       <div className="rounded-2xl border border-slate-200 bg-white/70 p-2">
-                                        <div className="text-[11px] font-semibold text-slate-700">Z-API: Ao receber</div>
+                                        <div className="text-[11px] font-semibold text-slate-700">Z-API: Ao receber (Legado)</div>
                                         <div className="mt-1 rounded-xl bg-slate-50 px-2 py-1 text-[11px] text-slate-700 break-all">{inboundUrl}</div>
                                         <div className="mt-1 text-[11px] text-slate-500">
                                           Garante que o evento seja tratado como <span className="font-medium">inbound</span>.
                                         </div>
                                       </div>
                                       <div className="rounded-2xl border border-slate-200 bg-white/70 p-2">
-                                        <div className="text-[11px] font-semibold text-slate-700">Z-API: Ao enviar</div>
+                                        <div className="text-[11px] font-semibold text-slate-700">Z-API: Ao enviar (Legado)</div>
                                         <div className="mt-1 rounded-xl bg-slate-50 px-2 py-1 text-[11px] text-slate-700 break-all">{outboundUrl}</div>
                                         <div className="mt-1 text-[11px] text-slate-500">
                                           Garante que o evento seja tratado como <span className="font-medium">outbound</span>.
+                                        </div>
+                                      </div>
+                                      <div className="rounded-2xl border border-indigo-200 bg-indigo-50/50 p-2">
+                                        <div className="flex items-center gap-1.5 text-[11px] font-bold text-indigo-900">
+                                          <Shield className="h-3 w-3" /> Rota Inteligente (Auditoria)
+                                        </div>
+                                        <div className="mt-1 rounded-xl bg-white px-2 py-1 text-[11px] font-medium text-indigo-700 break-all">
+                                          {`https://pryoirzeghatrgecwrci.supabase.co/functions/v1/whatsapp-inbound-ingest?secret=${i.webhook_secret}`}
+                                        </div>
+                                        <div className="mt-1 text-[11px] text-indigo-700/70">
+                                          Recomendado. Captura <span className="font-semibold text-indigo-900">tudo</span> (in/out) para Auditoria e Conversas.
                                         </div>
                                       </div>
                                     </div>
