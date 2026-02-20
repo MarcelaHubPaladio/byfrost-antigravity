@@ -21,16 +21,16 @@ interface Props {
 export function StatusConfigsEditor({ tenantId, states, statusConfigsJson, onChange }: Props) {
     const [selectedState, setSelectedState] = useState<string>(states[0] ?? "");
 
-    // users are fetched from tenant_users view
+    // users are fetched from users_profile
     const usersQ = useQuery({
         queryKey: ["tenant_users", tenantId],
         enabled: Boolean(tenantId),
         queryFn: async () => {
             const { data, error } = await supabase
-                .from("tenant_users")
+                .from("users_profile")
                 .select("user_id, email, display_name")
                 .eq("tenant_id", tenantId)
-                .order("email", { ascending: true });
+                .is("deleted_at", null);
             if (error) throw error;
             return data ?? [];
         },
@@ -44,10 +44,9 @@ export function StatusConfigsEditor({ tenantId, states, statusConfigsJson, onCha
             // Ideally an RPC to get distinct keys, but for now we fetch recent case_fields and distinct them
             const { data, error } = await supabase
                 .from("case_fields")
-                .select("key")
-                .eq("tenant_id", tenantId)
-                .order("created_at", { ascending: false })
-                .limit(500);
+                .select("key, cases!inner(tenant_id)")
+                .eq("cases.tenant_id", tenantId)
+                .limit(2000);
             if (error) throw error;
             const unique = Array.from(new Set(data.map(d => d.key)));
             return unique.sort();
