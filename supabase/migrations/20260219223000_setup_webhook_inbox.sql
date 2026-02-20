@@ -33,9 +33,11 @@ create index if not exists wa_webhook_inbox_tenant_received_idx on public.wa_web
 -- RLS
 alter table public.wa_webhook_inbox enable row level security;
 
+drop policy if exists wa_webhook_inbox_select on public.wa_webhook_inbox;
 create policy wa_webhook_inbox_select on public.wa_webhook_inbox for select to authenticated
 using (public.has_tenant_access(tenant_id));
 
+drop policy if exists wa_webhook_inbox_write on public.wa_webhook_inbox;
 create policy wa_webhook_inbox_write on public.wa_webhook_inbox for all to authenticated
 using (public.is_super_admin()) with check (public.is_super_admin());
 
