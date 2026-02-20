@@ -14,7 +14,13 @@ serve(async (req) => {
 
     const tenantId = body.tenantId as string | undefined;
     const instanceId = body.instanceId as string | undefined; // wa_instances.id
-    const to = normalizePhoneE164Like(body.to);
+
+    // Support bypassing normalization for group IDs
+    const rawTo = String(body.to ?? "");
+    const to = (rawTo.includes("@g.us") || rawTo.includes("@broadcast"))
+      ? rawTo
+      : normalizePhoneE164Like(rawTo);
+
     const from = normalizePhoneE164Like(body.from);
     const type = (body.type as string | undefined) ?? "text";
     const text = (body.text as string | undefined) ?? null;
@@ -61,7 +67,7 @@ serve(async (req) => {
       direction: "outbound",
       from_phone: from ?? inst.phone_number ?? null,
       to_phone: to,
-      type: type === "image" ? "image" : type === "location" ? "location" : "text",
+      type: (type === "image" || type === "video" || type === "audio" || type === "document") ? type : type === "location" ? "location" : "text",
       body_text: text,
       media_url: mediaUrl,
       payload_json: { ...body, meta: payloadMeta },
@@ -106,6 +112,15 @@ serve(async (req) => {
         } else if (type === "audio") {
           endpoint = "send-audio";
           bodyPayload.audio = mediaUrl;
+        } else if (type === "video") {
+          endpoint = "send-video";
+          bodyPayload.video = mediaUrl;
+          if (text) bodyPayload.caption = text;
+        } else if (type === "document") {
+          endpoint = "send-document/pdf"; // Default to pdf if not specified, or use dynamic endpoint
+          bodyPayload.document = mediaUrl;
+          bodyPayload.extension = payloadMeta?.extension ?? "pdf";
+          if (text) bodyPayload.caption = text;
         } else if (type === "location") {
           endpoint = "send-location";
           // Location payload requires latitude/longitude.
@@ -120,8 +135,7 @@ serve(async (req) => {
             throw new Error("Missing latitude/longitude for location message");
           }
         } else {
-          // Fallback or other types (video, document, etc) - implement as needed.
-          // For now, treat unknown as text if text is present, or error.
+          // Fallback or other types - implement as needed.
           if (text) {
             endpoint = "send-text";
             bodyPayload.message = text;

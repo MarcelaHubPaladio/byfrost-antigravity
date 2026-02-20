@@ -286,9 +286,13 @@ export function WhatsAppConversation({
   const [tab, setTab] = useState<"messages" | "participants">("messages");
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [transcribingById, setTranscribingById] = useState<Record<string, boolean>>({});
 
   const scrollerRef = useRef<HTMLDivElement | null>(null);
+  const imageRef = useRef<HTMLInputElement | null>(null);
+  const audioRef = useRef<HTMLInputElement | null>(null);
+  const fileRef = useRef<HTMLInputElement | null>(null);
 
   const effectiveInstanceIds = instanceIds ?? chatAccess.instanceIds;
 
@@ -484,6 +488,62 @@ export function WhatsAppConversation({
     });
   };
 
+  const uploadAndSend = async (file: File, type: "image" | "audio" | "video" | "document") => {
+    if (!activeTenantId || !caseId) return;
+    const inst = instanceQ.data;
+    const to = conversationMode === "group" && waGroupId ? waGroupId : counterpartPhone;
+
+    if (!inst?.id) {
+      showError("Nenhuma instância ativa vinculada.");
+      return;
+    }
+    if (!to) {
+      showError("Destinatário não identificado.");
+      return;
+    }
+
+    setUploading(true);
+    try {
+      const ext = file.name.split(".").pop();
+      const fileName = `${activeTenantId}/${caseId}/${crypto.randomUUID()}.${ext}`;
+
+      const { data: uploadData, error: uploadErr } = await supabase.storage
+        .from("whatsapp-media")
+        .upload(fileName, file, { cacheControl: "3600", upsert: false });
+
+      if (uploadErr) throw uploadErr;
+
+      const { data: { publicUrl } } = supabase.storage
+        .from("whatsapp-media")
+        .getPublicUrl(uploadData.path);
+
+      const { data, error } = await supabase.functions.invoke("integrations-zapi-send", {
+        body: {
+          tenantId: activeTenantId,
+          instanceId: inst.id,
+          to,
+          type,
+          mediaUrl: publicUrl,
+          meta: { case_id: caseId, fileName: file.name, extension: ext },
+        },
+      });
+
+      if (error) throw error;
+      if (!data?.ok) throw new Error(data?.error || "Falha no envio");
+
+      showSuccess(`${type === "image" ? "Imagem" : "Arquivo"} enviado.`);
+
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ["wa_messages_case", activeTenantId, caseId, conversationMode, entityPhone, waGroupId] }),
+        qc.invalidateQueries({ queryKey: ["timeline", activeTenantId, caseId] }),
+      ]);
+    } catch (e: any) {
+      showError(`Falha no upload/envio: ${e?.message ?? "erro"}`);
+    } finally {
+      setUploading(false);
+    }
+  };
+
   const sendText = async () => {
     if (!activeTenantId) return;
     const inst = instanceQ.data;
@@ -522,22 +582,16 @@ export function WhatsAppConversation({
 
       if (error) throw error;
       if (!data?.ok) {
-        // ...
         throw new Error(data?.error || "Falha no envio");
       }
 
       setText("");
-      showSuccess("Mensagem preparada/enfileirada.");
+      showSuccess("Mensagem enviada.");
 
-      // Auto-refresh using the same keys
       await Promise.all([
-        // ... existing invalidation
-        qc.invalidateQueries({ queryKey: ["wa_messages_case", activeTenantId, caseId] }), // old key just in case
         qc.invalidateQueries({ queryKey: ["wa_messages_case", activeTenantId, caseId, conversationMode, entityPhone, waGroupId] }),
         qc.invalidateQueries({ queryKey: ["timeline", activeTenantId, caseId] }),
       ]);
-
-
     } catch (e: any) {
       showError(`Falha ao enviar: ${e?.message ?? "erro"}`);
     } finally {
@@ -984,14 +1038,49 @@ export function WhatsAppConversation({
 
           {/* Composer */}
           <div className="border-t border-slate-200 bg-white/80 p-3 backdrop-blur">
+            <input
+              type="file"
+              ref={imageRef}
+              className="hidden"
+              accept="image/*"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) uploadAndSend(f, "image");
+                e.target.value = "";
+              }}
+            />
+            <input
+              type="file"
+              ref={audioRef}
+              className="hidden"
+              accept="audio/*"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) uploadAndSend(f, "audio");
+                e.target.value = "";
+              }}
+            />
+            <input
+              type="file"
+              ref={fileRef}
+              className="hidden"
+              accept="*/*"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) uploadAndSend(f, "document");
+                e.target.value = "";
+              }}
+            />
+
             <div className="flex items-end gap-2">
               <div className="flex items-center gap-1">
                 <Button
                   type="button"
                   variant="secondary"
                   className="h-10 w-10 rounded-2xl p-0"
-                  title="Anexar (em breve)"
-                  disabled
+                  title="Anexar arquivo"
+                  disabled={uploading || sending}
+                  onClick={() => fileRef.current?.click()}
                 >
                   <Paperclip className="h-4 w-4" />
                 </Button>
@@ -999,8 +1088,9 @@ export function WhatsAppConversation({
                   type="button"
                   variant="secondary"
                   className="h-10 w-10 rounded-2xl p-0"
-                  title="Foto (em breve)"
-                  disabled
+                  title="Enviar imagem"
+                  disabled={uploading || sending}
+                  onClick={() => imageRef.current?.click()}
                 >
                   <ImageIcon className="h-4 w-4" />
                 </Button>
@@ -1008,8 +1098,9 @@ export function WhatsAppConversation({
                   type="button"
                   variant="secondary"
                   className="h-10 w-10 rounded-2xl p-0"
-                  title="Áudio (em breve)"
-                  disabled
+                  title="Enviar áudio"
+                  disabled={uploading || sending}
+                  onClick={() => audioRef.current?.click()}
                 >
                   <Mic className="h-4 w-4" />
                 </Button>
@@ -1019,10 +1110,12 @@ export function WhatsAppConversation({
                 <textarea
                   value={text}
                   onChange={(e) => setText(e.target.value)}
-                  placeholder="Escreva sua mensagem…"
+                  placeholder={uploading ? "Enviando arquivo…" : "Escreva sua mensagem…"}
+                  disabled={uploading}
                   className={cn(
                     "h-10 w-full resize-none rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm text-slate-800 shadow-sm outline-none",
-                    "placeholder:text-slate-400 focus:border-[hsl(var(--byfrost-accent)/0.45)]"
+                    "placeholder:text-slate-400 focus:border-[hsl(var(--byfrost-accent)/0.45)]",
+                    uploading && "opacity-50"
                   )}
                   onKeyDown={(e) => {
                     if (e.key === "Enter" && !e.shiftKey) {
@@ -1037,7 +1130,7 @@ export function WhatsAppConversation({
                 type="button"
                 className="h-10 w-11 rounded-2xl bg-[hsl(var(--byfrost-accent))] p-0 text-white shadow-sm hover:bg-[hsl(var(--byfrost-accent)/0.92)]"
                 onClick={sendText}
-                disabled={sending || !text.trim()}
+                disabled={sending || uploading || !text.trim()}
                 title="Enviar"
               >
                 <Send className="h-4 w-4" />

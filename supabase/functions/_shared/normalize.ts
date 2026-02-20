@@ -4,6 +4,11 @@ export function normalizePhoneE164Like(input: string | null | undefined) {
   const raw = String(input).trim();
   if (!raw) return null;
 
+  // Preserve WhatsApp Group and Broadcast IDs
+  if (raw.toLowerCase().includes("@g.us") || raw.toLowerCase().includes("@broadcast")) {
+    return raw;
+  }
+
   // Z-API sometimes emits LID identifiers (e.g. "1864...@lid"). These are NOT phone numbers.
   // Returning null prevents creating customers/cases with bogus long numbers.
   if (raw.toLowerCase().includes("@lid")) return null;

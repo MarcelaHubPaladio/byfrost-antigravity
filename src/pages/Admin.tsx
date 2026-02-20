@@ -46,7 +46,7 @@ import { AccessMatrixPanel } from "@/components/admin/AccessMatrixPanel";
 import { OrgChartPanel } from "@/components/admin/OrgChartPanel";
 import { IncentivesPanel } from "@/components/admin/IncentivesPanel";
 import { TenantModulesPanel } from "@/components/admin/TenantModulesPanel";
-import { Trash2, PauseCircle, PlayCircle, ChevronLeft, ChevronRight, UsersRound, Smartphone, Copy, Shield, Settings2 } from "lucide-react";
+import { Trash2, PauseCircle, PlayCircle, ChevronLeft, ChevronRight, UsersRound, Smartphone, Copy, Shield, Settings2, Zap } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 
 type UserRole = string;
@@ -189,6 +189,49 @@ export default function Admin() {
   const [deletingInstanceId, setDeletingInstanceId] = useState<string | null>(null);
   const [updatingInstanceId, setUpdatingInstanceId] = useState<string | null>(null);
   const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
+
+  const [testDialogOpen, setTestDialogOpen] = useState(false);
+  const [testPhone, setTestPhone] = useState("");
+  const [testTargetInstId, setTestTargetInstId] = useState<string | null>(null);
+  const [testing, setTesting] = useState(false);
+
+  const testConnection = async () => {
+    if (!activeTenantId || !testTargetInstId || !testPhone.trim()) return;
+    setTesting(true);
+    try {
+      const url = "https://pryoirzeghatrgecwrci.supabase.co/functions/v1/integrations-zapi-send";
+      const { data: sess } = await supabase.auth.getSession();
+      const token = sess.session?.access_token;
+
+      const res = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          tenantId: activeTenantId,
+          instanceId: testTargetInstId,
+          to: testPhone.trim(),
+          type: "text",
+          text: "🚀 Byfrost Connection Test: Sua instância Z-API está conectada e enviando mensagens corretamente!",
+        }),
+      });
+
+      const json = await res.json().catch(() => null);
+      if (!res.ok || !json?.ok) {
+        throw new Error(json?.error || json?.external?.body?.message || `HTTP ${res.status}`);
+      }
+
+      showSuccess("Mensagem de teste enviada!");
+      setTestDialogOpen(false);
+      setTestPhone("");
+    } catch (e: any) {
+      showError(`Falha no teste: ${e?.message ?? "erro"}`);
+    } finally {
+      setTesting(false);
+    }
+  };
   const [addingSelf, setAddingSelf] = useState(false);
   const [selfRole, setSelfRole] = useState<UserRole>("admin");
 
@@ -1773,6 +1816,19 @@ export default function Admin() {
                                           </Button>
                                         )}
 
+                                        <Button
+                                          variant="secondary"
+                                          className="h-7 rounded-lg border border-indigo-200 bg-indigo-50 px-2 text-[10px] text-indigo-900 shadow-sm hover:bg-indigo-100"
+                                          disabled={!isActive || Boolean(updatingInstanceId) || deletingInstanceId === i.id}
+                                          onClick={() => {
+                                            setTestTargetInstId(i.id);
+                                            setTestDialogOpen(true);
+                                          }}
+                                        >
+                                          <Zap className="h-3.5 w-3.5 mr-1" />
+                                          Testar
+                                        </Button>
+
                                         <AlertDialog>
                                           <AlertDialogTrigger asChild>
                                             <Button
@@ -2153,6 +2209,50 @@ export default function Admin() {
               </TabsContent>
             </Tabs>
           </div>
+
+          {/* Test Connection Dialog */}
+          <Dialog open={testDialogOpen} onOpenChange={setTestDialogOpen}>
+            <DialogContent className="rounded-[28px] border-slate-200 bg-white shadow-2xl sm:max-w-[420px]">
+              <DialogHeader>
+                <DialogTitle className="text-xl font-bold text-slate-900">Testar envio</DialogTitle>
+                <DialogDescription className="text-sm text-slate-500">
+                  Enviaremos uma mensagem de texto simples para validar a conectividade com o Z-API.
+                </DialogDescription>
+              </DialogHeader>
+
+              <div className="py-4">
+                <Label className="text-sm font-semibold text-slate-800">Telefone de destino</Label>
+                <Input
+                  className="mt-2 h-12 rounded-2xl bg-slate-50 border-slate-200"
+                  placeholder="+5511999999999"
+                  value={testPhone}
+                  onChange={(e) => setTestPhone(e.target.value)}
+                  disabled={testing}
+                />
+                <div className="mt-2 text-[11px] text-slate-500">
+                  Certifique-se de incluir o código do país (ex: 55).
+                </div>
+              </div>
+
+              <DialogFooter className="gap-2 sm:gap-0">
+                <Button
+                  variant="secondary"
+                  className="h-11 rounded-2xl border-slate-200"
+                  onClick={() => setTestDialogOpen(false)}
+                  disabled={testing}
+                >
+                  Cancelar
+                </Button>
+                <Button
+                  className="h-11 rounded-2xl bg-indigo-600 px-6 text-white hover:bg-indigo-700"
+                  onClick={testConnection}
+                  disabled={testing || !testPhone.trim()}
+                >
+                  {testing ? "Enviando..." : "Enviar teste"}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
         </div>
       </AppShell>
     </RequireAuth >
