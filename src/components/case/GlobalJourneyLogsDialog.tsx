@@ -96,7 +96,7 @@ export function GlobalJourneyLogsDialog({ journeyId, journeyName, tenantId }: Gl
                     status: it.http_status,
                     reason: it.reason,
                     direction: it.direction,
-                    wa_type: it.wa_type || it.meta_json?.raw_type || 'event',
+                    wa_type: it.meta_json?.raw_type || it.wa_type || 'event',
                     from: it.from_phone,
                     to: it.to_phone,
                     caseId: it.meta_json?.case_id,
