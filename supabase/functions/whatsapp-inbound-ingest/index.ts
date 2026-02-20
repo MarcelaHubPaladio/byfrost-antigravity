@@ -200,7 +200,7 @@ serve(async (req) => {
 
         // 5. DIAGNOSTIC LOGGING (wa_webhook_inbox) - REGISTRA TUDO
         try {
-            await supabase.from("wa_webhook_inbox").insert({
+            const inboxRecord = {
                 tenant_id: instance.tenant_id,
                 instance_id: instance.id,
                 zapi_instance_id: zapiId,
@@ -224,9 +224,19 @@ serve(async (req) => {
                     raw_type: payload?.type || payload?.event
                 },
                 received_at: new Date().toISOString()
-            });
+            };
+
+            console.log(`[${fn}] Inserting diagnostic log for tenant ${instance.tenant_id}, reason: ${inboxRecord.reason}`);
+
+            const { error: inboxErr } = await supabase.from("wa_webhook_inbox").insert(inboxRecord);
+
+            if (inboxErr) {
+                console.error(`[${fn}] Database insert failed for wa_webhook_inbox`, inboxErr);
+            } else {
+                console.log(`[${fn}] Diagnostic log inserted successfully`);
+            }
         } catch (e) {
-            console.error(`[${fn}] Diagnostic logging failed`, e);
+            console.error(`[${fn}] Diagnostic logging critical failure`, e);
         }
 
         return new Response(JSON.stringify({
