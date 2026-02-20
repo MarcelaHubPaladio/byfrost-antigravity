@@ -199,28 +199,19 @@ export default function Admin() {
     if (!activeTenantId || !testTargetInstId || !testPhone.trim()) return;
     setTesting(true);
     try {
-      const url = "https://pryoirzeghatrgecwrci.supabase.co/functions/v1/integrations-zapi-send";
-      const { data: sess } = await supabase.auth.getSession();
-      const token = sess.session?.access_token;
-
-      const res = await fetch(url, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify({
+      const { data, error } = await supabase.functions.invoke("integrations-zapi-send", {
+        body: {
           tenantId: activeTenantId,
           instanceId: testTargetInstId,
           to: testPhone.trim(),
           type: "text",
           text: "🚀 Byfrost Connection Test: Sua instância Z-API está conectada e enviando mensagens corretamente!",
-        }),
+        },
       });
 
-      const json = await res.json().catch(() => null);
-      if (!res.ok || !json?.ok) {
-        throw new Error(json?.error || json?.external?.body?.message || `HTTP ${res.status}`);
+      if (error) throw error;
+      if (!data?.ok) {
+        throw new Error(data?.error || data?.external?.body?.message || "Erro no teste");
       }
 
       showSuccess("Mensagem de teste enviada!");
