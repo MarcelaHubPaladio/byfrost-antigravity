@@ -99,22 +99,23 @@ export function PendencyResolver({
 
         setSaving(true);
         try {
-            // 1. Upload attachment if exists
-            if (dataUrl) {
-                const { error: attErr } = await supabase.from("pendency_attachments").insert({
-                    pendency_id: pendency.id,
-                    storage_path: dataUrl,
-                    // content_type could also be added if the schema supports it, but keeping it minimal
-                });
-                if (attErr) throw attErr;
+            // 1. Mark pendency as answered and save attachment in metadata if exists
+            const nextMetadata = { ...(pendency.metadata_json || {}) };
+            if (dataUrl && file) {
+                nextMetadata.answered_attachment = {
+                    file_name: file.name,
+                    file_type: file.type,
+                    file_size: file.size,
+                    base64_data: dataUrl
+                };
             }
 
-            // 2. Mark pendency as answered
             const { error: pendErr } = await supabase
                 .from("pendencies")
                 .update({
                     status: "answered",
                     answered_text: justification.trim() || null,
+                    metadata_json: nextMetadata,
                 })
                 .eq("id", pendency.id);
 
