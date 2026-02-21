@@ -54,6 +54,7 @@ import { showError, showSuccess } from "@/utils/toast";
 import { getStateLabel } from "@/lib/journeyLabels";
 import { useJourneyTransition } from "@/hooks/useJourneyTransition";
 import { StateMachine } from "@/lib/journeys/types";
+import { PendencyResolver } from "@/components/case/PendencyResolver";
 
 function ConfidencePill({ v }: { v: number | null | undefined }) {
   const pct = Math.round(Math.max(0, Math.min(1, Number(v ?? 0))) * 100);
@@ -559,18 +560,27 @@ export default function CaseDetail() {
                       {p.assigned_to_role} • {p.type} • {p.required ? "obrigatória" : "opcional"}
                     </div>
                   </div>
-                  <Badge
-                    className={cn(
-                      "rounded-full border-0",
-                      p.status === "open"
-                        ? "bg-amber-100 text-amber-900"
-                        : p.status === "answered"
-                          ? "bg-emerald-100 text-emerald-900"
-                          : "bg-slate-100 text-slate-700"
+                  <div className="flex items-center gap-2">
+                    {p.status === "open" && activeTenantId && id && (
+                      <PendencyResolver
+                        tenantId={activeTenantId}
+                        caseId={id}
+                        pendency={p}
+                      />
                     )}
-                  >
-                    {p.status}
-                  </Badge>
+                    <Badge
+                      className={cn(
+                        "rounded-full border-0",
+                        p.status === "open"
+                          ? "bg-amber-100 text-amber-900"
+                          : p.status === "answered"
+                            ? "bg-emerald-100 text-emerald-900"
+                            : "bg-slate-100 text-slate-700"
+                      )}
+                    >
+                      {p.status}
+                    </Badge>
+                  </div>
                 </div>
                 {p.answered_text && (
                   <div className="mt-2 text-xs text-slate-600">
