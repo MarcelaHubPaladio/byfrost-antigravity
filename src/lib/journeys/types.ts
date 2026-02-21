@@ -3,6 +3,7 @@ export interface TaskConfig {
   description: string;
   required: boolean;
   require_attachment?: boolean;
+  require_justification?: boolean;
 }
 
 export interface StatusConfig {

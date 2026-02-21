@@ -297,6 +297,18 @@ export default function CaseDetail() {
       return;
     }
 
+    // 4. Check closed required pendencies that require justification but have no text
+    const missingJustifications = (pendQ.data ?? []).filter((p: any) => {
+      const requireJust = p.metadata_json?.require_justification === true;
+      const hasText = typeof p.answered_text === "string" && p.answered_text.trim().length > 0;
+      return p.required && requireJust && !hasText;
+    });
+
+    if (missingJustifications.length > 0) {
+      showError("Verifique as pendências obrigatórias, algumas exigem justificativa que não foi preenchida.");
+      return;
+    }
+
     try {
       await transitionState(
         id,
@@ -344,7 +356,7 @@ export default function CaseDetail() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("pendencies")
-        .select("id,type,assigned_to_role,question_text,required,status,created_at,answered_text")
+        .select("id,type,assigned_to_role,question_text,required,status,created_at,answered_text,metadata_json,attachments:pendency_attachments(id,storage_path)")
         .eq("case_id", id!)
         .order("created_at", { ascending: true });
       if (error) throw error;

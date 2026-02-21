@@ -9,7 +9,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Paperclip } from "lucide-react";
+import { Paperclip, MessageSquareText } from "lucide-react";
 
 interface Props {
     tenantId: string;
@@ -81,6 +81,7 @@ export function StatusConfigsEditor({ tenantId, states, statusConfigsJson, onCha
     const [newTaskDesc, setNewTaskDesc] = useState("");
     const [newTaskRequired, setNewTaskRequired] = useState(true);
     const [newTaskRequireAttachment, setNewTaskRequireAttachment] = useState(false);
+    const [newTaskRequireJustification, setNewTaskRequireJustification] = useState(false);
     const [newFieldName, setNewFieldName] = useState("");
 
     const addTask = () => {
@@ -90,10 +91,12 @@ export function StatusConfigsEditor({ tenantId, states, statusConfigsJson, onCha
             description: newTaskDesc.trim(),
             required: newTaskRequired,
             require_attachment: newTaskRequireAttachment,
+            require_justification: newTaskRequireJustification,
         };
         updateConfig(selectedState, { mandatory_tasks: [...currentTasks, newTask] });
         setNewTaskDesc("");
         setNewTaskRequireAttachment(false);
+        setNewTaskRequireJustification(false);
     };
 
     const removeTask = (taskId: string) => {
@@ -216,6 +219,11 @@ export function StatusConfigsEditor({ tenantId, states, statusConfigsJson, onCha
                                                     <Paperclip className="h-3 w-3" /> Anexo exigido
                                                 </span>
                                             )}
+                                            {t.require_justification && (
+                                                <span className="flex items-center gap-1 text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded font-medium">
+                                                    <MessageSquareText className="h-3 w-3" /> Justificativa exigida
+                                                </span>
+                                            )}
                                         </div>
                                     </div>
                                     <button onClick={() => removeTask(t.id)} className="text-slate-400 hover:text-red-500 transition-colors">
@@ -245,6 +253,12 @@ export function StatusConfigsEditor({ tenantId, states, statusConfigsJson, onCha
                                     <Switch checked={newTaskRequireAttachment} onCheckedChange={setNewTaskRequireAttachment} />
                                     <span className="text-[11px] text-indigo-900 font-medium flex items-center gap-1">
                                         <Paperclip className="h-3 w-3" /> Exigir Anexo
+                                    </span>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <Switch checked={newTaskRequireJustification} onCheckedChange={setNewTaskRequireJustification} />
+                                    <span className="text-[11px] text-indigo-900 font-medium flex items-center gap-1">
+                                        <MessageSquareText className="h-3 w-3" /> Exigir Resposta
                                     </span>
                                 </div>
                             </div>
