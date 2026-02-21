@@ -534,14 +534,6 @@ export default function CaseDetail() {
           <TrelloCardDetails tenantId={activeTenantId} caseId={id} />
         ) : null}
 
-        {/* Editáveis: apenas sales_order */}
-        {id && isSalesOrder ? (
-          <>
-            <CaseCustomerDataEditorCard caseId={id} fields={fieldsQ.data as any} />
-            <SalesOrderItemsEditorCard caseId={id} />
-          </>
-        ) : null}
-
         {/* Pendências */}
         <div className="rounded-[22px] border border-slate-200 bg-white p-4">
           <div className="flex items-center justify-between">
@@ -596,6 +588,16 @@ export default function CaseDetail() {
             )}
           </div>
         </div>
+
+        {/* Editáveis: apenas sales_order */}
+        {id && isSalesOrder ? (
+          <>
+            <CaseCustomerDataEditorCard caseId={id} fields={fieldsQ.data as any} />
+            <SalesOrderItemsEditorCard caseId={id} />
+          </>
+        ) : null}
+
+
 
         {/* Anexos */}
         {!isTrello ? (
