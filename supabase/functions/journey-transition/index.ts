@@ -17,10 +17,14 @@ interface StateMachine {
 // Handler Logic
 serve(async (req) => {
     try {
-        const { record, old_record, tenant_id } = await req.json();
+        const payload = await req.json();
+        const record = payload.record;
+        const old_record = payload.old_record || null;
+        const tenant_id = payload.tenant_id || record?.tenant_id;
 
         // Basic validation
         if (!record || !tenant_id) {
+            console.error("Missing record or tenant_id. Payload:", JSON.stringify(payload));
             return new Response("Missing record or tenant_id", { status: 400 });
         }
 
