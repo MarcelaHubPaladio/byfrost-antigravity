@@ -32,6 +32,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { showError, showSuccess } from "@/utils/toast";
 import { Download, Landmark, Pencil, Plus, Upload } from "lucide-react";
+import { AsyncSelect } from "@/components/ui/async-select";
 
 type BankAccountRow = {
   id: string;
@@ -145,10 +146,10 @@ function parseCategoryCsv(text: string) {
   // Only consider delimiter if the header *looks like* a multi-column CSV.
   const delimiter: "," | ";" | null =
     header.includes(";") &&
-    (headerLower.includes("categoria") || headerLower.includes("nome") || headerLower.includes("tipo"))
+      (headerLower.includes("categoria") || headerLower.includes("nome") || headerLower.includes("tipo"))
       ? ";"
       : header.includes(",") &&
-          (headerLower.includes("categoria") || headerLower.includes("nome") || headerLower.includes("tipo"))
+        (headerLower.includes("categoria") || headerLower.includes("nome") || headerLower.includes("tipo"))
         ? ","
         : null;
 
@@ -300,7 +301,7 @@ export function FinancialLedgerPanel() {
       const { data, error } = await supabase
         .from("financial_transactions")
         .select(
-          "id,tenant_id,account_id,amount,type,description,transaction_date,status,source,fingerprint,category_id,created_at"
+          "id,tenant_id,account_id,amount,type,description,transaction_date,status,source,fingerprint,category_id,created_at,entity_id,core_entities(display_name)"
         )
         .eq("tenant_id", activeTenantId!)
         .gte("transaction_date", txStartDate)
@@ -527,6 +528,7 @@ export function FinancialLedgerPanel() {
   const [txType, setTxType] = useState<"credit" | "debit">("debit");
   const [amount, setAmount] = useState<string>("");
   const [description, setDescription] = useState<string>("");
+  const [txEntityId, setTxEntityId] = useState<string | null>(null);
 
   const descNorm = useMemo(() => normalizeDescription(description), [description]);
   const [categoryId, setCategoryId] = useState<string>("");
@@ -596,6 +598,7 @@ export function FinancialLedgerPanel() {
         source: "manual",
         raw_payload: { origin: "manual" },
         category_id: categoryId || null,
+        entity_id: txEntityId || null,
       });
       if (insErr) throw insErr;
 
@@ -625,6 +628,7 @@ export function FinancialLedgerPanel() {
       setDescription("");
       setCategoryId("");
       setCategoryTouched(false);
+      setTxEntityId(null);
       setTxDialogOpen(false);
       await qc.invalidateQueries({ queryKey: ["financial_transactions", activeTenantId] });
     },
@@ -784,7 +788,28 @@ export function FinancialLedgerPanel() {
                       ) : null}
                     </div>
 
-                    <div className="md:col-span-6">
+                    <div className="md:col-span-2">
+                      <Label className="text-xs">Entidade</Label>
+                      <AsyncSelect
+                        className="mt-1 h-9 rounded-2xl"
+                        value={txEntityId}
+                        onChange={setTxEntityId}
+                        placeholder="Buscar cliente/fornec..."
+                        loadOptions={async (val) => {
+                          if (!activeTenantId || val.length < 2) return [];
+                          const { data } = await supabase
+                            .from("core_entities")
+                            .select("id, display_name")
+                            .eq("tenant_id", activeTenantId)
+                            .ilike("display_name", `%${val}%`)
+                            .is("deleted_at", null)
+                            .limit(10);
+                          return (data || []).map((d) => ({ value: d.id, label: d.display_name }));
+                        }}
+                      />
+                    </div>
+
+                    <div className="md:col-span-4">
                       <Label className="text-xs">Descrição</Label>
                       <Input className="mt-1 rounded-2xl" value={description} onChange={(e) => setDescription(e.target.value)} />
                     </div>
@@ -864,6 +889,7 @@ export function FinancialLedgerPanel() {
                 <TableRow>
                   <TableHead>Data</TableHead>
                   <TableHead>Descrição</TableHead>
+                  <TableHead>Entidade</TableHead>
                   <TableHead>Conta</TableHead>
                   <TableHead>Tipo</TableHead>
                   <TableHead className="text-right">Valor</TableHead>
@@ -881,6 +907,11 @@ export function FinancialLedgerPanel() {
                         <div className="font-medium text-slate-900 dark:text-slate-100">{t.description ?? "—"}</div>
                         <div className="mt-0.5 text-[11px] text-slate-500 dark:text-slate-400">
                           {t.source} • {t.status}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="whitespace-nowrap font-medium text-slate-800 dark:text-slate-200">
+                          {t.core_entities?.display_name ?? <span className="text-slate-400">—</span>}
                         </div>
                       </TableCell>
                       <TableCell className="whitespace-nowrap">

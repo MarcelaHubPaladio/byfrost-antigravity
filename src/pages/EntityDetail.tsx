@@ -17,6 +17,7 @@ import { Pencil, Trash2 } from "lucide-react";
 import { PartyCustomerEditorCard } from "@/components/core/PartyCustomerEditorCard";
 import { PartyProposalCard } from "@/components/core/PartyProposalCard";
 import { EntityHistory } from "@/components/core/EntityHistory";
+import { EntityFinanceTab } from "@/components/finance/EntityFinanceTab";
 
 type EntityRow = {
   id: string;
@@ -160,6 +161,7 @@ export default function EntityDetail() {
                   <TabsTrigger value="overview">Visão geral</TabsTrigger>
                   {entityQ.data?.entity_type === "party" ? <TabsTrigger value="customer">Cliente</TabsTrigger> : null}
                   {entityQ.data?.entity_type === "party" ? <TabsTrigger value="proposal">Proposta</TabsTrigger> : null}
+                  <TabsTrigger value="finance">Financeiro</TabsTrigger>
                   <TabsTrigger value="timeline">Linha do tempo</TabsTrigger>
                 </TabsList>
 
@@ -217,6 +219,10 @@ export default function EntityDetail() {
                   </TabsContent>
                 ) : null}
 
+                <TabsContent value="finance">
+                  {activeTenantId ? <EntityFinanceTab tenantId={activeTenantId} entityId={entityId} /> : null}
+                </TabsContent>
+
                 <TabsContent value="timeline">
                   {activeTenantId ? <EntityHistory tenantId={activeTenantId} entityId={entityId} /> : null}
                 </TabsContent>
@@ -240,8 +246,8 @@ export default function EntityDetail() {
               onOpenChange={setDeleteOpen}
               title="Excluir entidade"
               description="Esta ação faz soft delete. Você pode reverter via banco."
-              confirmText={deleting ? "Excluindo…" : "Excluir"}
-              confirmDisabled={deleting}
+              confirmLabel={deleting ? "Excluindo…" : "Excluir"}
+              disabled={deleting}
               onConfirm={onDelete}
             />
           </div>
