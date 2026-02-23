@@ -991,7 +991,7 @@ export function FinancialLedgerPanel() {
                       </TableCell>
                       <TableCell className="min-w-[220px]">
                         <AsyncSelect
-                          className="h-9 rounded-2xl border-transparent hover:border-slate-200 focus:border-slate-300 transition-colors"
+                          className="h-9 rounded-2xl"
                           value={t.entity_id ?? null}
                           initialLabel={t.core_entities?.display_name ?? null}
                           onChange={(v) =>
