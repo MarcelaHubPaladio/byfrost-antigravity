@@ -1066,7 +1066,7 @@ export function FinancialLedgerPanel() {
                     const acc = accountById.get(t.account_id);
                     const cat = t.category_id ? categoryById.get(t.category_id) : null;
                     return (
-                      <TableRow key={t.id}>
+                      <TableRow key={t.id} className="group">
                         <TableCell className="w-[110px] whitespace-nowrap">{t.transaction_date}</TableCell>
                         <TableCell className="max-w-[300px]">
                           <div className="truncate font-medium text-slate-900 dark:text-slate-100" title={t.description}>{t.description ?? "—"}</div>
@@ -1095,17 +1095,29 @@ export function FinancialLedgerPanel() {
                               return (data || []).map((d) => ({ value: d.id, label: d.display_name }));
                             }}
                           />
+                          {t.entity_id && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="mt-1 h-5 w-full text-[10px] text-slate-400 opacity-0 group-hover:opacity-100"
+                              onClick={() => setFilterEntityId(t.entity_id)}
+                            >
+                              Filtrar este
+                            </Button>
+                          )}
                         </TableCell>
-                        <TableCell className="whitespace-nowrap">
-                          {acc ? `${acc.account_name}` : String(t.account_id).slice(0, 8)}
+                        <TableCell className="w-[140px]">
+                          <div className="truncate text-[11px]" title={acc?.account_name}>
+                            {acc ? acc.account_name : String(t.account_id).slice(0, 8)}
+                          </div>
                         </TableCell>
-                        <TableCell className="font-medium text-slate-900 dark:text-slate-100">{t.type}</TableCell>
-                        <TableCell className="text-right font-bold text-slate-900 dark:text-slate-100">
+                        <TableCell className="w-[80px] text-[11px] font-medium text-slate-900 dark:text-slate-100">{t.type}</TableCell>
+                        <TableCell className="w-[110px] text-right font-bold text-slate-900 dark:text-slate-100">
                           {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(t.amount)}
                         </TableCell>
-                        <TableCell className="min-w-[220px]">
+                        <TableCell className="w-[180px]">
                           <AsyncSelect
-                            className="h-9 rounded-2xl"
+                            className="h-8 rounded-xl"
                             value={t.category_id ?? null}
                             initialLabel={(t as any).financial_categories?.name ?? null}
                             onChange={(v) =>
@@ -1132,9 +1144,19 @@ export function FinancialLedgerPanel() {
                               }));
                             }}
                           />
-                          {cat ? (
-                            <div className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">{cat.type}</div>
-                          ) : null}
+                          <div className="flex items-center justify-between">
+                            {cat ? <div className="mt-1 text-[10px] text-slate-500 dark:text-slate-400">{cat.type}</div> : <div></div>}
+                            {t.category_id && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="mt-1 h-5 text-[10px] text-slate-400 opacity-0 group-hover:opacity-100"
+                                onClick={() => setFilterCategoryId(t.category_id)}
+                              >
+                                Filtrar
+                              </Button>
+                            )}
+                          </div>
                         </TableCell>
                       </TableRow>
                     );
