@@ -301,7 +301,7 @@ export function FinancialLedgerPanel() {
       const { data, error } = await supabase
         .from("financial_transactions")
         .select(
-          "id,tenant_id,account_id,amount,type,description,transaction_date,status,source,fingerprint,category_id,created_at,entity_id,core_entities(display_name)"
+          "id,tenant_id,account_id,amount,type,description,transaction_date,status,source,fingerprint,category_id,created_at,entity_id,core_entities(display_name),financial_categories(name)"
         )
         .eq("tenant_id", activeTenantId!)
         .gte("transaction_date", txStartDate)
@@ -1043,23 +1043,34 @@ export function FinancialLedgerPanel() {
                           {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(t.amount)}
                         </TableCell>
                         <TableCell className="min-w-[220px]">
-                          <Select
-                            value={t.category_id ?? ""}
-                            onValueChange={(v) =>
+                          <AsyncSelect
+                            className="h-9 rounded-2xl"
+                            value={t.category_id ?? null}
+                            initialLabel={(t as any).financial_categories?.name ?? null}
+                            onChange={(v) =>
                               updateTxCategoryM.mutate({ id: t.id, description: t.description, categoryId: v })
                             }
-                          >
-                            <SelectTrigger className="h-9 rounded-2xl">
-                              <SelectValue placeholder="(sem categoria)" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {(categoriesQ.data ?? []).map((c) => (
-                                <SelectItem key={c.id} value={c.id}>
-                                  {c.name} ({c.type})
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
+                            placeholder="(sem categoria)"
+                            loadOptions={async (val) => {
+                              if (!activeTenantId) return [];
+                              const query = supabase
+                                .from("financial_categories")
+                                .select("id, name, type")
+                                .eq("tenant_id", activeTenantId)
+                                .order("name", { ascending: true })
+                                .limit(20);
+
+                              if (val.trim()) {
+                                query.ilike("name", `%${val}%`);
+                              }
+
+                              const { data } = await query;
+                              return (data || []).map((c) => ({
+                                value: c.id,
+                                label: `${c.name} (${c.type})`
+                              }));
+                            }}
+                          />
                           {cat ? (
                             <div className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">{cat.type}</div>
                           ) : null}
