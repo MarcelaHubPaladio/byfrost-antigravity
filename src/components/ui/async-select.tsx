@@ -118,9 +118,12 @@ export function AsyncSelect({
                     variant="outline"
                     role="combobox"
                     aria-expanded={open}
-                    className={cn("w-full justify-between", className)}
+                    className={cn(
+                        "h-9 w-full justify-between rounded-xl border-slate-200 bg-white/50 px-3 py-2 text-sm font-normal shadow-sm hover:bg-white/80 dark:border-slate-800 dark:bg-slate-950/20 dark:hover:bg-slate-900/50",
+                        className
+                    )}
                 >
-                    {selectedLabel || value || placeholder}
+                    <span className="truncate">{selectedLabel || value || placeholder}</span>
                     <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                 </Button>
             </PopoverTrigger>
