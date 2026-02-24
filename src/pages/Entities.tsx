@@ -20,6 +20,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { EntityImportDialog } from "@/components/core/EntityImportDialog";
+import { Upload } from "lucide-react";
 
 type EntityRow = {
   id: string;
@@ -39,6 +41,7 @@ export default function Entities() {
   const [q, setQ] = useState("");
   const [typeFilter, setTypeFilter] = useState<EntityTypeFilter>("all");
   const [createOpen, setCreateOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
 
   const listQ = useQuery({
     queryKey: ["entities", activeTenantId, q, typeFilter],
@@ -101,10 +104,16 @@ export default function Entities() {
                   </SelectContent>
                 </Select>
 
-                <Button className="rounded-xl" onClick={() => setCreateOpen(true)} disabled={!activeTenantId}>
-                  <Plus className="mr-2 h-4 w-4" />
-                  Nova
-                </Button>
+                <div className="flex items-center gap-2">
+                  <Button variant="secondary" className="rounded-xl" onClick={() => setImportOpen(true)} disabled={!activeTenantId}>
+                    <Upload className="mr-2 h-4 w-4" />
+                    Importar CSV
+                  </Button>
+                  <Button className="rounded-xl" onClick={() => setCreateOpen(true)} disabled={!activeTenantId}>
+                    <Plus className="mr-2 h-4 w-4" />
+                    Nova
+                  </Button>
+                </div>
               </div>
             </div>
 
@@ -146,6 +155,14 @@ export default function Entities() {
                 tenantId={activeTenantId}
                 initial={null}
                 onSaved={(id) => nav(`/app/entities/${id}`)}
+              />
+            ) : null}
+
+            {activeTenantId ? (
+              <EntityImportDialog
+                open={importOpen}
+                onOpenChange={setImportOpen}
+                tenantId={activeTenantId}
               />
             ) : null}
           </div>
