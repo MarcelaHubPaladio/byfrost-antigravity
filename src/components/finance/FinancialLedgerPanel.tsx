@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { cn } from "@/lib/utils";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { useTenant } from "@/providers/TenantProvider";
@@ -295,6 +296,72 @@ export function FinancialLedgerPanel() {
   const [filterCategoryId, setFilterCategoryId] = useState<string | null>(null);
   const [sortKey, setSortKey] = useState<string | null>(null);
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+
+  // DRE State
+  const dreMonths = useMemo(() => {
+    const months = [];
+    const now = new Date();
+    for (let i = 3; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      months.push({
+        label: d.toLocaleString("pt-BR", { month: "short" }).toUpperCase(),
+        key: d.toISOString().slice(0, 7), // YYYY-MM
+        start: new Date(d.getFullYear(), d.getMonth(), 1).toISOString().slice(0, 10),
+        end: new Date(d.getFullYear(), d.getMonth() + 1, 0).toISOString().slice(0, 10),
+      });
+    }
+    return months;
+  }, []);
+
+  const dreTransactionsQ = useQuery({
+    queryKey: ["financial_dre", activeTenantId, dreMonths[0].start, dreMonths[3].end],
+    enabled: Boolean(activeTenantId),
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("financial_transactions")
+        .select("amount, type, category_id, transaction_date")
+        .eq("tenant_id", activeTenantId!)
+        .gte("transaction_date", dreMonths[0].start)
+        .lte("transaction_date", dreMonths[3].end);
+      if (error) throw error;
+      return (data ?? []) as any[];
+    },
+  });
+
+  const dreData = useMemo(() => {
+    const categories = categoriesQ.data ?? [];
+    const transactions = dreTransactionsQ.data ?? [];
+
+    const rows: Record<string, { category: CategoryRow; months: Record<string, number> }> = {};
+
+    // Initialize rows for categories that have transactions
+    transactions.forEach(t => {
+      if (!t.category_id) return;
+      if (!rows[t.category_id]) {
+        const cat = categories.find(c => c.id === t.category_id);
+        if (!cat) return;
+        rows[t.category_id] = { category: cat, months: {} };
+        dreMonths.forEach(m => { rows[t.category_id].months[m.key] = 0; });
+      }
+      const mKey = t.transaction_date.slice(0, 7);
+      if (rows[t.category_id].months[mKey] !== undefined) {
+        // Amount is always positive in DB, we rely on t.type if needed but DRE usually sums by category
+        // Actually, let's keep it simple: sum absolute amounts. 
+        // If type is debit, it's an expense category usually.
+        rows[t.category_id].months[mKey] += Number(t.amount);
+      }
+    });
+
+    const sortedRows = Object.values(rows).sort((a, b) => {
+      if (a.category.type !== b.category.type) {
+        const order = { revenue: 0, cost: 1, variable: 2, fixed: 3, other: 4 };
+        return (order[a.category.type] ?? 99) - (order[b.category.type] ?? 99);
+      }
+      return a.category.name.localeCompare(b.category.name);
+    });
+
+    return sortedRows;
+  }, [categoriesQ.data, dreTransactionsQ.data, dreMonths]);
 
   const transactionsQ = useQuery({
     queryKey: ["financial_transactions", activeTenantId, txStartDate, txEndDate],
@@ -803,6 +870,9 @@ export function FinancialLedgerPanel() {
         </TabsTrigger>
         <TabsTrigger value="banks" className="rounded-2xl">
           Bancos
+        </TabsTrigger>
+        <TabsTrigger value="dre" className="rounded-2xl">
+          DRE-Caixa
         </TabsTrigger>
       </TabsList>
 
@@ -1617,6 +1687,94 @@ export function FinancialLedgerPanel() {
                     </TableCell>
                   </TableRow>
                 ) : null}
+              </TableBody>
+            </Table>
+          </div>
+        </Card>
+      </TabsContent>
+
+      <TabsContent value="dre" className="grid gap-4">
+        <Card className="rounded-[22px] border-slate-200 bg-white/70 p-4 shadow-sm backdrop-blur dark:border-slate-800 dark:bg-slate-950/40">
+          <div className="mb-4">
+            <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">DRE-Caixa Simplificado</div>
+            <div className="mt-1 text-xs text-slate-600 dark:text-slate-400">
+              Resumo mensal por categoria (regime de caixa). Apenas categorias com lançamentos são exibidas.
+            </div>
+          </div>
+
+          <div className="overflow-x-auto rounded-2xl border border-slate-200 dark:border-slate-800">
+            <Table>
+              <TableHeader>
+                <TableRow className="bg-slate-50/50 dark:bg-slate-900/20">
+                  <TableHead className="min-w-[200px]">Categoria</TableHead>
+                  {dreMonths.map((m) => (
+                    <TableHead key={m.key} className="text-right w-[120px]">{m.label}</TableHead>
+                  ))}
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {dreTransactionsQ.isLoading ? (
+                  <TableRow>
+                    <TableCell colSpan={5} className="py-8 text-center text-slate-500">Carregando dados...</TableCell>
+                  </TableRow>
+                ) : dreData.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={5} className="py-8 text-center text-slate-500">Nenhum dado encontrado para o período.</TableCell>
+                  </TableRow>
+                ) : (
+                  <>
+                    {/* Revenue Section */}
+                    <TableRow className="bg-slate-50/30 dark:bg-slate-950/20">
+                      <TableCell className="font-bold text-blue-600 dark:text-blue-400">(=) Receitas</TableCell>
+                      {dreMonths.map(m => {
+                        const total = dreData.filter(r => r.category.type === "revenue").reduce((acc, curr) => acc + curr.months[m.key], 0);
+                        return <TableCell key={m.key} className="text-right font-bold">{formatMoneyBRL(total)}</TableCell>
+                      })}
+                    </TableRow>
+                    {dreData.filter(r => r.category.type === "revenue").map(row => (
+                      <TableRow key={row.category.id}>
+                        <TableCell className="pl-6 text-sm text-slate-700 dark:text-slate-300">{row.category.name}</TableCell>
+                        {dreMonths.map(m => (
+                          <TableCell key={m.key} className="text-right text-sm">{formatMoneyBRL(row.months[m.key])}</TableCell>
+                        ))}
+                      </TableRow>
+                    ))}
+
+                    {/* Expenses Section */}
+                    <TableRow className="bg-slate-50/30 dark:bg-slate-950/20">
+                      <TableCell className="font-bold text-red-600 dark:text-red-400">(-) Despesas</TableCell>
+                      {dreMonths.map(m => {
+                        const total = dreData.filter(r => r.category.type !== "revenue").reduce((acc, curr) => acc + (curr.months[m.key] || 0), 0);
+                        return <TableCell key={m.key} className="text-right font-bold text-red-600/80 dark:text-red-400/80">{formatMoneyBRL(total)}</TableCell>
+                      })}
+                    </TableRow>
+                    {dreData.filter(r => r.category.type !== "revenue").map(row => (
+                      <TableRow key={row.category.id}>
+                        <TableCell className="pl-6 text-sm text-slate-700 dark:text-slate-300">
+                          {row.category.name} <span className="text-[10px] opacity-50">({row.category.type})</span>
+                        </TableCell>
+                        {dreMonths.map(m => (
+                          <TableCell key={m.key} className="text-right text-sm">{formatMoneyBRL(row.months[m.key])}</TableCell>
+                        ))}
+                      </TableRow>
+                    ))}
+
+                    {/* Net Result */}
+                    <TableRow className="bg-slate-100 dark:bg-slate-900 font-bold border-t-2">
+                      <TableCell>RESULTADO LÍQUIDO</TableCell>
+                      {dreMonths.map(m => {
+                        const rev = dreData.filter(r => r.category.type === "revenue").reduce((acc, curr) => acc + curr.months[m.key], 0);
+                        const exp = dreData.filter(r => r.category.type !== "revenue").reduce((acc, curr) => acc + (curr.months[m.key] || 0), 0);
+                        const net = rev - exp;
+                        return (
+                          <TableCell key={m.key} className={cn("text-right", net >= 0 ? "text-green-600" : "text-red-600")}>
+                            {formatMoneyBRL(net)}
+                          </TableCell>
+                        );
+                      })}
+                    </TableRow>
+                  </>
+                )}
               </TableBody>
             </Table>
           </div>
