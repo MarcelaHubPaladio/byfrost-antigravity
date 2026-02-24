@@ -198,10 +198,10 @@ export function EntityUpsertDialog({
 
   const isCpf = docDigits.length === 11;
   const isCnpj = docDigits.length === 14;
-  const docOk = !requiresDocAndContacts || isCpf || isCnpj;
+  const docOk = docDigits.length === 0 || isCpf || isCnpj;
 
   const whatsappOk =
-    !requiresDocAndContacts ||
+    whatsappDigits.length === 0 ||
     whatsappDigits.length === 10 ||
     whatsappDigits.length === 11 ||
     (whatsappDigits.startsWith("55") && whatsappDigits.length === 13);
@@ -213,8 +213,8 @@ export function EntityUpsertDialog({
   const canSave =
     Boolean(tenantId) &&
     displayName.trim().length >= 2 &&
-    // Party: require doc + whatsapp + email
-    (!requiresDocAndContacts || (docOk && whatsappOk && Boolean(email.trim()))) &&
+    docOk &&
+    whatsappOk &&
     emailOk &&
     !saving;
 
@@ -369,7 +369,9 @@ export function EntityUpsertDialog({
                 </div>
                 {!docOk ? (
                   <div className="text-[11px] font-semibold text-red-600">Informe um CPF (11 dígitos) ou CNPJ (14 dígitos).</div>
-                ) : null}
+                ) : (
+                  <div className="text-[11px] text-slate-500">CPF (11) • CNPJ (14) • Opcional</div>
+                )}
               </div>
 
               <div className="grid gap-2">
@@ -384,7 +386,7 @@ export function EntityUpsertDialog({
                 {!whatsappOk ? (
                   <div className="text-[11px] font-semibold text-red-600">Informe um número válido com DDD.</div>
                 ) : (
-                  <div className="text-[11px] text-slate-500">Padrão BR: (DD) 9XXXX-XXXX</div>
+                  <div className="text-[11px] text-slate-500">Padrão BR: (DD) 9XXXX-XXXX • Opcional</div>
                 )}
               </div>
             </div>
@@ -411,15 +413,17 @@ export function EntityUpsertDialog({
                 className="rounded-xl"
                 inputMode="email"
               />
-              {!emailOk ? <div className="text-[11px] font-semibold text-red-600">E-mail inválido.</div> : null}
+              {!emailOk ? (
+                <div className="text-[11px] font-semibold text-red-600">E-mail inválido.</div>
+              ) : (
+                <div className="text-[11px] text-slate-500">Opcional</div>
+              )}
             </div>
           ) : null}
 
-          {entityType === "offering" ? (
-            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
-              Para <span className="font-semibold">Serviço/Produto</span>, esta primeira versão não exige CPF/CNPJ/contato.
-            </div>
-          ) : null}
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
+            O nome é o único campo obrigatório. Dados de contato e documento são opcionais, mas recomendados para CRM.
+          </div>
         </div>
 
         <DialogFooter>
