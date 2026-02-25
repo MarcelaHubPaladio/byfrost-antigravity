@@ -270,7 +270,7 @@ export default function CaseDetail() {
     // --- Validation (leaving `prev` -> `next`) ---
     const sm = caseQ.data?.journeys?.default_state_machine_json as any;
 
-    const blocksReasons = await checkTransitionBlocks(supabase, activeTenantId!, id!, next, sm, {
+    const blocksReasons = await checkTransitionBlocks(supabase, activeTenantId!, id!, caseQ.data?.state || "", next, sm, {
       fields: fieldsQ.data,
       pendencies: pendQ.data,
     });

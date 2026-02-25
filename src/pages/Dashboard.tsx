@@ -839,7 +839,7 @@ export default function Dashboard() {
       // Pass journeyConfig from selectedJourney (or from row if needed, but Dashboard assumes single journey context usually)
       const journeyConfig = selectedJourney?.default_state_machine_json as unknown as StateMachine;
 
-      const blocksReasons = await checkTransitionBlocks(supabase, activeTenantId, caseId, nextState, journeyConfig);
+      const blocksReasons = await checkTransitionBlocks(supabase, activeTenantId, caseId, oldState, nextState, journeyConfig);
 
       if (blocksReasons.length > 0) {
         setTransitionBlock({ open: true, nextStateName: nextState, reasons: blocksReasons });
