@@ -31,21 +31,30 @@ export function TransitionBlockDialog({ open, onOpenChange, nextStateName, block
             if (b.type === "open_pendencies") {
                 return (
                     <div key={`block-${i}`}>
-                        <strong>Tarefas Incompletas:</strong> Responda todas as pendências obrigatórias antes de avançar.
+                        <strong>Tarefas Incompletas:</strong>
+                        <ul className="mt-1 list-disc pl-5 text-xs text-slate-600">
+                            {b.missingTypes.map((t) => <li key={t}>{t}</li>)}
+                        </ul>
                     </div>
                 );
             }
             if (b.type === "missing_attachments") {
                 return (
                     <div key={`block-${i}`}>
-                        <strong>Anexos Faltantes:</strong> Verifique as pendências que exigem anexos obrigatórios.
+                        <strong>Anexos Faltantes (obrigatório):</strong>
+                        <ul className="mt-1 list-disc pl-5 text-xs text-slate-600">
+                            {b.missingTypes.map((t) => <li key={t}>{t}</li>)}
+                        </ul>
                     </div>
                 );
             }
             if (b.type === "missing_justifications") {
                 return (
                     <div key={`block-${i}`}>
-                        <strong>Justificativas Faltantes:</strong> Verifique as pendências que exigem resposta em texto.
+                        <strong>Justificativas Faltantes (obrigatório):</strong>
+                        <ul className="mt-1 list-disc pl-5 text-xs text-slate-600">
+                            {b.missingTypes.map((t) => <li key={t}>{t}</li>)}
+                        </ul>
                     </div>
                 );
             }

@@ -2,9 +2,9 @@ import { SupabaseClient } from "@supabase/supabase-js";
 
 export type TransitionBlockReason =
     | { type: "missing_fields"; fields: string[] }
-    | { type: "open_pendencies" }
-    | { type: "missing_attachments" }
-    | { type: "missing_justifications" };
+    | { type: "open_pendencies"; missingTypes: string[] }
+    | { type: "missing_attachments"; missingTypes: string[] }
+    | { type: "missing_justifications"; missingTypes: string[] };
 
 export async function checkTransitionBlocks(
     supabase: SupabaseClient,
@@ -21,6 +21,7 @@ export async function checkTransitionBlocks(
     const configForNext = statusConfigs[nextState] ?? {};
 
     const requiredFields = Array.isArray(configForNext.required_case_fields) ? configForNext.required_case_fields : [];
+    const mandatoryTasks = Array.isArray(configForNext.mandatory_tasks) ? configForNext.mandatory_tasks : [];
 
     let fields = preFetched?.fields;
     let pendencies = preFetched?.pendencies;
@@ -49,27 +50,36 @@ export async function checkTransitionBlocks(
         }
     }
 
-    const openRequiredPendencies = (pendencies ?? []).filter((p: any) => p.required && p.status === "open");
+    // Filter to check only pendencies that are MANDATORY for this specific state transition
+    const isMandatoryForNextState = (p: any) => p.required && mandatoryTasks.some((mt: any) => mt.type === p.type);
+
+    const getLabel = (p: any) => {
+        // Try to find a human-readable name from the config first
+        const configTask = mandatoryTasks.find((mt: any) => mt.type === p.type);
+        return p.question_text || configTask?.name || p.type;
+    };
+
+    const openRequiredPendencies = (pendencies ?? []).filter((p: any) => isMandatoryForNextState(p) && p.status === "open");
     if (openRequiredPendencies.length > 0) {
-        blocks.push({ type: "open_pendencies" });
+        blocks.push({ type: "open_pendencies", missingTypes: openRequiredPendencies.map(getLabel) });
     }
 
     const missingAttachments = (pendencies ?? []).filter((p: any) => {
         const requireAtt = p.answered_payload_json?.require_attachment === true;
         const hasAtts = !!p.answered_payload_json?.answered_attachment;
-        return p.required && requireAtt && !hasAtts;
+        return isMandatoryForNextState(p) && requireAtt && !hasAtts;
     });
     if (missingAttachments.length > 0) {
-        blocks.push({ type: "missing_attachments" });
+        blocks.push({ type: "missing_attachments", missingTypes: missingAttachments.map(getLabel) });
     }
 
     const missingJustifications = (pendencies ?? []).filter((p: any) => {
         const requireJust = p.answered_payload_json?.require_justification === true;
         const hasText = typeof p.answered_text === "string" && p.answered_text.trim().length > 0;
-        return p.required && requireJust && !hasText;
+        return isMandatoryForNextState(p) && requireJust && !hasText;
     });
     if (missingJustifications.length > 0) {
-        blocks.push({ type: "missing_justifications" });
+        blocks.push({ type: "missing_justifications", missingTypes: missingJustifications.map(getLabel) });
     }
 
     return blocks;
