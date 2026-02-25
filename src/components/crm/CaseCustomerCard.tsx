@@ -33,7 +33,7 @@ export function CaseCustomerCard(props: {
   tenantId: string;
   caseId: string;
   customerId: string | null;
-  assignedVendorId: string | null;
+  assignedUserId: string | null;
   suggestedPhone?: string | null;
 }) {
   const qc = useQueryClient();
@@ -144,23 +144,23 @@ export function CaseCustomerCard(props: {
       const idToLink = existing?.id
         ? (existing.id as string)
         : (
-            await (async () => {
-              const { data: created, error: createErr } = await supabase
-                .from("customer_accounts")
-                .insert({
-                  tenant_id: props.tenantId,
-                  phone_e164: p,
-                  name: name.trim() || null,
-                  email: email.trim() || null,
-                  assigned_vendor_id: props.assignedVendorId,
-                  meta_json: {},
-                })
-                .select("id")
-                .single();
-              if (createErr) throw createErr;
-              return created.id as string;
-            })()
-          );
+          await (async () => {
+            const { data: created, error: createErr } = await supabase
+              .from("customer_accounts")
+              .insert({
+                tenant_id: props.tenantId,
+                phone_e164: p,
+                name: name.trim() || null,
+                email: email.trim() || null,
+                assigned_user_id: props.assignedUserId,
+                meta_json: {},
+              })
+              .select("id")
+              .single();
+            if (createErr) throw createErr;
+            return created.id as string;
+          })()
+        );
 
       // 3) Vincula no case
       const { error: linkErr } = await supabase

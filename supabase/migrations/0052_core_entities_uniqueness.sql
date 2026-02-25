@@ -5,10 +5,11 @@ create unique index if not exists core_entities_tenant_display_name_uq_idx
   where (deleted_at is null);
 
 -- 2) Cleanup logic (for information/manual run if needed):
--- To delete duplicates manually via SQL Editor, run:
+-- To cleanup duplicates manually via SQL Editor, run:
 /*
-DELETE FROM public.core_entities a
-USING public.core_entities b
+UPDATE public.core_entities a
+SET deleted_at = now()
+FROM public.core_entities b
 WHERE a.id < b.id 
   AND a.tenant_id = b.tenant_id
   AND a.display_name = b.display_name

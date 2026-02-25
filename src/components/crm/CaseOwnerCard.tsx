@@ -17,46 +17,39 @@ import { showError, showSuccess } from "@/utils/toast";
 import { cn } from "@/lib/utils";
 import { ShieldCheck, UserRoundCog, UsersRound } from "lucide-react";
 
-type VendorRow = {
-  id: string;
+type UserRow = {
+  user_id: string;
   tenant_id: string;
-  phone_e164: string;
+  email: string | null;
   display_name: string | null;
-  parent_vendor_id: string | null;
   deleted_at: string | null;
-};
-
-type AssignableVendorRow = {
-  vendor_id: string;
-  phone_e164: string;
-  display_name: string | null;
 };
 
 function isPresenceManagerRole(role: string | null | undefined) {
   return ["admin", "manager", "supervisor", "leader"].includes(String(role ?? "").toLowerCase());
 }
 
-function labelForVendor(v: { display_name: string | null; phone_e164: string }) {
-  const name = (v.display_name ?? "").trim();
-  if (name) return `${name} • ${v.phone_e164}`;
-  return v.phone_e164;
+function labelForUser(u: { display_name: string | null; email: string | null }) {
+  const name = (u.display_name ?? "").trim();
+  if (name) return u.email ? `${name} • ${u.email}` : name;
+  return u.email ?? "(Sem nome)";
 }
 
 export function CaseOwnerCard(props: {
   tenantId: string;
   caseId: string;
-  assignedVendorId: string | null;
+  assignedUserId: string | null;
 }) {
   const qc = useQueryClient();
   const { user } = useSession();
   const { activeTenant, isSuperAdmin } = useTenant();
 
-  const [selected, setSelected] = useState<string>(props.assignedVendorId ?? "__unassigned__");
+  const [selected, setSelected] = useState<string>(props.assignedUserId ?? "__unassigned__");
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    setSelected(props.assignedVendorId ?? "__unassigned__");
-  }, [props.assignedVendorId]);
+    setSelected(props.assignedUserId ?? "__unassigned__");
+  }, [props.assignedUserId]);
 
   const profileQ = useQuery({
     queryKey: ["crm_me_profile", props.tenantId, user?.id],
@@ -75,93 +68,64 @@ export function CaseOwnerCard(props: {
     },
   });
 
-  // Used to label the current owner and support the super-admin list.
-  const vendorsQ = useQuery({
-    queryKey: ["crm_vendors", props.tenantId],
+  // Fetch all users in the tenant
+  const usersQ = useQuery({
+    queryKey: ["crm_users", props.tenantId],
     enabled: Boolean(props.tenantId),
     staleTime: 30_000,
     queryFn: async () => {
       const { data, error } = await supabase
-        .from("vendors")
-        .select("id,tenant_id,phone_e164,display_name,parent_vendor_id,deleted_at")
+        .from("users_profile")
+        .select("user_id,tenant_id,email,display_name,deleted_at")
         .eq("tenant_id", props.tenantId)
         .is("deleted_at", null)
         .limit(5000);
       if (error) throw error;
-      return (data ?? []) as VendorRow[];
+      return (data ?? []) as UserRow[];
     },
   });
 
-  // Main source of options: database decides based on org chart cascade (with fallback).
-  const assignableQ = useQuery({
-    queryKey: ["crm_assignable_vendors", props.tenantId],
-    enabled: Boolean(props.tenantId),
-    staleTime: 20_000,
-    queryFn: async () => {
-      const { data, error } = await supabase.rpc("list_crm_assignable_vendors", {
-        p_tenant_id: props.tenantId,
-      });
-      if (error) throw error;
-      return (data ?? []) as AssignableVendorRow[];
-    },
-  });
-
-  const vendorById = useMemo(() => {
-    const m = new Map<string, VendorRow>();
-    for (const v of vendorsQ.data ?? []) m.set(v.id, v);
+  const userById = useMemo(() => {
+    const m = new Map<string, UserRow>();
+    for (const u of usersQ.data ?? []) m.set(u.user_id, u);
     return m;
-  }, [vendorsQ.data]);
+  }, [usersQ.data]);
 
   const myRole = String(profileQ.data?.role ?? activeTenant?.role ?? "");
 
-  const currentOwner = props.assignedVendorId ? vendorById.get(props.assignedVendorId) ?? null : null;
+  const currentOwner = props.assignedUserId ? userById.get(props.assignedUserId) ?? null : null;
 
   const canSetUnassigned = isSuperAdmin || isPresenceManagerRole(myRole);
 
   const optionRows = useMemo(() => {
-    if (isSuperAdmin) {
-      const all = (vendorsQ.data ?? []).map((v) => ({
-        vendor_id: v.id,
-        phone_e164: v.phone_e164,
-        display_name: v.display_name,
-      }));
-      all.sort((a, b) => labelForVendor(a).localeCompare(labelForVendor(b)));
-      return all;
-    }
-
-    const rows = [...(assignableQ.data ?? [])];
-    rows.sort((a, b) => labelForVendor(a).localeCompare(labelForVendor(b)));
-    return rows;
-  }, [assignableQ.data, vendorsQ.data, isSuperAdmin]);
+    const all = (usersQ.data ?? []).map((u) => ({
+      user_id: u.user_id,
+      email: u.email,
+      display_name: u.display_name,
+    }));
+    all.sort((a, b) => labelForUser(a).localeCompare(labelForUser(b)));
+    return all;
+  }, [usersQ.data]);
 
   const saveOwner = async () => {
     if (!props.tenantId || !props.caseId) return;
 
-    const nextVendorId = selected === "__unassigned__" ? null : selected;
-    if (nextVendorId === props.assignedVendorId) return;
-
-    // Guard client-side (o banco também barra)
-    if (nextVendorId && !isSuperAdmin) {
-      const allowed = optionRows.some((v) => v.vendor_id === nextVendorId);
-      if (!allowed) {
-        showError("Você não tem permissão (pela cascata) para atribuir para este vendedor.");
-        return;
-      }
-    }
+    const nextUserId = selected === "__unassigned__" ? null : selected;
+    if (nextUserId === props.assignedUserId) return;
 
     setSaving(true);
     try {
-      const prevVendorId = props.assignedVendorId;
-      const prevLabel = prevVendorId
-        ? labelForVendor(vendorById.get(prevVendorId) ?? { phone_e164: "(desconhecido)", display_name: null })
+      const prevUserId = props.assignedUserId;
+      const prevLabel = prevUserId
+        ? labelForUser(userById.get(prevUserId) ?? { email: "(desconhecido)", display_name: null })
         : "(sem dono)";
-      const nextLabel = nextVendorId
-        ? labelForVendor(vendorById.get(nextVendorId) ?? { phone_e164: "(desconhecido)", display_name: null })
+      const nextLabel = nextUserId
+        ? labelForUser(userById.get(nextUserId) ?? { email: "(desconhecido)", display_name: null })
         : "(sem dono)";
 
       const { error } = await supabase
         .from("cases")
-        .update({ assigned_vendor_id: nextVendorId })
+        .update({ assigned_user_id: nextUserId })
         .eq("tenant_id", props.tenantId)
         .eq("id", props.caseId);
       if (error) throw error;
@@ -174,8 +138,8 @@ export function CaseOwnerCard(props: {
         actor_id: user?.id ?? null,
         message: `Dono do lead alterado: ${prevLabel} → ${nextLabel}`,
         meta_json: {
-          from_vendor_id: prevVendorId,
-          to_vendor_id: nextVendorId,
+          from_user_id: prevUserId,
+          to_user_id: nextUserId,
           actor_user_id: user?.id ?? null,
           actor_role: myRole,
         },
@@ -191,7 +155,7 @@ export function CaseOwnerCard(props: {
       ]);
     } catch (e: any) {
       showError(`Falha ao alterar dono do lead: ${e?.message ?? "erro"}`);
-      setSelected(props.assignedVendorId ?? "__unassigned__");
+      setSelected(props.assignedUserId ?? "__unassigned__");
     } finally {
       setSaving(false);
     }
@@ -233,7 +197,7 @@ export function CaseOwnerCard(props: {
             <UsersRound className="h-4 w-4 text-slate-400" />
             <div className="min-w-0">
               <div className="truncate text-sm font-semibold text-slate-900">
-                {currentOwner ? labelForVendor(currentOwner) : "(sem dono)"}
+                {currentOwner ? labelForUser(currentOwner) : "(sem dono)"}
               </div>
               <div className="mt-0.5 text-[11px] text-slate-500">A permissão é validada no banco (organograma/cascata).</div>
             </div>
@@ -244,7 +208,7 @@ export function CaseOwnerCard(props: {
           <Button
             type="button"
             onClick={saveOwner}
-            disabled={saving || vendorsQ.isLoading || profileQ.isLoading || assignableQ.isLoading}
+            disabled={saving || usersQ.isLoading || profileQ.isLoading}
             className={cn(
               "h-11 rounded-2xl px-4 text-white",
               "bg-[hsl(var(--byfrost-accent))] hover:bg-[hsl(var(--byfrost-accent)/0.92)]"
@@ -259,10 +223,10 @@ export function CaseOwnerCard(props: {
           <Select
             value={selected}
             onValueChange={setSelected}
-            disabled={saving || vendorsQ.isLoading || profileQ.isLoading || assignableQ.isLoading}
+            disabled={saving || usersQ.isLoading || profileQ.isLoading}
           >
             <SelectTrigger className="mt-1 h-11 rounded-2xl bg-white">
-              <SelectValue placeholder="Selecionar vendedor…" />
+              <SelectValue placeholder="Selecionar usuário…" />
             </SelectTrigger>
             <SelectContent className="rounded-2xl">
               {canSetUnassigned && (
@@ -270,17 +234,17 @@ export function CaseOwnerCard(props: {
                   (sem dono)
                 </SelectItem>
               )}
-              {optionRows.map((v) => (
-                <SelectItem key={v.vendor_id} value={v.vendor_id} className="rounded-xl">
-                  {labelForVendor(v)}
+              {optionRows.map((u) => (
+                <SelectItem key={u.user_id} value={u.user_id} className="rounded-xl">
+                  {labelForUser(u)}
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
 
-          {assignableQ.isError ? (
+          {usersQ.isError ? (
             <div className="mt-2 rounded-2xl border border-rose-200 bg-rose-50 p-3 text-[11px] text-rose-900">
-              Erro ao carregar lista de atribuição: {(assignableQ.error as any)?.message ?? ""}
+              Erro ao carregar lista de atribuição: {(usersQ.error as any)?.message ?? ""}
             </div>
           ) : null}
 

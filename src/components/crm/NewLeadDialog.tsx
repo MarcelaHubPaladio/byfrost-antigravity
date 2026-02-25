@@ -87,50 +87,7 @@ export function NewLeadDialog({
     setEmail("");
   };
 
-  const ensureOwnerVendorId = async () => {
-    if (!tenantId || !actorUserId) throw new Error("Sessão inválida (sem usuário). Refaça login.");
 
-    const { data: profile, error: profErr } = await supabase
-      .from("users_profile")
-      .select("phone_e164,display_name,email")
-      .eq("tenant_id", tenantId)
-      .eq("user_id", actorUserId)
-      .is("deleted_at", null)
-      .maybeSingle();
-    if (profErr) throw profErr;
-
-    const phone = (profile as any)?.phone_e164 ? String((profile as any).phone_e164).trim() : "";
-    if (!phone) {
-      throw new Error(
-        "Seu usuário não tem phone_e164 cadastrado neste tenant. Cadastre o telefone do vendedor para atribuir a propriedade do lead."
-      );
-    }
-
-    const authUser = (await supabase.auth.getUser()).data.user;
-
-    const displayName =
-      (profile as any)?.display_name?.trim?.() ||
-      ((profile as any)?.email ? String((profile as any).email).split("@")[0] : "") ||
-      getUserDisplayNameFromAuthUser(authUser);
-
-    const { data, error } = await supabase
-      .from("vendors")
-      .upsert(
-        {
-          tenant_id: tenantId,
-          phone_e164: phone,
-          display_name: displayName,
-          active: true,
-          deleted_at: null,
-        } as any,
-        { onConflict: "tenant_id,phone_e164" }
-      )
-      .select("id")
-      .single();
-
-    if (error) throw error;
-    return String((data as any).id);
-  };
 
   const createLead = async () => {
     if (!tenantId || !journey?.id) return;
@@ -143,7 +100,8 @@ export function NewLeadDialog({
 
     setSaving(true);
     try {
-      const ownerVendorId = await ensureOwnerVendorId();
+      if (!tenantId || !actorUserId) throw new Error("Sessão inválida (sem usuário).");
+      const ownerUserId = actorUserId;
 
       const phoneE164 = normalizeWhatsappOrThrow(whatsapp);
       const emailNorm = email.trim().toLowerCase() || null;
@@ -168,7 +126,7 @@ export function NewLeadDialog({
             name: displayName,
             email: emailNorm,
             deleted_at: null,
-            assigned_vendor_id: ownerVendorId,
+            assigned_user_id: ownerUserId,
             meta_json: { lead_source: "panel_manual" },
           } as any)
           .eq("tenant_id", tenantId)
@@ -182,7 +140,7 @@ export function NewLeadDialog({
             phone_e164: phoneE164,
             name: displayName,
             email: emailNorm,
-            assigned_vendor_id: ownerVendorId,
+            assigned_user_id: ownerUserId,
             meta_json: { lead_source: "panel_manual" },
           } as any)
           .select("id")
@@ -199,8 +157,7 @@ export function NewLeadDialog({
           journey_id: journey.id,
           customer_id: customerId,
           created_by_channel: "panel",
-          created_by_vendor_id: ownerVendorId,
-          assigned_vendor_id: ownerVendorId,
+          assigned_user_id: ownerUserId,
           title: displayName,
           is_chat: false,
           state: firstState,
@@ -209,8 +166,7 @@ export function NewLeadDialog({
             journey_key: journey.key,
             lead_name: displayName,
             lead_email: emailNorm,
-            lead_whatsapp_e164: phoneE164,
-            owner_vendor_id: ownerVendorId,
+            owner_user_id: ownerUserId,
             owner_source: "panel_manual_creator",
           },
         } as any)
@@ -228,7 +184,7 @@ export function NewLeadDialog({
         actor_type: "admin",
         actor_id: actorUserId,
         message: "Lead criado manualmente no CRM.",
-        meta_json: { source: "panel_manual", owner_vendor_id: ownerVendorId },
+        meta_json: { source: "panel_manual", owner_user_id: ownerUserId },
         occurred_at: new Date().toISOString(),
       });
 

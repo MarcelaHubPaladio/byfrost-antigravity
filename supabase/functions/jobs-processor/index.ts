@@ -1728,22 +1728,22 @@ serve(async (req) => {
 
             const itemLinesForFp = completeItems.length
               ? completeItems.map((r: any) => {
-                  const code = String(r?.code ?? "").trim();
-                  const desc = String(r?.description ?? "").trim();
-                  const qty = Number(r?.qty);
-                  const price = Number(r?.price);
-                  return `${code ? `${code} ` : ""}${desc} | QTY:${qty} | PRICE:${price}`;
-                })
+                const code = String(r?.code ?? "").trim();
+                const desc = String(r?.description ?? "").trim();
+                const qty = Number(r?.qty);
+                const price = Number(r?.price);
+                return `${code ? `${code} ` : ""}${desc} | QTY:${qty} | PRICE:${price}`;
+              })
               : (extracted.itemLines ?? []);
 
             const totalCentsFromItems = completeItems.length
               ? Math.round(
-                  completeItems.reduce((acc: number, r: any) => {
-                    const qty = Number(r?.qty);
-                    const price = Number(r?.price);
-                    return acc + (Number.isFinite(qty) && Number.isFinite(price) ? qty * price : 0);
-                  }, 0) * 100
-                )
+                completeItems.reduce((acc: number, r: any) => {
+                  const qty = Number(r?.qty);
+                  const price = Number(r?.price);
+                  return acc + (Number.isFinite(qty) && Number.isFinite(price) ? qty * price : 0);
+                }, 0) * 100
+              )
               : null;
 
             const totalCents =
@@ -1755,10 +1755,10 @@ serve(async (req) => {
             const fingerprint =
               journeyKey === "sales_order" && looksAgroforte && clientKey && totalCents
                 ? await computeSalesOrderFingerprint({
-                    clientKey,
-                    totalCents,
-                    itemLines: itemLinesForFp,
-                  })
+                  clientKey,
+                  totalCents,
+                  itemLines: itemLinesForFp,
+                })
                 : null;
 
             if (fingerprint) {
@@ -1950,23 +1950,23 @@ serve(async (req) => {
           // Build a pendency list message
           const { data: c } = await supabase
             .from("cases")
-            .select("assigned_vendor_id, meta_json")
+            .select("assigned_user_id, meta_json")
             .eq("id", caseId)
             .maybeSingle();
 
           const meta = (c as any)?.meta_json ?? {};
 
-          // Prefer sending to vendor when assigned; otherwise fallback to customer/counterpart phone.
+          // Prefer sending to user when assigned; otherwise fallback to customer/counterpart phone.
           let toPhone: string | null = null;
 
-          if (c?.assigned_vendor_id) {
-            const { data: vendor } = await supabase
-              .from("vendors")
+          if (c?.assigned_user_id) {
+            const { data: user } = await supabase
+              .from("users_profile")
               .select("phone_e164")
-              .eq("id", c.assigned_vendor_id)
+              .eq("user_id", c.assigned_user_id)
               .maybeSingle();
 
-            toPhone = (vendor as any)?.phone_e164 ?? null;
+            toPhone = (user as any)?.phone_e164 ?? null;
           }
 
           if (!toPhone) {

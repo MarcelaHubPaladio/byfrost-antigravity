@@ -21,7 +21,7 @@ interface Props {
 export function StatusConfigsEditor({ tenantId, states, statusConfigsJson, onChange }: Props) {
     const [selectedState, setSelectedState] = useState<string>(states[0] ?? "");
 
-    // users are fetched from users_profile
+    // users are fetched from users_profile (assigned_user_id references auth.users)
     const usersQ = useQuery({
         queryKey: ["tenant_users", tenantId],
         enabled: Boolean(tenantId),

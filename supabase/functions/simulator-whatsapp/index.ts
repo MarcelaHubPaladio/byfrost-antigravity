@@ -907,8 +907,7 @@ serve(async (req) => {
           status: "open",
           state: "awaiting_ocr",
           created_by_channel: "api",
-          created_by_vendor_id: vendorId,
-          assigned_vendor_id: vendorId,
+          assigned_user_id: vendorId,
           title: "Pedido (simulador)",
           meta_json: { correlation_id: correlationId, simulator: true, ocr_provider: ocrProvider },
         })
@@ -1168,29 +1167,29 @@ serve(async (req) => {
 
           const totalCentsFromItems = Array.isArray(extracted.items)
             ? Math.round(
-                extracted.items.reduce((acc: number, it: any) => acc + (Number(it?.value_num) || 0), 0) * 100
-              )
+              extracted.items.reduce((acc: number, it: any) => acc + (Number(it?.value_num) || 0), 0) * 100
+            )
             : 0;
 
           const itemLinesForFp = Array.isArray(extracted.items)
             ? extracted.items
-                .map((it: any) => {
-                  const code = String(it?.code ?? "").trim();
-                  const desc = String(it?.description ?? "").trim();
-                  const qty = Number(it?.qty ?? 0);
-                  const value = Number(it?.value_num ?? 0);
-                  return `${code ? `${code} ` : ""}${desc} | QTY:${qty} | VALUE:${value}`;
-                })
-                .filter(Boolean)
+              .map((it: any) => {
+                const code = String(it?.code ?? "").trim();
+                const desc = String(it?.description ?? "").trim();
+                const qty = Number(it?.qty ?? 0);
+                const value = Number(it?.value_num ?? 0);
+                return `${code ? `${code} ` : ""}${desc} | QTY:${qty} | VALUE:${value}`;
+              })
+              .filter(Boolean)
             : [];
 
           const fingerprint =
             looksAgroforte && clientKey && totalCentsFromItems > 0 && itemLinesForFp.length
               ? await computeSalesOrderFingerprint({
-                  clientKey,
-                  totalCents: totalCentsFromItems,
-                  itemLines: itemLinesForFp,
-                })
+                clientKey,
+                totalCents: totalCentsFromItems,
+                itemLines: itemLinesForFp,
+              })
               : null;
 
           if (fingerprint) {

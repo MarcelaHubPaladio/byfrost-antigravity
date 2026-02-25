@@ -53,7 +53,7 @@ export function TrelloCardDetails(props: { tenantId: string; caseId: string }) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("cases")
-        .select("id,tenant_id,title,summary_text,assigned_vendor_id,customer_entity_id,meta_json")
+        .select("id,tenant_id,title,summary_text,assigned_user_id,customer_entity_id,meta_json")
         .eq("tenant_id", props.tenantId)
         .eq("id", props.caseId)
         .maybeSingle();
@@ -64,7 +64,7 @@ export function TrelloCardDetails(props: { tenantId: string; caseId: string }) {
         tenant_id: string;
         title: string | null;
         summary_text: string | null;
-        assigned_vendor_id: string | null;
+        assigned_user_id: string | null;
         customer_entity_id: string | null;
         meta_json: any;
       };
@@ -270,7 +270,7 @@ export function TrelloCardDetails(props: { tenantId: string; caseId: string }) {
       <TrelloResponsibleCard
         tenantId={props.tenantId}
         caseId={props.caseId}
-        assignedVendorId={caseQ.data?.assigned_vendor_id ?? null}
+        assignedUserId={caseQ.data?.assigned_user_id ?? null}
       />
 
       <CaseTasksCard tenantId={props.tenantId} caseId={props.caseId} />

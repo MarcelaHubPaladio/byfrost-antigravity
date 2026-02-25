@@ -1247,7 +1247,7 @@ serve(async (req) => {
     const loadOpenCase = async (caseId: string, opts: { deleted: "exclude" | "only" }) => {
       let q = supabase
         .from("cases")
-        .select("id,journey_id,is_chat,assigned_vendor_id,deleted_at,updated_at")
+        .select("id,journey_id,is_chat,assigned_user_id,deleted_at,updated_at")
         .eq("tenant_id", instance.tenant_id)
         .eq("id", caseId)
         .eq("status", "open");

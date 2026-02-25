@@ -49,12 +49,12 @@ type CaseRow = {
   state: string;
   created_at: string;
   updated_at: string;
-  assigned_vendor_id: string | null;
+  assigned_user_id: string | null;
   customer_id: string | null;
   customer_entity_id: string | null;
   meta_json?: any;
   is_chat?: boolean;
-  vendors?: { display_name: string | null; phone_e164: string | null } | null;
+  users_profile?: { display_name: string | null; email: string | null } | null;
   journeys?: { key: string | null; name: string | null; is_crm?: boolean; default_state_machine_json?: any } | null;
 };
 
@@ -105,7 +105,7 @@ export default function CrmCaseDetail() {
       const { data, error } = await supabase
         .from("cases")
         .select(
-          "id,tenant_id,customer_id,customer_entity_id,title,status,state,created_at,updated_at,assigned_vendor_id,meta_json,is_chat,vendors:vendors!cases_assigned_vendor_id_fkey(display_name,phone_e164),journeys:journeys!cases_journey_id_fkey(key,name,is_crm,default_state_machine_json)"
+          "id,tenant_id,customer_id,customer_entity_id,title,status,state,created_at,updated_at,assigned_user_id,meta_json,is_chat,users_profile:users_profile!cases_assigned_user_id_fkey(display_name,email),journeys:journeys!cases_journey_id_fkey(key,name,is_crm,default_state_machine_json)"
         )
         .eq("tenant_id", activeTenantId!)
         .eq("id", id!)
@@ -333,7 +333,7 @@ export default function CrmCaseDetail() {
     return (
       c.title ??
       suggestedPhone ??
-      c.vendors?.display_name ??
+      c.users_profile?.display_name ??
       `Case ${String(c.id).slice(0, 8)}…`
     );
   }, [caseQ.data, suggestedPhone]);
@@ -452,14 +452,14 @@ export default function CrmCaseDetail() {
                   <CaseOwnerCard
                     tenantId={activeTenantId}
                     caseId={id}
-                    assignedVendorId={c?.assigned_vendor_id ?? null}
+                    assignedUserId={c?.assigned_user_id ?? null}
                   />
 
                   <CaseCustomerCard
                     tenantId={activeTenantId}
                     caseId={id}
                     customerId={c?.customer_id ?? null}
-                    assignedVendorId={c?.assigned_vendor_id ?? null}
+                    assignedUserId={c?.assigned_user_id ?? null}
                     suggestedPhone={suggestedPhone}
                   />
 
@@ -555,10 +555,10 @@ export default function CrmCaseDetail() {
                       const hasJson = f.value_json !== null && f.value_json !== undefined;
                       return Boolean(vt) || hasJson;
                     }).length === 0 && (
-                    <div className="rounded-2xl border border-dashed border-slate-200 bg-white/60 p-4 text-xs text-slate-500">
-                      Ainda não há campos extraídos.
-                    </div>
-                  )}
+                      <div className="rounded-2xl border border-dashed border-slate-200 bg-white/60 p-4 text-xs text-slate-500">
+                        Ainda não há campos extraídos.
+                      </div>
+                    )}
                 </div>
               </div>
 

@@ -78,21 +78,36 @@ serve(async (req) => {
         if (configForNext && oldState !== newState) {
             console.log(`[JourneyTransition] Applying status_configs for state: ${newState}`);
 
-            // 1. Update responsible_id
+            // 1. Update responsible_id (Wrapped in try/catch to maintain resilience if ID is invalid/User vs Vendor)
             if (configForNext.responsible_id) {
-                await supabaseClient.from("cases").update({
-                    assigned_vendor_id: configForNext.responsible_id
-                }).eq("id", caseId);
+                try {
+                    const { error: updateErr } = await supabaseClient.from("cases").update({
+                        assigned_user_id: configForNext.responsible_id
+                    }).eq("id", caseId);
 
-                await supabaseClient.from("timeline_events").insert({
-                    tenant_id,
-                    case_id: caseId,
-                    event_type: "case_updated",
-                    actor_type: "system",
-                    message: `Responsável atualizado automaticamente pela entrada no status ${newState}.`,
-                    meta_json: { responsible_id: configForNext.responsible_id },
-                    occurred_at: new Date().toISOString(),
-                });
+                    if (updateErr) throw updateErr;
+
+                    await supabaseClient.from("timeline_events").insert({
+                        tenant_id,
+                        case_id: caseId,
+                        event_type: "case_updated",
+                        actor_type: "system",
+                        message: `Responsável atualizado automaticamente pela entrada no status ${newState}.`,
+                        meta_json: { responsible_id: configForNext.responsible_id },
+                        occurred_at: new Date().toISOString(),
+                    });
+                } catch (err: any) {
+                    console.error("[JourneyTransition] Failed to update responsible_id", err);
+                    await supabaseClient.from("timeline_events").insert({
+                        tenant_id,
+                        case_id: caseId,
+                        event_type: "automation_executed",
+                        actor_type: "system",
+                        message: `Falha na atribuição automática: O responsável configurado (${configForNext.responsible_id}) não é um Usuário válido.`,
+                        meta_json: { error: err.message, config: configForNext.responsible_id },
+                        occurred_at: new Date().toISOString(),
+                    });
+                }
             }
 
             // 2. Create mandatory tasks as pendencies

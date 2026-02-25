@@ -35,9 +35,9 @@ type CaseRow = {
   state: string;
   created_at: string;
   updated_at: string;
-  assigned_vendor_id: string | null;
+  assigned_user_id: string | null;
   is_chat?: boolean;
-  vendors?: { display_name: string | null; phone_e164: string | null } | null;
+  users_profile?: { display_name: string | null; email: string | null } | null;
   journeys?: { key: string | null; name: string | null; is_crm?: boolean; default_state_machine_json?: any } | null;
   meta_json?: any;
 };
@@ -58,7 +58,7 @@ type WaMsgLite = { case_id: string | null; occurred_at: string; from_phone: stri
 
 type WaInstanceRow = { id: string; phone_number: string | null };
 
-type VendorOpt = { vendor_id: string; phone_e164: string | null; display_name: string | null };
+type UserOpt = { user_id: string; email: string | null; display_name: string | null };
 
 type CustomerLite = {
   id: string;
@@ -120,8 +120,8 @@ export default function Crm() {
   const [tagQuery, setTagQuery] = useState("");
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
 
-  const [vendorQuery, setVendorQuery] = useState("");
-  const [selectedVendorIds, setSelectedVendorIds] = useState<string[]>([]);
+  const [userQuery, setUserQuery] = useState("");
+  const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
 
   const instanceQ = useQuery({
     queryKey: ["wa_instance_active_first", activeTenantId],
@@ -172,42 +172,45 @@ export default function Crm() {
     },
   });
 
-  const vendorsQ = useQuery({
-    queryKey: ["crm_assignable_vendors", activeTenantId],
+  const usersQ = useQuery({
+    queryKey: ["crm_assignable_users", activeTenantId],
     enabled: Boolean(activeTenantId),
     staleTime: 30_000,
     refetchOnWindowFocus: true,
     queryFn: async () => {
-      const { data, error } = await supabase.rpc("list_crm_assignable_vendors", { p_tenant_id: activeTenantId! });
+      const { data, error } = await supabase.from("users_profile")
+        .select("user_id, display_name, email")
+        .eq("tenant_id", activeTenantId!)
+        .is("deleted_at", null);
       if (error) throw error;
-      const rows = (data ?? []) as VendorOpt[];
+      const rows = (data ?? []) as UserOpt[];
       rows.sort((a, b) => {
-        const al = String(a.display_name ?? a.phone_e164 ?? a.vendor_id).toLowerCase();
-        const bl = String(b.display_name ?? b.phone_e164 ?? b.vendor_id).toLowerCase();
+        const al = String(a.display_name ?? a.email ?? a.user_id).toLowerCase();
+        const bl = String(b.display_name ?? b.email ?? b.user_id).toLowerCase();
         return al.localeCompare(bl);
       });
       return rows;
     },
   });
 
-  const showVendorFilter = useMemo(() => {
-    return (vendorsQ.data?.length ?? 0) > 1;
-  }, [vendorsQ.data?.length]);
+  const showUserFilter = useMemo(() => {
+    return (usersQ.data?.length ?? 0) > 1;
+  }, [usersQ.data?.length]);
 
-  const visibleVendors = useMemo(() => {
-    const qq = vendorQuery.trim().toLowerCase();
-    const base = vendorsQ.data ?? [];
+  const visibleUsers = useMemo(() => {
+    const qq = userQuery.trim().toLowerCase();
+    const base = usersQ.data ?? [];
     if (!qq) return base;
     return base.filter((v) => {
-      const label = `${v.display_name ?? ""} ${v.phone_e164 ?? ""}`.toLowerCase();
+      const label = `${v.display_name ?? ""} ${v.email ?? ""}`.toLowerCase();
       return label.includes(qq);
     });
-  }, [vendorsQ.data, vendorQuery]);
+  }, [usersQ.data, userQuery]);
 
   useEffect(() => {
-    const allowed = new Set((vendorsQ.data ?? []).map((v) => v.vendor_id));
-    setSelectedVendorIds((prev) => prev.filter((id) => allowed.has(id)));
-  }, [vendorsQ.data]);
+    const allowed = new Set((usersQ.data ?? []).map((v) => v.user_id));
+    setSelectedUserIds((prev) => prev.filter((id) => allowed.has(id)));
+  }, [usersQ.data]);
 
   const selectedJourney = useMemo(() => {
     const list = crmJourneysQ.data ?? [];
@@ -237,7 +240,7 @@ export default function Crm() {
       const { data, error } = await supabase
         .from("cases")
         .select(
-          "id,journey_id,customer_id,customer_entity_id,title,status,state,created_at,updated_at,assigned_vendor_id,is_chat,vendors:vendors!cases_assigned_vendor_id_fkey(display_name,phone_e164),journeys:journeys!cases_journey_id_fkey(key,name,is_crm,default_state_machine_json),meta_json"
+          "id,journey_id,customer_id,customer_entity_id,title,status,state,created_at,updated_at,assigned_user_id,is_chat,users_profile:users_profile!cases_assigned_user_id_fkey(display_name,email),journeys:journeys!cases_journey_id_fkey(key,name,is_crm,default_state_machine_json),meta_json"
         )
         .eq("tenant_id", activeTenantId!)
         .is("deleted_at", null)
@@ -439,12 +442,12 @@ export default function Crm() {
   const filteredRows = useMemo(() => {
     const qq = q.trim().toLowerCase();
     const tagSel = selectedTags;
-    const vendorSel = selectedVendorIds;
+    const userSel = selectedUserIds;
 
     return journeyRows.filter((r) => {
-      if (vendorSel.length) {
-        const vid = r.assigned_vendor_id;
-        if (!vid || !vendorSel.includes(vid)) return false;
+      if (userSel.length) {
+        const uid = r.assigned_user_id;
+        if (!uid || !userSel.includes(uid)) return false;
       }
 
       if (tagSel.length) {
@@ -458,10 +461,10 @@ export default function Crm() {
       const cust = customersQ.data?.get(String((r as any).customer_id ?? "")) ?? null;
       const metaPhone = getMetaPhone(r.meta_json);
       const fieldPhone = casePhoneQ.data?.get(r.id) ?? null;
-      const t = `${r.title ?? ""} ${(r.vendors?.display_name ?? "")} ${(r.vendors?.phone_e164 ?? "")} ${cust?.name ?? ""} ${cust?.phone_e164 ?? ""} ${cust?.email ?? ""} ${metaPhone ?? ""} ${fieldPhone ?? ""}`.toLowerCase();
+      const t = `${r.title ?? ""} ${(r.users_profile?.display_name ?? "")} ${(r.users_profile?.email ?? "")} ${cust?.name ?? ""} ${cust?.phone_e164 ?? ""} ${cust?.email ?? ""} ${metaPhone ?? ""} ${fieldPhone ?? ""}`.toLowerCase();
       return t.includes(qq);
     });
-  }, [journeyRows, q, selectedTags, selectedVendorIds, customersQ.data, casePhoneQ.data, tagsByCase]);
+  }, [journeyRows, q, selectedTags, selectedUserIds, customersQ.data, casePhoneQ.data, tagsByCase]);
 
   const pendQ = useQuery({
     queryKey: ["crm_pendencies_open", activeTenantId, filteredRows.map((c) => c.id).join(",")],
@@ -552,7 +555,7 @@ export default function Crm() {
     pendQ.refetch();
     lastInboundQ.refetch();
     readsQ.refetch();
-    vendorsQ.refetch();
+    usersQ.refetch();
   };
 
   const visibleTags = useMemo(() => {
@@ -577,14 +580,14 @@ export default function Crm() {
               />
             </div>
 
-            {showVendorFilter && (
+            {showUserFilter && (
               <Popover>
                 <PopoverTrigger asChild>
                   <Button variant="secondary" className="h-11 rounded-2xl">
-                    <UsersRound className="mr-2 h-4 w-4" /> Vendedores
-                    {selectedVendorIds.length ? (
+                    <UsersRound className="mr-2 h-4 w-4" /> Usuários
+                    {selectedUserIds.length ? (
                       <span className="ml-2 rounded-full bg-white/70 px-2 py-0.5 text-[11px] font-semibold text-slate-700">
-                        {selectedVendorIds.length}
+                        {selectedUserIds.length}
                       </span>
                     ) : null}
                   </Button>
@@ -592,26 +595,26 @@ export default function Crm() {
                 <PopoverContent align="end" className="w-[340px] rounded-2xl border-slate-200 bg-white p-2">
                   <Command className="rounded-2xl border border-slate-200">
                     <CommandInput
-                      value={vendorQuery}
-                      onValueChange={setVendorQuery}
-                      placeholder="Filtrar vendedores…"
+                      value={userQuery}
+                      onValueChange={setUserQuery}
+                      placeholder="Filtrar responsáveis…"
                       className="h-11"
                     />
                     <CommandList className="max-h-[260px]">
-                      <CommandEmpty>Nenhum vendedor</CommandEmpty>
-                      <CommandGroup heading="Vendedores (sua árvore)">
-                        {visibleVendors.map((v) => {
-                          const checked = selectedVendorIds.includes(v.vendor_id);
-                          const label = v.display_name?.trim() || v.phone_e164?.trim() || "Vendedor";
+                      <CommandEmpty>Nenhum responsável</CommandEmpty>
+                      <CommandGroup heading="Responsáveis">
+                        {visibleUsers.map((v) => {
+                          const checked = selectedUserIds.includes(v.user_id);
+                          const label = v.display_name?.trim() || v.email?.trim() || "Responsável";
                           return (
                             <CommandItem
-                              key={v.vendor_id}
-                              value={`${label} ${v.phone_e164 ?? ""}`}
+                              key={v.user_id}
+                              value={`${label} ${v.email ?? ""}`}
                               onSelect={() => {
-                                setSelectedVendorIds((prev) =>
-                                  prev.includes(v.vendor_id)
-                                    ? prev.filter((x) => x !== v.vendor_id)
-                                    : [...prev, v.vendor_id]
+                                setSelectedUserIds((prev) =>
+                                  prev.includes(v.user_id)
+                                    ? prev.filter((x) => x !== v.user_id)
+                                    : [...prev, v.user_id]
                                 );
                               }}
                               className={cn(
@@ -631,7 +634,7 @@ export default function Crm() {
                               </div>
                               <div className="min-w-0">
                                 <div className="truncate text-sm font-medium text-slate-900">{label}</div>
-                                <div className="truncate text-[11px] text-slate-500">{v.phone_e164 ?? ""}</div>
+                                <div className="truncate text-[11px] text-slate-500">{v.email ?? ""}</div>
                               </div>
                             </CommandItem>
                           );
@@ -646,10 +649,10 @@ export default function Crm() {
                       variant="secondary"
                       className="h-9 flex-1 rounded-2xl"
                       onClick={() => {
-                        setSelectedVendorIds([]);
-                        setVendorQuery("");
+                        setSelectedUserIds([]);
+                        setUserQuery("");
                       }}
-                      disabled={!selectedVendorIds.length}
+                      disabled={!selectedUserIds.length}
                     >
                       Limpar
                     </Button>
@@ -821,8 +824,8 @@ export default function Crm() {
                                 <div className="mt-1 truncate text-xs text-slate-500">
                                   <span className="inline-flex items-center gap-1">
                                     <UsersRound className="h-3.5 w-3.5" />
-                                    {(c.vendors?.display_name ?? "Vendedor") +
-                                      (c.vendors?.phone_e164 ? ` • ${c.vendors.phone_e164}` : "")}
+                                    {(c.users_profile?.display_name ?? "Responsável") +
+                                      (c.users_profile?.email ? ` • ${c.users_profile.email}` : "")}
                                   </span>
                                 </div>
                               </div>
