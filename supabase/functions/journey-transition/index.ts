@@ -93,16 +93,20 @@ serve(async (req) => {
         // --- Execute Status Configs Logic ---
         const statusConfigs = journeyConfig.status_configs || {};
 
-        // Handle typo em_anlise vs em_analise
-        let configForNext = statusConfigs[newState];
-        if (!configForNext && newState === "em_anlise") configForNext = statusConfigs["em_analise"];
-        if (!configForNext && newState === "em_analise") configForNext = statusConfigs["em_anlise"];
+        // Normalization: Try exact, then lowercase, then typo-tolerance
+        const normalizedNewState = newState.toLowerCase();
+        let configForNext = statusConfigs[newState] || statusConfigs[normalizedNewState];
 
-        if (configForNext && oldState !== newState) {
-            console.log(`[JourneyTransition] Applying status_configs for state: ${newState}`);
+        if (!configForNext && (normalizedNewState === "em_anlise" || normalizedNewState === "em_analise")) {
+            configForNext = statusConfigs["em_analise"] || statusConfigs["em_anlise"];
+        }
+
+        if (oldState !== newState) {
+            console.log(`[JourneyTransition] State changed to: ${newState}. configForNext present: ${!!configForNext}`);
 
             // 1. Update responsible_id (Always sync with config: set ID or set NULL if missing)
-            const targetResponsibleId = configForNext.responsible_id || null;
+            // This ensures "Sem Responsável" if the state has no config or no responsible_id
+            const targetResponsibleId = configForNext?.responsible_id || null;
 
             try {
                 const { error: updateErr } = await supabaseClient.from("cases").update({
@@ -118,7 +122,7 @@ serve(async (req) => {
                     actor_type: "system",
                     message: targetResponsibleId
                         ? `Responsável atualizado automaticamente pela entrada no status ${newState}.`
-                        : `Responsável removido automaticamente (não configurado para o status ${newState}).`,
+                        : `Responsável removido automaticamente (entrada no status ${newState}).`,
                     meta_json: { responsible_id: targetResponsibleId },
                     occurred_at: new Date().toISOString(),
                 });
@@ -136,7 +140,10 @@ serve(async (req) => {
                     });
                 }
             }
+        }
 
+        if (configForNext && oldState !== newState) {
+            console.log(`[JourneyTransition] Applying additional status_configs (tasks) for state: ${newState}`);
             // 2. Create mandatory tasks as pendencies
             if (Array.isArray(configForNext.mandatory_tasks) && configForNext.mandatory_tasks.length > 0) {
                 try {
