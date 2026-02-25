@@ -39,20 +39,31 @@ import { SalesOrderReviewDialog } from "@/components/case/SalesOrderReviewDialog
 import { SalesOrderAddAttachmentExtractDialog } from "@/components/case/SalesOrderAddAttachmentExtractDialog";
 import { TrelloCardDetails } from "@/components/trello/TrelloCardDetails";
 import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
+import {
   ArrowLeft,
+  Search,
   CheckCircle2,
+  Paperclip,
+  MessageSquareText,
+  Clock,
+  User,
+  ExternalLink,
   ClipboardList,
   Image as ImageIcon,
   ShieldCheck,
   Send,
   MessagesSquare,
   Trash2,
-  ExternalLink,
   Terminal,
 } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { AuditLogsPanel } from "@/components/case/AuditLogsPanel";
-import { cn } from "@/lib/utils";
+import { cn, titleizeState } from "@/lib/utils";
 import { showError, showSuccess } from "@/utils/toast";
 import { getStateLabel } from "@/lib/journeyLabels";
 import { useJourneyTransition } from "@/hooks/useJourneyTransition";
@@ -510,64 +521,133 @@ export default function CaseDetail() {
             <div className="text-sm font-semibold text-slate-900">Pendências</div>
             <div className="text-xs text-slate-500">{pendQ.data?.length ?? 0}</div>
           </div>
-          <div className="mt-3 space-y-2">
-            {(pendQ.data ?? []).map((p: any) => (
-              <div key={p.id} className="rounded-2xl border border-slate-200 bg-white px-3 py-2">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <div className="text-xs font-semibold truncate text-slate-900">
-                      {p.question_text}
+
+          <div className="mt-3 space-y-4">
+            {(() => {
+              const currentState = caseQ.data?.state || "";
+              const sm = caseQ.data?.journeys?.default_state_machine_json as any;
+              const statusConfigs = sm?.status_configs || {};
+
+              const getConfig = (st: string) => {
+                if (statusConfigs[st]) return statusConfigs[st];
+                if (st === "em_anlise") return statusConfigs["em_analise"];
+                if (st === "em_analise") return statusConfigs["em_anlise"];
+                return {};
+              };
+
+              const currentConfig = getConfig(currentState);
+              const mandatoryTasks = Array.isArray(currentConfig.mandatory_tasks) ? currentConfig.mandatory_tasks : [];
+
+              const isUrgent = (p: any) => {
+                if (p.status !== "open") return false;
+                return mandatoryTasks.some((mt: any) => {
+                  const typeMatch = mt.type && mt.type === p.type;
+                  const descriptionMatch = mt.description === p.question_text;
+                  return typeMatch || descriptionMatch;
+                });
+              };
+
+              const allPendencies = pendQ.data ?? [];
+              const urgent = allPendencies.filter(isUrgent);
+              const others = allPendencies.filter(p => !isUrgent(p));
+
+              const renderPendencyCard = (p: any, urgentMode = false) => (
+                <div key={p.id} className={cn(
+                  "rounded-2xl border px-3 py-2 transition-all",
+                  urgentMode
+                    ? "border-amber-200 bg-amber-50/30 shadow-sm"
+                    : "border-slate-100 bg-white"
+                )}>
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className={cn(
+                        "text-xs font-semibold truncate",
+                        urgentMode ? "text-slate-900" : "text-slate-700"
+                      )}>
+                        {p.question_text}
+                      </div>
+                      <div className="mt-0.5 text-[10px] text-slate-500 uppercase tracking-tight">
+                        {p.assigned_to_role} • {p.required ? "obrigatória" : "opcional"}
+                      </div>
                     </div>
-                    <div className="mt-0.5 text-[11px] text-slate-500">
-                      {p.assigned_to_role} • {p.type} • {p.required ? "obrigatória" : "opcional"}
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {p.status === "open" && activeTenantId && id && (
-                      <PendencyResolver
-                        tenantId={activeTenantId}
-                        caseId={id}
-                        pendency={p}
-                      />
-                    )}
-                    <Badge
-                      className={cn(
-                        "rounded-full border-0",
-                        p.status === "open"
-                          ? "bg-amber-100 text-amber-900"
-                          : p.status === "answered"
-                            ? "bg-emerald-100 text-emerald-900"
-                            : "bg-slate-100 text-slate-700"
+                    <div className="flex items-center gap-2 shrink-0">
+                      {p.status === "open" && activeTenantId && id && (
+                        <PendencyResolver
+                          tenantId={activeTenantId}
+                          caseId={id}
+                          pendency={p}
+                        />
                       )}
-                    >
-                      {p.status}
-                    </Badge>
+                      {p.status !== "open" && (
+                        <Badge
+                          className={cn(
+                            "rounded-full border-0 text-[10px] px-2 py-0 h-5",
+                            p.status === "answered"
+                              ? "bg-emerald-100 text-emerald-900"
+                              : "bg-slate-100 text-slate-700"
+                          )}
+                        >
+                          {p.status === "answered" ? "concluído" : p.status}
+                        </Badge>
+                      )}
+                    </div>
                   </div>
+                  {p.answered_text && (
+                    <div className="mt-2 text-xs text-slate-600 bg-white/50 rounded-lg p-2 border border-slate-50">
+                      <span className="font-medium text-slate-900">Resposta:</span> {p.answered_text}
+                    </div>
+                  )}
+                  {p.answered_payload_json?.answered_attachment && (
+                    <div className="mt-2 text-xs text-slate-600">
+                      <span className="font-medium">Anexo:</span>{" "}
+                      <a
+                        href={p.answered_payload_json.answered_attachment.base64_data}
+                        download={p.answered_payload_json.answered_attachment.file_name}
+                        className="text-[hsl(var(--byfrost-accent))] hover:underline flex items-center gap-1"
+                      >
+                        <Paperclip className="h-3 w-3" />
+                        {p.answered_payload_json.answered_attachment.file_name}
+                      </a>
+                    </div>
+                  )}
                 </div>
-                {p.answered_text && (
-                  <div className="mt-2 text-xs text-slate-600">
-                    <span className="font-medium">Resposta:</span> {p.answered_text}
-                  </div>
-                )}
-                {p.answered_payload_json?.answered_attachment && (
-                  <div className="mt-2 text-xs text-slate-600">
-                    <span className="font-medium">Anexo:</span>{" "}
-                    <a
-                      href={p.answered_payload_json.answered_attachment.base64_data}
-                      download={p.answered_payload_json.answered_attachment.file_name}
-                      className="text-[hsl(var(--byfrost-accent))] hover:underline"
-                    >
-                      {p.answered_payload_json.answered_attachment.file_name}
-                    </a>
-                  </div>
-                )}
-              </div>
-            ))}
-            {(pendQ.data ?? []).length === 0 && (
-              <div className="rounded-2xl border border-dashed border-slate-200 bg-white/60 p-4 text-xs text-slate-500">
-                Sem pendências.
-              </div>
-            )}
+              );
+
+              return (
+                <div className="space-y-4">
+                  {/* Urgentes (Mandatórias do Status Atual) */}
+                  {urgent.length > 0 && (
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2 text-[10px] font-bold text-amber-600 uppercase tracking-widest px-1">
+                        <div className="h-1 w-1 rounded-full bg-amber-500 animate-pulse" />
+                        Prioridade: {titleizeState(currentState)}
+                      </div>
+                      {urgent.map(p => renderPendencyCard(p, true))}
+                    </div>
+                  )}
+
+                  {/* Outras (Accordion) */}
+                  {others.length > 0 && (
+                    <Accordion type="single" collapsible className="w-full border-none">
+                      <AccordionItem value="others" className="border-none">
+                        <AccordionTrigger className="flex h-8 w-full items-center justify-between rounded-xl bg-slate-50 px-3 text-[11px] font-medium text-slate-600 hover:no-underline py-0">
+                          {urgent.length === 0 ? "Tarefas do Caso" : `Outras Tarefas (${others.length})`}
+                        </AccordionTrigger>
+                        <AccordionContent className="mt-2 space-y-2 pb-0">
+                          {others.map(p => renderPendencyCard(p, false))}
+                        </AccordionContent>
+                      </AccordionItem>
+                    </Accordion>
+                  )}
+
+                  {allPendencies.length === 0 && (
+                    <div className="rounded-2xl border border-dashed border-slate-200 bg-white/60 p-4 text-xs text-slate-500 text-center">
+                      Nenhuma tarefa registrada para este caso.
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
           </div>
         </div>
 

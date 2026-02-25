@@ -6,7 +6,7 @@ import { RequireAuth } from "@/components/RequireAuth";
 import { useTenant } from "@/providers/TenantProvider";
 import { useSession } from "@/providers/SessionProvider";
 import { supabase } from "@/lib/supabase";
-import { cn } from "@/lib/utils";
+import { cn, titleizeState } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -112,15 +112,6 @@ type WaInstanceRow = { id: string; phone_number: string | null };
 function minutesAgo(iso: string) {
   const diff = Date.now() - new Date(iso).getTime();
   return Math.max(0, Math.round(diff / 60000));
-}
-
-function titleizeState(s: string) {
-  return (s ?? "")
-    .replace(/[_-]+/g, " ")
-    .split(" ")
-    .filter(Boolean)
-    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-    .join(" ");
 }
 
 function getMetaPhone(meta: any): string | null {

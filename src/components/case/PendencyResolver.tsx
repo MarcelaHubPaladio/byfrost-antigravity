@@ -84,22 +84,26 @@ export function PendencyResolver({
         }
     };
 
-    const save = async () => {
+    const save = async (event?: React.MouseEvent) => {
+        if (event) {
+            event.stopPropagation();
+        }
         if (!tenantId || !caseId) return;
 
         if (requireJustification && !justification.trim()) {
             showError("A justificativa é obrigatória.");
+            setOpen(true);
             return;
         }
 
         if (requireAttachment && !dataUrl) {
             showError("O anexo é obrigatório.");
+            setOpen(true);
             return;
         }
 
         setSaving(true);
         try {
-            // 1. Mark pendency as answered and save attachment in metadata if exists
             const nextMetadata = { ...(pendency.answered_payload_json || {}) };
             if (dataUrl && file) {
                 nextMetadata.answered_attachment = {
@@ -121,7 +125,6 @@ export function PendencyResolver({
 
             if (pendErr) throw pendErr;
 
-            // 3. Log event
             await supabase.from("timeline_events").insert({
                 tenant_id: tenantId,
                 case_id: caseId,
@@ -141,15 +144,31 @@ export function PendencyResolver({
                 qc.invalidateQueries({ queryKey: ["timeline", tenantId, caseId] }),
             ]);
 
-            showSuccess("Pendência resolvida.");
+            showSuccess("Tarefa concluída.");
             setOpen(false);
             reset();
         } catch (e: any) {
-            showError(`Falha ao resolver pendência: ${e?.message ?? "erro"}`);
+            showError(`Falha ao resolver: ${e?.message ?? "erro"}`);
         } finally {
             setSaving(false);
         }
     };
+
+    const isSimple = !requireJustification && !requireAttachment;
+
+    if (isSimple) {
+        return (
+            <Button
+                type="button"
+                className={cn("h-8 rounded-xl px-4 text-xs bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100", className)}
+                variant="outline"
+                disabled={saving}
+                onClick={save}
+            >
+                {saving ? "..." : <><CheckCircle2 className="mr-1.5 h-3.5 w-3.5" /> Concluir</>}
+            </Button>
+        );
+    }
 
     return (
         <Dialog
@@ -165,6 +184,7 @@ export function PendencyResolver({
                     className={cn("h-8 rounded-xl px-3 text-xs", className)}
                     variant="outline"
                 >
+                    {requireAttachment ? <Paperclip className="mr-1.5 h-3.5 w-3.5" /> : <MessageSquareText className="mr-1.5 h-3.5 w-3.5" />}
                     Responder
                 </Button>
             </DialogTrigger>
@@ -172,7 +192,7 @@ export function PendencyResolver({
             <DialogContent className="w-[95vw] max-w-[500px] rounded-[24px] border-slate-200 bg-white p-6 shadow-xl">
                 <DialogHeader>
                     <DialogTitle className="text-base font-semibold text-slate-900">
-                        Resolver Pendência
+                        {requireAttachment ? "Enviar Anexo" : "Responder Pendência"}
                     </DialogTitle>
                     <DialogDescription className="mt-1.5 text-sm text-slate-600">
                         {pendency.question_text}
@@ -184,7 +204,7 @@ export function PendencyResolver({
                         <div>
                             <Label className="flex items-center gap-1.5 text-xs font-semibold text-slate-900">
                                 <MessageSquareText className="h-4 w-4 text-slate-500" />
-                                Justificativa <span className="text-rose-500">*</span>
+                                Resposta <span className="text-rose-500">*</span>
                             </Label>
                             <Textarea
                                 value={justification}
@@ -195,16 +215,16 @@ export function PendencyResolver({
                         </div>
                     )}
 
-                    {!requireJustification && (
+                    {!requireJustification && !isSimple && (
                         <div>
                             <Label className="flex items-center gap-1.5 text-xs font-semibold text-slate-900">
                                 <MessageSquareText className="h-4 w-4 text-slate-500" />
-                                Justificativa (opcional)
+                                Comentários (opcional)
                             </Label>
                             <Textarea
                                 value={justification}
                                 onChange={(e) => setJustification(e.target.value)}
-                                placeholder="Observações adicionais..."
+                                placeholder="Alguma observação adicional?"
                                 className="mt-2 min-h-[80px] rounded-2xl resize-none"
                             />
                         </div>
@@ -214,7 +234,7 @@ export function PendencyResolver({
                         <div>
                             <Label className="flex items-center gap-1.5 text-xs font-semibold text-slate-900">
                                 <Paperclip className="h-4 w-4 text-slate-500" />
-                                Anexo Comprobatório <span className="text-rose-500">*</span>
+                                Anexo <span className="text-rose-500">*</span>
                             </Label>
                             <Input
                                 ref={fileRef}
@@ -230,28 +250,7 @@ export function PendencyResolver({
                                     ? "Processando..."
                                     : file
                                         ? `${file.name} (${Math.round(file.size / 1024)} KB)`
-                                        : "Anexo obrigatório para esta tarefa. (Até 4MB)"}
-                            </div>
-                        </div>
-                    )}
-
-                    {!requireAttachment && (
-                        <div>
-                            <Label className="flex items-center gap-1.5 text-xs font-semibold text-slate-900">
-                                <Paperclip className="h-4 w-4 text-slate-500" />
-                                Anexo Opcional
-                            </Label>
-                            <Input
-                                ref={fileRef}
-                                type="file"
-                                onChange={(e) => onPick(e.target.files?.[0] ?? null)}
-                                className={cn(
-                                    "mt-2 rounded-2xl",
-                                    "file:rounded-xl file:border-0 file:bg-slate-100 file:px-3 file:py-2 file:text-xs file:font-medium file:text-slate-700"
-                                )}
-                            />
-                            <div className="mt-1 text-[11px] text-slate-500">
-                                {file ? file.name : "Anexe arquivos se necessário. (Até 4MB)"}
+                                        : "Obrigatório anexar arquivo comprovante."}
                             </div>
                         </div>
                     )}
@@ -260,7 +259,7 @@ export function PendencyResolver({
                         <Button
                             type="button"
                             variant="secondary"
-                            className="h-10 rounded-2xl"
+                            className="h-10 rounded-2xl px-6"
                             onClick={() => setOpen(false)}
                             disabled={saving}
                         >
@@ -268,8 +267,8 @@ export function PendencyResolver({
                         </Button>
                         <Button
                             type="button"
-                            className="h-10 rounded-2xl bg-[hsl(var(--byfrost-accent))] px-5 text-white hover:bg-[hsl(var(--byfrost-accent)/0.92)]"
-                            onClick={save}
+                            className="h-10 rounded-2xl bg-[hsl(var(--byfrost-accent))] px-8 text-white hover:bg-[hsl(var(--byfrost-accent)/0.92)] shadow-sm"
+                            onClick={() => save()}
                             disabled={
                                 saving ||
                                 reading ||
@@ -277,8 +276,7 @@ export function PendencyResolver({
                                 (requireAttachment && !dataUrl)
                             }
                         >
-                            <CheckCircle2 className="mr-2 h-4 w-4" />
-                            {saving ? "Salvando..." : "Concluir Tarefa"}
+                            {saving ? "Salvando..." : <><CheckCircle2 className="mr-2 h-4 w-4" /> Concluir</>}
                         </Button>
                     </div>
                 </div>
