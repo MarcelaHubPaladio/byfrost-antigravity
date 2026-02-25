@@ -19,8 +19,16 @@ export async function checkTransitionBlocks(
     }
 ): Promise<TransitionBlockReason[]> {
     const statusConfigs = journeyConfig?.status_configs ?? {};
-    const configForNext = statusConfigs[nextState] ?? {};
-    const configForCurrent = statusConfigs[currentState] ?? {};
+
+    const getConfig = (st: string) => {
+        if (statusConfigs[st]) return statusConfigs[st];
+        if (st === "em_anlise") return statusConfigs["em_analise"];
+        if (st === "em_analise") return statusConfigs["em_anlise"];
+        return {};
+    };
+
+    const configForNext = getConfig(nextState);
+    const configForCurrent = getConfig(currentState);
 
     const requiredFields = Array.isArray(configForNext.required_case_fields) ? configForNext.required_case_fields : [];
     const mandatoryTasks = Array.isArray(configForCurrent.mandatory_tasks) ? configForCurrent.mandatory_tasks : [];
@@ -53,7 +61,15 @@ export async function checkTransitionBlocks(
     }
 
     // Filter to check only pendencies that are MANDATORY for the CURRENT state transition
-    const isMandatoryForCurrentState = (p: any) => p.required && mandatoryTasks.some((mt: any) => mt.type === p.type);
+    const isMandatoryForCurrentState = (p: any) => {
+        if (!p.required) return false;
+        return mandatoryTasks.some((mt: any) => {
+            // Match by type (preferred) or by precise description (fallback for UI-configured tasks)
+            const typeMatch = mt.type && mt.type === p.type;
+            const descriptionMatch = mt.description === p.question_text;
+            return typeMatch || descriptionMatch;
+        });
+    };
 
     const getLabel = (p: any) => {
         // Try to find a human-readable name from the config first

@@ -46,20 +46,12 @@ serve(async (req) => {
         );
 
         // Fetch Journey Config
-        // 1. Get case journey_id/details first (if not in record) or get tenant journey config
-        // Actually, 'cases' table has 'journey_id' usually. Let's check if we need to fetch it.
-        // Assuming record has journey_id. If not, we might need to fetch case. Let's trust record for now.
-        // Wait, the case record structure might not have full journey config json.
-        // We need to fetch the 'journeys' definition AND 'tenant_journeys' config.
-
-        // Fetch case with journey relation to get key, and tenant_journeys for config
+        // 1. Get case details
         const { data: caseData, error: caseError } = await supabaseClient
             .from("cases")
             .select(`
                 journey_id,
-                journeys:journey_id (
-                    default_state_machine_json
-                )
+                tenant_id
             `)
             .eq("id", caseId)
             .single();
@@ -69,16 +61,47 @@ serve(async (req) => {
             return new Response("Failed to fetch case data", { status: 500 });
         }
 
-        const journeyConfig = caseData.journeys?.default_state_machine_json as StateMachine;
+        // 2. Fetch tenant-specific journey config (merging default + tenant overrides)
+        const { data: tenantJourney, error: tjError } = await supabaseClient
+            .from("tenant_journeys")
+            .select(`
+                config_json,
+                journeys (
+                    default_state_machine_json
+                )
+            `)
+            .eq("tenant_id", tenant_id)
+            .eq("journey_id", caseData.journey_id)
+            .single();
+
+        if (tjError) {
+            console.warn("[JourneyTransition] Failed to fetch tenant_journey config", tjError);
+        }
+
+        const defaultJson = (tenantJourney?.journeys as any)?.default_state_machine_json || {};
+        const tenantJson = (tenantJourney?.config_json as any) || {};
+
+        // Simple deep merge (labels, status_configs, transitions)
+        const journeyConfig = {
+            ...defaultJson,
+            ...tenantJson,
+            labels: { ...(defaultJson.labels || {}), ...(tenantJson.labels || {}) },
+            status_configs: { ...(defaultJson.status_configs || {}), ...(tenantJson.status_configs || {}) },
+            transitions: { ...(defaultJson.transitions || {}), ...(tenantJson.transitions || {}) },
+        };
 
         // --- Execute Status Configs Logic ---
-        const statusConfigs = (journeyConfig as any)?.status_configs || {};
-        const configForNext = statusConfigs[newState];
+        const statusConfigs = journeyConfig.status_configs || {};
+
+        // Handle typo em_anlise vs em_analise
+        let configForNext = statusConfigs[newState];
+        if (!configForNext && newState === "em_anlise") configForNext = statusConfigs["em_analise"];
+        if (!configForNext && newState === "em_analise") configForNext = statusConfigs["em_anlise"];
 
         if (configForNext && oldState !== newState) {
             console.log(`[JourneyTransition] Applying status_configs for state: ${newState}`);
 
-            // 1. Update responsible_id (Wrapped in try/catch to maintain resilience if ID is invalid/User vs Vendor)
+            // 1. Update responsible_id
             if (configForNext.responsible_id) {
                 try {
                     const { error: updateErr } = await supabaseClient.from("cases").update({
@@ -112,31 +135,61 @@ serve(async (req) => {
 
             // 2. Create mandatory tasks as pendencies
             if (Array.isArray(configForNext.mandatory_tasks) && configForNext.mandatory_tasks.length > 0) {
-                const pendenciesToInsert = configForNext.mandatory_tasks.map((task: any) => ({
-                    tenant_id,
-                    case_id: caseId,
-                    type: "text",
-                    assigned_to_role: "admin",
-                    question_text: task.description,
-                    required: task.required !== false,
-                    status: "open",
-                    answered_payload_json: {
-                        ...(task.require_attachment ? { require_attachment: true } : {}),
-                        ...(task.require_justification ? { require_justification: true } : {})
-                    },
-                }));
+                try {
+                    // Fetch existing pendencies to avoid duplicates
+                    const { data: existingPendencies } = await supabaseClient
+                        .from("pendencies")
+                        .select("question_text, status")
+                        .eq("case_id", caseId);
 
-                const { error: pendErr } = await supabaseClient.from("pendencies").insert(pendenciesToInsert);
-                if (pendErr) {
-                    console.error("Failed to create mandatory pendencies", pendErr);
-                } else {
+                    const existingTexts = new Set((existingPendencies || []).map(p => p.question_text));
+
+                    const pendenciesToInsert = configForNext.mandatory_tasks
+                        .filter((task: any) => !existingTexts.has(task.description))
+                        .map((task: any) => ({
+                            // REMOVED tenant_id as it is missing from remote DB schema for this table
+                            case_id: caseId,
+                            // Using 'need_location' as a safe default type because 'text' is blocked by a check constraint
+                            type: task.type || "need_location",
+                            assigned_to_role: task.assigned_to_role || "admin",
+                            question_text: task.description,
+                            required: task.required !== false,
+                            status: "open",
+                            answered_payload_json: {
+                                ...(task.require_attachment ? { require_attachment: true } : {}),
+                                ...(task.require_justification ? { require_justification: true } : {})
+                            },
+                        }));
+
+                    if (pendenciesToInsert.length > 0) {
+                        console.log(`[JourneyTransition] Inserting ${pendenciesToInsert.length} new pendencies for case ${caseId}`);
+                        const { error: pendErr } = await supabaseClient.from("pendencies").insert(pendenciesToInsert);
+                        if (pendErr) throw pendErr;
+
+                        await supabaseClient.from("timeline_events").insert({
+                            tenant_id,
+                            case_id: caseId,
+                            event_type: "automation_executed",
+                            actor_type: "system",
+                            message: `${pendenciesToInsert.length} novas tarefas obrigatórias criadas para o status ${newState}.`,
+                            meta_json: {
+                                task_count: pendenciesToInsert.length,
+                                tasks: pendenciesToInsert.map((t: any) => t.question_text)
+                            },
+                            occurred_at: new Date().toISOString(),
+                        });
+                    } else {
+                        console.log(`[JourneyTransition] All ${configForNext.mandatory_tasks.length} mandatory tasks already exist for case ${caseId}. Skipping.`);
+                    }
+                } catch (err: any) {
+                    console.error("[JourneyTransition] Failed to create mandatory pendencies", err);
                     await supabaseClient.from("timeline_events").insert({
                         tenant_id,
                         case_id: caseId,
                         event_type: "automation_executed",
                         actor_type: "system",
-                        message: `Tarefas obrigatórias criadas para o status ${newState}.`,
-                        meta_json: { task_count: configForNext.mandatory_tasks.length },
+                        message: `Falha ao criar tarefas obrigatórias: ${err.message}`,
+                        meta_json: { error: err.message, config: configForNext.mandatory_tasks },
                         occurred_at: new Date().toISOString(),
                     });
                 }

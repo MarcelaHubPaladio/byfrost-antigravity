@@ -753,10 +753,21 @@ export default function Dashboard() {
     };
 
     return all.map((st) => {
+      const isAnalise = st === "em_anlise" || st === "em_analise";
+
       const itemsRaw =
         st === "__other__"
-          ? filteredRows.filter((r) => !known.has(r.state))
-          : filteredRows.filter((r) => r.state === st);
+          ? filteredRows.filter((r) => {
+            if (known.has(r.state)) return false;
+            // If current state column is analise-related, maybe it's "known" via typo
+            if (isAnalise && (r.state === "em_anlise" || r.state === "em_analise")) return false;
+            return true;
+          })
+          : filteredRows.filter((r) => {
+            if (r.state === st) return true;
+            if (isAnalise && (r.state === "em_anlise" || r.state === "em_analise")) return true;
+            return false;
+          });
 
       const items = [...itemsRaw].sort(sortCases);
 
