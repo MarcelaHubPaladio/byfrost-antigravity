@@ -258,13 +258,13 @@ export default function CaseDetail() {
     const prev = caseQ.data?.state ?? "";
     if (!next || next === prev) return;
 
-    // --- Validation (leaving `prev`) ---
+    // --- Validation (leaving `prev` -> `next`) ---
     const sm = caseQ.data?.journeys?.default_state_machine_json as any;
     const statusConfigs = sm?.status_configs ?? {};
-    const configForPrev = statusConfigs[prev] ?? {};
+    const configForNext = statusConfigs[next] ?? {};
 
-    // 1. Check required fields
-    const requiredFields = Array.isArray(configForPrev.required_case_fields) ? configForPrev.required_case_fields : [];
+    // 1. Check required fields for the NEXT state
+    const requiredFields = Array.isArray(configForNext.required_case_fields) ? configForNext.required_case_fields : [];
     if (requiredFields.length > 0) {
       const missingFields = requiredFields.filter((reqKey: string) => {
         const field = fieldsQ.data?.find((f: any) => f.key === reqKey);
@@ -273,7 +273,7 @@ export default function CaseDetail() {
         return !val && !hasJson;
       });
       if (missingFields.length > 0) {
-        showError(`Preencha os campos obrigatórios antes de avançar: ${missingFields.join(", ")}`);
+        showError(`Preencha os campos obrigatórios antes de avançar para este status: ${missingFields.join(", ")}`);
         return;
       }
     }
