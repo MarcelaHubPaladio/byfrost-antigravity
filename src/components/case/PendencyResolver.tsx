@@ -49,8 +49,8 @@ export function PendencyResolver({
     const [reading, setReading] = useState(false);
     const [saving, setSaving] = useState(false);
 
-    const requireJustification = pendency?.metadata_json?.require_justification === true;
-    const requireAttachment = pendency?.metadata_json?.require_attachment === true;
+    const requireJustification = pendency?.answered_payload_json?.require_justification === true;
+    const requireAttachment = pendency?.answered_payload_json?.require_attachment === true;
 
     const reset = () => {
         setJustification("");
@@ -100,7 +100,7 @@ export function PendencyResolver({
         setSaving(true);
         try {
             // 1. Mark pendency as answered and save attachment in metadata if exists
-            const nextMetadata = { ...(pendency.metadata_json || {}) };
+            const nextMetadata = { ...(pendency.answered_payload_json || {}) };
             if (dataUrl && file) {
                 nextMetadata.answered_attachment = {
                     file_name: file.name,
@@ -115,7 +115,7 @@ export function PendencyResolver({
                 .update({
                     status: "answered",
                     answered_text: justification.trim() || null,
-                    metadata_json: nextMetadata,
+                    answered_payload_json: nextMetadata,
                 })
                 .eq("id", pendency.id);
 

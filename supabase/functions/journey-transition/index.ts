@@ -120,7 +120,7 @@ serve(async (req) => {
                     question_text: task.description,
                     required: task.required !== false,
                     status: "open",
-                    metadata_json: {
+                    answered_payload_json: {
                         ...(task.require_attachment ? { require_attachment: true } : {}),
                         ...(task.require_justification ? { require_justification: true } : {})
                     },

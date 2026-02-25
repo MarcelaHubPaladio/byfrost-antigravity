@@ -287,8 +287,8 @@ export default function CaseDetail() {
 
     // 3. Check closed required pendencies that require attachments but have no attachments
     const missingAttachments = (pendQ.data ?? []).filter((p: any) => {
-      const requireAtt = p.metadata_json?.require_attachment === true;
-      const hasAtts = !!p.metadata_json?.answered_attachment;
+      const requireAtt = p.answered_payload_json?.require_attachment === true;
+      const hasAtts = !!p.answered_payload_json?.answered_attachment;
       // It must be required to attach AND not have attachments (even if closed, because the user could have closed it without attaching if the UI didn't block it yet)
       return p.required && requireAtt && !hasAtts;
     });
@@ -300,7 +300,7 @@ export default function CaseDetail() {
 
     // 4. Check closed required pendencies that require justification but have no text
     const missingJustifications = (pendQ.data ?? []).filter((p: any) => {
-      const requireJust = p.metadata_json?.require_justification === true;
+      const requireJust = p.answered_payload_json?.require_justification === true;
       const hasText = typeof p.answered_text === "string" && p.answered_text.trim().length > 0;
       return p.required && requireJust && !hasText;
     });
@@ -357,7 +357,7 @@ export default function CaseDetail() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("pendencies")
-        .select("id,type,assigned_to_role,question_text,required,status,created_at,answered_text,metadata_json")
+        .select("id,type,assigned_to_role,question_text,required,status,created_at,answered_text,answered_payload_json")
         .eq("case_id", id!)
         .order("created_at", { ascending: true });
       if (error) throw error;
@@ -579,15 +579,15 @@ export default function CaseDetail() {
                     <span className="font-medium">Resposta:</span> {p.answered_text}
                   </div>
                 )}
-                {p.metadata_json?.answered_attachment && (
+                {p.answered_payload_json?.answered_attachment && (
                   <div className="mt-2 text-xs text-slate-600">
                     <span className="font-medium">Anexo:</span>{" "}
                     <a
-                      href={p.metadata_json.answered_attachment.base64_data}
-                      download={p.metadata_json.answered_attachment.file_name}
+                      href={p.answered_payload_json.answered_attachment.base64_data}
+                      download={p.answered_payload_json.answered_attachment.file_name}
                       className="text-[hsl(var(--byfrost-accent))] hover:underline"
                     >
-                      {p.metadata_json.answered_attachment.file_name}
+                      {p.answered_payload_json.answered_attachment.file_name}
                     </a>
                   </div>
                 )}
