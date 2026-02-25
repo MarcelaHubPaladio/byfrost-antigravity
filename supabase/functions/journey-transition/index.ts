@@ -101,33 +101,37 @@ serve(async (req) => {
         if (configForNext && oldState !== newState) {
             console.log(`[JourneyTransition] Applying status_configs for state: ${newState}`);
 
-            // 1. Update responsible_id
-            if (configForNext.responsible_id) {
-                try {
-                    const { error: updateErr } = await supabaseClient.from("cases").update({
-                        assigned_user_id: configForNext.responsible_id
-                    }).eq("id", caseId);
+            // 1. Update responsible_id (Always sync with config: set ID or set NULL if missing)
+            const targetResponsibleId = configForNext.responsible_id || null;
 
-                    if (updateErr) throw updateErr;
+            try {
+                const { error: updateErr } = await supabaseClient.from("cases").update({
+                    assigned_user_id: targetResponsibleId
+                }).eq("id", caseId);
 
-                    await supabaseClient.from("timeline_events").insert({
-                        tenant_id,
-                        case_id: caseId,
-                        event_type: "case_updated",
-                        actor_type: "system",
-                        message: `Responsável atualizado automaticamente pela entrada no status ${newState}.`,
-                        meta_json: { responsible_id: configForNext.responsible_id },
-                        occurred_at: new Date().toISOString(),
-                    });
-                } catch (err: any) {
-                    console.error("[JourneyTransition] Failed to update responsible_id", err);
+                if (updateErr) throw updateErr;
+
+                await supabaseClient.from("timeline_events").insert({
+                    tenant_id,
+                    case_id: caseId,
+                    event_type: "case_updated",
+                    actor_type: "system",
+                    message: targetResponsibleId
+                        ? `Responsável atualizado automaticamente pela entrada no status ${newState}.`
+                        : `Responsável removido automaticamente (não configurado para o status ${newState}).`,
+                    meta_json: { responsible_id: targetResponsibleId },
+                    occurred_at: new Date().toISOString(),
+                });
+            } catch (err: any) {
+                console.error("[JourneyTransition] Failed to update responsible_id", err);
+                if (targetResponsibleId) {
                     await supabaseClient.from("timeline_events").insert({
                         tenant_id,
                         case_id: caseId,
                         event_type: "automation_executed",
                         actor_type: "system",
-                        message: `Falha na atribuição automática: O responsável configurado (${configForNext.responsible_id}) não é um Usuário válido.`,
-                        meta_json: { error: err.message, config: configForNext.responsible_id },
+                        message: `Falha na atribuição automática: O responsável configurado (${targetResponsibleId}) não é um Usuário válido.`,
+                        meta_json: { error: err.message, config: targetResponsibleId },
                         occurred_at: new Date().toISOString(),
                     });
                 }
