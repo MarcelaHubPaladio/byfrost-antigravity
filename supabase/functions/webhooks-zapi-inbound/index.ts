@@ -1544,9 +1544,11 @@ serve(async (req) => {
       }
 
       // If it reaches here, it's a group message but NOT explicitly monitored by a case meta_json.
-      // We no longer 'return' here. We let it fall through to standard inbound routing.
-      // This allows it to link to a customer's open case based on their participant phone.
-      console.log(`[${fn}] Group message fallthrough (not explicitly monitored)`, { groupId, direction });
+      // We must DROP it to prevent phantom cases from being created for the group ID itself.
+      console.log(`[${fn}] Group message dropped (not explicitly monitored)`, { groupId, direction });
+      return new Response(JSON.stringify({ ok: true, ignored: "unmonitored_group" }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     // Determine whether the inbound sender is a *vendor user* (users_profile.role='vendor').
