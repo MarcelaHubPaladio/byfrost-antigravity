@@ -731,6 +731,8 @@ async function ensureSalesOrderJourney(supabase: ReturnType<typeof createSupabas
       "new",
       "awaiting_ocr",
       "awaiting_location",
+      "em_analise",
+      "em_anlise",
       "pending_vendor",
       "ready_for_review",
       "confirmed",

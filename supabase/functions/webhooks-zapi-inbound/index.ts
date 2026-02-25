@@ -1675,7 +1675,9 @@ serve(async (req) => {
     const cfg = (tJ as any)?.config_json ?? {};
 
     const cfgOcrEnabled = Boolean(readCfg(cfg, "automation.ocr.enabled"));
-    const cfgPendenciesOnImage = Boolean(readCfg(cfg, "automation.on_image.create_default_pendencies"));
+    // Legacy pendencies ('need_location', 'need_more_pages') are hardcoded in the RPC based on this flag.
+    // We disable it globally here to favor the dynamic 'journey-transition' system.
+    const cfgPendenciesOnImage = false; // Forced false to remove legacy tasks
     const cfgInitialStateOnImage = (readCfg(cfg, "automation.on_image.initial_state") as string | undefined) ?? null;
 
     // Default: create case on text unless explicitly disabled.
