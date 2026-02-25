@@ -37,6 +37,8 @@ import { getStateLabel } from "@/lib/journeyLabels";
 import { useJourneyTransition } from "@/hooks/useJourneyTransition";
 import { StateMachine } from "@/lib/journeys/types"
 import { GlobalJourneyLogsDialog } from "@/components/case/GlobalJourneyLogsDialog";
+import { checkTransitionBlocks, TransitionBlockReason } from "@/lib/journeys/validation";
+import { TransitionBlockDialog } from "@/components/case/TransitionBlockDialog";
 
 const DASHBOARD_VIEW_MODE_KEY_PREFIX = "dashboard_view_mode_v1:";
 
@@ -159,6 +161,11 @@ export default function Dashboard() {
   const [refreshingToken, setRefreshingToken] = useState(false);
   const [q, setQ] = useState("");
   const [movingCaseId, setMovingCaseId] = useState<string | null>(null);
+  const [transitionBlock, setTransitionBlock] = useState<{
+    open: boolean;
+    nextStateName: string;
+    reasons: TransitionBlockReason[];
+  }>({ open: false, nextStateName: "", reasons: [] });
   const [newSalesOrderOpen, setNewSalesOrderOpen] = useState(false);
   const [exportingCsv, setExportingCsv] = useState(false);
 
@@ -832,6 +839,13 @@ export default function Dashboard() {
       // Pass journeyConfig from selectedJourney (or from row if needed, but Dashboard assumes single journey context usually)
       const journeyConfig = selectedJourney?.default_state_machine_json as unknown as StateMachine;
 
+      const blocksReasons = await checkTransitionBlocks(supabase, activeTenantId, caseId, nextState, journeyConfig);
+
+      if (blocksReasons.length > 0) {
+        setTransitionBlock({ open: true, nextStateName: nextState, reasons: blocksReasons });
+        return;
+      }
+
       await transitionState(caseId, oldState, nextState, journeyConfig);
 
       // Invalidation handled by hook, but Dashboard might need specific invalidations?
@@ -1396,6 +1410,13 @@ export default function Dashboard() {
               Erro ao carregar casos: {(casesQ.error as any)?.message ?? ""}
             </div>
           )}
+
+          <TransitionBlockDialog
+            open={transitionBlock.open}
+            onOpenChange={(v) => setTransitionBlock({ ...transitionBlock, open: v })}
+            nextStateName={transitionBlock.nextStateName}
+            blocks={transitionBlock.reasons}
+          />
         </div>
       </AppShell>
     </RequireAuth>
