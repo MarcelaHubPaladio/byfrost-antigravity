@@ -25,6 +25,8 @@ import Simulator from "@/pages/Simulator";
 import Settings from "@/pages/Settings";
 import Me from "@/pages/Me";
 import Admin from "@/pages/Admin";
+import GoalsCenter from "@/pages/GoalsCenter";
+import AdminUserDetail from "@/pages/AdminUserDetail";
 import Crm from "@/pages/Crm";
 import CrmCaseDetail from "@/pages/CrmCaseDetail";
 import Chats from "@/pages/Chats";
@@ -331,6 +333,26 @@ const App = () => (
                     <RequireTenantRole roles={["admin"]}>
                       <RequireRouteAccess routeKey="app.admin">
                         <Admin />
+                      </RequireRouteAccess>
+                    </RequireTenantRole>
+                  }
+                />
+                <Route
+                  path="/app/admin/goals"
+                  element={
+                    <RequireTenantRole roles={["admin"]}>
+                      <RequireRouteAccess routeKey="app.admin">
+                        <GoalsCenter />
+                      </RequireRouteAccess>
+                    </RequireTenantRole>
+                  }
+                />
+                <Route
+                  path="/app/admin/users/:id"
+                  element={
+                    <RequireTenantRole roles={["admin"]}>
+                      <RequireRouteAccess routeKey="app.admin">
+                        <AdminUserDetail />
                       </RequireRouteAccess>
                     </RequireTenantRole>
                   }

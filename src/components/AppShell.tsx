@@ -35,6 +35,7 @@ import {
   PackageCheck,
   FileSignature,
   LineChart,
+  Target,
 } from "lucide-react";
 import * as HoverCardPrimitive from "@radix-ui/react-hover-card";
 import { cn } from "@/lib/utils";
@@ -814,6 +815,7 @@ export function AppShell({
                 )}
 
                 {isSuperAdmin && <NavTile to="/app/admin" icon={Crown} label="Admin" disabled={!can("app.admin")} />}
+                <NavTile to="/app/admin/goals" icon={Target} label="Metas" disabled={!can("app.admin")} />
                 <NavTile to="/app/settings" icon={Settings} label="Config" disabled={!can("app.settings")} />
               </div>
             </div>
@@ -1096,6 +1098,13 @@ export function AppShell({
                                 onNavigate={() => setMobileNavOpen(false)}
                               />
                             )}
+                            <MobileNavItem
+                              to="/app/admin/goals"
+                              icon={Target}
+                              label="Metas"
+                              disabled={!can("app.admin")}
+                              onNavigate={() => setMobileNavOpen(false)}
+                            />
                             <MobileNavItem
                               to="/app/settings"
                               icon={Settings}

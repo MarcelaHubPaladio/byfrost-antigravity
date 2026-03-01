@@ -46,8 +46,9 @@ import { AccessMatrixPanel } from "@/components/admin/AccessMatrixPanel";
 import { OrgChartPanel } from "@/components/admin/OrgChartPanel";
 import { IncentivesPanel } from "@/components/admin/IncentivesPanel";
 import { TenantModulesPanel } from "@/components/admin/TenantModulesPanel";
-import { Trash2, PauseCircle, PlayCircle, ChevronLeft, ChevronRight, UsersRound, Smartphone, Copy, Shield, Settings2, Zap } from "lucide-react";
+import { Trash2, PauseCircle, PlayCircle, ChevronLeft, ChevronRight, UsersRound, Smartphone, Copy, Shield, Settings2, Zap, UserCog } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
+import { useNavigate } from "react-router-dom";
 
 type UserRole = string;
 
@@ -174,6 +175,7 @@ function normalizePhoneLoose(v: string) {
 }
 
 export default function Admin() {
+  const nav = useNavigate();
   const qc = useQueryClient();
   const { activeTenantId, activeTenant, isSuperAdmin } = useTenant();
   const { user } = useSession();
@@ -1476,6 +1478,16 @@ export default function Admin() {
                                   </Select>
                                 </div>
                                 <div className="flex items-end justify-end gap-2">
+                                  {!isDeleted && (
+                                    <Button
+                                      variant="secondary"
+                                      className="h-10 rounded-2xl border border-slate-200 bg-white px-3 text-slate-800 shadow-sm hover:bg-slate-50"
+                                      onClick={() => nav(`/app/admin/users/${u.user_id}`)}
+                                      title="Editar Usuário"
+                                    >
+                                      <UserCog className="h-4 w-4" />
+                                    </Button>
+                                  )}
                                   {isDeleted ? (
                                     <Button
                                       variant="secondary"
