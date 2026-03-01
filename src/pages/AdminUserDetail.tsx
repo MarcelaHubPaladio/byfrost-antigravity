@@ -28,7 +28,7 @@ export default function AdminUserDetail() {
         queryFn: async () => {
             if (!activeTenantId || !id) return null;
             const { data, error } = await supabase
-                .from("tenant_users")
+                .from("users_profile")
                 .select(`
           *,
           tenant_job_titles (id, name)
@@ -110,7 +110,7 @@ function UserDataTab({ userData }: { userData: any }) {
     const save = async () => {
         try {
             const { error } = await supabase
-                .from("tenant_users")
+                .from("users_profile")
                 .update({
                     display_name: name,
                     phone_e164: phone,

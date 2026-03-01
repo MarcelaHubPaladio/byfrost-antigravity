@@ -14,8 +14,8 @@ create policy "Tenant users can view job titles"
 create policy "Tenant admins can manage job titles" 
     on public.tenant_job_titles for all using (public.has_tenant_access(tenant_id)); -- we can refine to check role='admin' but typically UI handles it, or we rely on the function. Let's keep it simple or use has_tenant_access
 
--- Add job_title_id to tenant_users
-alter table public.tenant_users add column if not exists job_title_id uuid references public.tenant_job_titles(id) on delete set null;
+-- Add job_title_id to users_profile
+alter table public.users_profile add column if not exists job_title_id uuid references public.tenant_job_titles(id) on delete set null;
 
 create table if not exists public.goal_templates (
     id uuid primary key default gen_random_uuid(),
@@ -38,7 +38,7 @@ create policy "Tenant admins can manage goal templates"
 create table if not exists public.user_goals (
     id uuid primary key default gen_random_uuid(),
     tenant_id uuid not null references public.tenants(id) on delete cascade,
-    user_id uuid not null references auth.users(id) on delete cascade, -- referencing auth.users per typical structure, or tenant_users
+    user_id uuid not null references auth.users(id) on delete cascade, -- referencing auth.users per typical structure, or users_profile
     name text not null,
     description text,
     metric_key text not null,
