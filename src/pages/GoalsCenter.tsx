@@ -580,6 +580,9 @@ function MyGoalsDashboard() {
             });
 
             if (error) throw error;
+            if (data?.ok === false) {
+                throw new Error(data.error + (data.detail?.message ? ` - ${data.detail.message}` : ""));
+            }
             if (data?.signing_link) {
                 window.open(data.signing_link, "_blank");
             } else {

@@ -15,7 +15,8 @@ function json(data: any, status = 200) {
 }
 
 function err(message: string, status = 400, detail?: any) {
-  return json({ ok: false, error: message, detail }, status);
+  // Always return 200 for now to debug the exact error on the frontend, since Supabase hides non-2xx bodies
+  return json({ ok: false, error: message, original_status: status, detail }, 200);
 }
 
 function createSupabaseAuth(req: Request) {
