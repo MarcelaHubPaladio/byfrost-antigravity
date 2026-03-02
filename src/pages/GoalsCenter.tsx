@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { useTenant } from "@/providers/TenantProvider";
+import { useSession } from "@/providers/SessionProvider";
 import { AppShell } from "@/components/AppShell";
 import { RequireAuth } from "@/components/RequireAuth";
 import { Button } from "@/components/ui/button";
@@ -328,15 +329,69 @@ function TemplatesEditor({ roleKey }: { roleKey: string }) {
 
 function MyGoalsDashboard() {
     const { activeTenantId } = useTenant();
+    const { user } = useSession();
+
+    const goalsQ = useQuery({
+        queryKey: ["my_goals", activeTenantId, user?.id],
+        queryFn: async () => {
+            if (!activeTenantId || !user?.id) return null;
+            const { data, error } = await supabase
+                .from("user_goals")
+                .select("*")
+                .eq("tenant_id", activeTenantId)
+                .eq("user_id", user.id)
+                .order("created_at", { ascending: false });
+            if (error) throw error;
+            return data;
+        },
+        enabled: !!activeTenantId && !!user?.id,
+    });
+
+    if (goalsQ.isLoading) {
+        return <div className="p-8 text-center text-slate-500">Carregando metas...</div>;
+    }
+
+    if (!goalsQ.data || goalsQ.data.length === 0) {
+        return (
+            <div className="bg-white p-6 rounded-lg border shadow-sm">
+                <h2 className="text-lg font-bold mb-4">Minhas Metas</h2>
+                <div className="flex-1 flex flex-col items-center justify-center text-slate-400 py-12 border-2 border-dashed rounded-lg bg-slate-50">
+                    <Target className="w-12 h-12 mb-3 text-slate-300" />
+                    <p className="text-center max-w-md">
+                        Você ainda não possui metas atribuídas para o seu usuário.
+                    </p>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="bg-white p-6 rounded-lg border shadow-sm">
-            <h2 className="text-lg font-bold mb-4">Minhas Metas (Dashboard)</h2>
-            <div className="flex-1 flex flex-col items-center justify-center text-slate-400 py-12 border-2 border-dashed rounded-lg bg-slate-50">
-                <Target className="w-12 h-12 mb-3 text-slate-300" />
-                <p className="text-center max-w-md">
-                    Em breve: Mini-dashboard visual com o progresso das suas metas ativas, mostrando conquistas e alvos.
-                </p>
+            <h2 className="text-lg font-bold mb-6">Minhas Metas</h2>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {goalsQ.data.map((goal: any) => (
+                    <div key={goal.id} className="border rounded-xl p-5 shadow-sm bg-white relative overflow-hidden flex flex-col justify-between min-h-[160px]">
+                        <div className="absolute top-0 left-0 w-1 h-full bg-indigo-500 rounded-l-xl"></div>
+                        <div>
+                            <div className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">
+                                {goal.frequency === 'monthly' ? 'Meta Mensal' : goal.frequency === 'weekly' ? 'Meta Semanal' : goal.frequency === 'daily' ? 'Meta Diária' : 'Meta Anual'}
+                            </div>
+                            <h3 className="font-bold text-lg text-slate-800 leading-tight mb-2">{goal.name}</h3>
+                        </div>
+
+                        <div className="mt-4 pt-4 border-t border-slate-100 flex items-end justify-between">
+                            <div>
+                                <div className="text-xs text-slate-500 mb-0.5">Alvo</div>
+                                <div className="text-2xl font-black text-indigo-700">{goal.target_value}</div>
+                            </div>
+                            <div className="text-right">
+                                <div className="text-xs text-slate-500 mb-0.5">Progresso</div>
+                                <div className="text-lg font-bold text-slate-300">--</div>
+                            </div>
+                        </div>
+                    </div>
+                ))}
             </div>
         </div>
     );

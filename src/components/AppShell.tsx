@@ -482,7 +482,7 @@ export function AppShell({
   const roleKey = String(activeTenant?.role ?? "");
   const financeEnabledForTenant = isSuperAdmin || isFinanceEnabled(activeTenant?.modules_json);
   const simulatorEnabledForTenant = isSuperAdmin || isSimulatorEnabled(activeTenant?.modules_json);
-  const goalsEnabledForTenant = isSuperAdmin || isGoalsEnabled(activeTenant?.modules_json);
+  const goalsEnabledForTenant = isGoalsEnabled(activeTenant?.modules_json);
 
   const navAccessQ = useQuery({
     queryKey: ["nav_access", activeTenantId, roleKey],
