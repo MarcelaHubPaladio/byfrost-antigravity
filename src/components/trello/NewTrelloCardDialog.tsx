@@ -47,24 +47,55 @@ export function NewTrelloCardDialog(props: { tenantId: string; journeyId: string
   const [title, setTitle] = useState("");
   const [descriptionHtml, setDescriptionHtml] = useState("");
   const [dueDate, setDueDate] = useState("");
-  const [responsibleId, setResponsibleId] = useState<string>("__unassigned__");
+  const [responsibleId, setResponsibleId] = useState<string>(user?.id ?? "__unassigned__");
   const [creating, setCreating] = useState(false);
 
   const usersQ = useQuery({
-    queryKey: ["trello_users", props.tenantId],
-    enabled: Boolean(open && props.tenantId),
+    queryKey: ["trello_users_hierarchy", props.tenantId, user?.id],
+    enabled: Boolean(open && props.tenantId && user?.id),
     staleTime: 30_000,
     queryFn: async () => {
-      const { data, error } = await supabase
+      // 1. Get current user's role
+      const { data: meProfile } = await supabase
+        .from("users_profile")
+        .select("role")
+        .eq("tenant_id", props.tenantId)
+        .eq("user_id", user!.id)
+        .single();
+
+      const isAdmin = meProfile?.role === "admin";
+
+      // 2. Fetch all profiles in tenant (RLS allows it now)
+      const { data: allUsers, error: usersErr } = await supabase
         .from("users_profile")
         .select("user_id,email,display_name")
         .eq("tenant_id", props.tenantId)
         .is("deleted_at", null)
-        .limit(5000);
-      if (error) throw error;
-      const list = (data ?? []) as UserRow[];
-      list.sort((a, b) => labelForUser(a).localeCompare(labelForUser(b)));
-      return list;
+        .limit(1000);
+
+      if (usersErr) throw usersErr;
+      const list = (allUsers ?? []) as UserRow[];
+
+      if (isAdmin) {
+        list.sort((a, b) => labelForUser(a).localeCompare(labelForUser(b)));
+        return list;
+      }
+
+      // 3. For non-admins, filter by hierarchy
+      const { data: subordinateIds, error: rpcErr } = await supabase
+        .rpc("get_subordinates", { p_tenant_id: props.tenantId, p_user_id: user!.id });
+
+      if (rpcErr) {
+        // Fallback: if RPC fails just show themselves
+        console.warn("[trello] Failed to fetch subordinates", rpcErr);
+        return list.filter(u => u.user_id === user!.id);
+      }
+
+      const subSet = new Set(subordinateIds as string[]);
+      const filtered = list.filter(u => u.user_id === user!.id || subSet.has(u.user_id));
+
+      filtered.sort((a, b) => labelForUser(a).localeCompare(labelForUser(b)));
+      return filtered;
     },
   });
 

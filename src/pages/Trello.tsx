@@ -79,18 +79,44 @@ export default function Trello() {
     const [assigneeFilterId, setAssigneeFilterId] = useState<string>("all");
 
     const tenantUsersQ = useQuery({
-        queryKey: ["tenant_users_all", activeTenantId],
-        enabled: Boolean(activeTenantId),
+        queryKey: ["tenant_users_hierarchy", activeTenantId, user?.id],
+        enabled: Boolean(activeTenantId && user?.id),
         staleTime: 60_000,
         queryFn: async () => {
-            const { data, error } = await supabase
+            // 1. Get current user's role
+            const { data: meProfile } = await supabase
+                .from("users_profile")
+                .select("role")
+                .eq("tenant_id", activeTenantId!)
+                .eq("user_id", user!.id)
+                .single();
+
+            const isAdmin = meProfile?.role === "admin";
+
+            // 2. Fetch all profiles in tenant
+            const { data: allUsers, error: usersErr } = await supabase
                 .from("users_profile")
                 .select("user_id, display_name, email")
                 .eq("tenant_id", activeTenantId!)
                 .is("deleted_at", null)
                 .order("display_name", { ascending: true });
-            if (error) throw error;
-            return (data ?? []) as Array<{ user_id: string; display_name: string | null; email: string | null }>;
+
+            if (usersErr) throw usersErr;
+            const list = (allUsers ?? []) as Array<{ user_id: string; display_name: string | null; email: string | null }>;
+
+            if (isAdmin) return list;
+
+            // 3. For non-admins, filter by hierarchy
+            const { data: subordinateIds, error: rpcErr } = await supabase
+                .rpc("get_subordinates", { p_tenant_id: activeTenantId!, p_user_id: user!.id });
+
+            if (rpcErr) {
+                console.warn("[trello] Failed to fetch subordinates", rpcErr);
+                return list.filter(u => u.user_id === user!.id);
+            }
+
+            const subSet = new Set(subordinateIds as string[]);
+            return list.filter(u => u.user_id === user!.id || subSet.has(u.user_id));
         },
     });
 
