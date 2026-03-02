@@ -144,7 +144,7 @@ export default function Trello() {
                 .eq("tenant_id", activeTenantId!)
                 .eq("journey_id", selectedJourney!.id)
                 .is("deleted_at", null)
-                .eq("is_chat", false)
+                .or("is_chat.eq.false,is_chat.is.null")
                 .order("updated_at", { ascending: false })
                 .limit(300);
 

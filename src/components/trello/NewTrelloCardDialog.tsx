@@ -84,6 +84,7 @@ export function NewTrelloCardDialog(props: { tenantId: string; journeyId: string
         tenant_id: props.tenantId,
         journey_id: props.journeyId,
         case_type: "TRELLO",
+        is_chat: false,
         created_by_channel: "panel",
         title: t,
         summary_text: normalizeRichTextHtmlOrNull(descriptionHtml),
