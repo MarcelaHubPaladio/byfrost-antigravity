@@ -278,31 +278,65 @@ serve(async (req) => {
 
     const supabase = createSupabaseAdmin();
 
-    // Find proposal by document_id stored in party_proposals.autentique_json.document_id
+    // 1. Try finding it as a User Goal Signature
+    let goalSignature: any = null;
     let proposal: any = null;
     let matchedBy: string | null = null;
+    let matchedContext = "";
 
     if (documentId) {
-      const { data } = await supabase
-        .from("party_proposals")
-        .select("id,tenant_id,status,autentique_json")
-        .is("deleted_at", null)
+      // Check user_goal_signatures
+      const { data: gData } = await supabase
+        .from("user_goal_signatures")
+        .select("id,tenant_id,autentique_status,autentique_json")
         .eq("autentique_json->>document_id", String(documentId))
         .maybeSingle();
-      proposal = data ?? null;
-      if (proposal) matchedBy = "document_id";
+      if (gData) {
+        goalSignature = gData;
+        matchedBy = "document_id";
+        matchedContext = "goal_signature";
+      } else {
+        // Fallback to party_proposals
+        const { data: pData } = await supabase
+          .from("party_proposals")
+          .select("id,tenant_id,status,autentique_json")
+          .is("deleted_at", null)
+          .eq("autentique_json->>document_id", String(documentId))
+          .maybeSingle();
+        if (pData) {
+          proposal = pData;
+          matchedBy = "document_id";
+          matchedContext = "proposal";
+        }
+      }
     }
 
-    // Fallback: find by signer_public_id
-    if (!proposal && signerPublicId) {
-      const { data } = await supabase
-        .from("party_proposals")
-        .select("id,tenant_id,status,autentique_json")
-        .is("deleted_at", null)
+    // Fallback: find by signer_public_id if documentId failed
+    if (!goalSignature && !proposal && signerPublicId) {
+      // Check user_goal_signatures
+      const { data: gData } = await supabase
+        .from("user_goal_signatures")
+        .select("id,tenant_id,autentique_status,autentique_json")
         .eq("autentique_json->>signer_public_id", String(signerPublicId))
         .maybeSingle();
-      proposal = data ?? null;
-      if (proposal) matchedBy = "signer_public_id";
+
+      if (gData) {
+        goalSignature = gData;
+        matchedBy = "signer_public_id";
+        matchedContext = "goal_signature";
+      } else {
+        const { data: pData } = await supabase
+          .from("party_proposals")
+          .select("id,tenant_id,status,autentique_json")
+          .is("deleted_at", null)
+          .eq("autentique_json->>signer_public_id", String(signerPublicId))
+          .maybeSingle();
+        if (pData) {
+          proposal = pData;
+          matchedBy = "signer_public_id";
+          matchedContext = "proposal";
+        }
+      }
     }
 
     const signed = isSignedEvent(payload);
@@ -321,10 +355,13 @@ serve(async (req) => {
       });
     }
 
+    const tenantId = goalSignature?.tenant_id ?? proposal?.tenant_id ?? null;
+
     // Audit insert (idempotent on payload_sha256)
     const { error: insErr } = await supabase.from("autentique_webhook_events").insert({
-      tenant_id: proposal?.tenant_id ?? null,
+      tenant_id: tenantId,
       proposal_id: proposal?.id ?? null,
+      goal_signature_id: goalSignature?.id ?? null,
       document_id: documentId,
       event_type: eventType,
       status,
@@ -332,10 +369,30 @@ serve(async (req) => {
       payload_json: payload,
       received_at: new Date().toISOString(),
     } as any);
-
     // Ignore duplicates
     if (insErr && !String(insErr.message ?? "").toLowerCase().includes("duplicate")) {
       return err("insert_failed", 500, { message: insErr.message });
+    }
+
+    if (goalSignature) {
+      const nextAut = {
+        ...(goalSignature.autentique_json ?? {}),
+        last_webhook_event: eventType,
+        last_webhook_status: status,
+        last_webhook_received_at: new Date().toISOString(),
+        status: signed ? "signed" : (goalSignature.autentique_json?.status ?? status ?? eventType ?? null),
+        ...(signed ? { signed_at: new Date().toISOString() } : {}),
+      };
+
+      await supabase
+        .from("user_goal_signatures")
+        .update({
+          autentique_status: signed ? "signed" : goalSignature.autentique_status,
+          ...(signed ? { signed_at: new Date().toISOString() } : {}),
+          autentique_json: nextAut,
+        })
+        .eq("tenant_id", goalSignature.tenant_id)
+        .eq("id", goalSignature.id);
     }
 
     // Best-effort proposal update even if not signed (helps UI and debugging)
