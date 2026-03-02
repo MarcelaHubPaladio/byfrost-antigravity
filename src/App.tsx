@@ -173,6 +173,14 @@ const App = () => (
                   }
                 />
                 <Route
+                  path="/app/j/trello"
+                  element={
+                    <RequireRouteAccess routeKey="app.trello">
+                      <Dashboard />
+                    </RequireRouteAccess>
+                  }
+                />
+                <Route
                   path="/app/j/:journeyKey"
                   element={
                     <RequireRouteAccess routeKey="app.dashboard">
