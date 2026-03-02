@@ -9,6 +9,7 @@ export type CandidateRoute = {
 // Ordered by what we consider the best "landing" options.
 export const CANDIDATE_ROUTES: CandidateRoute[] = [
   { key: "app.dashboard", path: "/app", label: "Dashboard" },
+  { key: "app.dashboard", path: "/app/j/trello", label: "Tarefas" },
   { key: "app.chat", path: "/app/chat", label: "Chat" },
   { key: "app.crm", path: "/app/crm", label: "CRM" },
   { key: "app.content", path: "/app/content", label: "Conteúdo" },

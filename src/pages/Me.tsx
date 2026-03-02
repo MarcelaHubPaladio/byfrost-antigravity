@@ -2,6 +2,8 @@ import { useMemo, useState } from "react";
 import { RequireAuth } from "@/components/RequireAuth";
 import { AppShell } from "@/components/AppShell";
 import { useSession } from "@/providers/SessionProvider";
+import { useTenant } from "@/providers/TenantProvider";
+import { useQuery } from "@tanstack/react-query";
 import { useTheme } from "@/providers/ThemeProvider";
 import { showError, showSuccess } from "@/utils/toast";
 import { cn } from "@/lib/utils";
@@ -73,9 +75,61 @@ function getUserDisplayName(user: any) {
 
 export default function Me() {
   const { user } = useSession();
+  const { activeTenantId, isSuperAdmin } = useTenant();
   const { prefs, setMode, setCustom, setStartRoute, isLoading } = useTheme();
   const [busy, setBusy] = useState(false);
   const [linking, setLinking] = useState(false);
+
+  const journeysEnabledQ = useQuery({
+    queryKey: ["tenant_journeys_enabled", activeTenantId],
+    enabled: Boolean(activeTenantId),
+    staleTime: 60_000,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("tenant_journeys")
+        .select("journeys(key, is_crm)")
+        .eq("tenant_id", activeTenantId!)
+        .eq("enabled", true);
+      if (error) throw error;
+      return (data ?? []) as any[];
+    },
+  });
+
+  const filteredRoutes = useMemo(() => {
+    if (isSuperAdmin) return CANDIDATE_ROUTES;
+    if (journeysEnabledQ.isLoading) return [];
+
+    return CANDIDATE_ROUTES.filter((r) => {
+      // Basic routes are always allowed if the key is just generic access.
+      // But for journey-specific ones, we check.
+      if (r.path === "/app") return true;
+      if (r.path === "/app/me") return true;
+      if (r.path === "/app/settings") return true;
+      if (r.path === "/app/chat") return true; // Usually enabled via another flag but keep for simplicity or check role
+
+      const enabledList = journeysEnabledQ.data ?? [];
+
+      if (r.path === "/app/j/trello") {
+        return enabledList.some(j => j.journeys?.key === "trello");
+      }
+      if (r.path === "/app/crm") {
+        return enabledList.some(j => j.journeys?.is_crm);
+      }
+      if (r.path === "/app/content") {
+        return enabledList.some(j => j.journeys?.key === "meta_content");
+      }
+      if (r.path === "/app/presence") {
+        // AppShell has complex check for presence, but here we can check if journey exists
+        return enabledList.some(j => j.journeys?.key === "presence");
+      }
+      if (r.path === "/app/simulator") {
+        // This is usually a module flag in modules_json, but let's see if there's a journey too or just keep it
+        return true;
+      }
+
+      return true;
+    });
+  }, [CANDIDATE_ROUTES, journeysEnabledQ.data, journeysEnabledQ.isLoading, isSuperAdmin]);
 
   const userName = getUserDisplayName(user);
   const userEmail = user?.email ?? "";
@@ -246,8 +300,8 @@ export default function Me() {
                           <SelectValue placeholder="Selecione uma tela..." />
                         </SelectTrigger>
                         <SelectContent className="rounded-2xl border-slate-200 dark:border-slate-800">
-                          {CANDIDATE_ROUTES.map((r) => (
-                            <SelectItem key={r.key} value={r.path} className="rounded-xl">
+                          {filteredRoutes.map((r) => (
+                            <SelectItem key={r.path} value={r.path} className="rounded-xl">
                               {r.label}
                             </SelectItem>
                           ))}
