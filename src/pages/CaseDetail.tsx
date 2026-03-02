@@ -243,6 +243,10 @@ export default function CaseDetail() {
     }
     if (caseQ.data.journeys?.is_crm) {
       nav(`/crm/cases/${caseQ.data.id}`, { replace: true });
+      return;
+    }
+    if (caseQ.data.journeys?.key === "trello" || caseQ.data.case_type === "TRELLO") {
+      nav(`/app/trello/${caseQ.data.id}`, { replace: true });
     }
   }, [caseQ.data?.id, caseQ.data?.journeys?.is_crm, caseQ.data?.is_chat, nav]);
 

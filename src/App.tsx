@@ -22,6 +22,7 @@ import AuthCallback from "@/pages/AuthCallback";
 import ResetPassword from "@/pages/ResetPassword";
 import Dashboard from "@/pages/Dashboard";
 import Trello from "@/pages/Trello";
+import TrelloCase from "@/pages/TrelloCase";
 import CaseDetail from "@/pages/CaseDetail";
 import Simulator from "@/pages/Simulator";
 import Settings from "@/pages/Settings";
@@ -381,6 +382,15 @@ const App = () => (
                   element={
                     <RequireRouteAccess routeKey="app.crm">
                       <CrmCaseDetail />
+                    </RequireRouteAccess>
+                  }
+                />
+
+                <Route
+                  path="/app/trello/:id"
+                  element={
+                    <RequireRouteAccess routeKey="app.trello">
+                      <TrelloCase />
                     </RequireRouteAccess>
                   }
                 />

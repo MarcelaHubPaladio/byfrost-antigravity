@@ -468,7 +468,7 @@ export default function Trello() {
                                             return (
                                                 <Link
                                                     key={c.id}
-                                                    to={`/cases/${c.id}`}
+                                                    to={`/app/trello/${c.id}`}
                                                     draggable
                                                     onDragStart={(e) => {
                                                         e.dataTransfer.setData("text/caseId", c.id);
