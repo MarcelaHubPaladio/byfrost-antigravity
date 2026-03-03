@@ -7,11 +7,12 @@ import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { showError, showSuccess } from "@/utils/toast";
-import { Loader2 } from "lucide-react";
+import { TvTimelineOrderModal } from "./TvTimelineOrderModal";
 
 export function TvTimelineManage({ tenantId }: { tenantId: string }) {
     const qc = useQueryClient();
     const [selectedPoint, setSelectedPoint] = useState<string>("all");
+    const [orderingTimelineId, setOrderingTimelineId] = useState<string | null>(null);
 
     const pointsQ = useQuery({
         queryKey: ["tv_points", tenantId],
@@ -164,14 +165,24 @@ export function TvTimelineManage({ tenantId }: { tenantId: string }) {
                                             )}
                                         </TableCell>
                                         <TableCell className="text-right">
-                                            <Button
-                                                size="sm"
-                                                variant="ghost"
-                                                className="rounded-xl text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50"
-                                                onClick={() => handleToggleMode(timeline.id, timeline.mode)}
-                                            >
-                                                Alternar Modo
-                                            </Button>
+                                            <div className="flex items-center justify-end gap-2">
+                                                <Button
+                                                    size="sm"
+                                                    variant="ghost"
+                                                    className="rounded-xl text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50"
+                                                    onClick={() => setOrderingTimelineId(timeline.id)}
+                                                >
+                                                    Organizar
+                                                </Button>
+                                                <Button
+                                                    size="sm"
+                                                    variant="ghost"
+                                                    className="rounded-xl text-slate-600 hover:text-slate-900 hover:bg-slate-100"
+                                                    onClick={() => handleToggleMode(timeline.id, timeline.mode)}
+                                                >
+                                                    Alternar Modo
+                                                </Button>
+                                            </div>
                                         </TableCell>
                                     </TableRow>
                                 );
@@ -180,6 +191,13 @@ export function TvTimelineManage({ tenantId }: { tenantId: string }) {
                     </TableBody>
                 </Table>
             </div>
+
+            <TvTimelineOrderModal
+                tenantId={tenantId}
+                timelineId={orderingTimelineId}
+                open={orderingTimelineId !== null}
+                onOpenChange={(open) => !open && setOrderingTimelineId(null)}
+            />
         </Card>
     );
 }

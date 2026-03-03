@@ -84,13 +84,28 @@ export default function TvPlayer() {
             if (mediaErr) throw mediaErr;
 
             // 3. Map medias to their duration based on the plan
-            return medias.map(m => {
+            const mappedMedias = medias.map(m => {
                 const plan = activePlans.find(ap => ap.entity_id === m.entity_id)?.tv_plans as any;
                 return {
                     ...m,
                     duration: plan?.video_duration_seconds || 15,
                 };
             });
+
+            // 4. Sort medias based on manual_order if it exists and has items
+            const manualOrderIds = timelineQ.data?.manual_order || [];
+            if (manualOrderIds.length > 0) {
+                mappedMedias.sort((a, b) => {
+                    let idxA = manualOrderIds.indexOf(a.id);
+                    let idxB = manualOrderIds.indexOf(b.id);
+                    // Push unsorted/new medias to the end
+                    if (idxA === -1) idxA = 999999;
+                    if (idxB === -1) idxB = 999999;
+                    return idxA - idxB;
+                });
+            }
+
+            return mappedMedias;
         },
     });
 
