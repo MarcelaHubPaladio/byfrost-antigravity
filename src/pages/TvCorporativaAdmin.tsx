@@ -3,6 +3,7 @@ import { useTenant } from "@/providers/TenantProvider";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { TvPointsManage } from "@/components/tv/TvPointsManage";
 import { TvPlansManage } from "@/components/tv/TvPlansManage";
+import { TvTimelineManage } from "@/components/tv/TvTimelineManage";
 
 export default function TvCorporativaAdmin() {
     const { activeTenantId } = useTenant();
@@ -36,11 +37,7 @@ export default function TvCorporativaAdmin() {
                         </TabsContent>
 
                         <TabsContent value="timeline" className="pt-4">
-                            <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-                                <p className="text-sm text-slate-600">
-                                    Gestão da linha do tempo da TV. Aqui você poderá associar vídeos aos pontos de TV. (Em desenvolvimento)
-                                </p>
-                            </div>
+                            <TvTimelineManage tenantId={activeTenantId} />
                         </TabsContent>
                     </Tabs>
                 ) : null}
