@@ -179,12 +179,29 @@ export default function TvPlayer() {
             )}
 
             {/* Frame / Overlay Dinâmico */}
-            <div className="absolute bottom-0 left-0 right-0 h-24 bg-gradient-to-t from-black/80 to-transparent flex items-end p-6">
-                <div>
+            <div className="absolute bottom-0 left-0 right-0 h-24 bg-gradient-to-t from-black/80 to-transparent flex flex-col justify-end">
+                <div className="p-6 pb-4">
                     <h2 className="text-white font-bold text-2xl truncate">{(pointQ.data.tenants as any)?.name ?? "Tenant"}</h2>
                     <p className="text-slate-300 text-sm">{pointQ.data.name}</p>
                 </div>
+                {/* Progress Bar */}
+                <div className="w-full h-1 bg-white/20">
+                    <div
+                        key={currentMedia.id + currentIndex} // Forces animation restart
+                        className="h-full bg-primary"
+                        style={{
+                            animation: `progressBar ${currentMedia.duration}s linear forwards`
+                        }}
+                    />
+                </div>
             </div>
+
+            <style>{`
+                @keyframes progressBar {
+                    0% { width: 0%; }
+                    100% { width: 100%; }
+                }
+            `}</style>
         </div>
     );
 }
