@@ -80,7 +80,7 @@ export default function TvTimelineEditor() {
 
                 return {
                     ...m,
-                    entity_name: (entityData as any)?.name || "Cliente sem nome",
+                    entity_name: (entityData as any)?.display_name || (entityData as any)?.name || "Cliente sem nome",
                     plan_name: (planData as any)?.name || "Plano Padrão",
                     duration: (planData as any)?.video_duration_seconds || 15,
                     default_frame_url: (planInfo as any)?.default_frame_url
@@ -290,9 +290,12 @@ export default function TvTimelineEditor() {
             {/* Main Editor Section */}
             <main className="flex-1 flex flex-col min-h-0 bg-slate-900/30">
                 {/* Preview Area */}
-                <div className="flex-1 relative bg-black flex items-center justify-center overflow-hidden py-10">
+                <div className="flex-1 relative bg-black flex items-center justify-center overflow-hidden p-8">
                     <div
-                        className={`w-full h-full max-w-[90%] max-h-[90%] ${timelineQ.data?.tv_points?.orientation === 'portrait' ? 'aspect-[9/16]' : 'aspect-video'}`}
+                        className={`max-w-full max-h-full shadow-2xl transition-all duration-500 ring-1 ring-white/10 overflow-hidden ${timelineQ.data?.tv_points?.orientation === 'portrait'
+                                ? 'h-full aspect-[9/16]'
+                                : 'w-full aspect-video'
+                            }`}
                     >
                         {renderPreview()}
                     </div>
