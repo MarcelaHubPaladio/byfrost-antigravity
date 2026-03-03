@@ -90,10 +90,11 @@ export default function TvPlayer() {
             // 3. Map medias to their duration based on the plan
             const mappedMedias = medias.map(m => {
                 const ep = activePlans.find(ap => ap.entity_id === m.entity_id);
-                const plan = ep?.tv_plans as any;
+                // Handle Supabase join returning array or object
+                const planData = Array.isArray(ep?.tv_plans) ? ep.tv_plans[0] : ep?.tv_plans;
                 return {
                     ...m,
-                    duration: plan?.video_duration_seconds || 15,
+                    duration: (planData as any)?.video_duration_seconds || 15,
                     default_frame_url: ep?.default_frame_url,
                 };
             });
@@ -141,9 +142,9 @@ export default function TvPlayer() {
         } else {
             // 2. Fallback timeout: if media takes too long to load (e.g. 30 seconds), skip it
             fallbackTimeoutRef.current = setTimeout(() => {
-                console.warn(`Media timeout to load: ${currentMedia.url}. Skipping.`);
+                console.warn(`[TvPlayer] Media timeout to load (${currentIndex}/${medias.length}): ${currentMedia.url}. Skipping.`);
                 setCurrentIndex((prev) => (prev + 1) % medias.length);
-            }, 30000); // 30 seconds max to load any media
+            }, 30000);
         }
 
         return () => {
@@ -232,10 +233,12 @@ export default function TvPlayer() {
                             autoPlay
                             muted
                             className="h-full w-full object-contain"
-                            onPlay={() => setMediaLoaded(true)}
-                            onCanPlay={() => setMediaLoaded(true)}
-                            onCanPlayThrough={() => setMediaLoaded(true)}
+                            onPlay={() => { console.log("[TvPlayer] Video Playing"); setMediaLoaded(true); }}
+                            onCanPlay={() => { console.log("[TvPlayer] Video CanPlay"); setMediaLoaded(true); }}
+                            onCanPlayThrough={() => { console.log("[TvPlayer] Video CanPlayThrough"); setMediaLoaded(true); }}
+                            onLoadedData={() => { console.log("[TvPlayer] Video LoadedData"); setMediaLoaded(true); }}
                             onLoadedMetadata={(e) => {
+                                console.log("[TvPlayer] Video Metadata Loaded", e.currentTarget.duration);
                                 const videoDur = e.currentTarget.duration;
                                 const planDur = currentMedia.duration;
                                 // 30% tolerance logic: respect video duration within [plan * 0.7, plan * 1.3]
@@ -256,7 +259,8 @@ export default function TvPlayer() {
                             src={getYouTubeEmbedUrl(currentMedia.url)}
                             className="h-full w-full border-0 pointer-events-none"
                             allow="autoplay"
-                            onLoad={() => setMediaLoaded(true)}
+                            onLoad={() => { console.log("[TvPlayer] YouTube Iframe Loaded"); setMediaLoaded(true); }}
+                            onError={() => { console.error("[TvPlayer] YouTube Iframe Error"); setCurrentIndex((prev) => (prev + 1) % medias.length); }}
                             key={currentMedia.id}
                         />
                     ) : currentMedia.media_type === "google_drive_link" && getDriveFileId(currentMedia.url) ? (
@@ -264,11 +268,17 @@ export default function TvPlayer() {
                             src={`https://drive.google.com/file/d/${getDriveFileId(currentMedia.url)}/preview?autoplay=1&mute=1`}
                             className="h-full w-full border-0 pointer-events-none"
                             allow="autoplay"
-                            onLoad={() => setMediaLoaded(true)}
+                            onLoad={() => { console.log("[TvPlayer] Google Drive Iframe Loaded"); setMediaLoaded(true); }}
+                            onError={() => { console.error("[TvPlayer] Google Drive Iframe Error"); setCurrentIndex((prev) => (prev + 1) % medias.length); }}
                             key={currentMedia.id}
                         />
                     ) : (
-                        <div className="flex h-full w-full items-center justify-center text-slate-500 bg-slate-900">
+                        <div className="flex h-full w-full items-center justify-center text-slate-500 bg-slate-900" ref={() => {
+                            if (!mediaLoaded) {
+                                console.warn("[TvPlayer] Media type not supported, skipping skip-timer delay.");
+                                setMediaLoaded(true);
+                            }
+                        }}>
                             <p>Mídia não suportada ou URL inválida.</p>
                         </div>
                     )}
