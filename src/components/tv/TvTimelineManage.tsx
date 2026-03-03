@@ -55,8 +55,9 @@ export function TvTimelineManage({ tenantId }: { tenantId: string }) {
             if (error) throw error;
             showSuccess("Timeline iniciada");
             qc.invalidateQueries({ queryKey: ["tv_timelines"] });
-        } catch (e: any) {
-            showError("Erro ao iniciar a timeline. Tente novamente.");
+        } catch (e: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
+            console.error(e);
+            showError(e?.message || "Erro ao iniciar a timeline. Tente novamente.");
         }
     };
 
@@ -70,7 +71,8 @@ export function TvTimelineManage({ tenantId }: { tenantId: string }) {
             if (error) throw error;
             showSuccess(`Modo alterado para ${newMode}`);
             qc.invalidateQueries({ queryKey: ["tv_timelines"] });
-        } catch (e: any) {
+        } catch (e: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
+            console.error(e);
             showError("Erro ao alterar modo");
         }
     };
