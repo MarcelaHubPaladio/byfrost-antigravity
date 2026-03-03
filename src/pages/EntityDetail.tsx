@@ -18,6 +18,8 @@ import { PartyCustomerEditorCard } from "@/components/core/PartyCustomerEditorCa
 import { PartyProposalCard } from "@/components/core/PartyProposalCard";
 import { EntityHistory } from "@/components/core/EntityHistory";
 import { EntityFinanceTab } from "@/components/finance/EntityFinanceTab";
+import { isTvCorporativaEnabled } from "@/components/RequireTvCorporativaEnabled";
+import { EntityTvCorporativaTab } from "@/components/entities/EntityTvCorporativaTab";
 
 type EntityRow = {
   id: string;
@@ -41,6 +43,8 @@ export default function EntityDetail() {
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
+
+  const tvCorporativaEnabled = useMemo(() => isTvCorporativaEnabled(activeTenant?.modules_json), [activeTenant?.modules_json]);
 
   const entityQ = useQuery({
     queryKey: ["entity", activeTenantId, entityId],
@@ -161,6 +165,7 @@ export default function EntityDetail() {
                   <TabsTrigger value="overview">Visão geral</TabsTrigger>
                   {entityQ.data?.entity_type === "party" ? <TabsTrigger value="customer">Cliente</TabsTrigger> : null}
                   {entityQ.data?.entity_type === "party" ? <TabsTrigger value="proposal">Proposta</TabsTrigger> : null}
+                  {tvCorporativaEnabled ? <TabsTrigger value="tv_corporativa">TV Corporativa</TabsTrigger> : null}
                   <TabsTrigger value="finance">Financeiro</TabsTrigger>
                   <TabsTrigger value="timeline">Linha do tempo</TabsTrigger>
                 </TabsList>
@@ -215,6 +220,14 @@ export default function EntityDetail() {
                         partyId={entityId}
                         tenantSlug={String(activeTenant?.slug ?? "tenant")}
                       />
+                    ) : null}
+                  </TabsContent>
+                ) : null}
+
+                {tvCorporativaEnabled ? (
+                  <TabsContent value="tv_corporativa">
+                    {activeTenantId && entityQ.data ? (
+                      <EntityTvCorporativaTab tenantId={activeTenantId} entityId={entityId} />
                     ) : null}
                   </TabsContent>
                 ) : null}

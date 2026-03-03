@@ -10,6 +10,10 @@ import { ThemeProvider } from "@/providers/ThemeProvider";
 import { RequireTenantRole } from "@/components/RequireTenantRole";
 import { RequireRouteAccess } from "./components/RequireRouteAccess";
 import { RequireGoalsEnabled } from "./components/RequireGoalsEnabled";
+import {
+  isTvCorporativaEnabled,
+  RequireTvCorporativaEnabled,
+} from "@/components/RequireTvCorporativaEnabled";
 import { RequireChatInstanceAccess } from "@/components/RequireChatInstanceAccess";
 import { RequireFinanceEnabled } from "@/components/RequireFinanceEnabled";
 import { RequireSimulatorEnabled } from "@/components/RequireSimulatorEnabled";
@@ -55,6 +59,8 @@ import EntityDetail from "@/pages/EntityDetail";
 import DeliverableTemplates from "@/pages/DeliverableTemplates";
 import PublicProposal from "@/pages/PublicProposal";
 import ContractTemplates from "@/pages/ContractTemplates";
+import TvCorporativaAdmin from "@/pages/TvCorporativaAdmin";
+import TvPlayer from "@/pages/TvPlayer";
 
 const queryClient = new QueryClient();
 
@@ -76,6 +82,9 @@ const App = () => (
 
                 {/* Public proposal (no auth) */}
                 <Route path="/p/:tenantSlug/:token" element={<PublicProposal />} />
+
+                {/* TV Player (no protection initially, just specific route) */}
+                <Route path="/tv/:pointId" element={<TvPlayer />} />
 
                 {/* Public screen (no protection) */}
                 <Route path="/screen" element={<Screen />} />
@@ -294,6 +303,18 @@ const App = () => (
                     <RequireRouteAccess routeKey="app.commitments">
                       <CommitmentDetail />
                     </RequireRouteAccess>
+                  }
+                />
+
+                {/* TV Corporativa (Admin Tenant) */}
+                <Route
+                  path="/app/tv-corporativa"
+                  element={
+                    <RequireTvCorporativaEnabled>
+                      <RequireRouteAccess routeKey="app.tv_corporativa">
+                        <TvCorporativaAdmin />
+                      </RequireRouteAccess>
+                    </RequireTvCorporativaEnabled>
                   }
                 />
 

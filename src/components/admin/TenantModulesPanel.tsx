@@ -18,6 +18,10 @@ function getGoalsEnabled(modulesJson: any) {
   return Boolean(modulesJson?.goals_enabled === true);
 }
 
+function getTvCorporativaEnabled(modulesJson: any) {
+  return Boolean(modulesJson?.tv_corporativa_enabled === true);
+}
+
 function setModuleFlag(modulesJson: any, key: string, enabled: boolean) {
   const base = (modulesJson ?? {}) as any;
   return { ...base, [key]: enabled };
@@ -46,6 +50,7 @@ export function TenantModulesPanel() {
   const financeEnabled = useMemo(() => getFinanceEnabled(tenantQ.data?.modules_json), [tenantQ.data]);
   const simulatorEnabled = useMemo(() => getSimulatorEnabled(tenantQ.data?.modules_json), [tenantQ.data]);
   const goalsEnabled = useMemo(() => getGoalsEnabled(tenantQ.data?.modules_json), [tenantQ.data]);
+  const tvCorporativaEnabled = useMemo(() => getTvCorporativaEnabled(tenantQ.data?.modules_json), [tenantQ.data]);
 
   const toggleModule = async (key: string, next: boolean) => {
     if (!activeTenantId) return;
@@ -120,6 +125,20 @@ export function TenantModulesPanel() {
                 checked={goalsEnabled}
                 disabled={saving || tenantQ.isLoading}
                 onCheckedChange={(v) => toggleModule("goals_enabled", v)}
+              />
+            </div>
+
+            <div className="flex items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2">
+              <div>
+                <div className="text-xs font-semibold text-slate-900">TV Corporativa</div>
+                <div className="mt-0.5 text-[11px] text-slate-600">
+                  Habilita portais, displays e gerência de mídia em TVs.
+                </div>
+              </div>
+              <Switch
+                checked={tvCorporativaEnabled}
+                disabled={saving || tenantQ.isLoading}
+                onCheckedChange={(v) => toggleModule("tv_corporativa_enabled", v)}
               />
             </div>
 

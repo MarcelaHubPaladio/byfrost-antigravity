@@ -41,7 +41,10 @@ import {
   Settings2,
   LineChart,
   FileSignature,
+  Tv,
 } from "lucide-react";
+
+import { isTvCorporativaEnabled } from "@/components/RequireTvCorporativaEnabled";
 import * as HoverCardPrimitive from "@radix-ui/react-hover-card";
 import { cn } from "@/lib/utils";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -485,6 +488,7 @@ export function AppShell({
   const financeEnabledForTenant = isSuperAdmin || isFinanceEnabled(activeTenant?.modules_json);
   const simulatorEnabledForTenant = isSuperAdmin || isSimulatorEnabled(activeTenant?.modules_json);
   const goalsEnabledForTenant = isGoalsEnabled(activeTenant?.modules_json);
+  const tvCorporativaEnabledForTenant = isSuperAdmin || isTvCorporativaEnabled(activeTenant?.modules_json);
 
   const navAccessQ = useQuery({
     queryKey: ["nav_access", activeTenantId, roleKey],
@@ -520,6 +524,7 @@ export function AppShell({
         "app.finance.tensions",
         "app.finance.planning",
         "app.finance.board",
+        "app.tv_corporativa",
       ];
 
       const map: Record<string, boolean> = {};
@@ -837,6 +842,15 @@ export function AppShell({
                   />
                 )}
 
+                {tvCorporativaEnabledForTenant && (
+                  <NavTile
+                    to="/app/tv-corporativa"
+                    icon={Tv}
+                    label="TV Corp."
+                    disabled={!can("app.tv_corporativa")}
+                  />
+                )}
+
                 {can("app.admin") && (
                   <NavTile to="/app/admin" icon={Settings2} label="Admin" />
                 )}
@@ -1118,6 +1132,16 @@ export function AppShell({
                                 to="/app/goals"
                                 icon={Target}
                                 label="Metas"
+                                onNavigate={() => setMobileNavOpen(false)}
+                              />
+                            )}
+
+                            {tvCorporativaEnabledForTenant && (
+                              <MobileNavItem
+                                to="/app/tv-corporativa"
+                                icon={Tv}
+                                label="TV Corporativa"
+                                disabled={!can("app.tv_corporativa")}
                                 onNavigate={() => setMobileNavOpen(false)}
                               />
                             )}
