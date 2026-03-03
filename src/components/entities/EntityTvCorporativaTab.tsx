@@ -56,8 +56,7 @@ export function EntityTvCorporativaTab({ tenantId, entityId }: { tenantId: strin
                 .from("tv_entity_plans")
                 .select("*, tv_plans(name, video_duration_seconds)")
                 .eq("tenant_id", tenantId)
-                .eq("entity_id", entityId)
-                .is("deleted_at", null);
+                .eq("entity_id", entityId);
             if (error) throw error;
             return data;
         },
@@ -128,10 +127,10 @@ export function EntityTvCorporativaTab({ tenantId, entityId }: { tenantId: strin
     const handleTogglePlan = async (planId: string, isActive: boolean, existingRecordId?: string) => {
         try {
             if (existingRecordId) {
-                // Toggle existing
+                // Toggle existing (could be activating a previously disabled or soft-deleted one)
                 const { error } = await supabase
                     .from("tv_entity_plans")
-                    .update({ is_active: isActive })
+                    .update({ is_active: isActive, deleted_at: isActive ? null : new Date().toISOString() })
                     .eq("id", existingRecordId);
                 if (error) throw error;
             } else {
@@ -263,7 +262,7 @@ export function EntityTvCorporativaTab({ tenantId, entityId }: { tenantId: strin
                     <div className="space-y-4">
                         {plansQ.data?.map(plan => {
                             const entityPlan = entityPlansQ.data?.find(ep => ep.plan_id === plan.id);
-                            const isActive = entityPlan?.is_active ?? false;
+                            const isActive = entityPlan ? (entityPlan.is_active && !entityPlan.deleted_at) : false;
 
                             return (
                                 <div key={plan.id} className={`flex items-center justify-between rounded-xl border p-4 transition ${isActive ? 'border-primary/50 bg-primary/5' : 'border-slate-200'}`}>
