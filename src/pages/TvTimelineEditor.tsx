@@ -50,7 +50,7 @@ export default function TvTimelineEditor() {
             // 1. Get all active entity plans with their plan details
             const { data: activePlans, error: plansErr } = await supabase
                 .from("tv_entity_plans")
-                .select("entity_id, tv_plans(*), core_entities(*)")
+                .select("entity_id, default_frame_url, tv_plans(*), core_entities(*)")
                 .eq("tenant_id", tenantId)
                 .eq("is_active", true)
                 .is("deleted_at", null);
@@ -63,7 +63,7 @@ export default function TvTimelineEditor() {
             // 2. Get active media
             const { data: medias, error: mediaErr } = await supabase
                 .from("tv_media")
-                .select("*")
+                .select("*, frame_url")
                 .eq("tenant_id", tenantId)
                 .in("entity_id", entityIds)
                 .eq("status", "active")
@@ -82,7 +82,8 @@ export default function TvTimelineEditor() {
                     ...m,
                     entity_name: (entityData as any)?.name || "Cliente sem nome",
                     plan_name: (planData as any)?.name || "Plano Padrão",
-                    duration: (planData as any)?.video_duration_seconds || 15
+                    duration: (planData as any)?.video_duration_seconds || 15,
+                    default_frame_url: (planInfo as any)?.default_frame_url
                 };
             });
         }
@@ -155,13 +156,24 @@ export default function TvTimelineEditor() {
 
         if (media.media_type === "supabase_storage" || media.url.endsWith(".mp4")) {
             return (
-                <video
-                    src={media.url}
-                    controls
-                    autoPlay={isPlaying}
-                    className="h-full w-full object-contain bg-black shadow-2xl"
-                    key={media.id}
-                />
+                <div className="h-full w-full relative">
+                    <video
+                        src={media.url}
+                        controls
+                        autoPlay={isPlaying}
+                        className="h-full w-full object-contain bg-black shadow-2xl"
+                        key={media.id}
+                    />
+                    {media.frame_url || media.default_frame_url ? (
+                        <div className="absolute inset-0 pointer-events-none z-10">
+                            <img
+                                src={media.frame_url || media.default_frame_url}
+                                className="h-full w-full object-fill"
+                                alt="Frame"
+                            />
+                        </div>
+                    ) : null}
+                </div>
             );
         } else if (media.media_type === "youtube_link") {
             let videoId = "";
@@ -170,30 +182,65 @@ export default function TvTimelineEditor() {
             else if (media.url.includes("youtu.be/")) videoId = media.url.split("youtu.be/")[1].split("?")[0];
 
             return (
-                <iframe
-                    src={`https://www.youtube.com/embed/${videoId}?autoplay=${isPlaying ? 1 : 0}&mute=1`}
-                    className="h-full w-full border-0 shadow-2xl"
-                    allow="autoplay; encrypted-media"
-                    allowFullScreen
-                    key={media.id}
-                />
+                <div className="h-full w-full relative">
+                    <iframe
+                        src={`https://www.youtube.com/embed/${videoId}?autoplay=${isPlaying ? 1 : 0}&mute=1`}
+                        className="h-full w-full border-0 shadow-2xl"
+                        allow="autoplay; encrypted-media"
+                        allowFullScreen
+                        key={media.id}
+                    />
+                    {media.frame_url || media.default_frame_url ? (
+                        <div className="absolute inset-0 pointer-events-none z-10">
+                            <img
+                                src={media.frame_url || media.default_frame_url}
+                                className="h-full w-full object-fill"
+                                alt="Frame"
+                            />
+                        </div>
+                    ) : null}
+                </div>
             );
         } else if (media.media_type === "google_drive_link") {
             const match = media.url.match(/\/d\/([a-zA-Z0-9-_]+)/);
             const driveId = match ? match[1] : null;
             if (driveId) {
                 return (
-                    <iframe
-                        src={`https://drive.google.com/file/d/${driveId}/preview?autoplay=${isPlaying ? 1 : 0}&mute=1`}
-                        className="h-full w-full border-0 shadow-2xl"
-                        allow="autoplay"
-                        key={media.id}
-                    />
+                    <div className="h-full w-full relative">
+                        <iframe
+                            src={`https://drive.google.com/file/d/${driveId}/preview?autoplay=${isPlaying ? 1 : 0}&mute=1`}
+                            className="h-full w-full border-0 shadow-2xl"
+                            allow="autoplay"
+                            key={media.id}
+                        />
+                        {media.frame_url || media.default_frame_url ? (
+                            <div className="absolute inset-0 pointer-events-none z-10">
+                                <img
+                                    src={media.frame_url || media.default_frame_url}
+                                    className="h-full w-full object-fill"
+                                    alt="Frame"
+                                />
+                            </div>
+                        ) : null}
+                    </div>
                 );
             }
         }
 
-        return <div className="flex h-full items-center justify-center text-slate-500 bg-slate-900"><ImageIcon className="h-12 w-12 opacity-20" /></div>;
+        return (
+            <div className="flex h-full w-full items-center justify-center text-slate-500 bg-slate-900 relative">
+                <ImageIcon className="h-12 w-12 opacity-20" />
+                {media.frame_url || media.default_frame_url ? (
+                    <div className="absolute inset-0 pointer-events-none z-10">
+                        <img
+                            src={media.frame_url || media.default_frame_url}
+                            className="h-full w-full object-fill"
+                            alt="Frame"
+                        />
+                    </div>
+                ) : null}
+            </div>
+        );
     };
 
     if (timelineQ.isLoading || activeMediasQ.isLoading) {

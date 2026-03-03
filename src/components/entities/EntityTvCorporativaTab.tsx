@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Trash2, Loader2, UploadCloud, Link as LinkIcon, Youtube, Pencil, Check, X } from "lucide-react";
+import { Trash2, Loader2, UploadCloud, Link as LinkIcon, Youtube, Pencil, Check, X, Image as ImageIcon } from "lucide-react";
 import { showError, showSuccess } from "@/utils/toast";
 
 export function EntityTvCorporativaTab({ tenantId, entityId }: { tenantId: string; entityId: string; }) {
@@ -19,6 +19,7 @@ export function EntityTvCorporativaTab({ tenantId, entityId }: { tenantId: strin
     const [mediaName, setMediaName] = useState("");
     const [editingMediaId, setEditingMediaId] = useState<string | null>(null);
     const [editingName, setEditingName] = useState("");
+    const [uploadingFrameId, setUploadingFrameId] = useState<string | null>(null); // 'default' or mediaId
 
     const mediaQ = useQuery({
         queryKey: ["tv_media", tenantId, entityId],
@@ -173,6 +174,70 @@ export function EntityTvCorporativaTab({ tenantId, entityId }: { tenantId: strin
         }
     };
 
+    const handleUploadFrame = async (file: File, targetId: string, isDefault = false) => {
+        setUploadingFrameId(targetId);
+        try {
+            const fileExt = file.name.split('.').pop();
+            const fileName = `frames/${entityId}/${Math.random().toString(36).substring(2)}_${Date.now()}.${fileExt}`;
+            const { error: uploadError, data } = await supabase.storage
+                .from("tv-corporativa-media")
+                .upload(fileName, file);
+
+            if (uploadError) throw uploadError;
+
+            const { data: publicUrlData } = supabase.storage
+                .from("tv-corporativa-media")
+                .getPublicUrl(data.path);
+
+            const frameUrl = publicUrlData.publicUrl;
+
+            if (isDefault) {
+                const { error } = await supabase
+                    .from("tv_entity_plans")
+                    .update({ default_frame_url: frameUrl })
+                    .eq("id", targetId);
+                if (error) throw error;
+            } else {
+                const { error } = await supabase
+                    .from("tv_media")
+                    .update({ frame_url: frameUrl })
+                    .eq("id", targetId);
+                if (error) throw error;
+            }
+
+            showSuccess("Moldura salva com sucesso!");
+            qc.invalidateQueries({ queryKey: ["tv_entity_plans", tenantId, entityId] });
+            qc.invalidateQueries({ queryKey: ["tv_media", tenantId, entityId] });
+        } catch (e: any) {
+            showError("Erro ao subir moldura: " + (e.message || "Erro desconhecido"));
+        } finally {
+            setUploadingFrameId(null);
+        }
+    };
+
+    const handleRemoveFrame = async (targetId: string, isDefault = false) => {
+        try {
+            if (isDefault) {
+                const { error } = await supabase
+                    .from("tv_entity_plans")
+                    .update({ default_frame_url: null })
+                    .eq("id", targetId);
+                if (error) throw error;
+            } else {
+                const { error } = await supabase
+                    .from("tv_media")
+                    .update({ frame_url: null })
+                    .eq("id", targetId);
+                if (error) throw error;
+            }
+            showSuccess("Moldura removida");
+            qc.invalidateQueries({ queryKey: ["tv_entity_plans", tenantId, entityId] });
+            qc.invalidateQueries({ queryKey: ["tv_media", tenantId, entityId] });
+        } catch (e: any) {
+            showError("Erro ao remover moldura");
+        }
+    };
+
     return (
         <div className="grid gap-6 lg:grid-cols-2">
             <Card className="rounded-2xl border-slate-200 p-6">
@@ -303,9 +368,36 @@ export function EntityTvCorporativaTab({ tenantId, entityId }: { tenantId: strin
                                             )}
                                         </div>
                                     </div>
-                                    <Button variant="ghost" size="icon" onClick={() => handleDeleteMedia(m.id)} className="shrink-0 text-slate-400 hover:text-rose-600">
-                                        <Trash2 className="h-4 w-4" />
-                                    </Button>
+                                    <div className="flex items-center gap-2 shrink-0">
+                                        <div className="relative group/frame">
+                                            {m.frame_url ? (
+                                                <div className="flex items-center gap-1">
+                                                    <div className="h-8 w-8 rounded-lg border border-slate-200 overflow-hidden bg-white cursor-pointer hover:bg-slate-50 relative group/frameimg">
+                                                        <img src={m.frame_url} className="h-full w-full object-contain" alt="Moldura" />
+                                                        <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover/frameimg:opacity-100 transition-opacity" onClick={() => handleRemoveFrame(m.id)}>
+                                                            <Trash2 className="h-3 w-3 text-white" />
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                <div className="relative">
+                                                    <Input
+                                                        type="file"
+                                                        accept="image/png"
+                                                        className="absolute inset-0 opacity-0 cursor-pointer z-10"
+                                                        onChange={(e) => e.target.files?.[0] && handleUploadFrame(e.target.files[0], m.id)}
+                                                        disabled={uploadingFrameId === m.id}
+                                                    />
+                                                    <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-300 hover:text-indigo-600 hover:bg-indigo-50">
+                                                        {uploadingFrameId === m.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <ImageIcon className="h-3 w-3" />}
+                                                    </Button>
+                                                </div>
+                                            )}
+                                        </div>
+                                        <Button variant="ghost" size="icon" onClick={() => handleDeleteMedia(m.id)} className="text-slate-400 hover:text-rose-600">
+                                            <Trash2 className="h-4 w-4" />
+                                        </Button>
+                                    </div>
                                 </div>
                             ))}
                         </div>
@@ -335,10 +427,41 @@ export function EntityTvCorporativaTab({ tenantId, entityId }: { tenantId: strin
                                         <p className="font-semibold text-slate-900">{plan.name}</p>
                                         <p className="text-xs text-slate-500">{plan.video_duration_seconds}s de duração • {plan.has_contact_break ? 'Com' : 'Sem'} tela de contato</p>
                                     </div>
-                                    <Switch
-                                        checked={isActive}
-                                        onCheckedChange={(c) => handleTogglePlan(plan.id, c, entityPlan?.id)}
-                                    />
+                                    <div className="flex items-center gap-4">
+                                        {isActive && (
+                                            <div className="flex items-center gap-2">
+                                                {entityPlan.default_frame_url ? (
+                                                    <div className="flex items-center gap-2 group/defaultframe">
+                                                        <div className="h-10 w-10 rounded-lg border border-slate-200 overflow-hidden bg-white relative group/frameimg">
+                                                            <img src={entityPlan.default_frame_url} className="h-full w-full object-contain" alt="Moldura Padrão" />
+                                                            <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover/frameimg:opacity-100 transition-opacity cursor-pointer" onClick={() => handleRemoveFrame(entityPlan.id, true)}>
+                                                                <Trash2 className="h-4 w-4 text-white" />
+                                                            </div>
+                                                        </div>
+                                                        <p className="text-[10px] font-bold text-slate-400">Moldura Padrão</p>
+                                                    </div>
+                                                ) : (
+                                                    <div className="relative group/upload">
+                                                        <Input
+                                                            type="file"
+                                                            accept="image/png"
+                                                            className="absolute inset-0 opacity-0 cursor-pointer z-10"
+                                                            onChange={(e) => e.target.files?.[0] && handleUploadFrame(e.target.files[0], entityPlan.id, true)}
+                                                            disabled={uploadingFrameId === entityPlan.id}
+                                                        />
+                                                        <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-dashed border-slate-300 text-slate-400 hover:text-primary hover:border-primary transition cursor-pointer">
+                                                            {uploadingFrameId === entityPlan.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <ImageIcon className="h-3 w-3" />}
+                                                            <span className="text-[10px] font-bold">+ MOLDURA PADRÃO</span>
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
+                                        <Switch
+                                            checked={isActive}
+                                            onCheckedChange={(c) => handleTogglePlan(plan.id, c, entityPlan?.id)}
+                                        />
+                                    </div>
                                 </div>
                             )
                         })}

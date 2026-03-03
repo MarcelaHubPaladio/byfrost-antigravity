@@ -67,7 +67,7 @@ export default function TvPlayer() {
             // 1. Get all active entity plans for this tenant
             const { data: activePlans, error: plansErr } = await supabase
                 .from("tv_entity_plans")
-                .select("entity_id, tv_plans(video_duration_seconds, frame_layout)")
+                .select("entity_id, default_frame_url, tv_plans(video_duration_seconds, frame_layout)")
                 .eq("tenant_id", pointQ.data!.tenant_id)
                 .eq("is_active", true)
                 .is("deleted_at", null);
@@ -80,7 +80,7 @@ export default function TvPlayer() {
             // 2. Get media for those entities
             const { data: medias, error: mediaErr } = await supabase
                 .from("tv_media")
-                .select("id, entity_id, media_type, url")
+                .select("id, entity_id, media_type, url, frame_url")
                 .eq("tenant_id", pointQ.data!.tenant_id)
                 .in("entity_id", entityIds)
                 .eq("status", "active")
@@ -89,10 +89,12 @@ export default function TvPlayer() {
 
             // 3. Map medias to their duration based on the plan
             const mappedMedias = medias.map(m => {
-                const plan = activePlans.find(ap => ap.entity_id === m.entity_id)?.tv_plans as any;
+                const ep = activePlans.find(ap => ap.entity_id === m.entity_id);
+                const plan = ep?.tv_plans as any;
                 return {
                     ...m,
                     duration: plan?.video_duration_seconds || 15,
+                    default_frame_url: ep?.default_frame_url,
                 };
             });
 
@@ -265,9 +267,20 @@ export default function TvPlayer() {
                         />
                     ) : (
                         <div className="flex h-full w-full items-center justify-center text-slate-500 bg-slate-900">
-                            <p>Mídia não suportada ou URL inválida.</p>
+                            <p>Mídia não suportada ou URL inválid.</p>
                         </div>
                     )}
+
+                    {/* Frame Overlay */}
+                    {(currentMedia as any).frame_url || (currentMedia as any).default_frame_url ? (
+                        <div className="absolute inset-0 pointer-events-none z-10">
+                            <img
+                                src={(currentMedia as any).frame_url || (currentMedia as any).default_frame_url}
+                                className="h-full w-full object-fill"
+                                alt="Frame"
+                            />
+                        </div>
+                    ) : null}
                 </div>
             </div> {/* Closing the stage-container div */}
 
