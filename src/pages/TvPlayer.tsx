@@ -318,7 +318,7 @@ export default function TvPlayer() {
             )}
 
             {/* Frame / Overlay Dinâmico */}
-            <div className="absolute bottom-0 left-0 right-0 h-24 bg-gradient-to-t from-black/80 to-transparent flex flex-col justify-end">
+            <div className="absolute bottom-0 left-0 right-0 h-24 bg-gradient-to-t from-black/80 to-transparent flex flex-col justify-end opacity-0 group-hover:opacity-100 transition-opacity duration-500">
                 <div className="p-6 pb-4">
                     <h2 className="text-white font-bold text-2xl truncate">{(pointQ.data.tenants as any)?.name ?? "Tenant"}</h2>
                     <p className="text-slate-300 text-sm">{pointQ.data.name}</p>
