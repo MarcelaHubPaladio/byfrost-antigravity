@@ -267,7 +267,7 @@ export default function TvPlayer() {
                         />
                     ) : (
                         <div className="flex h-full w-full items-center justify-center text-slate-500 bg-slate-900">
-                            <p>Mídia não suportada ou URL inválid.</p>
+                            <p>Mídia não suportada ou URL inválida.</p>
                         </div>
                     )}
 
