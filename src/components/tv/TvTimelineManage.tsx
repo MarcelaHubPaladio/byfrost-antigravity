@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useNavigate } from "react-router-dom";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -7,12 +8,11 @@ import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { showError, showSuccess } from "@/utils/toast";
-import { TvTimelineOrderModal } from "./TvTimelineOrderModal";
 
 export function TvTimelineManage({ tenantId }: { tenantId: string }) {
+    const navigate = useNavigate();
     const qc = useQueryClient();
     const [selectedPoint, setSelectedPoint] = useState<string>("all");
-    const [orderingTimelineId, setOrderingTimelineId] = useState<string | null>(null);
 
     const pointsQ = useQuery({
         queryKey: ["tv_points", tenantId],
@@ -170,7 +170,7 @@ export function TvTimelineManage({ tenantId }: { tenantId: string }) {
                                                     size="sm"
                                                     variant="ghost"
                                                     className="rounded-xl text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50"
-                                                    onClick={() => setOrderingTimelineId(timeline.id)}
+                                                    onClick={() => navigate(`/app/tv/timeline/${timeline.id}`)}
                                                 >
                                                     Organizar
                                                 </Button>
@@ -191,13 +191,6 @@ export function TvTimelineManage({ tenantId }: { tenantId: string }) {
                     </TableBody>
                 </Table>
             </div>
-
-            <TvTimelineOrderModal
-                tenantId={tenantId}
-                timelineId={orderingTimelineId}
-                open={orderingTimelineId !== null}
-                onOpenChange={(open) => !open && setOrderingTimelineId(null)}
-            />
         </Card>
     );
 }

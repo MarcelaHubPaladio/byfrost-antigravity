@@ -61,6 +61,7 @@ import PublicProposal from "@/pages/PublicProposal";
 import ContractTemplates from "@/pages/ContractTemplates";
 import TvCorporativaAdmin from "@/pages/TvCorporativaAdmin";
 import TvPlayer from "@/pages/TvPlayer";
+import TvTimelineEditor from "@/pages/TvTimelineEditor";
 
 const queryClient = new QueryClient();
 
@@ -317,6 +318,16 @@ const App = () => (
                     </RequireTvCorporativaEnabled>
                   }
                 />
+                <Route
+                  path="/app/tv/timeline/:id"
+                  element={
+                    <RequireTvCorporativaEnabled>
+                      <RequireRouteAccess routeKey="app.tv_corporativa">
+                        <TvTimelineEditor />
+                      </RequireRouteAccess>
+                    </RequireTvCorporativaEnabled>
+                  }
+                />
 
                 {/* Presença (opcional por tenant) */}
                 <Route
@@ -434,7 +445,7 @@ const App = () => (
         </ThemeProvider>
       </SessionProvider>
     </TooltipProvider>
-  </QueryClientProvider>
+  </QueryClientProvider >
 );
 
 export default App;

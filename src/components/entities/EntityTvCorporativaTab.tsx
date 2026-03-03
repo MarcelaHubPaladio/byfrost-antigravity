@@ -16,6 +16,7 @@ export function EntityTvCorporativaTab({ tenantId, entityId }: { tenantId: strin
     const [mediaType, setMediaType] = useState<"supabase_storage" | "youtube_link" | "google_drive_link">("google_drive_link");
     const [mediaUrl, setMediaUrl] = useState("");
     const [mediaFile, setMediaFile] = useState<File | null>(null);
+    const [mediaName, setMediaName] = useState("");
 
     const mediaQ = useQuery({
         queryKey: ["tv_media", tenantId, entityId],
@@ -93,6 +94,7 @@ export function EntityTvCorporativaTab({ tenantId, entityId }: { tenantId: strin
                     entity_id: entityId,
                     media_type: mediaType,
                     url: finalUrl,
+                    name: mediaName.trim() || (mediaType === "supabase_storage" ? mediaFile?.name : "Nova Mídia"),
                 });
 
             if (error) throw error;
@@ -100,6 +102,7 @@ export function EntityTvCorporativaTab({ tenantId, entityId }: { tenantId: strin
             showSuccess("Mídia adicionada com sucesso!");
             setMediaUrl("");
             setMediaFile(null);
+            setMediaName("");
             qc.invalidateQueries({ queryKey: ["tv_media", tenantId, entityId] });
         } catch (e: any) {
             showError(e?.message ?? "Erro ao adicionar mídia");
@@ -192,6 +195,16 @@ export function EntityTvCorporativaTab({ tenantId, entityId }: { tenantId: strin
                     </div>
 
                     <div>
+                        <Label className="text-xs text-slate-500 mb-2 block">Nome da Mídia (Opcional)</Label>
+                        <Input
+                            placeholder="Ex: Campanha de Verão..."
+                            className="rounded-xl bg-white"
+                            value={mediaName}
+                            onChange={e => setMediaName(e.target.value)}
+                        />
+                    </div>
+
+                    <div>
                         {mediaType === "supabase_storage" ? (
                             <Input
                                 type="file"
@@ -232,8 +245,8 @@ export function EntityTvCorporativaTab({ tenantId, entityId }: { tenantId: strin
                                     <div className="flex items-center gap-3 overflow-hidden">
                                         {m.media_type === 'youtube_link' ? <Youtube className="h-5 w-5 text-rose-500 shrink-0" /> : <LinkIcon className="h-5 w-5 text-indigo-500 shrink-0" />}
                                         <div className="truncate">
-                                            <p className="text-sm font-medium text-slate-900 capitalize">{m.media_type.replace('_link', '').replace('_storage', '')}</p>
-                                            <a href={m.url} target="_blank" rel="noreferrer" className="text-xs text-blue-600 hover:underline truncate block">
+                                            <p className="text-sm font-medium text-slate-900 truncate">{m.name || "Sem nome"}</p>
+                                            <a href={m.url} target="_blank" rel="noreferrer" className="text-[10px] text-slate-400 hover:text-blue-600 hover:underline truncate block">
                                                 {m.url}
                                             </a>
                                         </div>
