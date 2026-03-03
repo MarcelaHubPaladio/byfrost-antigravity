@@ -35,8 +35,7 @@ export function TvTimelineManage({ tenantId }: { tenantId: string }) {
             const { data, error } = await supabase
                 .from("tv_timelines")
                 .select("*, tv_points(name)")
-                .eq("tenant_id", tenantId)
-                .is("deleted_at", null);
+                .eq("tenant_id", tenantId);
             if (error) throw error;
             return data;
         },

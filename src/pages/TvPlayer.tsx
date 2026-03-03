@@ -31,7 +31,6 @@ export default function TvPlayer() {
                 .from("tv_timelines")
                 .select("*")
                 .eq("tv_point_id", pointId!)
-                .is("deleted_at", null)
                 .maybeSingle();
             if (error) throw error;
             return data;
