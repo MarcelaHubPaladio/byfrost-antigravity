@@ -4,6 +4,12 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { Loader2 } from "lucide-react";
 
+// Helper to extract Google Drive file ID
+function getDriveFileId(url: string) {
+    const match = url.match(/\/d\/([a-zA-Z0-9-_]+)/);
+    return match ? match[1] : null;
+}
+
 export default function TvPlayer() {
     const { pointId } = useParams();
     const [currentIndex, setCurrentIndex] = useState(0);
@@ -146,9 +152,16 @@ export default function TvPlayer() {
                     allow="autoplay"
                     key={currentMedia.id}
                 />
+            ) : currentMedia.media_type === "google_drive_link" && getDriveFileId(currentMedia.url) ? (
+                <iframe
+                    src={`https://drive.google.com/file/d/${getDriveFileId(currentMedia.url)}/preview`}
+                    className="h-full w-full border-0 pointer-events-none"
+                    allow="autoplay"
+                    key={currentMedia.id}
+                />
             ) : (
-                <div className="flex h-full w-full items-center justify-center text-slate-500">
-                    <p>Mídia não suportada: Google Drive / Link genérico.</p>
+                <div className="flex h-full w-full items-center justify-center text-slate-500 bg-slate-900">
+                    <p>Mídia não suportada ou URL inválida.</p>
                 </div>
             )}
 
