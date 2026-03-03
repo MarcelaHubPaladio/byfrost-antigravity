@@ -211,12 +211,12 @@ export default function TvPlayer() {
                 }
 
                 .aspect-portrait {
-                    height: 95vh;
+                    height: 100vh;
                     aspect-ratio: 9 / 16;
                 }
 
                 .aspect-landscape {
-                    width: 95vw;
+                    width: 100vw;
                     aspect-ratio: 16 / 9;
                 }
             `}</style>
