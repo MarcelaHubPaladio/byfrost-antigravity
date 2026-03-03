@@ -2,7 +2,7 @@ import { useEffect, useState, useRef } from "react";
 import { useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
-import { Loader2 } from "lucide-react";
+import { Loader2, ChevronRight, ChevronLeft } from "lucide-react";
 
 // Helper to extract Google Drive file ID
 function getDriveFileId(url: string) {
@@ -188,11 +188,12 @@ export default function TvPlayer() {
         );
     }
 
-    const currentMedia = medias[currentIndex];
     const isPortrait = pointQ.data.orientation === "portrait";
+    const currentMedia = medias[currentIndex];
+    const hasMultipleMedias = medias.length > 1;
 
     return (
-        <div className={`relative flex bg-black overflow-hidden ${isPortrait ? 'h-screen w-screen flex-row' : 'h-screen w-screen flex-col'}`}>
+        <div className={`relative flex bg-black overflow-hidden group ${isPortrait ? 'h-screen w-screen flex-row' : 'h-screen w-screen flex-col'}`}>
             <style>{`
                 .stage-container {
                     width: 100vw;
@@ -295,6 +296,26 @@ export default function TvPlayer() {
                     ) : null}
                 </div>
             </div> {/* Closing the stage-container div */}
+
+            {/* Manual Navigation Buttons (Discrete) */}
+            {hasMultipleMedias && (
+                <>
+                    <button
+                        onClick={() => setCurrentIndex((prev) => (prev - 1 + medias.length) % medias.length)}
+                        className="absolute left-8 top-1/2 -translate-y-1/2 z-50 p-3 rounded-full bg-black/20 backdrop-blur-md border border-white/10 text-white/50 opacity-0 group-hover:opacity-100 transition-all hover:bg-black/40 hover:text-white hover:scale-110"
+                        title="Anterior"
+                    >
+                        <ChevronLeft className="w-8 h-8" />
+                    </button>
+                    <button
+                        onClick={() => setCurrentIndex((prev) => (prev + 1) % medias.length)}
+                        className="absolute right-8 top-1/2 -translate-y-1/2 z-50 p-3 rounded-full bg-black/20 backdrop-blur-md border border-white/10 text-white/50 opacity-0 group-hover:opacity-100 transition-all hover:bg-black/40 hover:text-white hover:scale-110"
+                        title="Próximo"
+                    >
+                        <ChevronRight className="w-8 h-8" />
+                    </button>
+                </>
+            )}
 
             {/* Frame / Overlay Dinâmico */}
             <div className="absolute bottom-0 left-0 right-0 h-24 bg-gradient-to-t from-black/80 to-transparent flex flex-col justify-end">
