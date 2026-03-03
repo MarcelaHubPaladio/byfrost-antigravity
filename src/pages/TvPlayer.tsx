@@ -139,18 +139,18 @@ export default function TvPlayer() {
                 setCurrentIndex((prev) => (prev + 1) % medias.length);
             }, durationMs);
         } else {
-            // 2. Fallback timeout: if media takes too long to load (e.g. 15 seconds), skip it
+            // 2. Fallback timeout: if media takes too long to load (e.g. 30 seconds), skip it
             fallbackTimeoutRef.current = setTimeout(() => {
                 console.warn(`Media timeout to load: ${currentMedia.url}. Skipping.`);
                 setCurrentIndex((prev) => (prev + 1) % medias.length);
-            }, 10000); // 10 seconds max to load any media
+            }, 30000); // 30 seconds max to load any media
         }
 
         return () => {
             if (timeoutRef.current) clearTimeout(timeoutRef.current);
             if (fallbackTimeoutRef.current) clearTimeout(fallbackTimeoutRef.current);
         };
-    }, [currentIndex, medias, mediaLoaded]);
+    }, [currentIndex, medias, mediaLoaded, effectiveDuration]);
 
     if (pointQ.isLoading || timelineQ.isLoading || activeMediasQ.isLoading) {
         return (
@@ -233,6 +233,8 @@ export default function TvPlayer() {
                             muted
                             className="h-full w-full object-contain"
                             onPlay={() => setMediaLoaded(true)}
+                            onCanPlay={() => setMediaLoaded(true)}
+                            onCanPlayThrough={() => setMediaLoaded(true)}
                             onLoadedMetadata={(e) => {
                                 const videoDur = e.currentTarget.duration;
                                 const planDur = currentMedia.duration;
