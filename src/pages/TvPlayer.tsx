@@ -153,10 +153,12 @@ export default function TvPlayer() {
                     key={currentMedia.id}
                 />
             ) : currentMedia.media_type === "google_drive_link" && getDriveFileId(currentMedia.url) ? (
-                <iframe
-                    src={`https://drive.google.com/file/d/${getDriveFileId(currentMedia.url)}/preview`}
-                    className="h-full w-full border-0 pointer-events-none"
-                    allow="autoplay"
+                <video
+                    src={`https://drive.google.com/uc?export=download&id=${getDriveFileId(currentMedia.url)}`}
+                    autoPlay
+                    muted
+                    className="h-full w-full object-cover bg-black"
+                    onEnded={() => setCurrentIndex((prev) => (prev + 1) % medias.length)}
                     key={currentMedia.id}
                 />
             ) : (
