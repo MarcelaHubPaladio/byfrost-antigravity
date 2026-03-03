@@ -74,11 +74,15 @@ export default function TvTimelineEditor() {
             // Merge with plan data
             return medias.map(m => {
                 const planInfo = activePlans.find(ap => ap.entity_id === m.entity_id);
+                // Supabase joins can sometimes return an array or an object depending on schema detection
+                const entityData = Array.isArray(planInfo?.core_entities) ? planInfo.core_entities[0] : planInfo?.core_entities;
+                const planData = Array.isArray(planInfo?.tv_plans) ? planInfo.tv_plans[0] : planInfo?.tv_plans;
+
                 return {
                     ...m,
-                    entity_name: (planInfo?.core_entities as any)?.name || "Cliente sem nome",
-                    plan_name: (planInfo?.tv_plans as any)?.name || "Plano Padrão",
-                    duration: (planInfo?.tv_plans as any)?.video_duration_seconds || 15
+                    entity_name: (entityData as any)?.name || "Cliente sem nome",
+                    plan_name: (planData as any)?.name || "Plano Padrão",
+                    duration: (planData as any)?.video_duration_seconds || 15
                 };
             });
         }

@@ -27,6 +27,7 @@ export default function TvPlayer() {
     const { pointId } = useParams();
     const [currentIndex, setCurrentIndex] = useState(0);
     const [mediaLoaded, setMediaLoaded] = useState(false);
+    const [effectiveDuration, setEffectiveDuration] = useState(15);
     const timeoutRef = useRef<NodeJS.Timeout | null>(null);
     const fallbackTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -117,13 +118,14 @@ export default function TvPlayer() {
     // Reset load state when media changes
     useEffect(() => {
         setMediaLoaded(false);
-    }, [currentIndex]);
+        setEffectiveDuration(medias[currentIndex]?.duration || 15);
+    }, [currentIndex, medias]);
 
     useEffect(() => {
         if (medias.length === 0) return;
 
         const currentMedia = medias[currentIndex];
-        const durationMs = currentMedia.duration * 1000;
+        const durationMs = effectiveDuration * 1000;
 
         // Clear any previous timeouts
         if (timeoutRef.current) clearTimeout(timeoutRef.current);
@@ -229,6 +231,15 @@ export default function TvPlayer() {
                             muted
                             className="h-full w-full object-contain"
                             onPlay={() => setMediaLoaded(true)}
+                            onLoadedMetadata={(e) => {
+                                const videoDur = e.currentTarget.duration;
+                                const planDur = currentMedia.duration;
+                                // 30% tolerance logic: respect video duration within [plan * 0.7, plan * 1.3]
+                                const minDur = planDur * 0.7;
+                                const maxDur = planDur * 1.3;
+                                const clamped = Math.max(minDur, Math.min(maxDur, videoDur));
+                                setEffectiveDuration(clamped);
+                            }}
                             onEnded={() => setCurrentIndex((prev) => (prev + 1) % medias.length)}
                             onError={(e) => {
                                 console.error("Erro ao carregar video da TV:", currentMedia.url, e);
@@ -270,10 +281,10 @@ export default function TvPlayer() {
                 <div className="w-full h-1 bg-white/20">
                     {mediaLoaded && (
                         <div
-                            key={currentMedia.id + currentIndex} // Forces animation restart
+                            key={currentMedia.id + currentIndex + effectiveDuration} // Forces animation restart
                             className="h-full bg-primary"
                             style={{
-                                animation: `progressBar ${currentMedia.duration}s linear forwards`
+                                animation: `progressBar ${effectiveDuration}s linear forwards`
                             }}
                         />
                     )}
