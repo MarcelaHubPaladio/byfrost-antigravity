@@ -7,7 +7,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { showError, showSuccess } from "@/utils/toast";
 import { cn } from "@/lib/utils";
-import { Plus, ReceiptText, Save, Trash2 } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Plus, ReceiptText, Save, Trash2, Check, ChevronsUpDown, Loader2 } from "lucide-react";
 import { useTenant } from "@/providers/TenantProvider";
 import { useSession } from "@/providers/SessionProvider";
 
@@ -20,6 +21,7 @@ type CaseItemRow = {
   qty: number | null;
   price: number | null;
   total: number | null;
+  offering_entity_id: string | null;
   updated_at: string;
 };
 
@@ -30,6 +32,7 @@ type DraftRow = {
   description: string;
   qty: string;
   price: string;
+  offering_entity_id: string | null;
 };
 
 function parsePtBrNumber(input: string) {
@@ -74,12 +77,44 @@ export function SalesOrderItemsEditorCard(props: { caseId: string; className?: s
     queryFn: async () => {
       const { data, error } = await supabase
         .from("case_items")
-        .select("id,case_id,line_no,code,description,qty,price,total,updated_at")
+        .select("id,case_id,line_no,code,description,qty,price,total,offering_entity_id,updated_at")
         .eq("case_id", caseId)
         .order("line_no", { ascending: true })
         .limit(200);
       if (error) throw error;
       return (data ?? []) as CaseItemRow[];
+    },
+  });
+
+  const [searchOffering, setSearchOffering] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [openOfferingPerLine, setOpenOfferingPerLine] = useState<Record<number, boolean>>({});
+
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(searchOffering), 300);
+    return () => clearTimeout(t);
+  }, [searchOffering]);
+
+  const offeringsQ = useQuery({
+    queryKey: ["offerings_search", activeTenantId, debouncedSearch],
+    enabled: Boolean(activeTenantId),
+    queryFn: async () => {
+      let q = supabase
+        .from("core_entities")
+        .select("id,name,short_name,document,avatar_url,tags")
+        .eq("tenant_id", activeTenantId!)
+        .eq("entity_type", "offering")
+        .is("deleted_at", null)
+        .order("name", { ascending: true })
+        .limit(30);
+
+      const term = debouncedSearch.trim();
+      if (term) {
+        q = q.ilike("name", `%${term}%`);
+      }
+      const { data, error } = await q;
+      if (error) throw error;
+      return data ?? [];
     },
   });
 
@@ -91,6 +126,7 @@ export function SalesOrderItemsEditorCard(props: { caseId: string; className?: s
       description: r.description ?? "",
       qty: r.qty == null ? "" : String(r.qty).replace(/\./g, ","),
       price: r.price == null ? "" : String(r.price).replace(/\./g, ","),
+      offering_entity_id: r.offering_entity_id,
     }));
   }, [itemsQ.data]);
 
@@ -122,6 +158,7 @@ export function SalesOrderItemsEditorCard(props: { caseId: string; className?: s
         description: "",
         qty: "1",
         price: "",
+        offering_entity_id: null,
       },
     ]);
   };
@@ -198,6 +235,7 @@ export function SalesOrderItemsEditorCard(props: { caseId: string; className?: s
           qty,
           price,
           total,
+          offering_entity_id: r.offering_entity_id || null,
           confidence_json: {},
         };
 
@@ -324,17 +362,105 @@ export function SalesOrderItemsEditorCard(props: { caseId: string; className?: s
                   </div>
 
                   <div>
-                    <Label className="text-[11px] text-slate-600">Descrição</Label>
-                    <Textarea
-                      value={row.description}
-                      onChange={(e) =>
-                        setDraft((prev) =>
-                          prev.map((x) => (x.line_no === row.line_no ? { ...x, description: e.target.value } : x))
-                        )
-                      }
-                      className="mt-1 min-h-[88px] rounded-2xl"
-                      placeholder="Descrição do item"
-                    />
+                    <Label className="text-[11px] text-slate-600">Produto / Serviço</Label>
+                    <Popover
+                      open={openOfferingPerLine[row.line_no] || false}
+                      onOpenChange={(open) => {
+                        setOpenOfferingPerLine((prev) => ({ ...prev, [row.line_no]: open }));
+                        if (!open) {
+                          setSearchOffering("");
+                        }
+                      }}
+                    >
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          role="combobox"
+                          className={cn(
+                            "mt-1 w-full justify-between h-auto min-h-10 text-left rounded-2xl whitespace-normal break-words",
+                            !row.description && "text-slate-500"
+                          )}
+                        >
+                          <span className="line-clamp-2">
+                            {row.description || "Selecione ou digite..."}
+                          </span>
+                          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-[300px] p-0 rounded-2xl" side="bottom" align="start">
+                        <div className="flex flex-col">
+                          <div className="px-3 py-2 border-b border-slate-100 flex items-center gap-2">
+                            <Input
+                              placeholder="Buscar ou digitar item..."
+                              value={searchOffering}
+                              onChange={(e) => setSearchOffering(e.target.value)}
+                              className="h-8 rounded-xl bg-slate-50 border-transparent shadow-none"
+                            />
+                            {offeringsQ.isFetching && <Loader2 className="h-4 w-4 animate-spin text-slate-400" />}
+                          </div>
+                          <div className="max-h-[220px] overflow-y-auto">
+                            {!offeringsQ.isFetching && searchOffering.length > 0 && offeringsQ.data?.length === 0 && (
+                              <div className="px-3 py-4 text-center text-sm text-slate-500">
+                                Nenhum produto encontrado.
+                              </div>
+                            )}
+                            {offeringsQ.data?.map((off: any) => (
+                              <Button
+                                key={off.id}
+                                variant="ghost"
+                                className="w-full justify-start rounded-none h-auto min-h-12 py-2 px-3 hover:bg-slate-50 whitespace-normal break-words text-left"
+                                onClick={() => {
+                                  setDraft((prev) =>
+                                    prev.map((x) =>
+                                      x.line_no === row.line_no
+                                        ? { ...x, code: off.short_name || x.code, description: off.name, offering_entity_id: off.id }
+                                        : x
+                                    )
+                                  );
+                                  setOpenOfferingPerLine((prev) => ({ ...prev, [row.line_no]: false }));
+                                  setSearchOffering("");
+                                }}
+                              >
+                                <div className="flex flex-col gap-0.5">
+                                  <div className="text-sm font-medium text-slate-900 leading-snug">
+                                    {off.name}
+                                  </div>
+                                  {off.short_name && (
+                                    <div className="text-[11px] text-slate-500 font-mono">
+                                      {off.short_name}
+                                    </div>
+                                  )}
+                                </div>
+                                {row.offering_entity_id === off.id && (
+                                  <Check className="ml-auto h-4 w-4 text-emerald-600" />
+                                )}
+                              </Button>
+                            ))}
+                          </div>
+                          {searchOffering.trim().length > 0 && (
+                            <div className="p-2 border-t border-slate-100 bg-slate-50/50">
+                              <Button
+                                variant="ghost"
+                                className="w-full justify-start text-[13px] h-9 rounded-xl text-indigo-700 bg-indigo-50/50 hover:bg-indigo-100/50"
+                                onClick={() => {
+                                  setDraft((prev) =>
+                                    prev.map((x) =>
+                                      x.line_no === row.line_no
+                                        ? { ...x, description: searchOffering.trim(), offering_entity_id: null }
+                                        : x
+                                    )
+                                  );
+                                  setOpenOfferingPerLine((prev) => ({ ...prev, [row.line_no]: false }));
+                                  setSearchOffering("");
+                                }}
+                              >
+                                Usar o texto "{searchOffering}"
+                              </Button>
+                            </div>
+                          )}
+                        </div>
+                      </PopoverContent>
+                    </Popover>
                   </div>
 
                   <div className="grid grid-cols-2 gap-3">
@@ -434,17 +560,105 @@ export function SalesOrderItemsEditorCard(props: { caseId: string; className?: s
                   </div>
 
                   <div>
-                    <Label className="text-[11px] text-slate-600">Descrição</Label>
-                    <Textarea
-                      value={row.description}
-                      onChange={(e) =>
-                        setDraft((prev) =>
-                          prev.map((x) => (x.line_no === row.line_no ? { ...x, description: e.target.value } : x))
-                        )
-                      }
-                      className="mt-1 min-h-[88px] rounded-2xl"
-                      placeholder="Descrição do item"
-                    />
+                    <Label className="text-[11px] text-slate-600">Produto / Serviço</Label>
+                    <Popover
+                      open={openOfferingPerLine[row.line_no] || false}
+                      onOpenChange={(open) => {
+                        setOpenOfferingPerLine((prev) => ({ ...prev, [row.line_no]: open }));
+                        if (!open) {
+                          setSearchOffering("");
+                        }
+                      }}
+                    >
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          role="combobox"
+                          className={cn(
+                            "mt-1 w-full justify-between h-auto min-h-10 text-left rounded-2xl whitespace-normal break-words",
+                            !row.description && "text-slate-500"
+                          )}
+                        >
+                          <span className="line-clamp-2">
+                            {row.description || "Selecione ou digite..."}
+                          </span>
+                          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-[400px] p-0 rounded-2xl" side="bottom" align="start">
+                        <div className="flex flex-col">
+                          <div className="px-3 py-2 border-b border-slate-100 flex items-center gap-2">
+                            <Input
+                              placeholder="Buscar ou digitar item..."
+                              value={searchOffering}
+                              onChange={(e) => setSearchOffering(e.target.value)}
+                              className="h-8 rounded-xl bg-slate-50 border-transparent shadow-none"
+                            />
+                            {offeringsQ.isFetching && <Loader2 className="h-4 w-4 animate-spin text-slate-400" />}
+                          </div>
+                          <div className="max-h-[260px] overflow-y-auto">
+                            {!offeringsQ.isFetching && searchOffering.length > 0 && offeringsQ.data?.length === 0 && (
+                              <div className="px-3 py-4 text-center text-sm text-slate-500">
+                                Nenhum produto encontrado.
+                              </div>
+                            )}
+                            {offeringsQ.data?.map((off: any) => (
+                              <Button
+                                key={off.id}
+                                variant="ghost"
+                                className="w-full justify-start rounded-none h-auto min-h-12 py-2 px-3 hover:bg-slate-50 whitespace-normal break-words text-left"
+                                onClick={() => {
+                                  setDraft((prev) =>
+                                    prev.map((x) =>
+                                      x.line_no === row.line_no
+                                        ? { ...x, code: off.short_name || x.code, description: off.name, offering_entity_id: off.id }
+                                        : x
+                                    )
+                                  );
+                                  setOpenOfferingPerLine((prev) => ({ ...prev, [row.line_no]: false }));
+                                  setSearchOffering("");
+                                }}
+                              >
+                                <div className="flex flex-col gap-0.5">
+                                  <div className="text-sm font-medium text-slate-900 leading-snug">
+                                    {off.name}
+                                  </div>
+                                  {off.short_name && (
+                                    <div className="text-[11px] text-slate-500 font-mono">
+                                      {off.short_name}
+                                    </div>
+                                  )}
+                                </div>
+                                {row.offering_entity_id === off.id && (
+                                  <Check className="ml-auto h-4 w-4 text-emerald-600" />
+                                )}
+                              </Button>
+                            ))}
+                          </div>
+                          {searchOffering.trim().length > 0 && (
+                            <div className="p-2 border-t border-slate-100 bg-slate-50/50">
+                              <Button
+                                variant="ghost"
+                                className="w-full justify-start text-[13px] h-9 rounded-xl text-indigo-700 bg-indigo-50/50 hover:bg-indigo-100/50"
+                                onClick={() => {
+                                  setDraft((prev) =>
+                                    prev.map((x) =>
+                                      x.line_no === row.line_no
+                                        ? { ...x, description: searchOffering.trim(), offering_entity_id: null }
+                                        : x
+                                    )
+                                  );
+                                  setOpenOfferingPerLine((prev) => ({ ...prev, [row.line_no]: false }));
+                                  setSearchOffering("");
+                                }}
+                              >
+                                Usar o texto "{searchOffering}"
+                              </Button>
+                            </div>
+                          )}
+                        </div>
+                      </PopoverContent>
+                    </Popover>
                   </div>
                 </div>
               </div>
