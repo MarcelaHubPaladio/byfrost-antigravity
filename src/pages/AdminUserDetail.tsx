@@ -131,7 +131,8 @@ function UserDataTab({ userData }: { userData: any }) {
             });
 
             if (!res.ok) {
-                throw new Error("Falha ao resetar senha");
+                const errJson = await res.json().catch(() => ({}));
+                throw new Error(errJson.error || "Falha ao resetar senha");
             }
 
             const json = await res.json();
