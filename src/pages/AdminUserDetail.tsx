@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { showError, showSuccess } from "@/utils/toast";
-import { ArrowLeft, UserSquare2, Target, KeyRound, Copy, Save, Plus, Library, Trash2, FileSignature, CheckCircle, AlertCircle, Pencil } from "lucide-react";
+import { ArrowLeft, UserSquare2, Target, KeyRound, Copy, Save, Plus, Library, Trash2, FileSignature, CheckCircle, AlertCircle, Pencil, Send, MessageSquare, Loader2 } from "lucide-react";
 import {
     Dialog,
     DialogContent,
@@ -94,6 +94,22 @@ function UserDataTab({ userData }: { userData: any }) {
     const [resetModalOpen, setResetModalOpen] = useState(false);
     const [tempPassword, setTempPassword] = useState("");
     const [isResetting, setIsResetting] = useState(false);
+    const [isSendingWa, setIsSendingWa] = useState(false);
+    const [selectedInstanceId, setSelectedInstanceId] = useState("");
+
+    const instancesQ = useQuery({
+        queryKey: ["wa_instances", activeTenantId],
+        queryFn: async () => {
+            const { data, error } = await supabase
+                .from("wa_instances")
+                .select("id, name, status")
+                .eq("tenant_id", activeTenantId)
+                .is("deleted_at", null);
+            if (error) throw error;
+            return data;
+        },
+        enabled: resetModalOpen && !!activeTenantId,
+    });
 
     const save = async () => {
         try {
@@ -140,6 +156,48 @@ function UserDataTab({ userData }: { userData: any }) {
             showError(e.message);
         } finally {
             setIsResetting(false);
+        }
+    };
+
+    const sendViaWhatsApp = async () => {
+        if (!selectedInstanceId) {
+            showError("Selecione uma instância do WhatsApp.");
+            return;
+        }
+        if (!phone) {
+            showError("Usuário não tem telefone cadastrado.");
+            return;
+        }
+
+        setIsSendingWa(true);
+        try {
+            const { data: { session } } = await supabase.auth.getSession();
+            const message = `*Olá ${name}!* 🚀\n\nSeguem suas credenciais de acesso ao Byfrost:\n\n*E-mail:* ${email}\n*Senha Temporária:* ${tempPassword}\n\n*Acesse aqui:* ${window.location.origin}/login\n\n_Recomendamos trocar sua senha após o primeiro acesso._`;
+
+            const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/integrations-zapi-send`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "Authorization": `Bearer ${session?.access_token}`
+                },
+                body: JSON.stringify({
+                    tenantId: activeTenantId,
+                    instanceId: selectedInstanceId,
+                    to: phone,
+                    text: message
+                })
+            });
+
+            const json = await res.json().catch(() => ({}));
+            if (!res.ok || !json.ok) {
+                throw new Error(json.error || "Erro ao enviar mensagem");
+            }
+
+            showSuccess("Credenciais enviadas via WhatsApp!");
+        } catch (e: any) {
+            showError(e.message);
+        } finally {
+            setIsSendingWa(false);
         }
     };
 
@@ -194,17 +252,61 @@ function UserDataTab({ userData }: { userData: any }) {
                     </DialogHeader>
 
                     {tempPassword ? (
-                        <div className="space-y-4 py-4 text-center">
-                            <p className="text-sm text-slate-600">A nova senha temporária é:</p>
-                            <div className="text-2xl font-mono tracking-widest font-bold text-slate-900 bg-slate-100 p-4 rounded-lg">
-                                {tempPassword}
+                        <div className="space-y-4 py-4">
+                            <div className="text-center">
+                                <p className="text-sm text-slate-600">A nova senha temporária é:</p>
+                                <div className="text-2xl font-mono tracking-widest font-bold text-slate-900 bg-slate-100 p-4 rounded-lg my-2">
+                                    {tempPassword}
+                                </div>
+                                <Button variant="outline" size="sm" onClick={copyPwd} className="w-full">
+                                    <Copy className="w-4 h-4 mr-2" /> Copiar Senha
+                                </Button>
                             </div>
-                            <Button onClick={copyPwd} className="w-full">Copiar Senha</Button>
+
+                            <div className="border-t pt-4 space-y-3">
+                                <h4 className="text-sm font-bold flex items-center gap-2">
+                                    <MessageSquare className="w-4 h-4 text-emerald-600" />
+                                    Enviar por WhatsApp
+                                </h4>
+
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-bold text-slate-400 uppercase">Instância de Envio</label>
+                                    <select
+                                        className="w-full h-10 rounded-lg border bg-slate-50 px-3 text-sm"
+                                        value={selectedInstanceId}
+                                        onChange={(e) => setSelectedInstanceId(e.target.value)}
+                                    >
+                                        <option value="">Selecione uma instância...</option>
+                                        {instancesQ.data?.map(inst => (
+                                            <option key={inst.id} value={inst.id}>
+                                                {inst.name} ({inst.status})
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+
+                                <Button
+                                    onClick={sendViaWhatsApp}
+                                    disabled={isSendingWa || !selectedInstanceId || !phone}
+                                    className="w-full bg-emerald-600 hover:bg-emerald-700 h-11 rounded-xl"
+                                >
+                                    {isSendingWa ? (
+                                        <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                                    ) : (
+                                        <Send className="w-4 h-4 mr-2" />
+                                    )}
+                                    Enviar Credenciais
+                                </Button>
+                                {!phone && (
+                                    <p className="text-[10px] text-red-500 text-center italic">Cadastre um telefone para habilitar o envio.</p>
+                                )}
+                            </div>
                         </div>
                     ) : (
                         <div className="flex justify-end gap-2 mt-4">
                             <Button variant="outline" onClick={() => setResetModalOpen(false)}>Cancelar</Button>
                             <Button variant="destructive" onClick={resetPassword} disabled={isResetting}>
+                                {isResetting && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
                                 Confirmar Reset
                             </Button>
                         </div>
