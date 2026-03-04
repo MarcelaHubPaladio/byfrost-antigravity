@@ -105,7 +105,7 @@ export default function CrmCaseDetail() {
       const { data, error } = await supabase
         .from("cases")
         .select(
-          "id,tenant_id,customer_id,customer_entity_id,title,status,state,created_at,updated_at,assigned_user_id,meta_json,is_chat,users_profile:users_profile!fk_cases_users_profile(display_name,email),journeys:journeys!cases_journey_id_fkey(key,name,is_crm,default_state_machine_json),customer_accounts:customer_accounts(name)"
+          "id,tenant_id,customer_id,customer_entity_id,title,status,state,created_at,updated_at,assigned_user_id,meta_json,is_chat,users_profile:users_profile!fk_cases_users_profile(display_name,email),journeys:journeys!cases_journey_id_fkey(key,name,is_crm,default_state_machine_json)"
         )
         .eq("tenant_id", activeTenantId!)
         .eq("id", id!)
@@ -358,17 +358,34 @@ export default function CrmCaseDetail() {
     return (byField as string | undefined) ?? getMetaPhone(caseQ.data?.meta_json) ?? null;
   }, [fieldsQ.data, caseQ.data?.meta_json]);
 
+  const customerQ = useQuery({
+    queryKey: ["crm_customer_for_case", activeTenantId, caseQ.data?.customer_id],
+    enabled: Boolean(activeTenantId && caseQ.data?.customer_id),
+    staleTime: 60_000,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("customer_accounts")
+        .select("id,name,phone_e164")
+        .eq("tenant_id", activeTenantId!)
+        .eq("id", caseQ.data!.customer_id!)
+        .maybeSingle();
+      if (error) throw error;
+      return data;
+    }
+  });
+
   const displayTitle = useMemo(() => {
     const c = caseQ.data as any;
     if (!c) return "Case";
     return (
-      c.customer_accounts?.name ??
+      customerQ.data?.name ??
       c.title ??
       suggestedPhone ??
+      customerQ.data?.phone_e164 ??
       c.users_profile?.display_name ??
       `Case ${String(c.id).slice(0, 8)}…`
     );
-  }, [caseQ.data, suggestedPhone]);
+  }, [caseQ.data, suggestedPhone, customerQ.data]);
 
   const c = caseQ.data;
 
