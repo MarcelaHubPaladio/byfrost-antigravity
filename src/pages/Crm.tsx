@@ -290,12 +290,18 @@ export default function Crm() {
         .limit(500);
       if (error) throw error;
       const m = new Map<string, any>();
-      for (const c of data ?? []) m.set((c as any).id, c);
+      for (const c of data ?? []) {
+        if (c.id) {
+          m.set(String(c.id), c);
+        }
+      }
       return m;
     },
   });
 
-  const caseIdsForLookup = useMemo(() => journeyRows.map((r) => r.id), [journeyRows]);
+  const caseIdsForLookup = useMemo(() => {
+    return journeyRows.map((r) => r.id).filter(Boolean);
+  }, [journeyRows]);
 
   const casePhoneQ = useQuery({
     queryKey: ["crm_case_phone_fallback", activeTenantId, caseIdsForLookup.join(",")],
@@ -792,12 +798,14 @@ export default function Crm() {
                         const pend = pendQ.data?.get(c.id);
                         const age = minutesAgo(c.updated_at);
                         const isMoving = movingCaseId === c.id;
-                        const cust = customersQ.data?.get(String((c as any).customer_id ?? "")) ?? null;
+                        const custId = String((c as any).customer_id || "");
+                        const cust = custId ? customersQ.data?.get(custId) ?? null : null;
+                        const casePhone = c.id ? casePhoneQ.data?.get(c.id) ?? null : null;
                         const unread = unreadByCase.has(c.id);
 
                         const titlePrimary =
                           cust?.name ??
-                          casePhoneQ.data?.get(c.id) ??
+                          casePhone ??
                           getMetaPhone((c as any).meta_json) ??
                           cust?.phone_e164 ??
                           c.title ??

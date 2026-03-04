@@ -12,20 +12,13 @@ const supabaseKey = keyMatch ? keyMatch[1].trim() : "";
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 async function check() {
-    const { data, error } = await supabase
-        .from("cases")
-        .select("id, title, customer_id, customer_entity_id, status")
-        .neq("status", "closed")
-        .order("updated_at", { ascending: false })
-        .limit(10);
+    const activeTenantId = "25c9b68a-ef89-4e0d-bae7-e23e200dbfdd" // Just a guess, let's pull from one of the cases. First, fetch a case to get tenant.
+    const { data: casesData } = await supabase.from("cases").select("id, title, tenant_id, customer_id").neq("status", "closed").limit(10);
 
-    if (error) {
-        console.error("Join error:", error.message);
-    } else {
-        // print out IDs safely
-        for (const row of data) {
-            console.log(`[CASE ${row.id}] Title: ${row.title} | Cust: ${row.customer_id} | Entity: ${row.customer_entity_id}`);
-        }
+    if (!casesData || casesData.length === 0) { console.log("No cases"); return; }
+
+    for (const c of casesData) {
+        console.log(`Case ${c.id} CustomerId: ${c.customer_id}`);
     }
 }
 
