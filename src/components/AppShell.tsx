@@ -389,6 +389,7 @@ type CoreNavChild = {
 
 const CORE_NAV_CHILDREN: CoreNavChild[] = [
   { to: "/app/entities", label: "Entidades", icon: Building2, routeKey: "app.entities" },
+  { to: "/app/inventory", label: "Inventário", icon: PackageCheck, routeKey: "app.entities" },
   {
     to: "/app/catalog/deliverable-templates",
     label: "Templates",

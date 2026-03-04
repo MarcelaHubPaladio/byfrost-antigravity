@@ -63,6 +63,7 @@ import TvCorporativaAdmin from "@/pages/TvCorporativaAdmin";
 import TvPlayer from "@/pages/TvPlayer";
 import TvTimelineEditor from "@/pages/TvTimelineEditor";
 import PublicEntityTvUpload from "@/pages/PublicEntityTvUpload";
+import Inventory from "@/pages/Inventory";
 
 const queryClient = new QueryClient();
 
@@ -273,6 +274,14 @@ const App = () => (
                   element={
                     <RequireRouteAccess routeKey="app.entities">
                       <EntityDetail />
+                    </RequireRouteAccess>
+                  }
+                />
+                <Route
+                  path="/app/inventory"
+                  element={
+                    <RequireRouteAccess routeKey="app.entities">
+                      <Inventory />
                     </RequireRouteAccess>
                   }
                 />
