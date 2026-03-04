@@ -8,17 +8,17 @@ serve(async (req: Request) => {
     if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
     const authHeader = req.headers.get("Authorization");
-    if (!authHeader) return new Response("Missing auth", { status: 401, headers: corsHeaders });
+    if (!authHeader) return new Response(JSON.stringify({ ok: false, error: "Missing auth" }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
     const supabase = createSupabaseAdmin();
     const { data: { user }, error: userErr } = await supabase.auth.getUser(authHeader.replace("Bearer ", ""));
-    if (userErr || !user) return new Response("Unauthorized", { status: 401, headers: corsHeaders });
+    if (userErr || !user) return new Response(JSON.stringify({ ok: false, error: `Unauthorized: ${userErr?.message || "User not found"}` }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
     const body = await req.json().catch(() => null);
-    if (!body) return new Response("Invalid JSON", { status: 400, headers: corsHeaders });
+    if (!body) return new Response(JSON.stringify({ ok: false, error: "Invalid JSON" }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
     const { tenantId, caseId, linked_goal_metric } = body;
-    if (!tenantId || !caseId) return new Response("Missing tenantId or caseId", { status: 400, headers: corsHeaders });
+    if (!tenantId || !caseId) return new Response(JSON.stringify({ ok: false, error: "Missing tenantId or caseId in body" }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
     // 1. Get the CRM Case
     const { data: crmCase, error: caseErr } = await supabase
@@ -117,6 +117,41 @@ serve(async (req: Request) => {
       }
     }
 
+    // 4.2 Duplicate Fields & Inject Customer Data
+    const { data: existingFields } = await supabase
+      .from("case_fields")
+      .select("*")
+      .eq("tenant_id", tenantId)
+      .eq("case_id", caseId);
+
+    const fieldsToInsert = (existingFields || []).map((f: any) => ({
+      tenant_id: tenantId,
+      case_id: orderCase.id,
+      key: f.key,
+      value_text: f.value_text,
+      value_number: f.value_number,
+      value_date: f.value_date,
+      confidence: f.confidence,
+      source: f.source,
+      last_updated_by: f.last_updated_by
+    }));
+
+    const hasField = (k: string) => fieldsToInsert.some((f: any) => f.key === k);
+    if (customerName && customerName !== "Novo Lead" && !hasField("name")) {
+      fieldsToInsert.push({ tenant_id: tenantId, case_id: orderCase.id, key: "name", value_text: customerName, source: "crm_generation" });
+    }
+    if (customerPhone && !hasField("phone")) {
+      fieldsToInsert.push({ tenant_id: tenantId, case_id: orderCase.id, key: "phone", value_text: customerPhone, source: "crm_generation" });
+    }
+    if (customerEmail && !hasField("email")) {
+      fieldsToInsert.push({ tenant_id: tenantId, case_id: orderCase.id, key: "email", value_text: customerEmail, source: "crm_generation" });
+    }
+
+    if (fieldsToInsert.length > 0) {
+      const { error: fieldsErr } = await supabase.from("case_fields").insert(fieldsToInsert);
+      if (fieldsErr) console.error(`[${fn}] Failed to copy case fields:`, fieldsErr);
+    }
+
     // 5. Audit & Timeline
     await Promise.all([
       supabase.rpc("append_audit_ledger", {
@@ -151,7 +186,7 @@ serve(async (req: Request) => {
 
   } catch (err: any) {
     console.error(`[${fn}] Critical:`, err);
-    return new Response(JSON.stringify({ ok: false, error: err.message }), {
+    return new Response(JSON.stringify({ ok: false, error: `Runtime Exception: ${err?.message || String(err)}` }), {
       status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" }
     });
