@@ -36,7 +36,7 @@ import { CaseProductsCard } from "@/components/crm/CaseProductsCard";
 import { CaseTasksCard } from "@/components/crm/CaseTasksCard";
 import { CaseNotesCard } from "@/components/crm/CaseNotesCard";
 import { CaseTechnicalReportDialog } from "@/components/case/CaseTechnicalReportDialog";
-import { ArrowLeft, ClipboardList, Image as ImageIcon, MessagesSquare, Trash2, UsersRound, ExternalLink } from "lucide-react";
+import { ArrowLeft, ChevronLeft, ChevronRight, Image as ImageIcon, MessagesSquare, Trash2, UsersRound, ExternalLink } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { showError, showSuccess } from "@/utils/toast";
 import { getStateLabel } from "@/lib/journeyLabels";
@@ -320,6 +320,37 @@ export default function CrmCaseDetail() {
     },
   });
 
+  const adjacentCasesQ = useQuery({
+    queryKey: ["adjacent_cases", activeTenantId, caseQ.data?.state],
+    enabled: Boolean(activeTenantId && caseQ.data?.state),
+    queryFn: async () => {
+      const state = caseQ.data!.state;
+      const { data, error } = await supabase
+        .from("cases")
+        .select("id")
+        .eq("tenant_id", activeTenantId!)
+        .eq("status", "open")
+        .eq("state", state)
+        .is("deleted_at", null)
+        .order("updated_at", { ascending: false });
+      if (error) throw error;
+      return data.map((d: any) => String(d.id));
+    },
+  });
+
+  const adjacent = useMemo(() => {
+    const list = adjacentCasesQ.data ?? [];
+    if (!id || !list.length) return { prevId: null, nextId: null, index: -1, total: list.length };
+    const idx = list.indexOf(id);
+    if (idx < 0) return { prevId: null, nextId: null, index: -1, total: list.length };
+    return {
+      prevId: idx > 0 ? list[idx - 1] : null,
+      nextId: idx < list.length - 1 ? list[idx + 1] : null,
+      index: idx,
+      total: list.length
+    };
+  }, [adjacentCasesQ.data, id]);
+
   const suggestedPhone = useMemo(() => {
     const byField = fieldsQ.data?.find((f: any) =>
       ["whatsapp", "phone", "customer_phone"].includes(String(f.key ?? ""))
@@ -374,6 +405,51 @@ export default function CrmCaseDetail() {
             </div>
 
             <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-center sm:justify-end">
+              <div className="flex items-center justify-center gap-1 sm:mr-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  className="h-11 w-11 rounded-2xl"
+                  disabled={!adjacent.prevId}
+                  onClick={() => adjacent.prevId && nav(`/crm/cases/${adjacent.prevId}`)}
+                  title="Caso anterior neste status"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+                <div className="text-xs text-slate-500 min-w-[40px] text-center font-medium">
+                  {adjacent.index >= 0 ? `${adjacent.index + 1}/${adjacent.total}` : "—"}
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  className="h-11 w-11 rounded-2xl"
+                  disabled={!adjacent.nextId}
+                  onClick={() => adjacent.nextId && nav(`/crm/cases/${adjacent.nextId}`)}
+                  title="Próximo caso neste status"
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
+
+              {states.length > 0 && c ? (
+                <div className="w-full sm:w-[200px]">
+                  <Select value={c.state} onValueChange={updateState} disabled={updatingState}>
+                    <SelectTrigger className="h-11 rounded-2xl bg-white font-medium">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className="rounded-2xl">
+                      {states.map((st) => (
+                        <SelectItem key={st} value={st} className="rounded-xl">
+                          {getStateLabel(c.journeys as any, st)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              ) : null}
+
               <div className="flex items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white/70 px-3 py-2 text-xs text-slate-700 shadow-sm">
                 <div className="min-w-0">
                   <div className="text-[11px] font-semibold text-slate-800">Somente chat</div>
@@ -509,56 +585,6 @@ export default function CrmCaseDetail() {
                       Sem anexos ainda.
                     </div>
                   )}
-                </div>
-              </div>
-
-              {/* Campos extraídos */}
-              <div className="rounded-[22px] border border-slate-200 bg-white p-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2 text-sm font-semibold text-slate-900">
-                    <ClipboardList className="h-4 w-4 text-slate-500" /> Campos extraídos
-                  </div>
-                  <div className="text-xs text-slate-500">com confiança</div>
-                </div>
-
-                <div className="mt-3 space-y-2">
-                  {(fieldsQ.data ?? [])
-                    .filter((f: any) => {
-                      if (f.key === "ocr_text") return false;
-                      const vt = typeof f.value_text === "string" ? f.value_text.trim() : "";
-                      const hasJson = f.value_json !== null && f.value_json !== undefined;
-                      return Boolean(vt) || hasJson;
-                    })
-                    .sort((a: any, b: any) => a.key.localeCompare(b.key))
-                    .map((f: any) => (
-                      <div
-                        key={f.key}
-                        className="flex items-start justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2"
-                      >
-                        <div className="min-w-0">
-                          <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-                            {f.key}
-                          </div>
-                          <div className="truncate text-sm font-medium text-slate-900">
-                            {f.value_text ?? (f.value_json ? JSON.stringify(f.value_json) : "—")}
-                          </div>
-                          <div className="mt-0.5 text-[11px] text-slate-500">fonte: {f.source}</div>
-                        </div>
-                        <ConfidencePill v={f.confidence} />
-                      </div>
-                    ))}
-
-                  {(fieldsQ.data ?? [])
-                    .filter((f: any) => {
-                      if (f.key === "ocr_text") return false;
-                      const vt = typeof f.value_text === "string" ? f.value_text.trim() : "";
-                      const hasJson = f.value_json !== null && f.value_json !== undefined;
-                      return Boolean(vt) || hasJson;
-                    }).length === 0 && (
-                      <div className="rounded-2xl border border-dashed border-slate-200 bg-white/60 p-4 text-xs text-slate-500">
-                        Ainda não há campos extraídos.
-                      </div>
-                    )}
                 </div>
               </div>
 

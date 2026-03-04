@@ -1,5 +1,5 @@
-import { useMemo, useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useMemo, useState, useEffect } from "react";
+import { useQueryClient, useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import {
   Dialog,
@@ -15,7 +15,19 @@ import { Label } from "@/components/ui/label";
 import { supabase } from "@/lib/supabase";
 import { showError, showSuccess } from "@/utils/toast";
 import { cn } from "@/lib/utils";
-import { UserPlus2 } from "lucide-react";
+import {
+  Command,
+  CommandEmpty,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { Check, ChevronsUpDown, Plus, UserPlus2 } from "lucide-react";
 
 type JourneyInfo = {
   id: string;
@@ -75,6 +87,40 @@ export function NewLeadDialog({
   const [whatsapp, setWhatsapp] = useState("+55");
   const [email, setEmail] = useState("");
 
+  const [entityHandling, setEntityHandling] = useState<"none" | "create" | "link">("none");
+  const [selectedEntityId, setSelectedEntityId] = useState<string | null>(null);
+  const [searchEntity, setSearchEntity] = useState("");
+  const [openEntity, setOpenEntity] = useState(false);
+  const [debouncedSearchEntity, setDebouncedSearchEntity] = useState("");
+
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearchEntity(searchEntity), 300);
+    return () => clearTimeout(t);
+  }, [searchEntity]);
+
+  const entitiesQ = useQuery({
+    queryKey: ["crm_parties_search", tenantId, debouncedSearchEntity],
+    enabled: Boolean(tenantId && entityHandling === "link"),
+    queryFn: async () => {
+      let q = supabase
+        .from("core_entities")
+        .select("id, display_name")
+        .eq("tenant_id", tenantId)
+        .in("entity_type", ["party", "tenant"])
+        .is("deleted_at", null)
+        .order("display_name", { ascending: true })
+        .limit(20);
+
+      if (debouncedSearchEntity) {
+        q = q.ilike("display_name", `%${debouncedSearchEntity}%`);
+      }
+
+      const { data, error } = await q;
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+
   const firstState = useMemo(() => {
     const st = (journey.default_state_machine_json?.states ?? []) as any[];
     const first = Array.isArray(st) && st.length ? String(st[0]) : "capturing";
@@ -85,6 +131,9 @@ export function NewLeadDialog({
     setName("");
     setWhatsapp("+55");
     setEmail("");
+    setEntityHandling("none");
+    setSelectedEntityId(null);
+    setSearchEntity("");
   };
 
 
@@ -127,6 +176,26 @@ export function NewLeadDialog({
       if (selErr) throw selErr;
 
       let customerId: string;
+      let finalEntityId: string | null = null;
+
+      if (entityHandling === "link" && selectedEntityId) {
+        finalEntityId = selectedEntityId;
+      } else if (entityHandling === "create") {
+        const entityRes = await supabase.from("core_entities").insert({
+          tenant_id: tenantId,
+          entity_type: "party",
+          subtype: "cliente",
+          display_name: displayName,
+          status: "active",
+          metadata: {
+            source: "crm_manual",
+            whatsapp: phoneE164.replace(/\D/g, ""),
+            email: emailNorm
+          }
+        }).select("id").single();
+        if (entityRes.error) throw entityRes.error;
+        finalEntityId = (entityRes.data as any).id;
+      }
 
       if (existing?.id) {
         customerId = String(existing.id);
@@ -137,6 +206,7 @@ export function NewLeadDialog({
             email: emailNorm,
             deleted_at: null,
             assigned_user_id: ownerUserId,
+            entity_id: finalEntityId ?? (existing as any).entity_id,
             meta_json: { lead_source: "panel_manual" },
           } as any)
           .eq("tenant_id", tenantId)
@@ -151,6 +221,7 @@ export function NewLeadDialog({
             name: displayName,
             email: emailNorm,
             assigned_user_id: ownerUserId,
+            entity_id: finalEntityId,
             meta_json: { lead_source: "panel_manual" },
           } as any)
           .select("id")
@@ -274,6 +345,86 @@ export function NewLeadDialog({
                 className="mt-1 h-11 rounded-2xl"
                 placeholder="maria@empresa.com"
               />
+            </div>
+
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
+              <Label className="text-xs mb-2 block font-semibold">Vínculo de Entidade</Label>
+              <div className="flex flex-wrap gap-2 mb-3">
+                <Button
+                  type="button"
+                  variant={entityHandling === "none" ? "default" : "outline"}
+                  className="rounded-xl h-8 text-[11px]"
+                  onClick={() => setEntityHandling("none")}
+                >
+                  Não vincular
+                </Button>
+                <Button
+                  type="button"
+                  variant={entityHandling === "create" ? "default" : "outline"}
+                  className="rounded-xl h-8 text-[11px]"
+                  onClick={() => setEntityHandling("create")}
+                >
+                  <Plus className="h-3 w-3 mr-1" />
+                  Criar entidade
+                </Button>
+                <Button
+                  type="button"
+                  variant={entityHandling === "link" ? "default" : "outline"}
+                  className="rounded-xl h-8 text-[11px]"
+                  onClick={() => setEntityHandling("link")}
+                >
+                  Relacionar existente
+                </Button>
+              </div>
+
+              {entityHandling === "link" && (
+                <Popover open={openEntity} onOpenChange={setOpenEntity}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      role="combobox"
+                      aria-expanded={openEntity}
+                      className="flex h-11 w-full justify-between items-center rounded-2xl border-slate-200 px-3 py-2 font-normal text-slate-900 bg-white"
+                    >
+                      <div className="truncate text-sm">
+                        {selectedEntityId
+                          ? entitiesQ.data?.find(e => e.id === selectedEntityId)?.display_name || "Entidade selecionada"
+                          : <span className="text-slate-500">Selecione uma entidade...</span>}
+                      </div>
+                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[300px] rounded-2xl p-0" align="start">
+                    <Command shouldFilter={false}>
+                      <CommandInput
+                        placeholder="Buscar entidade..."
+                        value={searchEntity}
+                        onValueChange={setSearchEntity}
+                      />
+                      <CommandList>
+                        <CommandEmpty>
+                          <div className="p-3 text-sm text-slate-500">
+                            Nenhuma entidade encontrada.
+                          </div>
+                        </CommandEmpty>
+                        {entitiesQ.data?.map((ent) => (
+                          <CommandItem
+                            key={ent.id}
+                            value={ent.id}
+                            onSelect={() => {
+                              setSelectedEntityId(ent.id);
+                              setOpenEntity(false);
+                            }}
+                          >
+                            <Check className={cn("mr-2 h-4 w-4", selectedEntityId === ent.id ? "opacity-100" : "opacity-0")} />
+                            {ent.display_name}
+                          </CommandItem>
+                        ))}
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
+              )}
             </div>
 
             <div className="mt-2 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">

@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
@@ -8,7 +8,19 @@ import { Label } from "@/components/ui/label";
 import { supabase } from "@/lib/supabase";
 import { showError, showSuccess } from "@/utils/toast";
 import { cn } from "@/lib/utils";
-import { BadgeDollarSign, ExternalLink, Plus, Trash2 } from "lucide-react";
+import {
+  Command,
+  CommandEmpty,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { BadgeDollarSign, Check, ChevronsUpDown, ExternalLink, Plus, Trash2 } from "lucide-react";
 import { useSession } from "@/providers/SessionProvider";
 
 type CaseItemRow = {
@@ -46,6 +58,39 @@ export function CaseProductsCard(props: { tenantId: string; caseId: string }) {
   const [name, setName] = useState("");
   const [price, setPrice] = useState("");
   const [adding, setAdding] = useState(false);
+
+  const [entityId, setEntityId] = useState<string | null>(null);
+  const [openOffering, setOpenOffering] = useState(false);
+  const [searchOffering, setSearchOffering] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(searchOffering), 300);
+    return () => clearTimeout(t);
+  }, [searchOffering]);
+
+  const offeringsQ = useQuery({
+    queryKey: ["crm_offerings_search", props.tenantId, debouncedSearch],
+    enabled: Boolean(props.tenantId),
+    queryFn: async () => {
+      let q = supabase
+        .from("core_entities")
+        .select("id, display_name")
+        .eq("tenant_id", props.tenantId)
+        .eq("entity_type", "offering")
+        .is("deleted_at", null)
+        .order("display_name", { ascending: true })
+        .limit(20);
+
+      if (debouncedSearch) {
+        q = q.ilike("display_name", `%${debouncedSearch}%`);
+      }
+
+      const { data, error } = await q;
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
 
   const itemsQ = useQuery({
     queryKey: ["crm_case_items", props.tenantId, props.caseId],
@@ -115,6 +160,7 @@ export function CaseProductsCard(props: { tenantId: string; caseId: string }) {
         qty,
         price: p,
         total: qty * p,
+        offering_entity_id: entityId,
         confidence_json: {},
       });
       if (error) throw error;
@@ -123,6 +169,8 @@ export function CaseProductsCard(props: { tenantId: string; caseId: string }) {
 
       setName("");
       setPrice("");
+      setEntityId(null);
+      setSearchOffering("");
       showSuccess("Item adicionado.");
       await Promise.all([
         qc.invalidateQueries({ queryKey: ["crm_case_items", props.tenantId, props.caseId] }),
@@ -185,13 +233,82 @@ export function CaseProductsCard(props: { tenantId: string; caseId: string }) {
 
       <div className="mt-4 grid gap-3 sm:grid-cols-[1fr_160px_auto]">
         <div>
-          <Label className="text-xs">Nome</Label>
-          <Input
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            className="mt-1 h-11 rounded-2xl"
-            placeholder="Ex: Instalação / Consultoria / Produto X"
-          />
+          <Label className="text-xs">Nome / Produto</Label>
+          <Popover open={openOffering} onOpenChange={setOpenOffering}>
+            <PopoverTrigger asChild>
+              <Button
+                variant="outline"
+                role="combobox"
+                aria-expanded={openOffering}
+                className="mt-1 flex h-11 w-full justify-between items-center rounded-2xl border-slate-200 px-3 py-2 font-normal text-slate-900 bg-white"
+              >
+                <div className="truncate text-sm">
+                  {name ? name : <span className="text-slate-500">Ex: Produto X</span>}
+                </div>
+                <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-[300px] rounded-2xl p-0" align="start">
+              <Command shouldFilter={false}>
+                <CommandInput
+                  placeholder="Buscar ou criar novo..."
+                  value={searchOffering}
+                  onValueChange={setSearchOffering}
+                />
+                <CommandList>
+                  <CommandEmpty>
+                    <div className="p-3 text-sm text-slate-500">
+                      Nenhum produto listado.
+                      {searchOffering && (
+                        <div className="mt-2">
+                          <Button
+                            type="button"
+                            variant="secondary"
+                            className="h-8 rounded-xl px-3 text-xs w-full"
+                            onClick={() => {
+                              setName(searchOffering);
+                              setEntityId(null);
+                              setOpenOffering(false);
+                            }}
+                          >
+                            Utilizar "{searchOffering}"
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  </CommandEmpty>
+                  {offeringsQ.data?.map((off) => (
+                    <CommandItem
+                      key={off.id}
+                      value={off.id}
+                      onSelect={() => {
+                        setName(off.display_name);
+                        setEntityId(off.id);
+                        setOpenOffering(false);
+                      }}
+                    >
+                      <Check className={cn("mr-2 h-4 w-4", entityId === off.id ? "opacity-100" : "opacity-0")} />
+                      {off.display_name}
+                    </CommandItem>
+                  ))}
+                  {offeringsQ.data && offeringsQ.data.length > 0 && searchOffering && !offeringsQ.data.find(o => o.display_name.toLowerCase() === searchOffering.toLowerCase()) && (
+                    <CommandItem
+                      value={`custom-${searchOffering}`}
+                      onSelect={() => {
+                        setName(searchOffering);
+                        setEntityId(null);
+                        setOpenOffering(false);
+                      }}
+                      className="border-t border-slate-100 text-slate-600 mt-1"
+                    >
+                      <Plus className="mr-2 h-4 w-4" />
+                      Utilizar "{searchOffering}" livremente
+                    </CommandItem>
+                  )}
+                </CommandList>
+              </Command>
+            </PopoverContent>
+          </Popover>
         </div>
         <div>
           <Label className="text-xs">Preço (R$)</Label>
