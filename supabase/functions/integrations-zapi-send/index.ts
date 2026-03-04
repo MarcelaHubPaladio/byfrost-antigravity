@@ -67,24 +67,9 @@ serve(async (req) => {
       });
     }
 
-    // Persistir Audit Outbound
-    const { error: msgInsertError } = await supabase.from("wa_messages").insert({
-      tenant_id: tenantId,
-      instance_id: inst.id,
-      case_id: body.caseId ?? meta?.case_id ?? null,
-      direction: "outbound",
-      from_phone: inst.phone_number ?? null,
-      to_phone: to,
-      type: (["image", "video", "audio", "document"].includes(type)) ? type : "text",
-      body_text: text,
-      media_url: mediaUrl,
-      correlation_id: correlationId,
-      occurred_at: new Date().toISOString(),
-    });
-
-    if (msgInsertError) {
-      console.error(`[${fn}] Failed to insert wa_messages:`, msgInsertError);
-    }
+    // Removed direct insert into `wa_messages` here.
+    // We now rely solely on the Z-API `on-message-send` webhook (processed by `whatsapp-inbound-ingest`)
+    // to prevent duplicate messages from appearing in the CRM chat.
 
     // Validar credenciais Z-API
     const zapiInstanceId = inst.zapi_instance_id;
@@ -191,7 +176,7 @@ serve(async (req) => {
       ok: res.ok,
       correlationId,
       external,
-      debug: { to, url: url.replace(zapiToken, "REDACTED"), dbError: msgInsertError },
+      debug: { to, url: url.replace(zapiToken, "REDACTED") },
       error: res.ok ? null : (resJson?.message || resText)
     }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
