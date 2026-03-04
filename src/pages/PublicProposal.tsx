@@ -7,8 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { showError, showSuccess } from "@/utils/toast";
-import { SUPABASE_ANON_KEY_IN_USE, SUPABASE_URL_IN_USE, USING_FALLBACK_SUPABASE } from "@/lib/supabase";
-import { createClient } from "@supabase/supabase-js";
+import { supabase, SUPABASE_ANON_KEY_IN_USE, SUPABASE_URL_IN_USE, USING_FALLBACK_SUPABASE } from "@/lib/supabase";
 import { PublicPortalShell, type PublicPalette } from "@/components/public/PublicPortalShell";
 import { PublicReport, type PublicReportData } from "@/components/public/PublicReport";
 import { PublicPostsCalendar, type PublicPublication } from "@/components/public/PublicPostsCalendar";
@@ -48,10 +47,6 @@ type ApiData = {
     templates: any[];
   };
 };
-
-const publicSb = createClient(SUPABASE_URL_IN_USE, SUPABASE_ANON_KEY_IN_USE, {
-  auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
-});
 
 function safe(s: any) {
   return String(s ?? "").trim();
@@ -100,7 +95,7 @@ export default function PublicProposal() {
             apikey: SUPABASE_ANON_KEY_IN_USE,
           },
         }),
-        publicSb.rpc("public_get_portal_data", { p_token: token })
+        supabase.rpc("public_get_portal_data", { p_token: token })
       ]);
 
       console.log("[PublicProposal] RPC Response:", rpcRes);
@@ -182,7 +177,7 @@ export default function PublicProposal() {
   useEffect(() => {
     if (!tenantSlug || !token) return;
 
-    const channel = publicSb
+    const channel = supabase
       .channel(`public-proposal:${tenantSlug}:${token}`)
       .on(
         "postgres_changes",
@@ -199,7 +194,7 @@ export default function PublicProposal() {
       .subscribe();
 
     return () => {
-      publicSb.removeChannel(channel);
+      supabase.removeChannel(channel);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tenantSlug, token]);

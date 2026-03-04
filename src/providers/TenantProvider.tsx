@@ -54,6 +54,7 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
 
   const refresh = async () => {
     if (!user) {
+      console.log("[TenantProvider] No user, clearing tenants");
       setTenants([]);
       setActiveTenantIdState(null);
       setMembershipHint({ type: "none" });
@@ -61,106 +62,118 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
+    console.log("[TenantProvider] Refreshing tenants for user:", user.id);
     setLoading(true);
     setMembershipHint({ type: "none" });
 
-    // Super-admin can see *all* tenants (via RLS bypass claim).
-    if (isSuperAdmin) {
-      const { data, error } = await supabase
-        .from("tenants")
-        .select("id,name,slug,branding_json,modules_json")
-        .is("deleted_at", null)
-        .order("created_at", { ascending: false })
-        .limit(500);
+    // Fail-safe: if refresh takes more than 10s, force loading(false)
+    const timeout = setTimeout(() => {
+      console.warn("[TenantProvider] Refresh timed out after 10s");
+      setLoading(false);
+    }, 10000);
 
-      if (error) {
-        console.warn("Failed to load tenants (super-admin)", error);
-        setTenants([]);
-        setMembershipHint({ type: "error", message: error.message });
-        setLoading(false);
+    try {
+      // Super-admin can see *all* tenants (via RLS bypass claim).
+      if (isSuperAdmin) {
+        console.log("[TenantProvider] User is super-admin, fetching all tenants");
+        const { data, error } = await supabase
+          .from("tenants")
+          .select("id,name,slug,branding_json,modules_json")
+          .is("deleted_at", null)
+          .order("created_at", { ascending: false })
+          .limit(500);
+
+        if (error) {
+          console.warn("[TenantProvider] Failed to load tenants (super-admin)", error);
+          setTenants([]);
+          setMembershipHint({ type: "error", message: error.message });
+          return;
+        }
+
+        const mapped: TenantInfo[] = (data ?? []).map((t: any) => ({
+          id: t.id,
+          name: t.name,
+          slug: t.slug,
+          branding_json: t.branding_json ?? {},
+          modules_json: t.modules_json ?? {},
+          role: "admin",
+        }));
+
+        console.log(`[TenantProvider] Mapped ${mapped.length} tenants for super-admin`);
+        setTenants(mapped);
+
+        if (mapped.length === 1) {
+          setActiveTenantId(mapped[0].id);
+        } else if (mapped.length > 1) {
+          if (activeTenantId && !mapped.some((t) => t.id === activeTenantId)) {
+            localStorage.removeItem(LS_KEY);
+            setActiveTenantIdState(null);
+          }
+        }
         return;
       }
 
-      const mapped: TenantInfo[] = (data ?? []).map((t: any) => ({
-        id: t.id,
-        name: t.name,
-        slug: t.slug,
-        branding_json: t.branding_json ?? {},
-        modules_json: t.modules_json ?? {},
-        role: "admin",
-      }));
+      // Regular users: tenant list comes from users_profile membership.
+      console.log("[TenantProvider] Fetching memberships from users_profile");
+      const { data, error } = await supabase
+        .from("users_profile")
+        .select("tenant_id, role, tenants(id,name,slug,branding_json,modules_json)")
+        .eq("user_id", user.id)
+        .is("deleted_at", null);
 
+      if (error) {
+        console.warn("[TenantProvider] Failed to load tenants", error);
+        setTenants([]);
+        setMembershipHint({ type: "error", message: error.message });
+        return;
+      }
+
+      const mapped: TenantInfo[] = (data ?? [])
+        .map((row: any) => ({
+          id: row.tenants?.id ?? row.tenant_id,
+          name: row.tenants?.name ?? "Tenant",
+          slug: row.tenants?.slug ?? "tenant",
+          branding_json: row.tenants?.branding_json ?? {},
+          modules_json: row.tenants?.modules_json ?? {},
+          role: String(row.role ?? "vendor"),
+        }))
+        .filter((t: any) => Boolean(t.id));
+
+      console.log(`[TenantProvider] Mapped ${mapped.length} tenants for user`);
       setTenants(mapped);
+
+      if (mapped.length === 0) {
+        console.log("[TenantProvider] No active memberships, checking for soft-deleted ones");
+        // Distinguish "no membership" vs "membership exists but is soft-deleted".
+        const { data: anyRows, error: anyErr } = await supabase
+          .from("users_profile")
+          .select("tenant_id, deleted_at")
+          .eq("user_id", user.id)
+          .limit(1);
+
+        if (anyErr) {
+          setMembershipHint({ type: "error", message: anyErr.message });
+        } else {
+          const hasAny = (anyRows ?? []).length > 0;
+          const softDeleted = Boolean((anyRows ?? [])[0]?.deleted_at);
+          setMembershipHint(hasAny && softDeleted ? { type: "soft_deleted" } : { type: "none" });
+        }
+      }
 
       if (mapped.length === 1) {
         setActiveTenantId(mapped[0].id);
       } else if (mapped.length > 1) {
+        // If stored tenant is no longer accessible, clear it.
         if (activeTenantId && !mapped.some((t) => t.id === activeTenantId)) {
           localStorage.removeItem(LS_KEY);
           setActiveTenantIdState(null);
         }
       }
-
+    } finally {
+      clearTimeout(timeout);
       setLoading(false);
-      return;
+      console.log("[TenantProvider] Refresh complete");
     }
-
-    // Regular users: tenant list comes from users_profile membership.
-    const { data, error } = await supabase
-      .from("users_profile")
-      .select("tenant_id, role, tenants(id,name,slug,branding_json,modules_json)")
-      .eq("user_id", user.id)
-      .is("deleted_at", null);
-
-    if (error) {
-      console.warn("Failed to load tenants", error);
-      setTenants([]);
-      setMembershipHint({ type: "error", message: error.message });
-      setLoading(false);
-      return;
-    }
-
-    const mapped: TenantInfo[] = (data ?? [])
-      .map((row: any) => ({
-        id: row.tenants?.id ?? row.tenant_id,
-        name: row.tenants?.name ?? "Tenant",
-        slug: row.tenants?.slug ?? "tenant",
-        branding_json: row.tenants?.branding_json ?? {},
-        modules_json: row.tenants?.modules_json ?? {},
-        role: String(row.role ?? "vendor"),
-      }))
-      .filter((t: any) => Boolean(t.id));
-
-    setTenants(mapped);
-
-    if (mapped.length === 0) {
-      // Distinguish "no membership" vs "membership exists but is soft-deleted".
-      const { data: anyRows, error: anyErr } = await supabase
-        .from("users_profile")
-        .select("tenant_id, deleted_at")
-        .eq("user_id", user.id)
-        .limit(1);
-
-      if (anyErr) {
-        setMembershipHint({ type: "error", message: anyErr.message });
-      } else {
-        const hasAny = (anyRows ?? []).length > 0;
-        const softDeleted = Boolean((anyRows ?? [])[0]?.deleted_at);
-        setMembershipHint(hasAny && softDeleted ? { type: "soft_deleted" } : { type: "none" });
-      }
-    }
-
-    if (mapped.length === 1) {
-      setActiveTenantId(mapped[0].id);
-    } else if (mapped.length > 1) {
-      // If stored tenant is no longer accessible, clear it.
-      if (activeTenantId && !mapped.some((t) => t.id === activeTenantId)) {
-        localStorage.removeItem(LS_KEY);
-        setActiveTenantIdState(null);
-      }
-    }
-
-    setLoading(false);
   };
 
   useEffect(() => {
