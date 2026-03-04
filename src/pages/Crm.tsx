@@ -567,7 +567,7 @@ export default function Crm() {
 
   return (
     <RequireAuth>
-      <AppShell hideTopBar>
+      <AppShell>
         <div className="rounded-[28px] border border-slate-200 bg-white/65 p-3 shadow-sm backdrop-blur md:p-4">
           <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
             <div className="relative w-full sm:w-auto sm:flex-1 sm:min-w-[280px]">
