@@ -569,52 +569,133 @@ export default function Crm() {
     <RequireAuth>
       <AppShell hideTopBar>
         <div className="rounded-[28px] border border-slate-200 bg-white/65 p-3 shadow-sm backdrop-blur md:p-4">
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-            <div className="relative flex-1">
+          <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+            <div className="relative w-full sm:w-auto sm:flex-1 sm:min-w-[280px]">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
               <Input
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
-                placeholder="Buscar por cliente, telefone, email, vendedor…"
-                className="h-11 rounded-2xl pl-10"
+                placeholder="Buscar por cliente, telefone…"
+                className="h-11 w-full rounded-2xl pl-10"
               />
             </div>
 
-            {showUserFilter && (
+            <div className="flex flex-wrap items-center gap-2">
+              {showUserFilter && (
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button variant="secondary" className="h-11 rounded-2xl">
+                      <UsersRound className="mr-2 h-4 w-4" /> Usuários
+                      {selectedUserIds.length ? (
+                        <span className="ml-2 rounded-full bg-white/70 px-2 py-0.5 text-[11px] font-semibold text-slate-700">
+                          {selectedUserIds.length}
+                        </span>
+                      ) : null}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent align="end" className="w-[340px] rounded-2xl border-slate-200 bg-white p-2">
+                    <Command className="rounded-2xl border border-slate-200">
+                      <CommandInput
+                        value={userQuery}
+                        onValueChange={setUserQuery}
+                        placeholder="Filtrar responsáveis…"
+                        className="h-11"
+                      />
+                      <CommandList className="max-h-[260px]">
+                        <CommandEmpty>Nenhum responsável</CommandEmpty>
+                        <CommandGroup heading="Responsáveis">
+                          {visibleUsers.map((v) => {
+                            const checked = selectedUserIds.includes(v.user_id);
+                            const label = v.display_name?.trim() || v.email?.trim() || "Responsável";
+                            return (
+                              <CommandItem
+                                key={v.user_id}
+                                value={`${label} ${v.email ?? ""}`}
+                                onSelect={() => {
+                                  setSelectedUserIds((prev) =>
+                                    prev.includes(v.user_id)
+                                      ? prev.filter((x) => x !== v.user_id)
+                                      : [...prev, v.user_id]
+                                  );
+                                }}
+                                className={cn(
+                                  "rounded-xl",
+                                  checked ? "bg-[hsl(var(--byfrost-accent)/0.10)]" : ""
+                                )}
+                              >
+                                <div
+                                  className={cn(
+                                    "mr-2 grid h-5 w-5 place-items-center rounded-md border",
+                                    checked
+                                      ? "border-[hsl(var(--byfrost-accent)/0.35)] bg-[hsl(var(--byfrost-accent))] text-white"
+                                      : "border-slate-200 bg-white"
+                                  )}
+                                >
+                                  {checked ? <Check className="h-3.5 w-3.5" /> : null}
+                                </div>
+                                <div className="min-w-0">
+                                  <div className="truncate text-sm font-medium text-slate-900">{label}</div>
+                                  <div className="truncate text-[11px] text-slate-500">{v.email ?? ""}</div>
+                                </div>
+                              </CommandItem>
+                            );
+                          })}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+
+                    <div className="mt-2 flex items-center justify-between gap-2">
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        className="h-9 flex-1 rounded-2xl"
+                        onClick={() => {
+                          setSelectedUserIds([]);
+                          setUserQuery("");
+                        }}
+                        disabled={!selectedUserIds.length}
+                      >
+                        Limpar
+                      </Button>
+                      <Button type="button" variant="secondary" className="h-9 rounded-2xl" onClick={refresh}>
+                        <RefreshCw className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </PopoverContent>
+                </Popover>
+              )}
+
               <Popover>
                 <PopoverTrigger asChild>
                   <Button variant="secondary" className="h-11 rounded-2xl">
-                    <UsersRound className="mr-2 h-4 w-4" /> Usuários
-                    {selectedUserIds.length ? (
+                    <Tags className="mr-2 h-4 w-4" /> Tags
+                    {selectedTags.length ? (
                       <span className="ml-2 rounded-full bg-white/70 px-2 py-0.5 text-[11px] font-semibold text-slate-700">
-                        {selectedUserIds.length}
+                        {selectedTags.length}
                       </span>
                     ) : null}
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent align="end" className="w-[340px] rounded-2xl border-slate-200 bg-white p-2">
+                <PopoverContent align="end" className="w-[320px] rounded-2xl border-slate-200 bg-white p-2">
                   <Command className="rounded-2xl border border-slate-200">
                     <CommandInput
-                      value={userQuery}
-                      onValueChange={setUserQuery}
-                      placeholder="Filtrar responsáveis…"
+                      value={tagQuery}
+                      onValueChange={setTagQuery}
+                      placeholder="Filtrar tags…"
                       className="h-11"
                     />
-                    <CommandList className="max-h-[260px]">
-                      <CommandEmpty>Nenhum responsável</CommandEmpty>
-                      <CommandGroup heading="Responsáveis">
-                        {visibleUsers.map((v) => {
-                          const checked = selectedUserIds.includes(v.user_id);
-                          const label = v.display_name?.trim() || v.email?.trim() || "Responsável";
+                    <CommandList className="max-h-[240px]">
+                      <CommandEmpty>Nenhuma tag</CommandEmpty>
+                      <CommandGroup heading="Tags">
+                        {visibleTags.map((t) => {
+                          const checked = selectedTags.includes(t);
                           return (
                             <CommandItem
-                              key={v.user_id}
-                              value={`${label} ${v.email ?? ""}`}
+                              key={t}
+                              value={t}
                               onSelect={() => {
-                                setSelectedUserIds((prev) =>
-                                  prev.includes(v.user_id)
-                                    ? prev.filter((x) => x !== v.user_id)
-                                    : [...prev, v.user_id]
+                                setSelectedTags((prev) =>
+                                  prev.includes(t) ? prev.filter((x) => x !== t) : [...prev, t]
                                 );
                               }}
                               className={cn(
@@ -632,10 +713,7 @@ export default function Crm() {
                               >
                                 {checked ? <Check className="h-3.5 w-3.5" /> : null}
                               </div>
-                              <div className="min-w-0">
-                                <div className="truncate text-sm font-medium text-slate-900">{label}</div>
-                                <div className="truncate text-[11px] text-slate-500">{v.email ?? ""}</div>
-                              </div>
+                              <span className="truncate text-sm font-medium">{t}</span>
                             </CommandItem>
                           );
                         })}
@@ -649,10 +727,10 @@ export default function Crm() {
                       variant="secondary"
                       className="h-9 flex-1 rounded-2xl"
                       onClick={() => {
-                        setSelectedUserIds([]);
-                        setUserQuery("");
+                        setSelectedTags([]);
+                        setTagQuery("");
                       }}
-                      disabled={!selectedUserIds.length}
+                      disabled={!selectedTags.length}
                     >
                       Limpar
                     </Button>
@@ -662,95 +740,19 @@ export default function Crm() {
                   </div>
                 </PopoverContent>
               </Popover>
-            )}
 
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button variant="secondary" className="h-11 rounded-2xl">
-                  <Tags className="mr-2 h-4 w-4" /> Tags
-                  {selectedTags.length ? (
-                    <span className="ml-2 rounded-full bg-white/70 px-2 py-0.5 text-[11px] font-semibold text-slate-700">
-                      {selectedTags.length}
-                    </span>
-                  ) : null}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent align="end" className="w-[320px] rounded-2xl border-slate-200 bg-white p-2">
-                <Command className="rounded-2xl border border-slate-200">
-                  <CommandInput
-                    value={tagQuery}
-                    onValueChange={setTagQuery}
-                    placeholder="Filtrar tags…"
-                    className="h-11"
-                  />
-                  <CommandList className="max-h-[240px]">
-                    <CommandEmpty>Nenhuma tag</CommandEmpty>
-                    <CommandGroup heading="Tags">
-                      {visibleTags.map((t) => {
-                        const checked = selectedTags.includes(t);
-                        return (
-                          <CommandItem
-                            key={t}
-                            value={t}
-                            onSelect={() => {
-                              setSelectedTags((prev) =>
-                                prev.includes(t) ? prev.filter((x) => x !== t) : [...prev, t]
-                              );
-                            }}
-                            className={cn(
-                              "rounded-xl",
-                              checked ? "bg-[hsl(var(--byfrost-accent)/0.10)]" : ""
-                            )}
-                          >
-                            <div
-                              className={cn(
-                                "mr-2 grid h-5 w-5 place-items-center rounded-md border",
-                                checked
-                                  ? "border-[hsl(var(--byfrost-accent)/0.35)] bg-[hsl(var(--byfrost-accent))] text-white"
-                                  : "border-slate-200 bg-white"
-                              )}
-                            >
-                              {checked ? <Check className="h-3.5 w-3.5" /> : null}
-                            </div>
-                            <span className="truncate text-sm font-medium">{t}</span>
-                          </CommandItem>
-                        );
-                      })}
-                    </CommandGroup>
-                  </CommandList>
-                </Command>
+              {activeTenantId && selectedJourney ? (
+                <NewLeadDialog tenantId={activeTenantId} journey={selectedJourney as any} actorUserId={user?.id ?? null} />
+              ) : null}
 
-                <div className="mt-2 flex items-center justify-between gap-2">
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    className="h-9 flex-1 rounded-2xl"
-                    onClick={() => {
-                      setSelectedTags([]);
-                      setTagQuery("");
-                    }}
-                    disabled={!selectedTags.length}
-                  >
-                    Limpar
-                  </Button>
-                  <Button type="button" variant="secondary" className="h-9 rounded-2xl" onClick={refresh}>
-                    <RefreshCw className="h-4 w-4" />
-                  </Button>
-                </div>
-              </PopoverContent>
-            </Popover>
+              {activeTenantId && selectedJourney ? (
+                <ImportLeadsDialog tenantId={activeTenantId} journey={selectedJourney as any} actorUserId={user?.id ?? null} />
+              ) : null}
 
-            {activeTenantId && selectedJourney ? (
-              <NewLeadDialog tenantId={activeTenantId} journey={selectedJourney as any} actorUserId={user?.id ?? null} />
-            ) : null}
-
-            {activeTenantId && selectedJourney ? (
-              <ImportLeadsDialog tenantId={activeTenantId} journey={selectedJourney as any} actorUserId={user?.id ?? null} />
-            ) : null}
-
-            <Button type="button" variant="secondary" className="h-11 rounded-2xl" onClick={refresh}>
-              <RefreshCw className="mr-2 h-4 w-4" /> Atualizar
-            </Button>
+              <Button type="button" variant="secondary" className="h-11 flex-1 sm:flex-none justify-center rounded-2xl" onClick={refresh}>
+                <RefreshCw className="mr-2 h-4 w-4" /> Atualizar
+              </Button>
+            </div>
           </div>
 
           {crmJourneysQ.data?.length === 0 && (
@@ -760,12 +762,12 @@ export default function Crm() {
           )}
 
           {selectedJourney?.key && (
-            <div className="mt-3 overflow-x-auto pb-1">
-              <div className="flex min-w-[980px] gap-4">
+            <div className="mt-4 overflow-x-auto pb-4 snap-x snap-mandatory">
+              <div className="flex w-max gap-4 px-1">
                 {columns.map((col) => (
                   <div
                     key={col.key}
-                    className="w-[320px] flex-shrink-0"
+                    className="w-[85vw] max-w-[320px] snap-center shrink-0 sm:w-[320px]"
                     onDragOver={(e) => {
                       if (col.key === "__other__") return;
                       e.preventDefault();

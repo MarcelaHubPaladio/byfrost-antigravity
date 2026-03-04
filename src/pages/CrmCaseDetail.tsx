@@ -375,24 +375,26 @@ export default function CrmCaseDetail() {
     <RequireAuth>
       <AppShell>
         <div className="space-y-4">
-          <div className="flex items-center justify-between gap-3">
-            <div className="flex items-center gap-2">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div className="flex items-start gap-3">
               <Button
                 variant="outline"
-                className="h-10 rounded-2xl"
+                className="h-10 shrink-0 rounded-2xl"
                 onClick={() => nav("/app/crm")}
               >
                 <ArrowLeft className="mr-2 h-4 w-4" /> Voltar
               </Button>
-              <div className="min-w-0">
-                <div className="truncate text-lg font-semibold text-slate-900">{caseQ.data?.title ?? "CRM"}</div>
-                <div className="mt-0.5 flex flex-wrap items-center gap-2 text-[11px] text-slate-600">
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-lg font-semibold text-slate-900 leading-tight">
+                  {caseQ.data?.title ?? "CRM"}
+                </div>
+                <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-slate-600">
                   <Badge variant="secondary">{caseQ.data?.journeys?.key ?? "crm"}</Badge>
                   <span>id: {String(id ?? "").slice(0, 8)}…</span>
                   {entityLink ? (
                     <Link
                       to={entityLink}
-                      className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-2 py-0.5 font-semibold text-slate-700 hover:bg-slate-50"
+                      className="inline-flex items-center gap-1 auto-cols-min rounded-full border border-slate-200 bg-white px-2 py-0.5 font-semibold text-slate-700 hover:bg-slate-50"
                       title="Abrir entidade"
                     >
                       entidade <ExternalLink className="h-3.5 w-3.5" />
@@ -404,8 +406,8 @@ export default function CrmCaseDetail() {
               </div>
             </div>
 
-            <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-center sm:justify-end">
-              <div className="flex items-center justify-center gap-1 sm:mr-2">
+            <div className="flex flex-col items-stretch gap-3 sm:flex-row sm:items-center sm:justify-end">
+              <div className="flex items-center justify-between gap-1 rounded-2xl bg-slate-50 p-1 sm:bg-transparent sm:p-0">
                 <Button
                   type="button"
                   variant="outline"
@@ -479,7 +481,7 @@ export default function CrmCaseDetail() {
                     type="button"
                     variant="secondary"
                     className={cn(
-                      "h-11 rounded-2xl border-rose-200 bg-rose-50 text-rose-800 hover:bg-rose-100",
+                      "h-11 w-full sm:w-auto rounded-2xl border-rose-200 bg-rose-50 text-rose-800 hover:bg-rose-100",
                       deleting ? "opacity-60" : ""
                     )}
                     disabled={!c || deleting}
@@ -488,17 +490,17 @@ export default function CrmCaseDetail() {
                     <Trash2 className="mr-2 h-4 w-4" /> Excluir
                   </Button>
                 </AlertDialogTrigger>
-                <AlertDialogContent className="rounded-[22px]">
+                <AlertDialogContent className="rounded-[22px] max-w-[90vw] sm:max-w-lg">
                   <AlertDialogHeader>
                     <AlertDialogTitle>Excluir este caso?</AlertDialogTitle>
                     <AlertDialogDescription>
                       Esta ação remove o caso das listas (CRM/Dashboard/Chat). As mensagens continuam no histórico do banco.
                     </AlertDialogDescription>
                   </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel className="rounded-2xl">Cancelar</AlertDialogCancel>
+                  <AlertDialogFooter className="flex-col gap-2 sm:flex-row sm:justify-end">
+                    <AlertDialogCancel className="w-full sm:w-auto rounded-2xl mt-0">Cancelar</AlertDialogCancel>
                     <AlertDialogAction
-                      className="rounded-2xl bg-rose-600 text-white hover:bg-rose-700"
+                      className="w-full sm:w-auto rounded-2xl bg-rose-600 text-white hover:bg-rose-700 m-0"
                       onClick={(e) => {
                         e.preventDefault();
                         deleteCase();
@@ -513,7 +515,7 @@ export default function CrmCaseDetail() {
               <Button
                 type="button"
                 variant="secondary"
-                className="h-11 rounded-2xl"
+                className="h-11 w-full sm:w-auto rounded-2xl hidden lg:inline-flex"
                 onClick={() => nav("/app/crm")}
               >
                 Voltar ao CRM

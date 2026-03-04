@@ -306,8 +306,8 @@ export function NewLeadDialog({
         </Button>
       </DialogTrigger>
 
-      <DialogContent className="w-[95vw] max-w-[560px] rounded-[22px] border-slate-200 bg-white p-0 shadow-xl">
-        <div className="p-5">
+      <DialogContent className="w-[95vw] max-w-[560px] max-h-[90vh] flex flex-col overflow-hidden rounded-[22px] border-slate-200 bg-white p-0 shadow-xl">
+        <div className="flex-1 overflow-y-auto p-4 sm:p-5">
           <DialogHeader>
             <DialogTitle className="text-base font-semibold text-slate-900">Novo lead</DialogTitle>
             <DialogDescription className="text-sm text-slate-600">
@@ -427,11 +427,11 @@ export function NewLeadDialog({
               )}
             </div>
 
-            <div className="mt-2 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+            <div className="mt-4 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
               <Button
                 type="button"
                 variant="secondary"
-                className="h-11 rounded-2xl"
+                className="h-11 w-full sm:w-auto rounded-2xl"
                 onClick={() => setOpen(false)}
                 disabled={saving}
               >
@@ -439,7 +439,7 @@ export function NewLeadDialog({
               </Button>
               <Button
                 type="button"
-                className="h-11 rounded-2xl bg-[hsl(var(--byfrost-accent))] px-5 text-white hover:bg-[hsl(var(--byfrost-accent)/0.92)]"
+                className="h-11 w-full sm:w-auto rounded-2xl bg-[hsl(var(--byfrost-accent))] px-5 text-white hover:bg-[hsl(var(--byfrost-accent)/0.92)]"
                 onClick={createLead}
                 disabled={saving || !name.trim()}
               >

@@ -1358,252 +1358,261 @@ export function ImportLeadsDialog({
   };
 
   return (
-    <Dialog
-      open={open}
-      onOpenChange={(v) => {
-        setOpen(v);
-        if (!v) reset();
-      }}
-    >
+    <Dialog open={open} onOpenChange={(v) => {
+      if (!importing) setOpen(v);
+    }}>
       <DialogTrigger asChild>
-        {trigger ?? (
-          <Button className="h-11 rounded-2xl bg-[hsl(var(--byfrost-accent))] text-white hover:bg-[hsl(var(--byfrost-accent)/0.92)]">
-            <FileUp className="mr-2 h-4 w-4" /> Importar Leads
+        {trigger ? trigger : (
+          <Button
+            variant="outline"
+            className="h-11 rounded-2xl border-slate-200 bg-white"
+          >
+            <FileUp className="mr-2 h-4 w-4" /> Importar CSV
           </Button>
         )}
       </DialogTrigger>
 
-      <DialogContent className="max-w-[980px] rounded-[22px]">
-        <DialogHeader>
-          <DialogTitle>Importar Leads</DialogTitle>
-          <DialogDescription>
-            Envie um CSV com colunas: <span className="font-medium">Nome</span>, <span className="font-medium">Whasapp</span>,{" "}
-            <span className="font-medium">Email</span>, <span className="font-medium">Dono do Lead</span>. Aceita separador por vírgula ou ponto-e-vírgula.
-          </DialogDescription>
-        </DialogHeader>
+      <DialogContent className="w-[95vw] max-w-[800px] max-h-[90vh] flex flex-col overflow-hidden rounded-[22px] border-slate-200 bg-white p-0 shadow-xl">
+        <div className="flex-1 overflow-y-auto p-4 sm:p-5 text-left">
+          <DialogHeader>
+            <DialogTitle className="text-base font-semibold text-slate-900">Importar Leads (CSV)</DialogTitle>
+            <DialogDescription className="text-sm text-slate-500">
+              Jornada de destino: <span className="font-semibold text-slate-700">{journey.name}</span>
+            </DialogDescription>
+          </DialogHeader>
 
-        <div className="grid gap-4">
-          <div className="rounded-[18px] border border-slate-200 bg-slate-50 p-3">
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-              <div>
-                <div className="text-sm font-semibold text-slate-900">Jornada</div>
-                <div className="mt-0.5 text-xs text-slate-600">
-                  Importando para: <span className="font-medium">{journey.name}</span>
-                  <span className="text-slate-400"> • </span>
-                  <span className="text-slate-500">estado inicial: {firstState}</span>
-                </div>
-              </div>
+          <div className="mt-4 rounded-[18px] border border-slate-200 bg-slate-50 p-4">
+            <div className="text-sm font-semibold text-slate-900">Regras do Arquivo</div>
+            <ul className="mt-2 ml-4 list-disc text-xs text-slate-600 space-y-1">
+              <li>Colunas ignoram maiúsculas/minúsculas e acentos (ex: <span className="font-mono bg-white px-1 py-0.5 rounded border border-slate-200">Whasapp</span> ou <span className="font-mono bg-white px-1 py-0.5 rounded border border-slate-200">whatsapp</span>).</li>
+              <li>Coluna de número é **obrigatória** e deve conter nome derivado de whatsapp (ex: "Whasapp", "telefone").</li>
+              <li>A coluna <span className="font-mono bg-white px-1 py-0.5 rounded border border-slate-200">Dono do Lead</span> ou <span className="font-mono bg-white px-1 py-0.5 rounded border border-slate-200">Owner</span> (opcional) buscará o vendedor pelo email no Autentique.</li>
+              <li>O arquivo deve ser delimitado por vírgula (<span className="font-medium text-slate-800">,</span>) ou ponto-e-vírgula (<span className="font-medium text-slate-800">;</span>).</li>
+            </ul>
 
-              <div className="flex items-center gap-2">
-                <Badge className="rounded-full border-0 bg-indigo-100 text-indigo-900 hover:bg-indigo-100">
-                  Preview
-                </Badge>
+            <div className="mt-3 font-medium text-xs text-slate-700">Cabeçalhos suportados:</div>
+            <div className="mt-1 flex flex-wrap gap-1.5">
+              <Badge className="rounded-full border-0 bg-white text-slate-600 hover:bg-white border-slate-200 border">
+                Nome (opcional)
+              </Badge>
+              <Badge className="rounded-full border-0 bg-rose-50 text-rose-700 hover:bg-rose-50 ring-1 ring-inset ring-rose-200/50">
+                Whatsapp (obrigatório)
+              </Badge>
+              <Badge className="rounded-full border-0 bg-white text-slate-600 hover:bg-white border-slate-200 border">
+                Email (opcional)
+              </Badge>
+              <Badge className="rounded-full border-0 bg-white text-slate-600 hover:bg-white border-slate-200 border">
+                Dono do Lead (opcional, por e-mail)
+              </Badge>
+            </div>
+            {fileName && (
+              <div className="mt-3 flex items-center justify-between gap-2 border-t border-slate-200 pt-3">
+                <div className="text-xs font-semibold text-slate-700">Arquivo Carregado:</div>
                 <Badge className="rounded-full border-0 bg-slate-200 text-slate-800 hover:bg-slate-200">
-                  {fileName || "nenhum arquivo"}
+                  {fileName}
                 </Badge>
               </div>
-            </div>
-
-            <Separator className="my-3" />
-
-            <div className="grid gap-3 sm:grid-cols-[1fr_auto]">
-              <div>
-                <Label className="text-xs">Arquivo CSV</Label>
-                <Input
-                  type="file"
-                  accept=".csv,text/csv"
-                  className="mt-1 h-11 rounded-2xl bg-white"
-                  onChange={(e) => onFile(e.target.files?.[0] ?? null)}
-                  disabled={importing}
-                />
-              </div>
-              <div className="flex items-end">
-                <Button
-                  type="button"
-                  variant="secondary"
-                  className="h-11 rounded-2xl"
-                  onClick={() => {
-                    setRawText("");
-                    setCustomersCache(null);
-                    setUsersCache(null);
-
-                    setChatCasesCache(null);
-                    setChatCasePhonesCache(null);
-                    setNonChatCasesCache(null);
-                    setFileName("");
-                    setParsingError(null);
-                  }}
-                  disabled={importing || (!rawText && !fileName)}
-                >
-                  Limpar
-                </Button>
-              </div>
-            </div>
-
-            {parsingError && (
-              <div className="mt-3 flex items-start gap-2 rounded-2xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-900">
-                <AlertTriangle className="mt-0.5 h-4 w-4" />
-                <div>{parsingError}</div>
-              </div>
             )}
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
-            <Badge className="rounded-full border-0 bg-emerald-100 text-emerald-900 hover:bg-emerald-100">
-              novos: {counts.create_case}
-            </Badge>
-            <Badge className="rounded-full border-0 bg-amber-100 text-amber-900 hover:bg-amber-100">
-              reativar: {counts.reactivate_case}
-            </Badge>
-            <Badge className="rounded-full border-0 bg-slate-100 text-slate-800 hover:bg-slate-100">
-              atualizar: {counts.update_only}
-            </Badge>
-            <Badge className="rounded-full border-0 bg-indigo-100 text-indigo-900 hover:bg-indigo-100">
-              reconhecidos via chat: {counts.update_chat_only}
-            </Badge>
-            <Badge className="rounded-full border-0 bg-rose-100 text-rose-900 hover:bg-rose-100">
-              erros: {counts.skip_error}
-            </Badge>
-            <Badge className="rounded-full border-0 bg-amber-100 text-amber-900 hover:bg-amber-100">
-              novos/reativados sem dono: {counts.missing_owner}
-            </Badge>
+          <Separator className="my-3" />
 
-            {progress && (
-              <div className="ml-auto text-xs text-slate-600">
-                Importando… <span className="font-medium text-slate-900">{progress.done}</span>/{progress.total}
-              </div>
-            )}
+          <div className="grid gap-3 sm:grid-cols-[1fr_auto]">
+            <div>
+              <Label className="text-xs">Arquivo CSV</Label>
+              <Input
+                type="file"
+                accept=".csv,text/csv"
+                className="mt-1 h-11 rounded-2xl bg-white"
+                onChange={(e) => onFile(e.target.files?.[0] ?? null)}
+                disabled={importing}
+              />
+            </div>
+            <div className="flex items-end">
+              <Button
+                type="button"
+                variant="secondary"
+                className="h-11 rounded-2xl"
+                onClick={() => {
+                  setRawText("");
+                  setCustomersCache(null);
+                  setUsersCache(null);
+
+                  setChatCasesCache(null);
+                  setChatCasePhonesCache(null);
+                  setNonChatCasesCache(null);
+                  setFileName("");
+                  setParsingError(null);
+                }}
+                disabled={importing || (!rawText && !fileName)}
+              >
+                Limpar
+              </Button>
+            </div>
           </div>
 
-          <div className="rounded-[18px] border border-slate-200 bg-white">
-            <div className="border-b border-slate-200 bg-slate-50 px-3 py-2 text-[11px] font-semibold text-slate-700">
-              Linhas
-            </div>
-
-            <ScrollArea className="h-[380px]">
-              <div className="divide-y divide-slate-100">
-                {previewRows.map((r) => {
-                  const tone =
-                    r.action === "skip_error"
-                      ? "rose"
-                      : r.action === "update_only"
-                        ? "slate"
-                        : r.action === "reactivate_case"
-                          ? "amber"
-                          : r.ownerResolved
-                            ? "emerald"
-                            : "amber";
-
-                  const badgeCls =
-                    tone === "rose"
-                      ? "bg-rose-100 text-rose-900"
-                      : tone === "emerald"
-                        ? "bg-emerald-100 text-emerald-900"
-                        : tone === "amber"
-                          ? "bg-amber-100 text-amber-900"
-                          : "bg-slate-100 text-slate-800";
-
-                  const label =
-                    r.action === "skip_error"
-                      ? "erro"
-                      : r.action === "update_only"
-                        ? "atualizar"
-                        : r.action === "reactivate_case"
-                          ? "reativar"
-                          : r.ownerResolved
-                            ? "criar case"
-                            : "criar case (sem dono)";
-
-                  return (
-                    <div key={r.rowNo} className="px-3 py-2">
-                      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                        <div className="min-w-0">
-                          <div className="text-xs font-semibold text-slate-900">
-                            Linha {r.rowNo}: <span className="font-normal">{r.name || "(sem nome)"}</span>
-                          </div>
-                          <div className="mt-0.5 text-[11px] text-slate-600">
-                            <span className="font-medium">WhatsApp:</span> {r.whatsapp || "—"}
-                            <span className="text-slate-300"> • </span>
-                            <span className="font-medium">Email:</span> {r.email || "—"}
-                            <span className="text-slate-300"> • </span>
-                            <span className="font-medium">Dono:</span> {r.ownerEmail || "(vazio)"}
-                          </div>
-
-                          {r.duplicateInFile && !r.error ? (
-                            <div className="mt-2 text-[11px] text-amber-700">
-                              Duplicado no CSV: esta linha não criará um novo case.
-                            </div>
-                          ) : null}
-
-                          {r.error && (
-                            <div className="mt-2 text-[11px] text-rose-700">{r.error}</div>
-                          )}
-                        </div>
-
-                        <div className="flex items-center gap-2">
-                          <Badge className={cn("rounded-full border-0", badgeCls)}>{label}</Badge>
-                          {r.duplicateInFile && r.action !== "skip_error" ? (
-                            <Badge className="rounded-full border-0 bg-amber-100 text-amber-900 hover:bg-amber-100">
-                              duplicado
-                            </Badge>
-                          ) : null}
-                          {r.action !== "skip_error" && r.existingCustomerId && (
-                            <Badge className="rounded-full border-0 bg-indigo-100 text-indigo-900 hover:bg-indigo-100">
-                              já existe
-                            </Badge>
-                          )}
-                          {r.action !== "skip_error" && !r.existingCustomerId && r.existingChatCaseId && (
-                            <Badge className="rounded-full border-0 bg-indigo-100 text-indigo-900 hover:bg-indigo-100">
-                              já existe (chat)
-                            </Badge>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-
-                {previewRows.length === 0 && (
-                  <div className="p-6 text-center text-sm text-slate-500">
-                    Selecione um arquivo para ver o preview.
-                  </div>
-                )}
-              </div>
-            </ScrollArea>
-          </div>
-
-          {rowFailures.length > 0 && (
-            <div className="rounded-[18px] border border-rose-200 bg-rose-50 p-3">
-              <div className="text-sm font-semibold text-rose-900">Falhas na importação</div>
-              <div className="mt-1 text-xs text-rose-800">
-                Abaixo estão os motivos retornados pelo banco para cada linha.
-              </div>
-              <div className="mt-3 space-y-2">
-                {rowFailures.map((f) => (
-                  <div key={`${f.rowNo}-${f.message}`} className="rounded-2xl border border-rose-200 bg-white px-3 py-2">
-                    <div className="text-xs font-semibold text-rose-900">Linha {f.rowNo}{f.name ? ` • ${f.name}` : ""}</div>
-                    <div className="mt-0.5 text-[11px] text-rose-800 break-words">{f.message}</div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {counts.skip_error > 0 && (
-            <div className="flex items-start gap-2 rounded-2xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-900">
+          {parsingError && (
+            <div className="mt-3 flex items-start gap-2 rounded-2xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-900">
               <AlertTriangle className="mt-0.5 h-4 w-4" />
-              <div>
-                Existem linhas com erro. Ajuste o CSV e reenvie antes de confirmar.
-              </div>
+              <div>{parsingError}</div>
             </div>
           )}
         </div>
 
-        <DialogFooter className="gap-2 sm:gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <Badge className="rounded-full border-0 bg-emerald-100 text-emerald-900 hover:bg-emerald-100">
+            novos: {counts.create_case}
+          </Badge>
+          <Badge className="rounded-full border-0 bg-amber-100 text-amber-900 hover:bg-amber-100">
+            reativar: {counts.reactivate_case}
+          </Badge>
+          <Badge className="rounded-full border-0 bg-slate-100 text-slate-800 hover:bg-slate-100">
+            atualizar: {counts.update_only}
+          </Badge>
+          <Badge className="rounded-full border-0 bg-indigo-100 text-indigo-900 hover:bg-indigo-100">
+            reconhecidos via chat: {counts.update_chat_only}
+          </Badge>
+          <Badge className="rounded-full border-0 bg-rose-100 text-rose-900 hover:bg-rose-100">
+            erros: {counts.skip_error}
+          </Badge>
+          <Badge className="rounded-full border-0 bg-amber-100 text-amber-900 hover:bg-amber-100">
+            novos/reativados sem dono: {counts.missing_owner}
+          </Badge>
+
+          {progress && (
+            <div className="ml-auto text-xs text-slate-600">
+              Importando… <span className="font-medium text-slate-900">{progress.done}</span>/{progress.total}
+            </div>
+          )}
+        </div>
+
+        <div className="rounded-[18px] border border-slate-200 bg-white">
+          <div className="border-b border-slate-200 bg-slate-50 px-3 py-2 text-[11px] font-semibold text-slate-700">
+            Linhas
+          </div>
+
+          <ScrollArea className="h-[380px]">
+            <div className="divide-y divide-slate-100">
+              {previewRows.map((r) => {
+                const tone =
+                  r.action === "skip_error"
+                    ? "rose"
+                    : r.action === "update_only"
+                      ? "slate"
+                      : r.action === "reactivate_case"
+                        ? "amber"
+                        : r.ownerResolved
+                          ? "emerald"
+                          : "amber";
+
+                const badgeCls =
+                  tone === "rose"
+                    ? "bg-rose-100 text-rose-900"
+                    : tone === "emerald"
+                      ? "bg-emerald-100 text-emerald-900"
+                      : tone === "amber"
+                        ? "bg-amber-100 text-amber-900"
+                        : "bg-slate-100 text-slate-800";
+
+                const label =
+                  r.action === "skip_error"
+                    ? "erro"
+                    : r.action === "update_only"
+                      ? "atualizar"
+                      : r.action === "reactivate_case"
+                        ? "reativar"
+                        : r.ownerResolved
+                          ? "criar case"
+                          : "criar case (sem dono)";
+
+                return (
+                  <div key={r.rowNo} className="px-3 py-2">
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                      <div className="min-w-0">
+                        <div className="text-xs font-semibold text-slate-900">
+                          Linha {r.rowNo}: <span className="font-normal">{r.name || "(sem nome)"}</span>
+                        </div>
+                        <div className="mt-0.5 text-[11px] text-slate-600">
+                          <span className="font-medium">WhatsApp:</span> {r.whatsapp || "—"}
+                          <span className="text-slate-300"> • </span>
+                          <span className="font-medium">Email:</span> {r.email || "—"}
+                          <span className="text-slate-300"> • </span>
+                          <span className="font-medium">Dono:</span> {r.ownerEmail || "(vazio)"}
+                        </div>
+
+                        {r.duplicateInFile && !r.error ? (
+                          <div className="mt-2 text-[11px] text-amber-700">
+                            Duplicado no CSV: esta linha não criará um novo case.
+                          </div>
+                        ) : null}
+
+                        {r.error && (
+                          <div className="mt-2 text-[11px] text-rose-700">{r.error}</div>
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <Badge className={cn("rounded-full border-0", badgeCls)}>{label}</Badge>
+                        {r.duplicateInFile && r.action !== "skip_error" ? (
+                          <Badge className="rounded-full border-0 bg-amber-100 text-amber-900 hover:bg-amber-100">
+                            duplicado
+                          </Badge>
+                        ) : null}
+                        {r.action !== "skip_error" && r.existingCustomerId && (
+                          <Badge className="rounded-full border-0 bg-indigo-100 text-indigo-900 hover:bg-indigo-100">
+                            já existe
+                          </Badge>
+                        )}
+                        {r.action !== "skip_error" && !r.existingCustomerId && r.existingChatCaseId && (
+                          <Badge className="rounded-full border-0 bg-indigo-100 text-indigo-900 hover:bg-indigo-100">
+                            já existe (chat)
+                          </Badge>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+
+              {previewRows.length === 0 && (
+                <div className="p-6 text-center text-sm text-slate-500">
+                  Selecione um arquivo para ver o preview.
+                </div>
+              )}
+            </div>
+          </ScrollArea>
+        </div>
+
+        {rowFailures.length > 0 && (
+          <div className="rounded-[18px] border border-rose-200 bg-rose-50 p-3">
+            <div className="text-sm font-semibold text-rose-900">Falhas na importação</div>
+            <div className="mt-1 text-xs text-rose-800">
+              Abaixo estão os motivos retornados pelo banco para cada linha.
+            </div>
+            <div className="mt-3 space-y-2">
+              {rowFailures.map((f) => (
+                <div key={`${f.rowNo}-${f.message}`} className="rounded-2xl border border-rose-200 bg-white px-3 py-2">
+                  <div className="text-xs font-semibold text-rose-900">Linha {f.rowNo}{f.name ? ` • ${f.name}` : ""}</div>
+                  <div className="mt-0.5 text-[11px] text-rose-800 break-words">{f.message}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {counts.skip_error > 0 && (
+          <div className="flex items-start gap-2 rounded-2xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-900">
+            <AlertTriangle className="mt-0.5 h-4 w-4" />
+            <div>
+              Existem linhas com erro. Ajuste o CSV e reenvie antes de confirmar.
+            </div>
+          </div>
+        )}
+        <DialogFooter className="flex-col gap-2 p-4 sm:p-5 sm:flex-row sm:justify-end border-t border-slate-100 bg-slate-50/50 mt-auto">
           <Button
             type="button"
             variant="secondary"
-            className="h-11 rounded-2xl"
+            className="w-full sm:w-auto h-11 rounded-2xl"
             onClick={() => setOpen(false)}
             disabled={importing}
           >
@@ -1611,7 +1620,7 @@ export function ImportLeadsDialog({
           </Button>
           <Button
             type="button"
-            className="h-11 rounded-2xl bg-[hsl(var(--byfrost-accent))] text-white hover:bg-[hsl(var(--byfrost-accent)/0.92)]"
+            className="w-full sm:w-auto h-11 rounded-2xl bg-[hsl(var(--byfrost-accent))] text-white hover:bg-[hsl(var(--byfrost-accent)/0.92)]"
             onClick={runImport}
             disabled={importing || !previewRows.length || counts.skip_error > 0}
           >
