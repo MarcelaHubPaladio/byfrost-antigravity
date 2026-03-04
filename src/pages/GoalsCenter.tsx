@@ -192,6 +192,7 @@ function TemplatesEditor({ roleKey }: { roleKey: string }) {
     const [metricKey, setMetricKey] = useState("");
     const [targetValue, setTargetValue] = useState("");
     const [frequency, setFrequency] = useState("monthly");
+    const [targetType, setTargetType] = useState("quantity");
 
     const tplQuery = useQuery({
         queryKey: ["goal_templates", activeTenantId, roleKey],
@@ -219,6 +220,7 @@ function TemplatesEditor({ roleKey }: { roleKey: string }) {
                         metric_key: metricKey,
                         target_value: Number(targetValue),
                         frequency,
+                        target_type: targetType,
                     })
                     .eq("tenant_id", activeTenantId)
                     .eq("id", editingTpl.id);
@@ -232,6 +234,7 @@ function TemplatesEditor({ roleKey }: { roleKey: string }) {
                     metric_key: metricKey,
                     target_value: Number(targetValue),
                     frequency,
+                    target_type: targetType,
                 });
                 if (error) throw error;
                 showSuccess("Template criado!");
@@ -269,6 +272,7 @@ function TemplatesEditor({ roleKey }: { roleKey: string }) {
                         setMetricKey("");
                         setTargetValue("");
                         setFrequency("monthly");
+                        setTargetType("quantity");
                         setIsModalOpen(true);
                     }}
                 >
@@ -281,10 +285,12 @@ function TemplatesEditor({ roleKey }: { roleKey: string }) {
                     <div key={tpl.id} className="p-4 rounded-lg border flex justify-between items-center">
                         <div>
                             <div className="font-medium">{tpl.name}</div>
-                            <div className="text-sm text-slate-600 mt-1 flex gap-4">
-                                <span className="bg-slate-100 px-2 py-0.5 rounded text-xs">Chave: {tpl.metric_key}</span>
-                                <span className="bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded text-xs font-medium">Alvo: {tpl.target_value}</span>
-                                <span className="text-slate-500 text-xs mt-1">{tpl.frequency === 'monthly' ? 'Mensal' : tpl.frequency === 'weekly' ? 'Semanal' : 'Diário'}</span>
+                            <div className="text-sm text-slate-600 mt-1 flex gap-4 items-center">
+                                <span className="bg-slate-100 px-2 py-0.5 rounded text-xs shrink-0">Chave: {tpl.metric_key}</span>
+                                <span className="bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded text-xs font-medium shrink-0">
+                                    Alvo: {tpl.target_type === 'money' ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(tpl.target_value) : tpl.target_value}
+                                </span>
+                                <span className="text-slate-500 text-xs shrink-0">{tpl.frequency === 'monthly' ? 'Mensal' : tpl.frequency === 'weekly' ? 'Semanal' : 'Diário'}</span>
                             </div>
                         </div>
                         <div className="flex gap-2">
@@ -297,6 +303,7 @@ function TemplatesEditor({ roleKey }: { roleKey: string }) {
                                     setMetricKey(tpl.metric_key);
                                     setTargetValue(String(tpl.target_value));
                                     setFrequency(tpl.frequency);
+                                    setTargetType(tpl.target_type || "quantity");
                                     setIsModalOpen(true);
                                 }}
                             >
@@ -346,6 +353,24 @@ function TemplatesEditor({ roleKey }: { roleKey: string }) {
                                 }}
                             />
                         </div>
+                        <div className="space-y-2">
+                            <label className="text-sm font-medium">Tipo de Meta</label>
+                            <div className="flex gap-2 p-1 bg-slate-100 rounded-lg w-fit">
+                                <button
+                                    onClick={() => setTargetType("quantity")}
+                                    className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all ${targetType === "quantity" ? "bg-white text-indigo-700 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}
+                                >
+                                    QUANTIDADE
+                                </button>
+                                <button
+                                    onClick={() => setTargetType("money")}
+                                    className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all ${targetType === "money" ? "bg-white text-indigo-700 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}
+                                >
+                                    FATURAMENTO (R$)
+                                </button>
+                            </div>
+                        </div>
+
                         <div className="space-y-2">
                             <label className="text-sm font-medium">Chave da Métrica (Sistema)</label>
                             <Input
@@ -779,7 +804,9 @@ function MyGoalsDashboard() {
                         <div className="mt-4 pt-4 border-t border-slate-100 flex items-end justify-between">
                             <div>
                                 <div className="text-xs text-slate-500 mb-0.5">Alvo</div>
-                                <div className="text-2xl font-black text-indigo-700">{goal.target_value}</div>
+                                <div className="text-2xl font-black text-indigo-700">
+                                    {goal.target_type === 'money' ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(goal.target_value) : goal.target_value}
+                                </div>
                             </div>
                             <div className="text-right">
                                 <div className="text-xs text-slate-500 mb-0.5">Progresso</div>

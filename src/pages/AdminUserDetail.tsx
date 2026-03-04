@@ -225,6 +225,7 @@ function UserGoalsTab({ userData }: { userData: any }) {
     const [metricKey, setMetricKey] = useState("");
     const [targetValue, setTargetValue] = useState("");
     const [frequency, setFrequency] = useState("monthly");
+    const [targetType, setTargetType] = useState("quantity");
 
     const goalsQ = useQuery({
         queryKey: ["user_goals", activeTenantId, userData.user_id],
@@ -304,6 +305,7 @@ function UserGoalsTab({ userData }: { userData: any }) {
             metric_key: t.metric_key,
             target_value: t.target_value,
             frequency: t.frequency,
+            target_type: t.target_type || 'quantity',
             template_id: t.id,
         }));
 
@@ -333,6 +335,7 @@ function UserGoalsTab({ userData }: { userData: any }) {
                         metric_key: metricKey,
                         target_value: Number(targetValue),
                         frequency,
+                        target_type: targetType,
                     })
                     .eq("id", editingGoal.id);
                 if (error) throw error;
@@ -345,6 +348,7 @@ function UserGoalsTab({ userData }: { userData: any }) {
                     metric_key: metricKey,
                     target_value: Number(targetValue),
                     frequency,
+                    target_type: targetType,
                 });
                 if (error) throw error;
                 showSuccess("Meta criada!");
@@ -422,6 +426,7 @@ function UserGoalsTab({ userData }: { userData: any }) {
                         setMetricKey("");
                         setTargetValue("");
                         setFrequency("monthly");
+                        setTargetType("quantity");
                         setIsModalOpen(true);
                     }}>
                         <Plus className="w-4 h-4 mr-1" />
@@ -475,10 +480,12 @@ function UserGoalsTab({ userData }: { userData: any }) {
                                     </span>
                                 )}
                             </div>
-                            <div className="text-sm text-slate-600 mt-1 flex gap-4">
-                                <span className="bg-slate-100 px-2 py-0.5 rounded text-xs">Chave: {g.metric_key}</span>
-                                <span className="bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded text-xs font-medium">Alvo: {g.target_value}</span>
-                                <span className="text-slate-500 text-xs mt-1">{g.frequency === 'monthly' ? 'Mensal' : g.frequency === 'weekly' ? 'Semanal' : 'Diário'}</span>
+                            <div className="text-sm text-slate-600 mt-1 flex gap-4 items-center">
+                                <span className="bg-slate-100 px-2 py-0.5 rounded text-xs shrink-0">Chave: {g.metric_key}</span>
+                                <span className="bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded text-xs font-medium shrink-0">
+                                    Alvo: {g.target_type === 'money' ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(g.target_value) : g.target_value}
+                                </span>
+                                <span className="text-slate-500 text-xs shrink-0">{g.frequency === 'monthly' ? 'Mensal' : g.frequency === 'weekly' ? 'Semanal' : 'Diário'}</span>
                             </div>
                         </div>
                         <div className="flex gap-2">
@@ -541,6 +548,24 @@ function UserGoalsTab({ userData }: { userData: any }) {
                                 }}
                             />
                         </div>
+                        <div className="space-y-2">
+                            <label className="text-sm font-medium">Tipo de Meta</label>
+                            <div className="flex gap-2 p-1 bg-slate-100 rounded-lg w-fit">
+                                <button
+                                    onClick={() => setTargetType("quantity")}
+                                    className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all ${targetType === "quantity" ? "bg-white text-indigo-700 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}
+                                >
+                                    QUANTIDADE
+                                </button>
+                                <button
+                                    onClick={() => setTargetType("money")}
+                                    className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all ${targetType === "money" ? "bg-white text-indigo-700 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}
+                                >
+                                    FATURAMENTO (R$)
+                                </button>
+                            </div>
+                        </div>
+
                         <div className="space-y-2">
                             <label className="text-sm font-medium">Chave da Métrica (Sistema)</label>
                             <Input
