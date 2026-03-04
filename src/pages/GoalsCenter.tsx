@@ -1018,6 +1018,7 @@ function MyGoalsDashboard() {
 function TeamGoalsTab() {
     const { activeTenantId } = useTenant();
     const [selectedUserId, setSelectedUserId] = useState<string>("");
+    const [showGlobal, setShowGlobal] = useState(true);
 
     // Fetch users with hierarchy
     const usersQ = useQuery({
@@ -1155,22 +1156,142 @@ function TeamGoalsTab() {
         enabled: !!activeTenantId && !!selectedUserId && !!selectedUser
     });
 
+    const globalGoalsQ = useQuery({
+        queryKey: ["tenant_global_goals", activeTenantId],
+        queryFn: async () => {
+            if (!activeTenantId || !usersQ.data) return null;
+
+            const allUsers = usersQ.data;
+            const userIds = allUsers.map(u => u.id);
+
+            // Fetch all user goals (overrides)
+            const { data: allUserGoals } = await supabase
+                .from("user_goals")
+                .select("*")
+                .eq("tenant_id", activeTenantId);
+
+            // Fetch all templates
+            const { data: allTemplates } = await supabase
+                .from("goal_templates")
+                .select("*")
+                .eq("tenant_id", activeTenantId);
+
+            // Fetch all participants
+            const { data: participants } = await supabase
+                .from("incentive_participants")
+                .select("id, user_id")
+                .eq("tenant_id", activeTenantId);
+
+            const startOfMonth = new Date();
+            startOfMonth.setDate(1);
+            startOfMonth.setHours(0, 0, 0, 0);
+
+            // Fetch all events for the month
+            const { data: allEvents } = await supabase
+                .from("incentive_events")
+                .select("event_type, value, participant_id")
+                .eq("tenant_id", activeTenantId)
+                .gte("created_at", startOfMonth.toISOString());
+
+            const participantMap = new Map(participants?.map(p => [p.id, p.user_id]));
+            const userToGoals = new Map<string, Map<string, any>>();
+
+            // Map templates by role
+            const templatesByRole = new Map<string, any[]>();
+            allTemplates?.forEach(t => {
+                if (!templatesByRole.has(t.role_key)) templatesByRole.set(t.role_key, []);
+                templatesByRole.get(t.role_key)?.push(t);
+            });
+
+            // Resolve goals for every user
+            const globalMetrics = new Map<string, {
+                name: string,
+                target: number,
+                achieved: number,
+                type: string,
+                freq: string
+            }>();
+
+            allUsers.forEach(u => {
+                const resolved = new Map<string, any>();
+                // Templates for user role
+                templatesByRole.get(u.role)?.forEach(t => {
+                    resolved.set(t.metric_key, { ...t });
+                });
+                // Overrides
+                allUserGoals?.filter(ug => ug.user_id === u.id).forEach(ug => {
+                    resolved.set(ug.metric_key, { ...ug });
+                });
+
+                resolved.forEach(g => {
+                    if (!globalMetrics.has(g.metric_key)) {
+                        globalMetrics.set(g.metric_key, {
+                            name: g.name,
+                            target: 0,
+                            achieved: 0,
+                            type: g.target_type,
+                            freq: g.frequency
+                        });
+                    }
+                    const m = globalMetrics.get(g.metric_key)!;
+                    m.target += Number(g.target_value) || 0;
+                });
+            });
+
+            // Sum achieved from events
+            allEvents?.forEach(e => {
+                if (globalMetrics.has(e.event_type)) {
+                    const m = globalMetrics.get(e.event_type)!;
+                    if (m.type === 'money') {
+                        m.achieved += Number(e.value) || 0;
+                    } else {
+                        m.achieved += 1;
+                    }
+                }
+            });
+
+            return Array.from(globalMetrics.entries()).map(([key, val]) => ({
+                metric_key: key,
+                ...val
+            })).sort((a, b) => a.name.localeCompare(b.name));
+        },
+        enabled: !!activeTenantId && !!usersQ.data
+    });
+
+    const isGlobalAndSelected = showGlobal && !selectedUserId;
+
     return (
         <div className="space-y-6">
             <div className="bg-white p-6 rounded-lg border shadow-sm">
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
                     <div>
                         <h2 className="text-lg font-bold">Gestão de Metas da Equipe</h2>
-                        <p className="text-sm text-slate-500 text-balance">Visualize o desempenho dos seus liderados em tempo real.</p>
+                        <div className="flex gap-4 mt-1">
+                            <button
+                                onClick={() => { setSelectedUserId(""); setShowGlobal(true); }}
+                                className={`text-xs font-bold uppercase tracking-wider pb-1 transition-all border-b-2 ${(!selectedUserId && showGlobal) ? "border-indigo-600 text-indigo-600" : "border-transparent text-slate-400 hover:text-slate-600"}`}
+                            >
+                                Visão Geral (Tenant)
+                            </button>
+                            <button
+                                onClick={() => { setShowGlobal(false); }}
+                                className={`text-xs font-bold uppercase tracking-wider pb-1 transition-all border-b-2 ${(selectedUserId || !showGlobal) ? "border-indigo-600 text-indigo-600" : "border-transparent text-slate-400 hover:text-slate-600"}`}
+                            >
+                                Por Usuário
+                            </button>
+                        </div>
                     </div>
                     <div className="w-full md:w-80">
-                        <label className="text-xs font-bold text-slate-400 uppercase mb-1 block">Selecionar Usuário</label>
+                        <label className="text-xs font-bold text-slate-400 uppercase mb-1 block">Filtrar por Usuário</label>
                         <select
                             className="w-full h-10 px-3 py-2 bg-slate-50 border border-slate-200 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                             value={selectedUserId}
-                            onChange={(e) => setSelectedUserId(e.target.value)}
+                            onChange={(e) => {
+                                setSelectedUserId(e.target.value);
+                                if (e.target.value) setShowGlobal(false);
+                            }}
                         >
-                            <option value="">Escolha um liderado...</option>
+                            <option value="">Todos os usuários...</option>
                             {usersQ.data?.map(u => (
                                 <option key={u.id} value={u.id}>
                                     {"\u00A0\u00A0".repeat(u.depth)}{u.name} ({u.role})
@@ -1180,7 +1301,92 @@ function TeamGoalsTab() {
                     </div>
                 </div>
 
-                {!selectedUserId ? (
+                {isGlobalAndSelected ? (
+                    globalGoalsQ.isLoading ? (
+                        <div className="py-12 text-center text-slate-500 italic">Consolidando dados do tenant...</div>
+                    ) : !globalGoalsQ.data || globalGoalsQ.data.length === 0 ? (
+                        <div className="py-12 text-center text-slate-500 bg-slate-50 rounded-xl border border-dashed">
+                            Nenhuma meta configurada no tenant.
+                        </div>
+                    ) : (
+                        <div className="space-y-6">
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                                {globalGoalsQ.data.map((m: any) => (
+                                    <div key={m.metric_key} className="bg-slate-50 border border-slate-200 rounded-xl p-4">
+                                        <div className="text-[10px] font-bold text-slate-400 uppercase mb-1">{m.name}</div>
+                                        <div className="flex items-end justify-between">
+                                            <div className="text-xl font-black text-slate-800">
+                                                {m.type === 'money' ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(m.achieved) : m.achieved}
+                                            </div>
+                                            <div className="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded">
+                                                {Math.round((m.achieved / (m.target || 1)) * 100)}%
+                                            </div>
+                                        </div>
+                                        <div className="mt-2 h-1.5 w-full bg-slate-200 rounded-full overflow-hidden">
+                                            <div
+                                                className="h-full bg-indigo-500 rounded-full"
+                                                style={{ width: `${Math.min(100, (m.achieved / (m.target || 1)) * 100)}%` }}
+                                            />
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+
+                            <div className="border-t pt-6">
+                                <h3 className="text-sm font-bold text-slate-400 uppercase mb-4 tracking-widest">Detalhamento Global</h3>
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                    {globalGoalsQ.data.map((goal: any) => (
+                                        <div key={goal.metric_key} className="border rounded-xl p-5 shadow-sm bg-white border-slate-200">
+                                            <div className="flex justify-between items-start mb-4">
+                                                <div>
+                                                    <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">
+                                                        Meta Consolidada ({goal.freq})
+                                                    </div>
+                                                    <h3 className="font-bold text-slate-800 leading-tight">{goal.name}</h3>
+                                                </div>
+                                                <div className="bg-indigo-50 text-indigo-700 p-2 rounded-lg">
+                                                    <Users className="w-4 h-4" />
+                                                </div>
+                                            </div>
+
+                                            <div className="space-y-4">
+                                                <div>
+                                                    <div className="flex justify-between text-xs mb-1.5">
+                                                        <span className="text-slate-500">Progresso Geral</span>
+                                                        <span className="font-bold text-slate-700">
+                                                            {Math.round((goal.achieved / (goal.target || 1)) * 100)}%
+                                                        </span>
+                                                    </div>
+                                                    <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
+                                                        <div
+                                                            className="h-full bg-indigo-500 rounded-full transition-all duration-500"
+                                                            style={{ width: `${Math.min(100, (goal.achieved / (goal.target || 1)) * 100)}%` }}
+                                                        />
+                                                    </div>
+                                                </div>
+
+                                                <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-50">
+                                                    <div>
+                                                        <div className="text-[10px] text-slate-400 font-bold uppercase uppercase">Alvo Total</div>
+                                                        <div className="text-sm font-bold text-slate-600">
+                                                            {goal.type === 'money' ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(goal.target) : goal.target}
+                                                        </div>
+                                                    </div>
+                                                    <div className="text-right">
+                                                        <div className="text-[10px] text-slate-400 font-bold uppercase uppercase">Atingido Total</div>
+                                                        <div className="text-sm font-bold text-indigo-600">
+                                                            {goal.type === 'money' ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(goal.achieved) : goal.achieved}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+                    )
+                ) : !selectedUserId ? (
                     <div className="flex flex-col items-center justify-center py-16 text-slate-400 border-2 border-dashed rounded-xl bg-slate-50">
                         <Users className="w-12 h-12 mb-3 opacity-20" />
                         <p>Selecione um usuário acima para ver suas metas.</p>
