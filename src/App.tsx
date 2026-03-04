@@ -281,7 +281,7 @@ const App = () => (
                 <Route
                   path="/app/inventory"
                   element={
-                    <RequireRouteAccess routeKey="app.entities">
+                    <RequireRouteAccess routeKey="app.inventory">
                       <Inventory />
                     </RequireRouteAccess>
                   }
@@ -289,7 +289,7 @@ const App = () => (
                 <Route
                   path="/app/inventory/new"
                   element={
-                    <RequireRouteAccess routeKey="app.entities">
+                    <RequireRouteAccess routeKey="app.inventory">
                       <InventoryDetail />
                     </RequireRouteAccess>
                   }
@@ -297,7 +297,7 @@ const App = () => (
                 <Route
                   path="/app/inventory/:id"
                   element={
-                    <RequireRouteAccess routeKey="app.entities">
+                    <RequireRouteAccess routeKey="app.inventory">
                       <InventoryDetail />
                     </RequireRouteAccess>
                   }
