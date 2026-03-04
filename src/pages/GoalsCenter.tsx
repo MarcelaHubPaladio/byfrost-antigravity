@@ -7,7 +7,7 @@ import { AppShell } from "@/components/AppShell";
 import { RequireAuth } from "@/components/RequireAuth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Plus, Pencil, Trash2, Target, FileText, Save } from "lucide-react";
+import { Plus, Pencil, Trash2, Target, FileText, Save, Library } from "lucide-react";
 import { RichTextEditor } from "@/components/RichTextEditor";
 import { showSuccess, showError } from "@/utils/toast";
 import {
@@ -158,7 +158,7 @@ export default function GoalsCenter() {
 
                                                 <div className="flex-1 overflow-y-auto p-4 bg-white">
                                                     <TabsContent value="templates" className="mt-0 h-full data-[state=inactive]:hidden">
-                                                        <TemplatesEditor roleKey={selectedRole} />
+                                                        <TemplatesEditor roleKey={selectedRole} roles={roles} />
                                                     </TabsContent>
                                                     <TabsContent value="rules" className="mt-0 h-full data-[state=inactive]:hidden">
                                                         <RoleRulesEditor roleKey={selectedRole} />
@@ -182,10 +182,13 @@ export default function GoalsCenter() {
     );
 }
 
-function TemplatesEditor({ roleKey }: { roleKey: string }) {
+function TemplatesEditor({ roleKey, roles }: { roleKey: string, roles: any[] }) {
     const { activeTenantId } = useTenant();
     const queryClient = useQueryClient();
     const [isModalOpen, setIsModalOpen] = useState(false);
+    const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+    const [sourceRoleKey, setSourceRoleKey] = useState("");
+    const [isImporting, setIsImporting] = useState(false);
     const [editingTpl, setEditingTpl] = useState<any>(null);
 
     const [name, setName] = useState("");
@@ -258,6 +261,59 @@ function TemplatesEditor({ roleKey }: { roleKey: string }) {
         }
     };
 
+    const handleImport = async () => {
+        if (!sourceRoleKey || !activeTenantId) return;
+        setIsImporting(true);
+        try {
+            // Fetch source templates
+            const { data: sourceTpls, error: fetchErr } = await supabase
+                .from("goal_templates")
+                .select("*")
+                .eq("tenant_id", activeTenantId)
+                .eq("role_key", sourceRoleKey);
+
+            if (fetchErr) throw fetchErr;
+
+            if (!sourceTpls || sourceTpls.length === 0) {
+                showError("O cargo de origem não possui metas cadastradas.");
+                setIsImporting(false);
+                return;
+            }
+
+            // Get current templates to avoid exact duplicates
+            const currentKeys = new Set(tplQuery.data?.map(t => t.metric_key) || []);
+
+            const toInsert = sourceTpls
+                .filter(t => !currentKeys.has(t.metric_key))
+                .map(t => ({
+                    tenant_id: activeTenantId,
+                    role_key: roleKey,
+                    name: t.name,
+                    metric_key: t.metric_key,
+                    target_value: t.target_value,
+                    frequency: t.frequency,
+                    target_type: t.target_type || 'quantity'
+                }));
+
+            if (toInsert.length === 0) {
+                showSuccess("Todas as metas do cargo de origem já existem aqui.");
+                setIsImportModalOpen(false);
+                return;
+            }
+
+            const { error: insErr } = await supabase.from("goal_templates").insert(toInsert);
+            if (insErr) throw insErr;
+
+            showSuccess(`${toInsert.length} metas importadas com sucesso!`);
+            setIsImportModalOpen(false);
+            queryClient.invalidateQueries({ queryKey: ["goal_templates", activeTenantId, roleKey] });
+        } catch (e: any) {
+            showError(`Erro ao importar: ${e.message}`);
+        } finally {
+            setIsImporting(false);
+        }
+    };
+
     return (
         <div className="flex flex-col h-full">
             <div className="flex justify-between items-center mb-4 pb-4 border-b">
@@ -265,19 +321,30 @@ function TemplatesEditor({ roleKey }: { roleKey: string }) {
                     <h2 className="font-semibold text-lg">Templates de Metas</h2>
                     <p className="text-sm text-slate-500">Defina o que é esperado padrão para este cargo.</p>
                 </div>
-                <Button
-                    onClick={() => {
-                        setEditingTpl(null);
-                        setName("");
-                        setMetricKey("");
-                        setTargetValue("");
-                        setFrequency("monthly");
-                        setTargetType("quantity");
-                        setIsModalOpen(true);
-                    }}
-                >
-                    <Plus className="w-4 h-4 mr-1" /> Adicionar Meta
-                </Button>
+                <div className="flex gap-2">
+                    <Button
+                        variant="outline"
+                        onClick={() => {
+                            setSourceRoleKey("");
+                            setIsImportModalOpen(true);
+                        }}
+                    >
+                        <Library className="w-4 h-4 mr-1" /> Importar de outro Cargo
+                    </Button>
+                    <Button
+                        onClick={() => {
+                            setEditingTpl(null);
+                            setName("");
+                            setMetricKey("");
+                            setTargetValue("");
+                            setFrequency("monthly");
+                            setTargetType("quantity");
+                            setIsModalOpen(true);
+                        }}
+                    >
+                        <Plus className="w-4 h-4 mr-1" /> Adicionar Meta
+                    </Button>
+                </div>
             </div>
 
             <div className="flex-1 overflow-y-auto space-y-3">
@@ -408,6 +475,40 @@ function TemplatesEditor({ roleKey }: { roleKey: string }) {
                     <div className="flex justify-end gap-2">
                         <Button variant="outline" onClick={() => setIsModalOpen(false)}>Cancelar</Button>
                         <Button onClick={saveTpl}>Salvar</Button>
+                    </div>
+                </DialogContent>
+            </Dialog>
+
+            <Dialog open={isImportModalOpen} onOpenChange={setIsImportModalOpen}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Importar Metas de outro Cargo</DialogTitle>
+                        <DialogDescription>
+                            Escolha um cargo para copiar todos os templates de metas dele para o cargo atual.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4 py-4">
+                        <div className="space-y-2">
+                            <label className="text-sm font-medium">Cargo de Origem</label>
+                            <select
+                                className="flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                                value={sourceRoleKey}
+                                onChange={(e) => setSourceRoleKey(e.target.value)}
+                            >
+                                <option value="">Selecione um cargo...</option>
+                                {roles.filter(r => r.id !== roleKey).map(role => (
+                                    <option key={role.id} value={role.id}>
+                                        {role.name} ({role.id})
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+                    </div>
+                    <div className="flex justify-end gap-2">
+                        <Button variant="outline" onClick={() => setIsImportModalOpen(false)}>Cancelar</Button>
+                        <Button onClick={handleImport} disabled={!sourceRoleKey || isImporting}>
+                            {isImporting ? "Importando..." : "Importar Agora"}
+                        </Button>
                     </div>
                 </DialogContent>
             </Dialog>
