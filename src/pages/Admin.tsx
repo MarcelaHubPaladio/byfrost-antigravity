@@ -157,13 +157,14 @@ function PaginationControls({
 }
 
 function roleLabel(r: UserRole) {
-  // Fallback para roles customizados
-  if (r === "admin") return "Admin";
-  if (r === "manager") return "Gerente";
-  if (r === "supervisor") return "Supervisor";
-  if (r === "vendor") return "Vendedor";
-  if (r === "leader") return "Líder";
-  return r;
+  const map: Record<string, string> = {
+    admin: "Admin",
+    manager: "Gerente",
+    supervisor: "Supervisor",
+    vendor: "Vendedor",
+    leader: "Líder",
+  };
+  return map[r] || r;
 }
 
 function normalizePhoneLoose(v: string) {
@@ -1463,17 +1464,17 @@ export default function Admin() {
                                       <SelectValue />
                                     </SelectTrigger>
                                     <SelectContent className="rounded-2xl">
-                                      {(tenantRolesQ.data ?? ([
-                                        { key: "admin", name: "Admin" },
-                                        { key: "manager", name: "Gerente" },
-                                        { key: "supervisor", name: "Supervisor" },
-                                        { key: "leader", name: "Líder" },
-                                        { key: "vendor", name: "Vendedor" },
-                                      ] as any)).map((r: any) => (
+                                      {tenantRolesQ.data?.map((r) => (
                                         <SelectItem key={r.key} value={r.key} className="rounded-xl">
-                                          {r.name}
+                                          {r.name} ({r.key})
                                         </SelectItem>
                                       ))}
+                                      {/* Fallback for legacy roles */}
+                                      {(!tenantRolesQ.data || !tenantRolesQ.data.some((r) => r.key === u.role)) && (
+                                        <SelectItem value={u.role} className="rounded-xl italic">
+                                          {u.role}
+                                        </SelectItem>
+                                      )}
                                     </SelectContent>
                                   </Select>
                                 </div>

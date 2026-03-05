@@ -504,6 +504,7 @@ export function AppShell({
         "app.content",
         // Core
         "app.entities",
+        "app.inventory",
         "app.commitments",
         // Presença
         "app.presence",
@@ -567,7 +568,7 @@ export function AppShell({
 
   const coreHasAnyAccess = useMemo(() => {
     if (isSuperAdmin) return true;
-    return ["app.entities", "app.commitments"].some((k) => can(k));
+    return ["app.entities", "app.inventory", "app.commitments"].some((k) => can(k));
   }, [isSuperAdmin, navAccessQ.isLoading, navAccessQ.data, activeTenantId, roleKey]);
 
   const showChatInNav = isSuperAdmin ? true : chatAccess.isLoading ? false : chatAccess.hasAccess;

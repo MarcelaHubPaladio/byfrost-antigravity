@@ -111,6 +111,20 @@ function UserDataTab({ userData }: { userData: any }) {
         enabled: resetModalOpen && !!activeTenantId,
     });
 
+    const tenantRolesQ = useQuery({
+        queryKey: ["tenant_roles_enabled", activeTenantId],
+        enabled: !!activeTenantId,
+        queryFn: async () => {
+            const { data, error } = await supabase
+                .from("tenant_roles")
+                .select("role_id, enabled, roles(key, name)")
+                .eq("tenant_id", activeTenantId!)
+                .eq("enabled", true);
+            if (error) throw error;
+            return (data ?? []) as any[];
+        },
+    });
+
     const save = async () => {
         try {
             const { error } = await supabase
@@ -228,9 +242,15 @@ function UserDataTab({ userData }: { userData: any }) {
                         value={role}
                         onChange={(e) => setRole(e.target.value)}
                     >
-                        <option value="admin">Administrador</option>
-                        <option value="manager">Gerente</option>
-                        <option value="member">Membro</option>
+                        {tenantRolesQ.data?.map((r) => (
+                            <option key={r.role_id} value={r.roles?.key}>
+                                {r.roles?.name} ({r.roles?.key})
+                            </option>
+                        ))}
+                        {/* Fallback support for legacy roles not in tenant_roles but in users_profile */}
+                        {!tenantRolesQ.data?.some(r => r.roles?.key === role) && (
+                            <option value={role}>{role}</option>
+                        )}
                     </select>
                 </div>
             </div>
