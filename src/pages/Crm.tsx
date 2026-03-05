@@ -819,25 +819,14 @@ export default function Crm() {
                           return (
                             <CommandItem
                               key={t}
-                              value={t}
                               onSelect={() => {
                                 setSelectedTags((prev) =>
                                   prev.includes(t) ? prev.filter((x) => x !== t) : [...prev, t]
                                 );
                               }}
-                              className={cn(
-                                "rounded-xl",
-                                checked ? "bg-[hsl(var(--byfrost-accent)/0.10)]" : ""
-                              )}
+                              className={cn("rounded-xl", checked ? "bg-[hsl(var(--byfrost-accent)/0.10)]" : "")}
                             >
-                              <div
-                                className={cn(
-                                  "mr-2 grid h-5 w-5 place-items-center rounded-md border",
-                                  checked
-                                    ? "border-[hsl(var(--byfrost-accent)/0.35)] bg-[hsl(var(--byfrost-accent))] text-white"
-                                    : "border-slate-200 bg-white"
-                                )}
-                              >
+                              <div className={cn("mr-2 grid h-5 w-5 place-items-center rounded-md border", checked ? "border-[hsl(var(--byfrost-accent)/0.35)] bg-[hsl(var(--byfrost-accent))] text-white" : "border-slate-200 bg-white")}>
                                 {checked ? <Check className="h-3.5 w-3.5" /> : null}
                               </div>
                               <span className="truncate text-sm font-medium">{t}</span>
@@ -847,7 +836,6 @@ export default function Crm() {
                       </CommandGroup>
                     </CommandList>
                   </Command>
-
                   <div className="mt-2 flex items-center justify-between gap-2">
                     <Button
                       type="button"
@@ -872,11 +860,9 @@ export default function Crm() {
                 <PopoverTrigger asChild>
                   <Button variant="secondary" className="h-11 rounded-2xl">
                     <MapPin className="mr-2 h-4 w-4" /> Instância
-                    {instanceFilterId !== "all" ? (
-                      <span className="ml-2 rounded-full bg-white/70 px-2 py-0.5 text-[11px] font-semibold text-slate-700">
-                        1
-                      </span>
-                    ) : null}
+                    {instanceFilterId !== "all" && (
+                      <span className="ml-2 rounded-full bg-white/70 px-2 py-0.5 text-[11px] font-semibold text-slate-700">1</span>
+                    )}
                   </Button>
                 </PopoverTrigger>
                 <PopoverContent align="end" className="w-[320px] rounded-2xl border-slate-200 bg-white p-2">
@@ -922,7 +908,7 @@ export default function Crm() {
                 variant="secondary"
                 className="h-11 rounded-2xl"
                 onClick={exportConversationsCsv}
-                disabled={exportingCsv || filteredRows.length === 0}
+                disabled={exportingCsv}
               >
                 {exportingCsv ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
                 Exportar
