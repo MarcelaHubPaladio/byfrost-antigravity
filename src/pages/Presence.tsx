@@ -121,7 +121,7 @@ export default function Presence() {
   const caseQ = useQuery({
     queryKey: ["presence_case_today", activeTenantId, user?.id, today],
     enabled: Boolean(activeTenantId && user?.id && presenceEnabled),
-    refetchInterval: 8000,
+    refetchInterval: 30_000,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("cases")
@@ -142,7 +142,7 @@ export default function Presence() {
   const punchesQ = useQuery({
     queryKey: ["presence_punches_today", activeTenantId, caseQ.data?.id],
     enabled: Boolean(activeTenantId && caseQ.data?.id && presenceEnabled),
-    refetchInterval: 8000,
+    refetchInterval: 30_000,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("time_punches")
@@ -159,7 +159,7 @@ export default function Presence() {
   const pendQ = useQuery({
     queryKey: ["presence_pendencies_today", activeTenantId, caseQ.data?.id],
     enabled: Boolean(activeTenantId && caseQ.data?.id && presenceEnabled),
-    refetchInterval: 9000,
+    refetchInterval: 35_000,
     queryFn: async () => {
       const base = supabase
         .from("pendencies")

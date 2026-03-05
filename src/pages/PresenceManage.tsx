@@ -330,7 +330,7 @@ export default function PresenceManage() {
   const casesQ = useQuery({
     queryKey: ["presence_manage_cases", activeTenantId, selectedDate, presenceEnabled],
     enabled: Boolean(activeTenantId && presenceEnabled),
-    refetchInterval: 10_000,
+    refetchInterval: 45_000,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("cases")
@@ -351,7 +351,7 @@ export default function PresenceManage() {
   const punchesQ = useQuery({
     queryKey: ["presence_manage_punches", activeTenantId, selectedDate, caseIds.join(",")],
     enabled: Boolean(activeTenantId && presenceEnabled && caseIds.length),
-    refetchInterval: 10_000,
+    refetchInterval: 45_000,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("time_punches")
@@ -368,7 +368,7 @@ export default function PresenceManage() {
   const pendQ = useQuery({
     queryKey: ["presence_manage_pend", activeTenantId, selectedDate, caseIds.join(",")],
     enabled: Boolean(activeTenantId && presenceEnabled && caseIds.length),
-    refetchInterval: 10_000,
+    refetchInterval: 45_000,
     queryFn: async () => {
       // pendencies table doesn't always have tenant_id; use case join RLS.
       const { data, error } = await supabase
@@ -534,12 +534,12 @@ export default function PresenceManage() {
           .limit(500),
         employeeId
           ? supabase
-              .from("bank_hour_ledger")
-              .select("id,case_id,employee_id,minutes_delta,balance_after,source,created_at")
-              .eq("tenant_id", activeTenantId!)
-              .eq("employee_id", employeeId)
-              .order("created_at", { ascending: false })
-              .limit(80)
+            .from("bank_hour_ledger")
+            .select("id,case_id,employee_id,minutes_delta,balance_after,source,created_at")
+            .eq("tenant_id", activeTenantId!)
+            .eq("employee_id", employeeId)
+            .order("created_at", { ascending: false })
+            .limit(80)
           : (Promise.resolve({ data: [], error: null }) as any),
         supabase
           .from("time_punch_adjustments")

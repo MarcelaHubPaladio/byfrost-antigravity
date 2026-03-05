@@ -120,7 +120,7 @@ export function CaseProductsCard(props: { tenantId: string; caseId: string }) {
   const itemsQ = useQuery({
     queryKey: ["crm_case_items", props.tenantId, props.caseId],
     enabled: Boolean(props.tenantId && props.caseId),
-    refetchInterval: 9000,
+    refetchInterval: 30_000,
     refetchOnWindowFocus: true,
     queryFn: async () => {
       const { data, error } = await supabase

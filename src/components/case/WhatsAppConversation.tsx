@@ -390,7 +390,7 @@ export function WhatsAppConversation({
     // Include mode in key to refetch when switching
     queryKey: ["wa_messages_case", activeTenantId, caseId, conversationMode, entityPhone, waGroupId],
     enabled: Boolean(activeTenantId && caseId),
-    refetchInterval: 5000,
+    refetchInterval: 12_000,
     refetchOnWindowFocus: true,
     queryFn: async () => {
       let q = supabase

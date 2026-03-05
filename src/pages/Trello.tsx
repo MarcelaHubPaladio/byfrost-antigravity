@@ -159,7 +159,7 @@ export default function Trello() {
     const casesQ = useQuery({
         queryKey: ["cases_by_tenant_trello", activeTenantId, selectedJourney?.id],
         enabled: Boolean(activeTenantId && selectedJourney?.id),
-        refetchInterval: 5000,
+        refetchInterval: 20_000,
         refetchOnWindowFocus: true,
         queryFn: async () => {
             const { data, error } = await supabase
@@ -230,7 +230,7 @@ export default function Trello() {
     const lastInboundQ = useQuery({
         queryKey: ["case_last_inbound_trello", activeTenantId, visibleCaseIds.join(",")],
         enabled: Boolean(activeTenantId && visibleCaseIds.length),
-        refetchInterval: 5000,
+        refetchInterval: 20_000,
         refetchOnWindowFocus: true,
         queryFn: async () => {
             const { data, error } = await supabase
@@ -278,7 +278,7 @@ export default function Trello() {
     const pendQ = useQuery({
         queryKey: ["pendencies_open_trello", activeTenantId, visibleCaseIds.join(",")],
         enabled: Boolean(activeTenantId && visibleCaseIds.length),
-        refetchInterval: 7000,
+        refetchInterval: 25_000,
         refetchOnWindowFocus: true,
         queryFn: async () => {
             const { data, error } = await supabase

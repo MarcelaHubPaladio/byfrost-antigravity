@@ -183,7 +183,7 @@ export default function Chats() {
   const chatsQ = useQuery({
     queryKey: ["chat_cases", activeTenantId, instanceIds.join(",")],
     enabled: Boolean(activeTenantId && instanceIds.length),
-    refetchInterval: 5000,
+    refetchInterval: 12_000,
     refetchOnWindowFocus: true,
     queryFn: async () => {
       // 1) Find cases that have messages for *this instance set*
@@ -287,7 +287,7 @@ export default function Chats() {
   const lastInboundQ = useQuery({
     queryKey: ["chat_case_last_inbound", activeTenantId, instanceIds.join(","), caseIds.join(",")],
     enabled: Boolean(activeTenantId && instanceIds.length && caseIds.length),
-    refetchInterval: 5000,
+    refetchInterval: 12_000,
     refetchOnWindowFocus: true,
     queryFn: async () => {
       const { data, error } = await supabase
@@ -307,7 +307,7 @@ export default function Chats() {
   const lastMsgQ = useQuery({
     queryKey: ["chat_case_last_message", activeTenantId, instanceIds.join(","), caseIds.join(",")],
     enabled: Boolean(activeTenantId && instanceIds.length && caseIds.length),
-    refetchInterval: 5000,
+    refetchInterval: 15_000,
     refetchOnWindowFocus: true,
     queryFn: async () => {
       const { data, error } = await supabase

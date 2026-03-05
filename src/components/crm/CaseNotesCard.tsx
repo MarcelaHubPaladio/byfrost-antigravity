@@ -34,7 +34,7 @@ export function CaseNotesCard(props: { tenantId: string; caseId: string; userId:
   const notesQ = useQuery({
     queryKey: ["case_notes", props.tenantId, props.caseId],
     enabled: Boolean(props.tenantId && props.caseId),
-    refetchInterval: 9000,
+    refetchInterval: 30_000,
     refetchOnWindowFocus: true,
     queryFn: async () => {
       const { data, error } = await supabase

@@ -49,7 +49,7 @@ export function CaseTasksCard(props: { tenantId: string; caseId: string }) {
   const tasksQ = useQuery({
     queryKey: ["tasks_case", props.tenantId, props.caseId],
     enabled: Boolean(props.tenantId && props.caseId),
-    refetchInterval: 7000,
+    refetchInterval: 30_000,
     refetchOnWindowFocus: true,
     queryFn: async () => {
       const { data, error } = await supabase

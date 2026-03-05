@@ -143,7 +143,7 @@ function Kanban({
   const casesQ = useQuery({
     queryKey: ["meta_content_cases", activeTenantId],
     enabled: Boolean(activeTenantId),
-    refetchInterval: 6000,
+    refetchInterval: 30_000,
     refetchOnWindowFocus: true,
     queryFn: async () => {
       const { data, error } = await supabase
@@ -506,7 +506,7 @@ function CalendarView() {
   const pubsQ = useQuery({
     queryKey: ["meta_content_calendar", activeTenantId, mode, range.start.toISOString().slice(0, 10)],
     enabled: Boolean(activeTenantId),
-    refetchInterval: 12_000,
+    refetchInterval: 30_000,
     refetchOnWindowFocus: true,
     queryFn: async () => {
       const { data, error } = await supabase

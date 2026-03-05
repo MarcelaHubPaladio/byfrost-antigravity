@@ -68,7 +68,7 @@ export function FinancialDecisionBoard() {
   const cardsQ = useQuery({
     queryKey: ["financial_decision_cards_board", activeTenantId],
     enabled: Boolean(activeTenantId),
-    refetchInterval: 8000,
+    refetchInterval: 25_000,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("financial_decision_cards")

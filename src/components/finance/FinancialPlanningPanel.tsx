@@ -99,7 +99,7 @@ export function FinancialPlanningPanel() {
   const projectionQ = useQuery({
     queryKey: ["financial_cash_projection", activeTenantId],
     enabled: Boolean(activeTenantId),
-    refetchInterval: 5000,
+    refetchInterval: 60_000,
     queryFn: async () => {
       const { data, error } = await supabase.rpc("financial_cash_projection", {
         p_tenant_id: activeTenantId!,

@@ -86,7 +86,7 @@ export function ContentKanban() {
   const casesQ = useQuery({
     queryKey: ["content_cases", activeTenantId, journeyId],
     enabled: Boolean(activeTenantId && journeyId),
-    refetchInterval: 6000,
+    refetchInterval: 30_000,
     refetchOnWindowFocus: true,
     queryFn: async () => {
       const { data, error } = await supabase

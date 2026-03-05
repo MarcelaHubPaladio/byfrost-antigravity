@@ -58,7 +58,7 @@ export function CaseTagsCard(props: { tenantId: string; caseId: string }) {
   const tagsQ = useQuery({
     queryKey: ["case_tags", props.tenantId, props.caseId],
     enabled: Boolean(props.tenantId && props.caseId),
-    refetchInterval: 9000,
+    refetchInterval: 30_000,
     refetchOnWindowFocus: true,
     queryFn: async () => {
       const { data, error } = await supabase

@@ -29,7 +29,7 @@ export function FinancialTensionsPanel() {
   const eventsQ = useQuery({
     queryKey: ["tension_events", activeTenantId],
     enabled: Boolean(activeTenantId),
-    refetchInterval: 8000,
+    refetchInterval: 45_000,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("tension_events")

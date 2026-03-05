@@ -130,7 +130,7 @@ export function FinancialIngestionPanel() {
   const jobsQ = useQuery({
     queryKey: ["financial_ingestion_jobs", activeTenantId],
     enabled: Boolean(activeTenantId),
-    refetchInterval: 2500,
+    refetchInterval: 30_000,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("ingestion_jobs")
