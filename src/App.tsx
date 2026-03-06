@@ -66,7 +66,15 @@ import PublicEntityTvUpload from "@/pages/PublicEntityTvUpload";
 import Inventory from "@/pages/Inventory";
 import InventoryDetail from "@/pages/InventoryDetail";
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 30_000,
+      refetchIntervalInBackground: false,
+      refetchOnWindowFocus: true,
+    },
+  },
+});
 
 const App = () => (
   <QueryClientProvider client={queryClient}>

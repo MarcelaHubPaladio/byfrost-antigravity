@@ -446,6 +446,7 @@ export default function Dashboard() {
     queryKey: ["cases_by_tenant", activeTenantId],
     enabled: Boolean(activeTenantId),
     refetchInterval: 30_000,
+    refetchIntervalInBackground: false,
     refetchOnWindowFocus: true,
     queryFn: async () => {
       // NOTE: "cases" possui mais de uma FK para users_profile
@@ -629,6 +630,7 @@ export default function Dashboard() {
     queryKey: ["case_last_inbound", activeTenantId, visibleCaseIds.join(",")],
     enabled: Boolean(activeTenantId && visibleCaseIds.length),
     refetchInterval: 15_000,
+    refetchIntervalInBackground: false,
     refetchOnWindowFocus: true,
     queryFn: async () => {
       const { data, error } = await supabase
@@ -690,6 +692,7 @@ export default function Dashboard() {
     queryKey: ["debug_cases_for_tenant_journey", activeTenantId, selectedKey],
     enabled: Boolean(activeTenantId && selectedKey),
     refetchInterval: 20_000,
+    refetchIntervalInBackground: false,
     refetchOnWindowFocus: true,
     queryFn: async () => {
       const { data, error } = await supabase.rpc("debug_cases_for_tenant_journey", {
@@ -728,6 +731,7 @@ export default function Dashboard() {
     queryKey: ["pendencies_open", activeTenantId, filteredRows.map((c) => c.id).join(",")],
     enabled: Boolean(activeTenantId && filteredRows.length),
     refetchInterval: 20_000,
+    refetchIntervalInBackground: false,
     refetchOnWindowFocus: true,
     queryFn: async () => {
       const ids = filteredRows.map((c) => c.id);

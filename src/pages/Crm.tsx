@@ -247,6 +247,7 @@ export default function Crm() {
     queryKey: ["crm_cases_by_tenant", activeTenantId],
     enabled: Boolean(activeTenantId),
     refetchInterval: 15_000,
+    refetchIntervalInBackground: false,
     refetchOnWindowFocus: true,
     queryFn: async () => {
       const { data, error } = await supabase
@@ -373,6 +374,7 @@ export default function Crm() {
     queryKey: ["crm_case_last_inbound", activeTenantId, caseIdsForLookup.join(",")],
     enabled: Boolean(activeTenantId && caseIdsForLookup.length),
     refetchInterval: 15_000,
+    refetchIntervalInBackground: false,
     refetchOnWindowFocus: true,
     queryFn: async () => {
       const { data, error } = await supabase
@@ -597,6 +599,7 @@ export default function Crm() {
     queryKey: ["crm_pendencies_open", activeTenantId, filteredRows.map((c) => c.id).join(",")],
     enabled: Boolean(activeTenantId && filteredRows.length),
     refetchInterval: 25_000,
+    refetchIntervalInBackground: false,
     refetchOnWindowFocus: true,
     queryFn: async () => {
       const ids = filteredRows.map((c) => c.id);

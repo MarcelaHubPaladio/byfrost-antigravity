@@ -122,6 +122,7 @@ export default function Presence() {
     queryKey: ["presence_case_today", activeTenantId, user?.id, today],
     enabled: Boolean(activeTenantId && user?.id && presenceEnabled),
     refetchInterval: 30_000,
+    refetchIntervalInBackground: false,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("cases")
@@ -143,6 +144,7 @@ export default function Presence() {
     queryKey: ["presence_punches_today", activeTenantId, caseQ.data?.id],
     enabled: Boolean(activeTenantId && caseQ.data?.id && presenceEnabled),
     refetchInterval: 30_000,
+    refetchIntervalInBackground: false,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("time_punches")
@@ -160,6 +162,7 @@ export default function Presence() {
     queryKey: ["presence_pendencies_today", activeTenantId, caseQ.data?.id],
     enabled: Boolean(activeTenantId && caseQ.data?.id && presenceEnabled),
     refetchInterval: 35_000,
+    refetchIntervalInBackground: false,
     queryFn: async () => {
       const base = supabase
         .from("pendencies")

@@ -65,7 +65,8 @@ export function useChatInstanceAccess(opts?: UseChatInstanceAccessOptions) {
   const instancesQ = useQuery({
     queryKey: ["chat_user_instances", activeTenantId, effectiveUserId, effectiveUserPhone, isSuperAdmin, activeTenant?.role],
     enabled: Boolean(activeTenantId && (isSuperAdmin || effectiveUserId)),
-    staleTime: 15_000,
+    staleTime: 10 * 60 * 1000, // 10 minutes
+    refetchOnWindowFocus: false,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("wa_instances")

@@ -24,7 +24,8 @@ export function RequireRouteAccess({
       const allowed = await checkRouteAccess({ tenantId: activeTenantId!, roleKey, routeKey });
       return allowed;
     },
-    staleTime: 10_000,
+    staleTime: 30 * 60 * 1000, // 30 minutes
+    refetchOnWindowFocus: false,
   });
 
   const fallbackQ = useQuery({
@@ -36,7 +37,8 @@ export function RequireRouteAccess({
       const next = await findFirstAllowedRoute({ tenantId: activeTenantId!, roleKey, excludeRouteKey: routeKey });
       return next;
     },
-    staleTime: 10_000,
+    staleTime: 30 * 60 * 1000, // 30 minutes
+    refetchOnWindowFocus: false,
   });
 
   if (loading) return <>{children}</>;

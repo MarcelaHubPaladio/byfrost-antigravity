@@ -494,7 +494,8 @@ export function AppShell({
   const navAccessQ = useQuery({
     queryKey: ["nav_access", activeTenantId, roleKey],
     enabled: Boolean(activeTenantId && roleKey && !isSuperAdmin),
-    staleTime: 10_000,
+    staleTime: 60 * 60 * 1000, // 1 hour
+    refetchOnWindowFocus: false,
     queryFn: async () => {
       const keys = [
         "app.dashboard",
@@ -576,7 +577,8 @@ export function AppShell({
   const tenantJourneysQ = useQuery({
     queryKey: ["nav_tenant_journeys", activeTenantId],
     enabled: Boolean(activeTenantId),
-    staleTime: 30_000,
+    staleTime: 60 * 60 * 1000, // 1 hour
+    refetchOnWindowFocus: false,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("tenant_journeys")
@@ -591,7 +593,8 @@ export function AppShell({
   const incentivesHasCampaignsQ = useQuery({
     queryKey: ["nav_incentives_has_campaigns", activeTenantId],
     enabled: Boolean(activeTenantId),
-    staleTime: 30_000,
+    staleTime: 60 * 60 * 1000, // 1 hour
+    refetchOnWindowFocus: false,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("campaigns")
