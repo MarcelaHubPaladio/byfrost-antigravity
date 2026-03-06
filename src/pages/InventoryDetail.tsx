@@ -3,6 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
+import imageCompression from "browser-image-compression";
 import { AppShell } from "@/components/AppShell";
 import { RequireAuth } from "@/components/RequireAuth";
 import { RequireRouteAccess } from "@/components/RequireRouteAccess";
@@ -15,9 +16,9 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/form";
 import { Card } from "@/components/ui/card";
-import { ArrowLeft, Loader2, Package, Image as ImageIcon, Upload, Trash2, Info } from "lucide-react";
+import { ArrowLeft, Loader2, Package, Image as ImageIcon, Upload, Trash2, Info, CloudUpload } from "lucide-react";
 
-const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
+const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB limit REMOVED from original, handled by compression.
 
 const formSchema = z.object({
     display_name: z.string().min(2, "O nome deve ter pelo menos 2 caracteres"),
@@ -39,6 +40,8 @@ export default function InventoryDetail() {
     const { activeTenantId } = useTenant();
     const [loading, setLoading] = useState(false);
     const [uploading, setUploading] = useState(false);
+    const [uploadProgress, setUploadProgress] = useState(0);
+    const [uploadPhase, setUploadPhase] = useState<"compressing" | "uploading" | "idle">("idle");
     const isEdit = Boolean(id && id !== "new");
 
     const itemQ = useQuery({
@@ -89,31 +92,61 @@ export default function InventoryDetail() {
         const file = e.target.files?.[0];
         if (!file || !activeTenantId) return;
 
-        if (file.size > MAX_FILE_SIZE) {
-            showError("A imagem deve ter no máximo 5MB.");
-            return;
-        }
-
         setUploading(true);
+        setUploadProgress(0);
+        setUploadPhase("compressing");
+
         try {
+            // Simulated progress for compression
+            const compInterval = setInterval(() => {
+                setUploadProgress(p => p >= 30 ? 30 : p + 5);
+            }, 200);
+
+            const options = {
+                maxSizeMB: 1, // Compress to max 1MB
+                maxWidthOrHeight: 1920,
+                useWebWorker: true,
+                initialQuality: 0.8,
+            };
+
+            const compressedFile = await imageCompression(file, options);
+            clearInterval(compInterval);
+
+            setUploadPhase("uploading");
+            setUploadProgress(40);
+
             const fileExt = file.name.split('.').pop();
             const fileName = `${activeTenantId}/${crypto.randomUUID()}.${fileExt}`;
+
+            // Simulated quick progress for the actual network upload since it's < 1MB
+            const upInterval = setInterval(() => {
+                setUploadProgress(p => p >= 90 ? 90 : p + 10);
+            }, 100);
+
             const { error: uploadError } = await supabase.storage
                 .from('inventory')
-                .upload(fileName, file);
+                .upload(fileName, compressedFile);
+
+            clearInterval(upInterval);
 
             if (uploadError) throw uploadError;
+
+            setUploadProgress(100);
 
             const { data: { publicUrl } } = supabase.storage
                 .from('inventory')
                 .getPublicUrl(fileName);
 
             form.setValue("photo_url", publicUrl);
-            showSuccess("Imagem enviada!");
+            showSuccess("Imagem enviada com sucesso!");
         } catch (e: any) {
-            showError(e.message || "Erro ao fazer upload");
+            showError(e.message || "Erro ao processar/enviar upload");
         } finally {
-            setUploading(false);
+            setTimeout(() => {
+                setUploading(false);
+                setUploadPhase("idle");
+                setUploadProgress(0);
+            }, 500);
         }
     };
 
@@ -209,23 +242,42 @@ export default function InventoryDetail() {
                                 <Card className="p-4 rounded-3xl border-slate-200 overflow-hidden text-center">
                                     <FormLabel className="text-xs font-bold text-slate-400 uppercase mb-4 block">Foto do Produto</FormLabel>
                                     <div className="aspect-square rounded-2xl bg-slate-50 border-2 border-dashed border-slate-200 flex flex-col items-center justify-center relative overflow-hidden mb-4 group">
-                                        {form.watch("photo_url") ? (
+                                        {uploading ? (
+                                            <div className="absolute inset-0 bg-white/90 backdrop-blur-sm z-10 flex flex-col items-center justify-center p-6 text-center">
+                                                {uploadPhase === "compressing" ? (
+                                                    <ImageIcon className="w-8 h-8 text-indigo-500 animate-pulse mb-3" />
+                                                ) : (
+                                                    <CloudUpload className="w-8 h-8 text-indigo-600 animate-bounce mb-3" />
+                                                )}
+                                                <div className="w-full bg-slate-100 rounded-full h-2 mb-2 overflow-hidden shadow-inner">
+                                                    <div
+                                                        className="bg-indigo-600 h-2 rounded-full transition-all duration-300 ease-out"
+                                                        style={{ width: `${uploadProgress}%` }}
+                                                    ></div>
+                                                </div>
+                                                <p className="text-xs font-bold text-slate-700">
+                                                    {uploadPhase === "compressing" ? "Otimizando Imagem..." : "Enviando para Nuvem..."}
+                                                </p>
+                                                <p className="text-[10px] text-slate-400 mt-1">{uploadProgress}%</p>
+                                            </div>
+                                        ) : form.watch("photo_url") ? (
                                             <>
                                                 <img src={form.watch("photo_url")} className="w-full h-full object-cover" />
                                                 <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                                                    <Button variant="secondary" size="sm" type="button" onClick={() => form.setValue("photo_url", "")}>Remover</Button>
+                                                    <Button variant="secondary" size="sm" type="button" onClick={() => form.setValue("photo_url", "")}>Substituir imagem</Button>
                                                 </div>
                                             </>
                                         ) : (
                                             <>
-                                                {uploading ? <Loader2 className="w-8 h-8 animate-spin text-slate-300" /> : <ImageIcon className="w-12 h-12 text-slate-200" />}
-                                                <p className="text-[10px] text-slate-400 mt-2">Clique para enviar (máx 5MB)</p>
+                                                <Upload className="w-10 h-10 text-slate-300 mb-2 group-hover:text-indigo-400 transition-colors" />
+                                                <p className="text-sm font-bold text-slate-600 group-hover:text-indigo-600 transition-colors">Selecionar Foto</p>
+                                                <p className="text-[10px] text-slate-400 mt-1 px-4 text-center">A compressão automática garante qualidade sem pesar</p>
                                             </>
                                         )}
                                         <input
                                             type="file"
                                             accept="image/*"
-                                            className="absolute inset-0 opacity-0 cursor-pointer"
+                                            className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
                                             onChange={handleFileUpload}
                                             disabled={uploading}
                                         />
