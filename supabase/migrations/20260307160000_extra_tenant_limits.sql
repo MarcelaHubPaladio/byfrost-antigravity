@@ -114,6 +114,7 @@ for each row execute function public.enforce_tenant_max_offerings();
 
 -- 4) Update get_admin_usage_stats to include the new metrics
 -- -----------------------------------------------------------------------------
+drop function if exists public.get_admin_usage_stats();
 create or replace function public.get_admin_usage_stats()
 returns table (
   tenant_id uuid,
