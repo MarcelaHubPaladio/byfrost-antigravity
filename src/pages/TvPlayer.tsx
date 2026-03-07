@@ -260,7 +260,7 @@ export default function TvPlayer() {
                             onEnded={() => setCurrentIndex((prev) => (prev + 1) % medias.length)}
                             onError={(e) => {
                                 console.error("Erro ao carregar video da TV:", currentMedia.url, e);
-                                setCurrentIndex((prev) => (prev + 1) % medias.length);
+                                setTimeout(() => setCurrentIndex((prev) => (prev + 1) % medias.length), 3000);
                             }}
                             key={currentMedia.id + retryCount} // forces reload on retry
                         />
@@ -270,7 +270,7 @@ export default function TvPlayer() {
                             className="h-full w-full border-0 pointer-events-none"
                             allow="autoplay"
                             onLoad={() => { console.log("[TvPlayer] YouTube Iframe Loaded"); setMediaLoaded(true); }}
-                            onError={() => { console.error("[TvPlayer] YouTube Iframe Error"); setCurrentIndex((prev) => (prev + 1) % medias.length); }}
+                            onError={() => { console.error("[TvPlayer] YouTube Iframe Error"); setTimeout(() => setCurrentIndex((prev) => (prev + 1) % medias.length), 3000); }}
                             key={currentMedia.id + retryCount}
                         />
                     ) : currentMedia.media_type === "google_drive_link" && getDriveFileId(currentMedia.url) ? (
@@ -279,7 +279,7 @@ export default function TvPlayer() {
                             className="h-full w-full border-0 pointer-events-none"
                             allow="autoplay"
                             onLoad={() => { console.log("[TvPlayer] Google Drive Iframe Loaded"); setMediaLoaded(true); }}
-                            onError={() => { console.error("[TvPlayer] Google Drive Iframe Error"); setCurrentIndex((prev) => (prev + 1) % medias.length); }}
+                            onError={() => { console.error("[TvPlayer] Google Drive Iframe Error"); setTimeout(() => setCurrentIndex((prev) => (prev + 1) % medias.length), 3000); }}
                             key={currentMedia.id + retryCount}
                         />
                     ) : (
