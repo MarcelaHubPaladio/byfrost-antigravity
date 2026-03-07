@@ -11,7 +11,7 @@ const options = {
     method: 'POST',
     headers: {
         'Content-Type': 'application/json',
-        'Authorization': 'Bearer sbp_66285de0439cf35900e7006a993d10a0a88ed8ab'
+        'Authorization': 'Bearer YOUR_SUPABASE_MANAGEMENT_TOKEN'
     }
 };
 
