@@ -1320,6 +1320,12 @@ export default function Admin() {
                                   max={t.tenant_plans?.[0]?.overrides_json?.max_messages || t.tenant_plans?.[0]?.plans?.limits_json?.max_messages || 0}
                                   icon={MessageSquare}
                                 />
+                                <UsageIndicator
+                                  label="IA Tok"
+                                  current={usageQ.data?.get(t.id)?.ai_tokens_count || 0}
+                                  max={t.tenant_plans?.[0]?.overrides_json?.max_ai_tokens || t.tenant_plans?.[0]?.plans?.limits_json?.max_ai_tokens || 0}
+                                  icon={Zap}
+                                />
                               </div>
                             )}
                             <div className="flex items-center gap-2">
