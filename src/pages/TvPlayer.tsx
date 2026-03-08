@@ -68,7 +68,7 @@ export default function TvPlayer() {
             // 1. Get all active entity plans for this tenant
             const { data: activePlans, error: plansErr } = await supabase
                 .from("tv_entity_plans")
-                .select("entity_id, default_frame_url, tv_plans(video_duration_seconds, frame_layout), core_entities(display_name)")
+                .select("entity_id, default_frame_url, tv_plans(video_duration_seconds, frame_layout), core_entities(display_name, status, deleted_at)")
                 .eq("tenant_id", pointQ.data!.tenant_id)
                 .eq("is_active", true)
                 .is("deleted_at", null);
@@ -94,13 +94,17 @@ export default function TvPlayer() {
                 // Handle Supabase join returning array or object
                 const planData = Array.isArray(ep?.tv_plans) ? ep.tv_plans[0] : ep?.tv_plans;
                 const entityData = Array.isArray(ep?.core_entities) ? ep.core_entities[0] : ep?.core_entities;
+
+                // FILTER: Only return media if entity is active and not deleted
+                if (!entityData || (entityData as any).deleted_at || (entityData as any).status !== 'active') return null;
+
                 return {
                     ...m,
                     duration: (planData as any)?.video_duration_seconds || 15,
                     entity_name: (entityData as any)?.display_name || "Cliente",
                     default_frame_url: ep?.default_frame_url,
                 };
-            });
+            }).filter(Boolean) as any[];
 
             // 4. Sort medias based on manual_order if it exists and has items
             const manualOrderIds = timelineQ.data?.manual_order || [];

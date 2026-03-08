@@ -160,6 +160,7 @@ export function EntityUpsertDialog({
   const [docDigitsState, setDocDigitsState] = useState<string>("");
   const [whatsappDigitsState, setWhatsappDigitsState] = useState<string>("");
   const [email, setEmail] = useState<string>("");
+  const [status, setStatus] = useState<string>("active");
 
   useEffect(() => {
     if (!open) return;
@@ -181,6 +182,7 @@ export function EntityUpsertDialog({
     setDocDigitsState(onlyDigits(String(md?.cpf_cnpj ?? md?.cpfCnpj ?? md?.document ?? "")).slice(0, 14));
     setWhatsappDigitsState(normalizeWhatsappDigits(String(md?.whatsapp ?? md?.phone ?? md?.phone_e164 ?? "")));
     setEmail(String(md?.email ?? ""));
+    setStatus(String(initial?.status ?? "active"));
   }, [open, initial?.id]);
 
   const entityType: CoreEntityType = useMemo(() => {
@@ -258,7 +260,7 @@ export function EntityUpsertDialog({
             // NOTE: avoid changing entity_type in edit (can break downstream constraints).
             subtype: subtype,
             display_name: displayName.trim(),
-            status: (initial?.status as string | null | undefined) ?? "active",
+            status: status,
             metadata: nextMetadata,
           })
           .eq("tenant_id", tenantId)
@@ -279,7 +281,7 @@ export function EntityUpsertDialog({
             entity_type: entityType,
             subtype: subtype,
             display_name: displayName.trim(),
-            status: "active",
+            status: status,
             metadata: nextMetadata,
           })
           .select("id")
@@ -420,6 +422,20 @@ export function EntityUpsertDialog({
               )}
             </div>
           ) : null}
+
+          <div className="grid gap-2">
+            <Label>Status</Label>
+            <Select value={status} onValueChange={setStatus}>
+              <SelectTrigger className="rounded-xl">
+                <SelectValue placeholder="Selecione o status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="active">Ativo</SelectItem>
+                <SelectItem value="paused">Inativo / Pausado</SelectItem>
+              </SelectContent>
+            </Select>
+            <div className="text-[11px] text-slate-500">Entidades inativas não aparecem na TV Corporativa nem em novos compromissos.</div>
+          </div>
 
           <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
             O nome é o único campo obrigatório. Dados de contato e documento são opcionais, mas recomendados para CRM.

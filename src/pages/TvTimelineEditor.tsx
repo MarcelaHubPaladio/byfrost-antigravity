@@ -14,7 +14,8 @@ import {
     MonitorPlay,
     X,
     ChevronLeft,
-    Clock
+    Clock,
+    Trash2
 } from "lucide-react";
 import { showError, showSuccess } from "@/utils/toast";
 
@@ -76,6 +77,10 @@ export default function TvTimelineEditor() {
                 const planInfo = activePlans.find(ap => ap.entity_id === m.entity_id);
                 // Supabase joins can sometimes return an array or an object depending on schema detection
                 const entityData = Array.isArray(planInfo?.core_entities) ? planInfo.core_entities[0] : planInfo?.core_entities;
+
+                // FILTER: Only return media if entity is active and not deleted
+                if (!entityData || (entityData as any).deleted_at || (entityData as any).status !== 'active') return null;
+
                 const planData = Array.isArray(planInfo?.tv_plans) ? planInfo.tv_plans[0] : planInfo?.tv_plans;
 
                 return {
@@ -85,7 +90,7 @@ export default function TvTimelineEditor() {
                     duration: (planData as any)?.video_duration_seconds || 15,
                     default_frame_url: (planInfo as any)?.default_frame_url
                 };
-            });
+            }).filter(Boolean) as any[];
         }
     });
 
@@ -141,6 +146,21 @@ export default function TvTimelineEditor() {
             qc.invalidateQueries({ queryKey: ["tv_active_medias"] });
         },
         onError: () => showError("Erro ao salvar ordem das mídias.")
+    });
+
+    const deleteMediaM = useMutation({
+        mutationFn: async (mediaId: string) => {
+            const { error } = await supabase
+                .from("tv_media")
+                .update({ deleted_at: new Date().toISOString() })
+                .eq("id", mediaId);
+            if (error) throw error;
+        },
+        onSuccess: () => {
+            showSuccess("Mídia excluída com sucesso!");
+            activeMediasQ.refetch();
+        },
+        onError: () => showError("Erro ao excluir mídia.")
     });
 
     const renderPreview = () => {
@@ -429,6 +449,21 @@ export default function TvTimelineEditor() {
                                                 onClick={(e) => { e.stopPropagation(); moveRight(idx); }}
                                             >
                                                 <ArrowRight className="w-3.5 h-3.5" />
+                                            </Button>
+
+                                            <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                className="h-8 w-8 rounded-full bg-rose-500/10 text-rose-500 hover:bg-rose-500 hover:text-white border border-rose-500/20"
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    if (confirm("Tem certeza que deseja excluir esta mídia? Ela será removida de todas as timelines.")) {
+                                                        deleteMediaM.mutate(media.id);
+                                                    }
+                                                }}
+                                                disabled={deleteMediaM.isPending}
+                                            >
+                                                <Trash2 className="w-3.5 h-3.5" />
                                             </Button>
                                         </div>
                                     </div>
