@@ -171,7 +171,10 @@ export default function PublicLinks() {
                             {selectedItem?.redirects?.map((r: any) => (
                                 <button
                                     key={r.store_name}
-                                    onClick={() => setSelectedStoreUrl(r.redirect_url)}
+                                    onClick={() => {
+                                        setSelectedStoreUrl(r.redirect_url);
+                                        window.location.href = r.redirect_url;
+                                    }}
                                     className={cn(
                                         "flex items-center gap-4 rounded-[24px] border p-4 text-left transition-all active:scale-[0.98]",
                                         selectedStoreUrl === r.redirect_url
@@ -199,15 +202,6 @@ export default function PublicLinks() {
                                 <div className="p-4 text-center text-xs text-slate-400 italic">Nenhuma loja configurada.</div>
                             )}
                         </div>
-
-                        <Button
-                            className="mt-4 h-14 w-full rounded-2xl text-base font-bold shadow-lg transition-all hover:opacity-90 active:scale-[0.98] disabled:opacity-50"
-                            style={{ backgroundColor: primaryColor, color: primaryText }}
-                            disabled={!selectedStoreUrl}
-                            onClick={handleRedirect}
-                        >
-                            Confirmar e Ir para Avaliação
-                        </Button>
                     </div>
                 </DialogContent>
             </Dialog>
