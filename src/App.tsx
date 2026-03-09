@@ -65,6 +65,8 @@ import TvTimelineEditor from "@/pages/TvTimelineEditor";
 import PublicEntityTvUpload from "@/pages/PublicEntityTvUpload";
 import Inventory from "@/pages/Inventory";
 import InventoryDetail from "@/pages/InventoryDetail";
+import LinkManager from "@/pages/LinkManager";
+import PublicLinks from "@/pages/PublicLinks";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -104,6 +106,9 @@ const App = () => (
 
                 {/* Incentive Engine (public ranking; no auth) */}
                 <Route path="/incentives/:tenant/:campaign" element={<PublicCampaignRanking />} />
+
+                {/* Public LinkTree (no auth) */}
+                <Route path="/l/:tenantSlug/:groupSlug" element={<PublicLinks />} />
 
                 {/* Incentives (gestão interna; protegido por matriz de acesso) */}
                 <Route
@@ -401,6 +406,15 @@ const App = () => (
                   element={
                     <RequireRouteAccess routeKey="app.settings">
                       <Settings />
+                    </RequireRouteAccess>
+                  }
+                />
+
+                <Route
+                  path="/app/link-manager"
+                  element={
+                    <RequireRouteAccess routeKey="app.link_manager">
+                      <LinkManager />
                     </RequireRouteAccess>
                   }
                 />

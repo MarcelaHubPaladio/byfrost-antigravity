@@ -47,6 +47,7 @@ import {
   Package,
   MessageSquare,
   Zap,
+  Link2,
 } from "lucide-react";
 import { UsageIndicator } from "@/components/admin/UsageIndicator";
 
@@ -534,6 +535,7 @@ export function AppShell({
         "app.finance.planning",
         "app.finance.board",
         "app.tv_corporativa",
+        "app.link_manager",
       ];
 
       try {
@@ -764,6 +766,7 @@ export function AppShell({
                 {hasMetaContent && (
                   <NavTile to="/app/content" icon={Clapperboard} label="Conteúdo" disabled={!can("app.content")} />
                 )}
+                <NavTile to="/app/link-manager" icon={Link2} label="Links" disabled={!can("app.link_manager")} />
 
                 {/* Core (desktop): hover menu */}
                 {coreHasAnyAccess && (
