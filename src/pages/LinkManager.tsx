@@ -482,6 +482,21 @@ export default function LinkManager() {
                                                                 </div>
                                                             </div>
                                                             <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition">
+                                                                {item.link_type === 'assessment' && (
+                                                                    <Button
+                                                                        variant="ghost"
+                                                                        size="icon"
+                                                                        className="h-8 w-8 text-blue-500 hover:text-blue-600 hover:bg-blue-50"
+                                                                        title="Copiar Link Direto para Avaliação"
+                                                                        onClick={() => {
+                                                                            const url = `${window.location.origin}/l/${activeTenant?.slug}/${selectedGroup.slug}?item=${item.id}`;
+                                                                            navigator.clipboard.writeText(url);
+                                                                            showSuccess("Link direto copiado!");
+                                                                        }}
+                                                                    >
+                                                                        <Share2 className="h-4 w-4" />
+                                                                    </Button>
+                                                                )}
                                                                 <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { setEditingItem(item); setIsItemDialogOpen(true); }}>
                                                                     <Edit2 className="h-4 w-4" />
                                                                 </Button>

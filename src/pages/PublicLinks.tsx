@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { useParams } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { useParams, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
@@ -23,8 +23,10 @@ import { cn } from "@/lib/utils";
 
 export default function PublicLinks() {
     const { tenantSlug, groupSlug } = useParams();
+    const [searchParams] = useSearchParams();
     const [selectedItem, setSelectedItem] = useState<any>(null);
     const [selectedStoreUrl, setSelectedStoreUrl] = useState<string>("");
+    const [autoOpened, setAutoOpened] = useState(false);
 
     const publicDataQ = useQuery({
         queryKey: ["public_link_group", tenantSlug, groupSlug],
@@ -39,6 +41,19 @@ export default function PublicLinks() {
         },
         staleTime: 60_000,
     });
+
+    useEffect(() => {
+        if (publicDataQ.data && !autoOpened) {
+            const directItemId = searchParams.get("item");
+            if (directItemId) {
+                const item = (publicDataQ.data as any).items?.find((i: any) => i.id === directItemId && i.link_type === 'assessment');
+                if (item) {
+                    setSelectedItem(item);
+                    setAutoOpened(true);
+                }
+            }
+        }
+    }, [publicDataQ.data, searchParams, autoOpened]);
 
     const handleAssessmentClick = (item: any) => {
         setSelectedItem(item);
@@ -102,22 +117,22 @@ export default function PublicLinks() {
                 <div className="mb-10 text-center">
                     <div className="mx-auto mb-4 flex h-24 w-24 items-center justify-center overflow-hidden rounded-3xl bg-white shadow-xl ring-1 ring-slate-100 dark:bg-slate-900 dark:ring-slate-800">
                         {logoUrl ? (
-                            <img src={logoUrl} alt={data.name} className="h-full w-full object-contain p-2" />
+                            <img src={logoUrl} alt={(data as any).name} className="h-full w-full object-contain p-2" />
                         ) : (
                             <span className="text-3xl font-bold" style={{ color: primaryColor }}>
-                                {data.name?.slice(0, 1).toUpperCase()}
+                                {(data as any).name?.slice(0, 1).toUpperCase()}
                             </span>
                         )}
                     </div>
-                    <h1 className="text-2xl font-bold text-slate-900 dark:text-white">{data.name}</h1>
-                    {data.description && (
-                        <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">{data.description}</p>
+                    <h1 className="text-2xl font-bold text-slate-900 dark:text-white">{(data as any).name}</h1>
+                    {(data as any).description && (
+                        <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">{(data as any).description}</p>
                     )}
                 </div>
 
                 {/* Links */}
                 <div className="space-y-4">
-                    {data.items?.map((item: any) => (
+                    {(data as any).items?.map((item: any) => (
                         <Card
                             key={item.id}
                             className="group relative overflow-hidden rounded-[24px] border-slate-200 bg-white/80 p-1 shadow-sm transition-all hover:scale-[1.02] hover:shadow-md active:scale-[0.98] dark:border-slate-800 dark:bg-slate-900/80"
@@ -183,11 +198,11 @@ export default function PublicLinks() {
                                     )}
                                     style={selectedStoreUrl === r.redirect_url ? { borderColor: primaryColor, backgroundColor: `${primaryColor}10`, boxShadow: `0 0 0 2px ${primaryColor}` } : {}}
                                 >
-                                    <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-white shadow-inner">
+                                    <div className="flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-white shadow-inner">
                                         {r.image_url ? (
                                             <img src={r.image_url} alt={r.store_name} className="h-full w-full object-cover" />
                                         ) : (
-                                            <Store className="h-6 w-6 text-slate-300" />
+                                            <Store className="h-8 w-8 text-slate-300" />
                                         )}
                                     </div>
                                     <div className="min-w-0">
