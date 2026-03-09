@@ -60,6 +60,15 @@ type ItemRedirect = {
     address: string | null;
 };
 
+async function fileToBase64(file: File): Promise<string> {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.readAsDataURL(file);
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = (error) => reject(error);
+    });
+}
+
 export default function LinkManager() {
     const { activeTenantId, activeTenant } = useTenant();
     const qc = useQueryClient();
@@ -72,6 +81,7 @@ export default function LinkManager() {
     const [editingItem, setEditingItem] = useState<Partial<LinkItem> | null>(null);
     const [editingRedirect, setEditingRedirect] = useState<Partial<ItemRedirect> | null>(null);
     const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
+    const [uploading, setUploading] = useState(false);
 
     // Queries
     const groupsQ = useQuery({
@@ -549,14 +559,46 @@ export default function LinkManager() {
                                     />
                                 </div>
                                 <div className="grid gap-2">
-                                    <Label htmlFor="img">Foto da Loja (URL)</Label>
-                                    <Input
-                                        id="img"
-                                        value={editingRedirect?.image_url || ""}
-                                        onChange={e => setEditingRedirect(p => ({ ...p, image_url: e.target.value }))}
-                                        placeholder="https://imagens.../loja.jpg"
-                                        className="rounded-xl"
-                                    />
+                                    <Label htmlFor="img">Foto da Loja (URL ou Upload)</Label>
+                                    <div className="flex gap-2">
+                                        <Input
+                                            id="img"
+                                            value={editingRedirect?.image_url || ""}
+                                            onChange={e => setEditingRedirect(p => ({ ...p, image_url: e.target.value }))}
+                                            placeholder="https://imagens.../loja.jpg"
+                                            className="rounded-xl flex-1"
+                                        />
+                                        <div className="relative">
+                                            <Input
+                                                type="file"
+                                                accept="image/*"
+                                                onChange={async (e) => {
+                                                    const file = e.target.files?.[0];
+                                                    if (!file) return;
+                                                    setUploading(true);
+                                                    try {
+                                                        const b64 = await fileToBase64(file);
+                                                        setEditingRedirect(p => ({ ...p, image_url: b64 }));
+                                                        showSuccess("Imagem carregada!");
+                                                    } catch (err) {
+                                                        showError("Erro ao carregar imagem.");
+                                                    } finally {
+                                                        setUploading(false);
+                                                    }
+                                                }}
+                                                className="absolute inset-0 opacity-0 cursor-pointer"
+                                                disabled={uploading}
+                                            />
+                                            <Button variant="outline" className="rounded-xl" disabled={uploading}>
+                                                {uploading ? "..." : "Subir"}
+                                            </Button>
+                                        </div>
+                                    </div>
+                                    {editingRedirect?.image_url && (
+                                        <div className="mt-2 flex justify-center border rounded-xl p-2 bg-slate-50">
+                                            <img src={editingRedirect.image_url} alt="Preview" className="h-20 rounded-lg object-contain" />
+                                        </div>
+                                    )}
                                 </div>
                                 <div className="grid gap-2">
                                     <Label htmlFor="address">Endereço (opcional)</Label>
