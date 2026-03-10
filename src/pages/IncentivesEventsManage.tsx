@@ -2,7 +2,7 @@ import { useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { AppShell } from "@/components/AppShell";
 import { RequireAuth } from "@/components/RequireAuth";
-import { supabase } from "@/lib/supabase";
+import { supabase, SUPABASE_URL_IN_USE } from "@/lib/supabase";
 import { useTenant } from "@/providers/TenantProvider";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -49,7 +49,7 @@ import { CalendarClock, Pencil, Trash2 } from "lucide-react";
 
 const BUCKET = "tenant-assets";
 const UPLOAD_URL =
-  "https://pryoirzeghatrgecwrci.supabase.co/functions/v1/upload-tenant-asset";
+  `${SUPABASE_URL_IN_USE}/functions/v1/upload-tenant-asset`;
 
 type ParticipantRow = {
   id: string;
@@ -78,15 +78,16 @@ type EventRow = {
   created_at: string;
 };
 
-async function fileToBase64(file: File) {
-  const buf = await file.arrayBuffer();
-  let binary = "";
-  const bytes = new Uint8Array(buf);
-  const chunkSize = 0x8000;
-  for (let i = 0; i < bytes.length; i += chunkSize) {
-    binary += String.fromCharCode(...bytes.slice(i, i + chunkSize));
-  }
-  return btoa(binary);
+async function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = () => {
+      const result = reader.result as string;
+      resolve(result.split(",")[1]);
+    };
+    reader.onerror = (error) => reject(error);
+  });
 }
 
 async function uploadTenantAsset(params: {
@@ -94,31 +95,21 @@ async function uploadTenantAsset(params: {
   kind: "events";
   file: File;
 }) {
-  const { data: sess } = await supabase.auth.getSession();
-  const token = sess.session?.access_token;
-  if (!token) throw new Error("Sessão inválida");
+  const b64 = await fileToBase64(params.file);
 
-  const fileBase64 = await fileToBase64(params.file);
-
-  const res = await fetch(UPLOAD_URL, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-    },
-    body: JSON.stringify({
+  const { data: json, error: upError } = await supabase.functions.invoke("upload-tenant-asset", {
+    body: {
       action: "upload",
       tenantId: params.tenantId,
       kind: params.kind,
-      filename: params.file.name,
-      contentType: params.file.type || "application/octet-stream",
-      fileBase64,
-    }),
+      fileName: params.file.name,
+      mimeType: params.file.type || "application/octet-stream",
+      mediaBase64: b64,
+    },
   });
 
-  const json = await res.json().catch(() => null);
-  if (!res.ok || !json?.ok) {
-    throw new Error(json?.error || `HTTP ${res.status}`);
+  if (upError || !json?.ok) {
+    throw new Error(upError?.message || json?.error || "Erro no upload");
   }
 
   return {

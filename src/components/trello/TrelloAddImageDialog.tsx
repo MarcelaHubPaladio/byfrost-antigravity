@@ -105,28 +105,19 @@ export function TrelloAddImageDialog(props: {
 
     setSaving(true);
     try {
-      const { data: sess } = await supabase.auth.getSession();
-      const token = sess.session?.access_token;
-
       const b64 = await fileToBase64(file);
 
-      const upRes = await fetch(UPLOAD_ASSET_URL, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify({
+      const { data: upJson, error: upError } = await supabase.functions.invoke("upload-tenant-asset", {
+        body: {
           tenantId: props.tenantId,
           mediaBase64: b64,
           mimeType: file.type || "image/jpeg",
           fileName: `trello_${props.caseId}_${Date.now()}`,
-        }),
+        },
       });
 
-      const upJson = await upRes.json().catch(() => null);
-      if (!upRes.ok || !upJson?.ok) {
-        throw new Error(upJson?.error || `HTTP ${upRes.status}`);
+      if (upError || !upJson?.ok) {
+        throw new Error(upError?.message || upJson?.error || "Erro no upload");
       }
 
       const publicUrl = upJson.publicUrl;

@@ -65,7 +65,10 @@ async function fileToBase64(file: File): Promise<string> {
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
         reader.readAsDataURL(file);
-        reader.onload = () => resolve(reader.result as string);
+        reader.onload = () => {
+            const result = reader.result as string;
+            resolve(result.split(",")[1]);
+        };
         reader.onerror = (error) => reject(error);
     });
 }
@@ -263,27 +266,19 @@ export default function LinkManager() {
         if (!activeTenantId) return;
         setUploading(true);
         try {
-            const { data: sess } = await supabase.auth.getSession();
-            const token = sess.session?.access_token;
             const b64 = await fileToBase64(file);
 
-            const res = await fetch(UPLOAD_ASSET_URL, {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                    ...(token ? { Authorization: `Bearer ${token}` } : {}),
-                },
-                body: JSON.stringify({
+            const { data: json, error: upError } = await supabase.functions.invoke("upload-tenant-asset", {
+                body: {
                     tenantId: activeTenantId,
                     mediaBase64: b64,
                     mimeType: file.type,
                     fileName: `logo_${Date.now()}`,
-                }),
+                },
             });
 
-            const json = await res.json().catch(() => null);
-            if (!res.ok || !json?.ok) {
-                throw new Error(json?.error || `HTTP ${res.status}`);
+            if (upError || !json?.ok) {
+                throw new Error(upError?.message || json?.error || "Erro no upload");
             }
 
             setEditingGroup(prev => ({
