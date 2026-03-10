@@ -603,7 +603,7 @@ serve(async (req) => {
         const overrides = (it as any).metadata?.deliverable_overrides ?? {};
 
         // Product name
-        scopeLines.push(`${offName} [PRODUTO] (qtd ${itemQty})`);
+        scopeLines.push(`${offName} [PRODUTO]`);
 
         for (const t of ts) {
           const tId = String((t as any).id);
@@ -612,7 +612,7 @@ serve(async (req) => {
           const finalQty = typeof overrideQty === "number" ? overrideQty : (itemQty * baseQty);
 
           if (finalQty > 0) {
-            scopeLines.push(`  - Entregável: ${(t as any).name} (qtd ${finalQty})`);
+            scopeLines.push(`  - Entregável: ${(t as any).name}`);
           }
         }
       }
@@ -713,7 +713,7 @@ serve(async (req) => {
         const overrides = (it as any).metadata?.deliverable_overrides ?? {};
 
         // Product name
-        scopeLines.push(`${offName} [PRODUTO] (qtd ${itemQty})`);
+        scopeLines.push(`${offName} [PRODUTO]`);
 
         for (const t of ts) {
           const tId = String((t as any).id);
@@ -722,7 +722,7 @@ serve(async (req) => {
           const finalQty = typeof overrideQty === "number" ? overrideQty : (itemQty * baseQty);
 
           if (finalQty > 0) {
-            scopeLines.push(`  - Entregável: ${(t as any).name} (qtd ${finalQty})`);
+            scopeLines.push(`  - Entregável: ${(t as any).name}`);
           }
         }
       }

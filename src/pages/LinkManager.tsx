@@ -551,7 +551,7 @@ export default function LinkManager() {
 
                                                                 {selectedItemId === item.id && redirectsQ.data ? (
                                                                     <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                                                                        {redirectsQ.data.map(r => (
+                                                                        {Array.isArray(redirectsQ.data) && redirectsQ.data.map(r => (
                                                                             <div key={r.id} className="flex items-center justify-between gap-2 rounded-lg border border-slate-100 bg-white px-3 py-2 shadow-sm">
                                                                                 <div className="flex items-center gap-2 min-w-0">
                                                                                     {r.image_url && (

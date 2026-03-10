@@ -436,10 +436,10 @@ export function PartyProposalCard({
         const overrides = (it as any).metadata?.deliverable_overrides ?? {};
 
         if (ts2.length === 0) {
-          scopeLines.push(`${offName} (qtd ${itemQty})`);
+          scopeLines.push(`${offName}`);
         } else {
           // Add the product itself to scope
-          scopeLines.push(`${offName} (qtd ${itemQty})`);
+          scopeLines.push(`${offName}`);
           // Then its deliverables
           for (const t of ts2) {
             const tId = String((t as any).id);
@@ -448,7 +448,7 @@ export function PartyProposalCard({
             const finalQty = typeof overrideQty === "number" ? overrideQty : (itemQty * baseQty);
 
             if (finalQty > 0) {
-              scopeLines.push(`  - Entregável: ${(t as any).name} (qtd ${finalQty})`);
+              scopeLines.push(`  - Entregável: ${(t as any).name}`);
             }
           }
         }

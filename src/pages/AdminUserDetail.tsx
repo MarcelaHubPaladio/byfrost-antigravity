@@ -414,7 +414,7 @@ function UserGoalsTab({ userData }: { userData: any }) {
     });
 
     const loadFromTemplates = async () => {
-        if (!templatesQ.data || templatesQ.data.length === 0) {
+        if (!Array.isArray(templatesQ.data) || templatesQ.data.length === 0) {
             showError("Não há templates disponíveis para esta role.");
             return;
         }

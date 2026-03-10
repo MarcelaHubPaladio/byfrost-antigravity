@@ -242,7 +242,7 @@ export default function PublicProposal() {
       const overrides = it.metadata?.deliverable_overrides ?? {};
 
       // Always show the product in the scope
-      scopeLines.push(`${offName} (qtd ${itemQty})`);
+      scopeLines.push(`${offName}`);
 
       // Show deliverables separately if they exist
       for (const t of ts) {
@@ -252,7 +252,7 @@ export default function PublicProposal() {
         const finalQty = typeof overrideQty === "number" ? overrideQty : (itemQty * baseQty);
 
         if (finalQty > 0) {
-          deliverableLines.push(`${String(t.name)} (qtd ${finalQty})`);
+          deliverableLines.push(`${String(t.name)}`);
         }
       }
     }

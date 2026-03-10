@@ -481,7 +481,7 @@ export default function InventoryDetail() {
                                         </div>
 
                                         <div className="space-y-3">
-                                            {templatesQ.data?.map(t => (
+                                            {Array.isArray(templatesQ.data) && templatesQ.data.map(t => (
                                                 <div key={t.id} className="flex items-center justify-between p-3 rounded-2xl border border-slate-100 bg-slate-50/30 group hover:border-indigo-100 hover:bg-white transition-all">
                                                     <div className="min-w-0">
                                                         <div className="flex items-center gap-2">

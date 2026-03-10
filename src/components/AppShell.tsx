@@ -639,7 +639,7 @@ export function AppShell({
     queryFn: async () => {
       const { data, error } = await supabase.rpc("get_admin_usage_stats");
       if (error) throw error;
-      return new Map((data as any[]).map((d) => [d.tenant_id, d]));
+      return new Map((Array.isArray(data) ? data : []).map((d) => [d.tenant_id, d]));
     },
   });
 

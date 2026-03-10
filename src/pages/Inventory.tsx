@@ -57,7 +57,7 @@ export default function Inventory() {
         },
     });
 
-    const items = listQ.data ?? [];
+    const items = Array.isArray(listQ.data) ? listQ.data : [];
 
     const handleEdit = (item: InventoryItem) => {
         nav(`/app/inventory/${item.id}`);
