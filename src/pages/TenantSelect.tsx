@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { RequireAuth } from "@/components/RequireAuth";
 import { useTenant } from "@/providers/TenantProvider";
 import { useSession } from "@/providers/SessionProvider";
@@ -17,6 +17,9 @@ type MembershipRow = {
 
 export default function TenantSelect() {
   const nav = useNavigate();
+  const [searchParams] = useSearchParams();
+  const hasNoAccessError = searchParams.get("error") === "no_access";
+
   const { user } = useSession();
   const { tenants, activeTenantId, setActiveTenantId, loading, isSuperAdmin, membershipHint, refresh } = useTenant();
 
@@ -50,8 +53,11 @@ export default function TenantSelect() {
 
   useEffect(() => {
     // Only auto-skip when there is nothing to choose.
-    if (!loading && tenants.length === 1) nav("/app", { replace: true });
-  }, [loading, tenants.length, nav]);
+    // Skip auto-redirect if we came from an access error to break the loop.
+    if (!loading && tenants.length === 1 && !hasNoAccessError) {
+      nav("/app", { replace: true });
+    }
+  }, [loading, tenants.length, nav, hasNoAccessError]);
 
   useEffect(() => {
     if (!loading && userId) loadDiag();
@@ -82,6 +88,19 @@ export default function TenantSelect() {
             Selecione o ambiente onde deseja operar.
             {isSuperAdmin ? " (super-admin: você vê todos os tenants)" : ""}
           </p>
+
+          {hasNoAccessError && (
+            <div className="mt-6 rounded-3xl border border-rose-200 bg-rose-50 p-5 text-sm text-rose-900 shadow-sm animate-in fade-in slide-in-from-top-2 duration-300">
+              <div className="font-bold flex items-center gap-2 text-rose-800">
+                ⚠️ Acesso Restrito
+              </div>
+              <p className="mt-1 text-rose-700 leading-relaxed">
+                Você tentou acessar o painel, mas seu cargo ainda não tem permissões liberadas para este cliente.
+                <br />
+                <strong>O que fazer:</strong> Peça ao administrador para ajustar a "Matriz de Acesso" do seu cargo nas configurações do sistema.
+              </p>
+            </div>
+          )}
 
           <div className="mt-6 grid gap-3 sm:grid-cols-2">
             {tenants.map((t) => {
