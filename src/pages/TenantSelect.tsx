@@ -59,11 +59,6 @@ export default function TenantSelect() {
     }
   }, [loading, tenants.length, nav, hasNoAccessError]);
 
-  useEffect(() => {
-    if (!loading && userId) loadDiag();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loading, userId]);
-
   const membershipSummary = useMemo(() => {
     if (!membershipRows.length) return "nenhum";
     const active = membershipRows.filter((r) => !r.deleted_at).length;

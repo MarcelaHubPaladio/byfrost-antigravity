@@ -445,7 +445,8 @@ export default function Dashboard() {
   const casesQ = useQuery({
     queryKey: ["cases_by_tenant", activeTenantId],
     enabled: Boolean(activeTenantId),
-    refetchInterval: 30_000,
+    refetchInterval: 60_000,
+    staleTime: 30_000,
     refetchIntervalInBackground: false,
     refetchOnWindowFocus: true,
     queryFn: async () => {
@@ -612,7 +613,7 @@ export default function Dashboard() {
   const readsQ = useQuery({
     queryKey: ["case_message_reads", activeTenantId, user?.id],
     enabled: Boolean(activeTenantId && user?.id),
-    staleTime: 10_000,
+    staleTime: 30_000,
     refetchOnWindowFocus: true,
     queryFn: async () => {
       const { data, error } = await supabase
@@ -629,7 +630,8 @@ export default function Dashboard() {
   const lastInboundQ = useQuery({
     queryKey: ["case_last_inbound", activeTenantId, visibleCaseIds.join(",")],
     enabled: Boolean(activeTenantId && visibleCaseIds.length),
-    refetchInterval: 15_000,
+    refetchInterval: 60_000,
+    staleTime: 30_000,
     refetchIntervalInBackground: false,
     refetchOnWindowFocus: true,
     queryFn: async () => {
@@ -691,7 +693,8 @@ export default function Dashboard() {
   const debugRpcQ = useQuery({
     queryKey: ["debug_cases_for_tenant_journey", activeTenantId, selectedKey],
     enabled: Boolean(activeTenantId && selectedKey),
-    refetchInterval: 20_000,
+    refetchInterval: 120_000,
+    staleTime: 60_000,
     refetchIntervalInBackground: false,
     refetchOnWindowFocus: true,
     queryFn: async () => {
@@ -708,6 +711,7 @@ export default function Dashboard() {
   const rlsDiagQ = useQuery({
     queryKey: ["rls_diag", activeTenantId],
     enabled: Boolean(activeTenantId),
+    staleTime: 120_000,
     refetchOnWindowFocus: true,
     queryFn: async () => {
       const [claimsRes, superRes, panelRes] = await Promise.all([
@@ -730,7 +734,8 @@ export default function Dashboard() {
   const pendQ = useQuery({
     queryKey: ["pendencies_open", activeTenantId, filteredRows.map((c) => c.id).join(",")],
     enabled: Boolean(activeTenantId && filteredRows.length),
-    refetchInterval: 20_000,
+    refetchInterval: 60_000,
+    staleTime: 30_000,
     refetchIntervalInBackground: false,
     refetchOnWindowFocus: true,
     queryFn: async () => {
