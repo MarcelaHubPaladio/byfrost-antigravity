@@ -24,7 +24,39 @@ type Body = {
   expiresIn?: number;
 };
 
-// ... (helper functions same)
+function json(data: any, status = 200) {
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
+}
+
+function err(message: string, status = 400) {
+  return json({ ok: false, error: message }, status);
+}
+
+function decodeBase64ToBytes(b64: string) {
+  const bin = atob(b64);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return bytes;
+}
+
+function sanitizeFilename(filename: string) {
+  const safe = filename.replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 120);
+  return safe || "file.bin";
+}
+
+function isUuid(v: string) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v);
+}
+
+function tenantIdFromPath(path: string) {
+  const seg1 = path.split("/")[0] ?? "";
+  const seg2 = path.split("/")[1] ?? "";
+  if (seg1 === "tenants") return seg2;
+  return seg1;
+}
 
 serve(async (req) => {
   const fn = "upload-tenant-asset";
