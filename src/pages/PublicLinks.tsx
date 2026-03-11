@@ -20,6 +20,7 @@ import {
 } from "@/components/ui/select";
 import { ExternalLink, Star, Store, ArrowRight, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Skeleton } from "@/components/ui/skeleton";
 
 export default function PublicLinks() {
     const { tenantSlug, groupSlug } = useParams();
@@ -68,8 +69,30 @@ export default function PublicLinks() {
 
     if (publicDataQ.isLoading) {
         return (
-            <div className="flex min-h-screen items-center justify-center bg-slate-50">
-                <Loader2 className="h-8 w-8 animate-spin text-slate-300" />
+            <div className="min-h-screen bg-slate-50 bg-gradient-to-b from-white to-slate-100 px-6 py-12 dark:from-slate-950 dark:to-slate-900">
+                <div className="mx-auto max-w-[480px]">
+                    <div className="mb-10 text-center animate-in fade-in duration-500">
+                        <Skeleton className="mx-auto mb-4 h-24 w-24 rounded-3xl" />
+                        <Skeleton className="mx-auto h-8 w-48 mb-2" />
+                        <Skeleton className="mx-auto h-4 w-64" />
+                    </div>
+                    <div className="space-y-4">
+                        {[1, 2, 3, 4].map((i) => (
+                            <Card key={i} className="rounded-[24px] border-slate-200 bg-white/80 p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900/80">
+                                <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-4">
+                                        <Skeleton className="h-12 w-12 rounded-2xl" />
+                                        <div className="space-y-2">
+                                            <Skeleton className="h-5 w-32" />
+                                            <Skeleton className="h-3 w-20" />
+                                        </div>
+                                    </div>
+                                    <Skeleton className="h-5 w-5" />
+                                </div>
+                            </Card>
+                        ))}
+                    </div>
+                </div>
             </div>
         );
     }
