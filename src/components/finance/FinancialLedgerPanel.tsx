@@ -880,6 +880,7 @@ export function FinancialLedgerPanel() {
   const [reconcileInstallments, setReconcileInstallments] = useState("12");
   const [reconcileDialogOpen, setReconcileDialogOpen] = useState(false);
   const [reconcileOnlyCurrentMonth, setReconcileOnlyCurrentMonth] = useState(true);
+  const [reconcileEntityId, setReconcileEntityId] = useState<string | null>(null);
 
   const selectedTx = useMemo(() =>
     transactionsQ.data?.find(t => t.id === reconcileTxId),
@@ -941,7 +942,7 @@ export function FinancialLedgerPanel() {
           recurrence_group_id: groupId,
           installment_number: i + 1,
           installments_total: count > 1 ? count : null,
-          entity_id: tx.entity_id,
+          entity_id: reconcileEntityId || tx.entity_id,
           category_id: tx.category_id
         });
       }
@@ -992,7 +993,7 @@ export function FinancialLedgerPanel() {
           recurrence_group_id: groupId,
           installment_number: i + 1,
           installments_total: count > 1 ? count : null,
-          entity_id: tx.entity_id,
+          entity_id: reconcileEntityId || tx.entity_id,
           category_id: tx.category_id
         });
       }
@@ -1414,10 +1415,11 @@ export function FinancialLedgerPanel() {
                               variant="ghost"
                               size="sm"
                               className="h-8 rounded-xl text-slate-500 hover:text-[hsl(var(--byfrost-accent))] hover:bg-[hsl(var(--byfrost-accent)/0.1)] gap-1.5 px-2"
-                              onClick={() => {
-                                setReconcileTxId(t.id);
-                                setReconcileDialogOpen(true);
-                              }}
+                                onClick={() => {
+                                  setReconcileTxId(t.id);
+                                  setReconcileEntityId(t.entity_id || null);
+                                  setReconcileDialogOpen(true);
+                                }}
                             >
                               <Link2 className="h-3.5 w-3.5" />
                               <span className="text-[11px]">Conciliar</span>
@@ -2098,7 +2100,29 @@ export function FinancialLedgerPanel() {
                       </div>
                       <p className="text-sm text-slate-600 dark:text-slate-400">Nenhuma conta pendente com valor de {formatMoneyBRL(selectedTx.amount)}.</p>
                       
-                      <div className="mt-5 w-full max-w-[280px] p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950">
+                      <div className="mt-5 w-full max-w-[320px] p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950">
+                        <div className="mb-4">
+                          <Label className="text-[10px] uppercase text-slate-500 block mb-1">Entidade (Cliente/Fornecedor)</Label>
+                          <AsyncSelect
+                            className="h-9 rounded-xl text-xs"
+                            value={reconcileEntityId}
+                            initialLabel={selectedTx?.core_entities?.display_name || null}
+                            onChange={setReconcileEntityId}
+                            placeholder="Buscar entidade..."
+                            loadOptions={async (val) => {
+                              if (!activeTenantId || val.length < 2) return [];
+                              const { data } = await supabase
+                                .from("core_entities")
+                                .select("id, display_name")
+                                .eq("tenant_id", activeTenantId)
+                                .ilike("display_name", `%${val}%`)
+                                .is("deleted_at", null)
+                                .limit(10);
+                              return (data || []).map((d) => ({ value: d.id, label: d.display_name }));
+                            }}
+                          />
+                        </div>
+
                         <div className="flex items-center gap-2 mb-3">
                           <Checkbox 
                             id="dlg-recurrent" 
