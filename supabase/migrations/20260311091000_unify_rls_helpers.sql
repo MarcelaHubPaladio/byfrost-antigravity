@@ -1,7 +1,14 @@
--- Migration: Unify RLS Helpers to Eliminate Recursion (FIXED SYNTAX)
--- Description: Consolidates all security helpers in plpgsql to break loops in tenants, cases and profiles.
+-- Migration: Unify RLS Helpers to Eliminate Recursion (FIXED PARAMETERS)
+-- Description: Consolidates all security helpers in plpgsql to break loops. 
+-- Includes DROP commands to allow parameter name changes.
 
--- 1. Consolidated Security Helpers (all as plpgsql + security definer)
+-- 1. Drop existing functions to allow signature/parameter changes
+drop function if exists public.is_super_admin();
+drop function if exists public.has_tenant_access(uuid);
+drop function if exists public.is_tenant_admin(uuid);
+drop function if exists public.get_subordinates(uuid, uuid);
+
+-- 2. Consolidated Security Helpers (all as plpgsql + security definer)
 
 create or replace function public.is_super_admin()
 returns boolean
@@ -78,25 +85,23 @@ begin
 end;
 $$;
 
--- 2. Update Tenants RLS (replace manual exists)
+-- 3. Update Tenants RLS
 drop policy if exists tenants_select on public.tenants;
 create policy tenants_select on public.tenants
 for select to authenticated
 using (public.has_tenant_access(id));
 
--- 3. Update Users Profile RLS (Simplified + Break loop)
+-- 4. Update Users Profile RLS
 drop policy if exists users_profile_select on public.users_profile;
 create policy users_profile_select on public.users_profile
 for select to authenticated
 using (
-    -- I can always see my OWN profile across any tenant (No function call = No recursion)
     (user_id = auth.uid())
-    -- For others, use the protected helper
     or public.is_super_admin()
     or public.has_tenant_access(tenant_id)
 );
 
--- 4. Update Cases RLS (Simplified Syntax - removed dynamic format)
+-- 5. Update Cases RLS
 drop policy if exists cases_select on public.cases;
 create policy cases_select on public.cases
 for select to authenticated
@@ -106,11 +111,8 @@ using (
         public.has_tenant_access(tenant_id)
         and (
             assigned_user_id = auth.uid()
-            -- We confirmed this column exists in migration 20260302050000_add_case_creator_rls.sql
             or created_by_user_id = auth.uid()
-            -- OR I am an admin in this tenant
             or public.is_tenant_admin(tenant_id)
-            -- OR The assignee is one of my subordinates
             or (assigned_user_id in (select public.get_subordinates(tenant_id, auth.uid())))
         )
     )
