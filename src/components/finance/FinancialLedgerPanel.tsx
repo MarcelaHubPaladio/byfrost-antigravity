@@ -936,7 +936,7 @@ export function FinancialLedgerPanel() {
           description: count > 1 ? `${tx.description} (${i+1}/${count})` : tx.description,
           amount: tx.amount,
           due_date: format(itemDate, "yyyy-MM-dd"),
-          status: 'paid', // A primeira parcela (pelo menos) é marcada como paga pois veio do extrato
+          status: 'pending', 
           recurrence_group_id: groupId,
           installment_number: i + 1,
           installments_total: count > 1 ? count : null,
@@ -952,11 +952,12 @@ export function FinancialLedgerPanel() {
       if (payErr) throw payErr;
       const firstItem = insertedItems[0];
 
-      const { error: txErr } = await supabase
-        .from("financial_transactions")
-        .update({ linked_payable_id: firstItem.id })
-        .eq("id", tx.id)
-        .eq("tenant_id", activeTenantId);
+      const { error: txErr } = await supabase.rpc("financial_reconcile_transaction", {
+        p_tenant_id: activeTenantId,
+        p_transaction_id: tx.id,
+        p_linked_id: firstItem.id,
+        p_type: 'payable'
+      });
       if (txErr) throw txErr;
     },
     onSuccess: async () => {
@@ -986,7 +987,7 @@ export function FinancialLedgerPanel() {
           description: count > 1 ? `${tx.description} (${i+1}/${count})` : tx.description,
           amount: tx.amount,
           due_date: format(itemDate, "yyyy-MM-dd"),
-          status: 'paid',
+          status: 'pending',
           recurrence_group_id: groupId,
           installment_number: i + 1,
           installments_total: count > 1 ? count : null,
@@ -1002,11 +1003,12 @@ export function FinancialLedgerPanel() {
       if (recvErr) throw recvErr;
       const firstItem = insertedItems[0];
 
-      const { error: txErr } = await supabase
-        .from("financial_transactions")
-        .update({ linked_receivable_id: firstItem.id })
-        .eq("id", tx.id)
-        .eq("tenant_id", activeTenantId);
+      const { error: txErr } = await supabase.rpc("financial_reconcile_transaction", {
+        p_tenant_id: activeTenantId,
+        p_transaction_id: tx.id,
+        p_linked_id: firstItem.id,
+        p_type: 'receivable'
+      });
       if (txErr) throw txErr;
     },
     onSuccess: async () => {

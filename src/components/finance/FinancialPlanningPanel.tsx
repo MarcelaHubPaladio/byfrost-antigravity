@@ -76,7 +76,7 @@ export function FinancialPlanningPanel() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("financial_receivables")
-        .select("id,tenant_id,description,amount,due_date,status,entity_id,core_entities(display_name)")
+        .select("id,tenant_id,description,amount,due_date,status,entity_id,core_entities(display_name),financial_transactions!financial_transactions_receivable_fk(amount)")
         .eq("tenant_id", activeTenantId!)
         .order("due_date", { ascending: true })
         .limit(400);
@@ -91,7 +91,7 @@ export function FinancialPlanningPanel() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("financial_payables")
-        .select("id,tenant_id,description,amount,due_date,status,entity_id,core_entities(display_name)")
+        .select("id,tenant_id,description,amount,due_date,status,entity_id,core_entities(display_name),financial_transactions!financial_transactions_payable_fk(amount)")
         .eq("tenant_id", activeTenantId!)
         .order("due_date", { ascending: true })
         .limit(400);
@@ -574,6 +574,7 @@ export function FinancialPlanningPanel() {
                     <TableHead>Descrição</TableHead>
                     <TableHead>Entidade</TableHead>
                     <TableHead>Valor</TableHead>
+                    <TableHead>Conciliado</TableHead>
                     <TableHead>Vencimento</TableHead>
                     <TableHead>Status</TableHead>
                   </TableRow>
@@ -589,9 +590,12 @@ export function FinancialPlanningPanel() {
                           </span>
                         )}
                       </TableCell>
-                      <TableCell>{formatMoneyBRL(Number(r.amount ?? 0))}</TableCell>
                       <TableCell className="text-xs text-slate-600">
                         {r.core_entities?.display_name ?? "—"}
+                      </TableCell>
+                      <TableCell>{formatMoneyBRL(Number(r.amount ?? 0))}</TableCell>
+                      <TableCell className="text-xs font-semibold text-emerald-600">
+                        {formatMoneyBRL((r.financial_transactions ?? []).reduce((acc: number, t: any) => acc + (t.amount ?? 0), 0))}
                       </TableCell>
                       <TableCell>{r.due_date}</TableCell>
                       <TableCell>
@@ -727,6 +731,7 @@ export function FinancialPlanningPanel() {
                     <TableHead>Descrição</TableHead>
                     <TableHead>Entidade</TableHead>
                     <TableHead>Valor</TableHead>
+                    <TableHead>Conciliado</TableHead>
                     <TableHead>Vencimento</TableHead>
                     <TableHead>Status</TableHead>
                   </TableRow>
@@ -742,9 +747,12 @@ export function FinancialPlanningPanel() {
                           </span>
                         )}
                       </TableCell>
-                      <TableCell>{formatMoneyBRL(Number(p.amount ?? 0))}</TableCell>
                       <TableCell className="text-xs text-slate-600">
                         {p.core_entities?.display_name ?? "—"}
+                      </TableCell>
+                      <TableCell>{formatMoneyBRL(Number(p.amount ?? 0))}</TableCell>
+                      <TableCell className="text-xs font-semibold text-emerald-600">
+                        {formatMoneyBRL((p.financial_transactions ?? []).reduce((acc: number, t: any) => acc + (t.amount ?? 0), 0))}
                       </TableCell>
                       <TableCell>{p.due_date}</TableCell>
                       <TableCell>
