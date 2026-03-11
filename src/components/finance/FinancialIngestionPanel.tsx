@@ -112,6 +112,8 @@ export function FinancialIngestionPanel() {
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [accountId, setAccountId] = useState<string>("");
+  const [bankSource, setBankSource] = useState<string>("auto");
+  const [extractType, setExtractType] = useState<string>("checking");
 
   const accountsQ = useQuery({
     queryKey: ["bank_accounts", activeTenantId],
@@ -163,6 +165,8 @@ export function FinancialIngestionPanel() {
         fileName: file.name,
         contentType: file.type || "application/octet-stream",
         fileBase64: b64,
+        bankSource,
+        extractType,
       };
 
       const baseUrl = (supabase as any)?.supabaseUrl as string | undefined;
@@ -266,6 +270,7 @@ export function FinancialIngestionPanel() {
               />
             </SelectTrigger>
             <SelectContent>
+              <SelectItem value="_">Selecione uma conta</SelectItem>
               {(accountsQ.data ?? []).map((a) => (
                 <SelectItem key={a.id} value={a.id}>
                   {a.account_name} • {a.bank_name} ({a.currency})
@@ -273,6 +278,35 @@ export function FinancialIngestionPanel() {
               ))}
             </SelectContent>
           </Select>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <Label className="text-xs text-slate-700 dark:text-slate-300">Instituição / Banco</Label>
+            <Select value={bankSource} onValueChange={setBankSource}>
+              <SelectTrigger className="mt-1 rounded-2xl">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="auto">Automático (Inter/OFX)</SelectItem>
+                <SelectItem value="inter">Banco Inter (CSV)</SelectItem>
+                <SelectItem value="cresol">Cresol (CSV)</SelectItem>
+                <SelectItem value="itau">Itaú (CSV)</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label className="text-xs text-slate-700 dark:text-slate-300">Tipo de Extrato</Label>
+            <Select value={extractType} onValueChange={setExtractType}>
+              <SelectTrigger className="mt-1 rounded-2xl">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="checking">Conta Corrente</SelectItem>
+                <SelectItem value="credit_card">Cartão de Crédito</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
         </div>
 
         <div>

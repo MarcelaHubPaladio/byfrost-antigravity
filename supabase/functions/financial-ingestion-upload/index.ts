@@ -116,10 +116,18 @@ function parseCsvWithPreamble(text: string) {
   if (lines.length < 2) return { headers: [] as string[], rows: [] as Record<string, string>[] };
 
   const splitLine = (line: string) => {
-    // Supports commas/semicolons, minimal quote support.
-    // IMPORTANT: Brazilian bank exports commonly use ';' as delimiter and ',' as decimal separator.
-    // So if ';' is present, prefer it even if the line also contains ','.
-    const sep = line.includes(";") ? ";" : ",";
+    // Supports commas/semicolons/tabs, minimal quote support.
+    // Detect which separator is most likely:
+    const counts = {
+      semicolon: (line.match(/;/g) || []).length,
+      comma: (line.match(/,/g) || []).length,
+      tab: (line.match(/\t/g) || []).length,
+    };
+
+    let sep = ",";
+    if (counts.tab > counts.semicolon && counts.tab > counts.comma) sep = "\t";
+    else if (counts.semicolon >= counts.comma) sep = ";";
+
     const out: string[] = [];
     let cur = "";
     let inQ = false;
@@ -191,8 +199,10 @@ async function processCsvIntoLedger(opts: {
   bucket: string;
   path: string;
   accountId?: string | null;
+  bankSource?: string;
+  extractType?: string;
 }) {
-  const { supabase, tenantId, ingestionJobId, bucket, path } = opts;
+  const { supabase, tenantId, ingestionJobId, bucket, path, bankSource, extractType } = opts;
 
   await supabase.from("ingestion_jobs").update({ status: "processing", error_log: null }).eq("id", ingestionJobId);
 
@@ -285,7 +295,7 @@ async function processCsvIntoLedger(opts: {
       status: "posted",
       fingerprint,
       source: "import",
-      raw_payload: { format: "csv", ...row },
+      raw_payload: { format: "csv", bankSource, extractType, ...row },
     });
   }
 
@@ -336,6 +346,8 @@ serve(async (req) => {
     const fileName = String(body?.fileName ?? "").trim();
     const contentType = String(body?.contentType ?? "application/octet-stream").trim();
     const fileBase64 = String(body?.fileBase64 ?? "").trim();
+    const bankSource = String(body?.bankSource ?? "auto").trim();
+    const extractType = String(body?.extractType ?? "checking").trim();
 
     if (!tenantId || !fileName || !fileBase64) return err("missing_params", 400);
 
@@ -415,7 +427,9 @@ serve(async (req) => {
       ingestionJobId: job.id,
       bucket: BUCKET,
       path,
-      accountId: accountIdRaw || null, 
+      accountId: accountIdRaw || null,
+      bankSource,
+      extractType,
     });
 
     console.log(`[${fn}] uploaded + processed`, { tenantId, jobId: job.id, path, by: userId, out });
