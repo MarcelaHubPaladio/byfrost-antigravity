@@ -1,7 +1,8 @@
--- Financial Reconciliation (Phase 4)
--- Idempotent migration: safe to re-run.
+-- 1) Ensure unique constraints for multi-tenant FKs
+alter table public.financial_payables add constraint financial_payables_tenant_id_id_uq unique (tenant_id, id);
+alter table public.financial_receivables add constraint financial_receivables_tenant_id_id_uq unique (tenant_id, id);
 
--- 1) Alter financial_transactions to add link columns
+-- 2) Alter financial_transactions to add link columns
 alter table public.financial_transactions
   add column if not exists linked_payable_id uuid,
   add column if not exists linked_receivable_id uuid;
@@ -25,11 +26,11 @@ begin
 end
 $do$;
 
--- 2) Indices
+-- 3) Indices
 create index if not exists financial_transactions_linked_payable_idx on public.financial_transactions(tenant_id, linked_payable_id);
 create index if not exists financial_transactions_linked_receivable_idx on public.financial_transactions(tenant_id, linked_receivable_id);
 
--- 3) RPC to suggest reconciliation
+-- 4) RPC to suggest reconciliation
 create or replace function public.financial_suggest_reconciliation(
   p_tenant_id uuid,
   p_transaction_id uuid
@@ -100,7 +101,7 @@ $$;
 
 grant execute on function public.financial_suggest_reconciliation(uuid, uuid) to authenticated;
 
--- 4) RPC to perform reconciliation
+-- 5) RPC to perform reconciliation
 create or replace function public.financial_reconcile_transaction(
   p_tenant_id uuid,
   p_transaction_id uuid,
