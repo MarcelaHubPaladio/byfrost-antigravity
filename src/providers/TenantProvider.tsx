@@ -52,7 +52,7 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
     setActiveTenantIdState(id);
   };
 
-  const refresh = async () => {
+  const refresh = React.useCallback(async () => {
     if (!user) {
       setTenants([]);
       setActiveTenantIdState(null);
@@ -166,7 +166,7 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
       clearTimeout(timeout);
       setLoading(false);
     }
-  };
+  }, [user?.id, isSuperAdmin, activeTenantId]);
 
   useEffect(() => {
     refresh();
@@ -189,7 +189,7 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
       isSuperAdmin,
       membershipHint,
     }),
-    [tenants, activeTenantId, activeTenant, loading, isSuperAdmin, membershipHint]
+    [tenants, activeTenantId, activeTenant, loading, isSuperAdmin, membershipHint, refresh]
   );
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

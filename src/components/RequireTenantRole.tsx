@@ -26,7 +26,13 @@ export function RequireTenantRole({
     staleTime: 10_000,
   });
 
-  if (loading) return <>{children}</>; // SessionProvider already has a loading screen; keep it simple.
+  if (loading) {
+    return (
+      <div className="min-h-[50vh] flex items-center justify-center">
+        <div className="text-sm text-slate-500">Validando acesso…</div>
+      </div>
+    );
+  }
 
   if (!activeTenantId || !activeTenant) {
     return <Navigate to="/tenants" replace state={{ from: loc.pathname }} />;

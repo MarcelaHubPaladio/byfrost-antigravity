@@ -142,14 +142,15 @@ export default function AuthCallback() {
       return;
     }
 
-    // If session exists but provider user is still null, try a soft refresh once.
+    // If local diagnostic saw a session but provider is still null, 
+    // we wait a bit or let the user click. We don't loop refresh() here.
     if (diag.hasSession && !user) {
-      refresh().finally(() => nav("/tenants", { replace: true }));
-      return;
+      console.warn("[AuthCallback] Session seen in diag but not in provider. Waiting for sync...");
+      return; 
     }
 
     nav("/login", { replace: true });
-  }, [bootDone, sessionLoading, tenantsLoading, user, activeTenantId, tenants.length, nav, diag.hasSession, refresh]);
+  }, [bootDone, sessionLoading, tenantsLoading, user, activeTenantId, tenants.length, nav, diag.hasSession]);
 
   const showStuck = bootDone && !sessionLoading && !tenantsLoading && !user;
 

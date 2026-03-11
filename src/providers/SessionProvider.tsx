@@ -15,10 +15,10 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const refresh = async () => {
+  const refresh = React.useCallback(async () => {
     const { data } = await supabase.auth.getSession();
     setSession(data.session ?? null);
-  };
+  }, []);
 
   useEffect(() => {
     let mounted = true;
@@ -34,6 +34,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     });
 
     const { data } = supabase.auth.onAuthStateChange((event, nextSession) => {
+      if (!mounted) return;
       setSession(nextSession);
       setLoading(false);
     });
@@ -46,7 +47,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
 
   const value = useMemo<SessionState>(
     () => ({ session, user: session?.user ?? null, loading, refresh }),
-    [session, loading]
+    [session, loading, refresh]
   );
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

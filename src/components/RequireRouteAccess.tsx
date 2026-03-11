@@ -41,7 +41,13 @@ export function RequireRouteAccess({
     refetchOnWindowFocus: false,
   });
 
-  if (loading) return <>{children}</>;
+  if (loading) {
+    return (
+      <div className="min-h-[50vh] flex items-center justify-center">
+        <div className="text-sm text-slate-500">Validando permissões…</div>
+      </div>
+    );
+  }
 
   if (!activeTenantId || !activeTenant) {
     return <Navigate to="/tenants" replace state={{ from: loc.pathname }} />;
