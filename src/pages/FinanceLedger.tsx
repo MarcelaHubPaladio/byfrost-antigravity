@@ -6,7 +6,7 @@ export default function FinanceLedger() {
   return (
     <RequireAuth>
       <AppShell>
-        <div className="mx-auto w-full max-w-6xl">
+        <div className="mx-auto w-full">
           <div className="mb-4">
             <h1 className="text-xl font-semibold tracking-tight text-slate-900 dark:text-slate-100">
               Financeiro • Lançamentos
