@@ -1,7 +1,7 @@
--- Migration: Unify RLS Helpers to Eliminate Recursion (COMPATIBILITY MODE)
--- Description: Uses unnamed parameters to allow CREATE OR REPLACE without dropping functions with dependencies.
+-- Migration: Unify RLS Helpers to Eliminate Recursion (STRICT PARAMETER MATCH)
+-- Description: Uses exact parameter names from existing functions to allow CREATE OR REPLACE without dropping dependencies.
 
--- 1. Security Helpers (using PL/pgSQL + Security Definer + position parameters)
+-- 1. Security Helpers (using PL/pgSQL + Security Definer + EXACT parameter names)
 
 create or replace function public.is_super_admin()
 returns boolean
@@ -15,7 +15,7 @@ begin
 end;
 $$;
 
-create or replace function public.has_tenant_access(uuid)
+create or replace function public.has_tenant_access(tid uuid)
 returns boolean
 language plpgsql
 stable
@@ -31,13 +31,13 @@ begin
     select 1
     from public.users_profile up
     where up.user_id = auth.uid()
-      and up.tenant_id = $1
+      and up.tenant_id = tid
       and up.deleted_at is null
   );
 end;
 $$;
 
-create or replace function public.is_tenant_admin(uuid)
+create or replace function public.is_tenant_admin(p_tenant_id uuid)
 returns boolean
 language plpgsql
 stable
@@ -48,14 +48,14 @@ begin
   return exists (
     select 1 from public.users_profile up 
     where up.user_id = auth.uid() 
-      and up.tenant_id = $1 
+      and up.tenant_id = p_tenant_id 
       and up.role = 'admin'
       and up.deleted_at is null
   );
 end;
 $$;
 
-create or replace function public.get_subordinates(uuid, uuid)
+create or replace function public.get_subordinates(p_tenant_id uuid, p_user_id uuid)
 returns setof uuid
 language plpgsql
 stable
@@ -67,12 +67,12 @@ begin
     with recursive subs as (
         select user_id
         from public.org_nodes
-        where tenant_id = $1 and parent_user_id = $2
+        where tenant_id = p_tenant_id and parent_user_id = p_user_id
         union
         select o.user_id
         from public.org_nodes o
         join subs s on o.parent_user_id = s.user_id
-        where o.tenant_id = $1
+        where o.tenant_id = p_tenant_id
     )
     select user_id from subs;
 end;
