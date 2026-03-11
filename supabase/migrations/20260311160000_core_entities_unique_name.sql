@@ -48,8 +48,10 @@ BEGIN
          WHERE tenant_id = r.tenant_id AND to_entity_id IN (SELECT id FROM public.core_entities WHERE tenant_id = r.tenant_id AND display_name = r.display_name AND id <> v_master_id);
 
         -- Specialized tables
-        DELETE FROM public.core_offerings
-         WHERE entity_id IN (SELECT id FROM public.core_entities WHERE tenant_id = r.tenant_id AND display_name = r.display_name AND id <> v_master_id);
+        IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'core_offerings' AND table_schema = 'public') THEN
+            EXECUTE 'DELETE FROM public.core_offerings WHERE entity_id IN (SELECT id FROM public.core_entities WHERE tenant_id = $1 AND display_name = $2 AND id <> $3)'
+            USING r.tenant_id, r.display_name, v_master_id;
+        END IF;
 
         -- Financial transactions if the table exists
         IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'financial_transactions' AND table_schema = 'public') THEN
