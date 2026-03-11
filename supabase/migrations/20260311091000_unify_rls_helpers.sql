@@ -1,14 +1,7 @@
--- Migration: Unify RLS Helpers to Eliminate Recursion (FIXED PARAMETERS)
--- Description: Consolidates all security helpers in plpgsql to break loops. 
--- Includes DROP commands to allow parameter name changes.
+-- Migration: Unify RLS Helpers to Eliminate Recursion (COMPATIBILITY MODE)
+-- Description: Uses unnamed parameters to allow CREATE OR REPLACE without dropping functions with dependencies.
 
--- 1. Drop existing functions to allow signature/parameter changes
-drop function if exists public.is_super_admin();
-drop function if exists public.has_tenant_access(uuid);
-drop function if exists public.is_tenant_admin(uuid);
-drop function if exists public.get_subordinates(uuid, uuid);
-
--- 2. Consolidated Security Helpers (all as plpgsql + security definer)
+-- 1. Security Helpers (using PL/pgSQL + Security Definer + position parameters)
 
 create or replace function public.is_super_admin()
 returns boolean
@@ -22,7 +15,7 @@ begin
 end;
 $$;
 
-create or replace function public.has_tenant_access(tid uuid)
+create or replace function public.has_tenant_access(uuid)
 returns boolean
 language plpgsql
 stable
@@ -38,13 +31,13 @@ begin
     select 1
     from public.users_profile up
     where up.user_id = auth.uid()
-      and up.tenant_id = tid
+      and up.tenant_id = $1
       and up.deleted_at is null
   );
 end;
 $$;
 
-create or replace function public.is_tenant_admin(tid uuid)
+create or replace function public.is_tenant_admin(uuid)
 returns boolean
 language plpgsql
 stable
@@ -55,14 +48,14 @@ begin
   return exists (
     select 1 from public.users_profile up 
     where up.user_id = auth.uid() 
-      and up.tenant_id = tid 
+      and up.tenant_id = $1 
       and up.role = 'admin'
       and up.deleted_at is null
   );
 end;
 $$;
 
-create or replace function public.get_subordinates(p_tenant_id uuid, p_user_id uuid)
+create or replace function public.get_subordinates(uuid, uuid)
 returns setof uuid
 language plpgsql
 stable
@@ -74,24 +67,26 @@ begin
     with recursive subs as (
         select user_id
         from public.org_nodes
-        where tenant_id = p_tenant_id and parent_user_id = p_user_id
+        where tenant_id = $1 and parent_user_id = $2
         union
         select o.user_id
         from public.org_nodes o
         join subs s on o.parent_user_id = s.user_id
-        where o.tenant_id = p_tenant_id
+        where o.tenant_id = $1
     )
     select user_id from subs;
 end;
 $$;
 
--- 3. Update Tenants RLS
+-- 2. Update RLS Policies to use unified helpers
+
+-- Table: tenants
 drop policy if exists tenants_select on public.tenants;
 create policy tenants_select on public.tenants
 for select to authenticated
 using (public.has_tenant_access(id));
 
--- 4. Update Users Profile RLS
+-- Table: users_profile (simplified to break recursion)
 drop policy if exists users_profile_select on public.users_profile;
 create policy users_profile_select on public.users_profile
 for select to authenticated
@@ -101,7 +96,7 @@ using (
     or public.has_tenant_access(tenant_id)
 );
 
--- 5. Update Cases RLS
+-- Table: cases
 drop policy if exists cases_select on public.cases;
 create policy cases_select on public.cases
 for select to authenticated
