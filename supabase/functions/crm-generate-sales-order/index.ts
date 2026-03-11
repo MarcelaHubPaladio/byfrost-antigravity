@@ -17,7 +17,7 @@ serve(async (req: Request) => {
     const body = await req.json().catch(() => null);
     if (!body) return new Response(JSON.stringify({ ok: false, error: "Invalid JSON" }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
-    const { tenantId, caseId, linked_goal_metric, attachments } = body;
+    const { tenantId, caseId, linked_goal_metric, attachments, generationMode = "crm" } = body;
     if (!tenantId || !caseId) return new Response(JSON.stringify({ ok: false, error: "Missing tenantId or caseId in body" }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
     // 1. Get the CRM Case
@@ -81,13 +81,14 @@ serve(async (req: Request) => {
     }
 
     // 4. Duplicate Items
-    // Get existing CRM items
-    const { data: existingItems } = await supabase
-      .from("case_items")
-      .select("*")
-      .eq("tenant_id", tenantId)
-      .eq("case_id", caseId)
-      .order("line_no", { ascending: true });
+    if (generationMode === "crm") {
+      // Get existing CRM items
+      const { data: existingItems } = await supabase
+        .from("case_items")
+        .select("*")
+        .eq("tenant_id", tenantId)
+        .eq("case_id", caseId)
+        .order("line_no", { ascending: true });
 
     if (existingItems && existingItems.length > 0) {
       const itemsToInsert = existingItems.map((item: any) => ({
@@ -116,6 +117,7 @@ serve(async (req: Request) => {
         if (delErr) console.error(`[${fn}] Failed to delete original CRM items:`, delErr);
       }
     }
+  }
 
     // 4.2 Duplicate Fields & Inject Customer Data
     const { data: existingFields } = await supabase
