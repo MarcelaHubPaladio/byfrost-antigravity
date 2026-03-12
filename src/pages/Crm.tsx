@@ -922,14 +922,6 @@ export default function Crm() {
                   <div className="hidden sm:block">
                     <NewLeadDialog tenantId={activeTenantId} journey={selectedJourney as any} actorUserId={user?.id ?? null} />
                   </div>
-                  <div className="fixed bottom-0 left-0 right-0 z-[60] border-t border-slate-200 bg-white/80 p-4 backdrop-blur-md sm:hidden">
-                    <NewLeadDialog 
-                      tenantId={activeTenantId} 
-                      journey={selectedJourney as any} 
-                      actorUserId={user?.id ?? null} 
-                      className="h-12 w-full text-base shadow-lg"
-                    />
-                  </div>
                 </>
               ) : null}
 
@@ -942,6 +934,18 @@ export default function Crm() {
               </Button>
             </div>
           </div>
+
+          {activeTenantId && selectedJourney ? (
+            <div className="fixed bottom-0 left-0 right-0 z-[9999] border-t border-slate-200 bg-white/90 p-3 pb-8 backdrop-blur-md sm:hidden shadow-[0_-10px_40px_rgba(0,0,0,0.1)]">
+              <NewLeadDialog 
+                tenantId={activeTenantId} 
+                journey={selectedJourney as any} 
+                actorUserId={user?.id ?? null} 
+                className="h-12 w-full text-base font-medium shadow-lg hover:shadow-xl transition-all flex items-center justify-center"
+              />
+            </div>
+          ) : null}
+
 
           {crmJourneysQ.data?.length === 0 && (
             <div className="mt-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
