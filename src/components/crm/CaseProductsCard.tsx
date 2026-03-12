@@ -284,7 +284,10 @@ export function CaseProductsCard(props: { tenantId: string; caseId: string }) {
           .from("tenant-assets")
           .upload(path, file);
 
-        if (upErr) throw upErr;
+        if (upErr) {
+          console.error("Falha ao subir anexo pro storage:", upErr);
+          throw upErr;
+        }
 
         uploadedAttachments.push({
           storage_path: supabase.storage.from("tenant-assets").getPublicUrl(path).data.publicUrl,
@@ -306,8 +309,14 @@ export function CaseProductsCard(props: { tenantId: string; caseId: string }) {
       const { data, error } = await supabase.functions.invoke("crm-generate-sales-order", {
         body: payload,
       });
-      if (error) throw error;
-      if (!data?.ok) throw new Error(data?.error || "Unknown error");
+      if (error) {
+         console.error("Edge function falhou network/invoke:", error);
+         throw error;
+      }
+      if (!data?.ok) {
+         console.error("Edge function retornou não-ok no body:", data?.error);
+         throw new Error(data?.error || "Unknown error na Edge Function.");
+      }
 
       showSuccess("Pedido de Venda gerado com sucesso!");
       setConfirmOrderOpen(false);
