@@ -64,6 +64,7 @@ type ParticipantRow = {
   tenant_id: string;
   name: string;
   user_id: string | null;
+  entity_id: string | null;
 };
 
 type CampaignRow = {
@@ -340,61 +341,69 @@ export default function IncentivesEventsManage() {
       const commRateNum = commissionRate.trim() ? Number(commissionRate.replace(",", ".")) : null;
       const commValue = (valueNum && commRateNum) ? (valueNum * commRateNum) / 100 : null;
 
-      // 1. Resolve participant_ids for each selected user_id
-      const finalParticipantIds: string[] = [];
-      const sellersMap = new Map<string, string>(); // user_id -> participant_id
-      (participantsQ.data ?? []).forEach(p => { if (p.user_id) sellersMap.set(p.user_id, p.id); });
-
-      for (const uid of participantIds) {
-        if (sellersMap.has(uid)) {
-          finalParticipantIds.push(sellersMap.get(uid)!);
-        } else {
-          // Create participant
-          const seller = (sellersQ.data ?? []).find(s => s.user_id === uid);
-          const { data: newP, error: pError } = await supabase
-            .from("incentive_participants")
-            .insert({
-              tenant_id: activeTenantId,
-              user_id: uid,
-              name: seller?.display_name || seller?.email || uid,
-              cpf: ".", // Placeholder for system-merged participants
-              whatsapp: seller?.phone_e164 || "."
-            })
-            .select("id")
-            .single();
-          if (pError) throw pError;
-          finalParticipantIds.push(newP.id);
-        }
+      // 1. Resolve participant_id from selected Painter (relatedEntityId)
+      // Note: The user selects a Painter (entity) in the UI. 
+      // We need a participant record for this Painter to rank them.
+      if (!relatedEntityId) {
+        showError("Selecione um pintor para o ranking.");
+        return;
       }
 
-      // 2. Ensure all participants are linked to this campaign (required for ranking view)
-      const linkageRows = finalParticipantIds.map(pid => ({
-        tenant_id: activeTenantId,
-        campaign_id: campaignId,
-        participant_id: pid
-      }));
+      const paintersMap = new Map<string, string>(); // entity_id -> participant_id
+      (participantsQ.data ?? []).forEach(p => { if (p.entity_id) paintersMap.set(p.entity_id, p.id); });
 
-      if (linkageRows.length > 0) {
-        const { error: linkErr } = await supabase
-          .from("campaign_participants")
-          .upsert(linkageRows, { onConflict: 'campaign_id,participant_id' });
-        if (linkErr) throw linkErr;
+      let finalParticipantId: string;
+      if (paintersMap.has(relatedEntityId)) {
+        finalParticipantId = paintersMap.get(relatedEntityId)!;
+      } else {
+        // Create participant for the Painter
+        const painter = (entitiesQ.data ?? []).find(e => e.id === relatedEntityId);
+        const { data: newP, error: pError } = await supabase
+          .from("incentive_participants")
+          .insert({
+            tenant_id: activeTenantId,
+            entity_id: relatedEntityId,
+            name: painter?.display_name || "Pintor",
+            cpf: ".", 
+            whatsapp: "."
+          })
+          .select("id")
+          .single();
+        if (pError) throw pError;
+        finalParticipantId = newP.id;
       }
 
-      const rows = finalParticipantIds.map((pid) => ({
-        tenant_id: activeTenantId,
-        campaign_id: campaignId,
-        participant_id: pid,
-        event_type: eventType,
-        value: Number.isFinite(valueNum as any) ? valueNum : null,
-        points: Number.isFinite(pointsNum as any) ? pointsNum : null,
-        order_number: orderNumber || null,
-        commission_rate: Number.isFinite(commRateNum as any) ? commRateNum : null,
-        commission_value: Number.isFinite(commValue as any) ? commValue : null,
-        source_entity_id: sourceEntityId,
-        related_entity_id: relatedEntityId,
-        attachment_url: attachmentPath,
-      }));
+      // 2. Ensure participant is linked to this campaign
+      const { error: linkErr } = await supabase
+        .from("campaign_participants")
+        .upsert({
+          tenant_id: activeTenantId,
+          campaign_id: campaignId,
+          participant_id: finalParticipantId
+        }, { onConflict: 'campaign_id,participant_id' });
+      if (linkErr) throw linkErr;
+
+      // 3. Create events (one per selected seller, but all for the same Painter participant)
+      const rows = participantIds.map((uid) => {
+        // We still need a seller participant if we want to track WHO sold, 
+        // but for the RANKING (incentive_events.participant_id), we MUST use the Painter.
+        // For now, following the request: "quem precisa rankiar não é os vendedores e sim os pintores".
+        return {
+          tenant_id: activeTenantId,
+          campaign_id: campaignId,
+          participant_id: finalParticipantId, // The Painter
+          event_type: eventType,
+          value: Number.isFinite(valueNum as any) ? valueNum : null,
+          points: Number.isFinite(pointsNum as any) ? pointsNum : null,
+          order_number: orderNumber || null,
+          commission_rate: Number.isFinite(commRateNum as any) ? commRateNum : null,
+          commission_value: Number.isFinite(commValue as any) ? commValue : null,
+          source_entity_id: sourceEntityId, // Supplier
+          related_entity_id: relatedEntityId, // Painter
+          attachment_url: attachmentPath,
+          metadata: { seller_user_id: uid } // Audit who sold
+        };
+      });
 
       const { error } = await supabase.from("incentive_events").insert(rows);
       if (error) throw error;
