@@ -25,6 +25,26 @@ import { toast } from "sonner";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { 
+    Settings,
+    Maximize,
+    AlignCenter,
+    StretchHorizontal
+} from "lucide-react";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { ImageUpload } from "@/components/portal/ImageUpload";
+import { useTenant } from "@/providers/TenantProvider";
+import { 
   DndContext, 
   closestCenter,
   KeyboardSensor,
@@ -64,6 +84,7 @@ type Section = {
         backgroundColor?: string;
         paddingY?: string;
         paddingX?: string;
+        maxWidth?: '1200' | '1400' | 'full';
         columns?: number;
     };
     blocks: Block[];
@@ -77,6 +98,7 @@ export default function PortalEditor() {
     const [previewMode, setPreviewMode] = useState<'desktop' | 'mobile'>('desktop');
     const [activeSectionId, setActiveSectionId] = useState<string | null>(null);
 
+    const { activeTenant } = useTenant();
     const sensors = useSensors(
         useSensor(PointerSensor),
         useSensor(KeyboardSensor, {
@@ -312,7 +334,7 @@ export default function PortalEditor() {
                 <div className="flex-1 overflow-y-auto p-12 bg-slate-100 dark:bg-slate-950 flex justify-center">
                     <div className={cn(
                         "transition-all duration-500 bg-white dark:bg-slate-900 shadow-2xl overflow-hidden min-h-[800px]",
-                        previewMode === 'desktop' ? "w-full max-w-5xl rounded-[40px]" : "w-[375px] rounded-[60px] border-[12px] border-slate-800"
+                        previewMode === 'desktop' ? "w-full max-w-[95%] rounded-[40px]" : "w-[375px] rounded-[60px] border-[12px] border-slate-800"
                     )}>
                         {/* Render Editor Blocks */}
                         <div className="h-full">
@@ -412,55 +434,83 @@ function SortableSectionItem({ section, active, onSelect, onRemove, onUpdateSett
         >
             {/* Section Controls */}
             <div className="absolute right-4 top-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity z-20">
-                <Button variant="secondary" size="icon" className="h-9 w-9 rounded-full shadow-lg bg-white/90" onClick={onRemove}>
-                    <Trash2 className="h-4 w-4 text-red-500" />
-                </Button>
+                <Popover>
+                    <PopoverTrigger asChild>
+                        <Button variant="secondary" size="icon" className="h-9 w-9 rounded-full shadow-lg bg-white/90">
+                            <Settings className="h-4 w-4 text-slate-600" />
+                        </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-80 p-6 rounded-[24px] shadow-2xl border-slate-100" side="left" align="start">
+                        <div className="space-y-6">
+                            <div className="flex items-center justify-between">
+                                <h4 className="font-bold text-sm">Configuração da Seção</h4>
+                                <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full" onClick={onRemove}>
+                                    <Trash2 className="h-4 w-4 text-red-500" />
+                                </Button>
+                            </div>
+
+                            <div className="space-y-4">
+                                <ImageUpload 
+                                    label="Imagem de Fundo"
+                                    value={section.settings.backgroundImage}
+                                    onChange={(url) => onUpdateSettings({ backgroundImage: url })}
+                                />
+
+                                <div className="space-y-2">
+                                    <Label className="text-[10px] uppercase text-slate-400 font-bold tracking-wider">Largura do Conteúdo</Label>
+                                    <div className="grid grid-cols-3 gap-2">
+                                        {(['1200', '1400', 'full'] as const).map((w) => (
+                                            <Button
+                                                key={w}
+                                                variant={(section.settings.maxWidth || '1400') === w ? 'secondary' : 'outline'}
+                                                size="sm"
+                                                className="text-[10px] h-8 rounded-lg"
+                                                onClick={() => onUpdateSettings({ maxWidth: w })}
+                                            >
+                                                {w === 'full' ? 'Total' : `${w}px`}
+                                            </Button>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                <div className="space-y-2">
+                                    <div className="flex justify-between items-center">
+                                        <Label className="text-[10px] uppercase text-slate-400 font-bold tracking-wider">Espaçamento Vertical</Label>
+                                        <span className="text-[10px] bg-slate-100 px-2 py-0.5 rounded-full font-bold">{section.settings.paddingY || '12'}</span>
+                                    </div>
+                                    <input 
+                                        type="range" min="0" max="40" step="1"
+                                        className="w-full h-1.5 bg-slate-100 rounded-lg appearance-none cursor-pointer accent-blue-500"
+                                        value={section.settings.paddingY || '12'}
+                                        onChange={(e) => onUpdateSettings({ paddingY: e.target.value })}
+                                    />
+                                </div>
+
+                                <div className="space-y-2">
+                                    <Label className="text-[10px] uppercase text-slate-400 font-bold tracking-wider">Cor de Fundo</Label>
+                                    <div className="flex gap-2">
+                                        <input 
+                                            type="color" 
+                                            className="h-8 w-8 rounded-lg overflow-hidden border-none p-0 cursor-pointer bg-transparent"
+                                            value={section.settings.backgroundColor || '#ffffff'}
+                                            onChange={(e) => onUpdateSettings({ backgroundColor: e.target.value })}
+                                        />
+                                        <Input 
+                                            className="h-8 text-xs rounded-lg flex-1 bg-slate-50 border-none font-mono" 
+                                            value={section.settings.backgroundColor || '#ffffff'}
+                                            onChange={(e) => onUpdateSettings({ backgroundColor: e.target.value })}
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </PopoverContent>
+                </Popover>
+
                 <div {...attributes} {...listeners} className="h-9 w-9 rounded-full shadow-lg bg-white/90 flex items-center justify-center cursor-grab active:cursor-grabbing">
                     <GripVertical className="h-4 w-4 text-slate-400" />
                 </div>
             </div>
-
-            {/* Section Settings Overlay (visible when active) */}
-            {active && (
-                <div className="absolute left-4 top-4 flex flex-col gap-2 z-20 bg-white/90 backdrop-blur p-4 rounded-2xl shadow-xl border border-slate-100 w-64 animate-in zoom-in-95 duration-200">
-                    <div className="space-y-3">
-                        <div className="space-y-1">
-                            <Label className="text-[10px] uppercase text-slate-400 font-bold">Imagem de Fundo URL</Label>
-                            <Input 
-                                className="h-8 text-xs rounded-lg" 
-                                placeholder="https://..." 
-                                value={section.settings.backgroundImage || ''}
-                                onChange={(e) => onUpdateSettings({ backgroundImage: e.target.value })}
-                            />
-                        </div>
-                        <div className="space-y-1">
-                            <Label className="text-[10px] uppercase text-slate-400 font-bold">Padding Vertical ({section.settings.paddingY})</Label>
-                            <input 
-                                type="range" min="0" max="40" step="1"
-                                className="w-full h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-blue-500"
-                                value={section.settings.paddingY || '12'}
-                                onChange={(e) => onUpdateSettings({ paddingY: e.target.value })}
-                            />
-                        </div>
-                        <div className="space-y-1">
-                            <Label className="text-[10px] uppercase text-slate-400 font-bold">Cor de Fundo</Label>
-                            <div className="flex gap-2">
-                                <input 
-                                    type="color" 
-                                    className="h-8 w-8 rounded-lg overflow-hidden border-none"
-                                    value={section.settings.backgroundColor || '#ffffff'}
-                                    onChange={(e) => onUpdateSettings({ backgroundColor: e.target.value })}
-                                />
-                                <Input 
-                                    className="h-8 text-xs rounded-lg flex-1" 
-                                    value={section.settings.backgroundColor || '#ffffff'}
-                                    onChange={(e) => onUpdateSettings({ backgroundColor: e.target.value })}
-                                />
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            )}
 
             <div className="relative z-10 space-y-4 px-8">
                 {section.blocks.length === 0 && (
@@ -636,13 +686,12 @@ function EditorBlockItem({ block, onUpdate, onRemove }: any) {
                                     onUpdate({ items });
                                 }}
                             />
-                            <Input 
-                                placeholder="Image URL" 
-                                className="h-8 text-[10px]" 
-                                value={item.image} 
-                                onChange={(e) => {
+                            <ImageUpload 
+                                label="Imagem do Banner"
+                                value={item.image}
+                                onChange={(url) => {
                                     const items = [...block.content.items];
-                                    items[idx].image = e.target.value;
+                                    items[idx].image = url;
                                     onUpdate({ items });
                                 }}
                             />
@@ -701,6 +750,15 @@ function EditorBlockItem({ block, onUpdate, onRemove }: any) {
                                 onChange={(e) => {
                                     const items = [...block.content.items];
                                     items[idx].text = e.target.value;
+                                    onUpdate({ items });
+                                }}
+                            />
+                            <ImageUpload 
+                                label="Imagem do Card"
+                                value={item.image}
+                                onChange={(url) => {
+                                    const items = [...block.content.items];
+                                    items[idx].image = url;
                                     onUpdate({ items });
                                 }}
                             />

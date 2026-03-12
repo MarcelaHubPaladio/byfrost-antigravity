@@ -21,7 +21,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
 export default function PortalManager() {
-    const { activeTenantId } = useTenant();
+    const { activeTenantId, activeTenant } = useTenant();
     const queryClient = useQueryClient();
     const navigate = useNavigate();
     const [isCreateOpen, setIsCreateOpen] = useState(false);
@@ -163,7 +163,7 @@ export default function PortalManager() {
                                 <span className={`h-2 w-2 rounded-full ${page.is_published ? 'bg-green-500' : 'bg-slate-300'}`} />
                                 {page.is_published ? "Publicado" : "Rascunho"}
                                 <span className="mx-1">•</span>
-                                /l/{page.slug}
+                                /l/{activeTenant?.slug}/p/{page.slug}
                             </div>
                             <div className="grid grid-cols-2 gap-3">
                                 <Button variant="secondary" className="rounded-xl w-full gap-2 h-10 text-sm" onClick={() => navigate(`/app/portal/edit/${page.id}`)}>

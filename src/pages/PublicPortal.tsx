@@ -34,6 +34,7 @@ type Section = {
         backgroundColor?: string;
         paddingY?: string;
         paddingX?: string;
+        maxWidth?: '1200' | '1400' | 'full';
         columns?: number;
     };
     blocks: Block[];
@@ -45,12 +46,50 @@ export default function PublicPortal() {
     const { data: page, isLoading, error } = useQuery({
         queryKey: ["public_portal_page", tenantSlug, slug],
         queryFn: async () => {
+            let effectiveTenantSlug = tenantSlug;
+
+            // If tenantSlug is missing (e.g., using /l/:slug route), try to infer it from host
+            if (!effectiveTenantSlug) {
+                const host = window.location.host;
+                // app2.m30.company -> app2.m30
+                // localhost:5173 -> null
+                if (host.includes('.') && !host.startsWith('localhost')) {
+                    effectiveTenantSlug = host.split('.')[0];
+                }
+            }
+
+            if (!effectiveTenantSlug) {
+                // If we still don't have a tenant slug, we try to find the page by slug only
+                // but this is risky if slugs overlap across tenants.
+                // For now, let's at least try.
+                const { data, error: pError } = await supabase
+                    .from("portal_pages")
+                    .select("*, tenants(slug)")
+                    .eq("slug", slug)
+                    .eq("is_published", true)
+                    .limit(1)
+                    .maybeSingle();
+                if (pError) throw pError;
+                return data;
+            }
+
             const { data: tenant, error: tError } = await supabase
                 .from("tenants")
                 .select("id")
-                .eq("slug", tenantSlug)
+                .eq("slug", effectiveTenantSlug)
                 .single();
-            if (tError) throw tError;
+            if (tError) {
+                // Fallback: try finding by slug alone if tenant slug lookup fails
+                const { data, error: pError } = await supabase
+                    .from("portal_pages")
+                    .select("*")
+                    .eq("slug", slug)
+                    .eq("is_published", true)
+                    .limit(1)
+                    .maybeSingle();
+                if (pError) throw pError;
+                return data;
+            }
 
             const { data, error: pError } = await supabase
                 .from("portal_pages")
@@ -127,6 +166,9 @@ export default function PublicPortal() {
                     >
                         <div className={cn(
                             "mx-auto",
+                            section.settings.maxWidth === 'full' ? "max-w-none px-0" : 
+                            section.settings.maxWidth === '1200' ? "max-w-[1200px] px-6" :
+                            section.settings.maxWidth === '1400' ? "max-w-[1400px] px-6" :
                             isPremium ? "max-w-[1600px] px-0" : "max-w-7xl px-6"
                         )}>
                             {section.blocks.map((block) => (

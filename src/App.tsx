@@ -126,6 +126,7 @@ const App = () => (
                   {/* Public Portal (no auth) */}
                   <Route path="/portal/:tenantSlug/:slug" element={<PublicPortal />} />
                   <Route path="/l/:tenantSlug/p/:slug" element={<PublicPortal />} />
+                  <Route path="/l/:slug" element={<PublicPortal />} />
 
                   {/* Incentives (gestão interna; protegido por matriz de acesso) */}
                   <Route
