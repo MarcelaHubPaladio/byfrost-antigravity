@@ -93,6 +93,7 @@ const SmartNotFound = () => {
   const hostname = window.location.hostname;
   const isMainDomain = hostname.includes('localhost') || 
                       hostname.includes('byfrost') || 
+                      hostname.includes('m30.company') || 
                       hostname.endsWith('.vercel.app');
 
   if (!isMainDomain) {

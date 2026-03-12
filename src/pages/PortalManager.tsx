@@ -203,17 +203,36 @@ export default function PortalManager() {
                                 </div>
                             </div>
                             <h3 className="text-xl font-semibold mb-2 text-slate-900 dark:text-white line-clamp-1">{page.title}</h3>
-                            <div className="flex items-center gap-2 text-sm text-slate-500 mb-6">
-                                <span className={`h-2 w-2 rounded-full ${page.is_published ? 'bg-green-500' : 'bg-slate-300'}`} />
-                                {page.is_published ? "Publicado" : "Rascunho"}
-                                <span className="mx-1">•</span>
-                                /l/{activeTenant?.slug}/p/{page.slug}
+                            <div className="flex flex-col gap-1 mb-6">
+                                <div className="flex items-center gap-2 text-sm text-slate-500">
+                                    <span className={`h-2 w-2 rounded-full ${page.is_published ? 'bg-green-500' : 'bg-slate-300'}`} />
+                                    {page.is_published ? "Publicado" : "Rascunho"}
+                                </div>
+                                <div className="flex items-center gap-2 text-[11px] text-slate-400">
+                                    <Globe className="h-3 w-3" />
+                                    {page.page_settings?.custom_domain ? (
+                                        <span className="font-medium text-blue-600 dark:text-blue-400">
+                                            {page.page_settings.custom_domain}
+                                        </span>
+                                    ) : (
+                                        <span>/l/{activeTenant?.slug}/p/{page.slug}</span>
+                                    )}
+                                </div>
                             </div>
                             <div className="grid grid-cols-2 gap-3">
                                 <Button variant="secondary" className="rounded-xl w-full gap-2 h-10 text-sm" onClick={() => navigate(`/app/portal/edit/${page.id}`)}>
                                     Editar
                                 </Button>
-                                <Button variant="outline" className="rounded-xl w-full gap-2 h-10 text-sm" onClick={() => window.open(`/l/${page.slug}`, '_blank')}>
+                                <Button 
+                                    variant="outline" 
+                                    className="rounded-xl w-full gap-2 h-10 text-sm" 
+                                    onClick={() => {
+                                        const url = page.page_settings?.custom_domain 
+                                            ? `https://${page.page_settings.custom_domain}` 
+                                            : `/l/${page.slug}`;
+                                        window.open(url, '_blank');
+                                    }}
+                                >
                                     <ExternalLink className="h-3 w-3" />
                                     Ver site
                                 </Button>

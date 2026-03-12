@@ -271,24 +271,27 @@ export default function PublicPortal() {
         queryFn: async () => {
             // 1. Check for Custom Domain first
             const hostname = window.location.hostname;
+            const domainSearch = hostname.replace(/^www\./, '');
             const isMainDomain = hostname.includes('localhost') || 
                                 hostname.includes('byfrost') || 
+                                hostname.includes('m30.company') || 
                                 hostname.endsWith('.vercel.app');
 
             if (!isMainDomain) {
-                const { data: customPage, error: cpError } = await supabase
+                const { data: customPage } = await supabase
                     .from("portal_pages")
                     .select("*")
-                    .eq("page_settings->>custom_domain", hostname)
+                    .or(`page_settings->>custom_domain.eq.${hostname},page_settings->>custom_domain.eq.${domainSearch}`)
                     .eq("is_published", true)
+                    .order('created_at', { ascending: false })
                     .maybeSingle();
                 
                 if (customPage) return customPage;
             }
 
             let effectiveTenantSlug = tenantSlug;
+            let effectiveSlug = slug || 'home';
 
-            // If tenantSlug is missing (e.g., using /l/:slug route), try to infer it from host
             if (!effectiveTenantSlug) {
                 const host = window.location.host;
                 if (host.includes('.') && !host.startsWith('localhost')) {
@@ -296,11 +299,7 @@ export default function PublicPortal() {
                 }
             }
 
-            if (!effectiveTenantSlug) {
-                // If we still don't have a tenant slug, it might be a custom domain that didn't match perfectly
-                // or just a bad URL.
-                return null;
-            }
+            if (!effectiveTenantSlug) return null;
 
             const { data: tenant, error: tError } = await supabase
                 .from("tenants")
@@ -309,11 +308,10 @@ export default function PublicPortal() {
                 .single();
 
             if (tError) {
-                // Fallback: try finding by slug alone if tenant slug lookup fails
                 const { data, error: pError } = await supabase
                     .from("portal_pages")
                     .select("*")
-                    .eq("slug", slug)
+                    .eq("slug", effectiveSlug)
                     .eq("is_published", true)
                     .limit(1)
                     .maybeSingle();
@@ -325,7 +323,7 @@ export default function PublicPortal() {
                 .from("portal_pages")
                 .select("*")
                 .eq("tenant_id", tenant.id)
-                .eq("slug", slug)
+                .eq("slug", effectiveSlug)
                 .eq("is_published", true)
                 .single();
             if (pError) throw pError;
