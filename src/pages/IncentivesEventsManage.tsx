@@ -56,6 +56,7 @@ type SellerRow = {
   user_id: string;
   display_name: string | null;
   email?: string | null;
+  phone_e164?: string | null;
 };
 
 type ParticipantRow = {
@@ -166,7 +167,7 @@ export default function IncentivesEventsManage() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("users_profile")
-        .select("user_id, display_name, email")
+        .select("user_id, display_name, email, phone_e164")
         .eq("tenant_id", activeTenantId!)
         .is("deleted_at", null)
         .order("display_name", { ascending: true });
@@ -345,7 +346,9 @@ export default function IncentivesEventsManage() {
             .insert({
               tenant_id: activeTenantId,
               user_id: uid,
-              name: seller?.display_name || seller?.email || uid
+              name: seller?.display_name || seller?.email || uid,
+              cpf: ".", // Placeholder for system-merged participants
+              whatsapp: seller?.phone_e164 || "."
             })
             .select("id")
             .single();
