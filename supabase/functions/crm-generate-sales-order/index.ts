@@ -149,7 +149,29 @@ serve(async (req: Request) => {
       if (fieldsErr) console.error(`[${fn}] Failed to copy case fields:`, fieldsErr);
     }
 
-    // 4.3 Link Attachments
+    // 4.2.5 Duplicate existing attachments from CRM Case
+    console.log(`[${fn}] Duplicating existing attachments from CRM case`);
+    const { data: existingAtts } = await supabase
+      .from("case_attachments")
+      .select("*")
+      .eq("tenant_id", tenantId)
+      .eq("case_id", caseId);
+
+    if (existingAtts && existingAtts.length > 0) {
+      const attsToInsert = existingAtts.map((att: any) => ({
+        tenant_id: tenantId,
+        case_id: orderCase.id,
+        kind: att.kind,
+        storage_path: att.storage_path,
+        original_filename: att.original_filename,
+        content_type: att.content_type,
+        meta_json: { ...att.meta_json, source: "crm_copied" }
+      }));
+      const { error: attsErr } = await supabase.from("case_attachments").insert(attsToInsert);
+      if (attsErr) console.error(`[${fn}] Failed to copy existing attachments:`, attsErr);
+    }
+
+    // 4.3 Link Modal Attachments
     if (attachments && Array.isArray(attachments) && attachments.length > 0) {
       console.log(`[${fn}] Linking ${attachments.length} attachments`);
       const attachmentsToInsert = attachments.map((att: any) => ({
