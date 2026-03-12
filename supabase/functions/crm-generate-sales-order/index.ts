@@ -159,7 +159,6 @@ serve(async (req: Request) => {
 
     if (existingAtts && existingAtts.length > 0) {
       const attsToInsert = existingAtts.map((att: any) => ({
-        tenant_id: tenantId,
         case_id: orderCase.id,
         kind: att.kind,
         storage_path: att.storage_path,
