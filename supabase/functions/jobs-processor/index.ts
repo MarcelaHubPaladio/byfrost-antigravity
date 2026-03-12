@@ -1857,41 +1857,6 @@ serve(async (req: any) => {
 
           if (upserts.length) await supabase.from("case_fields").upsert(upserts);
 
-          // Items insertion (Agroforte / Sales Order)
-          // Only insert if the case currently has NO items
-          const { data: anyItem } = await supabase
-            .from("case_items")
-            .select("id")
-            .eq("case_id", targetCaseId)
-            .limit(1)
-            .maybeSingle();
-
-          if (!(anyItem as any)?.id && Array.isArray(extracted.itemLines) && extracted.itemLines.length > 0) {
-            console.log(`[${fn}] Attempting to insert ${extracted.itemLines.length} items for case ${targetCaseId}`);
-            const itemRows = extracted.itemLines.map((line, idx) => {
-              // Rough parsing of item line: "Description R$ Value"
-              const moneyPart = line.match(/R\$\s*([0-9\.,]+)/);
-              const total = moneyPart ? parsePtBrMoneyToCents(moneyPart[1]) / 100 : null;
-              const description = line.replace(/R\$\s*[0-9\.,]+/, "").trim();
-              
-              return {
-                tenant_id: tenantId,
-                case_id: targetCaseId,
-                line_no: idx + 1,
-                description: description || "Item extraído",
-                qty: 1, // Default to 1 as raw OCR text extraction is limited
-                price: total, // qty is 1, so price = total
-                total: total,
-                confidence_json: { source: "ocr_rough", raw_line: line }
-              };
-            });
-
-            if (itemRows.length > 0) {
-              const { error: itemsErr } = await supabase.from("case_items").insert(itemRows);
-              if (itemsErr) console.error(`[${fn}] Failed to insert items:`, itemsErr);
-            }
-          }
-
           await supabase.from("decision_logs").insert({
             tenant_id: tenantId,
             case_id: targetCaseId,

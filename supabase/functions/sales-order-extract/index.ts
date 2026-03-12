@@ -778,8 +778,9 @@ serve(async (req) => {
       const exVal = typeof ex?.value_text === "string" ? ex.value_text.trim() : "";
       const exSource = String(ex?.source ?? "");
 
-      // Don't overwrite admin/manual values.
+      // Don't overwrite admin/manual or crm values.
       if (exVal && exSource === "admin") return;
+      if (exVal && exSource === "crm_generation") return;
 
       const row: any = {
         case_id: caseId,
