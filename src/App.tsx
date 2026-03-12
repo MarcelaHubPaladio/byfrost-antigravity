@@ -89,6 +89,17 @@ const queryClient = new QueryClient({
     },
   },
 });
+const SmartNotFound = () => {
+  const hostname = window.location.hostname;
+  const isMainDomain = hostname.includes('localhost') || 
+                      hostname.includes('byfrost') || 
+                      hostname.endsWith('.vercel.app');
+
+  if (!isMainDomain) {
+    return <PublicPortal />;
+  }
+  return <NotFound />;
+};
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
@@ -529,7 +540,7 @@ const App = () => (
 
                   {/* Default redirects */}
                   <Route path="/app/*" element={<Navigate to="/app" replace />} />
-                  <Route path="*" element={<NotFound />} />
+                  <Route path="*" element={<SmartNotFound />} />
                 </Routes>
               </Suspense>
             </BrowserRouter>

@@ -269,20 +269,36 @@ export default function PublicPortal() {
     const { data: page, isLoading, error } = useQuery({
         queryKey: ["public_portal_page", tenantSlug, slug],
         queryFn: async () => {
+            // 1. Check for Custom Domain first
+            const hostname = window.location.hostname;
+            const isMainDomain = hostname.includes('localhost') || 
+                                hostname.includes('byfrost') || 
+                                hostname.endsWith('.vercel.app');
+
+            if (!isMainDomain) {
+                const { data: customPage, error: cpError } = await supabase
+                    .from("portal_pages")
+                    .select("*")
+                    .eq("page_settings->>custom_domain", hostname)
+                    .eq("is_published", true)
+                    .maybeSingle();
+                
+                if (customPage) return customPage;
+            }
+
             let effectiveTenantSlug = tenantSlug;
 
             // If tenantSlug is missing (e.g., using /l/:slug route), try to infer it from host
             if (!effectiveTenantSlug) {
                 const host = window.location.host;
-                // app2.m30.company -> app2.m30
-                // localhost:5173 -> null
                 if (host.includes('.') && !host.startsWith('localhost')) {
                     effectiveTenantSlug = host.split('.')[0];
                 }
             }
 
             if (!effectiveTenantSlug) {
-                console.error("Tenant not identified. Host:", window.location.host);
+                // If we still don't have a tenant slug, it might be a custom domain that didn't match perfectly
+                // or just a bad URL.
                 return null;
             }
 
@@ -291,6 +307,7 @@ export default function PublicPortal() {
                 .select("id")
                 .eq("slug", effectiveTenantSlug)
                 .single();
+
             if (tError) {
                 // Fallback: try finding by slug alone if tenant slug lookup fails
                 const { data, error: pError } = await supabase

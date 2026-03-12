@@ -308,7 +308,19 @@ function PageSettingsDialog({ page, open, onOpenChange, onSave, isPending }: any
                                         value={settings.custom_domain || ""} 
                                         onChange={(e) => setSettings({ ...settings, custom_domain: e.target.value })} 
                                     />
-                                    <p className="text-[10px] text-slate-400 mt-1">Requer apontamento CNAME para nossa infraestrutura.</p>
+                                    <div className="mt-4 p-4 rounded-2xl bg-slate-50 border border-slate-100 dark:bg-slate-900 dark:border-slate-800">
+                                        <p className="text-[10px] font-bold uppercase text-slate-400 mb-2">Instruções de Apontamento</p>
+                                        <div className="space-y-2 text-[11px]">
+                                            <div className="flex justify-between">
+                                                <span className="text-slate-500">Tipo A (@):</span>
+                                                <code className="text-blue-600 font-mono">76.76.21.21</code>
+                                            </div>
+                                            <div className="flex justify-between">
+                                                <span className="text-slate-500">CNAME:</span>
+                                                <code className="text-blue-600 font-mono">cname.vercel-dns.com</code>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         </div>
