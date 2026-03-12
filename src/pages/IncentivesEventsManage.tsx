@@ -369,7 +369,9 @@ export default function IncentivesEventsManage() {
     } finally {
       setCreatingP(false);
     }
-    return (
+  };
+
+  return (
     <RequireAuth>
       <AppShell>
         <div className="grid gap-4">
