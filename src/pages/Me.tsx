@@ -79,6 +79,9 @@ export default function Me() {
   const { prefs, setMode, setCustom, setStartRoute, isLoading } = useTheme();
   const [busy, setBusy] = useState(false);
   const [linking, setLinking] = useState(false);
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [changingPassword, setChangingPassword] = useState(false);
 
   const journeysEnabledQ = useQuery({
     queryKey: ["tenant_journeys_enabled", activeTenantId],
@@ -186,6 +189,34 @@ export default function Me() {
       showError(`Não foi possível salvar seu tema. (${e?.message ?? "erro"})`);
     } finally {
       setBusy(false);
+    }
+  };
+
+  const handleUpdatePassword = async () => {
+    if (!password) {
+      showError("Digite uma nova senha.");
+      return;
+    }
+    if (password !== confirmPassword) {
+      showError("As senhas não conferem.");
+      return;
+    }
+    if (password.length < 6) {
+      showError("A senha deve ter pelo menos 6 caracteres.");
+      return;
+    }
+
+    setChangingPassword(true);
+    try {
+      const { error } = await supabase.auth.updateUser({ password });
+      if (error) throw error;
+      showSuccess("Senha atualizada com sucesso!");
+      setPassword("");
+      setConfirmPassword("");
+    } catch (e: any) {
+      showError(`Erro ao atualizar senha: ${e.message}`);
+    } finally {
+      setChangingPassword(false);
     }
   };
 
@@ -307,6 +338,42 @@ export default function Me() {
                           ))}
                         </SelectContent>
                       </Select>
+                    </div>
+                  </div>
+
+                  <div className="rounded-[22px] border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-950/40">
+                    <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">Segurança</div>
+                    <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                      Atualize sua senha de acesso.
+                    </p>
+                    <div className="mt-4 grid gap-3">
+                      <div>
+                        <Label className="text-xs text-slate-700 dark:text-slate-200">Nova Senha</Label>
+                        <Input
+                          type="password"
+                          value={password}
+                          onChange={(e) => setPassword(e.target.value)}
+                          placeholder="••••••••"
+                          className="mt-1 h-11 rounded-2xl border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-950"
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-xs text-slate-700 dark:text-slate-200">Confirmar Senha</Label>
+                        <Input
+                          type="password"
+                          value={confirmPassword}
+                          onChange={(e) => setConfirmPassword(e.target.value)}
+                          placeholder="••••••••"
+                          className="mt-1 h-11 rounded-2xl border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-950"
+                        />
+                      </div>
+                      <Button
+                        onClick={handleUpdatePassword}
+                        disabled={changingPassword}
+                        className="mt-2 h-11 rounded-2xl font-semibold shadow-sm"
+                      >
+                        {changingPassword ? "Atualizando…" : "Atualizar Senha"}
+                      </Button>
                     </div>
                   </div>
                 </div>
