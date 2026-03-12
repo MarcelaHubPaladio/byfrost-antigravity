@@ -226,10 +226,29 @@ export default function PortalEditor() {
         setSections(sections.map(s => s.id === sectionId ? { ...s, blocks: s.blocks.filter(b => b.id !== blockId) } : s));
     };
 
-    const updateBlockContent = (sectionId: string, blockId: string, newContent: any) => {
+    const updateBlock = (sectionId: string, blockId: string, updates: any) => {
         setSections(sections.map(s => s.id === sectionId ? {
             ...s,
-            blocks: s.blocks.map(b => b.id === blockId ? { ...b, content: { ...b.content, ...newContent } } : b)
+            blocks: s.blocks.map(b => {
+                if (b.id !== blockId) return b;
+                
+                const { settings, blocks, ...contentUpdates } = updates;
+                let updatedBlock = { ...b };
+                
+                if (settings) {
+                    updatedBlock.settings = { ...(updatedBlock.settings || {}), ...settings };
+                }
+                
+                if (blocks) {
+                    updatedBlock.blocks = blocks;
+                }
+                
+                if (Object.keys(contentUpdates).length > 0) {
+                    updatedBlock.content = { ...(updatedBlock.content || {}), ...contentUpdates };
+                }
+                
+                return updatedBlock;
+            })
         } : s));
     };
 
@@ -523,7 +542,7 @@ export default function PortalEditor() {
                                                 onSelect={() => setActiveSectionId(section.id)}
                                                 onRemove={() => removeSection(section.id)}
                                                 onUpdateSettings={(sets: any) => updateSectionSettings(section.id, sets)}
-                                                onUpdateBlock={(bid: string, content: any) => updateBlockContent(section.id, bid, content)}
+                                                onUpdateBlock={(bid: string, updates: any) => updateBlock(section.id, bid, updates)}
                                                 onRemoveBlock={(bid: string) => removeBlock(section.id, bid)}
                                             />
                                         ))}
@@ -835,7 +854,14 @@ function SortableBlockItem({ block, sectionId, onUpdate, onRemove }: any) {
         <div 
             ref={setNodeRef} 
             style={style}
-            className="group/block relative p-4 rounded-2xl hover:bg-slate-50 transition-all border border-transparent hover:border-slate-100"
+            key={block.settings?.animation || 'static'} 
+            className={cn(
+                "group/block relative p-4 rounded-2xl hover:bg-slate-50 transition-all border border-transparent hover:border-slate-100",
+                block.settings?.animation === 'fade-up' && 'animate-fade-up',
+                block.settings?.animation === 'zoom-in' && 'animate-zoom-in',
+                block.settings?.animation === 'fade-left' && 'animate-fade-left',
+                block.settings?.animation === 'fade-right' && 'animate-fade-right'
+            )}
         >
             <div className="absolute -left-3 top-1/2 -translate-y-1/2 opacity-0 group-hover/block:opacity-100 transition-opacity cursor-grab active:cursor-grabbing z-40 bg-white shadow-sm border border-slate-100 rounded-lg p-1" {...attributes} {...listeners}>
                 <GripVertical className="h-3 w-3 text-slate-400" />
@@ -858,7 +884,7 @@ function SortableBlockItem({ block, sectionId, onUpdate, onRemove }: any) {
                                             variant={(block.settings?.height || 'auto') === h ? 'secondary' : 'outline'}
                                             size="sm" 
                                             className="text-[10px] h-7"
-                                            onClick={() => onUpdate({ settings: { ...(block.settings || {}), height: h } })}
+                                            onClick={() => onUpdate({ settings: { height: h } })}
                                         >
                                             {h}
                                         </Button>
@@ -869,7 +895,7 @@ function SortableBlockItem({ block, sectionId, onUpdate, onRemove }: any) {
                                  <Label className="text-[10px] uppercase text-slate-400 font-bold">Animação de Entrada</Label>
                                  <Select 
                                     value={block.settings?.animation || 'none'} 
-                                    onValueChange={(val) => onUpdate({ settings: { ...(block.settings || {}), animation: val } })}
+                                    onValueChange={(val) => onUpdate({ settings: { animation: val } })}
                                  >
                                      <SelectTrigger className="h-7 text-[10px] rounded-lg">
                                          <SelectValue placeholder="Escolha" />
@@ -892,7 +918,7 @@ function SortableBlockItem({ block, sectionId, onUpdate, onRemove }: any) {
                                             variant={(block.settings?.textAlign || 'left') === a ? 'secondary' : 'outline'}
                                             size="sm" 
                                             className="text-[10px] h-7 flex-1"
-                                            onClick={() => onUpdate({ settings: { ...(block.settings || {}), textAlign: a } })}
+                                            onClick={() => onUpdate({ settings: { textAlign: a } })}
                                         >
                                             <AlignCenter className={cn("h-3 w-3", a === 'left' && "-rotate-90", a === 'right' && "rotate-90")} />
                                         </Button>
@@ -959,7 +985,11 @@ function SortableBlockItem({ block, sectionId, onUpdate, onRemove }: any) {
             )}
 
             {block.type === 'hero' && (
-                <div className="text-center py-6">
+                <div className={cn(
+                    "py-6",
+                    block.settings?.textAlign === 'left' ? "text-left" :
+                    block.settings?.textAlign === 'right' ? "text-right" : "text-center"
+                )}>
                     <Input 
                         className="text-4xl font-black text-center border-none bg-transparent hover:bg-slate-100 focus:bg-slate-100 p-2 h-auto mb-2 rounded-xl"
                         value={block.content.title}
@@ -975,7 +1005,11 @@ function SortableBlockItem({ block, sectionId, onUpdate, onRemove }: any) {
 
             {block.type === 'text' && (
                 <textarea 
-                    className="w-full min-h-[80px] border-none bg-transparent hover:bg-slate-100 focus:bg-slate-100 p-3 rounded-xl resize-none text-slate-700 font-medium"
+                    className={cn(
+                        "w-full min-h-[80px] border-none bg-transparent hover:bg-slate-100 focus:bg-slate-100 p-3 rounded-xl resize-none text-slate-700 font-medium transition-all",
+                        block.settings?.textAlign === 'center' && "text-center",
+                        block.settings?.textAlign === 'right' && "text-right"
+                    )}
                     value={block.content.text}
                     onChange={(e) => onUpdate({ text: e.target.value })}
                 />
@@ -993,7 +1027,7 @@ function SortableBlockItem({ block, sectionId, onUpdate, onRemove }: any) {
                             min={10}
                             max={100}
                             step={1}
-                            onValueChange={([val]) => onUpdate({ settings: { ...(block.settings || {}), imageWidth: val.toString() } })}
+                            onValueChange={([val]) => onUpdate({ settings: { imageWidth: val.toString() } })}
                         />
                     </div>
                     <div className="flex flex-col gap-2 p-4 bg-slate-50 rounded-2xl border border-slate-100">
@@ -1003,7 +1037,7 @@ function SortableBlockItem({ block, sectionId, onUpdate, onRemove }: any) {
                                 placeholder="https://..." 
                                 className="h-9 rounded-xl text-xs"
                                 value={block.settings?.targetUrl || ''}
-                                onChange={(e) => onUpdate({ settings: { ...(block.settings || {}), targetUrl: e.target.value } })}
+                                onChange={(e) => onUpdate({ settings: { targetUrl: e.target.value } })}
                             />
                             {block.settings?.targetUrl && (
                                 <div className="flex items-center justify-center h-9 w-9 bg-blue-50 text-blue-600 rounded-xl">
@@ -1014,7 +1048,11 @@ function SortableBlockItem({ block, sectionId, onUpdate, onRemove }: any) {
                     </div>
                     {block.content.url ? (
                         <div 
-                            className="relative aspect-video rounded-2xl overflow-hidden border border-slate-100 group/img mx-auto transition-all duration-300"
+                            className={cn(
+                                "relative aspect-video rounded-2xl overflow-hidden border border-slate-100 group/img transition-all duration-300",
+                                block.settings?.textAlign === 'left' ? "mr-auto" : 
+                                block.settings?.textAlign === 'right' ? "ml-auto" : "mx-auto"
+                            )}
                             style={{ width: `${block.settings?.imageWidth || '100'}%` }}
                         >
                             <img src={block.content.url} className="w-full h-full object-cover" alt="" />
@@ -1226,7 +1264,7 @@ function SortableBlockItem({ block, sectionId, onUpdate, onRemove }: any) {
                                             variant={(block.settings?.direction || 'row') === d ? 'secondary' : 'outline'}
                                             size="sm"
                                             className="text-[9px] h-7 flex-1 uppercase"
-                                            onClick={() => onUpdate({ settings: { ...(block.settings || {}), direction: d } })}
+                                            onClick={() => onUpdate({ settings: { direction: d } })}
                                         >
                                             {d === 'row' ? 'Horiz' : 'Vert'}
                                         </Button>
@@ -1242,7 +1280,7 @@ function SortableBlockItem({ block, sectionId, onUpdate, onRemove }: any) {
                                             variant={(block.settings?.alignment || 'start') === a ? 'secondary' : 'outline'}
                                             size="sm"
                                             className="text-[9px] h-7 flex-1 uppercase"
-                                            onClick={() => onUpdate({ settings: { ...(block.settings || {}), alignment: a } })}
+                                            onClick={() => onUpdate({ settings: { alignment: a } })}
                                         >
                                             {a === 'start' ? 'Esq' : a === 'center' ? 'Meio' : 'Esp'}
                                         </Button>
@@ -1268,8 +1306,16 @@ function SortableBlockItem({ block, sectionId, onUpdate, onRemove }: any) {
                             <SortableBlockItem 
                                 key={innerBlock.id} 
                                 block={innerBlock}
-                                onUpdate={(content: any) => {
-                                    const blocks = block.blocks?.map(b => b.id === innerBlock.id ? { ...b, content: { ...b.content, ...content } } : b);
+                                onUpdate={(innerUpdates: any) => {
+                                    const blocks = block.blocks?.map(b => {
+                                        if (b.id !== innerBlock.id) return b;
+                                        const { settings, blocks: subBlocks, ...innerContent } = innerUpdates;
+                                        let nb = { ...b };
+                                        if (settings) nb.settings = { ...(nb.settings || {}), ...settings };
+                                        if (subBlocks) nb.blocks = subBlocks;
+                                        if (Object.keys(innerContent).length > 0) nb.content = { ...(nb.content || {}), ...innerContent };
+                                        return nb;
+                                    });
                                     onUpdate({ blocks });
                                 }}
                                 onRemove={() => {

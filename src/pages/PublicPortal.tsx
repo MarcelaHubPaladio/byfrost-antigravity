@@ -82,11 +82,19 @@ function BlockRenderer({ block, isPremium }: { block: Block; isPremium: boolean 
 
             {block.type === 'hero' && (
                 <div className="py-12">
-                    <div className="max-w-4xl mx-auto">
+                    <div className={cn(
+                        "max-w-4xl",
+                        block.settings?.textAlign === 'center' || !block.settings?.textAlign ? "mx-auto" :
+                        block.settings?.textAlign === 'right' ? "ml-auto" : "mr-auto"
+                    )}>
                         <h1 className="text-5xl md:text-7xl font-extrabold tracking-tight mb-6">
                             {block.content.title}
                         </h1>
-                        <p className="text-xl md:text-2xl text-slate-500 max-w-2xl mx-auto leading-relaxed">
+                        <p className={cn(
+                            "text-xl md:text-2xl text-slate-500 max-w-2xl leading-relaxed",
+                            block.settings?.textAlign === 'center' || !block.settings?.textAlign ? "mx-auto" :
+                            block.settings?.textAlign === 'right' ? "ml-auto" : "mr-auto"
+                        )}>
                             {block.content.subtitle}
                         </p>
                     </div>
@@ -147,7 +155,11 @@ function BlockRenderer({ block, isPremium }: { block: Block; isPremium: boolean 
             )}
 
             {block.type === 'text' && (
-                <div className="max-w-3xl mx-auto py-8">
+                <div className={cn(
+                    "max-w-3xl py-8",
+                    block.settings?.textAlign === 'center' ? "mx-auto" :
+                    block.settings?.textAlign === 'right' ? "ml-auto" : "mr-auto"
+                )}>
                     <div className="prose prose-slate dark:prose-invert max-w-none text-lg leading-relaxed whitespace-pre-wrap">
                         {block.content.text}
                     </div>
@@ -161,7 +173,11 @@ function BlockRenderer({ block, isPremium }: { block: Block; isPremium: boolean 
                             href={block.settings.targetUrl} 
                             target="_blank" 
                             rel="noopener noreferrer"
-                            className="block mx-auto transition-transform hover:scale-[1.02] active:scale-[0.98]"
+                            className={cn(
+                                "block transition-transform hover:scale-[1.02] active:scale-[0.98]",
+                                block.settings?.textAlign === 'left' ? "mr-auto" : 
+                                block.settings?.textAlign === 'right' ? "ml-auto" : "mx-auto"
+                            )}
                             style={{ width: `${block.settings?.imageWidth || '100'}%` }}
                         >
                             <div className="relative rounded-[40px] overflow-hidden shadow-2xl">
@@ -170,7 +186,11 @@ function BlockRenderer({ block, isPremium }: { block: Block; isPremium: boolean 
                         </a>
                     ) : (
                         <div 
-                            className="relative rounded-[40px] overflow-hidden shadow-2xl mx-auto transition-all duration-300"
+                            className={cn(
+                                "relative rounded-[40px] overflow-hidden shadow-2xl transition-all duration-300",
+                                block.settings?.textAlign === 'left' ? "mr-auto" : 
+                                block.settings?.textAlign === 'right' ? "ml-auto" : "mx-auto"
+                            )}
                             style={{ width: `${block.settings?.imageWidth || '100'}%` }}
                         >
                             <img src={block.content.url} className="w-full h-auto" alt="" />
