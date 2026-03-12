@@ -19,7 +19,8 @@ import {
     GripVertical,
     Eye,
     Monitor,
-    Smartphone
+    Smartphone,
+    Globe
 } from "lucide-react";
 import { toast } from "sonner";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -403,6 +404,56 @@ export default function PortalEditor() {
         });
     };
 
+    const publishM = useMutation({
+        mutationFn: async () => {
+            // 1. Capture HTML from the stage
+            const stage = document.getElementById('editor-stage');
+            if (!stage) throw new Error("Stage not found");
+
+            // Clone to sanitize
+            const clone = stage.cloneNode(true) as HTMLElement;
+            // Remove editor-only elements (buttons, drag handles, etc.)
+            clone.querySelectorAll('.editor-controls, [data-editor-only]').forEach(el => el.remove());
+            
+            const html = clone.innerHTML;
+
+            // 2. Capture CSS
+            // We'll grab all styles from the document to ensure everything is included
+            // In a production app, we'd be more selective, but this ensures no missing styles
+            let styles = "";
+            for (let i = 0; i < document.styleSheets.length; i++) {
+                try {
+                    const sheet = document.styleSheets[i];
+                    for (let j = 0; j < sheet.cssRules.length; j++) {
+                        styles += sheet.cssRules[j].cssText + "\n";
+                    }
+                } catch (e) {
+                    // Ignore cross-origin stylesheet errors
+                }
+            }
+
+            const { error } = await supabase
+                .from("portal_pages")
+                .update({
+                    content_json: sections,
+                    is_published: true,
+                    published_html: html,
+                    published_css: styles,
+                    updated_at: new Date().toISOString(),
+                })
+                .eq("id", id);
+            
+            if (error) throw error;
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ["portal_page", id] });
+            toast.success("Site publicado com sucesso em HTML estático!");
+        },
+        onError: (err: any) => {
+            toast.error(err.message || "Erro ao publicar");
+        }
+    });
+
     if (isLoading) return <div className="p-20"><Skeleton className="h-full w-full rounded-3xl" /></div>;
 
     return (
@@ -518,6 +569,25 @@ export default function PortalEditor() {
                         <Button variant="outline" size="sm" className="rounded-lg h-9 gap-2" onClick={() => window.open(`/l/${page?.slug}`, '_blank')}>
                             <Eye className="h-4 w-4" /> Visualizar
                         </Button>
+                        <Button 
+                            variant="secondary" 
+                            size="sm" 
+                            className="rounded-lg h-9 gap-2" 
+                            onClick={handleSave}
+                            disabled={saveM.isPending}
+                        >
+                            <Save className="h-4 w-4" /> 
+                            {saveM.isPending ? "Salvando..." : "Salvar Rascunho"}
+                        </Button>
+                        <Button 
+                            className="bg-blue-600 hover:bg-blue-700 text-white rounded-lg h-9 gap-2 font-bold px-6" 
+                            size="sm"
+                            onClick={() => publishM.mutate()}
+                            disabled={publishM.isPending}
+                        >
+                            <Globe className="h-4 w-4" />
+                            {publishM.isPending ? "Publicando..." : "Publicar Site"}
+                        </Button>
                     </div>
                 </div>
 
@@ -527,7 +597,7 @@ export default function PortalEditor() {
                         previewMode === 'desktop' ? "w-full max-w-[95%] rounded-[40px]" : "w-[375px] rounded-[60px] border-[12px] border-slate-800"
                     )}>
                         {/* Render Editor Blocks */}
-                        <div className="relative">
+                        <div className="relative" id="editor-stage">
                             <SortableContext 
                                 items={sections.map(s => s.id)}
                                 strategy={verticalListSortingStrategy}

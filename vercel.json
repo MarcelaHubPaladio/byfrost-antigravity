@@ -2,6 +2,20 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "rewrites": [
     {
+      "source": "/api/serve",
+      "destination": "/api/serve.ts"
+    },
+    {
+      "source": "/(.*)",
+      "has": [
+        {
+          "type": "host",
+          "value": "^(?!(localhost|byfrost|m30\\.company|.*\\.vercel\\.app)).*$"
+        }
+      ],
+      "destination": "/api/serve"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }
