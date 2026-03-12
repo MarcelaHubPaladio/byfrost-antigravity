@@ -33,7 +33,7 @@ type Block = {
         direction?: 'row' | 'col';
         alignment?: 'start' | 'center' | 'end' | 'between';
         animation?: 'none' | 'fade-up' | 'zoom-in' | 'fade-left' | 'fade-right';
-        imageWidth?: '25' | '50' | '75' | '100';
+        imageWidth?: string;
     };
 };
 
@@ -155,12 +155,10 @@ function BlockRenderer({ block, isPremium }: { block: Block; isPremium: boolean 
 
             {block.type === 'image' && block.content.url && (
                 <div className="w-full py-8">
-                    <div className={cn(
-                        "relative rounded-[40px] overflow-hidden shadow-2xl mx-auto transition-all duration-300",
-                        (block.settings?.imageWidth === '25') ? "w-1/4" :
-                        (block.settings?.imageWidth === '50') ? "w-1/2" :
-                        (block.settings?.imageWidth === '75') ? "w-3/4" : "w-full"
-                    )}>
+                    <div 
+                        className="relative rounded-[40px] overflow-hidden shadow-2xl mx-auto transition-all duration-300"
+                        style={{ width: `${block.settings?.imageWidth || '100'}%` }}
+                    >
                         <img src={block.content.url} className="w-full h-auto" alt="" />
                     </div>
                 </div>

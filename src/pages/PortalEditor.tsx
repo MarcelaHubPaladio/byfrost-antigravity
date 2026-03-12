@@ -43,6 +43,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { ImageUpload } from "@/components/portal/ImageUpload";
+import { Slider } from "@/components/ui/slider";
 import { useTenant } from "@/providers/TenantProvider";
 import { 
     DndContext, 
@@ -83,7 +84,7 @@ type Block = {
         direction?: 'row' | 'col';
         alignment?: 'start' | 'center' | 'end' | 'between';
         animation?: 'none' | 'fade-up' | 'zoom-in' | 'fade-left' | 'fade-right';
-        imageWidth?: '25' | '50' | '75' | '100';
+        imageWidth?: string;
     };
 };
 
@@ -981,29 +982,24 @@ function SortableBlockItem({ block, sectionId, onUpdate, onRemove }: any) {
 
             {block.type === 'image' && (
                 <div className="space-y-4">
-                    <div className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100">
-                        <Label className="text-[10px] font-bold text-slate-400 uppercase">Tamanho da Imagem</Label>
-                        <div className="flex gap-1">
-                            {(['25', '50', '75', '100'] as const).map((w) => (
-                                <Button 
-                                    key={w} 
-                                    variant={(block.settings?.imageWidth || '100') === w ? 'secondary' : 'outline'}
-                                    size="sm" 
-                                    className="h-6 text-[9px] px-2"
-                                    onClick={() => onUpdate({ settings: { ...(block.settings || {}), imageWidth: w } })}
-                                >
-                                    {w}%
-                                </Button>
-                            ))}
+                    <div className="flex flex-col gap-3 p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                        <div className="flex items-center justify-between">
+                            <Label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Largura da Imagem</Label>
+                            <span className="text-[10px] font-bold text-blue-600">{block.settings?.imageWidth || '100'}%</span>
                         </div>
+                        <Slider
+                            value={[parseInt(block.settings?.imageWidth || '100')]}
+                            min={10}
+                            max={100}
+                            step={1}
+                            onValueChange={([val]) => onUpdate({ settings: { ...(block.settings || {}), imageWidth: val.toString() } })}
+                        />
                     </div>
                     {block.content.url ? (
-                        <div className={cn(
-                            "relative aspect-video rounded-2xl overflow-hidden border border-slate-100 group/img mx-auto transition-all duration-300",
-                            (block.settings?.imageWidth === '25') ? "w-1/4" :
-                            (block.settings?.imageWidth === '50') ? "w-1/2" :
-                            (block.settings?.imageWidth === '75') ? "w-3/4" : "w-full"
-                        )}>
+                        <div 
+                            className="relative aspect-video rounded-2xl overflow-hidden border border-slate-100 group/img mx-auto transition-all duration-300"
+                            style={{ width: `${block.settings?.imageWidth || '100'}%` }}
+                        >
                             <img src={block.content.url} className="w-full h-full object-cover" alt="" />
                             <div className="absolute inset-0 bg-black/40 opacity-0 group-hover/img:opacity-100 transition-opacity flex items-center justify-center">
                                 <Button variant="secondary" size="sm" onClick={() => onUpdate({ url: '' })}>Trocar Imagem</Button>
