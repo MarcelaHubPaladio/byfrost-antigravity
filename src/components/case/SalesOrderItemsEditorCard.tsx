@@ -101,16 +101,16 @@ export function SalesOrderItemsEditorCard(props: { caseId: string; className?: s
     queryFn: async () => {
       let q = supabase
         .from("core_entities")
-        .select("id,name,short_name,document,avatar_url,tags")
+        .select("id,display_name,metadata,status")
         .eq("tenant_id", activeTenantId!)
         .eq("entity_type", "offering")
         .is("deleted_at", null)
-        .order("name", { ascending: true })
+        .order("display_name", { ascending: true })
         .limit(30);
 
       const term = debouncedSearch.trim();
       if (term) {
-        q = q.ilike("name", `%${term}%`);
+        q = q.ilike("display_name", `%${term}%`);
       }
       const { data, error } = await q;
       if (error) throw error;
@@ -413,7 +413,12 @@ export function SalesOrderItemsEditorCard(props: { caseId: string; className?: s
                                   setDraft((prev) =>
                                     prev.map((x) =>
                                       x.line_no === row.line_no
-                                        ? { ...x, code: off.short_name || x.code, description: off.name, offering_entity_id: off.id }
+                                        ? {
+                                            ...x,
+                                            code: off.metadata?.short_name || off.metadata?.code || x.code,
+                                            description: off.display_name,
+                                            offering_entity_id: off.id,
+                                          }
                                         : x
                                     )
                                   );
@@ -423,11 +428,11 @@ export function SalesOrderItemsEditorCard(props: { caseId: string; className?: s
                               >
                                 <div className="flex flex-col gap-0.5">
                                   <div className="text-sm font-medium text-slate-900 leading-snug">
-                                    {off.name}
+                                    {off.display_name}
                                   </div>
-                                  {off.short_name && (
+                                  {(off.metadata?.short_name || off.metadata?.code) && (
                                     <div className="text-[11px] text-slate-500 font-mono">
-                                      {off.short_name}
+                                      {off.metadata?.short_name || off.metadata?.code}
                                     </div>
                                   )}
                                 </div>
@@ -611,7 +616,12 @@ export function SalesOrderItemsEditorCard(props: { caseId: string; className?: s
                                   setDraft((prev) =>
                                     prev.map((x) =>
                                       x.line_no === row.line_no
-                                        ? { ...x, code: off.short_name || x.code, description: off.name, offering_entity_id: off.id }
+                                        ? {
+                                            ...x,
+                                            code: off.metadata?.short_name || off.metadata?.code || x.code,
+                                            description: off.display_name,
+                                            offering_entity_id: off.id,
+                                          }
                                         : x
                                     )
                                   );
@@ -621,11 +631,11 @@ export function SalesOrderItemsEditorCard(props: { caseId: string; className?: s
                               >
                                 <div className="flex flex-col gap-0.5">
                                   <div className="text-sm font-medium text-slate-900 leading-snug">
-                                    {off.name}
+                                    {off.display_name}
                                   </div>
-                                  {off.short_name && (
+                                  {(off.metadata?.short_name || off.metadata?.code) && (
                                     <div className="text-[11px] text-slate-500 font-mono">
-                                      {off.short_name}
+                                      {off.metadata?.short_name || off.metadata?.code}
                                     </div>
                                   )}
                                 </div>

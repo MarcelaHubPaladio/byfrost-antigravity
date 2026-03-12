@@ -855,8 +855,13 @@ export default function CaseDetail() {
     );
   };
 
-  const openReview = (url: string | null) => {
-    setReviewImageUrl(url);
+  const openReview = (path: string | null) => {
+    if (!path) {
+      setReviewImageUrl(null);
+    } else {
+      const { data } = supabase.storage.from("tenant-assets").getPublicUrl(path);
+      setReviewImageUrl(data.publicUrl);
+    }
     setReviewOpen(true);
   };
 
