@@ -52,11 +52,17 @@ const BUCKET = "tenant-assets";
 const UPLOAD_URL =
   `${SUPABASE_URL_IN_USE}/functions/v1/upload-tenant-asset`;
 
+type SellerRow = {
+  user_id: string;
+  display_name: string | null;
+  email?: string | null;
+};
+
 type ParticipantRow = {
   id: string;
   tenant_id: string;
   name: string;
-  display_name: string | null;
+  user_id: string | null;
 };
 
 type CampaignRow = {
@@ -137,11 +143,11 @@ export default function IncentivesEventsManage() {
   const [creating, setCreating] = useState(false);
   const eventFileRef = useRef<HTMLInputElement | null>(null);
 
-  // quick participant create
-  const [showQuickParticipant, setShowQuickParticipant] = useState(false);
-  const [qName, setQName] = useState("");
-  const [qCpf, setQCpf] = useState("");
-  const [qWhatsapp, setQWhatsapp] = useState("");
+  // quick painter create
+  const [showQuickPainter, setShowQuickPainter] = useState(false);
+  const [qpName, setQpName] = useState("");
+  const [qpCpf, setQpCpf] = useState("");
+  const [qpWhatsapp, setQpWhatsapp] = useState("");
   const [creatingP, setCreatingP] = useState(false);
 
   // edit
@@ -154,16 +160,29 @@ export default function IncentivesEventsManage() {
   const [editCommissionRate, setEditCommissionRate] = useState("");
   const [savingEdit, setSavingEdit] = useState(false);
 
+  const sellersQ = useQuery({
+    queryKey: ["incentives_sellers_users", activeTenantId],
+    enabled: Boolean(activeTenantId),
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("users_profile")
+        .select("user_id, display_name, email")
+        .eq("tenant_id", activeTenantId!)
+        .is("deleted_at", null)
+        .order("display_name", { ascending: true });
+      if (error) throw error;
+      return (data ?? []) as SellerRow[];
+    },
+  });
+
   const participantsQ = useQuery({
-    queryKey: ["incentives_manage_participants", activeTenantId],
+    queryKey: ["incentives_participants_map", activeTenantId],
     enabled: Boolean(activeTenantId),
     queryFn: async () => {
       const { data, error } = await supabase
         .from("incentive_participants")
-        .select("id,tenant_id,name,display_name")
-        .eq("tenant_id", activeTenantId!)
-        .order("created_at", { ascending: false })
-        .limit(1000);
+        .select("id,tenant_id,name,user_id")
+        .eq("tenant_id", activeTenantId!);
       if (error) throw error;
       return (data ?? []) as ParticipantRow[];
     },
@@ -310,7 +329,32 @@ export default function IncentivesEventsManage() {
       const commRateNum = commissionRate.trim() ? Number(commissionRate.replace(",", ".")) : null;
       const commValue = (valueNum && commRateNum) ? (valueNum * commRateNum) / 100 : null;
 
-      const rows = participantIds.map((pid) => ({
+      // 1. Resolve participant_ids for each selected user_id
+      const finalParticipantIds: string[] = [];
+      const sellersMap = new Map<string, string>(); // user_id -> participant_id
+      (participantsQ.data ?? []).forEach(p => { if (p.user_id) sellersMap.set(p.user_id, p.id); });
+
+      for (const uid of participantIds) {
+        if (sellersMap.has(uid)) {
+          finalParticipantIds.push(sellersMap.get(uid)!);
+        } else {
+          // Create participant
+          const seller = (sellersQ.data ?? []).find(s => s.user_id === uid);
+          const { data: newP, error: pError } = await supabase
+            .from("incentive_participants")
+            .insert({
+              tenant_id: activeTenantId,
+              user_id: uid,
+              name: seller?.display_name || seller?.email || uid
+            })
+            .select("id")
+            .single();
+          if (pError) throw pError;
+          finalParticipantIds.push(newP.id);
+        }
+      }
+
+      const rows = finalParticipantIds.map((pid) => ({
         tenant_id: activeTenantId,
         campaign_id: campaignId,
         participant_id: pid,
@@ -339,6 +383,7 @@ export default function IncentivesEventsManage() {
 
       showSuccess(`Evento lançado para ${rows.length} participante(s).`);
       await qc.invalidateQueries({ queryKey: ["incentives_manage_events", activeTenantId, campaignId] });
+      await qc.invalidateQueries({ queryKey: ["incentives_participants_map", activeTenantId] });
     } catch (e: any) {
       showError(`Falha ao lançar evento: ${e?.message ?? "erro"}`);
     } finally {
@@ -346,24 +391,28 @@ export default function IncentivesEventsManage() {
     }
   };
 
-  const createQuickParticipant = async () => {
-    if (!activeTenantId || !qName.trim() || !qCpf.trim()) {
+  const createQuickPainter = async () => {
+    if (!activeTenantId || !qpName.trim() || !qpCpf.trim()) {
       showError("Nome e CPF são obrigatórios.");
       return;
     }
     setCreatingP(true);
     try {
-      const { error } = await supabase.from("incentive_participants").insert({
+      const { data, error } = await supabase.from("core_entities").insert({
         tenant_id: activeTenantId,
-        name: qName.trim(),
-        cpf: qCpf.trim(),
-        whatsapp: qWhatsapp.trim(),
-      });
+        display_name: qpName.trim(),
+        subtype: "pintor",
+        metadata: {
+          cpf: qpCpf.trim(),
+          whatsapp: qpWhatsapp.trim(),
+        }
+      }).select("id").single();
       if (error) throw error;
-      showSuccess("Vendedor cadastrado com sucesso.");
-      setQName(""); setQCpf(""); setQWhatsapp("");
-      setShowQuickParticipant(false);
-      await qc.invalidateQueries({ queryKey: ["incentives_manage_participants", activeTenantId] });
+      showSuccess("Pintor cadastrado com sucesso.");
+      setQpName(""); setQpCpf(""); setQpWhatsapp("");
+      setShowQuickPainter(false);
+      setRelatedEntityId(data.id);
+      await qc.invalidateQueries({ queryKey: ["incentives_manage_entities", activeTenantId] });
     } catch (e: any) {
       showError(`Falha ao cadastrar: ${e?.message ?? "erro"}`);
     } finally {
@@ -446,9 +495,9 @@ export default function IncentivesEventsManage() {
                       <div>
                         <Label className="text-xs font-semibold text-slate-600 mb-2 block">Participante (Vendedor)</Label>
                         <ParticipantsMultiSelect
-                          options={(participantsQ.data ?? []).map((p) => ({
-                            value: p.id,
-                            label: p.display_name ?? p.name,
+                          options={(sellersQ.data ?? []).map((s) => ({
+                            value: s.user_id,
+                            label: s.display_name || s.email || s.user_id,
                           }))}
                           value={participantIds}
                           onChange={setParticipantIds}
@@ -473,7 +522,7 @@ export default function IncentivesEventsManage() {
                           <Button
                             variant="outline"
                             className="h-12 w-12 rounded-2xl border-dashed border-slate-300 hover:border-indigo-400 group"
-                            onClick={() => setShowQuickParticipant(true)}
+                            onClick={() => setShowQuickPainter(true)}
                             title="Cadastro rápido"
                           >
                             <span className="text-xl text-slate-400 group-hover:text-indigo-500 transition-colors">+</span>
@@ -554,8 +603,8 @@ export default function IncentivesEventsManage() {
                       </TableHeader>
                       <TableBody>
                         {(eventsQ.data ?? []).slice(0, 8).map((e) => {
-                          const p = participantsById.get(e.participant_id);
-                          const pn = p ? p.display_name ?? p.name : e.participant_id.slice(0, 8) + "…";
+                          const p = (participantsQ.data ?? []).find(xp => xp.id === e.participant_id);
+                          const pn = p ? p.name : e.participant_id.slice(0, 8) + "…";
                           return (
                             <TableRow key={e.id} className="border-slate-50 hover:bg-slate-50/30 transition-colors">
                               <TableCell className="text-xs text-slate-500">
@@ -616,9 +665,9 @@ export default function IncentivesEventsManage() {
                     </TableHeader>
                     <TableBody>
                       {(eventsQ.data ?? []).map((e) => {
-                        const p = participantsById.get(e.participant_id);
-                        const pn = p ? p.display_name ?? p.name : e.participant_id.slice(0, 8) + "…";
-                        const c = campaignsById.get(e.campaign_id);
+                        const p = (participantsQ.data ?? []).find(xp => xp.id === e.participant_id);
+                        const pn = p ? p.name : e.participant_id.slice(0, 8) + "…";
+                        const c = (campaignsQ.data ?? []).find(xc => xc.id === e.campaign_id);
                         const cn = c ? c.name : e.campaign_id.slice(0, 8) + "…";
                         return (
                           <TableRow key={e.id}>
@@ -738,29 +787,29 @@ export default function IncentivesEventsManage() {
           </DialogContent>
         </Dialog>
 
-        <Dialog open={showQuickParticipant} onOpenChange={setShowQuickParticipant}>
+        <Dialog open={showQuickPainter} onOpenChange={setShowQuickPainter}>
           <DialogContent className="max-w-md rounded-3xl">
             <DialogHeader>
-              <DialogTitle>Cadastro Simplificado de Vendedor</DialogTitle>
-              <DialogDescription>Adicione um novo participante rapidamente.</DialogDescription>
+              <DialogTitle>Cadastro Simplificado de Pintor</DialogTitle>
+              <DialogDescription>Adicione um novo pintor conforme necessidade.</DialogDescription>
             </DialogHeader>
             <div className="grid gap-3">
               <div>
                 <Label className="text-xs">Nome Completo</Label>
-                <Input value={qName} onChange={(e) => setQName(e.target.value)} placeholder="Ex: João da Silva" className="mt-1 h-11 rounded-2xl" />
+                <Input value={qpName} onChange={(e) => setQpName(e.target.value)} placeholder="Ex: João da Silva" className="mt-1 h-11 rounded-2xl" />
               </div>
               <div>
                 <Label className="text-xs">CPF (Somente números)</Label>
-                <Input value={qCpf} onChange={(e) => setQCpf(e.target.value)} placeholder="00000000000" className="mt-1 h-11 rounded-2xl" />
+                <Input value={qpCpf} onChange={(e) => setQpCpf(e.target.value)} placeholder="00000000000" className="mt-1 h-11 rounded-2xl" />
               </div>
               <div>
                 <Label className="text-xs">WhatsApp (Opcional)</Label>
-                <Input value={qWhatsapp} onChange={(e) => setQWhatsapp(e.target.value)} placeholder="11999998888" className="mt-1 h-11 rounded-2xl" />
+                <Input value={qpWhatsapp} onChange={(e) => setQpWhatsapp(e.target.value)} placeholder="11999998888" className="mt-1 h-11 rounded-2xl" />
               </div>
             </div>
             <DialogFooter>
-              <Button variant="secondary" onClick={() => setShowQuickParticipant(false)} className="rounded-2xl">Cancelar</Button>
-              <Button onClick={createQuickParticipant} disabled={creatingP} className="rounded-2xl">
+              <Button variant="secondary" onClick={() => setShowQuickPainter(false)} className="rounded-2xl">Cancelar</Button>
+              <Button onClick={createQuickPainter} disabled={creatingP} className="rounded-2xl">
                 {creatingP ? "Cadastrando…" : "Cadastrar"}
               </Button>
             </DialogFooter>

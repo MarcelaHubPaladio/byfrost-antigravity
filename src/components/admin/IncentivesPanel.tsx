@@ -65,6 +65,9 @@ type CampaignRow = {
   start_date: string | null;
   end_date: string | null;
   finalized_at: string | null;
+  metadata?: {
+    commission_rate?: number;
+  };
   created_at: string;
 };
 
@@ -178,6 +181,7 @@ export function IncentivesPanel() {
   const [addingParticipantId, setAddingParticipantId] = useState<string | null>(null);
   const [addingParticipant, setAddingParticipant] = useState(false);
   const [editingCampaignName, setEditingCampaignName] = useState<string>("");
+  const [editingCommissionRate, setEditingCommissionRate] = useState<string>("");
 
   // ---- Events ----
   const [eCampaignId, setECampaignId] = useState<string | null>(null);
@@ -209,7 +213,7 @@ export function IncentivesPanel() {
       const { data, error } = await supabase
         .from("campaigns")
         .select(
-          "id,tenant_id,name,participant_scope,ranking_type,visibility,start_date,end_date,status,finalized_at,created_at"
+          "id,tenant_id,name,participant_scope,ranking_type,visibility,start_date,end_date,status,finalized_at,metadata,created_at"
         )
         .eq("tenant_id", activeTenantId!)
         .order("created_at", { ascending: false });
@@ -278,7 +282,12 @@ export function IncentivesPanel() {
 
   useEffect(() => {
     if (manageCampaign?.name) setEditingCampaignName(manageCampaign.name);
-  }, [manageCampaignId, manageCampaign?.name]);
+    if (manageCampaign?.metadata?.commission_rate != null) {
+      setEditingCommissionRate(String(manageCampaign.metadata.commission_rate));
+    } else {
+      setEditingCommissionRate("");
+    }
+  }, [manageCampaignId, manageCampaign?.name, manageCampaign?.metadata?.commission_rate]);
 
   const participantIdsInCampaign = useMemo(() => {
     const set = new Set<string>();
@@ -944,28 +953,49 @@ export function IncentivesPanel() {
                       )}
                     </div>
 
-                    <div className="mt-3 grid gap-2 sm:grid-cols-[1fr_auto]">
+                    <div className="mt-3 grid gap-3 sm:grid-cols-2">
                       <div>
-                        <Label className="text-xs">Título da campanha (label)</Label>
+                        <Label className="text-xs font-semibold text-slate-600 block mb-1.5">Título da campanha (label)</Label>
                         <Input
                           value={editingCampaignName}
                           onChange={(e) => setEditingCampaignName(e.target.value)}
-                          className="mt-1 h-11 rounded-2xl"
+                          className="h-11 rounded-2xl bg-white border-slate-200"
                           placeholder="Ex: Campanha Março/2026"
                         />
                       </div>
-                      <div className="flex items-end">
-                        <Button
-                          className="h-11 rounded-2xl"
-                          disabled={!editingCampaignName.trim() || editingCampaignName.trim() === manageCampaign.name}
-                          onClick={async () => {
-                            await updateCampaign(manageCampaign.id, { name: editingCampaignName.trim() });
-                            showSuccess("Título da campanha atualizado.");
-                          }}
-                        >
-                          Salvar título
-                        </Button>
+                      <div>
+                        <Label className="text-xs font-semibold text-slate-600 block mb-1.5">% Comissão Padrão</Label>
+                        <Input
+                          type="number"
+                          value={editingCommissionRate}
+                          onChange={(e) => setEditingCommissionRate(e.target.value)}
+                          className="h-11 rounded-2xl bg-white border-slate-200"
+                          placeholder="Ex: 10"
+                        />
                       </div>
+                    </div>
+
+                    <div className="mt-3 flex justify-end">
+                      <Button
+                        className="h-11 rounded-2xl px-6 bg-slate-900 text-white hover:bg-slate-800"
+                        disabled={
+                          (!editingCampaignName.trim() || editingCampaignName.trim() === manageCampaign.name) &&
+                          (editingCommissionRate === (manageCampaign.metadata?.commission_rate != null ? String(manageCampaign.metadata.commission_rate) : ""))
+                        }
+                        onClick={async () => {
+                          const commRate = editingCommissionRate.trim() ? Number(editingCommissionRate.replace(",", ".")) : null;
+                          await updateCampaign(manageCampaign.id, {
+                            name: editingCampaignName.trim(),
+                            metadata: {
+                              ...manageCampaign.metadata,
+                              commission_rate: Number.isFinite(commRate as any) ? commRate : undefined
+                            }
+                          });
+                          showSuccess("Campanha atualizada.");
+                        }}
+                      >
+                        Salvar configurações
+                      </Button>
                     </div>
                   </div>
 
