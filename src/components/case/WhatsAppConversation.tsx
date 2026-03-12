@@ -418,10 +418,14 @@ export function WhatsAppConversation({
             variants.push(monitoredGroupId);
           }
 
-          const checks = variants.flatMap(v => [`from_phone.eq.${v}`, `to_phone.eq.${v}`]);
+          const checks = variants.filter(v => v.trim().length > 0).flatMap(v => [`from_phone.eq.${v}`, `to_phone.eq.${v}`]);
           // Combine with case_id check
-          const orClause = [`case_id.eq.${caseId}`, ...checks].join(",");
-          q = q.or(orClause);
+          if (checks.length > 0) {
+            const orClause = [`case_id.eq.${caseId}`, ...checks].join(",");
+            q = q.or(orClause);
+          } else {
+            q = q.eq("case_id", caseId);
+          }
         } else {
           q = q.eq("case_id", caseId);
         }

@@ -169,7 +169,7 @@ serve(async (req: Request) => {
       }));
       console.log(`[${fn}] Atts to insert: ${JSON.stringify(attsToInsert)}`);
       const { error: attsErr } = await supabase.from("case_attachments").insert(attsToInsert);
-      if (attsErr) console.error(`[${fn}] Failed to copy existing attachments:`, attsErr);
+      if (attsErr) throw new Error("Falha ao copiar anexos existentes: " + JSON.stringify(attsErr));
     } else {
       console.log(`[${fn}] No existing attachments found for case ${caseId}`);
     }
@@ -189,7 +189,7 @@ serve(async (req: Request) => {
 
       console.log(`[${fn}] Modal Atts to insert: ${JSON.stringify(attachmentsToInsert)}`);
       const { error: attErr } = await supabase.from("case_attachments").insert(attachmentsToInsert);
-      if (attErr) console.error(`[${fn}] Failed to link modal attachments:`, attErr);
+      if (attErr) throw new Error("Falha ao salvar novos anexos: " + JSON.stringify(attErr));
       else console.log(`[${fn}] Successfully inserted modal attachments`);
 
       // 4.4 Enqueue OCR job if there's an image

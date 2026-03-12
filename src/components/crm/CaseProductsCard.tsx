@@ -290,7 +290,7 @@ export function CaseProductsCard(props: { tenantId: string; caseId: string }) {
         }
 
         uploadedAttachments.push({
-          storage_path: supabase.storage.from("tenant-assets").getPublicUrl(path).data.publicUrl,
+          storage_path: path,
           original_filename: file.name,
           content_type: file.type
         });
