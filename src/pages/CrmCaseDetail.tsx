@@ -90,8 +90,10 @@ export default function CrmCaseDetail() {
   const { id } = useParams();
   const nav = useNavigate();
   const qc = useQueryClient();
-  const { activeTenantId } = useTenant();
+  const { activeTenantId, activeTenant, isSuperAdmin } = useTenant();
   const { user } = useSession();
+
+  const isAdminOrSuper = isSuperAdmin || activeTenant?.role === "admin";
 
   const [chatOnly, setChatOnly] = useState(false);
   const [updatingChatOnly, setUpdatingChatOnly] = useState(false);
@@ -470,6 +472,7 @@ export default function CrmCaseDetail() {
                 </div>
               ) : null}
 
+              {isAdminOrSuper && (
               <div className="flex items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white/70 px-3 py-2 text-xs text-slate-700 shadow-sm">
                 <div className="min-w-0">
                   <div className="text-[11px] font-semibold text-slate-800">Somente chat</div>
@@ -490,8 +493,9 @@ export default function CrmCaseDetail() {
                   ) : null}
                 </div>
               </div>
+              )}
 
-              {id ? <CaseTechnicalReportDialog caseId={id} /> : null}
+              {isAdminOrSuper && id ? <CaseTechnicalReportDialog caseId={id} /> : null}
 
               <AlertDialog>
                 <AlertDialogTrigger asChild>
@@ -541,29 +545,37 @@ export default function CrmCaseDetail() {
             </div>
           </div>
 
-          <div className="mt-5 grid gap-4 lg:grid-cols-[0.95fr_1.05fr]">
+          <div className="mt-5 grid gap-4 lg:grid-cols-[0.95fr_1.05fr] pb-24 lg:pb-0">
             <div className="space-y-4">
               {activeTenantId && id && (
-                <div className="space-y-4">
-                  <CaseOwnerCard
-                    tenantId={activeTenantId}
-                    caseId={id}
-                    assignedUserId={c?.assigned_user_id ?? null}
-                  />
+                <div className="flex flex-col gap-4">
+                  <div className="order-3 lg:order-1">
+                    <CaseOwnerCard
+                      tenantId={activeTenantId}
+                      caseId={id}
+                      assignedUserId={c?.assigned_user_id ?? null}
+                    />
+                  </div>
 
-                  <CaseCustomerCard
-                    tenantId={activeTenantId}
-                    caseId={id}
-                    customerId={c?.customer_id ?? null}
-                    assignedUserId={c?.assigned_user_id ?? null}
-                    suggestedPhone={suggestedPhone}
-                  />
+                  <div className="order-1 lg:order-2">
+                    <CaseCustomerCard
+                      tenantId={activeTenantId}
+                      caseId={id}
+                      customerId={c?.customer_id ?? null}
+                      assignedUserId={c?.assigned_user_id ?? null}
+                      suggestedPhone={suggestedPhone}
+                    />
+                  </div>
 
-                  <CaseTagsCard tenantId={activeTenantId} caseId={id} />
+                  <div className="order-4 lg:order-3">
+                    <CaseTagsCard tenantId={activeTenantId} caseId={id} />
+                  </div>
 
-                  <CaseProductsCard tenantId={activeTenantId} caseId={id} />
+                  <div className="order-2 lg:order-4">
+                    <CaseProductsCard tenantId={activeTenantId} caseId={id} />
+                  </div>
 
-                  <div className="grid gap-4 lg:grid-cols-2">
+                  <div className="order-5 grid gap-4 lg:grid-cols-2">
                     <CaseTasksCard tenantId={activeTenantId} caseId={id} />
                     <CaseNotesCard tenantId={activeTenantId} caseId={id} userId={user?.id ?? null} />
                   </div>
@@ -611,9 +623,11 @@ export default function CrmCaseDetail() {
               <CaseTimeline events={timelineQ.data ?? []} />
             </div>
 
+            {isAdminOrSuper && (
             <div className="lg:sticky lg:top-5 lg:h-[calc(100vh-140px)]">
               <div className="h-[70vh] lg:h-full">{id && <WhatsAppConversation caseId={id} className="h-full" />}</div>
             </div>
+            )}
           </div>
         </div>
       </AppShell>

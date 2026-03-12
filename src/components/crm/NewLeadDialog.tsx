@@ -149,18 +149,28 @@ export function NewLeadDialog({
 
     setSaving(true);
     try {
-      let ownerUserId: string | null = actorUserId;
-
-      if (ownerUserId) {
-        const { data: profile } = await supabase
+      // Verify if actor is admin or superadmin
+      let isAdm = false;
+      if (actorUserId) {
+        const { data: tenantProfile } = await supabase
           .from("users_profile")
-          .select("user_id")
+          .select("role")
           .eq("tenant_id", tenantId)
-          .eq("user_id", ownerUserId)
+          .eq("user_id", actorUserId)
           .is("deleted_at", null)
           .maybeSingle();
-        if (!profile) ownerUserId = null;
+
+        const { data: userData } = await supabase.auth.getUser();
+        const isSuper = Boolean(
+          (userData.user as any)?.app_metadata?.byfrost_super_admin || 
+          (userData.user as any)?.app_metadata?.super_admin
+        );
+        isAdm = isSuper || tenantProfile?.role === "admin";
       }
+
+      // Se for admin ou super-admin, não herda a propriedade automática (fica null = "sem dono"),
+      // se for user comum, é ele mesmo o dono do lead.
+      let ownerUserId: string | null = isAdm ? null : actorUserId;
 
       const phoneE164 = normalizeWhatsappOrThrow(whatsapp);
       const emailNorm = email.trim().toLowerCase() || null;

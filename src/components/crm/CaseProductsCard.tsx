@@ -1,4 +1,5 @@
 import { useMemo, useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
@@ -341,7 +342,7 @@ export function CaseProductsCard(props: { tenantId: string; caseId: string }) {
         </div>
         <Button
           variant="secondary"
-          className="h-9 rounded-xl text-xs font-semibold bg-indigo-50 text-indigo-700 hover:bg-indigo-100 hover:text-indigo-800"
+          className="h-9 rounded-xl text-xs font-semibold bg-indigo-50 text-indigo-700 hover:bg-indigo-100 hover:text-indigo-800 hidden sm:inline-flex"
           onClick={() => setConfirmOrderOpen(true)}
           disabled={generatingOrder}
         >
@@ -520,6 +521,24 @@ export function CaseProductsCard(props: { tenantId: string; caseId: string }) {
       </div>
 
       <LinkedOrdersAccordion tenantId={props.tenantId} caseId={props.caseId} />
+
+      {typeof document !== "undefined" && document.body ? createPortal(
+        <div className="fixed bottom-0 left-0 right-0 z-[9999] border-t border-slate-200 bg-white/90 p-3 pb-8 backdrop-blur-md sm:hidden shadow-[0_-10px_40px_rgba(0,0,0,0.1)]">
+          <Button
+            className="h-12 w-full text-base font-medium shadow-lg hover:shadow-xl transition-all flex items-center justify-center bg-indigo-600 hover:bg-indigo-700 text-white"
+            onClick={() => setConfirmOrderOpen(true)}
+            disabled={generatingOrder}
+          >
+            {generatingOrder ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <PackagePlus className="mr-2 h-4 w-4" />
+            )}
+            Gerar Pedido
+          </Button>
+        </div>,
+        document.body
+      ) : null}
 
       <Dialog open={confirmOrderOpen} onOpenChange={setConfirmOrderOpen}>
         <DialogContent className="sm:max-w-[425px]">
