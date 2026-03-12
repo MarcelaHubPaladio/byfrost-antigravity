@@ -12,39 +12,33 @@ serve(async (req) => {
   }
 
   try {
+    const { sql } = await req.json()
+    if (!sql) throw new Error('No SQL provided')
+
     const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? ''
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey)
 
-    // Agroforte ID from UI: 97985c55-becc-4087-b376-5fa7ce461c26
-    const agroId = '97985c55-becc-4087-b376-5fa7ce461c26';
+    console.log('Running SQL patch...');
     
-    console.log('Fetching diagnostic data...');
-    const { data: journeys } = await supabaseAdmin.from('journeys').select('*')
-    const { data: tenantJourneys } = await supabaseAdmin.from('tenant_journeys').select('*, journeys(*)').eq('tenant_id', agroId)
-    const { data: roles } = await supabaseAdmin.from('roles').select('id, key, name')
-    const { data: profiles } = await supabaseAdmin.from('users_profile').select('*').eq('tenant_id', agroId).is('deleted_at', null)
-    
-    // Check RLS policies
-    const { data: policies } = await supabaseAdmin.rpc('run_sql', { 
-      sql_query: "SELECT tablename, policyname, roles, cmd, qual FROM pg_policies WHERE tablename IN ('journeys', 'tenant_journeys', 'cases')" 
-    }).catch(() => ({ data: null }))
+    // We expect a 'run_sql' RPC to exist that can execute arbitrary SQL.
+    // If it doesn't exist, this will fail.
+    const { data, error } = await supabaseAdmin.rpc('run_sql', { sql_query: sql })
 
-    return new Response(JSON.stringify({ 
-      ok: true, 
-      diagnostics: {
-        journeys,
-        tenantJourneys,
-        roles,
-        profiles,
-        policies
-      }
-    }), {
+    if (error) {
+      console.error('SQL Error:', error)
+      return new Response(JSON.stringify({ ok: false, error: error.message }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 200, // Return 200 to see the error in the body
+      })
+    }
+
+    return new Response(JSON.stringify({ ok: true, data }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 200,
     })
   } catch (error) {
-    return new Response(JSON.stringify({ error: error.message }), {
+    return new Response(JSON.stringify({ ok: false, error: error.message }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 400,
     })
