@@ -400,8 +400,9 @@ export default function IncentivesEventsManage() {
     try {
       const { data, error } = await supabase.from("core_entities").insert({
         tenant_id: activeTenantId,
-        display_name: qpName.trim(),
+        entity_type: "party",
         subtype: "pintor",
+        display_name: qpName.trim(),
         metadata: {
           cpf: qpCpf.trim(),
           whatsapp: qpWhatsapp.trim(),
