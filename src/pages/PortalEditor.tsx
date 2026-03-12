@@ -89,6 +89,7 @@ type Block = {
         imageWidth?: string;
         targetUrl?: string;
     };
+    mobileSettings?: Block['settings'];
 };
 
 type PageSettings = {
@@ -115,7 +116,15 @@ type Section = {
         justifyContent?: 'flex-start' | 'center' | 'flex-end';
         alignItems?: 'flex-start' | 'center' | 'flex-end' | 'stretch';
     };
+    mobileSettings?: Partial<Section['settings']>;
     blocks: Block[];
+};
+
+const getEffectiveSettings = (settings: any, mobileSettings: any, mode: 'desktop' | 'mobile') => {
+    if (mode === 'mobile' && mobileSettings) {
+        return { ...(settings || {}), ...mobileSettings };
+    }
+    return settings || {};
 };
 
 export default function PortalEditor() {
@@ -242,7 +251,11 @@ export default function PortalEditor() {
                 let updatedBlock = { ...b };
                 
                 if (settings) {
-                    updatedBlock.settings = { ...(updatedBlock.settings || {}), ...settings };
+                    if (previewMode === 'mobile') {
+                        updatedBlock.mobileSettings = { ...(updatedBlock.mobileSettings || {}), ...settings };
+                    } else {
+                        updatedBlock.settings = { ...(updatedBlock.settings || {}), ...settings };
+                    }
                 }
                 
                 if (blocks) {
@@ -259,7 +272,11 @@ export default function PortalEditor() {
     };
 
     const updateSectionSettings = (sectionId: string, settings: Partial<Section['settings']>) => {
-        setSections(sections.map(s => s.id === sectionId ? { ...s, settings: { ...s.settings, ...settings } } : s));
+        setSections(sections.map(s => s.id === sectionId ? { 
+            ...s, 
+            settings: previewMode === 'mobile' ? s.settings : { ...s.settings, ...settings },
+            mobileSettings: previewMode === 'mobile' ? { ...(s.mobileSettings || {}), ...settings } : s.mobileSettings
+        } : s));
     };
 
     const handleDragStart = (event: DragStartEvent) => {
@@ -416,13 +433,40 @@ export default function PortalEditor() {
             // Remove editor-only elements (buttons, drag handles, settings, etc.)
             clone.querySelectorAll('.editor-controls, [data-editor-only], .absolute.top-4.right-4, button:not([class*="cta"])').forEach(el => el.remove());
             
-            // Optimization: Image Hints (LCP & Lazy Loading)
+            // Optimization: Image Hints (LCP & Lazy Loading) & Turbo Compression
             const images = clone.querySelectorAll('img');
             images.forEach((img, idx) => {
+                // Optimization - Lazy Loading & Priority
                 if (idx === 0) {
                     img.setAttribute('fetchpriority', 'high');
                 } else {
                     img.setAttribute('loading', 'lazy');
+                }
+
+                // Turbo Compression - Supabase Transformation API
+                const src = img.getAttribute('src');
+                if (src && src.includes('supabase.co/storage/v1/object/public/')) {
+                    // Convert object/public to render/image/public
+                    // Quality 80, auto format (webp/avif), smart resizing if needed
+                    const optimizedUrl = src.replace('/object/public/', '/render/image/public/') + "?quality=80&format=auto";
+                    img.setAttribute('src', optimizedUrl);
+                }
+            });
+
+            // Optimize background images in inline styles
+            clone.querySelectorAll('[style*="background-image"]').forEach((el: any) => {
+                const style = el.getAttribute('style');
+                if (style && style.includes('supabase.co/storage/v1/object/public/')) {
+                    const optimizedStyle = style.replace(/\/object\/public\//g, '/render/image/public/');
+                    // Add quality/format to URLs inside url()
+                    const finalStyle = optimizedStyle.replace(/url\(['"]?([^'"]+)['"]?\)/g, (match, url) => {
+                        if (url.includes('supabase.co/storage/v1/render/image/public/')) {
+                            const separator = url.includes('?') ? '&' : '?';
+                            return `url("${url}${separator}quality=80&format=auto")`;
+                        }
+                        return match;
+                    });
+                    el.setAttribute('style', finalStyle);
                 }
             });
 
@@ -460,8 +504,6 @@ export default function PortalEditor() {
                         if (rule instanceof CSSStyleRule) {
                             const selector = rule.selectorText;
                             
-                            // Simple heuristic check: if any part of the selector matches our used tags/classes/ids
-                            // This is much faster than full DOM matches for every rule
                             const shouldKeep = 
                                 selector === '*' || 
                                 selector.includes('html') || 
@@ -469,7 +511,7 @@ export default function PortalEditor() {
                                 selector.split(/[\s,>+~:]+/).some(part => {
                                     if (part.startsWith('.')) return usedClasses.has(part.slice(1));
                                     if (part.startsWith('#')) return usedSelectors.has(part);
-                                    return false; // Could check tags too if needed
+                                    return false;
                                 });
 
                             if (shouldKeep) {
@@ -481,6 +523,41 @@ export default function PortalEditor() {
                     // Ignore cross-origin stylesheet errors
                 }
             }
+
+            // 3. Generate Responsive Media Queries from mobileSettings
+            let responsiveCSS = "\n@media (max-width: 768px) {\n";
+            sections.forEach(s => {
+                if (s.mobileSettings && Object.keys(s.mobileSettings).length > 0) {
+                    responsiveCSS += `  #section-${s.id} {\n`;
+                    if (s.mobileSettings.backgroundColor) responsiveCSS += `    background-color: ${s.mobileSettings.backgroundColor} !important;\n`;
+                    if (s.mobileSettings.paddingY) {
+                        const py = Number(s.mobileSettings.paddingY) * 4;
+                        responsiveCSS += `    padding-top: ${py}px !important; padding-bottom: ${py}px !important;\n`;
+                    }
+                    if (s.mobileSettings.paddingX) {
+                        const px = Number(s.mobileSettings.paddingX) * 4;
+                        responsiveCSS += `    padding-left: ${px}px !important; padding-right: ${px}px !important;\n`;
+                    }
+                    if (s.mobileSettings.alignItems) responsiveCSS += `    justify-content: ${s.mobileSettings.alignItems} !important;\n`;
+                    if (s.mobileSettings.justifyContent) responsiveCSS += `    align-items: ${s.mobileSettings.justifyContent} !important;\n`;
+                    responsiveCSS += `  }\n`;
+                }
+                s.blocks.forEach(b => {
+                    if (b.mobileSettings && Object.keys(b.mobileSettings).length > 0) {
+                        responsiveCSS += `  #block-${b.id} {\n`;
+                        if (b.mobileSettings.textAlign) responsiveCSS += `    text-align: ${b.mobileSettings.textAlign} !important;\n`;
+                        if (b.mobileSettings.height) responsiveCSS += `    height: ${b.mobileSettings.height === 'screen' ? '100vh' : 'auto'} !important;\n`;
+                        if (b.mobileSettings.direction) responsiveCSS += `    flex-direction: ${b.mobileSettings.direction} !important;\n`;
+                        if (b.mobileSettings.imageWidth) {
+                            responsiveCSS += `    width: ${b.mobileSettings.imageWidth}% !important;\n`;
+                        }
+                        responsiveCSS += `  }\n`;
+                    }
+                });
+            });
+            responsiveCSS += "}\n";
+
+            styles += responsiveCSS;
 
             // Minify CSS
             styles = styles
@@ -668,14 +745,15 @@ export default function PortalEditor() {
                                     <div className="space-y-4 p-4">
                                         {sections.map((section) => (
                                             <SortableSectionItem 
-                                                key={section.id}
-                                                section={section}
+                                                key={section.id} 
+                                                section={section} 
+                                                previewMode={previewMode}
                                                 active={activeSectionId === section.id}
                                                 onSelect={() => setActiveSectionId(section.id)}
+                                                onUpdateSettings={(settings) => updateSectionSettings(section.id, settings)}
                                                 onRemove={() => removeSection(section.id)}
-                                                onUpdateSettings={(sets: any) => updateSectionSettings(section.id, sets)}
-                                                onUpdateBlock={(bid: string, updates: any) => updateBlock(section.id, bid, updates)}
-                                                onRemoveBlock={(bid: string) => removeBlock(section.id, bid)}
+                                                onUpdateBlock={(bid, updates) => updateBlock(section.id, bid, updates)}
+                                                onRemoveBlock={(bid) => removeBlock(section.id, bid)}
                                             />
                                         ))}
                                     </div>
@@ -753,7 +831,7 @@ function DraggableBlockButton({ icon, label, type, active }: { icon: React.React
     );
 }
 
-function SortableSectionItem({ section, active, onSelect, onRemove, onUpdateSettings, onUpdateBlock, onRemoveBlock }: any) {
+function SortableSectionItem({ section, previewMode, active, onSelect, onRemove, onUpdateSettings, onUpdateBlock, onRemoveBlock }: any) {
     const {
         attributes,
         listeners,
@@ -761,6 +839,8 @@ function SortableSectionItem({ section, active, onSelect, onRemove, onUpdateSett
         transform,
         transition,
     } = useSortable({ id: section.id });
+
+    const effectiveSettings = getEffectiveSettings(section.settings, section.mobileSettings, previewMode);
 
     const { setNodeRef: setDroppableRef } = useDroppable({
         id: `droppable-${section.id}`,
@@ -772,21 +852,22 @@ function SortableSectionItem({ section, active, onSelect, onRemove, onUpdateSett
     const style = {
         transform: CSS.Transform.toString(transform),
         transition,
-        minHeight: section.settings?.height === 'screen' ? 'calc(100vh - 64px)' : 'auto',
+        minHeight: effectiveSettings.height === 'screen' ? 'calc(100vh - 64px)' : 'auto',
         display: 'flex',
         flexDirection: 'column' as const,
-        justifyContent: section.settings?.alignItems || 'flex-start', // alignItems is actually vertical in flex-col
-        alignItems: section.settings?.justifyContent || 'stretch', // justifyContent is actually horizontal in flex-col
+        justifyContent: effectiveSettings.alignItems || 'flex-start', // alignItems is actually vertical in flex-col
+        alignItems: effectiveSettings.justifyContent || 'stretch', // justifyContent is actually horizontal in flex-col
     };
 
     return (
         <div 
             ref={setNodeRef} 
+            id={`section-${section.id}`}
             style={{
-                backgroundImage: section.settings.backgroundImage ? `url(${section.settings.backgroundImage})` : 'none',
-                backgroundColor: section.settings.backgroundColor || 'transparent',
-                paddingTop: `${(Number(section.settings.paddingY) || 0) * 4}px`,
-                paddingBottom: `${(Number(section.settings.paddingY) || 0) * 4}px`,
+                backgroundImage: effectiveSettings.backgroundImage ? `url(${effectiveSettings.backgroundImage})` : 'none',
+                backgroundColor: effectiveSettings.backgroundColor || 'transparent',
+                paddingTop: `${(Number(effectiveSettings.paddingY) || 0) * 4}px`,
+                paddingBottom: `${(Number(effectiveSettings.paddingY) || 0) * 4}px`,
                 ...style,
             }}
             onClick={(e) => {
@@ -810,7 +891,10 @@ function SortableSectionItem({ section, active, onSelect, onRemove, onUpdateSett
                     <PopoverContent className="w-80 p-6 rounded-[24px] shadow-2xl border-slate-100" side="left" align="start">
                         <div className="space-y-6">
                             <div className="flex items-center justify-between">
-                                <h4 className="font-bold text-sm">Configuração da Seção</h4>
+                                <div className="space-y-0.5">
+                                    <h4 className="font-bold text-sm">Configuração da Seção</h4>
+                                    <p className="text-[10px] text-blue-500 font-bold uppercase">{previewMode === 'mobile' ? 'Editando Mobile 📱' : 'Editando Desktop 🖥️'}</p>
+                                </div>
                                 <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full" onClick={onRemove}>
                                     <Trash2 className="h-4 w-4 text-red-500" />
                                 </Button>
@@ -826,7 +910,7 @@ function SortableSectionItem({ section, active, onSelect, onRemove, onUpdateSett
                                                 {(['flex-start', 'center', 'flex-end'] as const).map((a) => (
                                                     <Button
                                                         key={a}
-                                                        variant={(section.settings.alignItems || 'flex-start') === a ? 'secondary' : 'outline'}
+                                                        variant={(effectiveSettings.alignItems || 'flex-start') === a ? 'secondary' : 'outline'}
                                                         size="sm"
                                                         className="text-[9px] h-7 px-1 uppercase"
                                                         onClick={() => onUpdateSettings({ alignItems: a })}
@@ -842,7 +926,7 @@ function SortableSectionItem({ section, active, onSelect, onRemove, onUpdateSett
                                                 {(['flex-start', 'center', 'flex-end', 'stretch'] as const).map((j) => (
                                                     <Button
                                                         key={j}
-                                                        variant={(section.settings.justifyContent || 'flex-start') === j ? 'secondary' : 'outline'}
+                                                        variant={(effectiveSettings.justifyContent || 'flex-start') === j ? 'secondary' : 'outline'}
                                                         size="sm"
                                                         className="text-[9px] h-7 px-1 uppercase"
                                                         onClick={() => onUpdateSettings({ justifyContent: j })}
@@ -857,7 +941,7 @@ function SortableSectionItem({ section, active, onSelect, onRemove, onUpdateSett
 
                                 <ImageUpload 
                                     label="Imagem de Fundo"
-                                    value={section.settings.backgroundImage}
+                                    value={effectiveSettings.backgroundImage}
                                     onChange={(url) => onUpdateSettings({ backgroundImage: url })}
                                 />
 
@@ -867,7 +951,7 @@ function SortableSectionItem({ section, active, onSelect, onRemove, onUpdateSett
                                         {(['auto', 'screen'] as const).map((h) => (
                                             <Button
                                                 key={h}
-                                                variant={(section.settings.height || 'auto') === h ? 'secondary' : 'outline'}
+                                                variant={(effectiveSettings.height || 'auto') === h ? 'secondary' : 'outline'}
                                                 size="sm"
                                                 className="text-[10px] h-8 rounded-lg capitalize"
                                                 onClick={() => onUpdateSettings({ height: h })}
@@ -884,7 +968,7 @@ function SortableSectionItem({ section, active, onSelect, onRemove, onUpdateSett
                                         {(['1200', '1400', 'full'] as const).map((w) => (
                                             <Button
                                                 key={w}
-                                                variant={(section.settings.maxWidth || '1400') === w ? 'secondary' : 'outline'}
+                                                variant={(effectiveSettings.maxWidth || '1400') === w ? 'secondary' : 'outline'}
                                                 size="sm"
                                                 className="text-[10px] h-8 rounded-lg"
                                                 onClick={() => onUpdateSettings({ maxWidth: w })}
@@ -898,12 +982,12 @@ function SortableSectionItem({ section, active, onSelect, onRemove, onUpdateSett
                                 <div className="space-y-2">
                                     <div className="flex justify-between items-center">
                                         <Label className="text-[10px] uppercase text-slate-400 font-bold tracking-wider">Espaçamento Vertical</Label>
-                                        <span className="text-[10px] bg-slate-100 px-2 py-0.5 rounded-full font-bold">{section.settings.paddingY || '12'}</span>
+                                        <span className="text-[10px] bg-slate-100 px-2 py-0.5 rounded-full font-bold">{effectiveSettings.paddingY || '12'}</span>
                                     </div>
                                     <input 
                                         type="range" min="0" max="40" step="1"
                                         className="w-full h-1.5 bg-slate-100 rounded-lg appearance-none cursor-pointer accent-blue-500"
-                                        value={section.settings.paddingY || '12'}
+                                        value={effectiveSettings.paddingY || '12'}
                                         onChange={(e) => onUpdateSettings({ paddingY: e.target.value })}
                                     />
                                 </div>
@@ -914,12 +998,12 @@ function SortableSectionItem({ section, active, onSelect, onRemove, onUpdateSett
                                         <input 
                                             type="color" 
                                             className="h-8 w-8 rounded-lg overflow-hidden border-none p-0 cursor-pointer bg-transparent"
-                                            value={section.settings.backgroundColor || '#ffffff'}
+                                            value={effectiveSettings.backgroundColor || '#ffffff'}
                                             onChange={(e) => onUpdateSettings({ backgroundColor: e.target.value })}
                                         />
                                         <Input 
                                             className="h-8 text-xs rounded-lg flex-1 bg-slate-50 border-none font-mono" 
-                                            value={section.settings.backgroundColor || '#ffffff'}
+                                            value={effectiveSettings.backgroundColor || '#ffffff'}
                                             onChange={(e) => onUpdateSettings({ backgroundColor: e.target.value })}
                                         />
                                     </div>
@@ -950,6 +1034,7 @@ function SortableSectionItem({ section, active, onSelect, onRemove, onUpdateSett
                             key={block.id} 
                             block={block} 
                             sectionId={section.id}
+                            previewMode={previewMode}
                             onUpdate={(content: any) => onUpdateBlock(block.id, content)}
                             onRemove={() => onRemoveBlock(block.id)}
                         />
@@ -960,7 +1045,7 @@ function SortableSectionItem({ section, active, onSelect, onRemove, onUpdateSett
     );
 }
 
-function SortableBlockItem({ block, sectionId, onUpdate, onRemove }: any) {
+function SortableBlockItem({ block, sectionId, previewMode, onUpdate, onRemove }: any) {
     const {
         attributes,
         listeners,
@@ -976,6 +1061,8 @@ function SortableBlockItem({ block, sectionId, onUpdate, onRemove }: any) {
         }
     });
 
+    const effectiveSettings = getEffectiveSettings(block.settings, block.mobileSettings, previewMode);
+
     const style = {
         transform: CSS.Transform.toString(transform),
         transition,
@@ -985,14 +1072,15 @@ function SortableBlockItem({ block, sectionId, onUpdate, onRemove }: any) {
     return (
         <div 
             ref={setNodeRef} 
+            id={`block-${block.id}`}
             style={style}
-            key={block.settings?.animation || 'static'} 
+            key={effectiveSettings.animation || 'static'} 
             className={cn(
                 "group/block relative p-4 rounded-2xl hover:bg-slate-50 transition-all border border-transparent hover:border-slate-100",
-                block.settings?.animation === 'fade-up' && 'animate-fade-up',
-                block.settings?.animation === 'zoom-in' && 'animate-zoom-in',
-                block.settings?.animation === 'fade-left' && 'animate-fade-left',
-                block.settings?.animation === 'fade-right' && 'animate-fade-right'
+                effectiveSettings.animation === 'fade-up' && 'animate-fade-up',
+                effectiveSettings.animation === 'zoom-in' && 'animate-zoom-in',
+                effectiveSettings.animation === 'fade-left' && 'animate-fade-left',
+                effectiveSettings.animation === 'fade-right' && 'animate-fade-right'
             )}
         >
             <div className="absolute -left-3 top-1/2 -translate-y-1/2 opacity-0 group-hover/block:opacity-100 transition-opacity cursor-grab active:cursor-grabbing z-40 bg-white shadow-sm border border-slate-100 rounded-lg p-1" {...attributes} {...listeners}>
@@ -1007,13 +1095,17 @@ function SortableBlockItem({ block, sectionId, onUpdate, onRemove }: any) {
                     </PopoverTrigger>
                     <PopoverContent className="w-56 p-4 rounded-2xl shadow-xl border-slate-100" side="left">
                         <div className="space-y-4">
+                            <div className="space-y-0.5">
+                                <Label className="text-[10px] uppercase text-slate-400 font-bold">Configuração do Bloco</Label>
+                                <p className="text-[9px] text-blue-500 font-bold uppercase">{previewMode === 'mobile' ? 'Editando Mobile 📱' : 'Editando Desktop 🖥️'}</p>
+                            </div>
                             <div className="space-y-1.5">
                                 <Label className="text-[10px] uppercase text-slate-400 font-bold">Altura do Bloco</Label>
                                 <div className="grid grid-cols-2 gap-1">
                                     {['auto', 'sm', 'md', 'lg', 'screen'].map((h) => (
                                         <Button 
                                             key={h} 
-                                            variant={(block.settings?.height || 'auto') === h ? 'secondary' : 'outline'}
+                                            variant={(effectiveSettings.height || 'auto') === h ? 'secondary' : 'outline'}
                                             size="sm" 
                                             className="text-[10px] h-7"
                                             onClick={() => onUpdate({ settings: { height: h } })}
@@ -1026,7 +1118,7 @@ function SortableBlockItem({ block, sectionId, onUpdate, onRemove }: any) {
                             <div className="space-y-1.5">
                                  <Label className="text-[10px] uppercase text-slate-400 font-bold">Animação de Entrada</Label>
                                  <Select 
-                                    value={block.settings?.animation || 'none'} 
+                                    value={effectiveSettings.animation || 'none'} 
                                     onValueChange={(val) => onUpdate({ settings: { animation: val } })}
                                  >
                                      <SelectTrigger className="h-7 text-[10px] rounded-lg">
@@ -1047,7 +1139,7 @@ function SortableBlockItem({ block, sectionId, onUpdate, onRemove }: any) {
                                     {(['left', 'center', 'right'] as const).map((a) => (
                                         <Button 
                                             key={a} 
-                                            variant={(block.settings?.textAlign || 'left') === a ? 'secondary' : 'outline'}
+                                            variant={(effectiveSettings.textAlign || 'left') === a ? 'secondary' : 'outline'}
                                             size="sm" 
                                             className="text-[10px] h-7 flex-1"
                                             onClick={() => onUpdate({ settings: { textAlign: a } })}
@@ -1125,8 +1217,8 @@ function SortableBlockItem({ block, sectionId, onUpdate, onRemove }: any) {
             {block.type === 'hero' && (
                 <div className={cn(
                     "py-6 space-y-4",
-                    block.settings?.textAlign === 'left' ? "text-left" :
-                    block.settings?.textAlign === 'right' ? "text-right" : "text-center"
+                    effectiveSettings.textAlign === 'left' ? "text-left" :
+                    effectiveSettings.textAlign === 'right' ? "text-right" : "text-center"
                 )}>
                     <Input 
                         className="text-4xl font-black text-center border-none bg-transparent hover:bg-slate-100 focus:bg-slate-100 p-2 h-auto mb-2 rounded-xl"
@@ -1163,8 +1255,8 @@ function SortableBlockItem({ block, sectionId, onUpdate, onRemove }: any) {
                         className="border-none bg-transparent shadow-none"
                         editorClassName={cn(
                             "text-slate-700 font-medium",
-                            block.settings?.textAlign === 'center' && "text-center",
-                            block.settings?.textAlign === 'right' && "text-right"
+                            effectiveSettings.textAlign === 'center' && "text-center",
+                            effectiveSettings.textAlign === 'right' && "text-right"
                         )}
                         minHeightClassName="min-h-[100px]"
                     />
@@ -1176,10 +1268,10 @@ function SortableBlockItem({ block, sectionId, onUpdate, onRemove }: any) {
                     <div className="flex flex-col gap-3 p-4 bg-slate-50 rounded-2xl border border-slate-100">
                         <div className="flex items-center justify-between">
                             <Label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Largura da Imagem</Label>
-                            <span className="text-[10px] font-bold text-blue-600">{block.settings?.imageWidth || '100'}%</span>
+                            <span className="text-[10px] font-bold text-blue-600">{effectiveSettings.imageWidth || '100'}%</span>
                         </div>
                         <Slider
-                            value={[parseInt(block.settings?.imageWidth || '100')]}
+                            value={[parseInt(effectiveSettings.imageWidth || '100')]}
                             min={10}
                             max={100}
                             step={1}
@@ -1192,7 +1284,7 @@ function SortableBlockItem({ block, sectionId, onUpdate, onRemove }: any) {
                             <Input 
                                 placeholder="https://..." 
                                 className="h-9 rounded-xl text-xs"
-                                value={block.settings?.targetUrl || ''}
+                                value={effectiveSettings.targetUrl || ''}
                                 onChange={(e) => onUpdate({ settings: { targetUrl: e.target.value } })}
                                 onPointerDown={(e) => e.stopPropagation()}
                                 onKeyDown={(e) => e.stopPropagation()}
@@ -1434,7 +1526,7 @@ function SortableBlockItem({ block, sectionId, onUpdate, onRemove }: any) {
                                     {(['row', 'col'] as const).map((d) => (
                                         <Button
                                             key={d}
-                                            variant={(block.settings?.direction || 'row') === d ? 'secondary' : 'outline'}
+                                            variant={(effectiveSettings.direction || 'row') === d ? 'secondary' : 'outline'}
                                             size="sm"
                                             className="text-[9px] h-7 flex-1 uppercase"
                                             onClick={() => onUpdate({ settings: { direction: d } })}
@@ -1450,7 +1542,7 @@ function SortableBlockItem({ block, sectionId, onUpdate, onRemove }: any) {
                                     {(['start', 'center', 'between'] as const).map((a) => (
                                         <Button
                                             key={a}
-                                            variant={(block.settings?.alignment || 'start') === a ? 'secondary' : 'outline'}
+                                            variant={(effectiveSettings.alignment || 'start') === a ? 'secondary' : 'outline'}
                                             size="sm"
                                             className="text-[9px] h-7 flex-1 uppercase"
                                             onClick={() => onUpdate({ settings: { alignment: a } })}

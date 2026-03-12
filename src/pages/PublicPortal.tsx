@@ -36,6 +36,7 @@ type Block = {
         imageWidth?: string;
         targetUrl?: string;
     };
+    mobileSettings?: any;
 };
 
 type Section = {
@@ -52,22 +53,30 @@ type Section = {
         justifyContent?: 'flex-start' | 'center' | 'flex-end';
         alignItems?: 'flex-start' | 'center' | 'flex-end' | 'stretch';
     };
+    mobileSettings?: any;
     blocks: Block[];
 };
 
-function BlockRenderer({ block, isPremium }: { block: Block; isPremium: boolean }) {
-    const heightClass = block.settings?.height === 'sm' ? 'min-h-[200px]' :
-                        block.settings?.height === 'md' ? 'min-h-[400px]' :
-                        block.settings?.height === 'lg' ? 'min-h-[600px]' :
-                        block.settings?.height === 'screen' ? 'min-h-screen' : '';
+function getEffectiveSettings(desktop: any, mobile: any, isMobile: boolean) {
+    if (!isMobile || !mobile || Object.keys(mobile).length === 0) return desktop || {};
+    return { ...desktop, ...mobile };
+}
 
-    const alignClass = block.settings?.textAlign === 'center' ? 'text-center' :
-                       block.settings?.textAlign === 'right' ? 'text-right' : 'text-left';
+function BlockRenderer({ block, isPremium, isMobile }: { block: Block; isPremium: boolean; isMobile: boolean }) {
+    const effectiveSettings = getEffectiveSettings(block.settings, block.mobileSettings, isMobile);
 
-    const animationClass = block.settings?.animation === 'fade-up' ? 'animate-fade-up' :
-                          block.settings?.animation === 'zoom-in' ? 'animate-zoom-in' :
-                          block.settings?.animation === 'fade-left' ? 'animate-fade-left' :
-                          block.settings?.animation === 'fade-right' ? 'animate-fade-right' : '';
+    const heightClass = effectiveSettings.height === 'sm' ? 'min-h-[200px]' :
+                        effectiveSettings.height === 'md' ? 'min-h-[400px]' :
+                        effectiveSettings.height === 'lg' ? 'min-h-[600px]' :
+                        effectiveSettings.height === 'screen' ? 'min-h-screen' : '';
+
+    const alignClass = effectiveSettings.textAlign === 'center' ? 'text-center' :
+                       effectiveSettings.textAlign === 'right' ? 'text-right' : 'text-left';
+
+    const animationClass = effectiveSettings.animation === 'fade-up' ? 'animate-fade-up' :
+                          effectiveSettings.animation === 'zoom-in' ? 'animate-zoom-in' :
+                          effectiveSettings.animation === 'fade-left' ? 'animate-fade-left' :
+                          effectiveSettings.animation === 'fade-right' ? 'animate-fade-right' : '';
 
     return (
         <div className={cn(
@@ -78,14 +87,14 @@ function BlockRenderer({ block, isPremium }: { block: Block; isPremium: boolean 
         )}>
             {block.type === 'slider' && <PremiumSlider items={block.content.items} />}
             
-            {block.type === 'info-cards' && <InfoCards items={block.content.items} />}
+            {block.type === 'info-cards' && <InfoCards items={block.content.items} isMobile={isMobile} />}
 
             {block.type === 'hero' && (
                 <div className="py-12">
                     <div className={cn(
                         "max-w-4xl",
-                        block.settings?.textAlign === 'center' || !block.settings?.textAlign ? "mx-auto" :
-                        block.settings?.textAlign === 'right' ? "ml-auto" : "mr-auto"
+                        effectiveSettings.textAlign === 'center' || !effectiveSettings.textAlign ? "mx-auto" :
+                        effectiveSettings.textAlign === 'right' ? "ml-auto" : "mr-auto"
                     )}>
                         <h1 className="text-5xl md:text-7xl font-extrabold tracking-tight mb-6">
                             {block.content.title}
@@ -93,8 +102,8 @@ function BlockRenderer({ block, isPremium }: { block: Block; isPremium: boolean 
                         <div 
                             className={cn(
                                 "text-xl md:text-2xl text-slate-500 max-w-2xl leading-relaxed prose prose-slate dark:prose-invert",
-                                block.settings?.textAlign === 'center' || !block.settings?.textAlign ? "mx-auto" :
-                                block.settings?.textAlign === 'right' ? "ml-auto" : "mr-auto"
+                                effectiveSettings.textAlign === 'center' || !effectiveSettings.textAlign ? "mx-auto" :
+                                effectiveSettings.textAlign === 'right' ? "ml-auto" : "mr-auto"
                             )}
                             dangerouslySetInnerHTML={{ __html: block.content.subtitle }}
                         />
@@ -238,7 +247,12 @@ function BlockRenderer({ block, isPremium }: { block: Block; isPremium: boolean 
                     block.settings?.alignment === 'end' ? (block.settings?.direction === 'col' ? "items-end text-right" : "items-end justify-items-end") : ""
                 )}>
                     {(block.blocks || []).map((innerBlock: Block) => (
-                        <BlockRenderer key={innerBlock.id} block={innerBlock} isPremium={isPremium} />
+                        <BlockRenderer 
+                            key={innerBlock.id} 
+                            block={innerBlock} 
+                            isPremium={isPremium} 
+                            isMobile={isMobile}
+                        />
                     ))}
                 </div>
             )}
@@ -265,8 +279,9 @@ function BlockRenderer({ block, isPremium }: { block: Block; isPremium: boolean 
 
 export default function PublicPortal() {
     const { tenantSlug, slug } = useParams();
-
-    const { data: page, isLoading, error } = useQuery({
+    const isMobile = useIsMobile();
+    
+    const { data: portal, isLoading, error } = useQuery({
         queryKey: ["public_portal_page", tenantSlug, slug],
         queryFn: async () => {
             // 1. Check for Custom Domain first
@@ -332,48 +347,48 @@ export default function PublicPortal() {
     });
 
     useEffect(() => {
-        if (!page) return;
+        if (!portal) return;
 
         // Title
-        if (page.page_settings?.seo_title) {
-            document.title = page.page_settings.seo_title;
-        } else if (page.title) {
-            document.title = page.title;
+        if (portal.page_settings?.seo_title) {
+            document.title = portal.page_settings.seo_title;
+        } else if (portal.title) {
+            document.title = portal.title;
         }
 
         // Favicon
-        if (page.page_settings?.favicon_url) {
+        if (portal.page_settings?.favicon_url) {
             let link = document.querySelector("link[rel~='icon']") as HTMLLinkElement;
             if (!link) {
                 link = document.createElement('link');
                 link.rel = 'icon';
                 document.getElementsByTagName('head')[0].appendChild(link);
             }
-            link.href = page.page_settings.favicon_url;
+            link.href = portal.page_settings.favicon_url;
         }
 
         // Meta Description
-        if (page.page_settings?.seo_description) {
+        if (portal.page_settings?.seo_description) {
             let metaDesc = document.querySelector('meta[name="description"]');
             if (!metaDesc) {
                 metaDesc = document.createElement('meta');
                 metaDesc.setAttribute('name', 'description');
                 document.getElementsByTagName('head')[0].appendChild(metaDesc);
             }
-            metaDesc.setAttribute('content', page.page_settings.seo_description);
+            metaDesc.setAttribute('content', portal.page_settings.seo_description);
         }
 
         // OG Image
-        if (page.page_settings?.og_image_url) {
+        if (portal.page_settings?.og_image_url) {
             let ogImg = document.querySelector('meta[property="og:image"]');
             if (!ogImg) {
                 ogImg = document.createElement('meta');
                 ogImg.setAttribute('property', 'og:image');
                 document.getElementsByTagName('head')[0].appendChild(ogImg);
             }
-            ogImg.setAttribute('content', page.page_settings.og_image_url);
+            ogImg.setAttribute('content', portal.page_settings.og_image_url);
         }
-    }, [page]);
+    }, [portal]);
 
     if (isLoading) return (
         <div className="max-w-4xl mx-auto py-20 px-6 space-y-12">
@@ -382,15 +397,15 @@ export default function PublicPortal() {
         </div>
     );
 
-    if (error || !page) return (
+    if (error || !portal) return (
         <div className="min-h-screen flex flex-col items-center justify-center p-6 text-center">
             <h1 className="text-4xl font-bold mb-4">404</h1>
             <p className="text-slate-500">Página não encontrada ou ainda não publicada.</p>
         </div>
     );
 
-    const isPremium = page.page_settings?.layout === 'sidebar';
-    const content = page.content_json || [];
+    const isPremium = portal.page_settings?.layout === 'sidebar';
+    const content = portal.content_json || [];
     const sections: Section[] = (Array.isArray(content) && content.length > 0 && !content[0].blocks) 
         ? [{ id: 'migrated', settings: { paddingY: '12' }, blocks: content as Block[] }]
         : content as Section[];
@@ -425,35 +440,44 @@ export default function PublicPortal() {
                 "relative transition-all duration-700",
                 isPremium && "lg:pl-[80px]"
             )}>
-                {sections.map((section) => (
-                    <section 
-                        key={section.id} 
-                        className="relative bg-cover bg-center overflow-hidden"
-                        style={{
-                            backgroundImage: section.settings.backgroundImage ? `url(${section.settings.backgroundImage})` : 'none',
-                            backgroundColor: section.settings.backgroundColor || 'transparent',
-                            paddingTop: `${(Number(section.settings.paddingY) || 0) * 4}px`,
-                            paddingBottom: `${(Number(section.settings.paddingY) || 0) * 4}px`,
-                            minHeight: section.settings.height === 'screen' ? '100vh' : 'auto',
-                            display: 'flex',
-                            flexDirection: 'column',
-                            justifyContent: section.settings.alignItems || 'flex-start',
-                            alignItems: section.settings.justifyContent || 'stretch',
-                        }}
-                    >
-                        <div className={cn(
-                            "mx-auto",
-                            section.settings.maxWidth === 'full' ? "max-w-none px-0" : 
-                            section.settings.maxWidth === '1200' ? "max-w-[1200px] px-6" :
-                            section.settings.maxWidth === '1400' ? "max-w-[1400px] px-6" :
-                            isPremium ? "max-w-[1600px] px-0" : "max-w-7xl px-6"
-                        )}>
-                            {section.blocks.map((block) => (
-                                <BlockRenderer key={block.id} block={block} isPremium={isPremium} />
-                            ))}
-                        </div>
-                    </section>
-                ))}
+                {portal.sections.map((section: Section) => {
+                    const effectiveSettings = getEffectiveSettings(section.settings, section.mobileSettings, isMobile);
+                    return (
+                        <section 
+                            key={section.id} 
+                            className={cn(
+                                "relative w-full overflow-hidden transition-all duration-700",
+                                effectiveSettings.height === 'screen' ? "min-h-screen" : "min-h-0",
+                                "flex flex-col"
+                            )}
+                            style={{
+                                backgroundImage: effectiveSettings.backgroundImage ? `url(${effectiveSettings.backgroundImage})` : 'none',
+                                backgroundColor: effectiveSettings.backgroundColor || 'transparent',
+                                backgroundSize: effectiveSettings.backgroundSize || 'cover',
+                                backgroundPosition: 'center',
+                                paddingTop: `${(Number(effectiveSettings.paddingY) || 0) * 4}px`,
+                                paddingBottom: `${(Number(effectiveSettings.paddingY) || 0) * 4}px`,
+                                justifyContent: effectiveSettings.alignItems || 'flex-start',
+                                alignItems: effectiveSettings.justifyContent || 'stretch',
+                            }}
+                        >
+                            <div className={cn(
+                                "relative z-10 w-full px-6 md:px-12 mx-auto",
+                                effectiveSettings.maxWidth === '1200' ? "max-w-[1200px]" :
+                                effectiveSettings.maxWidth === '1400' ? "max-w-[1400px]" : "max-w-full"
+                            )}>
+                                {section.blocks.map((block) => (
+                                    <BlockRenderer 
+                                        key={block.id} 
+                                        block={block} 
+                                        isPremium={!!portal?.is_premium} 
+                                        isMobile={isMobile}
+                                    />
+                                ))}
+                            </div>
+                        </section>
+                    );
+                })}
                 <footer className="py-12 text-center text-sm text-slate-400">
                     <p>Feito com ❤️ Byfrost</p>
                 </footer>
@@ -496,9 +520,12 @@ function PremiumSlider({ items }: { items: any[] }) {
     );
 }
 
-function InfoCards({ items }: { items: any[] }) {
+function InfoCards({ items, isMobile }: { items: any[]; isMobile: boolean }) {
     return (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-0 bg-[#0a0b10] border-t border-white/10">
+        <div className={cn(
+            "grid gap-0 bg-[#0a0b10] border-t border-white/10",
+            isMobile ? "grid-cols-1" : "grid-cols-1 md:grid-cols-3"
+        )}>
             {/* Explore Now Block */}
             <div className="bg-white text-[#0a0b10] p-12 flex flex-col justify-between min-h-[300px]">
                 <h3 className="text-3xl font-black leading-tight">Explore<br/>Now</h3>
@@ -517,4 +544,15 @@ function InfoCards({ items }: { items: any[] }) {
             ))}
         </div>
     );
+}
+
+function useIsMobile() {
+    const [isMobile, setIsMobile] = useState(false);
+    useEffect(() => {
+        const check = () => setIsMobile(window.innerWidth < 768);
+        check();
+        window.addEventListener('resize', check);
+        return () => window.removeEventListener('resize', check);
+    }, []);
+    return isMobile;
 }
