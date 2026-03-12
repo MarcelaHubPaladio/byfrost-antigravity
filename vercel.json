@@ -6,11 +6,11 @@
       "destination": "/api/serve.ts"
     },
     {
-      "source": "/(.*)",
+      "source": "/((?!api/|assets/|index\\.html).*)",
       "has": [
         {
           "type": "host",
-          "value": "^(?!(localhost|byfrost|m30\\.company|.*\\.vercel\\.app)).*$"
+          "value": "^(?!(localhost|.*byfrost|.*m30\\.company|.*\\.vercel\\.app)).*$"
         }
       ],
       "destination": "/api/serve"
