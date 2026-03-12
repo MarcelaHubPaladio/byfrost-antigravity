@@ -143,15 +143,6 @@ serve(async (req: Request) => {
     }));
 
     const hasField = (k: string) => fieldsToInsert.some((f: any) => f.key === k);
-    if (customerName && customerName !== "Novo Lead" && !hasField("name")) {
-      fieldsToInsert.push({ tenant_id: tenantId, case_id: orderCase.id, key: "name", value_text: customerName, source: "crm_generation", confidence: 1, last_updated_by: "system" });
-    }
-    if (customerPhone && !hasField("phone")) {
-      fieldsToInsert.push({ tenant_id: tenantId, case_id: orderCase.id, key: "phone", value_text: customerPhone, source: "crm_generation", confidence: 1, last_updated_by: "system" });
-    }
-    if (customerEmail && !hasField("email")) {
-      fieldsToInsert.push({ tenant_id: tenantId, case_id: orderCase.id, key: "email", value_text: customerEmail, source: "crm_generation", confidence: 1, last_updated_by: "system" });
-    }
 
     if (fieldsToInsert.length > 0) {
       const { error: fieldsErr } = await supabase.from("case_fields").insert(fieldsToInsert);

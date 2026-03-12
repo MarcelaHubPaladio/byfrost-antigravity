@@ -267,48 +267,6 @@ export function CaseCustomerDataEditorCard(props: {
       <div className="mt-4 grid gap-3">
         <div className="grid gap-3 sm:grid-cols-2">
           <div>
-            <Label className="text-xs">Nome</Label>
-            <Input
-              value={draft.name}
-              onChange={(e) => setDraft((p) => ({ ...p, name: e.target.value }))}
-              className="mt-1 h-10 rounded-2xl"
-              placeholder="Nome do cliente"
-            />
-          </div>
-          <div>
-            <Label className="text-xs">Código do cliente</Label>
-            <Input
-              value={draft.customer_code}
-              onChange={(e) => setDraft((p) => ({ ...p, customer_code: e.target.value }))}
-              className="mt-1 h-10 rounded-2xl"
-              placeholder="Ex: 12345"
-            />
-          </div>
-        </div>
-
-        <div className="grid gap-3 sm:grid-cols-2">
-          <div>
-            <Label className="text-xs">Telefone</Label>
-            <Input
-              value={draft.phone}
-              onChange={(e) => setDraft((p) => ({ ...p, phone: e.target.value }))}
-              className="mt-1 h-10 rounded-2xl"
-              placeholder="(DD) 9xxxx-xxxx"
-            />
-          </div>
-          <div>
-            <Label className="text-xs">Email</Label>
-            <Input
-              value={draft.email}
-              onChange={(e) => setDraft((p) => ({ ...p, email: e.target.value }))}
-              className="mt-1 h-10 rounded-2xl"
-              placeholder="cliente@empresa.com"
-            />
-          </div>
-        </div>
-
-        <div className="grid gap-3 sm:grid-cols-2">
-          <div>
             <Label className="text-xs">Data de nascimento</Label>
             <Input
               value={draft.birth_date_text}
