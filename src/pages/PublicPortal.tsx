@@ -34,6 +34,7 @@ type Block = {
         alignment?: 'start' | 'center' | 'end' | 'between';
         animation?: 'none' | 'fade-up' | 'zoom-in' | 'fade-left' | 'fade-right';
         imageWidth?: string;
+        targetUrl?: string;
     };
 };
 
@@ -155,12 +156,26 @@ function BlockRenderer({ block, isPremium }: { block: Block; isPremium: boolean 
 
             {block.type === 'image' && block.content.url && (
                 <div className="w-full py-8">
-                    <div 
-                        className="relative rounded-[40px] overflow-hidden shadow-2xl mx-auto transition-all duration-300"
-                        style={{ width: `${block.settings?.imageWidth || '100'}%` }}
-                    >
-                        <img src={block.content.url} className="w-full h-auto" alt="" />
-                    </div>
+                    {block.settings?.targetUrl ? (
+                        <a 
+                            href={block.settings.targetUrl} 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="block mx-auto transition-transform hover:scale-[1.02] active:scale-[0.98]"
+                            style={{ width: `${block.settings?.imageWidth || '100'}%` }}
+                        >
+                            <div className="relative rounded-[40px] overflow-hidden shadow-2xl">
+                                <img src={block.content.url} className="w-full h-auto" alt="" />
+                            </div>
+                        </a>
+                    ) : (
+                        <div 
+                            className="relative rounded-[40px] overflow-hidden shadow-2xl mx-auto transition-all duration-300"
+                            style={{ width: `${block.settings?.imageWidth || '100'}%` }}
+                        >
+                            <img src={block.content.url} className="w-full h-auto" alt="" />
+                        </div>
+                    )}
                 </div>
             )}
 

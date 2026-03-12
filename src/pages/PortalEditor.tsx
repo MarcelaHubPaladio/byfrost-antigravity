@@ -85,6 +85,7 @@ type Block = {
         alignment?: 'start' | 'center' | 'end' | 'between';
         animation?: 'none' | 'fade-up' | 'zoom-in' | 'fade-left' | 'fade-right';
         imageWidth?: string;
+        targetUrl?: string;
     };
 };
 
@@ -994,6 +995,22 @@ function SortableBlockItem({ block, sectionId, onUpdate, onRemove }: any) {
                             step={1}
                             onValueChange={([val]) => onUpdate({ settings: { ...(block.settings || {}), imageWidth: val.toString() } })}
                         />
+                    </div>
+                    <div className="flex flex-col gap-2 p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                        <Label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Link de Destino (Opcional)</Label>
+                        <div className="flex gap-2">
+                            <Input 
+                                placeholder="https://..." 
+                                className="h-9 rounded-xl text-xs"
+                                value={block.settings?.targetUrl || ''}
+                                onChange={(e) => onUpdate({ settings: { ...(block.settings || {}), targetUrl: e.target.value } })}
+                            />
+                            {block.settings?.targetUrl && (
+                                <div className="flex items-center justify-center h-9 w-9 bg-blue-50 text-blue-600 rounded-xl">
+                                    <LinkIcon className="h-4 w-4" />
+                                </div>
+                            )}
+                        </div>
                     </div>
                     {block.content.url ? (
                         <div 
