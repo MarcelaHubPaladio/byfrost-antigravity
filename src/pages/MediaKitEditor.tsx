@@ -71,6 +71,7 @@ export default function MediaKitEditor() {
   // Multi-page config
   const [pages, setPages] = useState<{ id: string; templateId: string; layers: Layer[] }[]>([]);
   const [selectedLayerId, setSelectedLayerId] = useState<{ pageId: string; layerId: string } | null>(null);
+  const [clipboard, setClipboard] = useState<Layer | null>(null);
   const [activePageId, setActivePageId] = useState<string | null>(null);
   const activePage = pages.find(p => p.id === activePageId);
 
@@ -270,14 +271,49 @@ export default function MediaKitEditor() {
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Undo
       if ((e.ctrlKey || e.metaKey) && e.key === "z") {
         e.preventDefault();
         undo();
       }
+      
+      // Copy
+      if ((e.ctrlKey || e.metaKey) && e.key === "c") {
+        if (selectedLayerId) {
+          const page = pages.find(p => p.id === selectedLayerId.pageId);
+          const layer = page?.layers.find(l => l.id === selectedLayerId.layerId);
+          if (layer) {
+            setClipboard({ ...layer });
+            // Don't preventDefault so native copy might still work elsewhere if needed, 
+            // but for layers we want our logic.
+          }
+        }
+      }
+
+      // Paste
+      if ((e.ctrlKey || e.metaKey) && e.key === "v") {
+        if (clipboard && activePageId) {
+          e.preventDefault();
+          const newLayer: Layer = {
+            ...clipboard,
+            id: Math.random().toString(36).substr(2, 9),
+            x: clipboard.x + 20,
+            y: clipboard.y + 20,
+            zIndex: 10, // Will be updated by state logic or stay as is
+          };
+
+          setPages(prev => {
+            const updatedPages = prev.map(p => p.id === activePageId ? { ...p, layers: [...p.layers, newLayer] } : p);
+            pushToHistory(updatedPages);
+            return updatedPages;
+          });
+          setSelectedLayerId({ pageId: activePageId, layerId: newLayer.id });
+        }
+      }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [history]);
+  }, [history, selectedLayerId, pages, activePageId, clipboard]);
 
   const saveM = useMutation({
     mutationFn: async () => {
