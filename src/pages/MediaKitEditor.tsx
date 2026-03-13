@@ -20,7 +20,9 @@ import {
   Layers, 
   ChevronLeft,
   Search,
-  Check
+  Check,
+  Smartphone,
+  Monitor,
 } from "lucide-react";
 import { showSuccess, showError } from "@/utils/toast";
 import { MediaKitCanvas, Layer } from "@/components/media-kit/MediaKitCanvas";
@@ -51,6 +53,8 @@ export default function MediaKitEditor() {
   const [entityData, setEntityData] = useState<any>(null);
   const [isEntityDialogOpen, setIsEntityDialogOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
+  const [editorDimensions, setEditorDimensions] = useState({ width: 1080, height: 1080 });
+  const [orientation, setOrientation] = useState<"vertical" | "horizontal">("vertical");
 
   const templatesQ = useQuery({
     queryKey: ["media_kit_templates", activeTenantId],
@@ -69,10 +73,13 @@ export default function MediaKitEditor() {
   const [activeTemplate, setActiveTemplate] = useState<any>(null);
 
   useEffect(() => {
-    if (templatesQ.data?.length && !activeTemplate) {
-      setActiveTemplate(templatesQ.data[0]);
+    if (templatesQ.data?.length && !activeTemplate && !id) {
+      const first = templatesQ.data[0];
+      setActiveTemplate(first);
+      setEditorDimensions({ width: first.width, height: first.height });
+      setOrientation(first.width > first.height ? "horizontal" : "vertical");
     }
-  }, [templatesQ.data, activeTemplate]);
+  }, [templatesQ.data, activeTemplate, id]);
 
   const kitQ = useQuery({
     queryKey: ["media_kit", id],
@@ -97,6 +104,12 @@ export default function MediaKitEditor() {
         ...kitQ.data.entities,
         ...kitQ.data.entities?.metadata
       });
+      
+      const config = kitQ.data.config as any;
+      if (config.width && config.height) {
+        setEditorDimensions({ width: config.width, height: config.height });
+        setOrientation(config.width > config.height ? "horizontal" : "vertical");
+      }
     }
   }, [kitQ.data]);
 
@@ -146,7 +159,12 @@ export default function MediaKitEditor() {
         name,
         tenant_id: activeTenantId!,
         entity_id: entityId,
-        config: { layers },
+        config: { 
+          layers,
+          width: editorDimensions.width,
+          height: editorDimensions.height,
+          orientation 
+        },
         updated_at: new Date().toISOString(),
       };
 
@@ -206,13 +224,36 @@ export default function MediaKitEditor() {
     try {
       const dataUrl = await canvasRef.current.exportImage();
       const link = document.createElement("a");
-      link.download = `${name}-${activeTemplate.name}.png`;
+      link.download = `${name}-${orientation}.png`;
       link.href = dataUrl;
       link.click();
       showSuccess("Sua arte está sendo baixada!");
     } catch (err) {
       showError("Erro ao exportar imagem.");
     }
+  };
+
+  const handleTemplateSelect = (t: any) => {
+    setActiveTemplate(t);
+    // Keep current orientation or use template's natural one
+    if (orientation === "horizontal") {
+      const max = Math.max(t.width, t.height);
+      const min = Math.min(t.width, t.height);
+      setEditorDimensions({ width: max, height: min });
+    } else {
+      const max = Math.max(t.width, t.height);
+      const min = Math.min(t.width, t.height);
+      setEditorDimensions({ width: min, height: max });
+    }
+  };
+
+  const toggleOrientation = (newOrientation: "vertical" | "horizontal") => {
+    if (newOrientation === orientation) return;
+    setOrientation(newOrientation);
+    setEditorDimensions({
+      width: editorDimensions.height,
+      height: editorDimensions.width
+    });
   };
 
   return (
@@ -309,19 +350,40 @@ export default function MediaKitEditor() {
                     key={t.id} 
                     variant={activeTemplate?.id === t.id ? "default" : "outline"}
                     className="cursor-pointer"
-                    onClick={() => setActiveTemplate(t)}
+                    onClick={() => handleTemplateSelect(t)}
                   >
                     {t.name}
                   </Badge>
                 ))}
+                
+                <div className="mx-2 w-px h-4 bg-slate-200" />
+                
+                <Button 
+                  variant={orientation === "vertical" ? "secondary" : "ghost"} 
+                  size="sm" 
+                  className="h-7 px-2 rounded-lg gap-1 text-[10px]"
+                  onClick={() => toggleOrientation("vertical")}
+                >
+                  <Smartphone className="h-3 w-3" />
+                  Vertical
+                </Button>
+                <Button 
+                  variant={orientation === "horizontal" ? "secondary" : "ghost"} 
+                  size="sm" 
+                  className="h-7 px-2 rounded-lg gap-1 text-[10px]"
+                  onClick={() => toggleOrientation("horizontal")}
+                >
+                  <Monitor className="h-3 w-3" />
+                  Horizontal
+                </Button>
               </div>
 
               {activeTemplate && (
                 <MediaKitCanvas
                   ref={canvasRef}
                   layers={layers}
-                  width={activeTemplate.width}
-                  height={activeTemplate.height}
+                  width={editorDimensions.width}
+                  height={editorDimensions.height}
                   selectedLayerId={selectedLayerId}
                   onSelectLayer={setSelectedLayerId}
                   onUpdateLayer={updateLayer}
