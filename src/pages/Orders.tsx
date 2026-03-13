@@ -137,13 +137,18 @@ export default function Orders() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("tenant_journeys")
-        .select("journey_id, journeys(id,key,name,is_crm,default_state_machine_json)")
+        .select(`
+          journey_id, 
+          journeys!inner(id,key,name,is_crm,default_state_machine_json)
+        `)
         .eq("tenant_id", activeTenantId!)
         .eq("journeys.key", SALES_ORDER_KEY)
         .eq("enabled", true)
-        .single();
+        .maybeSingle();
       
       if (error) throw error;
+      if (!data) return null;
+
       const j = (data as any).journeys;
       return {
         id: j.id,
@@ -338,12 +343,20 @@ export default function Orders() {
     }
   };
 
-  if (journeyQ.isError) {
+  if (journeyQ.isError || (!journeyQ.isLoading && !journeyQ.data)) {
     return (
       <AppShell>
-        <div className="p-8 text-center">
-          <h2 className="text-xl font-semibold">Jornada de Pedidos não encontrada</h2>
-          <p className="text-slate-500 mt-2">Certifique-se de que a jornada 'sales_order' está habilitada no Admin.</p>
+        <div className="flex flex-col items-center justify-center min-h-[50vh] p-8 text-center bg-white/40 rounded-[32px] border border-slate-200 backdrop-blur m-4">
+          <div className="h-16 w-16 bg-blue-50 text-blue-500 rounded-full flex items-center justify-center mb-4">
+            <Package className="h-8 w-8" />
+          </div>
+          <h2 className="text-xl font-semibold text-slate-800">Módulo de Pedidos não habilitado</h2>
+          <p className="text-slate-500 mt-2 max-w-sm">
+            A jornada de <span className="font-semibold">Venda (sales_order)</span> não foi encontrada ou não está habilitada para este tenant.
+          </p>
+          <Button asChild variant="outline" className="mt-6 rounded-2xl">
+            <Link to="/app">Voltar ao Dashboard</Link>
+          </Button>
         </div>
       </AppShell>
     );
