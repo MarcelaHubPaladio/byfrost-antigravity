@@ -19,6 +19,8 @@ import {
   Trash2, 
   Layers, 
   ChevronLeft,
+  ChevronUp,
+  ChevronDown,
   Search,
   Check,
   Smartphone,
@@ -431,21 +433,25 @@ export default function MediaKitEditor() {
       const page = prev.find(p => p.id === activePageId);
       if (!page) return prev;
 
-      const sorted = [...page.layers].sort((a, b) => a.zIndex - b.zIndex);
-      const index = sorted.findIndex(l => l.id === layerId);
+      const layers = [...page.layers].sort((a, b) => a.zIndex - b.zIndex);
+      const index = layers.findIndex(l => l.id === layerId);
       if (index === -1) return prev;
 
       const newIndex = direction === "up" ? index + 1 : index - 1;
-      if (newIndex < 0 || newIndex >= sorted.length) return prev;
+      if (newIndex < 0 || newIndex >= layers.length) return prev;
 
-      const layerToSwap = sorted[newIndex];
-      const currentLayer = sorted[index];
+      const layerToSwap = layers[newIndex];
+      const currentLayer = layers[index];
+
+      // Swap z-indices
+      const oldZ = currentLayer.zIndex;
+      const newZ = layerToSwap.zIndex;
 
       const updatedPages = prev.map(p => p.id === activePageId ? {
         ...p,
         layers: p.layers.map(l => {
-          if (l.id === layerId) return { ...l, zIndex: layerToSwap.zIndex };
-          if (l.id === layerToSwap.id) return { ...l, zIndex: currentLayer.zIndex };
+          if (l.id === layerId) return { ...l, zIndex: newZ };
+          if (l.id === layerToSwap.id) return { ...l, zIndex: oldZ };
           return l;
         })
       } : p);
@@ -1076,6 +1082,27 @@ export default function MediaKitEditor() {
                           />
                         </div>
                       </div>
+                       <div className="space-y-2 pt-2 border-t border-slate-100">
+                          <Label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Ordem das Camadas</Label>
+                          <div className="grid grid-cols-2 gap-2">
+                             <Button 
+                               variant="outline" 
+                               size="sm" 
+                               className="h-9 gap-2 rounded-xl text-xs font-bold"
+                               onClick={() => reorderLayer(selectedLayer.id, "up")}
+                             >
+                               <ChevronUp className="h-4 w-4" /> Trazer
+                             </Button>
+                             <Button 
+                               variant="outline" 
+                               size="sm" 
+                               className="h-9 gap-2 rounded-xl text-xs font-bold"
+                               onClick={() => reorderLayer(selectedLayer.id, "down")}
+                             >
+                               <ChevronDown className="h-4 w-4" /> Enviar
+                             </Button>
+                          </div>
+                       </div>
                     </div>
                   </>
                 ) : (

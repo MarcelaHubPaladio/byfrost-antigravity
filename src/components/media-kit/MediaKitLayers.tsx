@@ -41,9 +41,11 @@ export function MediaKitLayers({ layers, selectedLayerId, onSelect, onRemove, on
         {sortedLayers.map((layer, index) => (
           <div
             key={layer.id}
-            onClick={(e) => {
-              e.stopPropagation();
-              onSelect(layer.id);
+            onMouseDown={(e) => {
+              if (e.target === e.currentTarget || (e.target as HTMLElement).closest('.layer-info')) {
+                e.stopPropagation();
+                onSelect(layer.id);
+              }
             }}
             className={`flex items-center gap-3 p-3 rounded-xl border-2 transition-all cursor-pointer group
               ${selectedLayerId === layer.id 
@@ -54,11 +56,11 @@ export function MediaKitLayers({ layers, selectedLayerId, onSelect, onRemove, on
               {getIcon(layer.type)}
             </div>
             
-            <div className="flex-1 min-w-0">
-              <p className="text-xs font-bold text-slate-900 truncate uppercase tracking-tight">
+            <div className="flex-1 min-w-0 layer-info">
+              <p className="text-xs font-bold text-slate-900 truncate uppercase tracking-tight layer-info">
                 {layer.type === "text" ? (layer.content || "Texto") : layer.type}
               </p>
-              <p className="text-[10px] text-slate-400">Layer {layer.id.slice(0, 4)}</p>
+              <p className="text-[10px] text-slate-400 layer-info">Layer {layer.id.slice(0, 4)}</p>
             </div>
 
             <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
