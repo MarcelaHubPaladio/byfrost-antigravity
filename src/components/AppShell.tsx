@@ -635,6 +635,7 @@ export function AppShell({
     (r) => r.journeys?.key === "meta_content" && r.config_json?.meta_content_enabled === true
   );
   const hasTrello = journeys.some((r) => r.journeys?.key === "trello");
+  const hasOrders = journeys.some((r) => r.journeys?.key === "sales_order");
 
   const hasIncentivesCampaigns = Boolean(incentivesHasCampaignsQ.data);
   const isPresenceManager = isSuperAdmin || isPresenceManagerRole(activeTenant?.role);
@@ -774,6 +775,7 @@ export function AppShell({
                 <NavTile to={prefs.startRoute || "/app"} icon={LayoutGrid} label="Dashboard" disabled={!can("app.dashboard")} />
                 {showChatInNav && <NavTile to="/app/chat" icon={MessagesSquare} label="Chat" disabled={!can("app.chat")} />}
                 {hasTrello && <NavTile to="/app/trello" icon={KanbanSquare} label="Tarefas" disabled={!can("app.trello")} />}
+                {hasOrders && <NavTile to="/app/orders" icon={Package} label="Pedidos" disabled={!can("app.dashboard")} />}
                 {hasCrm && <NavTile to="/app/crm" icon={LayoutDashboard} label="CRM" disabled={!can("app.crm")} />}
                 {hasMetaContent && (
                   <NavTile to="/app/content" icon={Clapperboard} label="Conteúdo" disabled={!can("app.content")} />

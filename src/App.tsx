@@ -39,6 +39,7 @@ const GoalsCenter = lazy(() => import("@/pages/GoalsCenter"));
 const AdminUserDetail = lazy(() => import("@/pages/AdminUserDetail"));
 const Crm = lazy(() => import("@/pages/Crm"));
 const CrmCaseDetail = lazy(() => import("@/pages/CrmCaseDetail"));
+const Orders = lazy(() => import("@/pages/Orders"));
 const Chats = lazy(() => import("@/pages/Chats"));
 const Presence = lazy(() => import("@/pages/Presence"));
 const PresenceManage = lazy(() => import("@/pages/PresenceManage"));
@@ -261,6 +262,15 @@ const App = () => (
                     element={
                       <RequireRouteAccess routeKey="app.crm">
                         <Crm />
+                      </RequireRouteAccess>
+                    }
+                  />
+
+                  <Route
+                    path="/app/orders"
+                    element={
+                      <RequireRouteAccess routeKey="app.dashboard">
+                        <Orders />
                       </RequireRouteAccess>
                     }
                   />
