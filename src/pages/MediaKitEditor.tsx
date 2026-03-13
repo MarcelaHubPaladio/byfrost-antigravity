@@ -609,9 +609,8 @@ export default function MediaKitEditor() {
             </aside>
           </div>
         </div>
-      </RequireRouteAccess>
-    </RequireAuth>
-  );
+    );
+}
 
 const styleText = `
   .custom-scrollbar::-webkit-scrollbar {
