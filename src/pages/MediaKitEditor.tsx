@@ -49,7 +49,8 @@ export default function MediaKitEditor() {
   const initialEntityId = searchParams.get("entityId");
 
   const [editorState, setEditorState] = useState<"setup" | "editing">(id === "new" ? "setup" : "editing");
-  const [name, setName] = useState("Novo Mídia Kit");
+  const mode = searchParams.get("mode") || "kit"; // "kit" or "mask"
+  const [name, setName] = useState(mode === "mask" ? "Nova Máscara" : "Novo Mídia Kit");
   const [entityId, setEntityId] = useState<string | null>(null);
   const [entityData, setEntityData] = useState<any>(null);
   const [selectedTemplateIds, setSelectedTemplateIds] = useState<string[]>([]);
@@ -79,32 +80,50 @@ export default function MediaKitEditor() {
   });
 
   const kitQ = useQuery({
-    queryKey: ["media_kit", id],
+    queryKey: ["media_resource", mode, id],
     enabled: !!id && id !== "new",
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("media_kits")
-        .select("*, entities:core_entities(*)")
-        .eq("id", id!)
-        .single();
+      const table = mode === "mask" ? "media_kit_masks" : "media_kits";
+      let query = supabase.from(table).select("*");
+      
+      if (mode === "kit") {
+        query = query.select("*, entities:core_entities(*)").eq("id", id!).single() as any;
+      } else {
+        query = query.eq("id", id!).single() as any;
+      }
+      
+      const { data, error } = await query;
       if (error) throw error;
       return data;
     },
   });
 
   useEffect(() => {
-    if (kitQ.data) {
-      setName(kitQ.data.name);
-      setEntityId(kitQ.data.entity_id);
-      setEntityData({
-        ...kitQ.data.entities,
-        ...kitQ.data.entities?.metadata
-      });
+    const data = kitQ.data as any;
+    if (data) {
+      setName(data.name);
       
-      const config = kitQ.data.config as any;
+      if (mode === "kit") {
+        setEntityId(data.entity_id);
+        setEntityData({
+          ...data.entities,
+          ...data.entities?.metadata
+        });
+      }
+      
+      const config = data.config as any;
       if (config.pages) {
         setPages(config.pages);
         if (config.pages.length > 0) setActivePageId(config.pages[0].id);
+      } else if (config.layouts) {
+        // Mask format: convert layouts to pages for the editor
+        const maskPages = Object.entries(config.layouts).map(([tid, layers], idx) => ({
+          id: `page-${idx}-${Date.now()}`,
+          templateId: tid,
+          layers: layers as Layer[]
+        }));
+        setPages(maskPages);
+        if (maskPages.length > 0) setActivePageId(maskPages[0].id);
       } else if (config.layers) {
         // Migration of old data format
         setPages([{ id: "p1", templateId: "unknown", layers: config.layers }]);
@@ -112,7 +131,7 @@ export default function MediaKitEditor() {
       }
       setEditorState("editing");
     }
-  }, [kitQ.data]);
+  }, [kitQ.data, mode]);
 
   const initialEntityQ = useQuery({
     queryKey: ["entity_initial", activeTenantId, initialEntityId],
@@ -195,33 +214,45 @@ export default function MediaKitEditor() {
 
   const saveM = useMutation({
     mutationFn: async () => {
-      const payload = {
+      // If saving a mask, we need to convert pages back to layouts
+      const config = mode === "mask" 
+        ? { 
+            layouts: pages.reduce((acc, p) => ({ ...acc, [p.templateId]: p.layers }), {}) 
+          }
+        : { pages };
+
+      const payload: any = {
         name,
         tenant_id: activeTenantId!,
-        entity_id: entityId,
-        config: { pages },
+        config,
         updated_at: new Date().toISOString(),
       };
 
+      if (mode === "kit") {
+        payload.entity_id = entityId;
+      }
+
+      const table = mode === "mask" ? "media_kit_masks" : "media_kits";
+
       if (id && id !== "new") {
         const { error } = await supabase
-          .from("media_kits")
+          .from(table)
           .update(payload)
           .eq("id", id);
         if (error) throw error;
       } else {
         const { data, error } = await supabase
-          .from("media_kits")
+          .from(table)
           .insert([payload])
           .select()
           .single();
         if (error) throw error;
-        nav(`/app/media-kit/editor/${data.id}`, { replace: true });
+        nav(`/app/media-kit/editor/${data.id}?mode=${mode}`, { replace: true });
       }
     },
     onSuccess: () => {
-      showSuccess("Mídia Kit salvo.");
-      qc.invalidateQueries({ queryKey: ["media_kits"] });
+      showSuccess(mode === "mask" ? "Máscara salva." : "Mídia Kit salvo.");
+      qc.invalidateQueries({ queryKey: [mode === "mask" ? "media_kit_masks" : "media_kits"] });
     },
     onError: (err: any) => showError(err.message),
   });
@@ -306,8 +337,12 @@ export default function MediaKitEditor() {
                   <ChevronLeft className="h-5 w-5" />
                 </Button>
                 <div>
-                  <h1 className="text-2xl font-bold text-slate-900">Configurar Novo Mídia Kit</h1>
-                  <p className="text-slate-500 text-sm">Selecione a entidade e os formatos das artes</p>
+                  <h1 className="text-2xl font-bold text-slate-900">
+                    {mode === "mask" ? "Configurar Nova Máscara" : "Configurar Novo Mídia Kit"}
+                  </h1>
+                  <p className="text-slate-500 text-sm">
+                    {mode === "mask" ? "Selecione o nome e os templates para a máscara" : "Selecione a entidade e os formatos das artes"}
+                  </p>
                 </div>
               </div>
 
@@ -322,29 +357,31 @@ export default function MediaKitEditor() {
                   />
                 </div>
 
-                <div className="space-y-4">
-                  <Label className="text-base font-semibold">2. Tipo de Arte</Label>
-                  <div className="flex gap-4">
-                    <Button 
-                      variant={creationMode === "related" ? "secondary" : "ghost"}
-                      onClick={() => setCreationMode("related")}
-                      className={`flex-1 h-16 rounded-xl border-2 ${creationMode === "related" ? "border-blue-600 bg-blue-50 text-blue-700" : "border-slate-100"}`}
-                    >
-                      Relacionado a Entidade
-                    </Button>
-                    <Button 
-                      variant={creationMode === "free" ? "secondary" : "ghost"}
-                      onClick={() => {
-                        setCreationMode("free");
-                        setEntityId(null);
-                        setEntityData(null);
-                      }}
-                      className={`flex-1 h-16 rounded-xl border-2 ${creationMode === "free" ? "border-blue-600 bg-blue-50 text-blue-700" : "border-slate-100"}`}
-                    >
-                      Arte Livre
-                    </Button>
+                {mode === "kit" && (
+                  <div className="space-y-4">
+                    <Label className="text-base font-semibold">2. Tipo de Arte</Label>
+                    <div className="flex gap-4">
+                      <Button 
+                        variant={creationMode === "related" ? "secondary" : "ghost"}
+                        onClick={() => setCreationMode("related")}
+                        className={`flex-1 h-16 rounded-xl border-2 ${creationMode === "related" ? "border-blue-600 bg-blue-50 text-blue-700" : "border-slate-100"}`}
+                      >
+                        Relacionado a Entidade
+                      </Button>
+                      <Button 
+                        variant={creationMode === "free" ? "secondary" : "ghost"}
+                        onClick={() => {
+                          setCreationMode("free");
+                          setEntityId(null);
+                          setEntityData(null);
+                        }}
+                        className={`flex-1 h-16 rounded-xl border-2 ${creationMode === "free" ? "border-blue-600 bg-blue-50 text-blue-700" : "border-slate-100"}`}
+                      >
+                        Arte Livre
+                      </Button>
+                    </div>
                   </div>
-                </div>
+                )}
 
                 {creationMode === "related" && (
                   <div className="space-y-4">
@@ -380,38 +417,42 @@ export default function MediaKitEditor() {
                   </div>
                 )}
                 
-                <div className="space-y-4">
-                  <Label className="text-base font-semibold">{creationMode === "related" ? "4" : "3"}. Selecionar Máscara (Opcional)</Label>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                    <div 
-                      onClick={() => setSelectedMaskId(null)}
-                      className={`p-4 border-2 rounded-2xl cursor-pointer transition-all flex flex-col items-center justify-center gap-2 text-center
-                        ${selectedMaskId === null 
-                          ? "border-blue-600 bg-blue-50 text-blue-700 shadow-sm" 
-                          : "border-slate-100 hover:border-slate-300 bg-white"}`}
-                    >
-                      <Palette className="h-4 w-4 text-slate-400" />
-                      <p className="font-semibold text-sm leading-tight text-slate-400 italic">Sem Máscara</p>
-                    </div>
-                    {masksQ.data?.map(m => (
+                {mode === "kit" && (
+                  <div className="space-y-4">
+                    <Label className="text-base font-semibold">{creationMode === "related" ? "4" : "3"}. Selecionar Máscara (Opcional)</Label>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                       <div 
-                        key={m.id}
-                        onClick={() => setSelectedMaskId(m.id)}
+                        onClick={() => setSelectedMaskId(null)}
                         className={`p-4 border-2 rounded-2xl cursor-pointer transition-all flex flex-col items-center justify-center gap-2 text-center
-                          ${selectedMaskId === m.id 
+                          ${selectedMaskId === null 
                             ? "border-blue-600 bg-blue-50 text-blue-700 shadow-sm" 
                             : "border-slate-100 hover:border-slate-300 bg-white"}`}
                       >
-                        <Layout className="h-4 w-4 text-purple-500" />
-                        <p className="font-semibold text-sm leading-tight">{m.name}</p>
-                        {selectedMaskId === m.id && <Check className="h-3 w-3" />}
+                        <Palette className="h-4 w-4 text-slate-400" />
+                        <p className="font-semibold text-sm leading-tight text-slate-400 italic">Sem Máscara</p>
                       </div>
-                    ))}
+                      {masksQ.data?.map(m => (
+                        <div 
+                          key={m.id}
+                          onClick={() => setSelectedMaskId(m.id)}
+                          className={`p-4 border-2 rounded-2xl cursor-pointer transition-all flex flex-col items-center justify-center gap-2 text-center
+                            ${selectedMaskId === m.id 
+                              ? "border-blue-600 bg-blue-50 text-blue-700 shadow-sm" 
+                              : "border-slate-100 hover:border-slate-300 bg-white"}`}
+                        >
+                          <Layout className="h-4 w-4 text-purple-500" />
+                          <p className="font-semibold text-sm leading-tight">{m.name}</p>
+                          {selectedMaskId === m.id && <Check className="h-3 w-3" />}
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                </div>
+                )}
 
                 <div className="space-y-4">
-                  <Label className="text-base font-semibold">{creationMode === "related" ? "5" : "4"}. Selecione os Templates (Formatos)</Label>
+                  <Label className="text-base font-semibold">
+                    {mode === "mask" ? "3" : (creationMode === "related" ? "5" : "4")}. Selecione os Templates (Formatos)
+                  </Label>
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                     {templatesQ.data?.map(t => (
                       <div 
@@ -447,7 +488,7 @@ export default function MediaKitEditor() {
                     disabled={selectedTemplateIds.length === 0}
                     onClick={startEditing}
                   >
-                    Criar Mídia Kit e Abrir Editor
+                    {mode === "mask" ? "Criar Máscara e Abrir Editor" : "Criar Mídia Kit e Abrir Editor"}
                   </Button>
                 </div>
               </Card>
@@ -475,7 +516,7 @@ export default function MediaKitEditor() {
                   className="h-8 py-0 font-bold border-none focus-visible:ring-0 text-slate-900 p-0"
                 />
                 <span className="text-[10px] text-slate-400 font-medium">
-                  {entityData?.display_name || "Nenhuma entidade"} • {pages.length} página(s)
+                  {mode === "mask" ? "Editor de Máscara" : (entityData?.display_name || "Nenhuma entidade")} • {pages.length} página(s)
                 </span>
               </div>
             </div>
