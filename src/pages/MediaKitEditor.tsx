@@ -769,6 +769,11 @@ export default function MediaKitEditor() {
             {/* Main Editor - Scrollable */}
             <main 
               onWheel={handleWheel}
+              onMouseDown={(e) => {
+                if (e.target === e.currentTarget) {
+                  setSelectedLayerId(null);
+                }
+              }}
               className="flex-1 overflow-auto bg-slate-100 flex flex-col items-center gap-16 py-20 px-4 custom-scrollbar overscroll-x-none"
               style={{ overscrollBehaviorX: "none" }}
             >
