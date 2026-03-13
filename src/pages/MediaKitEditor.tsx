@@ -28,6 +28,7 @@ import {
 } from "lucide-react";
 import { showSuccess, showError } from "@/utils/toast";
 import { MediaKitCanvas, Layer } from "@/components/media-kit/MediaKitCanvas";
+import { MediaKitGallery } from "@/components/media-kit/MediaKitGallery";
 import { Slider } from "@/components/ui/slider";
 import { Badge } from "@/components/ui/badge";
 import { 
@@ -64,6 +65,8 @@ export default function MediaKitEditor() {
 
   const [isEntityDialogOpen, setIsEntityDialogOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
+  const [scale, setScale] = useState(0.5);
+  const [isGalleryOpen, setIsGalleryOpen] = useState(false);
 
   const templatesQ = useQuery({
     queryKey: ["media_kit_templates", activeTenantId],
@@ -276,6 +279,23 @@ export default function MediaKitEditor() {
     setSelectedLayerId({ pageId: activePageId, layerId: newLayer.id });
   };
 
+  const addImageLayer = (url: string) => {
+    if (!activePageId) return;
+    const newLayer: Layer = {
+      id: Math.random().toString(36).substr(2, 9),
+      type: "image",
+      content: url,
+      x: 50,
+      y: 50,
+      zIndex: 10,
+      width: 400,
+      height: 400,
+    };
+    
+    setPages(pages.map(p => p.id === activePageId ? { ...p, layers: [...p.layers, newLayer] } : p));
+    setSelectedLayerId({ pageId: activePageId, layerId: newLayer.id });
+  };
+
   const updateLayer = (pageId: string, layerId: string, delta: Partial<Layer>) => {
     setPages(pages.map(p => p.id === pageId ? { 
       ...p, 
@@ -300,6 +320,14 @@ export default function MediaKitEditor() {
       };
     }));
     showSuccess(`Máscara "${mask.name}" aplicada.`);
+  };
+  
+  const handleWheel = (e: React.WheelEvent) => {
+    if (e.ctrlKey || e.metaKey) {
+      e.preventDefault();
+      const delta = e.deltaY > 0 ? -0.05 : 0.05;
+      setScale(prev => Math.min(Math.max(0.1, prev + delta), 3));
+    }
   };
 
   const handleExportAll = async () => {
@@ -538,7 +566,7 @@ export default function MediaKitEditor() {
               <Button variant="ghost" size="icon" onClick={() => addLayer("text")} title="Adicionar Texto" className="rounded-xl">
                 <Type className="h-6 w-6 text-slate-600" />
               </Button>
-              <Button variant="ghost" size="icon" onClick={() => addLayer("image")} title="Adicionar Imagem" className="rounded-xl">
+              <Button variant="ghost" size="icon" onClick={() => setIsGalleryOpen(true)} title="Adicionar Imagem" className="rounded-xl">
                 <ImageIcon className="h-6 w-6 text-slate-600" />
               </Button>
               <Button variant="ghost" size="icon" onClick={() => addLayer("shape")} title="Adicionar Forma" className="rounded-xl">
@@ -592,7 +620,22 @@ export default function MediaKitEditor() {
             </aside>
 
             {/* Main Editor - Scrollable */}
-            <main className="flex-1 overflow-y-auto bg-slate-100 flex flex-col items-center gap-16 py-20 px-4 custom-scrollbar">
+            <main 
+              onWheel={handleWheel}
+              className="flex-1 overflow-y-auto bg-slate-100 flex flex-col items-center gap-16 py-20 px-4 custom-scrollbar"
+            >
+              <div className="fixed bottom-8 left-1/2 -translate-x-1/2 bg-white/80 backdrop-blur-md px-4 py-2 rounded-full border shadow-sm z-30 flex items-center gap-4">
+                <Button variant="ghost" size="icon" onClick={() => setScale(prev => Math.max(0.1, prev - 0.1))} className="h-8 w-8 rounded-full">
+                  -
+                </Button>
+                <span className="text-xs font-bold text-slate-600 min-w-[3rem] text-center">
+                  {Math.round(scale * 100)}%
+                </span>
+                <Button variant="ghost" size="icon" onClick={() => setScale(prev => Math.min(3, prev + 0.1))} className="h-8 w-8 rounded-full">
+                  +
+                </Button>
+              </div>
+
               {pages.map((page, idx) => {
                 const template = templatesQ.data?.find(t => t.id === page.templateId);
                 return (
@@ -622,7 +665,7 @@ export default function MediaKitEditor() {
                           setSelectedLayerId(layerId ? { pageId: page.id, layerId } : null);
                         }}
                         onUpdateLayer={(layerId, delta) => updateLayer(page.id, layerId, delta)}
-                        scale={0.5}
+                        scale={scale}
                         entityData={entityData}
                       />
                     </div>
@@ -779,6 +822,12 @@ export default function MediaKitEditor() {
               </div>
             </aside>
           </div>
+          
+          <MediaKitGallery 
+            open={isGalleryOpen}
+            onOpenChange={setIsGalleryOpen}
+            onSelect={addImageLayer}
+          />
         </div>
       </RequireRouteAccess>
     </RequireAuth>
