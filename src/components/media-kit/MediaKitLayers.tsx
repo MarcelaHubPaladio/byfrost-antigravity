@@ -66,7 +66,9 @@ export function MediaKitLayers({ layers, selectedLayerId, onSelect, onRemove, on
                 variant="ghost"
                 size="icon"
                 disabled={index === 0}
+                onMouseDown={(e) => e.stopPropagation()}
                 onClick={(e) => {
+                  e.preventDefault();
                   e.stopPropagation();
                   onReorder(layer.id, "up");
                 }}
@@ -78,7 +80,9 @@ export function MediaKitLayers({ layers, selectedLayerId, onSelect, onRemove, on
                 variant="ghost"
                 size="icon"
                 disabled={index === sortedLayers.length - 1}
+                onMouseDown={(e) => e.stopPropagation()}
                 onClick={(e) => {
+                  e.preventDefault();
                   e.stopPropagation();
                   onReorder(layer.id, "down");
                 }}
@@ -89,7 +93,9 @@ export function MediaKitLayers({ layers, selectedLayerId, onSelect, onRemove, on
               <Button
                 variant="ghost"
                 size="icon"
+                onMouseDown={(e) => e.stopPropagation()}
                 onClick={(e) => {
+                  e.preventDefault();
                   e.stopPropagation();
                   onRemove(layer.id);
                 }}

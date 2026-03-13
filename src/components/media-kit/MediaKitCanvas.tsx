@@ -187,7 +187,7 @@ export const MediaKitCanvas = forwardRef<{ exportImage: () => Promise<string> },
               key={layer.id}
               onMouseDown={(e) => handleMouseDown(e, layer)}
               className={cn(
-                "absolute cursor-move select-none group",
+                "absolute cursor-move select-none group pointer-events-auto bg-transparent",
                 selectedLayerId === layer.id && "ring-2 ring-blue-500 ring-offset-2 shadow-lg"
               )}
               style={{
