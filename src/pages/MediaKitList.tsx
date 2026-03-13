@@ -8,7 +8,7 @@ import { useTenant } from "@/providers/TenantProvider";
 import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Plus, Trash2, Pencil, Image as ImageIcon, Settings } from "lucide-react";
+import { Plus, Trash2, Pencil, Image as ImageIcon, Settings, Layout } from "lucide-react";
 import { showSuccess, showError } from "@/utils/toast";
 import { Badge } from "@/components/ui/badge";
 
@@ -74,13 +74,17 @@ export default function MediaKitList() {
                 <p className="text-slate-500">Gerencie suas artes e campanhas visuais.</p>
               </div>
               <div className="flex gap-2">
+                <Button variant="outline" onClick={() => nav("/app/media-kit/masks")} className="rounded-xl border-purple-200 text-purple-700 hover:bg-purple-50">
+                  <Layout className="mr-2 h-4 w-4" />
+                  Gerenciar Máscaras
+                </Button>
                 <Button variant="outline" onClick={() => nav("/app/media-kit/templates")} className="rounded-xl">
                   <Settings className="mr-2 h-4 w-4" />
                   Gerenciar Tamanhos
                 </Button>
                 <Button onClick={() => nav("/app/media-kit/editor/new")} className="rounded-xl">
                   <Plus className="mr-2 h-4 w-4" />
-                  Cria Novo Kit
+                  Criar Novo Kit
                 </Button>
               </div>
             </div>
