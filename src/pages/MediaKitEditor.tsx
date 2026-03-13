@@ -115,6 +115,16 @@ export default function MediaKitEditor() {
     },
   });
 
+  // Navigation Guard - Unsaved Changes
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, []);
+
   useEffect(() => {
     const data = kitQ.data as any;
     if (data) {
@@ -713,7 +723,8 @@ export default function MediaKitEditor() {
             {/* Main Editor - Scrollable */}
             <main 
               onWheel={handleWheel}
-              className="flex-1 overflow-auto bg-slate-100 flex flex-col items-center gap-16 py-20 px-4 custom-scrollbar"
+              className="flex-1 overflow-auto bg-slate-100 flex flex-col items-center gap-16 py-20 px-4 custom-scrollbar overscroll-x-none"
+              style={{ overscrollBehaviorX: "none" }}
             >
               <div className="fixed bottom-8 left-1/2 -translate-x-1/2 bg-white/80 backdrop-blur-md px-4 py-2 rounded-full border shadow-sm z-30 flex items-center gap-4">
                 <Button variant="ghost" size="icon" onClick={() => setScale(prev => Math.max(0.1, prev - 0.1))} className="h-8 w-8 rounded-full">

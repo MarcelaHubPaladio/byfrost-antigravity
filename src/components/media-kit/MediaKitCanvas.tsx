@@ -168,7 +168,11 @@ export const MediaKitCanvas = forwardRef<{ exportImage: () => Promise<string> },
           width: width * scale,
           height: height * scale,
         }}
-        onClick={() => onSelectLayer("")}
+        onMouseDown={(e) => {
+          if (e.target === e.currentTarget) {
+            onSelectLayer("");
+          }
+        }}
       >
         <div
           ref={canvasRef}
