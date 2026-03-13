@@ -42,19 +42,23 @@ export default function MediaKitEditor() {
   const nav = useNavigate();
   const qc = useQueryClient();
   const { activeTenantId } = useTenant();
-  const canvasRef = useRef<any>(null);
+  const canvasRefs = useRef<{ [key: string]: any }>({});
 
   const initialEntityId = searchParams.get("entityId");
 
+  const [editorState, setEditorState] = useState<"setup" | "editing">(id === "new" ? "setup" : "editing");
   const [name, setName] = useState("Novo Mídia Kit");
-  const [layers, setLayers] = useState<Layer[]>([]);
-  const [selectedLayerId, setSelectedLayerId] = useState<string | null>(null);
   const [entityId, setEntityId] = useState<string | null>(null);
   const [entityData, setEntityData] = useState<any>(null);
+  const [selectedTemplateIds, setSelectedTemplateIds] = useState<string[]>([]);
+  
+  // Multi-page config
+  const [pages, setPages] = useState<{ id: string; templateId: string; layers: Layer[] }[]>([]);
+  const [selectedLayerId, setSelectedLayerId] = useState<{ pageId: string; layerId: string } | null>(null);
+  const [activePageId, setActivePageId] = useState<string | null>(null);
+
   const [isEntityDialogOpen, setIsEntityDialogOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
-  const [editorDimensions, setEditorDimensions] = useState({ width: 1080, height: 1080 });
-  const [orientation, setOrientation] = useState<"vertical" | "horizontal">("vertical");
 
   const templatesQ = useQuery({
     queryKey: ["media_kit_templates", activeTenantId],
@@ -69,17 +73,6 @@ export default function MediaKitEditor() {
       return data;
     },
   });
-
-  const [activeTemplate, setActiveTemplate] = useState<any>(null);
-
-  useEffect(() => {
-    if (templatesQ.data?.length && !activeTemplate && !id) {
-      const first = templatesQ.data[0];
-      setActiveTemplate(first);
-      setEditorDimensions({ width: first.width, height: first.height });
-      setOrientation(first.width > first.height ? "horizontal" : "vertical");
-    }
-  }, [templatesQ.data, activeTemplate, id]);
 
   const kitQ = useQuery({
     queryKey: ["media_kit", id],
@@ -98,7 +91,6 @@ export default function MediaKitEditor() {
   useEffect(() => {
     if (kitQ.data) {
       setName(kitQ.data.name);
-      setLayers((kitQ.data.config as any).layers || []);
       setEntityId(kitQ.data.entity_id);
       setEntityData({
         ...kitQ.data.entities,
@@ -106,28 +98,17 @@ export default function MediaKitEditor() {
       });
       
       const config = kitQ.data.config as any;
-      if (config.width && config.height) {
-        setEditorDimensions({ width: config.width, height: config.height });
-        setOrientation(config.width > config.height ? "horizontal" : "vertical");
+      if (config.pages) {
+        setPages(config.pages);
+        if (config.pages.length > 0) setActivePageId(config.pages[0].id);
+      } else if (config.layers) {
+        // Migration of old data format
+        setPages([{ id: "p1", templateId: "unknown", layers: config.layers }]);
+        setActivePageId("p1");
       }
+      setEditorState("editing");
     }
   }, [kitQ.data]);
-
-  const entitiesQ = useQuery({
-    queryKey: ["entities_search", activeTenantId, searchTerm],
-    enabled: !!activeTenantId && isEntityDialogOpen,
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("core_entities")
-        .select("*")
-        .eq("tenant_id", activeTenantId!)
-        .ilike("display_name", `%${searchTerm}%`)
-        .is("deleted_at", null)
-        .limit(10);
-      if (error) throw error;
-      return data;
-    },
-  });
 
   const initialEntityQ = useQuery({
     queryKey: ["entity_initial", activeTenantId, initialEntityId],
@@ -153,18 +134,44 @@ export default function MediaKitEditor() {
     }
   }, [initialEntityQ.data]);
 
+  const entitiesQ = useQuery({
+    queryKey: ["entities_search", activeTenantId, searchTerm],
+    enabled: !!activeTenantId && (isEntityDialogOpen || editorState === "setup"),
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("core_entities")
+        .select("*")
+        .eq("tenant_id", activeTenantId!)
+        .ilike("display_name", `%${searchTerm}%`)
+        .is("deleted_at", null)
+        .limit(10);
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  const startEditing = () => {
+    if (selectedTemplateIds.length === 0) {
+      showError("Selecione pelo menos um template.");
+      return;
+    }
+    const newPages = selectedTemplateIds.map((tid, idx) => ({
+      id: `page-${idx}-${Date.now()}`,
+      templateId: tid,
+      layers: []
+    }));
+    setPages(newPages);
+    setActivePageId(newPages[0].id);
+    setEditorState("editing");
+  };
+
   const saveM = useMutation({
     mutationFn: async () => {
       const payload = {
         name,
         tenant_id: activeTenantId!,
         entity_id: entityId,
-        config: { 
-          layers,
-          width: editorDimensions.width,
-          height: editorDimensions.height,
-          orientation 
-        },
+        config: { pages },
         updated_at: new Date().toISOString(),
       };
 
@@ -192,215 +199,281 @@ export default function MediaKitEditor() {
   });
 
   const addLayer = (type: Layer["type"]) => {
+    if (!activePageId) return;
     const newLayer: Layer = {
       id: Math.random().toString(36).substr(2, 9),
       type,
       content: type === "text" ? "Novo Texto" : type === "shape" ? "" : "https://via.placeholder.com/200",
       x: 50,
       y: 50,
-      zIndex: layers.length,
+      zIndex: 10,
       fontSize: type === "text" ? 48 : undefined,
       color: type === "text" ? "#000000" : type === "shape" ? "#3b82f6" : undefined,
       width: type === "image" || type === "shape" ? 200 : undefined,
       height: type === "image" || type === "shape" ? 200 : undefined,
     };
-    setLayers([...layers, newLayer]);
-    setSelectedLayerId(newLayer.id);
+    
+    setPages(pages.map(p => p.id === activePageId ? { ...p, layers: [...p.layers, newLayer] } : p));
+    setSelectedLayerId({ pageId: activePageId, layerId: newLayer.id });
   };
 
-  const updateLayer = (id: string, delta: Partial<Layer>) => {
-    setLayers(layers.map(l => l.id === id ? { ...l, ...delta } : l));
+  const updateLayer = (pageId: string, layerId: string, delta: Partial<Layer>) => {
+    setPages(pages.map(p => p.id === pageId ? { 
+      ...p, 
+      layers: p.layers.map(l => l.id === layerId ? { ...l, ...delta } : l) 
+    } : p));
   };
 
-  const removeLayer = (id: string) => {
-    setLayers(layers.filter(l => l.id !== id));
-    if (selectedLayerId === id) setSelectedLayerId(null);
+  const removeLayer = (pageId: string, layerId: string) => {
+    setPages(pages.map(p => p.id === pageId ? { ...p, layers: p.layers.filter(l => l.id !== layerId) } : p));
+    if (selectedLayerId?.layerId === layerId) setSelectedLayerId(null);
   };
 
-  const selectedLayer = layers.find(l => l.id === selectedLayerId);
-
-  const handleExport = async () => {
-    if (!canvasRef.current) return;
+  const handleExportAll = async () => {
     try {
-      const dataUrl = await canvasRef.current.exportImage();
-      const link = document.createElement("a");
-      link.download = `${name}-${orientation}.png`;
-      link.href = dataUrl;
-      link.click();
-      showSuccess("Sua arte está sendo baixada!");
+      showSuccess("Iniciando exportação de todas as páginas...");
+      for (const page of pages) {
+        const canvas = canvasRefs.current[page.id];
+        if (canvas) {
+          const dataUrl = await canvas.exportImage();
+          const link = document.createElement("a");
+          const template = templatesQ.data?.find(t => t.id === page.templateId);
+          link.download = `${name}-${template?.name || page.id}.png`;
+          link.href = dataUrl;
+          link.click();
+          // Small delay between downloads
+          await new Promise(r => setTimeout(r, 500));
+        }
+      }
     } catch (err) {
-      showError("Erro ao exportar imagem.");
+      showError("Erro ao exportar páginas.");
     }
   };
 
-  const handleTemplateSelect = (t: any) => {
-    setActiveTemplate(t);
-    // Keep current orientation or use template's natural one
-    if (orientation === "horizontal") {
-      const max = Math.max(t.width, t.height);
-      const min = Math.min(t.width, t.height);
-      setEditorDimensions({ width: max, height: min });
-    } else {
-      const max = Math.max(t.width, t.height);
-      const min = Math.min(t.width, t.height);
-      setEditorDimensions({ width: min, height: max });
-    }
-  };
+  const selectedPage = pages.find(p => p.id === selectedLayerId?.pageId);
+  const selectedLayer = selectedPage?.layers.find(l => l.id === selectedLayerId?.layerId);
 
-  const toggleOrientation = (newOrientation: "vertical" | "horizontal") => {
-    if (newOrientation === orientation) return;
-    setOrientation(newOrientation);
-    setEditorDimensions({
-      width: editorDimensions.height,
-      height: editorDimensions.width
-    });
-  };
+  if (editorState === "setup") {
+    return (
+      <RequireAuth>
+        <RequireRouteAccess routeKey="app.media_kit">
+          <AppShell>
+            <div className="max-w-4xl mx-auto space-y-8 py-8">
+              <div className="flex items-center gap-4">
+                <Button variant="ghost" size="icon" onClick={() => nav("/app/media-kit")}>
+                  <ChevronLeft className="h-5 w-5" />
+                </Button>
+                <div>
+                  <h1 className="text-2xl font-bold text-slate-900">Configurar Novo Mídia Kit</h1>
+                  <p className="text-slate-500 text-sm">Selecione o imóvel e os formatos das artes</p>
+                </div>
+              </div>
+
+              <Card className="p-6 space-y-6 rounded-2xl border-slate-200">
+                <div className="space-y-4">
+                  <Label className="text-base font-semibold">1. Nome do Projeto</Label>
+                  <Input 
+                    value={name} 
+                    onChange={(e) => setName(e.target.value)} 
+                    placeholder="Ex: Lançamento Residencial X"
+                    className="rounded-xl h-12"
+                  />
+                </div>
+
+                <div className="space-y-4">
+                  <Label className="text-base font-semibold">2. Vincular Imóvel/Entidade</Label>
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                    <Input 
+                      placeholder="Buscar por nome..." 
+                      value={searchTerm} 
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      className="pl-10 h-12 rounded-xl"
+                    />
+                  </div>
+                  <div className="grid gap-2 max-h-48 overflow-y-auto pr-2 custom-scrollbar">
+                    {entitiesQ.data?.map(e => (
+                      <Button 
+                        key={e.id} 
+                        variant={entityId === e.id ? "secondary" : "ghost"} 
+                        className={`justify-start h-auto p-3 text-left rounded-xl transition-all ${entityId === e.id ? "ring-2 ring-blue-500 bg-blue-50" : ""}`}
+                        onClick={() => {
+                          setEntityId(e.id);
+                          setEntityData({ ...e, ...e.metadata });
+                        }}
+                      >
+                        <div className="flex-1">
+                          <div className="font-semibold">{e.display_name}</div>
+                          <div className="text-xs text-slate-500">{e.subtype}</div>
+                        </div>
+                        {entityId === e.id && <Check className="h-4 w-4 text-blue-600" />}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  <Label className="text-base font-semibold">3. Selecione os Templates (Formatos)</Label>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                    {templatesQ.data?.map(t => (
+                      <div 
+                        key={t.id}
+                        onClick={() => {
+                          if (selectedTemplateIds.includes(t.id)) {
+                            setSelectedTemplateIds(selectedTemplateIds.filter(id => id !== t.id));
+                          } else {
+                            setSelectedTemplateIds([...selectedTemplateIds, t.id]);
+                          }
+                        }}
+                        className={`p-4 border-2 rounded-2xl cursor-pointer transition-all flex flex-col items-center justify-center gap-2 text-center
+                          ${selectedTemplateIds.includes(t.id) 
+                            ? "border-blue-600 bg-blue-50 text-blue-700 shadow-sm" 
+                            : "border-slate-100 hover:border-slate-300 bg-white"}`}
+                      >
+                        <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center">
+                          {t.width > t.height ? <Monitor className="h-4 w-4 text-slate-600" /> : <Smartphone className="h-4 w-4 text-slate-600" />}
+                        </div>
+                        <div>
+                          <p className="font-semibold text-sm leading-tight">{t.name}</p>
+                          <p className="text-[10px] opacity-70">{t.width}x{t.height}</p>
+                        </div>
+                        {selectedTemplateIds.includes(t.id) && <Check className="h-3 w-3" />}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="pt-4">
+                  <Button 
+                    className="w-full h-14 rounded-2xl text-lg font-bold bg-slate-900 hover:bg-slate-800"
+                    disabled={selectedTemplateIds.length === 0}
+                    onClick={startEditing}
+                  >
+                    Criar Mídia Kit e Abrir Editor
+                  </Button>
+                </div>
+              </Card>
+            </div>
+          </AppShell>
+        </RequireRouteAccess>
+      </RequireAuth>
+    );
+  }
 
   return (
     <RequireAuth>
       <RequireRouteAccess routeKey="app.media_kit">
-        <div className="flex flex-col h-screen bg-slate-50 overflow-hidden">
+        <div className="flex flex-col h-screen bg-slate-50 overflow-hidden relative">
           {/* Header */}
-          <header className="flex h-16 items-center justify-between border-b bg-white px-6">
+          <header className="flex h-16 shrink-0 items-center justify-between border-b bg-white px-6 z-20">
             <div className="flex items-center gap-4">
               <Button variant="ghost" size="icon" onClick={() => nav("/app/media-kit")}>
                 <ChevronLeft className="h-5 w-5" />
               </Button>
-              <Input 
-                value={name} 
-                onChange={(e) => setName(e.target.value)} 
-                className="w-64 font-semibold border-none focus-visible:ring-1"
-              />
-              <Dialog open={isEntityDialogOpen} onOpenChange={setIsEntityDialogOpen}>
-                <DialogTrigger asChild>
-                  <Button variant="outline" size="sm" className="rounded-full">
-                    {entityData ? entityData.display_name : "Vincular Entidade"}
-                  </Button>
-                </DialogTrigger>
-                <DialogContent>
-                  <DialogHeader>
-                    <DialogTitle>Vincular Entidade</DialogTitle>
-                  </DialogHeader>
-                  <div className="space-y-4 pt-4">
-                    <div className="relative">
-                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                      <Input 
-                        placeholder="Buscar imóvel..." 
-                        value={searchTerm} 
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                        className="pl-10"
-                      />
-                    </div>
-                    <div className="grid gap-2">
-                      {entitiesQ.data?.map(e => (
-                        <Button 
-                          key={e.id} 
-                          variant="ghost" 
-                          className="justify-start h-auto p-3 text-left"
-                          onClick={() => {
-                            setEntityId(e.id);
-                            setEntityData({ ...e, ...e.metadata });
-                            setIsEntityDialogOpen(false);
-                          }}
-                        >
-                          <div className="flex-1">
-                            <div className="font-semibold">{e.display_name}</div>
-                            <div className="text-xs text-slate-500">{e.subtype}</div>
-                          </div>
-                          {entityId === e.id && <Check className="h-4 w-4 text-blue-500" />}
-                        </Button>
-                      ))}
-                    </div>
-                  </div>
-                </DialogContent>
-              </Dialog>
+              <div className="flex flex-col">
+                <Input 
+                  value={name} 
+                  onChange={(e) => setName(e.target.value)} 
+                  className="h-8 py-0 font-bold border-none focus-visible:ring-0 text-slate-900 p-0"
+                />
+                <span className="text-[10px] text-slate-400 font-medium">
+                  {entityData?.display_name || "Nenhuma entidade"} • {pages.length} página(s)
+                </span>
+              </div>
             </div>
             <div className="flex items-center gap-2">
-              <Button variant="outline" onClick={handleExport} disabled={!activeTemplate}>
+              <Button variant="outline" size="sm" onClick={handleExportAll} disabled={pages.length === 0} className="rounded-xl">
                 <Download className="mr-2 h-4 w-4" />
-                Exportar
+                Exportar Tudo
               </Button>
-              <Button onClick={() => saveM.mutate()} disabled={saveM.isPending}>
+              <Button size="sm" onClick={() => saveM.mutate()} disabled={saveM.isPending} className="rounded-xl">
                 <Save className="mr-2 h-4 w-4" />
                 {saveM.isPending ? "Salvando..." : "Salvar"}
               </Button>
             </div>
           </header>
 
-          <div className="flex flex-1 overflow-hidden">
-            {/* Left Toolbar */}
-            <aside className="w-16 border-r bg-white flex flex-col items-center py-4 gap-4">
-              <Button variant="ghost" size="icon" onClick={() => addLayer("text")} title="Adicionar Texto">
-                <Type className="h-6 w-6" />
+          <div className="flex flex-1 overflow-hidden relative">
+            {/* Left Toolbar - Fixed */}
+            <aside className="w-16 border-r bg-white flex flex-col items-center py-4 gap-4 z-10">
+              <Button variant="ghost" size="icon" onClick={() => addLayer("text")} title="Adicionar Texto" className="rounded-xl">
+                <Type className="h-6 w-6 text-slate-600" />
               </Button>
-              <Button variant="ghost" size="icon" onClick={() => addLayer("image")} title="Adicionar Imagem">
-                <ImageIcon className="h-6 w-6" />
+              <Button variant="ghost" size="icon" onClick={() => addLayer("image")} title="Adicionar Imagem" className="rounded-xl">
+                <ImageIcon className="h-6 w-6 text-slate-600" />
               </Button>
-              <Button variant="ghost" size="icon" onClick={() => addLayer("shape")} title="Adicionar Forma">
-                <Square className="h-6 w-6" />
+              <Button variant="ghost" size="icon" onClick={() => addLayer("shape")} title="Adicionar Forma" className="rounded-xl">
+                <Square className="h-6 w-6 text-slate-600" />
               </Button>
+              <div className="mt-auto pt-4 border-t w-full flex flex-col items-center gap-4">
+                <p className="text-[9px] font-bold text-slate-400 uppercase">Páginas</p>
+                {pages.map((p, idx) => (
+                   <div 
+                    key={p.id}
+                    onClick={() => setActivePageId(p.id)}
+                    className={`w-10 h-10 rounded-lg border-2 cursor-pointer flex items-center justify-center text-xs font-bold transition-all
+                      ${activePageId === p.id ? "border-blue-500 bg-blue-50 text-blue-600" : "border-slate-100 text-slate-400 hover:border-slate-300"}`}
+                   >
+                     {idx + 1}
+                   </div>
+                ))}
+              </div>
             </aside>
 
-            {/* Main Editor */}
-            <main className="flex-1 overflow-auto bg-slate-100 flex items-center justify-center p-20 relative">
-              <div className="absolute top-4 left-4 bg-white/80 backdrop-blur rounded-xl p-2 flex gap-2 border shadow-sm">
-                <span className="text-xs font-semibold px-2 py-1">Tamanho:</span>
-                {templatesQ.data?.map(t => (
-                  <Badge 
-                    key={t.id} 
-                    variant={activeTemplate?.id === t.id ? "default" : "outline"}
-                    className="cursor-pointer"
-                    onClick={() => handleTemplateSelect(t)}
-                  >
-                    {t.name}
-                  </Badge>
-                ))}
-                
-                <div className="mx-2 w-px h-4 bg-slate-200" />
-                
-                <Button 
-                  variant={orientation === "vertical" ? "secondary" : "ghost"} 
-                  size="sm" 
-                  className="h-7 px-2 rounded-lg gap-1 text-[10px]"
-                  onClick={() => toggleOrientation("vertical")}
-                >
-                  <Smartphone className="h-3 w-3" />
-                  Vertical
-                </Button>
-                <Button 
-                  variant={orientation === "horizontal" ? "secondary" : "ghost"} 
-                  size="sm" 
-                  className="h-7 px-2 rounded-lg gap-1 text-[10px]"
-                  onClick={() => toggleOrientation("horizontal")}
-                >
-                  <Monitor className="h-3 w-3" />
-                  Horizontal
-                </Button>
-              </div>
-
-              {activeTemplate && (
-                <MediaKitCanvas
-                  ref={canvasRef}
-                  layers={layers}
-                  width={editorDimensions.width}
-                  height={editorDimensions.height}
-                  selectedLayerId={selectedLayerId}
-                  onSelectLayer={setSelectedLayerId}
-                  onUpdateLayer={updateLayer}
-                  scale={0.4}
-                  entityData={entityData}
-                />
+            {/* Main Editor - Scrollable */}
+            <main className="flex-1 overflow-y-auto bg-slate-100 flex flex-col items-center gap-16 py-20 px-4 custom-scrollbar">
+              {pages.map((page, idx) => {
+                const template = templatesQ.data?.find(t => t.id === page.templateId);
+                return (
+                  <div key={page.id} className="flex flex-col items-center gap-4 group">
+                    <div className="flex items-center justify-between w-full px-2">
+                       <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                         Página {idx + 1} • {template?.name || "Original"} ({template?.width}x{template?.height})
+                       </span>
+                       <Button 
+                        variant="ghost" 
+                        size="icon" 
+                        onClick={() => setActivePageId(page.id)}
+                        className={`h-6 w-6 rounded-full ${activePageId === page.id ? "text-blue-500 bg-blue-50" : "text-slate-300"}`}
+                       >
+                         <Check className="h-3 w-3" />
+                       </Button>
+                    </div>
+                    <div className={`relative p-2 rounded-xl transition-all ${activePageId === page.id ? "ring-2 ring-blue-400 ring-offset-8" : "hover:ring-2 hover:ring-slate-300 hover:ring-offset-8"}`}>
+                      <MediaKitCanvas
+                        ref={(el) => { if (el) canvasRefs.current[page.id] = el; }}
+                        layers={page.layers}
+                        width={template?.width || 1080}
+                        height={template?.height || 1080}
+                        selectedLayerId={selectedLayerId?.pageId === page.id ? selectedLayerId.layerId : null}
+                        onSelectLayer={(layerId) => {
+                          setActivePageId(page.id);
+                          setSelectedLayerId(layerId ? { pageId: page.id, layerId } : null);
+                        }}
+                        onUpdateLayer={(layerId, delta) => updateLayer(page.id, layerId, delta)}
+                        scale={0.5}
+                        entityData={entityData}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+              {pages.length === 0 && (
+                <div className="flex flex-col items-center justify-center text-slate-400 gap-4 mt-20">
+                  <Layers className="h-16 w-16 opacity-20" />
+                  <p>Nenhuma página configurada.</p>
+                </div>
               )}
             </main>
 
-            {/* Right Properties Panel */}
-            <aside className="w-80 border-l bg-white overflow-y-auto">
+            {/* Right Properties Panel - Fixed */}
+            <aside className="w-80 shrink-0 border-l bg-white overflow-y-auto z-10">
               <div className="p-6 space-y-8">
                 {selectedLayer ? (
                   <>
                     <div className="flex items-center justify-between">
-                      <h3 className="font-bold text-slate-900 capitalize">{selectedLayer.type} Props</h3>
-                      <Button variant="destructive" size="icon" onClick={() => removeLayer(selectedLayer.id)} className="h-8 w-8 rounded-full">
+                      <h3 className="font-bold text-slate-900 capitalize leading-none">{selectedLayer.type} Props</h3>
+                      <Button variant="destructive" size="icon" onClick={() => removeLayer(selectedLayerId!.pageId, selectedLayer.id)} className="h-8 w-8 rounded-full">
                         <Trash2 className="h-4 w-4" />
                       </Button>
                     </div>
@@ -412,25 +485,35 @@ export default function MediaKitEditor() {
                             <Label>Conteúdo</Label>
                             <Input 
                               value={selectedLayer.content} 
-                              onChange={(e) => updateLayer(selectedLayer.id, { content: e.target.value })} 
+                              onChange={(e) => updateLayer(selectedLayerId!.pageId, selectedLayer.id, { content: e.target.value })} 
+                              className="rounded-xl"
                             />
                             <p className="text-[10px] text-slate-400">Use {"{{campo}}"} para info da entidade</p>
                           </div>
                           <div className="space-y-2">
-                            <Label>Tamanho da Fonte: {selectedLayer.fontSize}px</Label>
+                            <Label className="text-xs text-slate-500">Tamanho da Fonte: {selectedLayer.fontSize}px</Label>
                             <Slider 
                               value={[selectedLayer.fontSize || 16]} 
-                              min={12} max={200} step={1}
-                              onValueChange={([v]) => updateLayer(selectedLayer.id, { fontSize: v })}
+                              min={12} max={300} step={1}
+                              onValueChange={([v]) => updateLayer(selectedLayerId!.pageId, selectedLayer.id, { fontSize: v })}
                             />
                           </div>
                           <div className="space-y-2">
-                            <Label>Cor</Label>
-                            <Input 
-                              type="color" 
-                              value={selectedLayer.color} 
-                              onChange={(e) => updateLayer(selectedLayer.id, { color: e.target.value })} 
-                            />
+                            <Label className="text-xs text-slate-500">Cor</Label>
+                            <div className="flex gap-2">
+                              <Input 
+                                type="color" 
+                                value={selectedLayer.color} 
+                                onChange={(e) => updateLayer(selectedLayerId!.pageId, selectedLayer.id, { color: e.target.value })} 
+                                className="w-12 h-10 p-1 border-none cursor-pointer"
+                              />
+                              <Input 
+                                value={selectedLayer.color} 
+                                onChange={(e) => updateLayer(selectedLayerId!.pageId, selectedLayer.id, { color: e.target.value })} 
+                                className="flex-1 rounded-xl text-xs uppercase"
+                                placeholder="#000000"
+                              />
+                            </div>
                           </div>
                         </>
                       )}
@@ -442,66 +525,84 @@ export default function MediaKitEditor() {
                               <Label>URL da Imagem</Label>
                               <Input 
                                 value={selectedLayer.content} 
-                                onChange={(e) => updateLayer(selectedLayer.id, { content: e.target.value })} 
+                                onChange={(e) => updateLayer(selectedLayerId!.pageId, selectedLayer.id, { content: e.target.value })} 
+                                className="rounded-xl"
                               />
                             </div>
                           )}
                           <div className="grid grid-cols-2 gap-4">
                             <div className="space-y-2">
-                              <Label>Largura</Label>
+                              <Label className="text-xs text-slate-500">Largura</Label>
                               <Input 
                                 type="number"
                                 value={selectedLayer.width} 
-                                onChange={(e) => updateLayer(selectedLayer.id, { width: parseInt(e.target.value) })} 
+                                onChange={(e) => updateLayer(selectedLayerId!.pageId, selectedLayer.id, { width: parseInt(e.target.value) })} 
+                                className="rounded-xl"
                               />
                             </div>
                             <div className="space-y-2">
-                              <Label>Altura</Label>
+                              <Label className="text-xs text-slate-500">Altura</Label>
                               <Input 
                                 type="number"
                                 value={selectedLayer.height} 
-                                onChange={(e) => updateLayer(selectedLayer.id, { height: parseInt(e.target.value) })} 
+                                onChange={(e) => updateLayer(selectedLayerId!.pageId, selectedLayer.id, { height: parseInt(e.target.value) })} 
+                                className="rounded-xl"
                               />
                             </div>
                           </div>
                           {selectedLayer.type === "shape" && (
                              <div className="space-y-2">
-                              <Label>Cor de Fundo</Label>
-                              <Input 
-                                type="color" 
-                                value={selectedLayer.color} 
-                                onChange={(e) => updateLayer(selectedLayer.id, { color: e.target.value })} 
-                              />
+                              <Label className="text-xs text-slate-500">Cor de Fundo</Label>
+                              <div className="flex gap-2">
+                                <Input 
+                                  type="color" 
+                                  value={selectedLayer.color} 
+                                  onChange={(e) => updateLayer(selectedLayerId!.pageId, selectedLayer.id, { color: e.target.value })} 
+                                  className="w-12 h-10 p-1 border-none cursor-pointer"
+                                />
+                                <Input 
+                                  value={selectedLayer.color} 
+                                  onChange={(e) => updateLayer(selectedLayerId!.pageId, selectedLayer.id, { color: e.target.value })} 
+                                  className="flex-1 rounded-xl text-xs uppercase"
+                                  placeholder="#3b82f6"
+                                />
+                              </div>
                             </div>
                           )}
                         </>
                       )}
 
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                          <Label>Posição X</Label>
+                      <div className="grid grid-cols-2 gap-4 pt-4 border-t border-slate-100">
+                        <div className="space-y-1">
+                          <Label className="text-[10px] font-bold text-slate-400 uppercase">Posição X</Label>
                           <Input 
                             type="number"
-                            value={selectedLayer.x} 
-                            onChange={(e) => updateLayer(selectedLayer.id, { x: parseInt(e.target.value) })} 
+                            value={Math.round(selectedLayer.x)} 
+                            onChange={(e) => updateLayer(selectedLayerId!.pageId, selectedLayer.id, { x: parseInt(e.target.value) })} 
+                            className="rounded-xl h-8 text-xs"
                           />
                         </div>
-                        <div className="space-y-2">
-                          <Label>Posição Y</Label>
+                        <div className="space-y-1">
+                          <Label className="text-[10px] font-bold text-slate-400 uppercase">Posição Y</Label>
                           <Input 
                             type="number"
-                            value={selectedLayer.y} 
-                            onChange={(e) => updateLayer(selectedLayer.id, { y: parseInt(e.target.value) })} 
+                            value={Math.round(selectedLayer.y)} 
+                            onChange={(e) => updateLayer(selectedLayerId!.pageId, selectedLayer.id, { y: parseInt(e.target.value) })} 
+                            className="rounded-xl h-8 text-xs"
                           />
                         </div>
                       </div>
                     </div>
                   </>
                 ) : (
-                  <div className="h-full flex flex-col items-center justify-center text-center py-20">
-                    <Layers className="h-12 w-12 text-slate-200 mb-4" />
-                    <h3 className="text-slate-900 font-semibold text-sm">Selecione um elemento</h3>
-                    <p className="text-slate-500 text-xs">Para editar suas propriedades</p>
+                  <div className="h-full flex flex-col items-center justify-center text-center py-20 px-4">
+                    <div className="w-16 h-16 rounded-3xl bg-slate-50 flex items-center justify-center mb-6">
+                      <Layers className="h-8 w-8 text-slate-200" />
+                    </div>
+                    <h3 className="text-slate-900 font-bold text-base mb-2">Editor de Propriedades</h3>
+                    <p className="text-slate-500 text-xs leading-relaxed">
+                      Selecione um elemento no canvas para editar cor, tamanho e posição. Suas alterações são salvas automaticamente em cada página.
+                    </p>
                   </div>
                 )}
               </div>
@@ -511,4 +612,26 @@ export default function MediaKitEditor() {
       </RequireRouteAccess>
     </RequireAuth>
   );
+
+const styleText = `
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  .custom-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    background: #e2e8f0;
+    border-radius: 10px;
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: #cbd5e1;
+  }
+`;
+
+if (typeof document !== 'undefined') {
+  const style = document.createElement("style");
+  style.innerHTML = styleText;
+  document.head.appendChild(style);
 }

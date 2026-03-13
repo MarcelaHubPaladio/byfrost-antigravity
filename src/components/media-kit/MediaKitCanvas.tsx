@@ -84,16 +84,23 @@ export const MediaKitCanvas = forwardRef<{ exportImage: () => Promise<string> },
 
     return (
       <div
-        ref={canvasRef}
         className="relative bg-white shadow-2xl overflow-hidden"
         style={{
-          width,
-          height,
-          transform: `scale(${scale})`,
-          transformOrigin: "top left",
+          width: width * scale,
+          height: height * scale,
         }}
         onClick={() => onSelectLayer("")}
       >
+        <div
+          ref={canvasRef}
+          className="relative h-full w-full"
+          style={{
+            width,
+            height,
+            transform: `scale(${scale})`,
+            transformOrigin: "top left",
+          }}
+        >
         {layers
           .sort((a, b) => a.zIndex - b.zIndex)
           .map((layer) => (
@@ -145,6 +152,7 @@ export const MediaKitCanvas = forwardRef<{ exportImage: () => Promise<string> },
               )}
             </div>
           ))}
+        </div>
       </div>
     );
   }
