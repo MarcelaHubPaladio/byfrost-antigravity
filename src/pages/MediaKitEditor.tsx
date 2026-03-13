@@ -383,7 +383,7 @@ export default function MediaKitEditor() {
                   </div>
                 )}
 
-                {creationMode === "related" && (
+                {mode === "kit" && creationMode === "related" && (
                   <div className="space-y-4">
                     <Label className="text-base font-semibold">3. Vincular Entidade</Label>
                     <div className="relative">
@@ -451,7 +451,7 @@ export default function MediaKitEditor() {
 
                 <div className="space-y-4">
                   <Label className="text-base font-semibold">
-                    {mode === "mask" ? "3" : (creationMode === "related" ? "5" : "4")}. Selecione os Templates (Formatos)
+                    {mode === "mask" ? "2" : (creationMode === "related" ? "5" : "4")}. Selecione os Templates (Formatos)
                   </Label>
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                     {templatesQ.data?.map(t => (
