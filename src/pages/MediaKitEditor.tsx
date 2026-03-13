@@ -46,6 +46,7 @@ export default function MediaKitEditor() {
   const qc = useQueryClient();
   const { activeTenantId } = useTenant();
   const canvasRefs = useRef<{ [key: string]: any }>({});
+  const pageRefs = useRef<{ [key: string]: HTMLDivElement | null }>({});
 
   const initialEntityId = searchParams.get("entityId");
 
@@ -67,6 +68,9 @@ export default function MediaKitEditor() {
   const [searchTerm, setSearchTerm] = useState("");
   const [scale, setScale] = useState(0.5);
   const [isGalleryOpen, setIsGalleryOpen] = useState(false);
+  
+  // History for Undo
+  const [history, setHistory] = useState<{ id: string; templateId: string; layers: Layer[] }[][]>([]);
 
   const templatesQ = useQuery({
     queryKey: ["media_kit_templates", activeTenantId],
@@ -212,8 +216,48 @@ export default function MediaKitEditor() {
     
     setPages(newPages);
     setActivePageId(newPages[0].id);
+    setPages(newPages);
+    setHistory([newPages]);
+    setActivePageId(newPages[0].id);
     setEditorState("editing");
   };
+
+  const pushToHistory = (newPages: typeof pages) => {
+    setHistory(prev => {
+      const updated = [...prev, newPages];
+      if (updated.length > 50) return updated.slice(updated.length - 50);
+      return updated;
+    });
+  };
+
+  const undo = () => {
+    if (history.length <= 1) return;
+    const newHistory = [...history];
+    newHistory.pop(); // Remove current state
+    const previousState = newHistory[newHistory.length - 1];
+    setHistory(newHistory);
+    setPages(previousState);
+    showSuccess("Desfeito");
+  };
+
+  const focusPage = (pageId: string) => {
+    setActivePageId(pageId);
+    setScale(1); // Zoom 100%
+    setTimeout(() => {
+      pageRefs.current[pageId]?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 100);
+  };
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === "z") {
+        e.preventDefault();
+        undo();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [history]);
 
   const saveM = useMutation({
     mutationFn: async () => {
@@ -275,7 +319,9 @@ export default function MediaKitEditor() {
       height: type === "image" || type === "shape" ? 200 : undefined,
     };
     
-    setPages(pages.map(p => p.id === activePageId ? { ...p, layers: [...p.layers, newLayer] } : p));
+    const updatedPages = pages.map(p => p.id === activePageId ? { ...p, layers: [...p.layers, newLayer] } : p);
+    setPages(updatedPages);
+    pushToHistory(updatedPages);
     setSelectedLayerId({ pageId: activePageId, layerId: newLayer.id });
   };
 
@@ -292,19 +338,25 @@ export default function MediaKitEditor() {
       height: 400,
     };
     
-    setPages(pages.map(p => p.id === activePageId ? { ...p, layers: [...p.layers, newLayer] } : p));
+    const updatedPages = pages.map(p => p.id === activePageId ? { ...p, layers: [...p.layers, newLayer] } : p);
+    setPages(updatedPages);
+    pushToHistory(updatedPages);
     setSelectedLayerId({ pageId: activePageId, layerId: newLayer.id });
   };
 
-  const updateLayer = (pageId: string, layerId: string, delta: Partial<Layer>) => {
-    setPages(pages.map(p => p.id === pageId ? { 
+  const updateLayer = (pageId: string, layerId: string, delta: Partial<Layer>, pushHistory = false) => {
+    const updatedPages = pages.map(p => p.id === pageId ? { 
       ...p, 
       layers: p.layers.map(l => l.id === layerId ? { ...l, ...delta } : l) 
-    } : p));
+    } : p);
+    setPages(updatedPages);
+    if (pushHistory) pushToHistory(updatedPages);
   };
 
   const removeLayer = (pageId: string, layerId: string) => {
-    setPages(pages.map(p => p.id === pageId ? { ...p, layers: p.layers.filter(l => l.id !== layerId) } : p));
+    const updatedPages = pages.map(p => p.id === pageId ? { ...p, layers: p.layers.filter(l => l.id !== layerId) } : p);
+    setPages(updatedPages);
+    pushToHistory(updatedPages);
     if (selectedLayerId?.layerId === layerId) setSelectedLayerId(null);
   };
 
@@ -609,7 +661,7 @@ export default function MediaKitEditor() {
                 {pages.map((p, idx) => (
                    <div 
                     key={p.id}
-                    onClick={() => setActivePageId(p.id)}
+                    onClick={() => focusPage(p.id)}
                     className={`w-10 h-10 rounded-lg border-2 cursor-pointer flex items-center justify-center text-xs font-bold transition-all
                       ${activePageId === p.id ? "border-blue-500 bg-blue-50 text-blue-600" : "border-slate-100 text-slate-400 hover:border-slate-300"}`}
                    >
@@ -639,7 +691,7 @@ export default function MediaKitEditor() {
               {pages.map((page, idx) => {
                 const template = templatesQ.data?.find(t => t.id === page.templateId);
                 return (
-                  <div key={page.id} className="flex flex-col items-center gap-4 group">
+                  <div key={page.id} ref={(el) => { pageRefs.current[page.id] = el; }} className="flex flex-col items-center gap-4 group">
                     <div className="flex items-center justify-between w-full px-2">
                        <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
                          Página {idx + 1} • {template?.name || "Original"} ({template?.width}x{template?.height})
@@ -699,7 +751,7 @@ export default function MediaKitEditor() {
                             <Label>Conteúdo</Label>
                             <Input 
                               value={selectedLayer.content} 
-                              onChange={(e) => updateLayer(selectedLayerId!.pageId, selectedLayer.id, { content: e.target.value })} 
+                              onChange={(e) => updateLayer(selectedLayerId!.pageId, selectedLayer.id, { content: e.target.value }, true)} 
                               className="rounded-xl"
                             />
                             <p className="text-[10px] text-slate-400">Use {"{{campo}}"} para info da entidade</p>
@@ -709,7 +761,7 @@ export default function MediaKitEditor() {
                             <Slider 
                               value={[selectedLayer.fontSize || 16]} 
                               min={12} max={300} step={1}
-                              onValueChange={([v]) => updateLayer(selectedLayerId!.pageId, selectedLayer.id, { fontSize: v })}
+                              onValueChange={([v]) => updateLayer(selectedLayerId!.pageId, selectedLayer.id, { fontSize: v }, true)}
                             />
                           </div>
                           <div className="space-y-2">
@@ -718,12 +770,12 @@ export default function MediaKitEditor() {
                               <Input 
                                 type="color" 
                                 value={selectedLayer.color} 
-                                onChange={(e) => updateLayer(selectedLayerId!.pageId, selectedLayer.id, { color: e.target.value })} 
+                                onChange={(e) => updateLayer(selectedLayerId!.pageId, selectedLayer.id, { color: e.target.value }, true)} 
                                 className="w-12 h-10 p-1 border-none cursor-pointer"
                               />
                               <Input 
                                 value={selectedLayer.color} 
-                                onChange={(e) => updateLayer(selectedLayerId!.pageId, selectedLayer.id, { color: e.target.value })} 
+                                onChange={(e) => updateLayer(selectedLayerId!.pageId, selectedLayer.id, { color: e.target.value }, true)} 
                                 className="flex-1 rounded-xl text-xs uppercase"
                                 placeholder="#000000"
                               />
@@ -750,7 +802,7 @@ export default function MediaKitEditor() {
                               <Input 
                                 type="number"
                                 value={selectedLayer.width} 
-                                onChange={(e) => updateLayer(selectedLayerId!.pageId, selectedLayer.id, { width: parseInt(e.target.value) })} 
+                                onChange={(e) => updateLayer(selectedLayerId!.pageId, selectedLayer.id, { width: parseInt(e.target.value) }, true)} 
                                 className="rounded-xl"
                               />
                             </div>
@@ -759,7 +811,7 @@ export default function MediaKitEditor() {
                               <Input 
                                 type="number"
                                 value={selectedLayer.height} 
-                                onChange={(e) => updateLayer(selectedLayerId!.pageId, selectedLayer.id, { height: parseInt(e.target.value) })} 
+                                onChange={(e) => updateLayer(selectedLayerId!.pageId, selectedLayer.id, { height: parseInt(e.target.value) }, true)} 
                                 className="rounded-xl"
                               />
                             </div>
@@ -771,12 +823,12 @@ export default function MediaKitEditor() {
                                 <Input 
                                   type="color" 
                                   value={selectedLayer.color} 
-                                  onChange={(e) => updateLayer(selectedLayerId!.pageId, selectedLayer.id, { color: e.target.value })} 
+                                  onChange={(e) => updateLayer(selectedLayerId!.pageId, selectedLayer.id, { color: e.target.value }, true)} 
                                   className="w-12 h-10 p-1 border-none cursor-pointer"
                                 />
                                 <Input 
                                   value={selectedLayer.color} 
-                                  onChange={(e) => updateLayer(selectedLayerId!.pageId, selectedLayer.id, { color: e.target.value })} 
+                                  onChange={(e) => updateLayer(selectedLayerId!.pageId, selectedLayer.id, { color: e.target.value }, true)} 
                                   className="flex-1 rounded-xl text-xs uppercase"
                                   placeholder="#3b82f6"
                                 />
@@ -792,7 +844,7 @@ export default function MediaKitEditor() {
                           <Input 
                             type="number"
                             value={Math.round(selectedLayer.x)} 
-                            onChange={(e) => updateLayer(selectedLayerId!.pageId, selectedLayer.id, { x: parseInt(e.target.value) })} 
+                            onChange={(e) => updateLayer(selectedLayerId!.pageId, selectedLayer.id, { x: parseInt(e.target.value) }, true)} 
                             className="rounded-xl h-8 text-xs"
                           />
                         </div>
@@ -801,7 +853,7 @@ export default function MediaKitEditor() {
                           <Input 
                             type="number"
                             value={Math.round(selectedLayer.y)} 
-                            onChange={(e) => updateLayer(selectedLayerId!.pageId, selectedLayer.id, { y: parseInt(e.target.value) })} 
+                            onChange={(e) => updateLayer(selectedLayerId!.pageId, selectedLayer.id, { y: parseInt(e.target.value) }, true)} 
                             className="rounded-xl h-8 text-xs"
                           />
                         </div>

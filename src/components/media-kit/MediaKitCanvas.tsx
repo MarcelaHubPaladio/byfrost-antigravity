@@ -22,7 +22,7 @@ type MediaKitCanvasProps = {
   height: number;
   selectedLayerId: string | null;
   onSelectLayer: (id: string) => void;
-  onUpdateLayer: (id: string, delta: Partial<Layer>) => void;
+  onUpdateLayer: (id: string, delta: Partial<Layer>, pushHistory?: boolean) => void;
   scale: number;
   entityData?: any;
 };
@@ -73,13 +73,20 @@ export const MediaKitCanvas = forwardRef<{ exportImage: () => Promise<string> },
         });
       };
 
-      const onMouseUp = () => {
+      const onMouseUp = (upEvent: MouseEvent) => {
+        const dx = (upEvent.clientX - startX) / scale;
+        const dy = (upEvent.clientY - startY) / scale;
+        onUpdateLayer(layer.id, {
+          x: Math.round(startLayerX + dx),
+          y: Math.round(startLayerY + dy),
+        }, true);
+
         document.removeEventListener("mousemove", onMouseMove);
         document.removeEventListener("mouseup", onMouseUp);
       };
 
       document.addEventListener("mousemove", onMouseMove);
-      document.addEventListener("mouseup", onMouseUp);
+      document.addEventListener("mouseup", onMouseUp as any);
     };
 
     return (
