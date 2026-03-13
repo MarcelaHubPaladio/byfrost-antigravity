@@ -839,7 +839,17 @@ export default function MediaKitEditor() {
                 {selectedLayer ? (
                   <>
                     <div className="flex items-center justify-between">
-                      <h3 className="font-bold text-slate-900 capitalize leading-none">{selectedLayer.type} Props</h3>
+                      <div className="flex items-center gap-3">
+                        <Button 
+                          variant="ghost" 
+                          size="icon" 
+                          onClick={() => setSelectedLayerId(null)}
+                          className="h-8 w-8 rounded-full text-slate-400 hover:text-slate-600 hover:bg-slate-100"
+                        >
+                          <ChevronLeft className="h-5 w-5" />
+                        </Button>
+                        <h3 className="font-bold text-slate-900 capitalize leading-none">{selectedLayer.type} Props</h3>
+                      </div>
                       <Button variant="destructive" size="icon" onClick={() => removeLayer(selectedLayerId!.pageId, selectedLayer.id)} className="h-8 w-8 rounded-full">
                         <Trash2 className="h-4 w-4" />
                       </Button>
