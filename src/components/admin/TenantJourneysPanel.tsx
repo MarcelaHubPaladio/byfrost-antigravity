@@ -131,6 +131,7 @@ export function TenantJourneysPanel() {
   const [editJourneyDesc, setEditJourneyDesc] = useState("");
   const [editJourneySectorId, setEditJourneySectorId] = useState<string>("");
   const [editJourneyIsCrm, setEditJourneyIsCrm] = useState(false);
+  const [editJourneyLocationCaptureDefault, setEditJourneyLocationCaptureDefault] = useState(false);
   const [editJourneyKey, setEditJourneyKey] = useState("");
 
   // state machine builder (UI)
@@ -520,6 +521,10 @@ export function TenantJourneysPanel() {
           sector_id: editJourneySectorId || null,
           is_crm: editJourneyIsCrm,
           key: editJourneyKey.trim(),
+          default_state_machine_json: {
+            ...(selectedJourney?.default_state_machine_json || {}),
+            crm_location_capture_enabled: editJourneyLocationCaptureDefault,
+          }
         })
         .eq("id", editingJourneyId);
       if (error) throw error;
@@ -1309,6 +1314,9 @@ export function TenantJourneysPanel() {
                           setEditJourneyDesc(selectedJourney.description ?? "");
                           setEditJourneySectorId(selectedJourney.sector_id ?? "");
                           setEditJourneyIsCrm(Boolean(selectedJourney.is_crm));
+                          setEditJourneyLocationCaptureDefault(
+                            Boolean(selectedJourney.default_state_machine_json?.crm_location_capture_enabled)
+                          );
                           setEditJourneyKey(selectedJourney.key);
                         }}
                       >
@@ -1421,6 +1429,28 @@ export function TenantJourneysPanel() {
                 </div>
               </div>
 
+              {selectedJourney.is_crm && (
+                <div className="rounded-2xl border border-slate-200 bg-white p-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="text-xs font-semibold text-slate-900">Configurações de CRM</div>
+                      <div className="text-[10px] text-slate-500">Ajustes para captura de leads</div>
+                    </div>
+                  </div>
+
+                  <div className="mt-3 flex items-center justify-between gap-3 rounded-xl border border-indigo-50 bg-indigo-50/30 p-2.5">
+                    <div className="min-w-0">
+                      <div className="text-[11px] font-semibold text-slate-900">crm_location_capture_enabled</div>
+                      <div className="text-[10px] text-slate-500 line-clamp-1">Exibe seletor de mapa no cadastro de lead</div>
+                    </div>
+                    <Switch
+                      checked={crmLocationCaptureEnabled}
+                      onCheckedChange={(v) => updateConfig({ crm_location_capture_enabled: v })}
+                    />
+                  </div>
+                </div>
+              )}
+
               {editingJourneyId === selectedJourney.id && (
                 <div className="rounded-2xl border border-indigo-200 bg-indigo-50/50 p-3">
                   <div className="text-xs font-semibold text-indigo-900">Editar Jornada (Catálogo)</div>
@@ -1469,6 +1499,17 @@ export function TenantJourneysPanel() {
                     <div className="flex items-center justify-between gap-3">
                       <div className="text-xs font-medium text-slate-900">Habilitar CRM</div>
                       <Switch checked={editJourneyIsCrm} onCheckedChange={setEditJourneyIsCrm} />
+                    </div>
+
+                    <div className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white p-2">
+                       <div className="min-w-0">
+                         <div className="text-[11px] font-semibold text-slate-900">Localização padrão</div>
+                         <div className="text-[10px] text-slate-500">Habilitar captura GPS por padrão</div>
+                       </div>
+                       <Switch 
+                         checked={editJourneyLocationCaptureDefault} 
+                         onCheckedChange={setEditJourneyLocationCaptureDefault} 
+                       />
                     </div>
                     <div className="flex gap-2">
                       <Button
@@ -1524,27 +1565,6 @@ export function TenantJourneysPanel() {
                 </div>
               </div>
 
-              {selectedJourney.is_crm && (
-                <div className="rounded-2xl border border-slate-200 bg-white p-3">
-                  <div className="text-xs font-semibold text-slate-900">Configurações de CRM</div>
-                  <div className="mt-1 text-[11px] text-slate-600">
-                    Ajustes específicos para captura de leads nesta jornada.
-                  </div>
-
-                  <div className="mt-4 flex items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2">
-                    <div className="min-w-0">
-                      <div className="text-xs font-semibold text-slate-900">crm_location_capture_enabled</div>
-                      <div className="mt-0.5 text-[11px] text-slate-600">
-                        Exibe o seletor de mapa (pin) no cadastro de novos leads.
-                      </div>
-                    </div>
-                    <Switch
-                      checked={crmLocationCaptureEnabled}
-                      onCheckedChange={(v) => updateConfig({ crm_location_capture_enabled: v })}
-                    />
-                  </div>
-                </div>
-              )}
 
               {selectedJourney.key === "meta_content" && (
                 <div className="rounded-2xl border border-slate-200 bg-white p-3">
