@@ -29,6 +29,7 @@ import {
 import { showSuccess, showError } from "@/utils/toast";
 import { MediaKitCanvas, Layer } from "@/components/media-kit/MediaKitCanvas";
 import { MediaKitGallery } from "@/components/media-kit/MediaKitGallery";
+import { MediaKitLayers } from "@/components/media-kit/MediaKitLayers";
 import { Slider } from "@/components/ui/slider";
 import { Badge } from "@/components/ui/badge";
 import { 
@@ -63,6 +64,7 @@ export default function MediaKitEditor() {
   const [pages, setPages] = useState<{ id: string; templateId: string; layers: Layer[] }[]>([]);
   const [selectedLayerId, setSelectedLayerId] = useState<{ pageId: string; layerId: string } | null>(null);
   const [activePageId, setActivePageId] = useState<string | null>(null);
+  const activePage = pages.find(p => p.id === activePageId);
 
   const [isEntityDialogOpen, setIsEntityDialogOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
@@ -358,6 +360,35 @@ export default function MediaKitEditor() {
     setPages(updatedPages);
     pushToHistory(updatedPages);
     if (selectedLayerId?.layerId === layerId) setSelectedLayerId(null);
+  };
+
+  const reorderLayer = (layerId: string, direction: "up" | "down") => {
+    if (!activePageId) return;
+    const page = pages.find(p => p.id === activePageId);
+    if (!page) return;
+
+    const sorted = [...page.layers].sort((a, b) => a.zIndex - b.zIndex);
+    const index = sorted.findIndex(l => l.id === layerId);
+    if (index === -1) return;
+
+    const newIndex = direction === "up" ? index + 1 : index - 1;
+    if (newIndex < 0 || newIndex >= sorted.length) return;
+
+    const layerToSwap = sorted[newIndex];
+    const currentLayer = sorted[index];
+
+    // Swap z-indices
+    const updatedPages = pages.map(p => p.id === activePageId ? {
+      ...p,
+      layers: p.layers.map(l => {
+        if (l.id === layerId) return { ...l, zIndex: layerToSwap.zIndex };
+        if (l.id === layerToSwap.id) return { ...l, zIndex: currentLayer.zIndex };
+        return l;
+      })
+    } : p);
+
+    setPages(updatedPages);
+    pushToHistory(updatedPages);
   };
 
   const applyMask = (maskId: string) => {
@@ -861,15 +892,13 @@ export default function MediaKitEditor() {
                     </div>
                   </>
                 ) : (
-                  <div className="h-full flex flex-col items-center justify-center text-center py-20 px-4">
-                    <div className="w-16 h-16 rounded-3xl bg-slate-50 flex items-center justify-center mb-6">
-                      <Layers className="h-8 w-8 text-slate-200" />
-                    </div>
-                    <h3 className="text-slate-900 font-bold text-base mb-2">Editor de Propriedades</h3>
-                    <p className="text-slate-500 text-xs leading-relaxed">
-                      Selecione um elemento no canvas para editar cor, tamanho e posição. Suas alterações são salvas automaticamente em cada página.
-                    </p>
-                  </div>
+                  <MediaKitLayers 
+                    layers={activePage?.layers || []}
+                    selectedLayerId={null}
+                    onSelect={(layerId) => setSelectedLayerId({ pageId: activePageId!, layerId })}
+                    onRemove={(layerId) => removeLayer(activePageId!, layerId)}
+                    onReorder={reorderLayer}
+                  />
                 )}
               </div>
             </aside>
