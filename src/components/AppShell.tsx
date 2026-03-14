@@ -366,6 +366,10 @@ function isMediaKitEnabled(modulesJson: any) {
   return Boolean(modulesJson?.media_kit_enabled === true);
 }
 
+function isCommunicationEnabled(modulesJson: any) {
+  return Boolean(modulesJson?.communication_enabled === true);
+}
+
 type FinanceNavChild = {
   to: string;
   label: string;
@@ -514,6 +518,7 @@ export function AppShell({
   const tvCorporativaEnabledForTenant = isSuperAdmin || isTvCorporativaEnabled(activeTenant?.modules_json);
   const portalEnabledForTenant = isSuperAdmin || isPortalEnabled(activeTenant?.modules_json);
   const mediaKitEnabledForTenant = isSuperAdmin || isMediaKitEnabled(activeTenant?.modules_json);
+  const communicationEnabledForTenant = isSuperAdmin || isCommunicationEnabled(activeTenant?.modules_json);
 
   const navAccessQ = useQuery({
     queryKey: ["nav_access", activeTenantId, roleKey],
@@ -555,6 +560,7 @@ export function AppShell({
         "app.link_manager",
         "app.portal",
         "app.media_kit",
+        "app.communication",
       ];
 
       try {
@@ -795,6 +801,9 @@ export function AppShell({
                 )}
                 {mediaKitEnabledForTenant && (
                   <NavTile to="/app/media-kit" icon={Palette} label="Mídia Kit" disabled={!can("app.media_kit")} />
+                )}
+                {communicationEnabledForTenant && (
+                  <NavTile to="/app/communication" icon={MessageSquare} label="Comunicação" disabled={!can("app.communication")} />
                 )}
 
                 {/* Core (desktop): hover menu */}
@@ -1204,6 +1213,16 @@ export function AppShell({
                                 icon={Tv}
                                 label="TV Corporativa"
                                 disabled={!can("app.tv_corporativa")}
+                                onNavigate={() => setMobileNavOpen(false)}
+                              />
+                            )}
+
+                            {communicationEnabledForTenant && (
+                              <MobileNavItem
+                                to="/app/communication"
+                                icon={MessageSquare}
+                                label="Comunicação"
+                                disabled={!can("app.communication")}
                                 onNavigate={() => setMobileNavOpen(false)}
                               />
                             )}

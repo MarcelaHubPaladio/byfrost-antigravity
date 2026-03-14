@@ -19,6 +19,7 @@ import { RequireFinanceEnabled } from "@/components/RequireFinanceEnabled";
 import { RequireSimulatorEnabled } from "@/components/RequireSimulatorEnabled";
 import { RequireLinkManagerEnabled } from "@/components/RequireLinkManagerEnabled";
 import { RequirePortalEnabled } from "@/components/RequirePortalEnabled";
+import { RequireCommunicationEnabled } from "@/components/chat/RequireCommunicationEnabled";
 
 // Lazy-loaded components
 const Index = lazy(() => import("@/pages/Index"));
@@ -78,6 +79,7 @@ const MediaKitList = lazy(() => import("@/pages/MediaKitList"));
 const MediaKitTemplates = lazy(() => import("@/pages/MediaKitTemplates"));
 const MediaKitMasks = lazy(() => import("@/pages/MediaKitMasks"));
 const MediaKitEditor = lazy(() => import("@/pages/MediaKitEditor"));
+const Communication = lazy(() => import("@/pages/Communication"));
 
 const GlobalLoading = () => (
   <div className="flex h-screen w-full items-center justify-center bg-slate-50 dark:bg-slate-950">
@@ -297,6 +299,15 @@ const App = () => (
                           <Chats />
                         </RequireChatInstanceAccess>
                       </RequireRouteAccess>
+                    }
+                  />
+
+                  <Route
+                    path="/app/communication"
+                    element={
+                      <RequireCommunicationEnabled>
+                        <Communication />
+                      </RequireCommunicationEnabled>
                     }
                   />
 
