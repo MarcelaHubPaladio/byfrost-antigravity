@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
+import { cn } from "@/lib/utils";
 import { useTenant } from "@/providers/TenantProvider";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -28,7 +29,21 @@ export default function PortalManager() {
     const [isCreateOpen, setIsCreateOpen] = useState(false);
     const [newPageTitle, setNewPageTitle] = useState("");
     const [newPageSlug, setNewPageSlug] = useState("");
+    const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
     const [editPage, setEditPage] = useState<any>(null);
+
+    const { data: templates } = useQuery({
+        queryKey: ["portal_templates"],
+        queryFn: async () => {
+            const { data, error } = await supabase
+                .from("portal_templates")
+                .select("*")
+                .is("deleted_at", null)
+                .order("name");
+            if (error) throw error;
+            return data;
+        }
+    });
 
     const { data: pages, isLoading } = useQuery({
         queryKey: ["portal_pages", activeTenantId],
@@ -44,7 +59,7 @@ export default function PortalManager() {
         enabled: !!activeTenantId,
     });
     const createPageM = useMutation({
-        mutationFn: async (payload: { title: string; slug: string; tenant_id: string }) => {
+        mutationFn: async (payload: { title: string; slug: string; tenant_id: string; content_json?: any }) => {
             const { data, error } = await supabase
                 .from("portal_pages")
                 .insert([payload])
@@ -57,6 +72,9 @@ export default function PortalManager() {
             queryClient.invalidateQueries({ queryKey: ["portal_pages", activeTenantId] });
             toast.success("Página criada com sucesso!");
             setIsCreateOpen(false);
+            setNewPageTitle("");
+            setNewPageSlug("");
+            setSelectedTemplateId(null);
             navigate(`/app/portal/edit/${data.id}`);
         },
         onError: (err: any) => {
@@ -101,10 +119,14 @@ export default function PortalManager() {
             toast.error("Preencha título e slug");
             return;
         }
+
+        const template = templates?.find(t => t.id === selectedTemplateId);
+
         createPageM.mutate({
             title: newPageTitle,
             slug: newPageSlug.toLowerCase().replace(/[^a-z0-9-]/g, "-"),
             tenant_id: activeTenantId!,
+            content_json: template?.content_json || []
         });
     };
 
@@ -162,6 +184,47 @@ export default function PortalManager() {
                                         value={newPageSlug}
                                         onChange={(e) => setNewPageSlug(e.target.value)}
                                     />
+                                </div>
+                            </div>
+                            <div className="space-y-4 pt-4 border-t border-slate-100">
+                                <Label className="text-sm font-bold uppercase text-slate-400">Escolha um Modelo</Label>
+                                <div className="grid grid-cols-2 gap-3">
+                                    <button 
+                                        type="button"
+                                        onClick={() => setSelectedTemplateId(null)}
+                                        className={cn(
+                                            "flex flex-col items-start p-4 rounded-2xl border-2 transition-all text-left group",
+                                            !selectedTemplateId ? "border-blue-600 bg-blue-50/50" : "border-slate-100 hover:border-slate-200"
+                                        )}
+                                    >
+                                        <div className="h-24 w-full bg-slate-100 rounded-xl mb-3 flex items-center justify-center text-slate-400 group-hover:bg-slate-200 transition-colors">
+                                            <Plus className="h-8 w-8" />
+                                        </div>
+                                        <span className="font-bold text-sm">Página em Branco</span>
+                                        <span className="text-[10px] text-slate-500">Comece do zero</span>
+                                    </button>
+
+                                    {templates?.map((t) => (
+                                        <button 
+                                            key={t.id}
+                                            type="button"
+                                            onClick={() => setSelectedTemplateId(t.id)}
+                                            className={cn(
+                                                "flex flex-col items-start p-4 rounded-2xl border-2 transition-all text-left group",
+                                                selectedTemplateId === t.id ? "border-blue-600 bg-blue-50/50" : "border-slate-100 hover:border-slate-200"
+                                            )}
+                                        >
+                                            <div className="h-24 w-full bg-slate-900 rounded-xl mb-3 flex items-center justify-center overflow-hidden">
+                                                {t.thumbnail_url ? (
+                                                    <img src={t.thumbnail_url} className="w-full h-full object-cover opacity-50 group-hover:opacity-100 transition-opacity" alt={t.name} />
+                                                ) : (
+                                                    <Globe className="h-8 w-8 text-blue-500" />
+                                                )}
+                                            </div>
+                                            <span className="font-bold text-sm">{t.name}</span>
+                                            <span className="text-[10px] text-slate-500 line-clamp-1">{t.description}</span>
+                                        </button>
+                                    ))}
                                 </div>
                             </div>
                         </div>
