@@ -166,9 +166,10 @@ export default function Communication() {
   // 4. Mutations
   const sendM = useMutation({
     mutationFn: async (text: string) => {
-      if (!activeChannelId || !user?.id || !text.trim()) return;
+      if (!activeChannelId || !activeTenantId || !user?.id || !text.trim()) return;
       const { error } = await supabase.from("communication_messages").insert({
         channel_id: activeChannelId,
+        tenant_id: activeTenantId,
         user_id: user.id,
         content: text.trim(),
       });

@@ -1,4 +1,4 @@
--- RPC to get or create a DM channel between two users
+-- RPC to get or create a DM channel between two users (Updated with tenant_id logic)
 CREATE OR REPLACE FUNCTION get_or_create_dm_channel(
     p_tenant_id UUID,
     p_user_a UUID,
@@ -24,24 +24,38 @@ BEGIN
     -- 2. If not found, create it
     IF v_channel_id IS NULL THEN
         -- Get display names for the channel name (fallback)
-        SELECT display_name INTO v_user_a_name FROM users_profile WHERE user_id = p_user_a;
-        SELECT display_name INTO v_user_b_name FROM users_profile WHERE user_id = p_user_b;
+        SELECT display_name INTO v_user_a_name FROM users_profile WHERE user_id = p_user_a AND tenant_id = p_tenant_id;
+        SELECT display_name INTO v_user_b_name FROM users_profile WHERE user_id = p_user_b AND tenant_id = p_tenant_id;
 
         INSERT INTO communication_channels (tenant_id, name, type)
         VALUES (p_tenant_id, COALESCE(v_user_a_name, 'User') || ', ' || COALESCE(v_user_b_name, 'User'), 'direct')
         RETURNING id INTO v_channel_id;
 
         -- Add both members (if not already added by trigger - but trigger only adds creator)
-        -- Actually, the trigger on_communication_channel_created adds the creator.
+        -- The trigger on_communication_channel_created adds the creator.
         -- We need to add the other person.
         
-        -- The trigger adds the person who runs the INSERT. 
-        -- So we just need to add p_user_b if it wasn't the creator.
-        INSERT INTO communication_members (channel_id, user_id)
-        VALUES (v_channel_id, p_user_b)
+        -- The trigger handle_communication_channel_creation now needs to handle tenant_id too.
+        -- Let's update the trigger function first.
+        
+        INSERT INTO communication_members (channel_id, user_id, tenant_id)
+        VALUES (v_channel_id, p_user_b, p_tenant_id)
         ON CONFLICT DO NOTHING;
     END IF;
 
     RETURN v_channel_id;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Update trigger function to handle tenant_id
+create or replace function public.handle_communication_channel_creation()
+returns trigger
+language plpgsql
+security definer
+as $$
+begin
+    insert into public.communication_members (channel_id, user_id, tenant_id)
+    values (new.id, auth.uid(), new.tenant_id);
+    return new;
+end;
+$$;
