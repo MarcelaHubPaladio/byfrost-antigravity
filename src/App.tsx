@@ -20,66 +20,68 @@ import { RequireSimulatorEnabled } from "@/components/RequireSimulatorEnabled";
 import { RequireLinkManagerEnabled } from "@/components/RequireLinkManagerEnabled";
 import { RequirePortalEnabled } from "@/components/RequirePortalEnabled";
 import { RequireCommunicationEnabled } from "@/components/chat/RequireCommunicationEnabled";
+import { GlobalErrorBoundary } from "@/components/GlobalErrorBoundary";
+import { lazyWithRetry } from "@/lib/lazyWithRetry";
 
 // Lazy-loaded components
-const Index = lazy(() => import("@/pages/Index"));
-const NotFound = lazy(() => import("@/pages/NotFound"));
-const Login = lazy(() => import("@/pages/Login"));
-const TenantSelect = lazy(() => import("@/pages/TenantSelect"));
-const AuthCallback = lazy(() => import("@/pages/AuthCallback"));
-const ResetPassword = lazy(() => import("@/pages/ResetPassword"));
-const Dashboard = lazy(() => import("@/pages/Dashboard"));
-const Trello = lazy(() => import("@/pages/Trello"));
-const TrelloCase = lazy(() => import("@/pages/TrelloCase"));
-const CaseDetail = lazy(() => import("@/pages/CaseDetail"));
-const Simulator = lazy(() => import("@/pages/Simulator"));
-const Settings = lazy(() => import("@/pages/Settings"));
-const Me = lazy(() => import("@/pages/Me"));
-const Admin = lazy(() => import("@/pages/Admin"));
-const GoalsCenter = lazy(() => import("@/pages/GoalsCenter"));
-const AdminUserDetail = lazy(() => import("@/pages/AdminUserDetail"));
-const Crm = lazy(() => import("@/pages/Crm"));
-const CrmCaseDetail = lazy(() => import("@/pages/CrmCaseDetail"));
-const Orders = lazy(() => import("@/pages/Orders"));
-const Chats = lazy(() => import("@/pages/Chats"));
-const Presence = lazy(() => import("@/pages/Presence"));
-const PresenceManage = lazy(() => import("@/pages/PresenceManage"));
-const IntegrationsMeta = lazy(() => import("@/pages/IntegrationsMeta"));
-const Content = lazy(() => import("@/pages/Content"));
-const ContentDetail = lazy(() => import("@/pages/ContentDetail"));
-const Screen = lazy(() => import("@/pages/Screen"));
-const PublicCampaignRanking = lazy(() => import("@/pages/PublicCampaignRanking"));
-const IncentivesEventsManage = lazy(() => import("@/pages/IncentivesEventsManage"));
-const FinanceIngestion = lazy(() => import("@/pages/FinanceIngestion"));
-const FinancePlanning = lazy(() => import("@/pages/FinancePlanning"));
-const FinanceLedger = lazy(() => import("@/pages/FinanceLedger"));
-const FinanceTensions = lazy(() => import("@/pages/FinanceTensions"));
-const FinanceDecisions = lazy(() => import("@/pages/FinanceDecisions"));
-const FinanceControlTower = lazy(() => import("@/pages/FinanceControlTower"));
-const FinanceDecisionBoard = lazy(() => import("@/pages/FinanceDecisionBoard"));
-const Commitments = lazy(() => import("@/pages/Commitments"));
-const CommitmentDetail = lazy(() => import("@/pages/CommitmentDetail"));
-const Entities = lazy(() => import("@/pages/Entities"));
-const EntityDetail = lazy(() => import("@/pages/EntityDetail"));
-const DeliverableTemplates = lazy(() => import("@/pages/DeliverableTemplates"));
-const PublicProposal = lazy(() => import("@/pages/PublicProposal"));
-const ContractTemplates = lazy(() => import("@/pages/ContractTemplates"));
-const TvCorporativaAdmin = lazy(() => import("@/pages/TvCorporativaAdmin"));
-const TvPlayer = lazy(() => import("@/pages/TvPlayer"));
-const TvTimelineEditor = lazy(() => import("@/pages/TvTimelineEditor"));
-const PublicEntityTvUpload = lazy(() => import("@/pages/PublicEntityTvUpload"));
-const Inventory = lazy(() => import("@/pages/Inventory"));
-const InventoryDetail = lazy(() => import("@/pages/InventoryDetail"));
-const LinkManager = lazy(() => import("@/pages/LinkManager"));
-const PublicLinks = lazy(() => import("@/pages/PublicLinks"));
-const PortalManager = lazy(() => import("@/pages/PortalManager"));
-const PortalEditor = lazy(() => import("@/pages/PortalEditor"));
-const PublicPortal = lazy(() => import("@/pages/PublicPortal"));
-const MediaKitList = lazy(() => import("@/pages/MediaKitList"));
-const MediaKitTemplates = lazy(() => import("@/pages/MediaKitTemplates"));
-const MediaKitMasks = lazy(() => import("@/pages/MediaKitMasks"));
-const MediaKitEditor = lazy(() => import("@/pages/MediaKitEditor"));
-const Communication = lazy(() => import("@/pages/Communication"));
+const Index = lazyWithRetry(() => import("@/pages/Index"));
+const NotFound = lazyWithRetry(() => import("@/pages/NotFound"));
+const Login = lazyWithRetry(() => import("@/pages/Login"));
+const TenantSelect = lazyWithRetry(() => import("@/pages/TenantSelect"));
+const AuthCallback = lazyWithRetry(() => import("@/pages/AuthCallback"));
+const ResetPassword = lazyWithRetry(() => import("@/pages/ResetPassword"));
+const Dashboard = lazyWithRetry(() => import("@/pages/Dashboard"));
+const Trello = lazyWithRetry(() => import("@/pages/Trello"));
+const TrelloCase = lazyWithRetry(() => import("@/pages/TrelloCase"));
+const CaseDetail = lazyWithRetry(() => import("@/pages/CaseDetail"));
+const Simulator = lazyWithRetry(() => import("@/pages/Simulator"));
+const Settings = lazyWithRetry(() => import("@/pages/Settings"));
+const Me = lazyWithRetry(() => import("@/pages/Me"));
+const Admin = lazyWithRetry(() => import("@/pages/Admin"));
+const GoalsCenter = lazyWithRetry(() => import("@/pages/GoalsCenter"));
+const AdminUserDetail = lazyWithRetry(() => import("@/pages/AdminUserDetail"));
+const Crm = lazyWithRetry(() => import("@/pages/Crm"));
+const CrmCaseDetail = lazyWithRetry(() => import("@/pages/CrmCaseDetail"));
+const Orders = lazyWithRetry(() => import("@/pages/Orders"));
+const Chats = lazyWithRetry(() => import("@/pages/Chats"));
+const Presence = lazyWithRetry(() => import("@/pages/Presence"));
+const PresenceManage = lazyWithRetry(() => import("@/pages/PresenceManage"));
+const IntegrationsMeta = lazyWithRetry(() => import("@/pages/IntegrationsMeta"));
+const Content = lazyWithRetry(() => import("@/pages/Content"));
+const ContentDetail = lazyWithRetry(() => import("@/pages/ContentDetail"));
+const Screen = lazyWithRetry(() => import("@/pages/Screen"));
+const PublicCampaignRanking = lazyWithRetry(() => import("@/pages/PublicCampaignRanking"));
+const IncentivesEventsManage = lazyWithRetry(() => import("@/pages/IncentivesEventsManage"));
+const FinanceIngestion = lazyWithRetry(() => import("@/pages/FinanceIngestion"));
+const FinancePlanning = lazyWithRetry(() => import("@/pages/FinancePlanning"));
+const FinanceLedger = lazyWithRetry(() => import("@/pages/FinanceLedger"));
+const FinanceTensions = lazyWithRetry(() => import("@/pages/FinanceTensions"));
+const FinanceDecisions = lazyWithRetry(() => import("@/pages/FinanceDecisions"));
+const FinanceControlTower = lazyWithRetry(() => import("@/pages/FinanceControlTower"));
+const FinanceDecisionBoard = lazyWithRetry(() => import("@/pages/FinanceDecisionBoard"));
+const Commitments = lazyWithRetry(() => import("@/pages/Commitments"));
+const CommitmentDetail = lazyWithRetry(() => import("@/pages/CommitmentDetail"));
+const Entities = lazyWithRetry(() => import("@/pages/Entities"));
+const EntityDetail = lazyWithRetry(() => import("@/pages/EntityDetail"));
+const DeliverableTemplates = lazyWithRetry(() => import("@/pages/DeliverableTemplates"));
+const PublicProposal = lazyWithRetry(() => import("@/pages/PublicProposal"));
+const ContractTemplates = lazyWithRetry(() => import("@/pages/ContractTemplates"));
+const TvCorporativaAdmin = lazyWithRetry(() => import("@/pages/TvCorporativaAdmin"));
+const TvPlayer = lazyWithRetry(() => import("@/pages/TvPlayer"));
+const TvTimelineEditor = lazyWithRetry(() => import("@/pages/TvTimelineEditor"));
+const PublicEntityTvUpload = lazyWithRetry(() => import("@/pages/PublicEntityTvUpload"));
+const Inventory = lazyWithRetry(() => import("@/pages/Inventory"));
+const InventoryDetail = lazyWithRetry(() => import("@/pages/InventoryDetail"));
+const LinkManager = lazyWithRetry(() => import("@/pages/LinkManager"));
+const PublicLinks = lazyWithRetry(() => import("@/pages/PublicLinks"));
+const PortalManager = lazyWithRetry(() => import("@/pages/PortalManager"));
+const PortalEditor = lazyWithRetry(() => import("@/pages/PortalEditor"));
+const PublicPortal = lazyWithRetry(() => import("@/pages/PublicPortal"));
+const MediaKitList = lazyWithRetry(() => import("@/pages/MediaKitList"));
+const MediaKitTemplates = lazyWithRetry(() => import("@/pages/MediaKitTemplates"));
+const MediaKitMasks = lazyWithRetry(() => import("@/pages/MediaKitMasks"));
+const MediaKitEditor = lazyWithRetry(() => import("@/pages/MediaKitEditor"));
+const Communication = lazyWithRetry(() => import("@/pages/Communication"));
 
 const GlobalLoading = () => (
   <div className="flex h-screen w-full items-center justify-center bg-slate-50 dark:bg-slate-950">
@@ -110,7 +112,8 @@ const SmartNotFound = () => {
 };
 
 const App = () => (
-  <QueryClientProvider client={queryClient}>
+  <GlobalErrorBoundary>
+    <QueryClientProvider client={queryClient}>
     <TooltipProvider>
       <Toaster />
       <Sonner />
@@ -590,6 +593,7 @@ const App = () => (
       </SessionProvider>
     </TooltipProvider>
   </QueryClientProvider >
+  </GlobalErrorBoundary>
 );
 
 export default App;

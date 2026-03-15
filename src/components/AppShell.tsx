@@ -431,6 +431,11 @@ const CORE_NAV_CHILDREN: CoreNavChild[] = [
   { to: "/app/commitments", label: "Compromissos", icon: Handshake, routeKey: "app.commitments" },
 ];
 
+const CREATE_NAV_CHILDREN = [
+  { to: "/app/link-manager", label: "Links", icon: Link2, routeKey: "app.link_manager" },
+  { to: "/app/media-kit", label: "Mídia Kit", icon: Palette, routeKey: "app.media_kit" },
+];
+
 function DesktopHoverMenu({
   trigger,
   title,
@@ -510,6 +515,7 @@ export function AppShell({
   const [mobileFinanceOpen, setMobileFinanceOpen] = useState(false);
   const [mobilePresenceOpen, setMobilePresenceOpen] = useState(false);
   const [mobileCoreOpen, setMobileCoreOpen] = useState(false);
+  const [mobileCreateOpen, setMobileCreateOpen] = useState(false);
 
   const roleKey = String(activeTenant?.role ?? "");
   const financeEnabledForTenant = isSuperAdmin || isFinanceEnabled(activeTenant?.modules_json);
@@ -667,6 +673,12 @@ export function AppShell({
     return ["app.entities", "app.inventory", "app.commitments"].some((k) => can(k));
   }, [isSuperAdmin, navAccessQ.isLoading, navAccessQ.data, activeTenantId, roleKey]);
 
+  const createHasAnyAccess = useMemo(() => {
+    if (isSuperAdmin) return true;
+    if (!linkManagerEnabledForTenant && !mediaKitEnabledForTenant) return false;
+    return ["app.link_manager", "app.media_kit"].some((k) => can(k));
+  }, [isSuperAdmin, linkManagerEnabledForTenant, mediaKitEnabledForTenant, navAccessQ.isLoading, navAccessQ.data, activeTenantId, roleKey]);
+
   const showChatInNav = isSuperAdmin ? true : chatAccess.isLoading ? false : chatAccess.hasAccess;
 
   const tenantJourneysQ = useQuery({
@@ -811,6 +823,7 @@ export function AppShell({
     if (isActiveFinancePath(loc.pathname)) setMobileFinanceOpen(true);
     if (isActivePresencePath(loc.pathname)) setMobilePresenceOpen(true);
     if (isActiveCorePath(loc.pathname)) setMobileCoreOpen(true);
+    if (CREATE_NAV_CHILDREN.some((c) => loc.pathname.startsWith(c.to))) setMobileCreateOpen(true);
   }, [loc.pathname]);
 
   return (
@@ -888,15 +901,34 @@ export function AppShell({
                 {hasMetaContent && (
                   <NavTile to="/app/content" icon={Clapperboard} label="Conteúdo" disabled={!can("app.content")} />
                 )}
-                {linkManagerEnabledForTenant && (
-                  <NavTile to="/app/link-manager" icon={Link2} label="Links" disabled={!can("app.link_manager")} />
-                )}
+                
                 {portalEnabledForTenant && (
                   <NavTile to="/app/portal" icon={Globe} label="Portal" disabled={!can("app.portal")} />
                 )}
-                {mediaKitEnabledForTenant && (
-                  <NavTile to="/app/media-kit" icon={Palette} label="Mídia Kit" disabled={!can("app.media_kit")} />
+
+                {/* Criar (desktop): hover menu */}
+                {createHasAnyAccess && (
+                  <DesktopHoverMenu
+                    title="Criar"
+                    trigger={<div className="w-full"><NavTile to="/app/create" icon={Zap} label="Criar" disabled={false} /></div>}
+                  >
+                    {CREATE_NAV_CHILDREN.filter(c => {
+                      if (c.to === "/app/link-manager" && !linkManagerEnabledForTenant) return false;
+                      if (c.to === "/app/media-kit" && !mediaKitEnabledForTenant) return false;
+                      return true;
+                    }).map(({ to, label, icon, routeKey }) => (
+                      <DesktopHoverMenuLink
+                        key={to}
+                        to={to}
+                        label={label}
+                        icon={icon}
+                        active={loc.pathname === to || loc.pathname.startsWith(to + "/")}
+                        disabled={!can(routeKey)}
+                      />
+                    ))}
+                  </DesktopHoverMenu>
                 )}
+
                 {communicationEnabledForTenant && (
                   <NavTile to="/app/communication" icon={MessageSquare} label="Comunicação" disabled={!can("app.communication")} />
                 )}
@@ -1109,24 +1141,60 @@ export function AppShell({
                                 onNavigate={() => setMobileNavOpen(false)}
                               />
                             )}
-                              {portalEnabledForTenant && (
-                                  <MobileNavItem
-                                    to="/app/portal"
-                                    icon={Globe}
-                                    label="Portal"
-                                    disabled={!can("app.portal")}
-                                    onNavigate={() => setMobileNavOpen(false)}
-                                  />
-                                )}
-                              {mediaKitEnabledForTenant && (
-                                  <MobileNavItem
-                                    to="/app/media-kit"
-                                    icon={Palette}
-                                    label="Mídia Kit"
-                                    disabled={!can("app.media_kit")}
-                                    onNavigate={() => setMobileNavOpen(false)}
-                                  />
-                                )}
+                            {portalEnabledForTenant && (
+                                <MobileNavItem
+                                  to="/app/portal"
+                                  icon={Globe}
+                                  label="Portal"
+                                  disabled={!can("app.portal")}
+                                  onNavigate={() => setMobileNavOpen(false)}
+                                />
+                              )}
+
+                            {/* Criar (mobile): menu com filhos */}
+                            {createHasAnyAccess && (
+                              <Collapsible open={mobileCreateOpen} onOpenChange={setMobileCreateOpen}>
+                                <CollapsibleTrigger asChild>
+                                  <button
+                                    type="button"
+                                    className={cn(
+                                      "flex w-full items-center justify-between gap-3 rounded-2xl border px-4 py-3 transition",
+                                      CREATE_NAV_CHILDREN.some((c) => loc.pathname.startsWith(c.to))
+                                        ? "border-[hsl(var(--byfrost-accent)/0.35)] bg-[hsl(var(--byfrost-accent)/0.10)] text-[hsl(var(--byfrost-accent))]"
+                                        : "border-slate-200 bg-white/75 text-slate-800 hover:border-slate-300 hover:bg-white",
+                                      "dark:border-slate-800 dark:bg-slate-950/40 dark:text-slate-100 dark:hover:bg-slate-950/60"
+                                    )
+                                    }
+                                    title="Criar"
+                                  >
+                                    <div className="flex items-center gap-3">
+                                      <Zap className="h-5 w-5" />
+                                      <span className="text-sm font-semibold tracking-tight">Criar</span>
+                                    </div>
+                                    <ChevronRight
+                                      className={cn("h-5 w-5 opacity-70 transition", mobileCreateOpen && "rotate-90")}
+                                    />
+                                  </button>
+                                </CollapsibleTrigger>
+
+                                <CollapsibleContent className="mt-2 grid gap-2 pl-2">
+                                  {CREATE_NAV_CHILDREN.filter(c => {
+                                    if (c.to === "/app/link-manager" && !linkManagerEnabledForTenant) return false;
+                                    if (c.to === "/app/media-kit" && !mediaKitEnabledForTenant) return false;
+                                    return true;
+                                  }).map(({ to, label, icon, routeKey }) => (
+                                    <MobileNavItem
+                                      key={to}
+                                      to={to}
+                                      icon={icon}
+                                      label={label}
+                                      disabled={!can(routeKey)}
+                                      onNavigate={() => setMobileNavOpen(false)}
+                                    />
+                                  ))}
+                                </CollapsibleContent>
+                              </Collapsible>
+                            )}
 
                             {/* Core (mobile): menu com filhos */}
                             {coreHasAnyAccess && (
