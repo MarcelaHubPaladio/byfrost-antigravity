@@ -333,6 +333,10 @@ export default function Communication() {
 
   const markAsReadM = useMutation({
     mutationFn: async (channelId: string) => {
+      if (!channelId || channelId.length !== 36) {
+        console.warn("Invalid channelId for mark_channel_as_read:", channelId);
+        return;
+      }
       const { error } = await supabase.rpc("mark_channel_as_read", {
         p_channel_id: channelId,
       });
@@ -509,16 +513,16 @@ export default function Communication() {
                           className={cn(
                             "flex w-full items-center gap-2 rounded-xl px-3 py-2 text-sm transition-all pr-10",
                             isActive 
-                              ? "bg-white/15 text-white shadow-sm" 
+                              ? "bg-rose-50 text-rose-600 shadow-sm dark:bg-rose-900/20 dark:text-rose-400" 
                               : isUnread
-                              ? "bg-white/5 font-semibold text-white/95"
-                              : "text-white/60 hover:bg-white/10 hover:text-white/80"
+                              ? "bg-slate-100/50 font-bold text-slate-900 dark:bg-slate-800/50 dark:text-slate-100"
+                              : "text-slate-500 hover:bg-slate-100/80 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-slate-800/80 dark:hover:text-slate-200"
                           )}
                         >
                           {c.type === 'private' ? (
-                            <Lock className={cn("h-4 w-4", isUnread && !isActive && "text-rose-400")} />
+                            <Lock className={cn("h-4 w-4", isUnread && !isActive ? "text-rose-500" : "text-current opacity-70")} />
                           ) : (
-                            <Hash className={cn("h-4 w-4", isUnread && !isActive && "text-[hsl(var(--byfrost-accent))]")} />
+                            <Hash className={cn("h-4 w-4", isUnread && !isActive ? "text-rose-500" : "text-current opacity-70")} />
                           )}
                           <span className="truncate">{c.name}</span>
 
@@ -564,13 +568,13 @@ export default function Communication() {
                         className={cn(
                           "group relative flex w-full items-center gap-2 rounded-xl px-3 py-2 text-sm transition-all",
                           isActive
-                            ? "bg-white/15 text-white shadow-sm"
+                            ? "bg-rose-50 text-rose-600 shadow-sm dark:bg-rose-900/20 dark:text-rose-400"
                             : isUnread
-                            ? "bg-white/5 font-semibold text-white/95"
-                            : "text-white/60 hover:bg-white/10 hover:text-white/80"
+                            ? "bg-slate-100/50 font-bold text-slate-900 dark:bg-slate-800/50 dark:text-slate-100"
+                            : "text-slate-500 hover:bg-slate-100/80 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-slate-800/80 dark:hover:text-slate-200"
                         )}
                       >
-                        <MessageSquare className={cn("h-4 w-4", isUnread && !isActive && "text-rose-400")} />
+                        <MessageSquare className={cn("h-4 w-4", isUnread && !isActive ? "text-rose-500" : "text-current opacity-70")} />
                         <span className="truncate">{c.name}</span>
                         {isUnread && !isActive && (
                           <div className="absolute right-3 h-2 w-2 rounded-full bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.6)]" />
