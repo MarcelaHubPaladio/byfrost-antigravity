@@ -13,11 +13,20 @@ language plpgsql
 security definer
 set search_path = public
 as $$
+declare
+    v_tenant_id uuid;
 begin
-    insert into public.communication_members (channel_id, user_id, last_read_at)
-    values (p_channel_id, auth.uid(), now())
-    on conflict (channel_id, user_id) 
-    do update set last_read_at = now();
+    -- Get tenant_id from channel
+    select tenant_id into v_tenant_id
+    from public.communication_channels
+    where id = p_channel_id;
+
+    if v_tenant_id is not null then
+        insert into public.communication_members (channel_id, user_id, tenant_id, last_read_at)
+        values (p_channel_id, auth.uid(), v_tenant_id, now())
+        on conflict (channel_id, user_id) 
+        do update set last_read_at = now();
+    end if;
 end;
 $$;
 

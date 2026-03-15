@@ -604,6 +604,11 @@ export function AppShell({
   useEffect(() => {
     if (!activeTenantId || !user?.id || !communicationEnabledForTenant) return;
 
+    // Request notification permission
+    if ("Notification" in window && Notification.permission === "default") {
+      Notification.requestPermission();
+    }
+
     const channel = supabase
       .channel(`comm_notifications:${activeTenantId}`)
       .on(
@@ -612,11 +617,23 @@ export function AppShell({
           event: "INSERT",
           schema: "public",
           table: "communication_messages",
-          // We can't filter by user_id != auth.uid() here easily in RLS/Client filter 
-          // but the RPC handles it.
         },
-        () => {
+        async (payload: any) => {
           unreadCommQ.refetch();
+
+          // Browser Notification logic
+          if (
+            payload.new.user_id !== user.id && 
+            "Notification" in window && 
+            Notification.permission === "granted" &&
+            (document.hidden || !loc.pathname.includes("/app/communication"))
+          ) {
+            // Optional: fetch user display name from profiles if needed
+            new Notification("Nova mensagem no Byfrost", {
+              body: payload.new.content?.slice(0, 100) + (payload.new.content?.length > 100 ? "..." : ""),
+              icon: "/favicon.ico", // Or a specific app icon
+            });
+          }
         }
       )
       .subscribe();
@@ -624,7 +641,7 @@ export function AppShell({
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [activeTenantId, user?.id, communicationEnabledForTenant]);
+  }, [activeTenantId, user?.id, communicationEnabledForTenant, loc.pathname]);
 
   const financeHasAnyAccess = useMemo(() => {
     if (!financeEnabledForTenant) return false;
@@ -827,7 +844,23 @@ export function AppShell({
                 <div className="mt-2 flex justify-center">
                   <button
                     type="button"
-                    onClick={() => nav("/app/communication")}
+                    onClick={async () => {
+                      // Attempt to find the channel with most recent unread
+                      const { data: latestUnread } = await supabase
+                        .from("communication_messages")
+                        .select("channel_id")
+                        .eq("tenant_id", activeTenantId)
+                        .neq("user_id", user?.id)
+                        .order("created_at", { ascending: false })
+                        .limit(1)
+                        .single();
+
+                      if (latestUnread?.channel_id) {
+                        nav(`/app/communication?channelId=${latestUnread.channel_id}`);
+                      } else {
+                        nav("/app/communication");
+                      }
+                    }}
                     className="group relative flex h-10 w-10 items-center justify-center rounded-2xl bg-white/15 text-white transition hover:bg-white/25 active:scale-95"
                     title={`${unreadCount} novas mensagens`}
                   >

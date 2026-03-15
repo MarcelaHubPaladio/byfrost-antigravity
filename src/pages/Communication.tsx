@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { AppShell } from "@/components/AppShell";
 import { RequireAuth } from "@/components/RequireAuth";
 import { MessageSquare, Hash, Users, Pin, Search, Send, Plus, MoreVertical, X, Check, Lock, Globe, Settings, Trash2 } from "lucide-react";
@@ -30,6 +31,8 @@ export default function Communication() {
   const { activeTenantId, activeTenant, isSuperAdmin } = useTenant();
   const { user } = useSession();
   const qc = useQueryClient();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const urlChannelId = searchParams.get("channelId");
   const [activeChannelId, setActiveChannelId] = useState<string | null>(null);
   const [messageText, setMessageText] = useState("");
   const [newChannelName, setNewChannelName] = useState("");
@@ -392,12 +395,26 @@ export default function Communication() {
     onError: (err: any) => showError(err.message),
   });
 
+  // Sync URL to state
+  useEffect(() => {
+    if (urlChannelId && urlChannelId !== activeChannelId) {
+      setActiveChannelId(urlChannelId);
+    }
+  }, [urlChannelId]);
+
+  // Sync state to URL 
+  useEffect(() => {
+    if (activeChannelId && activeChannelId !== urlChannelId) {
+      setSearchParams({ channelId: activeChannelId });
+    }
+  }, [activeChannelId]);
+
   // Default selection
   useEffect(() => {
-    if (!activeChannelId && (channelsQ.data?.length ?? 0) > 0) {
+    if (!activeChannelId && !urlChannelId && (channelsQ.data?.length ?? 0) > 0) {
       setActiveChannelId(channelsQ.data![0].id);
     }
-  }, [channelsQ.data, activeChannelId]);
+  }, [channelsQ.data, activeChannelId, urlChannelId]);
 
   // Scroll to bottom
   useEffect(() => {
