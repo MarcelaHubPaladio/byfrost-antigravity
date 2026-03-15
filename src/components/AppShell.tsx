@@ -1,5 +1,5 @@
 import { PropsWithChildren, useEffect, useMemo, useState } from "react";
-import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
+import { Link, NavLink, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { useTenant } from "@/providers/TenantProvider";
@@ -619,19 +619,30 @@ export function AppShell({
           table: "communication_messages",
         },
         async (payload: any) => {
+          console.log("Realtime message received:", payload);
           unreadCommQ.refetch();
 
+          const [params] = new URLSearchParams(window.location.search);
+          const currentChannelId = params.get("channelId");
+
           // Browser Notification logic
+          const isNotOnThisChannel = !loc.pathname.includes("/app/communication") || (currentChannelId && payload.new.channel_id !== currentChannelId);
+          console.log("Notification conditions:", {
+            isNotMe: payload.new.user_id !== user.id,
+            permission: Notification.permission,
+            hidden: document.hidden,
+            isNotOnThisChannel
+          });
+
           if (
-            payload.new.user_id !== user.id && 
-            "Notification" in window && 
+            payload.new.user_id !== user.id &&
+            "Notification" in window &&
             Notification.permission === "granted" &&
-            (document.hidden || !loc.pathname.includes("/app/communication"))
+            (document.hidden || isNotOnThisChannel)
           ) {
-            // Optional: fetch user display name from profiles if needed
             new Notification("Nova mensagem no Byfrost", {
               body: payload.new.content?.slice(0, 100) + (payload.new.content?.length > 100 ? "..." : ""),
-              icon: "/favicon.ico", // Or a specific app icon
+              icon: "/favicon.ico",
             });
           }
         }
