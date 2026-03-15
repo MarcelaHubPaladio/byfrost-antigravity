@@ -281,26 +281,6 @@ const App = () => (
                     }
                   />
 
-                  <Route
-                    path="/app/chat"
-                    element={
-                      <RequireRouteAccess routeKey="app.chat">
-                        <RequireChatInstanceAccess>
-                          <Chats />
-                        </RequireChatInstanceAccess>
-                      </RequireRouteAccess>
-                    }
-                  />
-                  <Route
-                    path="/app/chat/:id"
-                    element={
-                      <RequireRouteAccess routeKey="app.chat">
-                        <RequireChatInstanceAccess>
-                          <Chats />
-                        </RequireChatInstanceAccess>
-                      </RequireRouteAccess>
-                    }
-                  />
 
                   <Route
                     path="/app/communication"

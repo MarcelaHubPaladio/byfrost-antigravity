@@ -95,8 +95,6 @@ export default function CrmCaseDetail() {
 
   const isAdminOrSuper = isSuperAdmin || activeTenant?.role === "admin";
 
-  const [chatOnly, setChatOnly] = useState(false);
-  const [updatingChatOnly, setUpdatingChatOnly] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [updatingState, setUpdatingState] = useState(false);
 
@@ -118,52 +116,6 @@ export default function CrmCaseDetail() {
     },
   });
 
-  useEffect(() => {
-    setChatOnly(Boolean(caseQ.data?.is_chat));
-  }, [caseQ.data?.is_chat]);
-
-  const updateChatOnly = async (next: boolean) => {
-    if (!activeTenantId || !id) return;
-    if (updatingChatOnly) return;
-
-    setUpdatingChatOnly(true);
-    setChatOnly(next);
-    try {
-      const { error } = await supabase
-        .from("cases")
-        .update({ is_chat: next })
-        .eq("tenant_id", activeTenantId)
-        .eq("id", id);
-      if (error) throw error;
-
-      await supabase.from("timeline_events").insert({
-        tenant_id: activeTenantId,
-        case_id: id,
-        event_type: "case_updated",
-        actor_type: "admin",
-        actor_id: user?.id ?? null,
-        message: next ? "Marcado como chat (fora de fluxo)." : "Removido de chat (volta ao fluxo).",
-        meta_json: { field: "is_chat", value: next },
-        occurred_at: new Date().toISOString(),
-      });
-
-      showSuccess(next ? "Marcado como chat." : "Removido de chat.");
-      await Promise.all([
-        qc.invalidateQueries({ queryKey: ["case", activeTenantId, id] }),
-        qc.invalidateQueries({ queryKey: ["timeline", activeTenantId, id] }),
-        qc.invalidateQueries({ queryKey: ["crm_cases_by_tenant", activeTenantId] }),
-        qc.invalidateQueries({ queryKey: ["cases_by_tenant", activeTenantId] }),
-        qc.invalidateQueries({ queryKey: ["chat_cases", activeTenantId] }),
-      ]);
-
-      if (next) nav(`/app/chat/${id}`, { replace: true });
-    } catch (e: any) {
-      setChatOnly(Boolean(caseQ.data?.is_chat));
-      showError(`Falha ao atualizar: ${e?.message ?? "erro"}`);
-    } finally {
-      setUpdatingChatOnly(false);
-    }
-  };
 
   const deleteCase = async () => {
     if (!activeTenantId || !id) return;
@@ -246,20 +198,13 @@ export default function CrmCaseDetail() {
 
   const entityLink = caseQ.data?.customer_entity_id ? `/app/entities/${caseQ.data.customer_entity_id}` : null;
 
-  // Se foi marcado como chat, abre no inbox de chat.
-  useEffect(() => {
-    if (!caseQ.data?.id) return;
-    if (!caseQ.data.is_chat) return;
-    nav(`/app/chat/${caseQ.data.id}`, { replace: true });
-  }, [caseQ.data?.id, caseQ.data?.is_chat, nav]);
 
   // Se cair aqui por engano (case não é CRM), manda pro detalhe padrão.
   useEffect(() => {
     if (!caseQ.data?.id) return;
-    if (caseQ.data.is_chat) return;
     if (caseQ.data.journeys?.is_crm) return;
     nav(`/app/cases/${caseQ.data.id}`, { replace: true });
-  }, [caseQ.data?.id, caseQ.data?.journeys?.is_crm, caseQ.data?.is_chat, nav]);
+  }, [caseQ.data?.id, caseQ.data?.journeys?.is_crm, nav]);
 
   // Ao abrir o case, marca as mensagens inbound como "vistas" (por usuário).
   useEffect(() => {
@@ -472,28 +417,6 @@ export default function CrmCaseDetail() {
                 </div>
               ) : null}
 
-              {isAdminOrSuper && (
-              <div className="flex items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white/70 px-3 py-2 text-xs text-slate-700 shadow-sm">
-                <div className="min-w-0">
-                  <div className="text-[11px] font-semibold text-slate-800">Somente chat</div>
-                  <div className="text-[11px] text-slate-500">fora de fluxo</div>
-                </div>
-                <div className="flex items-center gap-3">
-                  <Switch checked={chatOnly} onCheckedChange={updateChatOnly} disabled={updatingChatOnly || !c} />
-                  {chatOnly ? (
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      className="h-9 rounded-2xl"
-                      onClick={() => nav(`/app/chat/${id}`)}
-                      title="Abrir no inbox de Chat"
-                    >
-                      <MessagesSquare className="mr-2 h-4 w-4" /> Abrir
-                    </Button>
-                  ) : null}
-                </div>
-              </div>
-              )}
 
               {isAdminOrSuper && id ? <CaseTechnicalReportDialog caseId={id} /> : null}
 

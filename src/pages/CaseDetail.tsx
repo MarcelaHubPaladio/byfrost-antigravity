@@ -112,7 +112,6 @@ export default function CaseDetail() {
   const { user } = useSession();
 
   const [sending, setSending] = useState(false);
-  const [chatOnly, setChatOnly] = useState(false);
   const [updatingChatOnly, setUpdatingChatOnly] = useState(false);
 
   const [transitionBlock, setTransitionBlock] = useState<{
@@ -145,51 +144,6 @@ export default function CaseDetail() {
     },
   });
 
-  useEffect(() => {
-    setChatOnly(Boolean(caseQ.data?.is_chat));
-  }, [caseQ.data?.is_chat]);
-
-  const updateChatOnly = async (next: boolean) => {
-    if (!activeTenantId || !id) return;
-    if (updatingChatOnly) return;
-
-    setUpdatingChatOnly(true);
-    setChatOnly(next);
-    try {
-      const { error } = await supabase
-        .from("cases")
-        .update({ is_chat: next })
-        .eq("tenant_id", activeTenantId)
-        .eq("id", id);
-      if (error) throw error;
-
-      // Audit in timeline
-      await supabase.from("timeline_events").insert({
-        tenant_id: activeTenantId,
-        case_id: id,
-        event_type: "case_updated",
-        actor_type: "admin",
-        actor_id: user?.id ?? null,
-        message: next ? "Marcado como chat (fora de fluxo)." : "Removido de chat (volta ao fluxo).",
-        meta_json: { field: "is_chat", value: next },
-        occurred_at: new Date().toISOString(),
-      });
-
-      showSuccess(next ? "Marcado como chat." : "Removido de chat.");
-      await Promise.all([
-        qc.invalidateQueries({ queryKey: ["case", activeTenantId, id] }),
-        qc.invalidateQueries({ queryKey: ["timeline", activeTenantId, id] }),
-        qc.invalidateQueries({ queryKey: ["cases_by_tenant", activeTenantId] }),
-        qc.invalidateQueries({ queryKey: ["crm_cases_by_tenant", activeTenantId] }),
-        qc.invalidateQueries({ queryKey: ["chat_cases", activeTenantId] }),
-      ]);
-    } catch (e: any) {
-      setChatOnly(Boolean(caseQ.data?.is_chat));
-      showError(`Falha ao atualizar: ${e?.message ?? "erro"}`);
-    } finally {
-      setUpdatingChatOnly(false);
-    }
-  };
 
   const deleteCase = async () => {
     if (!activeTenantId || !id) return;
@@ -234,14 +188,9 @@ export default function CaseDetail() {
   };
 
   // Higienização:
-  // - se o case está marcado como chat, abre no inbox de chat
   // - se é CRM, abre na rota própria
   useEffect(() => {
     if (!caseQ.data?.id) return;
-    if (caseQ.data.is_chat) {
-      nav(`/app/chat/${caseQ.data.id}`, { replace: true });
-      return;
-    }
     if (caseQ.data.journeys?.is_crm) {
       nav(`/crm/cases/${caseQ.data.id}`, { replace: true });
       return;
@@ -249,7 +198,7 @@ export default function CaseDetail() {
     if (caseQ.data.journeys?.key === "trello" || caseQ.data.case_type === "TRELLO") {
       nav(`/app/trello/${caseQ.data.id}`, { replace: true });
     }
-  }, [caseQ.data?.id, caseQ.data?.journeys?.is_crm, caseQ.data?.is_chat, nav]);
+  }, [caseQ.data?.id, caseQ.data?.journeys?.is_crm, nav]);
 
   // Ao abrir o case, marca as mensagens inbound como "vistas" (por usuário).
   useEffect(() => {
@@ -913,30 +862,6 @@ export default function CaseDetail() {
             </div>
 
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
-              <div className="flex items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white/70 px-3 py-2 text-xs text-slate-700 shadow-sm">
-                <div className="min-w-0">
-                  <div className="text-[11px] font-semibold text-slate-800">Somente chat</div>
-                  <div className="text-[11px] text-slate-500">fora de fluxo</div>
-                </div>
-                <div className="flex items-center gap-3">
-                  <Switch
-                    checked={chatOnly}
-                    onCheckedChange={updateChatOnly}
-                    disabled={updatingChatOnly || !c}
-                  />
-                  {chatOnly ? (
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      className="h-9 rounded-2xl"
-                      onClick={() => nav(`/app/chat/${id}`)}
-                      title="Abrir no inbox de Chat"
-                    >
-                      <MessagesSquare className="mr-2 h-4 w-4" /> Abrir
-                    </Button>
-                  ) : null}
-                </div>
-              </div>
 
               {id ? <CaseTechnicalReportDialog caseId={id} /> : null}
 
@@ -979,13 +904,8 @@ export default function CaseDetail() {
 
               <Button
                 onClick={approveAndPrepare}
-                disabled={sending || !c || chatOnly}
+                disabled={sending || !c}
                 className="h-11 rounded-2xl bg-[hsl(var(--byfrost-accent))] px-5 text-white shadow-sm hover:bg-[hsl(var(--byfrost-accent)/0.92)]"
-                title={
-                  chatOnly
-                    ? "Este case está como chat; ações de fluxo ficam desabilitadas."
-                    : undefined
-                }
               >
                 {sending ? "Processando…" : "Aprovar e preparar mensagem"}
                 <Send className="ml-2 h-4 w-4" />
