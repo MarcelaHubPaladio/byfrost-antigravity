@@ -120,6 +120,10 @@ export function EntityEditTab({
   const [location, setLocation] = useState<{ lat: number; lng: number } | null>(entity.location_json ? { lat: entity.location_json.lat, lng: entity.location_json.lng } : null);
   const [address, setAddress] = useState<string>(entity.location_json?.address || "");
 
+  const [propertyType, setPropertyType] = useState<string>(entity.property_type || "casa");
+  const [totalArea, setTotalArea] = useState<string>(entity.total_area?.toString() || "");
+  const [usefulArea, setUsefulArea] = useState<string>(entity.useful_area?.toString() || "");
+
   const [tags, setTags] = useState<string[]>([]);
   const [tagPickerOpen, setTagPickerOpen] = useState(false);
   const [tagInput, setTagInput] = useState("");
@@ -163,6 +167,9 @@ export function EntityEditTab({
         legacy_id: subtype === "imovel" ? legacyId.trim() : entity.metadata?.legacy_id,
         business_type: subtype === "imovel" ? businessType : entity.metadata?.business_type,
         location_json: subtype === "imovel" ? { ...location, address: address.trim() } : entity.metadata?.location_json,
+        property_type: subtype === "imovel" ? propertyType : entity.property_type,
+        total_area: subtype === "imovel" ? parseFloat(totalArea.replace(",", ".")) : entity.total_area,
+        useful_area: subtype === "imovel" ? parseFloat(usefulArea.replace(",", ".")) : entity.useful_area,
         tags: tags,
       };
 
@@ -177,6 +184,9 @@ export function EntityEditTab({
         entityData.legacy_id = legacyId.trim() || null;
         entityData.business_type = businessType;
         entityData.location_json = location ? { ...location, address: address.trim() } : null;
+        entityData.property_type = propertyType;
+        entityData.total_area = parseFloat(totalArea.replace(",", ".")) || null;
+        entityData.useful_area = parseFloat(usefulArea.replace(",", ".")) || null;
       }
 
       const { error } = await supabase
@@ -393,6 +403,42 @@ export function EntityEditTab({
                         </span>
                      </button>
                    ))}
+                </div>
+              </div>
+
+              <div className="grid gap-6 md:grid-cols-3">
+                <div className="grid gap-3">
+                  <Label className="text-slate-700 font-bold uppercase text-[11px] tracking-wider">Tipo de Imóvel</Label>
+                  <Select value={propertyType} onValueChange={setPropertyType}>
+                    <SelectTrigger className="rounded-2xl h-12 border-slate-200 bg-slate-50/50">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="casa">Casa</SelectItem>
+                      <SelectItem value="apartamento">Apartamento</SelectItem>
+                      <SelectItem value="terreno">Terreno</SelectItem>
+                      <SelectItem value="comercial">Comercial</SelectItem>
+                      <SelectItem value="chacara">Chácara / Sítio</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="grid gap-3">
+                  <Label className="text-slate-700 font-bold uppercase text-[11px] tracking-wider">Área Total (m²)</Label>
+                  <Input 
+                    value={totalArea} 
+                    onChange={e => setTotalArea(e.target.value)} 
+                    placeholder="Ex: 250" 
+                    className="rounded-2xl h-12 border-slate-200 bg-slate-50/50"
+                  />
+                </div>
+                <div className="grid gap-3">
+                  <Label className="text-slate-700 font-bold uppercase text-[11px] tracking-wider">Área Útil (m²)</Label>
+                  <Input 
+                    value={usefulArea} 
+                    onChange={e => setUsefulArea(e.target.value)} 
+                    placeholder="Ex: 180" 
+                    className="rounded-2xl h-12 border-slate-200 bg-slate-50/50"
+                  />
                 </div>
               </div>
 

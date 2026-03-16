@@ -52,6 +52,9 @@ export type EntityUpsertInput = {
   display_name: string;
   status: string | null;
   metadata: any;
+  property_type?: string | null;
+  total_area?: number | null;
+  useful_area?: number | null;
 };
 
 function onlyDigits(s: string) {
@@ -184,6 +187,9 @@ export function EntityUpsertDialog({
   const [businessType, setBusinessType] = useState<string>("both");
   const [location, setLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [address, setAddress] = useState<string>("");
+  const [propertyType, setPropertyType] = useState<string>("casa");
+  const [totalArea, setTotalArea] = useState<string>("");
+  const [usefulArea, setUsefulArea] = useState<string>("");
 
   // Tags
   const [tags, setTags] = useState<string[]>([]);
@@ -218,6 +224,10 @@ export function EntityUpsertDialog({
     const loc = initial?.metadata?.location_json || null;
     setLocation(loc?.lat ? { lat: loc.lat, lng: loc.lng } : null);
     setAddress(String(loc?.address ?? ""));
+
+    setPropertyType(String(initial?.property_type ?? "casa"));
+    setTotalArea(String(initial?.total_area ?? ""));
+    setUsefulArea(String(initial?.useful_area ?? ""));
 
     // Tags fetch
     if (initial?.id) {
@@ -314,17 +324,20 @@ export function EntityUpsertDialog({
         tags: tags, // keeping semantic copy in metadata if needed, but primary is table
       };
 
-      const entityData = {
+      const entityData: any = {
         subtype: subtype,
         display_name: displayName.trim(),
         status: status,
         metadata: nextMetadata,
-      } as any;
+      };
 
       if (subtype === "imovel") {
         entityData.legacy_id = legacyId.trim() || null;
         entityData.business_type = businessType;
         entityData.location_json = location ? { ...location, address: address.trim() } : null;
+        entityData.property_type = propertyType;
+        entityData.total_area = parseFloat(totalArea.replace(",", ".")) || null;
+        entityData.useful_area = parseFloat(usefulArea.replace(",", ".")) || null;
       }
 
       if (isEdit) {
@@ -602,7 +615,6 @@ export function EntityUpsertDialog({
                   />
                   <div className="text-[10px] text-slate-400">ID do sistema anterior</div>
                 </div>
-
                 <div className="grid gap-2">
                   <Label>Tipo de Negócio</Label>
                   <Select value={businessType} onValueChange={setBusinessType}>
@@ -615,6 +627,44 @@ export function EntityUpsertDialog({
                       <SelectItem value="both">Venda e Aluguel</SelectItem>
                     </SelectContent>
                   </Select>
+                </div>
+              </div>
+
+              <div className="grid gap-3 md:grid-cols-3">
+                <div className="grid gap-2">
+                  <Label>Tipo de Imóvel</Label>
+                  <Select value={propertyType} onValueChange={setPropertyType}>
+                    <SelectTrigger className="rounded-xl">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="casa">Casa</SelectItem>
+                      <SelectItem value="apartamento">Apartamento</SelectItem>
+                      <SelectItem value="terreno">Terreno</SelectItem>
+                      <SelectItem value="comercial">Comercial</SelectItem>
+                      <SelectItem value="chacara">Chácara / Sítio</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="grid gap-2">
+                  <Label>Área Total (m²)</Label>
+                  <Input
+                    value={totalArea}
+                    onChange={e => setTotalArea(e.target.value)}
+                    placeholder="Ex: 250"
+                    className="rounded-xl"
+                    inputMode="decimal"
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label>Área Útil (m²)</Label>
+                  <Input
+                    value={usefulArea}
+                    onChange={e => setUsefulArea(e.target.value)}
+                    placeholder="Ex: 180"
+                    className="rounded-xl"
+                    inputMode="decimal"
+                  />
                 </div>
               </div>
 

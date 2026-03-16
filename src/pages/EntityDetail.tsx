@@ -47,6 +47,9 @@ type EntityRow = {
   internal_code?: string;
   location_json?: any;
   business_type?: string;
+  property_type?: string;
+  total_area?: number;
+  useful_area?: number;
 };
 
 export default function EntityDetail() {
@@ -69,7 +72,7 @@ export default function EntityDetail() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("core_entities")
-        .select("id,tenant_id,entity_type,subtype,display_name,status,metadata,created_at,updated_at,legacy_id,internal_code,location_json,business_type")
+        .select("id,tenant_id,entity_type,subtype,display_name,status,metadata,created_at,updated_at,legacy_id,internal_code,location_json,business_type,property_type,total_area,useful_area")
         .eq("tenant_id", activeTenantId!)
         .eq("id", entityId)
         .is("deleted_at", null)
@@ -259,6 +262,27 @@ export default function EntityDetail() {
                                  <div className="text-sm font-mono text-slate-600">{entityQ.data.legacy_id}</div>
                                </div>
                              )}
+                          </div>
+
+                          <div className="grid grid-cols-3 gap-4 pt-2 border-t border-slate-100">
+                             <div>
+                               <div className="text-[10px] text-slate-400 uppercase font-bold">Tipo</div>
+                               <div className="text-sm font-semibold text-slate-700 capitalize">
+                                 {entityQ.data.property_type || "—"}
+                               </div>
+                             </div>
+                             <div>
+                               <div className="text-[10px] text-slate-400 uppercase font-bold">Área Total</div>
+                               <div className="text-sm font-semibold text-slate-700">
+                                 {entityQ.data.total_area ? `${entityQ.data.total_area} m²` : "—"}
+                               </div>
+                             </div>
+                             <div>
+                               <div className="text-[10px] text-slate-400 uppercase font-bold">Área Útil</div>
+                               <div className="text-sm font-semibold text-slate-700">
+                                 {entityQ.data.useful_area ? `${entityQ.data.useful_area} m²` : "—"}
+                               </div>
+                             </div>
                           </div>
                         </div>
                       )}

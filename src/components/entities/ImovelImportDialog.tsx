@@ -23,6 +23,9 @@ type ParsedRow = {
   price: string;
   address: string;
   photoUrl: string;
+  propertyType: string;
+  totalArea: string;
+  usefulArea: string;
 };
 
 export function ImovelImportDialog({
@@ -74,6 +77,9 @@ export function ImovelImportDialog({
       const idxPrice = headers.findIndex(h => h.includes("preco") || h.includes("price") || h.includes("valor"));
       const idxAddress = headers.findIndex(h => h.includes("endereco") || h.includes("address") || h.includes("localizacao"));
       const idxPhoto = headers.findIndex(h => h.includes("foto") || h.includes("photo") || h.includes("imagem") || h.includes("image") || h.includes("url"));
+      const idxPropertyType = headers.findIndex(h => h.includes("tipo_imovel") || h.includes("property_type") || h.includes("categoria"));
+      const idxTotalArea = headers.findIndex(h => h.includes("area_total") || h.includes("total_area"));
+      const idxUsefulArea = headers.findIndex(h => h.includes("area_util") || h.includes("useful_area") || h.includes("area_privativa"));
 
       const out: ParsedRow[] = [];
       for (let i = 1; i < lines.length; i++) {
@@ -90,6 +96,9 @@ export function ImovelImportDialog({
           price: idxPrice >= 0 ? cols[idxPrice] || "0" : "0",
           address: idxAddress >= 0 ? cols[idxAddress] || "" : "",
           photoUrl: idxPhoto >= 0 ? cols[idxPhoto] || "" : "",
+          propertyType: idxPropertyType >= 0 ? cols[idxPropertyType] || "casa" : "casa",
+          totalArea: idxTotalArea >= 0 ? cols[idxTotalArea] || "" : "",
+          usefulArea: idxUsefulArea >= 0 ? cols[idxUsefulArea] || "" : "",
         });
       }
       return out;
@@ -142,6 +151,9 @@ export function ImovelImportDialog({
           legacy_id: row.legacyId || null,
           business_type: busType,
           location_json: { address: row.address },
+          property_type: row.propertyType.toLowerCase() || 'casa',
+          total_area: parseFloat(row.totalArea.replace(",", ".")) || null,
+          useful_area: parseFloat(row.usefulArea.replace(",", ".")) || null,
           metadata: {
             price_sale: parseFloat(row.price.replace(",", ".")) || 0,
             photo_url: finalPhotoUrl,

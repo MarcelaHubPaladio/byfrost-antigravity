@@ -32,6 +32,9 @@ type InventoryItem = {
         };
         business_type?: 'sale' | 'rent' | 'both';
     };
+    property_type?: string | null;
+    total_area?: number | null;
+    useful_area?: number | null;
     tags?: string[];
     updated_at: string;
 };
@@ -52,10 +55,12 @@ export default function Inventory() {
                     id, 
                     display_name, 
                     subtype, 
-                    status, 
-                    metadata, 
-                    updated_at,
-                    core_entity_tags(tag)
+                    status,                     metadata, 
+                     updated_at,
+                     property_type,
+                     total_area,
+                     useful_area,
+                     core_entity_tags(tag)
                 `)
                 .eq("tenant_id", activeTenantId!)
                 .eq("entity_type", "offering")
@@ -182,6 +187,13 @@ export default function Inventory() {
                                     </div>
                                     <h3 className="font-bold text-slate-900 line-clamp-1 mb-1">{item.display_name}</h3>
                                     
+                                    {item.subtype === 'imovel' && (
+                                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500">
+                                            {item.property_type && <span className="capitalize">{item.property_type}</span>}
+                                            {item.useful_area && <span>{item.useful_area} m²</span>}
+                                        </div>
+                                    )}
+
                                     {item.metadata.location_json?.address && (
                                         <div className="flex items-center gap-1 text-[11px] text-slate-500 mb-2 truncate">
                                             <MapPin className="w-3 h-3 flex-shrink-0" />
