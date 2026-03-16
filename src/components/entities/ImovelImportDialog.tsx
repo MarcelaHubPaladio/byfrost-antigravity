@@ -67,19 +67,20 @@ export function ImovelImportDialog({
       const lines = rawText.split(/\r\n|\n|\r/);
       if (lines.length < 2) return [];
       
-      const header = lines[0].toLowerCase();
-      const delimiter = header.includes(";") ? ";" : ",";
-      const headers = lines[0].split(delimiter).map(h => h.trim().replace(/^"|"$/g, ''));
+      const normalize = (s: string) => s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/ç/g, "c");
+      const headerRaw = lines[0];
+      const delimiter = headerRaw.includes(";") ? ";" : ",";
+      const headers = headerRaw.split(delimiter).map(h => normalize(h.trim().replace(/^"|"$/g, '')));
       
-      const idxName = headers.findIndex(h => h.includes("nome") || h.includes("name"));
-      const idxLegacy = headers.findIndex(h => h.includes("id") || h.includes("legado") || h.includes("legacy"));
-      const idxBusiness = headers.findIndex(h => h.includes("tipo") || h.includes("negocio") || h.includes("business"));
+      const idxName = headers.findIndex(h => h.includes("nome") || h.includes("name") || h.includes("titulo"));
+      const idxLegacy = headers.findIndex(h => h.includes("id") || h.includes("legado") || h.includes("legacy") || h.includes("codigo"));
+      const idxBusiness = headers.findIndex(h => h.includes("tipo") || h.includes("negocio") || h.includes("business") || h.includes("finalidade"));
       const idxPrice = headers.findIndex(h => h.includes("preco") || h.includes("price") || h.includes("valor"));
-      const idxAddress = headers.findIndex(h => h.includes("endereco") || h.includes("address") || h.includes("localizacao"));
+      const idxAddress = headers.findIndex(h => h.includes("endereco") || h.includes("address") || h.includes("localizacao") || h.includes("logradouro"));
       const idxPhoto = headers.findIndex(h => h.includes("foto") || h.includes("photo") || h.includes("imagem") || h.includes("image") || h.includes("url"));
-      const idxPropertyType = headers.findIndex(h => h.includes("tipo_imovel") || h.includes("property_type") || h.includes("categoria"));
-      const idxTotalArea = headers.findIndex(h => h.includes("area_total") || h.includes("total_area"));
-      const idxUsefulArea = headers.findIndex(h => h.includes("area_util") || h.includes("useful_area") || h.includes("area_privativa"));
+      const idxPropertyType = headers.findIndex(h => h.includes("tipo_imovel") || h.includes("property_type") || h.includes("categoria") || h.includes("tipo do imovel"));
+      const idxTotalArea = headers.findIndex(h => h.includes("area_total") || h.includes("total_area") || h.includes("area total"));
+      const idxUsefulArea = headers.findIndex(h => h.includes("area_util") || h.includes("useful_area") || h.includes("area privativa") || h.includes("area util"));
 
       const out: ParsedRow[] = [];
       for (let i = 1; i < lines.length; i++) {
@@ -142,25 +143,46 @@ export function ImovelImportDialog({
            }
         }
 
-        const { data: entityData, error: entityErr } = await supabase.from("core_entities").insert({
-          tenant_id: tenantId,
-          entity_type: "offering",
-          subtype: "imovel",
-          display_name: row.name || "Sem nome",
-          status: "active",
-          legacy_id: row.legacyId || null,
-          business_type: busType,
-          location_json: { address: row.address },
-          property_type: row.propertyType.toLowerCase() || 'casa',
-          total_area: parseFloat(row.totalArea.replace(",", ".")) || null,
-          useful_area: parseFloat(row.usefulArea.replace(",", ".")) || null,
-          metadata: {
-            price_sale: parseFloat(row.price.replace(",", ".")) || 0,
-            photo_url: finalPhotoUrl,
-            imported: true,
-            import_date: new Date().toISOString()
+          const rawPrice = row.price.toLowerCase();
+          const isConsult = rawPrice.includes("consultar") || rawPrice.includes("consulta");
+          
+          let numericPrice = 0;
+          if (!isConsult) {
+            let clean = row.price.replace(/[R$\s]/g, "");
+            if (clean.includes(",") && clean.includes(".")) {
+              clean = clean.replace(/\./g, "").replace(",", ".");
+            } else if (clean.includes(",")) {
+              clean = clean.replace(",", ".");
+            } else if (clean.includes(".")) {
+              const parts = clean.split(".");
+              if (parts.length > 2 || parts[parts.length - 1].length === 3) {
+                clean = clean.replace(/\./g, "");
+              }
+            }
+            numericPrice = parseFloat(clean) || 0;
           }
-        }).select("id").single();
+
+          const { data: entityData, error: entityErr } = await supabase.from("core_entities").insert({
+            tenant_id: tenantId,
+            entity_type: "offering",
+            subtype: "imovel",
+            display_name: row.name || "Sem nome",
+            status: "active",
+            legacy_id: row.legacyId || null,
+            business_type: busType,
+            location_json: { address: row.address },
+            property_type: row.propertyType.toLowerCase() || 'casa',
+            total_area: parseFloat(row.totalArea.replace(",", ".")) || null,
+            useful_area: parseFloat(row.usefulArea.replace(",", ".")) || null,
+            metadata: {
+              price_sale: (busType === 'sale' || busType === 'both') ? numericPrice : 0,
+              price_rent: (busType === 'rent') ? numericPrice : 0,
+              price_consult: isConsult,
+              photo_url: finalPhotoUrl,
+              imported: true,
+              import_date: new Date().toISOString()
+            }
+          }).select("id").single();
 
         if (entityErr) throw entityErr;
 

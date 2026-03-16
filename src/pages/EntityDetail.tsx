@@ -251,17 +251,23 @@ export default function EntityDetail() {
 
                           <div className="grid grid-cols-2 gap-4 pt-2">
                              <div>
-                               <div className="text-[10px] text-slate-400 uppercase font-bold">Tipo</div>
+                               <div className="text-[10px] text-slate-400 uppercase font-bold">Tipo Negócio</div>
                                <div className="text-sm font-semibold text-slate-700 capitalize">
                                  {entityQ.data.business_type === 'sale' ? 'Venda' : entityQ.data.business_type === 'rent' ? 'Aluguel' : 'Venda/Aluguel'}
                                </div>
                              </div>
-                             {entityQ.data.legacy_id && (
-                               <div>
-                                 <div className="text-[10px] text-slate-400 uppercase font-bold">ID Antigo</div>
-                                 <div className="text-sm font-mono text-slate-600">{entityQ.data.legacy_id}</div>
+                             <div>
+                               <div className="text-[10px] text-slate-400 uppercase font-bold">Preço</div>
+                               <div className="text-sm font-bold text-indigo-600">
+                                 {entityQ.data.metadata?.price_consult ? (
+                                   <span className="italic text-indigo-500">Sob Consulta</span>
+                                 ) : entityQ.data.metadata?.price_sale ? (
+                                   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(entityQ.data.metadata.price_sale)
+                                 ) : (
+                                   "—"
+                                 )}
                                </div>
-                             )}
+                             </div>
                           </div>
 
                           <div className="grid grid-cols-3 gap-4 pt-2 border-t border-slate-100">

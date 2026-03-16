@@ -24,6 +24,8 @@ type InventoryItem = {
         internal_code?: string;
         stock_quantity?: number;
         price_sale?: number;
+        price_rent?: number;
+        price_consult?: boolean;
         price_cost?: number;
         location_json?: {
            address?: string;
@@ -203,9 +205,18 @@ export default function Inventory() {
 
                                     <div className="flex items-center justify-between mb-3">
                                         <div className="text-lg font-black text-indigo-600">
-                                            {item.metadata.price_sale
-                                                ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(item.metadata.price_sale)
-                                                : "—"}
+                                            {item.metadata.price_consult ? (
+                                                <span className="text-sm text-indigo-500 italic">Sob Consulta</span>
+                                            ) : item.metadata.price_sale ? (
+                                                new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(item.metadata.price_sale)
+                                            ) : item.metadata.price_rent ? (
+                                                <div className="flex flex-col">
+                                                    <span>{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(item.metadata.price_rent)}</span>
+                                                    <span className="text-[10px] opacity-60 font-medium -mt-1">por mês</span>
+                                                </div>
+                                            ) : (
+                                                "—"
+                                            )}
                                         </div>
                                         {item.metadata.internal_code && (
                                             <span className="text-[10px] text-slate-400 font-mono bg-slate-100 px-1.5 py-0.5 rounded">#{item.metadata.internal_code}</span>
@@ -274,9 +285,18 @@ export default function Inventory() {
                                                 </div>
                                             </td>
                                             <td className="px-6 py-3 font-bold text-indigo-600">
-                                                {item.metadata.price_sale
-                                                    ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(item.metadata.price_sale)
-                                                    : "—"}
+                                                {item.metadata.price_consult ? (
+                                                    <span className="text-xs italic text-indigo-500">Sob Consulta</span>
+                                                ) : item.metadata.price_sale ? (
+                                                    new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(item.metadata.price_sale)
+                                                ) : item.metadata.price_rent ? (
+                                                    <span className="text-xs">
+                                                        {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(item.metadata.price_rent)}
+                                                        <span className="opacity-50 text-[9px] ml-1">/mês</span>
+                                                    </span>
+                                                ) : (
+                                                    "—"
+                                                )}
                                             </td>
                                             <td className="px-6 py-3 text-right">
                                                 <Button variant="ghost" size="sm" className="text-indigo-600 font-bold" onClick={() => handleEdit(item)}>Editar</Button>

@@ -55,6 +55,8 @@ export type EntityUpsertInput = {
   property_type?: string | null;
   total_area?: number | null;
   useful_area?: number | null;
+  legacy_id?: string | null;
+  internal_code?: string | null;
 };
 
 function onlyDigits(s: string) {
@@ -184,12 +186,16 @@ export function EntityUpsertDialog({
 
   // Imóvel fields
   const [legacyId, setLegacyId] = useState<string>("");
+  const [internalCode, setInternalCode] = useState<string>("");
   const [businessType, setBusinessType] = useState<string>("both");
   const [location, setLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [address, setAddress] = useState<string>("");
   const [propertyType, setPropertyType] = useState<string>("casa");
   const [totalArea, setTotalArea] = useState<string>("");
   const [usefulArea, setUsefulArea] = useState<string>("");
+  const [priceSale, setPriceSale] = useState<string>("");
+  const [priceRent, setPriceRent] = useState<string>("");
+  const [priceConsult, setPriceConsult] = useState<boolean>(false);
   const [geocoding, setGeocoding] = useState(false);
 
   const handleGeocode = async () => {
@@ -240,7 +246,8 @@ export function EntityUpsertDialog({
     setStatus(String(initial?.status ?? "active"));
 
     // Imóvel fields
-    setLegacyId(String(initial?.metadata?.legacy_id ?? ""));
+    setLegacyId(String(initial?.legacy_id ?? initial?.metadata?.legacy_id ?? ""));
+    setInternalCode(String(initial?.internal_code ?? ""));
     setBusinessType(String(initial?.metadata?.business_type ?? "both"));
     const loc = initial?.metadata?.location_json || null;
     setLocation(loc?.lat ? { lat: loc.lat, lng: loc.lng } : null);
@@ -249,6 +256,9 @@ export function EntityUpsertDialog({
     setPropertyType(String(initial?.property_type ?? "casa"));
     setTotalArea(String(initial?.total_area ?? ""));
     setUsefulArea(String(initial?.useful_area ?? ""));
+    setPriceSale(String(initial?.metadata?.price_sale ?? ""));
+    setPriceRent(String(initial?.metadata?.price_rent ?? ""));
+    setPriceConsult(Boolean(initial?.metadata?.price_consult ?? false));
 
     // Tags fetch
     if (initial?.id) {
@@ -340,8 +350,12 @@ export function EntityUpsertDialog({
         whatsapp: requiresDocAndContacts ? whatsappDigits : baseMetadata?.whatsapp,
         email: requiresDocAndContacts ? email.trim() : baseMetadata?.email,
         legacy_id: subtype === "imovel" ? legacyId.trim() : baseMetadata?.legacy_id,
+        internal_code: subtype === "imovel" ? internalCode.trim() : baseMetadata?.internal_code,
         business_type: subtype === "imovel" ? businessType : baseMetadata?.business_type,
         location_json: subtype === "imovel" ? { ...location, address: address.trim() } : baseMetadata?.location_json,
+        price_sale: subtype === "imovel" && !priceConsult ? parseFloat(priceSale.replace(",", ".")) : baseMetadata?.price_sale,
+        price_rent: subtype === "imovel" && !priceConsult ? parseFloat(priceRent.replace(",", ".")) : baseMetadata?.price_rent,
+        price_consult: subtype === "imovel" ? priceConsult : baseMetadata?.price_consult,
         tags: tags, // keeping semantic copy in metadata if needed, but primary is table
       };
 
@@ -627,6 +641,15 @@ export function EntityUpsertDialog({
               
               <div className="grid gap-3 md:grid-cols-2">
                 <div className="grid gap-2">
+                  <Label>Código Interno</Label>
+                  <Input 
+                    value={internalCode} 
+                    onChange={e => setInternalCode(e.target.value)} 
+                    placeholder="Auto" 
+                    className="rounded-xl font-mono"
+                  />
+                </div>
+                <div className="grid gap-2">
                   <Label>ID Legado</Label>
                   <Input 
                     value={legacyId} 
@@ -634,7 +657,6 @@ export function EntityUpsertDialog({
                     placeholder="Ex: 00123" 
                     className="rounded-xl"
                   />
-                  <div className="text-[10px] text-slate-400">ID do sistema anterior</div>
                 </div>
                 <div className="grid gap-2">
                   <Label>Tipo de Negócio</Label>
@@ -687,6 +709,49 @@ export function EntityUpsertDialog({
                     inputMode="decimal"
                   />
                 </div>
+              </div>
+
+              <div className="grid gap-3 pt-2">
+                <div className="flex items-center justify-between">
+                  <Label className="text-slate-700 font-bold uppercase text-[11px] tracking-wider">Valores</Label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      id="priceConsultUpsert"
+                      checked={priceConsult}
+                      onChange={e => setPriceConsult(e.target.checked)}
+                      className="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                    />
+                    <label htmlFor="priceConsultUpsert" className="text-xs font-bold text-slate-600 cursor-pointer">Valor sob consulta</label>
+                  </div>
+                </div>
+
+                {!priceConsult ? (
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs font-bold">Venda R$</span>
+                      <Input
+                        value={priceSale}
+                        onChange={e => setPriceSale(e.target.value)}
+                        className="rounded-xl pl-16"
+                        placeholder="0,00"
+                      />
+                    </div>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs font-bold">Aluguel R$</span>
+                      <Input
+                        value={priceRent}
+                        onChange={e => setPriceRent(e.target.value)}
+                        className="rounded-xl pl-16"
+                        placeholder="0,00"
+                      />
+                    </div>
+                  </div>
+                ) : (
+                  <div className="rounded-xl h-10 bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-700 font-bold text-xs">
+                    Preço sob consulta ativo
+                  </div>
+                )}
               </div>
 
               <div className="grid gap-2">

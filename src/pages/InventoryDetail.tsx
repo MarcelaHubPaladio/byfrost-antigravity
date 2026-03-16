@@ -32,6 +32,7 @@ const formSchema = z.object({
     stock_quantity: z.coerce.number().min(0, "Estoque não pode ser negativo"),
     price_sale: z.coerce.number().min(0, "Preço não pode ser negativo"),
     price_cost: z.coerce.number().min(0, "Custo não pode ser negativo"),
+    price_consult: z.boolean().optional().default(false),
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -91,6 +92,7 @@ export default function InventoryDetail() {
             stock_quantity: 0,
             price_sale: 0,
             price_cost: 0,
+            price_consult: false,
         },
     });
 
@@ -105,6 +107,7 @@ export default function InventoryDetail() {
                 stock_quantity: itemQ.data.metadata?.stock_quantity || 0,
                 price_sale: itemQ.data.metadata?.price_sale || 0,
                 price_cost: itemQ.data.metadata?.price_cost || 0,
+                price_consult: !!itemQ.data.metadata?.price_consult,
             });
         }
     }, [itemQ.data, form]);
@@ -183,6 +186,7 @@ export default function InventoryDetail() {
                 stock_quantity: values.stock_quantity,
                 price_sale: values.price_sale,
                 price_cost: values.price_cost,
+                price_consult: values.price_consult,
             };
 
             if (isEdit) {
@@ -322,43 +326,71 @@ export default function InventoryDetail() {
                                 </Card>
 
                                 <Card className="p-6 rounded-3xl border-slate-200 bg-indigo-50/30">
-                                    <h3 className="text-sm font-bold text-slate-800 mb-4 flex items-center gap-2">
-                                        <Package className="w-4 h-4 text-indigo-600" />
-                                        Valores e Estoque
-                                    </h3>
+                                    <div className="flex items-center justify-between mb-4">
+                                        <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                                            <Package className="w-4 h-4 text-indigo-600" />
+                                            Valores e Estoque
+                                        </h3>
+                                        <FormField
+                                            control={form.control}
+                                            name="price_consult"
+                                            render={({ field }) => (
+                                                <div className="flex items-center gap-2">
+                                                    <input
+                                                        type="checkbox"
+                                                        id="inventoryConsult"
+                                                        checked={field.value}
+                                                        onChange={field.onChange}
+                                                        className="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                                                    />
+                                                    <label htmlFor="inventoryConsult" className="text-[10px] font-bold text-slate-500 uppercase cursor-pointer">Consultar</label>
+                                                </div>
+                                            )}
+                                        />
+                                    </div>
                                     <div className="space-y-4">
-                                        <FormField
-                                            control={form.control}
-                                            name="price_sale"
-                                            render={({ field }) => (
-                                                <FormItem>
-                                                    <FormLabel className="text-[10px] font-bold text-slate-400 uppercase">Preço de Venda</FormLabel>
-                                                    <FormControl>
-                                                        <div className="relative">
-                                                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm font-bold">R$</span>
-                                                            <Input type="number" step="0.01" {...field} className="pl-10 h-11 rounded-xl bg-white border-indigo-200 focus:ring-indigo-500 font-bold text-indigo-700" />
-                                                        </div>
-                                                    </FormControl>
-                                                    <FormMessage />
-                                                </FormItem>
-                                            )}
-                                        />
-                                        <FormField
-                                            control={form.control}
-                                            name="price_cost"
-                                            render={({ field }) => (
-                                                <FormItem>
-                                                    <FormLabel className="text-[10px] font-bold text-slate-400 uppercase">Preço de Custo</FormLabel>
-                                                    <FormControl>
-                                                        <div className="relative">
-                                                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm">R$</span>
-                                                            <Input type="number" step="0.01" {...field} className="pl-10 h-11 rounded-xl bg-white border-slate-200" />
-                                                        </div>
-                                                    </FormControl>
-                                                    <FormMessage />
-                                                </FormItem>
-                                            )}
-                                        />
+                                        {!form.watch("price_consult") ? (
+                                            <>
+                                                <FormField
+                                                    control={form.control}
+                                                    name="price_sale"
+                                                    render={({ field }) => (
+                                                        <FormItem>
+                                                            <FormLabel className="text-[10px] font-bold text-slate-400 uppercase">Preço de Venda</FormLabel>
+                                                            <FormControl>
+                                                                <div className="relative">
+                                                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm font-bold">R$</span>
+                                                                    <Input type="number" step="0.01" {...field} className="pl-10 h-11 rounded-xl bg-white border-indigo-200 focus:ring-indigo-500 font-bold text-indigo-700" />
+                                                                </div>
+                                                            </FormControl>
+                                                            <FormMessage />
+                                                        </FormItem>
+                                                    )}
+                                                />
+                                                <FormField
+                                                    control={form.control}
+                                                    name="price_cost"
+                                                    render={({ field }) => (
+                                                        <FormItem>
+                                                            <FormLabel className="text-[10px] font-bold text-slate-400 uppercase">Preço de Custo</FormLabel>
+                                                            <FormControl>
+                                                                <div className="relative">
+                                                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm">R$</span>
+                                                                    <Input type="number" step="0.01" {...field} className="pl-10 h-11 rounded-xl bg-white border-slate-200" />
+                                                                </div>
+                                                            </FormControl>
+                                                            <FormMessage />
+                                                        </FormItem>
+                                                    )}
+                                                />
+                                            </>
+                                        ) : (
+                                            <div className="py-8 px-4 rounded-2xl bg-indigo-50/50 border border-indigo-100 flex flex-col items-center justify-center text-center">
+                                                <Info className="w-5 h-5 text-indigo-400 mb-2" />
+                                                <p className="text-xs font-bold text-indigo-700 uppercase tracking-wider">Preço sob consulta</p>
+                                                <p className="text-[10px] text-indigo-400 mt-1">Os valores numéricos estão ocultos para os clientes</p>
+                                            </div>
+                                        )}
                                         <FormField
                                             control={form.control}
                                             name="stock_quantity"

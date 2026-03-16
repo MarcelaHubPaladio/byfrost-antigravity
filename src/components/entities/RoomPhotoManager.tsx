@@ -11,25 +11,33 @@ import { Progress } from "@/components/ui/progress";
 import { showError, showSuccess } from "@/utils/toast";
 import { Image as ImageIcon, Plus, Trash2, Star, Loader2, UploadCloud } from "lucide-react";
 import imageCompression from "browser-image-compression";
+import { RoomTypeManager } from "./RoomTypeManager";
+import { Settings2 } from "lucide-react";
 
-const ROOM_TEMPLATES = [
-  "Geral",
-  "Sala",
-  "Cozinha",
-  "Quarto 1",
-  "Quarto 2",
-  "Banheiro",
-  "Suíte",
-  "Copa",
-  "Área Gourmet",
-  "Sacada"
-];
+const DEFAULT_ROOMS = ["Geral", "Sala", "Cozinha", "Banheiro"];
 
 export function RoomPhotoManager({ tenantId, entityId }: { tenantId: string; entityId: string }) {
   const qc = useQueryClient();
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState(0);
   const [selectedRoom, setSelectedRoom] = useState<string>("Geral");
+  const [managerOpen, setManagerOpen] = useState(false);
+
+  const roomTypesQ = useQuery({
+    queryKey: ["room_types", tenantId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("core_property_room_types")
+        .select("name")
+        .eq("tenant_id", tenantId)
+        .is("deleted_at", null)
+        .order("name", { ascending: true });
+      if (error) throw error;
+      return data.map(r => r.name);
+    }
+  });
+
+  const availableRooms = roomTypesQ.data && roomTypesQ.data.length > 0 ? roomTypesQ.data : DEFAULT_ROOMS;
 
   const photosQ = useQuery({
     queryKey: ["entity_photos", tenantId, entityId],
@@ -171,13 +179,22 @@ export function RoomPhotoManager({ tenantId, entityId }: { tenantId: string; ent
                 <SelectValue placeholder="Selecione" />
               </SelectTrigger>
               <SelectContent>
-                {ROOM_TEMPLATES.map(r => (
+                {availableRooms.map(r => (
                   <SelectItem key={r} value={r}>{r}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
-          <div className="relative">
+          <div className="flex gap-2">
+            <Button 
+               variant="outline" 
+               size="icon" 
+               className="h-11 w-11 rounded-xl border-slate-200 text-slate-400 hover:text-indigo-600"
+               onClick={() => setManagerOpen(true)}
+               title="Gerenciar categorias/cômodos"
+            >
+               <Settings2 className="w-4 h-4" />
+            </Button>
             <Button disabled={uploading} className="h-11 rounded-xl gap-2 w-full md:w-auto overflow-hidden relative">
               {uploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <UploadCloud className="w-4 h-4" />}
               {uploading ? "Enviando..." : "Adicionar Foto"}
@@ -242,6 +259,12 @@ export function RoomPhotoManager({ tenantId, entityId }: { tenantId: string; ent
           </div>
         )}
       </div>
+
+      <RoomTypeManager 
+        tenantId={tenantId} 
+        open={managerOpen} 
+        onOpenChange={setManagerOpen} 
+      />
     </div>
   );
 }
