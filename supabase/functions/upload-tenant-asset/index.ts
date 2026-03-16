@@ -67,8 +67,13 @@ serve(async (req) => {
     if (req.method !== "POST") return err(`${fn}:method_not_allowed`, 405);
 
     const auth = req.headers.get("Authorization") ?? "";
-    if (!auth.startsWith("Bearer ")) return err(`${fn}:missing_auth`, 401);
-    const token = auth.slice("Bearer ".length).trim();
+    const token = auth.startsWith("Bearer ") ? auth.slice("Bearer ".length).trim() : "";
+    
+    if (!token) {
+      // We still need a token for this function's logic. 
+      // If no token is even sent, we fail here but with a clearer error.
+      return err(`${fn}:missing_bearer_token`, 401);
+    }
 
     const contentTypeHeader = (req.headers.get("Content-Type") ?? "").toLowerCase();
     let action: string = "upload";
