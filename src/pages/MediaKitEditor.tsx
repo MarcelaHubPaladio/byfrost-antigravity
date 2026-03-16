@@ -1021,14 +1021,14 @@ export default function MediaKitEditor() {
                                     <div className="space-y-2">
                                       <Label className="text-xs text-slate-500">Mapear Cômodo (Prioritário)</Label>
                                       <Select 
-                                        value={selectedLayer.variableRoomType || ""} 
-                                        onValueChange={(val) => updateLayer(selectedLayerId!.pageId, selectedLayer.id, { variableRoomType: val }, true)}
+                                        value={selectedLayer.variableRoomType || "none"} 
+                                        onValueChange={(val) => updateLayer(selectedLayerId!.pageId, selectedLayer.id, { variableRoomType: val === "none" ? "" : val }, true)}
                                       >
                                         <SelectTrigger className="rounded-xl h-10">
                                           <SelectValue placeholder="Selecione um cômodo..." />
                                         </SelectTrigger>
                                         <SelectContent className="rounded-xl">
-                                          <SelectItem value="">Nenhum (Usar Campo abaixo)</SelectItem>
+                                          <SelectItem value="none">Nenhum (Usar Campo abaixo)</SelectItem>
                                           {roomTypesQ.data?.map((room: any) => (
                                             <SelectItem key={room.id} value={room.name}>{room.name}</SelectItem>
                                           ))}
