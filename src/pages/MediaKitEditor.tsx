@@ -653,7 +653,7 @@ export default function MediaKitEditor() {
     const template = templatesQ.data?.find(t => t.id === activePage.templateId);
     if (!template) return;
 
-    const padding = 160; 
+    const padding = 64; 
     const availableWidth = el.clientWidth - padding;
     const availableHeight = el.clientHeight - padding;
 

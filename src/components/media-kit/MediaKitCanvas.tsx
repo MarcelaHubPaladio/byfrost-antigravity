@@ -263,7 +263,7 @@ export const MediaKitCanvas = forwardRef<{ exportImage: () => Promise<string> },
 
     return (
       <div 
-        className="relative overflow-visible group/canvas flex items-center justify-center bg-slate-100/50 rounded-2xl p-20"
+        className="relative group/canvas bg-white shadow-2xl overflow-visible"
         style={{
           width: width * scale,
           height: height * scale,
@@ -272,12 +272,11 @@ export const MediaKitCanvas = forwardRef<{ exportImage: () => Promise<string> },
       >
         <div
           ref={canvasRef}
-          className="relative h-full w-full"
+          className="relative origin-top-left"
           style={{
             width,
             height,
             transform: `scale(${scale})`,
-            transformOrigin: "top left",
           }}
         >
         {layers
