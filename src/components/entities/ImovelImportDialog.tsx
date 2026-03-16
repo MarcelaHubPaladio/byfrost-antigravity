@@ -192,16 +192,20 @@ export function ImovelImportDialog({
                    .from("media-kit")
                    .getPublicUrl(path);
                  finalPhotoUrl = publicUrl;
+              } else {
+                 console.warn("Erro ao subir para storage, usando fallback URL:", upErr);
+                 finalPhotoUrl = row.photoUrl;
               }
            } catch (err) {
-              console.warn("Falha ao importar foto da URL:", row.photoUrl, err);
+              console.warn("Falha ao importar foto da URL (CORS?), usando fallback:", row.photoUrl, err);
+              finalPhotoUrl = row.photoUrl;
            }
         }
 
           const isConsult = row.isConsult;
           const numericPrice = row.interpretedPrice || 0;
 
-          const { data: entityData, error: entityErr } = await supabase.from("core_entities").insert({
+          const { data: entityData, error: entityErr } = await supabase.from("core_entities").upsert({
             tenant_id: tenantId,
             entity_type: "offering",
             subtype: "imovel",
@@ -221,12 +225,20 @@ export function ImovelImportDialog({
               imported: true,
               import_date: new Date().toISOString()
             }
+          }, { 
+            onConflict: 'tenant_id, display_name' 
           }).select("id").single();
 
         if (entityErr) throw entityErr;
 
         // NEW: Also insert into core_entity_photos for room photo management
         if (finalPhotoUrl && entityData) {
+          // Set others as not main for this entity to ensure imported is primary
+          await supabase.from("core_entity_photos")
+            .update({ is_main: false })
+            .eq("entity_id", entityData.id)
+            .eq("tenant_id", tenantId);
+
           await supabase.from("core_entity_photos").insert({
             tenant_id: tenantId,
             entity_id: entityData.id,
