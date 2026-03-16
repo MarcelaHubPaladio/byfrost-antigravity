@@ -20,11 +20,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { LocationPinSelector } from "@/components/crm/LocationPinSelector";
 
 export type CoreEntityType = "party" | "offering";
 
 type PartySubtype = "cliente" | "fornecedor" | "indicador" | "banco" | "pintor";
-type OfferingSubtype = "servico" | "produto";
+type OfferingSubtype = "servico" | "produto" | "imovel";
 export type UiSubtype = PartySubtype | OfferingSubtype;
 
 export type EntityUpsertInput = {
@@ -49,7 +50,7 @@ function isValidEmail(s: string) {
 }
 
 function subtypeToEntityType(subtype: UiSubtype): CoreEntityType {
-  return subtype === "servico" || subtype === "produto" ? "offering" : "party";
+  return subtype === "servico" || subtype === "produto" || subtype === "imovel" ? "offering" : "party";
 }
 
 function formatCpfCnpj(digitsRaw: string) {
@@ -162,6 +163,12 @@ export function EntityUpsertDialog({
   const [email, setEmail] = useState<string>("");
   const [status, setStatus] = useState<string>("active");
 
+  // Imóvel fields
+  const [legacyId, setLegacyId] = useState<string>("");
+  const [businessType, setBusinessType] = useState<string>("both");
+  const [location, setLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [address, setAddress] = useState<string>("");
+
   useEffect(() => {
     if (!open) return;
 
@@ -183,6 +190,13 @@ export function EntityUpsertDialog({
     setWhatsappDigitsState(normalizeWhatsappDigits(String(md?.whatsapp ?? md?.phone ?? md?.phone_e164 ?? "")));
     setEmail(String(md?.email ?? ""));
     setStatus(String(initial?.status ?? "active"));
+
+    // Imóvel fields
+    setLegacyId(String(initial?.metadata?.legacy_id ?? ""));
+    setBusinessType(String(initial?.metadata?.business_type ?? "both"));
+    const loc = initial?.metadata?.location_json || null;
+    setLocation(loc?.lat ? { lat: loc.lat, lng: loc.lng } : null);
+    setAddress(String(loc?.address ?? ""));
   }, [open, initial?.id]);
 
   const entityType: CoreEntityType = useMemo(() => {
@@ -251,18 +265,28 @@ export function EntityUpsertDialog({
         cpf_cnpj: requiresDocAndContacts ? docDigits : baseMetadata?.cpf_cnpj,
         whatsapp: requiresDocAndContacts ? whatsappDigits : baseMetadata?.whatsapp,
         email: requiresDocAndContacts ? email.trim() : baseMetadata?.email,
+        legacy_id: subtype === "imovel" ? legacyId.trim() : baseMetadata?.legacy_id,
+        business_type: subtype === "imovel" ? businessType : baseMetadata?.business_type,
+        location_json: subtype === "imovel" ? { ...location, address: address.trim() } : baseMetadata?.location_json,
       };
+
+      const entityData = {
+        subtype: subtype,
+        display_name: displayName.trim(),
+        status: status,
+        metadata: nextMetadata,
+      } as any;
+
+      if (subtype === "imovel") {
+        entityData.legacy_id = legacyId.trim() || null;
+        entityData.business_type = businessType;
+        entityData.location_json = location ? { ...location, address: address.trim() } : null;
+      }
 
       if (isEdit) {
         const { error } = await supabase
           .from("core_entities")
-          .update({
-            // NOTE: avoid changing entity_type in edit (can break downstream constraints).
-            subtype: subtype,
-            display_name: displayName.trim(),
-            status: status,
-            metadata: nextMetadata,
-          })
+          .update(entityData)
           .eq("tenant_id", tenantId)
           .eq("id", String(initial?.id))
           .is("deleted_at", null);
@@ -279,10 +303,7 @@ export function EntityUpsertDialog({
           .insert({
             tenant_id: tenantId,
             entity_type: entityType,
-            subtype: subtype,
-            display_name: displayName.trim(),
-            status: status,
-            metadata: nextMetadata,
+            ...entityData
           })
           .select("id")
           .single();
@@ -309,6 +330,7 @@ export function EntityUpsertDialog({
     { value: "banco", label: "Banco", type: "party" },
     { value: "servico", label: "Serviço", type: "offering" },
     { value: "produto", label: "Produto", type: "offering" },
+    { value: "imovel", label: "Imóvel", type: "offering" },
   ];
 
   const visibleSubtypes = lockedEntityType
@@ -437,6 +459,58 @@ export function EntityUpsertDialog({
             </Select>
             <div className="text-[11px] text-slate-500">Entidades inativas não aparecem na TV Corporativa nem em novos compromissos.</div>
           </div>
+
+          {subtype === "imovel" && (
+            <div className="grid gap-4 rounded-2xl border border-slate-200 p-4 bg-slate-50/50">
+              <div className="text-xs font-bold text-slate-400 uppercase tracking-wider">Dados do Imóvel</div>
+              
+              <div className="grid gap-3 md:grid-cols-2">
+                <div className="grid gap-2">
+                  <Label>ID Legado</Label>
+                  <Input 
+                    value={legacyId} 
+                    onChange={e => setLegacyId(e.target.value)} 
+                    placeholder="Ex: 00123" 
+                    className="rounded-xl"
+                  />
+                  <div className="text-[10px] text-slate-400">ID do sistema anterior</div>
+                </div>
+
+                <div className="grid gap-2">
+                  <Label>Tipo de Negócio</Label>
+                  <Select value={businessType} onValueChange={setBusinessType}>
+                    <SelectTrigger className="rounded-xl">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="sale">Venda</SelectItem>
+                      <SelectItem value="rent">Aluguel</SelectItem>
+                      <SelectItem value="both">Venda e Aluguel</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="grid gap-2">
+                <Label>Endereço Completo</Label>
+                <Input 
+                  value={address} 
+                  onChange={e => setAddress(e.target.value)} 
+                  placeholder="Rua, Número, Bairro, Cidade - UF" 
+                  className="rounded-xl"
+                />
+              </div>
+
+              <div className="grid gap-2">
+                <Label>Localização no Mapa</Label>
+                <LocationPinSelector 
+                  value={location} 
+                  onChange={setLocation} 
+                  className="w-full"
+                />
+              </div>
+            </div>
+          )}
 
           <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
             O nome é o único campo obrigatório. Dados de contato e documento são opcionais, mas recomendados para CRM.

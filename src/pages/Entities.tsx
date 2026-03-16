@@ -21,7 +21,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { EntityImportDialog } from "@/components/core/EntityImportDialog";
-import { Upload } from "lucide-react";
+import { ImovelImportDialog } from "@/components/entities/ImovelImportDialog";
+import { Upload, Home } from "lucide-react";
 
 type EntityRow = {
   id: string;
@@ -42,6 +43,7 @@ export default function Entities() {
   const [typeFilter, setTypeFilter] = useState<EntityTypeFilter>("all");
   const [createOpen, setCreateOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
+  const [imovelImportOpen, setImovelImportOpen] = useState(false);
 
   const listQ = useQuery({
     queryKey: ["entities", activeTenantId, q, typeFilter],
@@ -107,7 +109,11 @@ export default function Entities() {
                 <div className="flex items-center gap-2">
                   <Button variant="secondary" className="rounded-xl" onClick={() => setImportOpen(true)} disabled={!activeTenantId}>
                     <Upload className="mr-2 h-4 w-4" />
-                    Importar CSV
+                    CSV Geral
+                  </Button>
+                  <Button variant="outline" className="rounded-xl border-indigo-200 text-indigo-700 hover:bg-indigo-50" onClick={() => setImovelImportOpen(true)} disabled={!activeTenantId}>
+                    <Home className="mr-2 h-4 w-4" />
+                    Importar Imóveis
                   </Button>
                   <Button className="rounded-xl" onClick={() => setCreateOpen(true)} disabled={!activeTenantId}>
                     <Plus className="mr-2 h-4 w-4" />
@@ -162,6 +168,14 @@ export default function Entities() {
               <EntityImportDialog
                 open={importOpen}
                 onOpenChange={setImportOpen}
+                tenantId={activeTenantId}
+              />
+            ) : null}
+
+            {activeTenantId ? (
+              <ImovelImportDialog
+                open={imovelImportOpen}
+                onOpenChange={setImovelImportOpen}
                 tenantId={activeTenantId}
               />
             ) : null}

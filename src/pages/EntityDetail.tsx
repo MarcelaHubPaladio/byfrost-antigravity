@@ -23,6 +23,14 @@ import { EntityTvCorporativaTab } from "@/components/entities/EntityTvCorporativ
 import { EntitySalesOrdersTab } from "@/components/entities/EntitySalesOrdersTab";
 import { EntityReceiptsTab } from "@/components/entities/EntityReceiptsTab";
 import { EntityMediaKitTab } from "@/components/entities/EntityMediaKitTab";
+import { RoomPhotoManager } from "@/components/entities/RoomPhotoManager";
+import { MapContainer, TileLayer, Marker } from "react-leaflet";
+import { divIcon } from "leaflet";
+
+// react-leaflet v5 typings workaround
+const RLMapContainer = MapContainer as any;
+const RLTileLayer = TileLayer as any;
+const RLMarker = Marker as any;
 
 type EntityRow = {
   id: string;
@@ -34,6 +42,10 @@ type EntityRow = {
   metadata: any;
   created_at: string;
   updated_at: string;
+  legacy_id?: string;
+  internal_code?: string;
+  location_json?: any;
+  business_type?: string;
 };
 
 export default function EntityDetail() {
@@ -56,7 +68,7 @@ export default function EntityDetail() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("core_entities")
-        .select("id,tenant_id,entity_type,subtype,display_name,status,metadata,created_at,updated_at")
+        .select("id,tenant_id,entity_type,subtype,display_name,status,metadata,created_at,updated_at,legacy_id,internal_code,location_json,business_type")
         .eq("tenant_id", activeTenantId!)
         .eq("id", entityId)
         .is("deleted_at", null)
@@ -127,6 +139,9 @@ export default function EntityDetail() {
                   <Badge variant="secondary">{entityQ.data?.entity_type ?? "—"}</Badge>
                   {entityQ.data?.subtype ? <Badge variant="outline">{entityQ.data.subtype}</Badge> : null}
                   {entityQ.data?.status ? <Badge variant="outline">{entityQ.data.status}</Badge> : null}
+                  {entityQ.data?.internal_code && (
+                    <Badge variant="secondary" className="bg-indigo-50 text-indigo-700 font-mono">#{entityQ.data.internal_code}</Badge>
+                  )}
                   <span className="text-xs text-slate-500">id: {entityId}</span>
                 </div>
               </div>
@@ -172,6 +187,7 @@ export default function EntityDetail() {
                   {entityQ.data?.entity_type === "party" ? <TabsTrigger value="orders">Pedidos</TabsTrigger> : null}
                   {tvCorporativaEnabled ? <TabsTrigger value="tv_corporativa">TV Corporativa</TabsTrigger> : null}
                   {mediaKitEnabled ? <TabsTrigger value="media_kit">Mídia Kit</TabsTrigger> : null}
+                  {entityQ.data?.subtype === "imovel" ? <TabsTrigger value="photos">Fotos</TabsTrigger> : null}
                   {entityQ.data?.entity_type === "party" ? <TabsTrigger value="receipts">Recibos</TabsTrigger> : null}
                   <TabsTrigger value="finance">Financeiro</TabsTrigger>
                   <TabsTrigger value="timeline">Linha do tempo</TabsTrigger>
@@ -196,6 +212,49 @@ export default function EntityDetail() {
                       <div className="mt-2 text-sm text-slate-700">
                         Compromissos como cliente: <span className="font-semibold">{commitmentCountQ.data ?? 0}</span>
                       </div>
+                      
+                      {entityQ.data?.subtype === "imovel" && (
+                        <div className="mt-4 pt-4 border-t space-y-3">
+                          <div className="text-xs font-bold text-slate-400 uppercase">Localização</div>
+                          {entityQ.data.location_json?.lat ? (
+                            <div className="space-y-2">
+                              <div className="text-sm text-slate-700 font-medium">{entityQ.data.location_json.address || "Endereço não informado"}</div>
+                              <div className="h-40 rounded-xl overflow-hidden border border-slate-200">
+                                <RLMapContainer 
+                                  center={[entityQ.data.location_json.lat, entityQ.data.location_json.lng]} 
+                                  zoom={15} 
+                                  scrollWheelZoom={false}
+                                  dragging={false}
+                                  zoomControl={false}
+                                  className="h-full w-full"
+                                  attributionControl={false}
+                                >
+                                  <RLTileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+                                  <RLMarker position={[entityQ.data.location_json.lat, entityQ.data.location_json.lng]} />
+                                </RLMapContainer>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="text-sm text-slate-400 italic">Nenhuma localização salva.</div>
+                          )}
+
+                          <div className="grid grid-cols-2 gap-4 pt-2">
+                             <div>
+                               <div className="text-[10px] text-slate-400 uppercase font-bold">Tipo</div>
+                               <div className="text-sm font-semibold text-slate-700 capitalize">
+                                 {entityQ.data.business_type === 'sale' ? 'Venda' : entityQ.data.business_type === 'rent' ? 'Aluguel' : 'Venda/Aluguel'}
+                               </div>
+                             </div>
+                             {entityQ.data.legacy_id && (
+                               <div>
+                                 <div className="text-[10px] text-slate-400 uppercase font-bold">ID Antigo</div>
+                                 <div className="text-sm font-mono text-slate-600">{entityQ.data.legacy_id}</div>
+                               </div>
+                             )}
+                          </div>
+                        </div>
+                      )}
+
                       <div className="mt-4 text-xs text-slate-600">
                         Esta tela é propositalmente simples. A governança e trilhas ficam na timeline.
                       </div>
@@ -251,6 +310,14 @@ export default function EntityDetail() {
                   <TabsContent value="media_kit">
                     {activeTenantId && entityQ.data ? (
                       <EntityMediaKitTab tenantId={activeTenantId} entityId={entityId} />
+                    ) : null}
+                  </TabsContent>
+                ) : null}
+
+                {entityQ.data?.subtype === "imovel" ? (
+                  <TabsContent value="photos">
+                    {activeTenantId && entityQ.data ? (
+                      <RoomPhotoManager tenantId={activeTenantId} entityId={entityId} />
                     ) : null}
                   </TabsContent>
                 ) : null}

@@ -1,0 +1,218 @@
+import { useMemo, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { supabase } from "@/lib/supabase";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Progress } from "@/components/ui/progress";
+import { showError, showSuccess } from "@/utils/toast";
+import { FileUp, UploadCloud, CheckCircle2, Loader2 } from "lucide-react";
+
+type ParsedRow = {
+  rowNo: number;
+  name: string;
+  subtype: string;
+  legacyId: string;
+  businessType: string;
+  price: string;
+  address: string;
+};
+
+export function ImovelImportDialog({
+  tenantId,
+  open,
+  onOpenChange,
+}: {
+  tenantId: string;
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+}) {
+  const qc = useQueryClient();
+  const [fileName, setFileName] = useState("");
+  const [rawText, setRawText] = useState("");
+  const [importing, setImporting] = useState(false);
+  const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
+
+  const reset = () => {
+    setFileName("");
+    setRawText("");
+    setImporting(false);
+    setProgress(null);
+  };
+
+  const onFile = async (f: File | null) => {
+    if (!f) return;
+    setFileName(f.name);
+    try {
+      const text = await f.text();
+      setRawText(text);
+    } catch (e: any) {
+      showError("Erro ao ler arquivo");
+    }
+  };
+
+  const parsedRows = useMemo(() => {
+    if (!rawText.trim()) return [];
+    try {
+      const lines = rawText.split(/\r\n|\n|\r/);
+      if (lines.length < 2) return [];
+      
+      const header = lines[0].toLowerCase();
+      const delimiter = header.includes(";") ? ";" : ",";
+      const headers = lines[0].split(delimiter).map(h => h.trim().replace(/^"|"$/g, ''));
+      
+      const idxName = headers.findIndex(h => h.includes("nome") || h.includes("name"));
+      const idxLegacy = headers.findIndex(h => h.includes("id") || h.includes("legado") || h.includes("legacy"));
+      const idxBusiness = headers.findIndex(h => h.includes("tipo") || h.includes("negocio") || h.includes("business"));
+      const idxPrice = headers.findIndex(h => h.includes("preco") || h.includes("price") || h.includes("valor"));
+      const idxAddress = headers.findIndex(h => h.includes("endereco") || h.includes("address") || h.includes("localizacao"));
+
+      const out: ParsedRow[] = [];
+      for (let i = 1; i < lines.length; i++) {
+        const line = lines[i].trim();
+        if (!line) continue;
+        const cols = line.split(delimiter).map(c => c.trim().replace(/^"|"$/g, ''));
+        
+        out.push({
+          rowNo: i + 1,
+          name: idxName >= 0 ? cols[idxName] || "" : "",
+          subtype: "imovel",
+          legacyId: idxLegacy >= 0 ? cols[idxLegacy] || "" : "",
+          businessType: idxBusiness >= 0 ? cols[idxBusiness]?.toLowerCase() || "sale" : "sale",
+          price: idxPrice >= 0 ? cols[idxPrice] || "0" : "0",
+          address: idxAddress >= 0 ? cols[idxAddress] || "" : "",
+        });
+      }
+      return out;
+    } catch (e) {
+      return [];
+    }
+  }, [rawText]);
+
+  const startImport = async () => {
+    if (!parsedRows.length) return;
+    setImporting(true);
+    setProgress({ done: 0, total: parsedRows.length });
+
+    let done = 0;
+    for (const row of parsedRows) {
+      try {
+        const busType = row.businessType.includes("aluguel") || row.businessType.includes("rent") 
+          ? (row.businessType.includes("venda") || row.businessType.includes("sale") ? "both" : "rent")
+          : "sale";
+
+        const { error } = await supabase.from("core_entities").insert({
+          tenant_id: tenantId,
+          entity_type: "offering",
+          subtype: "imovel",
+          display_name: row.name || "Sem nome",
+          status: "active",
+          legacy_id: row.legacyId || null,
+          business_type: busType,
+          location_json: { address: row.address },
+          metadata: {
+            price_sale: parseFloat(row.price.replace(",", ".")) || 0,
+            imported: true,
+            import_date: new Date().toISOString()
+          }
+        });
+        if (error) throw error;
+      } catch (e) {
+        console.error("Erro na linha", row.rowNo, e);
+      }
+      done++;
+      setProgress({ done, total: parsedRows.length });
+    }
+
+    showSuccess(`${done} imóveis importados!`);
+    qc.invalidateQueries({ queryKey: ["entities"] });
+    onOpenChange(false);
+    reset();
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-xl">
+        <DialogHeader>
+          <DialogTitle>Importar Imóveis</DialogTitle>
+          <DialogDescription>
+            Selecione uma planilha CSV para importar ofertas do subtipo Imóvel.
+            A primeira linha deve conter os cabeçalhos: Nome, Código/Legacy ID, Tipo de Negócio, Preço, Endereço.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="grid gap-6 py-4">
+          {!fileName ? (
+            <div className="group relative h-40 rounded-3xl border-2 border-dashed border-slate-200 bg-slate-50/50 hover:border-indigo-300 hover:bg-slate-50 transition-all flex flex-col items-center justify-center p-6 text-center">
+              <UploadCloud className="w-10 h-10 text-slate-300 group-hover:text-indigo-400 transition-colors mb-2" />
+              <p className="text-sm font-bold text-slate-600">Arraste ou clique para selecionar CSV</p>
+              <p className="text-xs text-slate-400 mt-1">Colunas sugeridas: Nome, ID Legado, Tipo, Preço, Endereço</p>
+              <input
+                type="file"
+                accept=".csv"
+                className="absolute inset-0 opacity-0 cursor-pointer"
+                onChange={e => onFile(e.target.files?.[0] || null)}
+              />
+            </div>
+          ) : (
+            <div className="flex items-center justify-between p-4 rounded-2xl border border-indigo-100 bg-indigo-50/30">
+              <div className="flex items-center gap-3">
+                <div className="bg-indigo-600 text-white p-2 rounded-xl">
+                  <FileUp className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="text-sm font-bold text-slate-800">{fileName}</div>
+                  <div className="text-[10px] text-slate-500 uppercase tracking-wider font-bold">
+                    {parsedRows.length} linhas detectadas
+                  </div>
+                </div>
+              </div>
+              <Button variant="ghost" size="sm" onClick={() => reset()} className="text-red-600 hover:text-red-700 hover:bg-red-50 rounded-xl">
+                Remover
+              </Button>
+            </div>
+          )}
+
+          {importing && (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between text-xs font-bold text-slate-600">
+                <span>Processando...</span>
+                <span>{progress?.done} / {progress?.total}</span>
+              </div>
+              <Progress value={progress ? (progress.done / progress.total) * 100 : 0} className="h-2" />
+            </div>
+          )}
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)} className="rounded-xl">
+            Cancelar
+          </Button>
+          <Button 
+            onClick={startImport} 
+            disabled={!parsedRows.length || importing} 
+            className="rounded-xl bg-indigo-600 hover:bg-indigo-700 min-w-[120px]"
+          >
+            {importing ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Importando
+              </>
+            ) : (
+              <>
+                <CheckCircle2 className="mr-2 h-4 w-4" />
+                Confirmar
+              </>
+            )}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
