@@ -127,6 +127,27 @@ export function EntityEditTab({
   const [tags, setTags] = useState<string[]>([]);
   const [tagPickerOpen, setTagPickerOpen] = useState(false);
   const [tagInput, setTagInput] = useState("");
+  const [geocoding, setGeocoding] = useState(false);
+
+  const handleGeocode = async () => {
+    if (!address.trim()) return;
+    setGeocoding(true);
+    try {
+      const resp = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}&limit=1`);
+      const data = await resp.json();
+      if (data && data.length > 0) {
+        const { lat, lon } = data[0];
+        setLocation({ lat: parseFloat(lat), lng: parseFloat(lon) });
+        showSuccess("Localização encontrada!");
+      } else {
+        showError("Endereço não encontrado no mapa.");
+      }
+    } catch (e) {
+      showError("Erro ao buscar coordenadas.");
+    } finally {
+      setGeocoding(false);
+    }
+  };
 
   useEffect(() => {
     supabase.from("core_entity_tags").select("tag").eq("entity_id", entity.id).eq("tenant_id", tenantId)
@@ -444,12 +465,26 @@ export function EntityEditTab({
 
               <div className="grid gap-3">
                 <Label className="text-slate-700 font-bold uppercase text-[11px] tracking-wider">Endereço Completo</Label>
-                <Input 
-                  value={address} 
-                  onChange={e => setAddress(e.target.value)} 
-                  placeholder="Rua, Número, Bairro, Cidade - UF" 
-                  className="rounded-2xl h-14 border-slate-200 shadow-sm"
-                />
+                <div className="relative">
+                  <Input 
+                    value={address} 
+                    onChange={e => setAddress(e.target.value)} 
+                    onKeyDown={e => e.key === 'Enter' && handleGeocode()}
+                    placeholder="Rua, Número, Bairro, Cidade - UF" 
+                    className="rounded-2xl h-14 border-slate-200 shadow-sm pr-12"
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    onClick={handleGeocode}
+                    disabled={geocoding || !address.trim()}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 h-10 w-10 text-slate-400 hover:text-indigo-600 rounded-xl"
+                  >
+                    {geocoding ? <Loader2 className="h-5 w-5 animate-spin" /> : <Search className="h-5 w-5" />}
+                  </Button>
+                </div>
+                <p className="text-[10px] text-slate-400 px-1 italic">Pressione Enter ou clique na lupa para atualizar o pin no mapa.</p>
               </div>
             </div>
 

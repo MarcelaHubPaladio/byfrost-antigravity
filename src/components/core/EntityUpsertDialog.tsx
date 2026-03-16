@@ -34,7 +34,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Tag, X, Plus as PlusIcon, Check } from "lucide-react";
+import { Search, Loader2, Check, ChevronsUpDown, MapPin, LocateFixed, Trash2, Tag, X, Plus as PlusIcon, Building2, Smartphone, Mail, Globe } from "lucide-react";
 import { LocationPinSelector } from "@/components/crm/LocationPinSelector";
 import { cn } from "@/lib/utils";
 
@@ -190,6 +190,27 @@ export function EntityUpsertDialog({
   const [propertyType, setPropertyType] = useState<string>("casa");
   const [totalArea, setTotalArea] = useState<string>("");
   const [usefulArea, setUsefulArea] = useState<string>("");
+  const [geocoding, setGeocoding] = useState(false);
+
+  const handleGeocode = async () => {
+    if (!address.trim()) return;
+    setGeocoding(true);
+    try {
+      const resp = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}&limit=1`);
+      const data = await resp.json();
+      if (data && data.length > 0) {
+        const { lat, lon } = data[0];
+        setLocation({ lat: parseFloat(lat), lng: parseFloat(lon) });
+        showSuccess("Localização encontrada!");
+      } else {
+        showError("Endereço não encontrado no mapa.");
+      }
+    } catch (e) {
+      showError("Erro ao buscar coordenadas.");
+    } finally {
+      setGeocoding(false);
+    }
+  };
 
   // Tags
   const [tags, setTags] = useState<string[]>([]);
@@ -670,12 +691,25 @@ export function EntityUpsertDialog({
 
               <div className="grid gap-2">
                 <Label>Endereço Completo</Label>
-                <Input 
-                  value={address} 
-                  onChange={e => setAddress(e.target.value)} 
-                  placeholder="Rua, Número, Bairro, Cidade - UF" 
-                  className="rounded-xl"
-                />
+                <div className="relative">
+                  <Input 
+                    value={address} 
+                    onChange={e => setAddress(e.target.value)} 
+                    onKeyDown={e => e.key === 'Enter' && handleGeocode()}
+                    placeholder="Rua, Número, Bairro, Cidade - UF" 
+                    className="rounded-xl pr-10"
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleGeocode}
+                    disabled={geocoding || !address.trim()}
+                    className="absolute right-1 top-1/2 -translate-y-1/2 h-8 w-8 text-slate-400 hover:text-indigo-600 rounded-lg"
+                  >
+                    {geocoding ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+                  </Button>
+                </div>
               </div>
 
               <div className="grid gap-2">
