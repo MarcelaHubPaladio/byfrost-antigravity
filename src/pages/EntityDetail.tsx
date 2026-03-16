@@ -24,6 +24,7 @@ import { EntitySalesOrdersTab } from "@/components/entities/EntitySalesOrdersTab
 import { EntityReceiptsTab } from "@/components/entities/EntityReceiptsTab";
 import { EntityMediaKitTab } from "@/components/entities/EntityMediaKitTab";
 import { RoomPhotoManager } from "@/components/entities/RoomPhotoManager";
+import { EntityEditTab } from "@/components/entities/EntityEditTab";
 import { MapContainer, TileLayer, Marker } from "react-leaflet";
 import { divIcon } from "leaflet";
 
@@ -55,7 +56,7 @@ export default function EntityDetail() {
   const entityId = String(id ?? "");
   const { activeTenantId, activeTenant } = useTenant();
 
-  const [editOpen, setEditOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState("overview");
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
@@ -158,7 +159,7 @@ export default function EntityDetail() {
                 <Button
                   variant="outline"
                   className="rounded-xl"
-                  onClick={() => setEditOpen(true)}
+                  onClick={() => setActiveTab("edit")}
                   disabled={entityQ.isLoading || entityQ.isError}
                 >
                   <Pencil className="mr-2 h-4 w-4" />
@@ -185,9 +186,10 @@ export default function EntityDetail() {
             {entityQ.isError ? (
               <Card className="rounded-2xl border-slate-200 p-4 text-sm text-slate-700">Entidade não encontrada.</Card>
             ) : (
-              <Tabs defaultValue="overview" className="w-full">
+              <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
                 <TabsList>
                   <TabsTrigger value="overview">Visão geral</TabsTrigger>
+                  <TabsTrigger value="edit">Editar</TabsTrigger>
                   {entityQ.data?.entity_type === "party" ? <TabsTrigger value="customer">Cliente</TabsTrigger> : null}
                   {entityQ.data?.entity_type === "party" ? <TabsTrigger value="proposal">Proposta</TabsTrigger> : null}
                   {entityQ.data?.entity_type === "party" ? <TabsTrigger value="orders">Pedidos</TabsTrigger> : null}
@@ -268,6 +270,16 @@ export default function EntityDetail() {
                   </div>
                 </TabsContent>
 
+                <TabsContent value="edit">
+                  {activeTenantId && entityQ.data ? (
+                    <EntityEditTab 
+                       tenantId={activeTenantId} 
+                       entity={entityQ.data} 
+                       onSaved={() => setActiveTab("overview")}
+                    />
+                  ) : null}
+                </TabsContent>
+
                 {entityQ.data?.entity_type === "party" ? (
                   <TabsContent value="customer">
                     {activeTenantId && entityQ.data ? (
@@ -346,17 +358,6 @@ export default function EntityDetail() {
               </Tabs>
             )}
 
-            {activeTenantId && entityQ.data ? (
-              <EntityUpsertDialog
-                open={editOpen}
-                onOpenChange={setEditOpen}
-                tenantId={activeTenantId}
-                initial={entityQ.data}
-                onSaved={() => {
-                  qc.invalidateQueries({ queryKey: ["entity", activeTenantId, entityId] });
-                }}
-              />
-            ) : null}
 
             <ConfirmDeleteDialog
               open={deleteOpen}
