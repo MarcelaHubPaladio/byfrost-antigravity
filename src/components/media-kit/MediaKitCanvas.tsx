@@ -24,8 +24,9 @@ type MediaKitCanvasProps = {
   layers: Layer[];
   width: number;
   height: number;
-  selectedLayerId: string | null;
-  onSelectLayer: (id: string) => void;
+  selectedLayerIds: string[] | null;
+  onSelectLayer: (id: string, isShift?: boolean) => void;
+  onSelectLayers: (ids: string[]) => void;
   onUpdateLayer: (id: string, delta: Partial<Layer>, pushHistory?: boolean) => void;
   scale: number;
   entityData?: any;
@@ -33,8 +34,9 @@ type MediaKitCanvasProps = {
 };
 
 export const MediaKitCanvas = forwardRef<{ exportImage: () => Promise<string> }, MediaKitCanvasProps>(
-  ({ layers, width, height, selectedLayerId, onSelectLayer, onUpdateLayer, scale, entityData, entityPhotos }, ref) => {
+  ({ layers, width, height, selectedLayerIds, onSelectLayer, onSelectLayers, onUpdateLayer, scale, entityData, entityPhotos }, ref) => {
     const canvasRef = useRef<HTMLDivElement>(null);
+    const [selectionBox, setSelectionBox] = React.useState<{ x: number; y: number; width: number; height: number } | null>(null);
 
     useImperativeHandle(ref, () => ({
       exportImage: async () => {
@@ -171,7 +173,7 @@ export const MediaKitCanvas = forwardRef<{ exportImage: () => Promise<string> },
 
     const handleMouseDown = (e: React.MouseEvent, layer: Layer) => {
       e.stopPropagation();
-      onSelectLayer(layer.id);
+      onSelectLayer(layer.id, e.shiftKey);
 
       const startX = e.clientX;
       const startY = e.clientY;
@@ -203,18 +205,70 @@ export const MediaKitCanvas = forwardRef<{ exportImage: () => Promise<string> },
       document.addEventListener("mouseup", onMouseUp as any);
     };
 
+    const handleCanvasMouseDown = (e: React.MouseEvent) => {
+      if (e.target !== e.currentTarget) return;
+      
+      const rect = canvasRef.current?.getBoundingClientRect();
+      if (!rect) return;
+
+      const startX = (e.clientX - rect.left) / scale;
+      const startY = (e.clientY - rect.top) / scale;
+
+      onSelectLayer("", e.shiftKey);
+
+      let currentBox: { x: number; y: number; width: number; height: number } | null = null;
+
+      const onMouseMove = (moveEvent: MouseEvent) => {
+        const currentX = (moveEvent.clientX - rect.left) / scale;
+        const currentY = (moveEvent.clientY - rect.top) / scale;
+        
+        currentBox = {
+          x: Math.min(startX, currentX),
+          y: Math.min(startY, currentY),
+          width: Math.abs(startX - currentX),
+          height: Math.abs(startY - currentY),
+        };
+        setSelectionBox(currentBox);
+      };
+
+      const onMouseUp = () => {
+        if (currentBox) {
+          const selectedIds = layers
+            .filter(l => {
+              const lx = l.x;
+              const ly = l.y;
+              const lw = l.width || 0;
+              const lh = l.height || 0;
+              
+              return (
+                lx < currentBox!.x + currentBox!.width &&
+                lx + lw > currentBox!.x &&
+                ly < currentBox!.y + currentBox!.height &&
+                ly + lh > currentBox!.y
+              );
+            })
+            .map(l => l.id);
+          
+          onSelectLayers(selectedIds);
+        }
+        
+        setSelectionBox(null);
+        document.removeEventListener("mousemove", onMouseMove);
+        document.removeEventListener("mouseup", onMouseUp);
+      };
+
+      document.addEventListener("mousemove", onMouseMove);
+      document.addEventListener("mouseup", onMouseUp);
+    };
+
     return (
-      <div
-        className="relative bg-white shadow-2xl overflow-hidden"
+      <div 
+        className="relative overflow-visible group/canvas flex items-center justify-center bg-slate-100/50 rounded-2xl p-20"
         style={{
           width: width * scale,
           height: height * scale,
         }}
-        onMouseDown={(e) => {
-          if (e.target === e.currentTarget) {
-            onSelectLayer("");
-          }
-        }}
+        onMouseDown={handleCanvasMouseDown}
       >
         <div
           ref={canvasRef}
@@ -234,7 +288,7 @@ export const MediaKitCanvas = forwardRef<{ exportImage: () => Promise<string> },
               onMouseDown={(e) => handleMouseDown(e, layer)}
               className={cn(
                 "absolute cursor-move select-none group pointer-events-auto bg-transparent",
-                selectedLayerId === layer.id && "ring-2 ring-blue-500 ring-offset-2 shadow-lg"
+                selectedLayerIds?.includes(layer.id) && "ring-2 ring-blue-500 ring-offset-2 shadow-lg"
               )}
               style={{
                 left: layer.x,
@@ -280,7 +334,7 @@ export const MediaKitCanvas = forwardRef<{ exportImage: () => Promise<string> },
                   }}
                 />
               )}
-              {selectedLayerId === layer.id && (
+              {selectedLayerIds?.includes(layer.id) && (
                 <>
                   {/* Custom Bounding Box for better visual */}
                   <div className="absolute inset-0 border border-blue-200 pointer-events-none -m-[1px]" />
@@ -297,6 +351,18 @@ export const MediaKitCanvas = forwardRef<{ exportImage: () => Promise<string> },
               )}
             </div>
           ))}
+          
+          {selectionBox && (
+            <div 
+              className="absolute border border-blue-500 bg-blue-500/10 pointer-events-none z-[1000]"
+              style={{
+                left: selectionBox.x,
+                top: selectionBox.y,
+                width: selectionBox.width,
+                height: selectionBox.height,
+              }}
+            />
+          )}
         </div>
       </div>
     );

@@ -31,8 +31,8 @@ import { CSS } from "@dnd-kit/utilities";
 
 type MediaKitLayersProps = {
   layers: Layer[];
-  selectedLayerId: string | null;
-  onSelect: (id: string) => void;
+  selectedLayerIds: string[] | null;
+  onSelect: (id: string, isShift?: boolean) => void;
   onRemove: (id: string) => void;
   onReorder: (id: string, direction: "up" | "down") => void;
   onDragReorder: (newLayers: Layer[]) => void;
@@ -43,7 +43,7 @@ interface SortableItemProps {
   index: number;
   totalLayers: number;
   isSelected: boolean;
-  onSelect: (id: string) => void;
+  onSelect: (id: string, isShift?: boolean) => void;
   onRemove: (id: string) => void;
   onReorder: (id: string, direction: "up" | "down") => void;
 }
@@ -88,7 +88,7 @@ function SortableLayerItem({
         // Only select if not clicking on buttons or drag handle
         if (e.target === e.currentTarget || (e.target as HTMLElement).closest('.layer-info')) {
           e.stopPropagation();
-          onSelect(layer.id);
+          onSelect(layer.id, e.shiftKey);
         }
       }}
       className={`flex items-center gap-3 p-3 rounded-xl border-2 transition-all cursor-pointer group
@@ -137,7 +137,7 @@ function SortableLayerItem({
 
 export function MediaKitLayers({ 
   layers, 
-  selectedLayerId, 
+  selectedLayerIds, 
   onSelect, 
   onRemove, 
   onReorder,
@@ -201,7 +201,7 @@ export function MediaKitLayers({
                 layer={layer}
                 index={index}
                 totalLayers={sortedLayers.length}
-                isSelected={selectedLayerId === layer.id}
+                isSelected={selectedLayerIds?.includes(layer.id) || false}
                 onSelect={onSelect}
                 onRemove={onRemove}
                 onReorder={onReorder}
