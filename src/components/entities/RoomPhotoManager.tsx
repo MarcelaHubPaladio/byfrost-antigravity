@@ -28,16 +28,18 @@ export function RoomPhotoManager({ tenantId, entityId }: { tenantId: string; ent
     queryFn: async () => {
       const { data, error } = await supabase
         .from("core_property_room_types")
-        .select("name")
+        .select("*")
         .eq("tenant_id", tenantId)
         .is("deleted_at", null)
         .order("name", { ascending: true });
       if (error) throw error;
-      return data.map(r => r.name);
+      return data;
     }
   });
 
-  const availableRooms = roomTypesQ.data && roomTypesQ.data.length > 0 ? roomTypesQ.data : DEFAULT_ROOMS;
+  const availableRooms = roomTypesQ.data && roomTypesQ.data.length > 0 
+    ? roomTypesQ.data.map(r => r.name) 
+    : DEFAULT_ROOMS;
 
   const photosQ = useQuery({
     queryKey: ["entity_photos", tenantId, entityId],
