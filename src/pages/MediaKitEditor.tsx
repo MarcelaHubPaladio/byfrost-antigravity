@@ -767,9 +767,12 @@ export default function MediaKitEditor() {
                             <div className="font-semibold">{e.display_name}</div>
                             <div className="flex items-center gap-2 text-[10px] text-slate-500 uppercase font-medium">
                               <span className="bg-slate-100 px-1.5 py-0.5 rounded text-slate-600">{e.subtype}</span>
-                              {(e.legacy_id || e.internal_code) && (
-                                <span className="text-blue-600">
-                                  #{e.internal_code || e.legacy_id}
+                              {e.internal_code && (
+                                <span className="text-blue-600">#{e.internal_code}</span>
+                              )}
+                              {e.legacy_id && (
+                                <span className="text-slate-400">
+                                  {e.internal_code ? "• ID: " : "ID: "}{e.legacy_id}
                                 </span>
                               )}
                             </div>
