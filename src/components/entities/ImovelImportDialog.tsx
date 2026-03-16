@@ -227,7 +227,7 @@ export function ImovelImportDialog({
               import_date: new Date().toISOString()
             }
           }, { 
-            onConflict: 'tenant_id, display_name' 
+            onConflict: row.legacyId ? 'tenant_id, legacy_id' : 'tenant_id, display_name' 
           }).select("id").single();
 
         if (entityErr) throw entityErr;

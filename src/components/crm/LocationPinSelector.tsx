@@ -140,8 +140,8 @@ export function LocationPinSelector({
       </div>
 
       <div className="mt-2 flex justify-between rounded-xl bg-slate-50 px-3 py-1.5 text-[10px] text-slate-500 font-mono">
-        <span>{center.lat.toFixed(6)}</span>
-        <span>{center.lng.toFixed(6)}</span>
+        <span>{center.lat?.toFixed?.(6) || "0.000000"}</span>
+        <span>{center.lng?.toFixed?.(6) || "0.000000"}</span>
       </div>
     </div>
   );
