@@ -72,14 +72,14 @@ export function RoomPhotoManager({ tenantId, entityId }: { tenantId: string; ent
       const path = `${tenantId}/${entityId}/${crypto.randomUUID()}.${ext}`;
       
       const { error: upErr } = await supabase.storage
-        .from("media-kit") // Reusing media-kit bucket
+        .from("media_kit_assets") 
         .upload(path, compressed);
         
       if (upErr) throw upErr;
       setProgress(80);
       
       const { data: { publicUrl } } = supabase.storage
-        .from("media-kit")
+        .from("media_kit_assets")
         .getPublicUrl(path);
         
       const { error: insErr } = await supabase

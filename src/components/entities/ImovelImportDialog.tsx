@@ -184,12 +184,12 @@ export function ImovelImportDialog({
               const path = `${tenantId}/imports/${crypto.randomUUID()}.${ext}`;
               
               const { error: upErr } = await supabase.storage
-                .from("media-kit")
+                .from("media_kit_assets")
                 .upload(path, blob);
                 
               if (!upErr) {
                  const { data: { publicUrl } } = supabase.storage
-                   .from("media-kit")
+                   .from("media_kit_assets")
                    .getPublicUrl(path);
                  finalPhotoUrl = publicUrl;
               } else {
@@ -211,6 +211,7 @@ export function ImovelImportDialog({
             subtype: "imovel",
             display_name: row.name || "Sem nome",
             status: "active",
+            deleted_at: null, // CRITICAL: Restore soft-deleted entities
             legacy_id: row.legacyId || null,
             business_type: busType,
             location_json: { address: row.address },
