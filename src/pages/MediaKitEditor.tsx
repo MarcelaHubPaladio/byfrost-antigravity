@@ -59,6 +59,7 @@ export default function MediaKitEditor() {
   const { activeTenantId } = useTenant();
   const canvasRefs = useRef<{ [key: string]: any }>({});
   const pageRefs = useRef<{ [key: string]: HTMLDivElement | null }>({});
+  const editorRef = useRef<HTMLDivElement>(null);
 
   const initialEntityId = searchParams.get("entityId");
 
@@ -498,13 +499,21 @@ export default function MediaKitEditor() {
     showSuccess(`Máscara "${mask.name}" aplicada.`);
   };
   
-  const handleWheel = (e: React.WheelEvent) => {
-    if (e.ctrlKey || e.metaKey) {
-      e.preventDefault();
-      const delta = e.deltaY > 0 ? -0.05 : 0.05;
-      setScale(prev => Math.min(Math.max(0.1, prev + delta), 3));
-    }
-  };
+  useEffect(() => {
+    const el = editorRef.current;
+    if (!el) return;
+
+    const onWheel = (e: WheelEvent) => {
+      if (e.ctrlKey || e.metaKey) {
+        e.preventDefault();
+        const delta = e.deltaY > 0 ? -0.05 : 0.05;
+        setScale(prev => Math.min(Math.max(0.1, prev + delta), 3));
+      }
+    };
+
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => el.removeEventListener("wheel", onWheel);
+  }, [editorRef]);
 
   const handleExportAll = async () => {
     try {
@@ -797,7 +806,7 @@ export default function MediaKitEditor() {
 
             {/* Main Editor - Scrollable */}
             <main 
-              onWheel={handleWheel}
+              ref={editorRef}
               onMouseDown={(e) => {
                 if (e.target === e.currentTarget) {
                   setSelectedLayerId(null);
