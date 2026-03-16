@@ -874,6 +874,7 @@ export default function LinkManager() {
                                                             },
                                                             body: JSON.stringify({
                                                                 tenantId: activeTenantId,
+                                                                kind: "links",
                                                                 mediaBase64: b64,
                                                                 mimeType: file.type,
                                                                 fileName: `store_${Date.now()}`,

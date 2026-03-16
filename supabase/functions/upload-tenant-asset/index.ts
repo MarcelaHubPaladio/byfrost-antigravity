@@ -4,7 +4,7 @@ import { createSupabaseAdmin } from "../_shared/supabaseAdmin.ts";
 
 const BUCKET = "tenant-assets";
 
-type UploadKind = "participants" | "events" | "branding"; // Added "branding"
+type UploadKind = "participants" | "events" | "branding" | "links"; // Added "branding" and "links"
 
 type Body = {
   action?: "upload" | "sign";
@@ -79,6 +79,7 @@ serve(async (req) => {
     let fileBytes: Uint8Array | null = null;
     let pathParam: string = "";
     let expiresInParam: number = 3600;
+    let decodedBody: Body | null = null;
 
     if (contentTypeHeader.includes("multipart/form-data")) {
       const formData = await req.formData();
@@ -96,20 +97,20 @@ serve(async (req) => {
       pathParam = String(formData.get("path") ?? "").trim();
       expiresInParam = Number(formData.get("expiresIn") ?? 3600);
     } else {
-      const body = (await req.json().catch(() => null)) as Body | null;
-      if (!body) return err(`${fn}:invalid_json_or_empty_body`, 400);
+      decodedBody = (await req.json().catch(() => null)) as Body | null;
+      if (!decodedBody) return err(`${fn}:invalid_json_or_empty_body`, 400);
 
-      action = body.action ?? "upload";
-      tenantIdStr = String(body.tenantId ?? body.tenant_id ?? "").trim();
-      kindStr = String(body.kind ?? "").trim();
-      fileName = String(body.filename ?? body.fileName ?? "file.bin");
-      mimeType = String(body.contentType ?? body.mimeType ?? "application/octet-stream");
+      action = decodedBody.action ?? "upload";
+      tenantIdStr = String(decodedBody.tenantId ?? decodedBody.tenant_id ?? "").trim();
+      kindStr = String(decodedBody.kind ?? "").trim();
+      fileName = String(decodedBody.filename ?? decodedBody.fileName ?? "file.bin");
+      mimeType = String(decodedBody.contentType ?? decodedBody.mimeType ?? "application/octet-stream");
 
-      const b64 = String(body.fileBase64 ?? body.mediaBase64 ?? "").trim();
+      const b64 = String(decodedBody.fileBase64 ?? decodedBody.mediaBase64 ?? "").trim();
       if (b64) fileBytes = decodeBase64ToBytes(b64);
 
-      pathParam = String(body.path ?? "").trim();
-      expiresInParam = Number(body.expiresIn ?? 3600);
+      pathParam = String(decodedBody.path ?? "").trim();
+      expiresInParam = Number(decodedBody.expiresIn ?? 3600);
     }
 
     if (!tenantIdStr || !isUuid(tenantIdStr)) return err(`${fn}:invalid_tenant_id:${tenantIdStr}`, 400);
@@ -160,8 +161,8 @@ serve(async (req) => {
 
     // action === "upload"
     const kind = kindStr as UploadKind;
-    if (kind !== "participants" && kind !== "events" && kind !== "branding") {
-      return err(`${fn}:invalid_kind:${kindStr}`, 400);
+    if (kind !== "participants" && kind !== "events" && kind !== "branding" && kind !== "links") {
+      return err(`${fn}:invalid_kind:${kindStr}:received_body:${JSON.stringify(decodedBody)}`, 400);
     }
 
     if (!fileBytes || fileBytes.length === 0) return err(`${fn}:missing_file_content`, 400);
