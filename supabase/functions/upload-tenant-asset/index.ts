@@ -162,7 +162,7 @@ serve(async (req) => {
     // action === "upload"
     const kind = kindStr as UploadKind;
     if (kind !== "participants" && kind !== "events" && kind !== "branding" && kind !== "links") {
-      return err(`${fn}:invalid_kind:${kindStr}:received_body:${JSON.stringify(decodedBody)}`, 400);
+      return err(`${fn}:invalid_kind:${kindStr}`, 400);
     }
 
     if (!fileBytes || fileBytes.length === 0) return err(`${fn}:missing_file_content`, 400);

@@ -862,28 +862,17 @@ export default function LinkManager() {
                                                     if (!file || !activeTenantId) return;
                                                     setUploading(true);
                                                     try {
-                                                        const { data: sess } = await supabase.auth.getSession();
-                                                        const token = sess.session?.access_token;
-                                                        const b64 = await fileToBase64(file);
+                                                        const fd = new FormData();
+                                                        fd.append("tenantId", activeTenantId);
+                                                        fd.append("kind", "links");
+                                                        fd.append("file", file);
 
-                                                        const res = await fetch(UPLOAD_ASSET_URL, {
-                                                            method: "POST",
-                                                            headers: {
-                                                                "Content-Type": "application/json",
-                                                                ...(token ? { Authorization: `Bearer ${token}` } : {}),
-                                                            },
-                                                            body: JSON.stringify({
-                                                                tenantId: activeTenantId,
-                                                                kind: "links",
-                                                                mediaBase64: b64,
-                                                                mimeType: file.type,
-                                                                fileName: `store_${Date.now()}`,
-                                                            }),
+                                                        const { data: json, error: upError } = await supabase.functions.invoke("upload-tenant-asset", {
+                                                            body: fd,
                                                         });
 
-                                                        const json = await res.json().catch(() => null);
-                                                        if (!res.ok || !json?.ok) {
-                                                            throw new Error(json?.error || `HTTP ${res.status}`);
+                                                        if (upError || !json?.ok) {
+                                                            throw new Error(upError?.message || json?.error || "Erro no upload");
                                                         }
 
                                                         setEditingRedirect(p => ({ ...p, image_url: json.publicUrl }));
