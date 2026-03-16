@@ -56,14 +56,53 @@ export default function PublicLinks() {
         }
     }, [publicDataQ.data, searchParams, autoOpened]);
 
-    const handleAssessmentClick = (item: any) => {
+    const handleAssessmentClick = async (item: any) => {
         setSelectedItem(item);
         setSelectedStoreUrl("");
+        // Track click on the item itself (even before choosing a store)
+        try {
+            await supabase.rpc("track_link_click", {
+                p_tenant_id: item.tenant_id,
+                p_item_id: item.id
+            });
+        } catch (e) { console.error("Tracking error", e); }
     };
 
-    const handleRedirect = () => {
-        if (selectedStoreUrl) {
-            window.location.href = selectedStoreUrl;
+    const handleSmartClick = async (item: any) => {
+        const redirects = item.redirects || [];
+        if (redirects.length === 0) {
+            if (item.url) window.open(item.url, '_blank');
+            return;
+        }
+
+        // Random rotation logic
+        const randomIndex = Math.floor(Math.random() * redirects.length);
+        const selected = redirects[randomIndex];
+
+        // Track click with redirect_id
+        try {
+            await supabase.rpc("track_link_click", {
+                p_tenant_id: item.tenant_id,
+                p_item_id: item.id,
+                p_redirect_id: selected.id
+            });
+        } catch (e) { console.error("Tracking error", e); }
+
+        window.location.href = selected.redirect_url;
+    };
+
+    const handleRedirect = async (redirect: any) => {
+        if (redirect.redirect_url) {
+            // Track specific store click
+            try {
+                await supabase.rpc("track_link_click", {
+                    p_tenant_id: selectedItem.tenant_id,
+                    p_item_id: selectedItem.id,
+                    p_redirect_id: redirect.id
+                });
+            } catch (e) { console.error("Tracking error", e); }
+            
+            window.location.href = redirect.redirect_url;
         }
     };
 
@@ -161,7 +200,20 @@ export default function PublicLinks() {
                             className="group relative overflow-hidden rounded-[24px] border-slate-200 bg-white/80 p-1 shadow-sm transition-all hover:scale-[1.02] hover:shadow-md active:scale-[0.98] dark:border-slate-800 dark:bg-slate-900/80"
                         >
                             <button
-                                onClick={() => item.link_type === 'assessment' ? handleAssessmentClick(item) : window.open(item.url, '_blank')}
+                                onClick={() => {
+                                    if (item.link_type === 'assessment') handleAssessmentClick(item);
+                                    else if (item.link_type === 'smart') handleSmartClick(item);
+                                    else {
+                                        // Standard link click tracking
+                                        (async () => {
+                                            await supabase.rpc("track_link_click", {
+                                                p_tenant_id: item.tenant_id,
+                                                p_item_id: item.id
+                                            });
+                                        })();
+                                        window.open(item.url, '_blank');
+                                    }
+                                }}
                                 className="flex w-full items-center justify-between px-6 py-5 text-left"
                             >
                                 <div className="flex items-center gap-4">
@@ -176,6 +228,9 @@ export default function PublicLinks() {
                                         <div className="font-bold text-slate-900 dark:text-white group-hover:opacity-80 transition-opacity">{item.label}</div>
                                         {item.link_type === 'assessment' && (
                                             <div className="text-[10px] font-medium uppercase tracking-wider" style={{ color: primaryColor }}>Avaliação Premiada</div>
+                                        )}
+                                        {item.link_type === 'smart' && (
+                                            <div className="text-[10px] font-medium uppercase tracking-wider text-blue-500">Smart Link</div>
                                         )}
                                     </div>
                                 </div>
@@ -208,11 +263,8 @@ export default function PublicLinks() {
                         <div className="grid gap-3">
                             {selectedItem?.redirects?.map((r: any) => (
                                 <button
-                                    key={r.store_name}
-                                    onClick={() => {
-                                        setSelectedStoreUrl(r.redirect_url);
-                                        window.location.href = r.redirect_url;
-                                    }}
+                                    key={r.id || r.store_name}
+                                    onClick={() => handleRedirect(r)}
                                     className={cn(
                                         "flex items-center gap-4 rounded-[24px] border p-4 text-left transition-all active:scale-[0.98]",
                                         selectedStoreUrl === r.redirect_url

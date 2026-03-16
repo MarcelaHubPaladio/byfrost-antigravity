@@ -28,7 +28,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
-import { Plus, Link2, ExternalLink, Star, Trash2, Edit2, GripVertical, Settings2, Share2, Copy, Check, Store, Palette, Image as ImageIcon } from "lucide-react";
+import { Plus, Link2, ExternalLink, Star, Trash2, Edit2, GripVertical, Settings2, Share2, Copy, Check, Store, Palette, Image as ImageIcon, BarChart3, ChevronRight } from "lucide-react";
 import { showError, showSuccess } from "@/utils/toast";
 import { cn } from "@/lib/utils";
 
@@ -46,7 +46,7 @@ type LinkItem = {
     group_id: string;
     label: string;
     url: string | null;
-    link_type: 'standard' | 'assessment';
+    link_type: 'standard' | 'assessment' | 'smart';
     icon: string | null;
     sort_order: number;
     is_active: boolean;
@@ -162,6 +162,7 @@ export default function LinkManager() {
     const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
     const [uploading, setUploading] = useState(false);
     const [extracting, setExtracting] = useState(false);
+    const [selectedStatsItemId, setSelectedStatsItemId] = useState<string | null>(null);
 
     // Queries
     const groupsQ = useQuery({
@@ -197,6 +198,7 @@ export default function LinkManager() {
         }
     });
 
+
     const redirectsQ = useQuery({
         queryKey: ["link_manager_redirects", selectedItemId],
         enabled: !!selectedItemId,
@@ -210,6 +212,20 @@ export default function LinkManager() {
             if (error) throw error;
             return data as ItemRedirect[];
         }
+    });
+
+    const statsQ = useQuery({
+        queryKey: ["link_manager_stats", selectedStatsItemId],
+        enabled: !!selectedStatsItemId,
+        queryFn: async () => {
+            const { data, error } = await supabase.rpc("get_link_stats", {
+                p_tenant_id: activeTenantId,
+                p_item_id: selectedStatsItemId
+            });
+            if (error) throw error;
+            return data;
+        },
+        refetchInterval: 30000,
     });
 
     // Actions
@@ -504,22 +520,34 @@ export default function LinkManager() {
                                                                         {item.link_type === 'assessment' && (
                                                                             <Badge variant="secondary" className="bg-blue-50 text-blue-600 border-blue-100">Avaliação</Badge>
                                                                         )}
+                                                                        {item.link_type === 'smart' && (
+                                                                            <Badge variant="secondary" className="bg-purple-50 text-purple-600 border-purple-100">Smart Link</Badge>
+                                                                        )}
                                                                         {!item.is_active && (
                                                                             <Badge variant="outline" className="text-slate-400">Inativo</Badge>
                                                                         )}
                                                                     </div>
                                                                     <div className="mt-0.5 max-w-md truncate text-xs text-slate-500">
-                                                                        {item.link_type === 'standard' ? item.url : 'Redirecionamento dinâmico por loja'}
+                                                                        {item.link_type === 'standard' ? item.url : 'Redirecionamento dinâmico (Multilink)'}
                                                                     </div>
                                                                 </div>
                                                             </div>
                                                             <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition">
-                                                                {item.link_type === 'assessment' && (
+                                                                <Button
+                                                                    variant="ghost"
+                                                                    size="icon"
+                                                                    className="h-8 w-8 text-slate-400 hover:text-slate-900"
+                                                                    title="Relatório de Cliques"
+                                                                    onClick={() => setSelectedStatsItemId(selectedStatsItemId === item.id ? null : item.id)}
+                                                                >
+                                                                    <BarChart3 className="h-4 w-4" />
+                                                                </Button>
+                                                                {(item.link_type === 'assessment' || item.link_type === 'smart') && (
                                                                     <Button
                                                                         variant="ghost"
                                                                         size="icon"
                                                                         className="h-8 w-8 text-blue-500 hover:text-blue-600 hover:bg-blue-50"
-                                                                        title="Copiar Link Direto para Avaliação"
+                                                                        title="Copiar Link Direto"
                                                                         onClick={() => {
                                                                             const url = `${window.location.origin}/l/${activeTenant?.slug}/${selectedGroup.slug}?item=${item.id}`;
                                                                             navigator.clipboard.writeText(url);
@@ -538,10 +566,53 @@ export default function LinkManager() {
                                                             </div>
                                                         </div>
 
-                                                        {item.link_type === 'assessment' && (
+                                                         {selectedStatsItemId === item.id && (
+                                                            <div className="ml-8 mt-2 overflow-hidden rounded-2xl border border-slate-100 bg-white p-4 shadow-inner animate-in slide-in-from-top-2 duration-300">
+                                                                <div className="mb-4 flex items-center justify-between">
+                                                                    <div className="flex items-center gap-2">
+                                                                        <BarChart3 className="h-4 w-4 text-slate-400" />
+                                                                        <span className="text-xs font-bold text-slate-700 uppercase tracking-widest">Relatório de Cliques</span>
+                                                                    </div>
+                                                                    {statsQ.isLoading ? (
+                                                                        <span className="text-[10px] text-slate-400 animate-pulse">Carregando...</span>
+                                                                    ) : (
+                                                                        <div className="rounded-lg bg-slate-900 px-2.5 py-1 text-[10px] font-bold text-white">
+                                                                            {statsQ.data?.total_clicks || 0} CLIQUES TOTAIS
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+
+                                                                <div className="space-y-1.5">
+                                                                    {statsQ.data?.redirects?.map((r: any) => (
+                                                                        <div key={r.redirect_id} className="flex items-center justify-between rounded-xl bg-slate-50/50 p-2.5 transition-colors hover:bg-slate-50">
+                                                                            <div className="flex items-center gap-3">
+                                                                                <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-white shadow-sm ring-1 ring-slate-100">
+                                                                                    <span className="text-[10px] font-bold text-slate-400">{r.clicks}</span>
+                                                                                </div>
+                                                                                <span className="text-xs font-medium text-slate-600">{r.store_name}</span>
+                                                                            </div>
+                                                                            <div className="h-1 flex-1 mx-4 max-w-[80px] rounded-full bg-slate-200 overflow-hidden">
+                                                                                <div 
+                                                                                    className="h-full bg-slate-400 transition-all duration-1000" 
+                                                                                    style={{ width: `${(r.clicks / (statsQ.data.total_clicks || 1)) * 100}%` }}
+                                                                                />
+                                                                            </div>
+                                                                            <ChevronRight className="h-3 w-3 text-slate-300" />
+                                                                        </div>
+                                                                    ))}
+                                                                    {(!statsQ.data?.redirects || statsQ.data.redirects.length === 0) && !statsQ.isLoading && (
+                                                                        <div className="py-8 text-center">
+                                                                            <p className="text-[10px] text-slate-400 italic">Configure redirecionamentos para ver estatísticas detalhadas.</p>
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                        )}
+
+                                                        {(item.link_type === 'assessment' || item.link_type === 'smart') && (
                                                             <div className="ml-8 mt-2 space-y-2 rounded-xl border border-slate-50 bg-slate-50/50 p-3">
                                                                 <div className="flex items-center justify-between">
-                                                                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Redirecionamentos por Loja</span>
+                                                                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Configurações de Redirecionamento</span>
                                                                     <Button size="sm" variant="ghost" className="h-6 gap-1.5 rounded-lg border border-slate-200 bg-white text-[10px]" onClick={() => { setSelectedItemId(item.id); setEditingRedirect({}); setIsRedirectDialogOpen(true); }}>
                                                                         <Plus className="h-3 w-3" /> Adicionar Loja
                                                                     </Button>
@@ -780,6 +851,7 @@ export default function LinkManager() {
                                         <SelectContent>
                                             <SelectItem value="standard">Padrão (URL Direta)</SelectItem>
                                             <SelectItem value="assessment">Avaliação (Seletor de Loja)</SelectItem>
+                                            <SelectItem value="smart">Smart Link (Redirecionamento Automático)</SelectItem>
                                         </SelectContent>
                                     </Select>
                                 </div>
