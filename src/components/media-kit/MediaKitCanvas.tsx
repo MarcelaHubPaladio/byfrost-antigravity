@@ -39,6 +39,8 @@ export type Layer = {
   shadowBlur?: number;
   shadowOpacity?: number;
   shadowColor?: string;
+  imageOffsetX?: number;
+  imageOffsetY?: number;
 };
 
 type MediaKitCanvasProps = {
@@ -61,6 +63,7 @@ export const MediaKitCanvas = forwardRef<{ exportImage: () => Promise<string> },
     const canvasRef = useRef<HTMLDivElement>(null);
     const [selectionBox, setSelectionBox] = React.useState<{ x: number; y: number; width: number; height: number } | null>(null);
     const [editingId, setEditingId] = React.useState<string | null>(null);
+    const [positioningId, setPositioningId] = React.useState<string | null>(null);
 
     useImperativeHandle(ref, () => ({
       exportImage: async () => {
@@ -246,7 +249,7 @@ export const MediaKitCanvas = forwardRef<{ exportImage: () => Promise<string> },
     const handleMouseDown = (e: React.MouseEvent, layer: Layer) => {
       e.stopPropagation();
       if (layer.locked) return;
-      if (editingId === layer.id) return;
+      if (editingId === layer.id || positioningId === layer.id) return;
       
       const isPartofSelection = selectedLayerIds?.includes(layer.id);
       if (!isPartofSelection) {
@@ -302,10 +305,68 @@ export const MediaKitCanvas = forwardRef<{ exportImage: () => Promise<string> },
       document.addEventListener("mousemove", onMouseMove);
       document.addEventListener("mouseup", onMouseUp as any);
     };
+    
+    const handleImagePositionMouseDown = (e: React.MouseEvent, layer: Layer) => {
+      e.stopPropagation();
+      const startX = e.clientX;
+      const startY = e.clientY;
+      const startOffsetX = layer.imageOffsetX ?? 50;
+      const startOffsetY = layer.imageOffsetY ?? 50;
+      
+      const onMouseMove = (moveEvent: MouseEvent) => {
+        const dx = (moveEvent.clientX - startX) / scale;
+        const dy = (moveEvent.clientY - startY) / scale;
+        
+        // Sensitivity factor could be adjusted. Standardizing sensitivity based on container size is better.
+        // If we want it to feel like "dragging the image", movement should be inverted and scaled.
+        // For simplicity, let's use a percentage-based move.
+        // 1px move in container = (1 / width) * 100 % in object-position
+        const moveX = (dx / (layer.width || 1)) * 100;
+        const moveY = (dy / (layer.height || 1)) * 100;
+        
+        onUpdateLayer(layer.id, {
+          imageOffsetX: Math.max(0, Math.min(100, startOffsetX - moveX)),
+          imageOffsetY: Math.max(0, Math.min(100, startOffsetY - moveY)),
+        });
+      };
+      
+      const onMouseUp = (upEvent: MouseEvent) => {
+        const dx = (upEvent.clientX - startX) / scale;
+        const dy = (upEvent.clientY - startY) / scale;
+        const moveX = (dx / (layer.width || 1)) * 100;
+        const moveY = (dy / (layer.height || 1)) * 100;
+        
+        onUpdateLayer(layer.id, {
+          imageOffsetX: Math.max(0, Math.min(100, startOffsetX - moveX)),
+          imageOffsetY: Math.max(0, Math.min(100, startOffsetY - moveY)),
+        }, true);
+        
+        document.removeEventListener("mousemove", onMouseMove);
+        document.removeEventListener("mouseup", onMouseUp);
+      };
+      
+      document.addEventListener("mousemove", onMouseMove);
+      document.addEventListener("mouseup", onMouseUp);
+    };
+
+    React.useEffect(() => {
+      const handleKeyDown = (e: KeyboardEvent) => {
+        if (e.key === "Escape") {
+          setEditingId(null);
+          setPositioningId(null);
+        }
+      };
+      window.addEventListener("keydown", handleKeyDown);
+      return () => window.removeEventListener("keydown", handleKeyDown);
+    }, []);
 
     const handleCanvasMouseDown = (e: React.MouseEvent) => {
       if (e.target !== e.currentTarget) return;
       
+      // Exit modes when clicking canvas background
+      setEditingId(null);
+      setPositioningId(null);
+
       const rect = canvasRef.current?.getBoundingClientRect();
       if (!rect) return;
 
@@ -388,6 +449,9 @@ export const MediaKitCanvas = forwardRef<{ exportImage: () => Promise<string> },
                 if (layer.type === "text" && !layer.locked && !layer.isVariable && !layer.isList) {
                   e.stopPropagation();
                   setEditingId(layer.id);
+                } else if (layer.type === "image" && !layer.locked) {
+                  e.stopPropagation();
+                  setPositioningId(layer.id);
                 }
               }}
               className={cn(
@@ -460,11 +524,18 @@ export const MediaKitCanvas = forwardRef<{ exportImage: () => Promise<string> },
                 <img
                   src={layer.isVariable ? getEffectiveImage(layer) : replacePlaceholders(layer.content)}
                   alt=""
+                  onMouseDown={(e) => {
+                    if (positioningId === layer.id) {
+                      handleImagePositionMouseDown(e, layer);
+                    }
+                  }}
                   style={{
                     width: layer.width,
                     height: layer.height,
-                    pointerEvents: "none",
+                    pointerEvents: positioningId === layer.id ? "auto" : "none",
                     objectFit: (layer.objectFit as any) || "cover",
+                    objectPosition: `${layer.imageOffsetX ?? 50}% ${layer.imageOffsetY ?? 50}%`,
+                    cursor: positioningId === layer.id ? "move" : undefined,
                   }}
                 />
               )}
