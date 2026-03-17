@@ -40,6 +40,7 @@ import { MediaKitCanvas, Layer } from "@/components/media-kit/MediaKitCanvas";
 import { ImageUpload } from "@/components/portal/ImageUpload";
 import { MediaKitGallery } from "@/components/media-kit/MediaKitGallery";
 import { MediaKitLayers } from "@/components/media-kit/MediaKitLayers";
+import { IconPicker } from "@/components/media-kit/IconPicker";
 import { Slider } from "@/components/ui/slider";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
@@ -57,6 +58,22 @@ import {
   DialogTitle, 
   DialogTrigger 
 } from "@/components/ui/dialog";
+
+const STANDARD_LABELS: Record<string, string> = {
+  display_name: "Nome de Exibição",
+  entity_type: "Tipo de Entidade",
+  status: "Status",
+  legacy_id: "ID Legado",
+  internal_code: "Código Interno",
+  location_json: "Localização",
+  business_type: "Tipo de Negócio",
+  property_type: "Tipo de Imóvel",
+  total_area: "Área Total",
+  useful_area: "Área Útil",
+  price_sale: "Preço de Venda",
+  price_rent: "Preço de Aluguel",
+  price_consult: "Preço sob Consulta",
+};
 
 export default function MediaKitEditor() {
   const { id } = useParams();
@@ -90,6 +107,7 @@ export default function MediaKitEditor() {
   const [searchTerm, setSearchTerm] = useState("");
   const [scale, setScale] = useState(0.5);
   const [isGalleryOpen, setIsGalleryOpen] = useState(false);
+  const [isIconPickerOpen, setIsIconPickerOpen] = useState(false);
   
   // History for Undo
   const [history, setHistory] = useState<{ id: string; templateId: string; layers: Layer[] }[][]>([]);
@@ -230,9 +248,17 @@ export default function MediaKitEditor() {
         .select("*")
         .eq("tenant_id", activeTenantId!)
         .eq("entity_id", entityId!)
+        .is("deleted_at", null)
         .order("created_at", { ascending: false });
       if (error) throw error;
-      return data;
+      
+      const roomCounts: Record<string, number> = {};
+      data?.forEach(p => {
+        const t = p.room_type || "Geral";
+        roomCounts[t] = (roomCounts[t] || 0) + 1;
+      });
+
+      return { photos: data || [], roomCounts };
     },
   });
 
@@ -444,6 +470,32 @@ export default function MediaKitEditor() {
         color: type === "text" ? "#000000" : type === "shape" ? "#3b82f6" : undefined,
         width: type === "image" || type === "shape" ? 200 : undefined,
         height: type === "image" || type === "shape" ? 200 : undefined,
+      };
+
+      const updatedPages = prev.map(p => p.id === activePageId ? { ...p, layers: [...p.layers, newLayer] } : p);
+      pushToHistory(updatedPages);
+      setSelectedLayerIds({ pageId: activePageId, layerIds: [newLayer.id] });
+      return updatedPages;
+    });
+  };
+
+  const addIconLayer = (iconName: string) => {
+    if (!activePageId) return;
+
+    setPages(prev => {
+      const page = prev.find(p => p.id === activePageId);
+      const maxZ = page?.layers.length ? Math.max(...page.layers.map(l => l.zIndex)) : 0;
+
+      const newLayer: Layer = {
+        id: Math.random().toString(36).substr(2, 9),
+        type: "icon",
+        content: iconName,
+        x: 100,
+        y: 100,
+        zIndex: maxZ + 10,
+        width: 100,
+        height: 100,
+        color: "#3b82f6",
       };
 
       const updatedPages = prev.map(p => p.id === activePageId ? { ...p, layers: [...p.layers, newLayer] } : p);
@@ -908,6 +960,9 @@ export default function MediaKitEditor() {
               <Button variant="ghost" size="icon" onClick={() => setIsGalleryOpen(true)} title="Adicionar Imagem" className="rounded-xl">
                 <ImageIcon className="h-6 w-6 text-slate-600" />
               </Button>
+              <Button variant="ghost" size="icon" onClick={() => setIsIconPickerOpen(true)} title="Biblioteca de Ícones" className="rounded-xl">
+                <Palette className="h-6 w-6 text-indigo-600" />
+              </Button>
               <Button variant="ghost" size="icon" onClick={() => addLayer("shape")} title="Adicionar Forma" className="rounded-xl">
                 <Square className="h-6 w-6 text-slate-600" />
               </Button>
@@ -1035,7 +1090,7 @@ export default function MediaKitEditor() {
                         onUpdateLayer={(layerId, delta) => updateLayer(page.id, layerId, delta)}
                         scale={scale}
                         entityData={entityData}
-                        entityPhotos={entityPhotosQ.data || []}
+                        entityPhotos={entityPhotosQ.data?.photos || []}
                       />
                     </div>
                   </div>
@@ -1127,16 +1182,23 @@ export default function MediaKitEditor() {
                                   <SelectValue placeholder="Selecione um campo..." />
                                 </SelectTrigger>
                                 <SelectContent className="rounded-xl">
+                                  {/* core fields with standardized labels */}
+                                  {Object.keys(STANDARD_LABELS).map(key => (
+                                    <SelectItem key={key} value={key}>{STANDARD_LABELS[key]}</SelectItem>
+                                  ))}
+                                  
+                                  {/* dynamic metadata fields from config */}
                                   {Object.entries(entityData?.metadata?.media_kit_config || {})
-                                    .filter(([_, enabled]) => enabled)
+                                    .filter(([field, enabled]) => enabled && !STANDARD_LABELS[field])
                                     .map(([field]) => (
                                       <SelectItem key={field} value={field} className="capitalize">{field.replace("_", " ")}</SelectItem>
                                     ))
                                   }
-                                  {/* Also offer core fields regardless of config for now as standard */}
-                                  <SelectItem value="display_name">Nome de Exibição</SelectItem>
-                                  <SelectItem value="entity_type">Tipo</SelectItem>
-                                  <SelectItem value="status">Status</SelectItem>
+
+                                  {/* room counts if applicable */}
+                                  {Object.entries(entityPhotosQ.data?.roomCounts || {}).map(([room, count]) => (
+                                    <SelectItem key={`room_${room}`} value={`room_${room}`}>{room}: {count}</SelectItem>
+                                  ))}
                                 </SelectContent>
                               </Select>
                             </div>
@@ -1179,7 +1241,7 @@ export default function MediaKitEditor() {
                         </>
                       )}
 
-                      {(selectedLayer.type === "image" || selectedLayer.type === "shape") && (
+                      {(selectedLayer.type === "image" || selectedLayer.type === "shape" || selectedLayer.type === "icon") && (
                         <>
                           {selectedLayer.type === "image" && (
                              <div className="space-y-4">
@@ -1311,9 +1373,9 @@ export default function MediaKitEditor() {
                               />
                             </div>
                           </div>
-                          {selectedLayer.type === "shape" && (
+                          {selectedLayer.type === "icon" && (
                              <div className="space-y-2">
-                              <Label className="text-xs text-slate-500">Cor de Fundo</Label>
+                              <Label className="text-xs text-slate-500">Cor do Ícone</Label>
                               <div className="flex gap-2">
                                 <Input 
                                   type="color" 
@@ -1330,6 +1392,15 @@ export default function MediaKitEditor() {
                               </div>
                             </div>
                           )}
+
+                          <div className="space-y-2 py-4 border-t border-slate-100">
+                             <Label className="text-xs text-slate-500">Opacidade: {Math.round((selectedLayer.opacity ?? 1) * 100)}%</Label>
+                             <Slider 
+                               value={[(selectedLayer.opacity ?? 1) * 100]} 
+                               min={0} max={100} step={1}
+                               onValueChange={([v]) => updateLayer(selectedLayerIds!.pageId, selectedLayer.id, { opacity: v / 100 }, true)}
+                             />
+                          </div>
                         </>
                       )}
 
@@ -1410,6 +1481,12 @@ export default function MediaKitEditor() {
             open={isGalleryOpen}
             onOpenChange={setIsGalleryOpen}
             onSelect={addImageLayer}
+          />
+
+          <IconPicker 
+            open={isIconPickerOpen}
+            onOpenChange={setIsIconPickerOpen}
+            onSelect={addIconLayer}
           />
         </div>
       </RequireRouteAccess>

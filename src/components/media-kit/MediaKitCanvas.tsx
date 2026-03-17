@@ -1,9 +1,10 @@
 import React, { useRef, useImperativeHandle, forwardRef } from "react";
 import { cn } from "@/lib/utils";
+import * as Icons from "lucide-react";
 
 export type Layer = {
   id: string;
-  type: "text" | "image" | "shape";
+  type: "text" | "image" | "shape" | "icon";
   content: string;
   x: number;
   y: number;
@@ -332,6 +333,23 @@ export const MediaKitCanvas = forwardRef<{ exportImage: () => Promise<string> },
                     backgroundColor: layer.color,
                   }}
                 />
+              )}
+              {layer.type === "icon" && (
+                <div
+                  style={{
+                    width: layer.width,
+                    height: layer.height,
+                    color: layer.color,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  {(() => {
+                    const IconComponent = (Icons as any)[layer.content];
+                    return IconComponent ? <IconComponent size={layer.width} /> : null;
+                  })()}
+                </div>
               )}
               {selectedLayerIds?.includes(layer.id) && (
                 <>
