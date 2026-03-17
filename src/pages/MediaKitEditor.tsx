@@ -422,6 +422,24 @@ export default function MediaKitEditor() {
         });
         setSelectedLayerIds(null);
       }
+
+      // Arrow keys movement
+      if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(e.key) && selectedLayerIds?.layerIds.length) {
+        const target = e.target as HTMLElement;
+        if (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable) return;
+
+        e.preventDefault();
+        const step = e.shiftKey ? 5 : 1;
+        const dx = e.key === "ArrowLeft" ? -step : e.key === "ArrowRight" ? step : 0;
+        const dy = e.key === "ArrowUp" ? -step : e.key === "ArrowDown" ? step : 0;
+
+        updateLayers(
+          selectedLayerIds.pageId, 
+          selectedLayerIds.layerIds, 
+          (l) => ({ x: Math.round(l.x + dx), y: Math.round(l.y + dy) }), 
+          true
+        );
+      }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
@@ -558,6 +576,24 @@ export default function MediaKitEditor() {
         return {
           ...p,
           layers: p.layers.map(l => l.id === layerId ? { ...l, ...delta } : l)
+        };
+      });
+      if (pushHistory) pushToHistory(updatedPages);
+      return updatedPages;
+    });
+  };
+
+  const updateLayers = (pageId: string, layerIds: string[], delta: Partial<Layer> | ((layer: Layer) => Partial<Layer>), pushHistory?: boolean) => {
+    setPages(prev => {
+      const updatedPages = prev.map(p => {
+        if (p.id !== pageId) return p;
+        return {
+          ...p,
+          layers: p.layers.map(l => {
+            if (!layerIds.includes(l.id)) return l;
+            const actualDelta = typeof delta === "function" ? delta(l) : delta;
+            return { ...l, ...actualDelta };
+          })
         };
       });
       if (pushHistory) pushToHistory(updatedPages);
@@ -1108,6 +1144,7 @@ export default function MediaKitEditor() {
                           setSelectedLayerIds(ids.length > 0 ? { pageId: page.id, layerIds: ids } : null);
                         }}
                         onUpdateLayer={(layerId, delta) => updateLayer(page.id, layerId, delta)}
+                        onUpdateLayers={(layerIds, delta) => updateLayers(page.id, layerIds, delta)}
                         scale={scale}
                         entityData={entityData}
                         entityPhotos={entityPhotosQ.data?.photos || []}

@@ -37,13 +37,14 @@ type MediaKitCanvasProps = {
   onSelectLayer: (id: string, isShift?: boolean) => void;
   onSelectLayers: (ids: string[]) => void;
   onUpdateLayer: (id: string, delta: Partial<Layer>, pushHistory?: boolean) => void;
+  onUpdateLayers: (ids: string[], delta: Partial<Layer> | ((layer: Layer) => Partial<Layer>), pushHistory?: boolean) => void;
   scale: number;
   entityData?: any;
   entityPhotos?: any[];
 };
 
 export const MediaKitCanvas = forwardRef<{ exportImage: () => Promise<string> }, MediaKitCanvasProps>(
-  ({ layers, width, height, selectedLayerIds, onSelectLayer, onSelectLayers, onUpdateLayer, scale, entityData, entityPhotos }, ref) => {
+  ({ layers, width, height, selectedLayerIds, onSelectLayer, onSelectLayers, onUpdateLayer, onUpdateLayers, scale, entityData, entityPhotos }, ref) => {
     const canvasRef = useRef<HTMLDivElement>(null);
     const [selectionBox, setSelectionBox] = React.useState<{ x: number; y: number; width: number; height: number } | null>(null);
 
@@ -204,29 +205,53 @@ export const MediaKitCanvas = forwardRef<{ exportImage: () => Promise<string> },
     const handleMouseDown = (e: React.MouseEvent, layer: Layer) => {
       e.stopPropagation();
       if (layer.locked) return;
-      onSelectLayer(layer.id, e.shiftKey);
+      
+      const isPartofSelection = selectedLayerIds?.includes(layer.id);
+      if (!isPartofSelection) {
+        onSelectLayer(layer.id, e.shiftKey);
+      }
 
       const startX = e.clientX;
       const startY = e.clientY;
-      const startLayerX = layer.x;
-      const startLayerY = layer.y;
+      
+      // Store initial positions of all affected layers
+      const targets = (isPartofSelection ? selectedLayerIds : [layer.id]) || [layer.id];
+      const affectedLayers = layers.filter(l => targets.includes(l.id) && !l.locked);
+      const startPositions = affectedLayers.map(l => ({ id: l.id, x: l.x, y: l.y }));
 
       const onMouseMove = (moveEvent: MouseEvent) => {
         const dx = (moveEvent.clientX - startX) / scale;
         const dy = (moveEvent.clientY - startY) / scale;
-        onUpdateLayer(layer.id, {
-          x: Math.round(startLayerX + dx),
-          y: Math.round(startLayerY + dy),
-        });
+        
+        onUpdateLayers(
+          affectedLayers.map(l => l.id),
+          (l) => {
+            const start = startPositions.find(s => s.id === l.id);
+            if (!start) return {};
+            return {
+              x: Math.round(start.x + dx),
+              y: Math.round(start.y + dy),
+            };
+          }
+        );
       };
 
       const onMouseUp = (upEvent: MouseEvent) => {
         const dx = (upEvent.clientX - startX) / scale;
         const dy = (upEvent.clientY - startY) / scale;
-        onUpdateLayer(layer.id, {
-          x: Math.round(startLayerX + dx),
-          y: Math.round(startLayerY + dy),
-        }, true);
+
+        onUpdateLayers(
+          affectedLayers.map(l => l.id),
+          (l) => {
+            const start = startPositions.find(s => s.id === l.id);
+            if (!start) return {};
+            return {
+              x: Math.round(start.x + dx),
+              y: Math.round(start.y + dy),
+            };
+          },
+          true
+        );
 
         document.removeEventListener("mousemove", onMouseMove);
         document.removeEventListener("mouseup", onMouseUp);
