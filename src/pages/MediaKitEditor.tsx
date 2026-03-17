@@ -110,6 +110,12 @@ export default function MediaKitEditor() {
   const [scale, setScale] = useState(0.5);
   const [isGalleryOpen, setIsGalleryOpen] = useState(false);
   const [isIconPickerOpen, setIsIconPickerOpen] = useState(false);
+
+  // Panning State
+  const [isSpacePressed, setIsSpacePressed] = useState(false);
+  const [isPanning, setIsPanning] = useState(false);
+  const mainContainerRef = useRef<HTMLElement>(null);
+  const panStartRef = useRef<{ x: number; y: number; scrollLeft: number; scrollTop: number } | null>(null);
   
   // History for Undo
   const [history, setHistory] = useState<{ id: string; templateId: string; layers: Layer[] }[][]>([]);
@@ -507,10 +513,30 @@ export default function MediaKitEditor() {
         e.preventDefault();
         saveM.mutate();
       }
+
+      // Space for Panning
+      if (e.key === " ") {
+        e.preventDefault();
+        if (!isSpacePressed) {
+          setIsSpacePressed(true);
+        }
+      }
     };
+
+    const handleKeyUp = (e: KeyboardEvent) => {
+      if (e.key === " ") {
+        setIsSpacePressed(false);
+        setIsPanning(false);
+      }
+    };
+
     window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [history, selectedLayerIds, pages, activePageId, clipboard, saveM]);
+    window.addEventListener("keyup", handleKeyUp);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("keyup", handleKeyUp);
+    };
+  }, [history, selectedLayerIds, pages, activePageId, clipboard, saveM, isSpacePressed]);
 
 
 
@@ -1097,11 +1123,36 @@ export default function MediaKitEditor() {
             <main 
               ref={editorRef}
               onMouseDown={(e) => {
-                if (e.target === e.currentTarget) {
-                  setSelectedLayerIds(null);
+                if (isSpacePressed) {
+                  setIsPanning(true);
+                  if (editorRef.current) {
+                    panStartRef.current = {
+                      x: e.clientX,
+                      y: e.clientY,
+                      scrollLeft: editorRef.current.scrollLeft,
+                      scrollTop: editorRef.current.scrollTop
+                    };
+                  }
+                } else {
+                  if (e.target === e.currentTarget) {
+                    setSelectedLayerIds(null);
+                  }
                 }
               }}
-              className="flex-1 overflow-auto bg-slate-100 flex flex-col items-center gap-16 py-20 px-4 custom-scrollbar overscroll-x-none"
+              onMouseMove={(e) => {
+                if (isPanning && panStartRef.current && editorRef.current) {
+                  const dx = e.clientX - panStartRef.current.x;
+                  const dy = e.clientY - panStartRef.current.y;
+                  editorRef.current.scrollLeft = panStartRef.current.scrollLeft - dx;
+                  editorRef.current.scrollTop = panStartRef.current.scrollTop - dy;
+                }
+              }}
+              onMouseUp={() => setIsPanning(false)}
+              onMouseLeave={() => setIsPanning(false)}
+              className={cn(
+                "flex-1 overflow-auto bg-slate-100 flex flex-col items-center gap-16 py-20 px-4 custom-scrollbar overscroll-x-none transition-all",
+                isSpacePressed && (isPanning ? "cursor-grabbing" : "cursor-grab")
+              )}
               style={{ overscrollBehaviorX: "none" }}
             >
               <div className="fixed bottom-8 left-1/2 -translate-x-1/2 bg-white/80 backdrop-blur-md px-4 py-2 rounded-full border shadow-sm z-30 flex items-center gap-4">
