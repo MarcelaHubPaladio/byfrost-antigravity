@@ -1197,7 +1197,17 @@ export default function MediaKitEditor() {
                   </div>
                 ) : selectedLayer ? (
                   <>
-                    <div className="flex items-center justify-between pb-4 border-b border-slate-100">
+                    <div className="flex items-center gap-3 pb-4 border-b border-slate-100">
+                      <Button 
+                        variant="ghost" 
+                        size="icon" 
+                        onClick={() => setSelectedLayerIds(null)} 
+                        className="h-8 w-8 rounded-full text-slate-400 hover:text-blue-600 hover:bg-blue-50"
+                        title="Voltar para Camadas"
+                      >
+                        <ChevronLeft className="h-5 w-5" />
+                      </Button>
+                      <div className="flex items-center justify-between flex-1">
                       <div className="flex flex-col gap-1 min-w-0">
                         <Input 
                           value={selectedLayer.name || ""} 
@@ -1222,12 +1232,47 @@ export default function MediaKitEditor() {
                           <Trash2 className="h-4 w-4" />
                         </Button>
                       </div>
+                      </div>
                     </div>
 
                     <div className="space-y-4">
-                      {selectedLayer.type === "text" && (
+                       {selectedLayer.type === "text" && (
                         <>
                           <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-100">
+                             <div className="space-y-0.5">
+                               <Label className="text-xs font-bold text-slate-700">Lista de Cômodos</Label>
+                               <p className="text-[10px] text-slate-500">Exibir todos os cômodos</p>
+                             </div>
+                             <Switch 
+                               checked={!!selectedLayer.isList}
+                               onCheckedChange={(val) => updateLayer(selectedLayerIds!.pageId, selectedLayer.id, { isList: val }, true)}
+                             />
+                           </div>
+
+                           {selectedLayer.isList && (
+                             <div className="space-y-4 p-3 rounded-xl border border-slate-100 bg-white shadow-sm">
+                               <div className="space-y-2">
+                                 <Label className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">Separador dos itens</Label>
+                                 <Select 
+                                   value={selectedLayer.listSeparator || " | "} 
+                                   onValueChange={(val) => updateLayer(selectedLayerIds!.pageId, selectedLayer.id, { listSeparator: val }, true)}
+                                 >
+                                   <SelectTrigger className="rounded-xl h-9 text-xs">
+                                     <SelectValue />
+                                   </SelectTrigger>
+                                   <SelectContent>
+                                     <SelectItem value=" | ">Barra ( | )</SelectItem>
+                                     <SelectItem value=" • ">Ponto ( • )</SelectItem>
+                                     <SelectItem value=" , ">Vírgula ( , )</SelectItem>
+                                     <SelectItem value=" / ">Slash ( / )</SelectItem>
+                                     <SelectItem value="\n">Nova Linha</SelectItem>
+                                   </SelectContent>
+                                 </Select>
+                               </div>
+                             </div>
+                           )}
+
+                           <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-100">
                             <div className="space-y-0.5">
                               <Label className="text-xs font-bold text-slate-700">Conteúdo Variável</Label>
                               <p className="text-[10px] text-slate-500">Vincular a um campo da entidade</p>

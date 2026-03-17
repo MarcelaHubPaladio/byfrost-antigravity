@@ -27,6 +27,10 @@ export type Layer = {
   fontStyle?: "normal" | "italic";
   textAlign?: "left" | "center" | "right";
   objectFit?: "cover" | "contain" | "fill";
+  isList?: boolean;
+  listSeparator?: string;
+  listShowIcons?: boolean;
+  listLayout?: "horizontal" | "vertical";
 };
 
 type MediaKitCanvasProps = {
@@ -65,16 +69,35 @@ export const MediaKitCanvas = forwardRef<{ exportImage: () => Promise<string> },
     }));
 
     const getEffectiveValue = (layer: Layer) => {
+      if (layer.isList && entityPhotos) {
+        // If it's a list of rooms
+        const roomEntries = Object.entries((entityPhotos as any)?.roomCounts || {});
+        if (roomEntries.length === 0) return layer.content;
+
+        const items = roomEntries.map(([room, count]) => `${room}: ${count}`);
+        const separator = layer.listSeparator === "\\n" ? "\n" : (layer.listSeparator || " | ");
+        return items.join(separator);
+      }
+
       if (!layer.isVariable || !layer.variableField || !entityData) return layer.content;
       
+      const field = layer.variableField;
+      
+      // Special check for room counts
+      if (field.startsWith("room_") && entityPhotos) {
+        const roomName = field.replace("room_", "");
+        const count = (entityPhotos as any)?.roomCounts?.[roomName];
+        return count !== undefined ? String(count) : "0";
+      }
+
       // Check core fields first
-      if (entityData[layer.variableField] !== undefined && entityData[layer.variableField] !== null) {
-        return String(entityData[layer.variableField]);
+      if (entityData[field] !== undefined && entityData[field] !== null) {
+        return String(entityData[field]);
       }
       
       // Then metadata
-      if (entityData.metadata?.[layer.variableField] !== undefined && entityData.metadata?.[layer.variableField] !== null) {
-        return String(entityData.metadata[layer.variableField]);
+      if (entityData.metadata?.[field] !== undefined && entityData.metadata?.[field] !== null) {
+        return String(entityData.metadata[field]);
       }
       
       return layer.content;
@@ -102,6 +125,14 @@ export const MediaKitCanvas = forwardRef<{ exportImage: () => Promise<string> },
       if (!entityData) return text;
       return text.replace(/\{\{(.*?)\}\}/g, (_, key) => {
         const trimmedKey = key.trim();
+        
+        // Handle room_ prefix in placeholders
+        if (trimmedKey.startsWith("room_") && entityPhotos) {
+          const roomName = trimmedKey.replace("room_", "");
+          const count = (entityPhotos as any)?.roomCounts?.[roomName];
+          return count !== undefined ? String(count) : "0";
+        }
+
         const val = entityData[trimmedKey] ?? entityData.metadata?.[trimmedKey];
         return val !== undefined && val !== null ? String(val) : `{{${key}}}`;
       });
@@ -356,6 +387,7 @@ export const MediaKitCanvas = forwardRef<{ exportImage: () => Promise<string> },
                 borderRadius: layer.borderRadius || 0,
                 border: layer.borderWidth ? `${layer.borderWidth}px solid ${layer.borderColor || "#000"}` : undefined,
                 pointerEvents: layer.locked ? "none" : "auto",
+                overflow: "hidden",
               }}
             >
               {layer.type === "text" && (
