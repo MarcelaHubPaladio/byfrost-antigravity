@@ -1150,7 +1150,7 @@ export default function MediaKitEditor() {
               onMouseUp={() => setIsPanning(false)}
               onMouseLeave={() => setIsPanning(false)}
               className={cn(
-                "flex-1 overflow-auto bg-slate-100 custom-scrollbar overscroll-x-none transition-all",
+                "flex-1 overflow-auto bg-slate-100 flex custom-scrollbar overscroll-x-none transition-all",
                 isSpacePressed && (isPanning ? "cursor-grabbing" : "cursor-grab")
               )}
               style={{ overscrollBehaviorX: "none" }}
@@ -1177,7 +1177,7 @@ export default function MediaKitEditor() {
                 </Button>
               </div>
 
-              <div className="min-w-full min-h-full flex flex-col items-center gap-16 py-20 px-4">
+              <div className="m-auto flex flex-col items-center gap-16 py-20 px-4">
                 {pages.map((page, idx) => {
                   const template = templatesQ.data?.find(t => t.id === page.templateId);
                   return (
