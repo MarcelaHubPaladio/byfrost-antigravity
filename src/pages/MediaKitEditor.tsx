@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { cn } from "@/lib/utils";
 import * as Icons from "lucide-react";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
@@ -254,15 +254,31 @@ export default function MediaKitEditor() {
         .order("created_at", { ascending: false });
       if (error) throw error;
       
-      const roomCounts: Record<string, number> = {};
-      data?.forEach(p => {
-        const t = p.room_type || "Geral";
-        roomCounts[t] = (roomCounts[t] || 0) + 1;
-      });
-
-      return { photos: data || [], roomCounts };
+      return data || [];
     },
   });
+
+  const roomCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    
+    // 1. Get photo base counts as secondary/fallback
+    entityPhotosQ.data?.forEach(p => {
+      const t = p.room_type || "Geral";
+      counts[t] = (counts[t] || 0) + 1;
+    });
+
+    // 2. Override with explicit quantities from metadata if present
+    if (entityData) {
+      Object.entries(entityData).forEach(([key, val]) => {
+        if (key.startsWith("room_qty_")) {
+          const roomName = key.replace("room_qty_", "");
+          counts[roomName] = Number(val);
+        }
+      });
+    }
+
+    return counts;
+  }, [entityPhotosQ.data, entityData]);
 
   const roomTypesQ = useQuery({
     queryKey: ["room_types", activeTenantId],
@@ -1155,8 +1171,8 @@ export default function MediaKitEditor() {
                         onUpdateLayers={(layerIds, delta) => updateLayers(page.id, layerIds, delta)}
                         scale={scale}
                         entityData={entityData}
-                        entityPhotos={entityPhotosQ.data?.photos || []}
-                        roomCounts={entityPhotosQ.data?.roomCounts || {}}
+                        entityPhotos={entityPhotosQ.data || []}
+                        roomCounts={roomCounts}
                       />
                     </div>
                   </div>
@@ -1317,8 +1333,8 @@ export default function MediaKitEditor() {
                                   }
 
                                   {/* room counts if applicable */}
-                                  {Object.entries(entityPhotosQ.data?.roomCounts || {}).map(([room, count]) => (
-                                    <SelectItem key={`room_${room}`} value={`room_${room}`}>{room}: {count}</SelectItem>
+                                  {Object.entries(roomCounts).map(([room, count]) => (
+                                    <SelectItem key={`room_${room}`} value={`room_${room}`}>{(room as string)}: {(count as number)}</SelectItem>
                                   ))}
                                 </SelectContent>
                               </Select>

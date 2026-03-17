@@ -27,6 +27,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Tag, X, Plus as PlusIcon, Check, Save, Loader2, Search } from "lucide-react";
+import * as Icons from "lucide-react";
 import { LocationPinSelector } from "@/components/crm/LocationPinSelector";
 import { cn } from "@/lib/utils";
 import { Card } from "@/components/ui/card";
@@ -133,6 +134,36 @@ export function EntityEditTab({
   const [tagInput, setTagInput] = useState("");
   const [geocoding, setGeocoding] = useState(false);
 
+  // Room Quantities State
+  const [roomQtys, setRoomQtys] = useState<Record<string, number>>({});
+
+  const roomTypesQ = useQuery({
+    queryKey: ["room_types", tenantId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("core_property_room_types")
+        .select("*")
+        .eq("tenant_id", tenantId)
+        .is("deleted_at", null)
+        .order("name", { ascending: true });
+      if (error) throw error;
+      return data;
+    }
+  });
+
+  useEffect(() => {
+    if (entity.metadata) {
+      const qtys: Record<string, number> = {};
+      Object.entries(entity.metadata).forEach(([key, val]) => {
+        if (key.startsWith("room_qty_")) {
+          const roomName = key.replace("room_qty_", "");
+          qtys[roomName] = Number(val) || 0;
+        }
+      });
+      setRoomQtys(qtys);
+    }
+  }, [entity.metadata]);
+
   const handleGeocode = async () => {
     if (!address.trim()) return;
     setGeocoding(true);
@@ -199,6 +230,11 @@ export function EntityEditTab({
         price_rent: subtype === "imovel" ? parseFloat(priceRent.replace(",", ".")) : entity.metadata?.price_rent,
         price_consult: subtype === "imovel" ? priceConsult : entity.metadata?.price_consult,
         tags: tags,
+        // Include room quantities
+        ...Object.entries(roomQtys).reduce((acc, [name, qty]) => ({
+          ...acc,
+          [`room_qty_${name}`]: qty
+        }), {})
       };
 
       const entityData: any = {
@@ -561,6 +597,44 @@ export function EntityEditTab({
               </div>
               <p className="text-[10px] text-slate-400 italic">Mova o pin para a localização exata no mapa para relatórios técnicos.</p>
             </div>
+          </div>
+
+          <div className="border-t pt-8">
+             <div className="grid gap-3 mb-6">
+                <Label className="text-slate-700 font-bold uppercase text-[11px] tracking-wider">Distribuição de Cômodos</Label>
+                <p className="text-xs text-slate-500">Informe a quantidade real de cada cômodo para exibição no Mídia Kit.</p>
+             </div>
+             
+             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                {roomTypesQ.data?.map(rt => (
+                  <div key={rt.id} className="relative group">
+                    <Label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">{rt.name}</Label>
+                    <div className="relative">
+                      <Input 
+                        type="number" 
+                        min="0"
+                        value={roomQtys[rt.name] ?? 0}
+                        onChange={e => setRoomQtys({ ...roomQtys, [rt.name]: parseInt(e.target.value) || 0 })}
+                        className="rounded-xl h-11 border-slate-200 bg-slate-50/50 pr-8 transition-all focus:bg-white focus:ring-indigo-500"
+                        placeholder="0"
+                      />
+                      <div className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-300 group-focus-within:text-indigo-400 pointer-events-none">
+                         <Icons.Hash className="w-3.5 h-3.5" />
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                {roomTypesQ.isLoading && (
+                  <div className="col-span-full py-4 text-center">
+                    <Loader2 className="w-6 h-6 animate-spin text-slate-200 mx-auto" />
+                  </div>
+                )}
+                {roomTypesQ.data?.length === 0 && (
+                  <div className="col-span-full py-6 text-center border-2 border-dashed border-slate-100 rounded-2xl bg-slate-50/20">
+                     <p className="text-xs text-slate-400">Nenhum tipo de cômodo configurado para este tenant.</p>
+                  </div>
+                )}
+             </div>
           </div>
         </Card>
       )}

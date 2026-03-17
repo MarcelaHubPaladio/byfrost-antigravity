@@ -81,8 +81,8 @@ export const MediaKitCanvas = forwardRef<{ exportImage: () => Promise<string> },
     const getEffectiveValue = (layer: Layer) => {
       if (layer.isList && roomCounts) {
         // If it's a list of rooms
-        const roomEntries = Object.entries(roomCounts);
-        if (roomEntries.length === 0) return layer.content;
+        const roomEntries = Object.entries(roomCounts).filter(([_, count]) => count > 0);
+        if (roomEntries.length === 0) return "";
 
         const items = roomEntries.map(([room, count]) => `${room}: ${count}`);
         const separator = layer.listSeparator === "\\n" ? "\n" : (layer.listSeparator || " | ");
