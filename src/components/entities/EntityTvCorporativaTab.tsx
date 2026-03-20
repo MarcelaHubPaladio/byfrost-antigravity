@@ -312,35 +312,35 @@ export function EntityTvCorporativaTab({ tenantId, entityId }: { tenantId: strin
     return (
         <div className="grid gap-6 lg:grid-cols-2">
             <Card className="rounded-2xl border-slate-200 p-6">
-                <div className="flex items-center justify-between mb-6">
-                    <div>
-                        <h3 className="text-lg font-semibold text-slate-900">Mídias do Cliente</h3>
-                        <p className="mt-1 text-sm text-slate-600">
-                            Adicione vídeos ou links para exibição.
-                        </p>
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-6 gap-4">
+                        <div>
+                            <h3 className="text-lg font-semibold text-slate-900">Mídias do Cliente</h3>
+                            <p className="mt-1 text-sm text-slate-600">
+                                Adicione vídeos ou links para exibição.
+                            </p>
+                        </div>
+                        <div className="w-full sm:w-auto">
+                            {entityQ.data?.magic_token ? (
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="w-full sm:w-auto rounded-xl border-indigo-200 text-indigo-700 bg-indigo-50 hover:bg-indigo-100"
+                                    onClick={copyMagicLink}
+                                >
+                                    <Copy className="mr-2 h-4 w-4" /> Copiar Link de Upload
+                                </Button>
+                            ) : (
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="w-full sm:w-auto rounded-xl"
+                                    onClick={handleGenerateMagicToken}
+                                >
+                                    <Share2 className="mr-2 h-4 w-4" /> Ativar Link de Upload
+                                </Button>
+                            )}
+                        </div>
                     </div>
-                    <div>
-                        {entityQ.data?.magic_token ? (
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                className="rounded-xl border-indigo-200 text-indigo-700 bg-indigo-50 hover:bg-indigo-100"
-                                onClick={copyMagicLink}
-                            >
-                                <Copy className="mr-2 h-4 w-4" /> Copiar Link de Upload
-                            </Button>
-                        ) : (
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                className="rounded-xl"
-                                onClick={handleGenerateMagicToken}
-                            >
-                                <Share2 className="mr-2 h-4 w-4" /> Ativar Link de Upload
-                            </Button>
-                        )}
-                    </div>
-                </div>
 
                 <div className="space-y-4 rounded-xl border border-slate-200 bg-slate-50 p-4 mb-6">
                     <div>
@@ -420,7 +420,7 @@ export function EntityTvCorporativaTab({ tenantId, entityId }: { tenantId: strin
                     ) : (
                         <div className="flex flex-col gap-3">
                             {mediaQ.data?.map(m => (
-                                <div key={m.id} className={`flex items-center justify-between rounded-xl border p-3 transition ${m.status === 'inactive' ? 'opacity-50 grayscale bg-slate-50 border-slate-200' : 'border-slate-200 bg-white shadow-sm'}`}>
+                                <div key={m.id} className={`flex flex-col sm:flex-row sm:items-center justify-between rounded-xl border p-3 gap-3 transition ${m.status === 'inactive' ? 'opacity-50 grayscale bg-slate-50 border-slate-200' : 'border-slate-200 bg-white shadow-sm'}`}>
                                     <div className="flex items-center gap-3 overflow-hidden flex-1">
                                         {m.media_type === 'youtube_link' ? <Youtube className="h-5 w-5 text-rose-500 shrink-0" /> : <LinkIcon className="h-5 w-5 text-indigo-500 shrink-0" />}
                                         <div className="truncate flex-1">
@@ -448,7 +448,7 @@ export function EntityTvCorporativaTab({ tenantId, entityId }: { tenantId: strin
                                                         <Button
                                                             variant="ghost"
                                                             size="icon"
-                                                            className="h-6 w-6 text-slate-300 hover:text-indigo-600 hover:bg-indigo-50 opacity-0 group-hover/title:opacity-100 transition-opacity"
+                                                            className="h-6 w-6 text-slate-300 hover:text-indigo-600 hover:bg-indigo-50 sm:opacity-0 group-hover/title:opacity-100 transition-opacity"
                                                             onClick={() => {
                                                                 setEditingMediaId(m.id);
                                                                 setEditingName(m.name || "");
@@ -464,38 +464,40 @@ export function EntityTvCorporativaTab({ tenantId, entityId }: { tenantId: strin
                                             )}
                                         </div>
                                     </div>
-                                    <div className="flex items-center gap-2 shrink-0">
-                                        <div className="relative group/frame mr-2">
-                                            {m.frame_url ? (
-                                                <div className="flex items-center gap-1">
-                                                    <div className="h-8 w-8 rounded-lg border border-slate-200 overflow-hidden bg-white cursor-pointer hover:bg-slate-50 relative group/frameimg">
-                                                        <img src={m.frame_url} className="h-full w-full object-contain" alt="Moldura" />
-                                                        <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover/frameimg:opacity-100 transition-opacity" onClick={() => handleRemoveFrame(m.id)}>
-                                                            <Trash2 className="h-3 w-3 text-white" />
+                                    <div className="flex items-center justify-between sm:justify-end gap-2 shrink-0 border-t sm:border-0 pt-2 sm:pt-0">
+                                        <div className="flex items-center gap-4">
+                                            <div className="relative group/frame">
+                                                {m.frame_url ? (
+                                                    <div className="flex items-center gap-1">
+                                                        <div className="h-8 w-8 rounded-lg border border-slate-200 overflow-hidden bg-white cursor-pointer hover:bg-slate-50 relative group/frameimg">
+                                                            <img src={m.frame_url} className="h-full w-full object-contain" alt="Moldura" />
+                                                            <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover/frameimg:opacity-100 transition-opacity" onClick={() => handleRemoveFrame(m.id)}>
+                                                                <Trash2 className="h-3 w-3 text-white" />
+                                                            </div>
                                                         </div>
                                                     </div>
-                                                </div>
-                                            ) : (
-                                                <div className="relative">
-                                                    <Input
-                                                        type="file"
-                                                        accept="image/png"
-                                                        className="absolute inset-0 opacity-0 cursor-pointer z-10"
-                                                        onChange={(e) => e.target.files?.[0] && handleUploadFrame(e.target.files[0], m.id)}
-                                                        disabled={uploadingFrameId === m.id}
-                                                    />
-                                                    <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-300 hover:text-indigo-600 hover:bg-indigo-50">
-                                                        {uploadingFrameId === m.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <ImageIcon className="h-3 w-3" />}
-                                                    </Button>
-                                                </div>
-                                            )}
-                                        </div>
-                                        <div className="flex items-center gap-2 mr-2">
-                                            <Switch
-                                                checked={m.status === "active"}
-                                                onCheckedChange={() => handleToggleMediaStatus(m.id, m.status)}
-                                                title={m.status === "active" ? "Desativar mídia" : "Ativar mídia"}
-                                            />
+                                                ) : (
+                                                    <div className="relative">
+                                                        <Input
+                                                            type="file"
+                                                            accept="image/png"
+                                                            className="absolute inset-0 opacity-0 cursor-pointer z-10"
+                                                            onChange={(e) => e.target.files?.[0] && handleUploadFrame(e.target.files[0], m.id)}
+                                                            disabled={uploadingFrameId === m.id}
+                                                        />
+                                                        <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-300 hover:text-indigo-600 hover:bg-indigo-50">
+                                                            {uploadingFrameId === m.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <ImageIcon className="h-3 w-3" />}
+                                                        </Button>
+                                                    </div>
+                                                )}
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                <Switch
+                                                    checked={m.status === "active"}
+                                                    onCheckedChange={() => handleToggleMediaStatus(m.id, m.status)}
+                                                    title={m.status === "active" ? "Desativar mídia" : "Ativar mídia"}
+                                                />
+                                            </div>
                                         </div>
                                         <Button variant="ghost" size="icon" onClick={() => handleDeleteMedia(m.id)} className="text-slate-400 hover:text-rose-600">
                                             <Trash2 className="h-4 w-4" />
@@ -541,12 +543,12 @@ export function EntityTvCorporativaTab({ tenantId, entityId }: { tenantId: strin
                             const isActive = entityPlan ? (entityPlan.is_active && !entityPlan.deleted_at) : false;
 
                             return (
-                                <div key={plan.id} className={`flex items-center justify-between rounded-xl border p-4 transition ${isActive ? 'border-primary/50 bg-primary/5' : 'border-slate-200'}`}>
+                                <div key={plan.id} className={`flex flex-col sm:flex-row sm:items-center justify-between rounded-xl border p-4 gap-4 transition ${isActive ? 'border-primary/50 bg-primary/5' : 'border-slate-200'}`}>
                                     <div>
                                         <p className="font-semibold text-slate-900">{plan.name}</p>
                                         <p className="text-xs text-slate-500">{plan.video_duration_seconds}s de duração • {plan.has_contact_break ? 'Com' : 'Sem'} tela de contato</p>
                                     </div>
-                                    <div className="flex items-center gap-4">
+                                    <div className="flex items-center justify-between sm:justify-end gap-4 border-t sm:border-0 pt-3 sm:pt-0">
                                         {isActive && (
                                             <div className="flex items-center gap-2">
                                                 {entityPlan.default_frame_url ? (
@@ -557,7 +559,7 @@ export function EntityTvCorporativaTab({ tenantId, entityId }: { tenantId: strin
                                                                 <Trash2 className="h-4 w-4 text-white" />
                                                             </div>
                                                         </div>
-                                                        <p className="text-[10px] font-bold text-slate-400">Moldura Padrão</p>
+                                                        <p className="text-[10px] font-bold text-slate-400 hidden sm:block">Moldura Padrão</p>
                                                     </div>
                                                 ) : (
                                                     <div className="relative group/upload">
@@ -570,7 +572,7 @@ export function EntityTvCorporativaTab({ tenantId, entityId }: { tenantId: strin
                                                         />
                                                         <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-dashed border-slate-300 text-slate-400 hover:text-primary hover:border-primary transition cursor-pointer">
                                                             {uploadingFrameId === entityPlan.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <ImageIcon className="h-3 w-3" />}
-                                                            <span className="text-[10px] font-bold">+ MOLDURA PADRÃO</span>
+                                                            <span className="text-[10px] font-bold">MOLDURA PADRÃO</span>
                                                         </div>
                                                     </div>
                                                 )}

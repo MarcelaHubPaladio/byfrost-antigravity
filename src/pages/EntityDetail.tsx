@@ -190,19 +190,21 @@ export default function EntityDetail() {
               <Card className="rounded-2xl border-slate-200 p-4 text-sm text-slate-700">Entidade não encontrada.</Card>
             ) : (
               <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-                <TabsList>
-                  <TabsTrigger value="overview">Visão geral</TabsTrigger>
-                  <TabsTrigger value="edit">Editar</TabsTrigger>
-                  {entityQ.data?.entity_type === "party" ? <TabsTrigger value="customer">Cliente</TabsTrigger> : null}
-                  {entityQ.data?.entity_type === "party" ? <TabsTrigger value="proposal">Proposta</TabsTrigger> : null}
-                  {entityQ.data?.entity_type === "party" ? <TabsTrigger value="orders">Pedidos</TabsTrigger> : null}
-                  {tvCorporativaEnabled ? <TabsTrigger value="tv_corporativa">TV Corporativa</TabsTrigger> : null}
-                  {mediaKitEnabled ? <TabsTrigger value="media_kit">Mídia Kit</TabsTrigger> : null}
-                  {entityQ.data?.subtype === "imovel" ? <TabsTrigger value="photos">Fotos</TabsTrigger> : null}
-                  {entityQ.data?.entity_type === "party" ? <TabsTrigger value="receipts">Recibos</TabsTrigger> : null}
-                  <TabsTrigger value="finance">Financeiro</TabsTrigger>
-                  <TabsTrigger value="timeline">Linha do tempo</TabsTrigger>
-                </TabsList>
+                <div className="overflow-x-auto pb-1 mb-2 scrollbar-hide -mx-4 px-4 sm:mx-0 sm:px-0">
+                  <TabsList className="bg-slate-100/50 p-1.5 rounded-2xl h-auto flex-nowrap w-max sm:w-fit sm:mx-auto">
+                    <TabsTrigger value="overview" className="rounded-xl px-4 py-2 text-xs font-semibold data-[state=active]:bg-white data-[state=active]:shadow-sm">Visão geral</TabsTrigger>
+                    <TabsTrigger value="edit" className="rounded-xl px-4 py-2 text-xs font-semibold data-[state=active]:bg-white data-[state=active]:shadow-sm">Editar</TabsTrigger>
+                    {entityQ.data?.entity_type === "party" ? <TabsTrigger value="customer" className="rounded-xl px-4 py-2 text-xs font-semibold data-[state=active]:bg-white data-[state=active]:shadow-sm">Cliente</TabsTrigger> : null}
+                    {entityQ.data?.entity_type === "party" ? <TabsTrigger value="proposal" className="rounded-xl px-4 py-2 text-xs font-semibold data-[state=active]:bg-white data-[state=active]:shadow-sm">Proposta</TabsTrigger> : null}
+                    {entityQ.data?.entity_type === "party" ? <TabsTrigger value="orders" className="rounded-xl px-4 py-2 text-xs font-semibold data-[state=active]:bg-white data-[state=active]:shadow-sm">Pedidos</TabsTrigger> : null}
+                    {tvCorporativaEnabled ? <TabsTrigger value="tv_corporativa" className="rounded-xl px-4 py-2 text-xs font-semibold data-[state=active]:bg-white data-[state=active]:shadow-sm">TV Corporativa</TabsTrigger> : null}
+                    {mediaKitEnabled ? <TabsTrigger value="media_kit" className="rounded-xl px-4 py-2 text-xs font-semibold data-[state=active]:bg-white data-[state=active]:shadow-sm">Mídia Kit</TabsTrigger> : null}
+                    {entityQ.data?.subtype === "imovel" ? <TabsTrigger value="photos" className="rounded-xl px-4 py-2 text-xs font-semibold data-[state=active]:bg-white data-[state=active]:shadow-sm">Fotos</TabsTrigger> : null}
+                    {entityQ.data?.entity_type === "party" ? <TabsTrigger value="receipts" className="rounded-xl px-4 py-2 text-xs font-semibold data-[state=active]:bg-white data-[state=active]:shadow-sm">Recibos</TabsTrigger> : null}
+                    <TabsTrigger value="finance" className="rounded-xl px-4 py-2 text-xs font-semibold data-[state=active]:bg-white data-[state=active]:shadow-sm">Financeiro</TabsTrigger>
+                    <TabsTrigger value="timeline" className="rounded-xl px-4 py-2 text-xs font-semibold data-[state=active]:bg-white data-[state=active]:shadow-sm">Linha do tempo</TabsTrigger>
+                  </TabsList>
+                </div>
 
                 <TabsContent value="overview">
                   <div className="grid gap-4 lg:grid-cols-2">

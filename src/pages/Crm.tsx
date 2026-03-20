@@ -1093,7 +1093,7 @@ export default function Crm() {
       </AppShell>
 
       {activeTenantId && selectedJourney ? (
-        <div className="fixed bottom-0 left-0 right-0 z-[9999] border-t border-slate-200 bg-white/90 p-3 pb-8 backdrop-blur-md sm:hidden shadow-[0_-10px_40px_rgba(0,0,0,0.1)]">
+        <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-slate-200 bg-white/90 p-3 pb-8 backdrop-blur-md sm:hidden shadow-[0_-10px_40px_rgba(0,0,0,0.1)]">
           <NewLeadDialog 
             tenantId={activeTenantId} 
             journey={selectedJourney as any} 
