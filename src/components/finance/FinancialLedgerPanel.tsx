@@ -627,14 +627,37 @@ export function FinancialLedgerPanel() {
       }
 
       // 1. Update all transactions to target category
-      const { error: updErr } = await supabase
+      const { error: txErr } = await supabase
         .from("financial_transactions")
         .update({ category_id: remappingTargetId })
         .eq("tenant_id", activeTenantId)
         .eq("category_id", categoryToDelete.id);
-      if (updErr) throw updErr;
+      if (txErr) throw txErr;
 
-      // 2. Delete the category
+      // 2. Update payables
+      const { error: payErr } = await supabase
+        .from("financial_payables")
+        .update({ category_id: remappingTargetId })
+        .eq("tenant_id", activeTenantId)
+        .eq("category_id", categoryToDelete.id);
+      if (payErr) throw payErr;
+
+      // 3. Update receivables
+      const { error: recErr } = await supabase
+        .from("financial_receivables")
+        .update({ category_id: remappingTargetId })
+        .eq("tenant_id", activeTenantId)
+        .eq("category_id", categoryToDelete.id);
+      if (recErr) throw recErr;
+
+      // 4. Delete classification rules (to avoid unique conflicts on remap)
+      await supabase
+        .from("classification_rules")
+        .delete()
+        .eq("tenant_id", activeTenantId)
+        .eq("category_id", categoryToDelete.id);
+
+      // 5. Delete the category
       const { error: delErr } = await supabase
         .from("financial_categories")
         .delete()
@@ -643,11 +666,13 @@ export function FinancialLedgerPanel() {
       if (delErr) throw delErr;
     },
     onSuccess: async () => {
-      showSuccess(`Categoria "${categoryToDelete?.name}" removida. Lançamentos movidos.`);
+      showSuccess(`Categoria "${categoryToDelete?.name}" removida. Lançamentos, contas a pagar e receber foram movidos.`);
       setCategoryToDelete(null);
       setRemappingTargetId(null);
       await qc.invalidateQueries({ queryKey: ["financial_categories", activeTenantId] });
       await qc.invalidateQueries({ queryKey: ["financial_transactions", activeTenantId] });
+      await qc.invalidateQueries({ queryKey: ["financial_payables", activeTenantId] });
+      await qc.invalidateQueries({ queryKey: ["financial_receivables", activeTenantId] });
     },
     onError: (e: any) => showError(e?.message ?? "Falha ao remover categoria"),
   });
