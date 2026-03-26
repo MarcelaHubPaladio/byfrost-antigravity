@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { cn } from "@/lib/utils";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
@@ -33,7 +33,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { showError, showSuccess } from "@/utils/toast";
 import { Checkbox } from "@/components/ui/checkbox";
-import { addMonths, format } from "date-fns";
+import { addDays, addMonths, subMonths, format, parseISO, startOfMonth, endOfMonth, startOfDay, endOfDay } from "date-fns";
+import { ptBR } from "date-fns/locale";
 import {
   Download, Landmark, Pencil, Plus, Upload, Link2, CheckCircle2, Search, Info, Trash2, X } from "lucide-react";
 import { AsyncSelect } from "@/components/ui/async-select";
@@ -323,78 +324,182 @@ export function FinancialLedgerPanel() {
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
 
   // DRE State
-  const dreMonths = useMemo(() => {
-    const months = [];
-    const now = new Date();
-    for (let i = 3; i >= 0; i--) {
-      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-      months.push({
-        label: d.toLocaleString("pt-BR", { month: "short" }).toUpperCase(),
-        key: d.toISOString().slice(0, 7), // YYYY-MM
-        start: new Date(d.getFullYear(), d.getMonth(), 1).toISOString().slice(0, 10),
-        end: new Date(d.getFullYear(), d.getMonth() + 1, 0).toISOString().slice(0, 10),
-      });
+  const [dreStartDate, setDreStartDate] = useState<string>(() => format(subMonths(new Date(), 2), "yyyy-MM-01"));
+  const [dreEndDate, setDreEndDate] = useState<string>(() => format(addMonths(new Date(), 3), "yyyy-MM-dd"));
+  const [dreGranularity, setDreGranularity] = useState<"monthly" | "daily">("monthly");
+
+  const drePeriods = useMemo(() => {
+    const periods = [];
+    const start = parseISO(dreStartDate);
+    const end = parseISO(dreEndDate);
+
+    if (dreGranularity === "monthly") {
+      let current = startOfMonth(start);
+      while (current <= end) {
+        const mKey = format(current, "yyyy-MM");
+        periods.push({
+          label: format(current, "MMM/yy", { locale: ptBR }).toUpperCase(),
+          key: mKey,
+          start: format(startOfMonth(current), "yyyy-MM-dd"),
+          end: format(endOfMonth(current), "yyyy-MM-dd"),
+        });
+        current = addMonths(current, 1);
+      }
+    } else {
+      let current = startOfDay(start);
+      const limit = endOfDay(end);
+      let count = 0;
+      while (current <= limit && count < 62) { // Limit to 2 months of daily view for performance
+        const dKey = format(current, "yyyy-MM-dd");
+        periods.push({
+          label: format(current, "dd/MM"),
+          key: dKey,
+          start: dKey,
+          end: dKey,
+        });
+        current = addDays(current, 1);
+        count++;
+      }
     }
-    return months;
-  }, []);
+    return periods;
+  }, [dreStartDate, dreEndDate, dreGranularity]);
 
   const dreTransactionsQ = useQuery({
-    queryKey: ["financial_dre", activeTenantId, dreMonths[0].start, dreMonths[3].end],
+    queryKey: ["financial_dre_transactions", activeTenantId, dreStartDate, dreEndDate],
     enabled: Boolean(activeTenantId),
     queryFn: async () => {
       const { data, error } = await supabase
         .from("financial_transactions")
         .select("amount, type, category_id, transaction_date")
         .eq("tenant_id", activeTenantId!)
-        .gte("transaction_date", dreMonths[0].start)
-        .lte("transaction_date", dreMonths[3].end);
+        .gte("transaction_date", dreStartDate)
+        .lte("transaction_date", dreEndDate);
       if (error) throw error;
       return (data ?? []) as any[];
+    },
+  });
+
+  const dreBudgetsQ = useQuery({
+    queryKey: ["financial_dre_budgets", activeTenantId],
+    enabled: Boolean(activeTenantId),
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("financial_budgets")
+        .select("category_id, expected_amount, recurrence, scenario")
+        .eq("tenant_id", activeTenantId!)
+        .eq("scenario", "base");
+      if (error) throw error;
+      return (data ?? []) as any[];
+    },
+  });
+
+  const drePendingQ = useQuery({
+    queryKey: ["financial_dre_pending", activeTenantId, dreStartDate, dreEndDate],
+    enabled: Boolean(activeTenantId),
+    queryFn: async () => {
+      const [resP, resR] = await Promise.all([
+        supabase
+          .from("financial_payables")
+          .select("amount, category_id, due_date")
+          .eq("tenant_id", activeTenantId!)
+          .eq("status", "pending")
+          .gte("due_date", dreStartDate)
+          .lte("due_date", dreEndDate),
+        supabase
+          .from("financial_receivables")
+          .select("amount, category_id, due_date")
+          .eq("tenant_id", activeTenantId!)
+          .eq("status", "pending")
+          .gte("due_date", dreStartDate)
+          .lte("due_date", dreEndDate),
+      ]);
+      if (resP.error) throw resP.error;
+      if (resR.error) throw resR.error;
+      return {
+        payables: resP.data ?? [],
+        receivables: resR.data ?? [],
+      };
     },
   });
 
   const dreData = useMemo(() => {
     const categories = categoriesQ.data ?? [];
     const transactions = dreTransactionsQ.data ?? [];
+    const budgets = dreBudgetsQ.data ?? [];
+    const pending = drePendingQ.data || { payables: [], receivables: [] };
 
-    const rows: Record<string, { category: CategoryRow; months: Record<string, number> }> = {};
+    const rows: Record<string, { 
+      category: CategoryRow; 
+      periods: Record<string, { budget: number; realized: number }> 
+    }> = {};
 
-    // Initialize rows for categories that have transactions
-    transactions.forEach(t => {
-      if (!t.category_id) return;
-      if (!rows[t.category_id]) {
-        const cat = categories.find(c => c.id === t.category_id);
-        if (!cat) return;
-        rows[t.category_id] = { category: cat, months: {} };
-        dreMonths.forEach(m => { rows[t.category_id].months[m.key] = 0; });
-      }
-      const mKey = t.transaction_date.slice(0, 7);
-      if (rows[t.category_id].months[mKey] !== undefined) {
-        // Amount is always positive in DB, we rely on t.type if needed but DRE usually sums by category
-        // Actually, let's keep it simple: sum absolute amounts. 
-        // If type is debit, it's an expense category usually.
-        rows[t.category_id].months[mKey] += Number(t.amount);
+    // Initialize periods for all categories
+    categories.forEach(cat => {
+      rows[cat.id] = { category: cat, periods: {} };
+      drePeriods.forEach(p => {
+        rows[cat.id].periods[p.key] = { budget: 0, realized: 0 };
+      });
+    });
+
+    // 1. Budgeting
+    budgets.forEach(b => {
+      if (!rows[b.category_id]) return;
+      if (b.recurrence === "monthly") {
+        drePeriods.forEach(p => {
+          // If monthly budget and Granville is daily, we divide? 
+          // For now, only show monthly budget in monthly view or distributed?
+          // User said "cada mes terá duas vertentes: Orçamento ... e Realizado".
+          // Let's assume budgets are monthly.
+          if (dreGranularity === "monthly") {
+            rows[b.category_id].periods[p.key].budget += Number(b.expected_amount);
+          } else {
+            // Distribute simple average for daily view
+            rows[b.category_id].periods[p.key].budget += Number(b.expected_amount) / 30;
+          }
+        });
       }
     });
 
-    const sortedRows = Object.values(rows).sort((a, b) => {
+    // 2. Realized (Transactions)
+    transactions.forEach(t => {
+      if (!t.category_id || !rows[t.category_id]) return;
+      const pKey = dreGranularity === "monthly" ? t.transaction_date.slice(0, 7) : t.transaction_date;
+      if (rows[t.category_id].periods[pKey]) {
+        rows[t.category_id].periods[pKey].realized += Number(t.amount);
+      }
+    });
+
+    // 3. Projected (Pending Payables/Receivables)
+    pending.payables.forEach(p => {
+      if (!p.category_id || !rows[p.category_id]) return;
+      const pKey = dreGranularity === "monthly" ? p.due_date.slice(0, 7) : p.due_date;
+      if (rows[p.category_id].periods[pKey]) {
+        rows[p.category_id].periods[pKey].realized += Number(p.amount);
+      }
+    });
+    pending.receivables.forEach(r => {
+      if (!r.category_id || !rows[r.category_id]) return;
+      const pKey = dreGranularity === "monthly" ? r.due_date.slice(0, 7) : r.due_date;
+      if (rows[r.category_id].periods[pKey]) {
+        rows[r.category_id].periods[pKey].realized += Number(r.amount);
+      }
+    });
+
+    // Filter out categories with no data in the range
+    const filteredRows = Object.values(rows).filter(row => {
+      return Object.values(row.periods).some(p => p.budget > 0 || p.realized > 0);
+    });
+
+    return filteredRows.sort((a, b) => {
       if (a.category.type !== b.category.type) {
-        const order: Record<CategoryType, number> = {
-          revenue: 0,
-          cost: 1,
-          variable: 2,
-          fixed: 3,
-          investment: 4,
-          financing: 5,
-          other: 6,
+        const order: Record<string, number> = {
+          revenue: 0, cost: 1, variable: 2, fixed: 3, investment: 4, financing: 5, other: 6,
         };
         return (order[a.category.type] ?? 99) - (order[b.category.type] ?? 99);
       }
       return a.category.name.localeCompare(b.category.name);
     });
-
-    return sortedRows;
-  }, [categoriesQ.data, dreTransactionsQ.data, dreMonths]);
+  }, [categoriesQ.data, dreTransactionsQ.data, dreBudgetsQ.data, drePendingQ.data, drePeriods, dreGranularity]);
 
   const transactionsQ = useQuery({
     queryKey: ["financial_transactions", activeTenantId, txStartDate, txEndDate],
@@ -2102,81 +2207,203 @@ export function FinancialLedgerPanel() {
 
       <TabsContent value="dre" className="grid gap-4">
         <Card className="rounded-[22px] border-slate-200 bg-white/70 p-4 shadow-sm backdrop-blur dark:border-slate-800 dark:bg-slate-950/40">
-          <div className="mb-4">
-            <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">DRE-Caixa Simplificado</div>
-            <div className="mt-1 text-xs text-slate-600 dark:text-slate-400">
-              Resumo mensal por categoria (regime de caixa). Apenas categorias com lançamentos são exibidas.
+          <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">DRE-Caixa & Planejamento</div>
+              <div className="mt-1 text-xs text-slate-600 dark:text-slate-400">
+                Acompanhamento de orçamento vs realizado (regime de caixa).
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-white p-1 dark:border-slate-800 dark:bg-slate-950/40">
+                <Button 
+                  variant={dreGranularity === "monthly" ? "secondary" : "ghost"} 
+                  size="sm" 
+                  className="h-8 rounded-xl px-4 text-xs" 
+                  onClick={() => setDreGranularity("monthly")}
+                >
+                  Mensal
+                </Button>
+                <Button 
+                  variant={dreGranularity === "daily" ? "secondary" : "ghost"} 
+                  size="sm" 
+                  className="h-8 rounded-xl px-4 text-xs" 
+                  onClick={() => setDreGranularity("daily")}
+                >
+                  Diário
+                </Button>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <Input 
+                  type="date" 
+                  className="h-9 w-[130px] rounded-2xl text-xs" 
+                  value={dreStartDate} 
+                  onChange={(e) => setDreStartDate(e.target.value)} 
+                />
+                <span className="text-slate-400">até</span>
+                <Input 
+                  type="date" 
+                  className="h-9 w-[130px] rounded-2xl text-xs" 
+                  value={dreEndDate} 
+                  onChange={(e) => setDreEndDate(e.target.value)} 
+                />
+              </div>
+
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="h-9 rounded-2xl"
+                onClick={() => {
+                  dreTransactionsQ.refetch();
+                  dreBudgetsQ.refetch();
+                  drePendingQ.refetch();
+                }}
+              >
+                Atualizar
+              </Button>
             </div>
           </div>
 
           <div className="overflow-x-auto rounded-2xl border border-slate-200 dark:border-slate-800">
             <Table>
               <TableHeader>
-                <TableRow className="bg-slate-50/50 dark:bg-slate-900/20">
-                  <TableHead className="min-w-[200px]">Categoria</TableHead>
-                  {dreMonths.map((m) => (
-                    <TableHead key={m.key} className="text-right w-[120px]">{m.label}</TableHead>
+                <TableRow className="bg-slate-50/50 dark:bg-slate-900/20 border-b">
+                  <TableHead className="min-w-[220px] sticky left-0 bg-slate-50/50 dark:bg-slate-900/20 z-10">Categoria</TableHead>
+                  {drePeriods.map((p) => (
+                    <TableHead key={p.key} colSpan={3} className="text-center border-l bg-slate-100/30 dark:bg-slate-800/20">
+                      <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">{p.label}</div>
+                      <div className="flex justify-around text-[9px] text-slate-400 border-t pt-1">
+                        <span className="w-1/3 text-left pl-1">ORÇ.</span>
+                        <span className="w-1/3 text-center">REAL.</span>
+                        <span className="w-1/3 text-right pr-1">%</span>
+                      </div>
+                    </TableHead>
                   ))}
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {dreTransactionsQ.isLoading ? (
+                {(dreTransactionsQ.isLoading || dreBudgetsQ.isLoading || drePendingQ.isLoading) ? (
                   <TableRow>
-                    <TableCell colSpan={5} className="py-8 text-center text-slate-500">Carregando dados...</TableCell>
+                    <TableCell colSpan={drePeriods.length * 3 + 1} className="py-12 text-center text-slate-500">
+                      Carregando dados financeiros...
+                    </TableCell>
                   </TableRow>
                 ) : dreData.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={5} className="py-8 text-center text-slate-500">Nenhum dado encontrado para o período.</TableCell>
+                    <TableCell colSpan={drePeriods.length * 3 + 1} className="py-12 text-center text-slate-500">
+                      Nenhum lançamento ou orçamento encontrado para este período.
+                    </TableCell>
                   </TableRow>
                 ) : (
                   <>
                     {/* Revenue Section */}
-                    <TableRow className="bg-slate-50/30 dark:bg-slate-950/20">
-                      <TableCell className="font-bold text-blue-600 dark:text-blue-400">(=) Receitas</TableCell>
-                      {dreMonths.map(m => {
-                        const total = dreData.filter(r => r.category.type === "revenue").reduce((acc, curr) => acc + curr.months[m.key], 0);
-                        return <TableCell key={m.key} className="text-right font-bold">{formatMoneyBRL(total)}</TableCell>
+                    <TableRow className="bg-blue-50/20 dark:bg-blue-900/10 hover:bg-transparent">
+                      <TableCell className="font-bold text-blue-600 dark:text-blue-400 sticky left-0 bg-inherit z-10">(=) RECEITAS</TableCell>
+                      {drePeriods.map(p => {
+                        const subRows = dreData.filter(r => r.category.type === "revenue");
+                        const totalB = subRows.reduce((acc, curr) => acc + curr.periods[p.key].budget, 0);
+                        const totalR = subRows.reduce((acc, curr) => acc + curr.periods[p.key].realized, 0);
+                        const pct = totalB > 0 ? (totalR / totalB) : 0;
+                        return (
+                          <React.Fragment key={p.key}>
+                            <TableCell className="text-right text-[11px] font-semibold border-l">{formatMoneyBRL(totalB)}</TableCell>
+                            <TableCell className="text-right text-[11px] font-bold text-blue-700 dark:text-blue-300">{formatMoneyBRL(totalR)}</TableCell>
+                            <TableCell className={cn("text-right text-[10px]", pct >= 1 ? "text-emerald-600" : "text-amber-600")}>
+                               {pct > 0 ? `${(pct * 100).toFixed(0)}%` : "—"}
+                            </TableCell>
+                          </React.Fragment>
+                        );
                       })}
                     </TableRow>
                     {dreData.filter(r => r.category.type === "revenue").map(row => (
-                      <TableRow key={row.category.id}>
-                        <TableCell className="pl-6 text-sm text-slate-700 dark:text-slate-300">{row.category.name}</TableCell>
-                        {dreMonths.map(m => (
-                          <TableCell key={m.key} className="text-right text-sm">{formatMoneyBRL(row.months[m.key])}</TableCell>
-                        ))}
+                      <TableRow key={row.category.id} className="group hover:bg-slate-50 dark:hover:bg-slate-900/40">
+                        <TableCell className="pl-6 text-sm text-slate-700 dark:text-slate-300 sticky left-0 bg-white dark:bg-slate-950 group-hover:bg-inherit z-10">{row.category.name}</TableCell>
+                        {drePeriods.map(p => {
+                          const val = row.periods[p.key];
+                          const pct = val.budget > 0 ? (val.realized / val.budget) : 0;
+                          return (
+                            <React.Fragment key={p.key}>
+                              <TableCell className="text-right text-[11px] text-slate-500 border-l">{formatMoneyBRL(val.budget)}</TableCell>
+                              <TableCell className="text-right text-[11px] font-medium">{formatMoneyBRL(val.realized)}</TableCell>
+                              <TableCell className={cn("text-right text-[10px]", pct >= 1 ? "text-emerald-600" : pct > 0 ? "text-amber-600" : "text-slate-300")}>
+                                {pct > 0 ? `${(pct * 100).toFixed(0)}%` : "—"}
+                              </TableCell>
+                            </React.Fragment>
+                          );
+                        })}
                       </TableRow>
                     ))}
 
+                    <TableRow className="h-4 hover:bg-transparent"><TableCell colSpan={drePeriods.length * 3 + 1}></TableCell></TableRow>
+
                     {/* Expenses Section */}
-                    <TableRow className="bg-slate-50/30 dark:bg-slate-950/20">
-                      <TableCell className="font-bold text-red-600 dark:text-red-400">(-) Despesas</TableCell>
-                      {dreMonths.map(m => {
-                        const total = dreData.filter(r => r.category.type !== "revenue").reduce((acc, curr) => acc + (curr.months[m.key] || 0), 0);
-                        return <TableCell key={m.key} className="text-right font-bold text-red-600/80 dark:text-red-400/80">{formatMoneyBRL(total)}</TableCell>
+                    <TableRow className="bg-rose-50/20 dark:bg-rose-900/10 hover:bg-transparent">
+                      <TableCell className="font-bold text-rose-600 dark:text-rose-400 sticky left-0 bg-inherit z-10">(-) DESPESAS</TableCell>
+                      {drePeriods.map(p => {
+                        const subRows = dreData.filter(r => r.category.type !== "revenue");
+                        const totalB = subRows.reduce((acc, curr) => acc + curr.periods[p.key].budget, 0);
+                        const totalR = subRows.reduce((acc, curr) => acc + curr.periods[p.key].realized, 0);
+                        const pct = totalB > 0 ? (totalR / totalB) : 0;
+                        return (
+                          <React.Fragment key={p.key}>
+                            <TableCell className="text-right text-[11px] font-semibold border-l">{formatMoneyBRL(totalB)}</TableCell>
+                            <TableCell className="text-right text-[11px] font-bold text-rose-700 dark:text-rose-300">{formatMoneyBRL(totalR)}</TableCell>
+                            <TableCell className={cn("text-right text-[10px]", pct > 1 ? "text-rose-600" : pct > 0 ? "text-emerald-600" : "text-slate-300")}>
+                               {pct > 0 ? `${(pct * 100).toFixed(0)}%` : "—"}
+                            </TableCell>
+                          </React.Fragment>
+                        );
                       })}
                     </TableRow>
                     {dreData.filter(r => r.category.type !== "revenue").map(row => (
-                      <TableRow key={row.category.id}>
-                        <TableCell className="pl-6 text-sm text-slate-700 dark:text-slate-300">
-                          {row.category.name} <span className="text-[10px] opacity-50">({row.category.type})</span>
+                      <TableRow key={row.category.id} className="group hover:bg-slate-50 dark:hover:bg-slate-900/40">
+                        <TableCell className="pl-6 text-sm text-slate-700 dark:text-slate-300 sticky left-0 bg-white dark:bg-slate-950 group-hover:bg-inherit z-10">
+                          {row.category.name} <span className="text-[10px] opacity-40 uppercase">({CATEGORY_LABELS[row.category.type]})</span>
                         </TableCell>
-                        {dreMonths.map(m => (
-                          <TableCell key={m.key} className="text-right text-sm">{formatMoneyBRL(row.months[m.key])}</TableCell>
-                        ))}
+                        {drePeriods.map(p => {
+                          const val = row.periods[p.key];
+                          const pct = val.budget > 0 ? (val.realized / val.budget) : 0;
+                          return (
+                            <React.Fragment key={p.key}>
+                              <TableCell className="text-right text-[11px] text-slate-500 border-l">{formatMoneyBRL(val.budget)}</TableCell>
+                              <TableCell className="text-right text-[11px] font-medium">{formatMoneyBRL(val.realized)}</TableCell>
+                              <TableCell className={cn("text-right text-[10px]", pct > 1 ? "text-rose-600" : pct > 0 ? "text-emerald-600" : "text-slate-300")}>
+                                {pct > 0 ? `${(pct * 100).toFixed(0)}%` : "—"}
+                              </TableCell>
+                            </React.Fragment>
+                          );
+                        })}
                       </TableRow>
                     ))}
 
                     {/* Net Result */}
-                    <TableRow className="bg-slate-100 dark:bg-slate-900 font-bold border-t-2">
-                      <TableCell>RESULTADO LÍQUIDO</TableCell>
-                      {dreMonths.map(m => {
-                        const rev = dreData.filter(r => r.category.type === "revenue").reduce((acc, curr) => acc + curr.months[m.key], 0);
-                        const exp = dreData.filter(r => r.category.type !== "revenue").reduce((acc, curr) => acc + (curr.months[m.key] || 0), 0);
-                        const net = rev - exp;
+                    <TableRow className="bg-slate-100 dark:bg-slate-900 font-bold border-t-2 border-slate-300 dark:border-slate-700 hover:bg-slate-100">
+                      <TableCell className="sticky left-0 bg-slate-100 dark:bg-slate-900 z-10">RESULTADO LÍQUIDO</TableCell>
+                      {drePeriods.map(p => {
+                        const revRows = dreData.filter(r => r.category.type === "revenue");
+                        const expRows = dreData.filter(r => r.category.type !== "revenue");
+                        
+                        const revB = revRows.reduce((acc, curr) => acc + curr.periods[p.key].budget, 0);
+                        const revR = revRows.reduce((acc, curr) => acc + curr.periods[p.key].realized, 0);
+                        
+                        const expB = expRows.reduce((acc, curr) => acc + curr.periods[p.key].budget, 0);
+                        const expR = expRows.reduce((acc, curr) => acc + curr.periods[p.key].realized, 0);
+                        
+                        const netB = revB - expB;
+                        const netR = revR - expR;
+                        
                         return (
-                          <TableCell key={m.key} className={cn("text-right", net >= 0 ? "text-green-600" : "text-red-600")}>
-                            {formatMoneyBRL(net)}
-                          </TableCell>
+                          <React.Fragment key={p.key}>
+                            <TableCell className="text-right text-[11px] border-l">{formatMoneyBRL(netB)}</TableCell>
+                            <TableCell className={cn("text-right text-[11px] font-bold", netR >= 0 ? "text-emerald-600" : "text-rose-600")}>
+                              {formatMoneyBRL(netR)}
+                            </TableCell>
+                            <TableCell className="text-right text-[10px] text-slate-400">
+                              {netB !== 0 ? `${(((netR - netB) / Math.abs(netB)) * 100).toFixed(0)}%` : "—"}
+                            </TableCell>
+                          </React.Fragment>
                         );
                       })}
                     </TableRow>
@@ -2184,6 +2411,9 @@ export function FinancialLedgerPanel() {
                 )}
               </TableBody>
             </Table>
+          </div>
+          <div className="mt-4 text-[10px] text-slate-400">
+            * Realizado inclui pagamentos confirmados e lançamentos projetados (contas a pagar/receber pendentes).
           </div>
         </Card>
       </TabsContent>
