@@ -2599,13 +2599,17 @@ export function FinancialLedgerPanel() {
               placeholder="Selecione a nova categoria..."
               loadOptions={async (val) => {
                 if (!activeTenantId) return [];
-                const { data } = await supabase
+                let query = supabase
                   .from("financial_categories")
                   .select("id, name")
                   .eq("tenant_id", activeTenantId)
-                  .ilike("name", `%${val}%`)
-                  .neq("id", categoryToDelete?.id || "") // Não pode ser ela mesma
-                  .limit(10);
+                  .ilike("name", `%${val}%`);
+                
+                if (categoryToDelete?.id) {
+                  query = query.neq("id", categoryToDelete.id);
+                }
+
+                const { data } = await query.limit(10);
                 return (data || []).map((d) => ({ value: d.id, label: d.name }));
               }}
             />
