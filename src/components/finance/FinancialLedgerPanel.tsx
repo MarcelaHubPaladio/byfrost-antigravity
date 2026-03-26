@@ -2245,8 +2245,8 @@ export function FinancialLedgerPanel() {
         </Card>
       </TabsContent>
 
-      <TabsContent value="dre" className="grid gap-4">
-        <Card className="rounded-[22px] border-slate-200 bg-white/70 p-4 shadow-sm backdrop-blur dark:border-slate-800 dark:bg-slate-950/40">
+      <TabsContent value="dre" className="grid gap-4 min-w-0 overflow-hidden">
+        <Card className="rounded-[22px] border-slate-200 bg-white/70 p-4 shadow-sm backdrop-blur dark:border-slate-800 dark:bg-slate-950/40 overflow-hidden">
           <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
             <div>
               <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">DRE-Caixa & Planejamento</div>
@@ -2306,20 +2306,20 @@ export function FinancialLedgerPanel() {
             </div>
           </div>
 
-          <div className="relative overflow-x-auto rounded-2xl border border-slate-200 dark:border-slate-800 [scrollbar-gutter:stable] max-w-full">
-            <Table className="min-w-max border-separate border-spacing-0">
+          <div className="relative w-full overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800 scrollbar-thin scrollbar-thumb-slate-300 dark:scrollbar-thumb-slate-700">
+            <Table className="w-max min-w-full border-separate border-spacing-0">
               <TableHeader className="sticky top-0 z-30">
                 <TableRow className="bg-slate-50 dark:bg-slate-900 border-b">
-                  <TableHead className="w-[220px] min-w-[220px] sticky left-0 bg-slate-50 dark:bg-slate-900 z-40 border-r shadow-[2px_0_5px_rgba(0,0,0,0.05)]">
+                  <TableHead className="w-[240px] min-w-[240px] sticky left-0 bg-slate-50 dark:bg-slate-900 z-40 border-r-2 border-slate-200 dark:border-slate-800 shadow-[4px_0_8px_rgba(0,0,0,0.05)] px-6">
                     Categoria
                   </TableHead>
                   {drePeriods.map((p) => (
-                    <TableHead key={p.key} colSpan={3} className="text-center border-l bg-slate-100/30 dark:bg-slate-800/20 w-[180px] min-w-[180px]">
+                    <TableHead key={p.key} colSpan={3} className="text-center border-l bg-slate-100/40 dark:bg-slate-800/20 w-[180px] min-w-[180px]">
                       <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">{p.label}</div>
-                      <div className="flex justify-around text-[9px] text-slate-400 border-t pt-1">
-                        <span className="w-1/3 text-left pl-1">ORÇ.</span>
-                        <span className="w-1/3 text-center">REAL.</span>
-                        <span className="w-1/3 text-right pr-1">%</span>
+                      <div className="grid grid-cols-3 text-[9px] text-slate-400 border-t pt-1 divide-x divide-slate-200 dark:divide-slate-800">
+                        <span className="text-left pl-1">ORÇ.</span>
+                        <span className="text-center">REAL.</span>
+                        <span className="text-right pr-1">%</span>
                       </div>
                     </TableHead>
                   ))}
@@ -2361,7 +2361,7 @@ export function FinancialLedgerPanel() {
                     </TableRow>
                     {dreData.filter(r => r.category.type === "revenue").map(row => (
                       <TableRow key={row.category.id} className="group hover:bg-slate-50 dark:hover:bg-slate-900/40">
-                        <TableCell className="pl-6 text-sm text-slate-700 dark:text-slate-300 sticky left-0 bg-white dark:bg-slate-950 group-hover:bg-slate-50 dark:group-hover:bg-slate-900/40 z-10 border-r shadow-[2px_0_5px_rgba(0,0,0,0.05)] overflow-hidden text-ellipsis whitespace-nowrap">{row.category.name}</TableCell>
+                        <TableCell className="pl-6 text-sm font-medium text-slate-700 dark:text-slate-300 sticky left-0 bg-white dark:bg-slate-950 group-hover:bg-slate-50 dark:group-hover:bg-slate-900/40 z-10 border-r-2 border-slate-100 dark:border-slate-800 shadow-[4px_0_8px_rgba(0,0,0,0.05)] overflow-hidden text-ellipsis whitespace-nowrap">{row.category.name}</TableCell>
                         {drePeriods.map(p => {
                           const val = row.periods[p.key];
                           const pct = val.budget > 0 ? (val.realized / val.budget) : 0;
@@ -2370,13 +2370,13 @@ export function FinancialLedgerPanel() {
                           return (
                             <React.Fragment key={p.key}>
                               <TableCell 
-                                className="text-right text-[11px] text-slate-500 border-l w-[60px] cursor-pointer hover:bg-blue-50/50 dark:hover:bg-blue-900/20"
+                                className="text-right text-[11px] text-slate-500 border-l w-[60px] cursor-pointer hover:bg-blue-50/50 dark:hover:bg-blue-900/20 group/cell overflow-hidden"
                                 onClick={() => setEditingBudget({ categoryId: row.category.id, periodKey: p.key, value: String(val.budget) })}
                               >
                                 {isEditing ? (
                                   <Input
                                     autoFocus
-                                    className="h-6 w-full text-right text-[11px] p-1 rounded-sm border-blue-400"
+                                    className="h-6 w-full text-right text-[11px] p-1 rounded-sm border-blue-400 shadow-sm focus:ring-1 ring-blue-400"
                                     value={editingBudget.value}
                                     onChange={(e) => setEditingBudget({ ...editingBudget, value: e.target.value })}
                                     onBlur={() => {
@@ -2397,10 +2397,15 @@ export function FinancialLedgerPanel() {
                                       if (e.key === "Escape") setEditingBudget(null);
                                     }}
                                   />
-                                ) : formatMoneyBRL(val.budget)}
+                                ) : (
+                                  <div className="flex items-center justify-end gap-1 group/row">
+                                    <span>{formatMoneyBRL(val.budget)}</span>
+                                    <Pencil className="w-2.5 h-2.5 opacity-0 group-hover/cell:opacity-40 transition-opacity" />
+                                  </div>
+                                )}
                               </TableCell>
                               <TableCell className="text-right text-[11px] font-medium w-[60px]">{formatMoneyBRL(val.realized)}</TableCell>
-                              <TableCell className={cn("text-right text-[10px] w-[60px]", pct >= 1 ? "text-emerald-600" : pct > 0 ? "text-amber-600" : "text-slate-300")}>
+                              <TableCell className={cn("text-right text-[10px] w-[60px]", pct >= 1 ? "text-emerald-600 font-medium" : pct > 0 ? "text-amber-600" : "text-slate-300")}>
                                 {pct > 0 ? `${(pct * 100).toFixed(0)}%` : "—"}
                               </TableCell>
                             </React.Fragment>
@@ -2432,7 +2437,7 @@ export function FinancialLedgerPanel() {
                     </TableRow>
                     {dreData.filter(r => r.category.type !== "revenue").map(row => (
                       <TableRow key={row.category.id} className="group hover:bg-slate-50 dark:hover:bg-slate-900/40">
-                        <TableCell className="pl-6 text-sm text-slate-700 dark:text-slate-300 sticky left-0 bg-white dark:bg-slate-950 group-hover:bg-slate-50 dark:group-hover:bg-slate-900/40 z-10 border-r shadow-[2px_0_5px_rgba(0,0,0,0.05)] overflow-hidden text-ellipsis whitespace-nowrap">
+                        <TableCell className="pl-6 text-sm font-medium text-slate-700 dark:text-slate-300 sticky left-0 bg-white dark:bg-slate-950 group-hover:bg-slate-50 dark:group-hover:bg-slate-900/40 z-10 border-r-2 border-slate-100 dark:border-slate-800 shadow-[4px_0_8px_rgba(0,0,0,0.05)] overflow-hidden text-ellipsis whitespace-nowrap">
                           {row.category.name} <span className="text-[10px] opacity-40 uppercase">({CATEGORY_LABELS[row.category.type]})</span>
                         </TableCell>
                         {drePeriods.map(p => {
@@ -2443,13 +2448,13 @@ export function FinancialLedgerPanel() {
                           return (
                             <React.Fragment key={p.key}>
                               <TableCell 
-                                className="text-right text-[11px] text-slate-500 border-l w-[60px] cursor-pointer hover:bg-rose-50/50 dark:hover:bg-rose-900/20"
+                                className="text-right text-[11px] text-slate-500 border-l w-[60px] cursor-pointer hover:bg-rose-50/50 dark:hover:bg-rose-900/20 group/cell overflow-hidden"
                                 onClick={() => setEditingBudget({ categoryId: row.category.id, periodKey: p.key, value: String(val.budget) })}
                               >
                                 {isEditing ? (
                                   <Input
                                     autoFocus
-                                    className="h-6 w-full text-right text-[11px] p-1 rounded-sm border-rose-400"
+                                    className="h-6 w-full text-right text-[11px] p-1 rounded-sm border-rose-400 shadow-sm focus:ring-1 ring-rose-400"
                                     value={editingBudget.value}
                                     onChange={(e) => setEditingBudget({ ...editingBudget, value: e.target.value })}
                                     onBlur={() => {
@@ -2470,10 +2475,15 @@ export function FinancialLedgerPanel() {
                                       if (e.key === "Escape") setEditingBudget(null);
                                     }}
                                   />
-                                ) : formatMoneyBRL(val.budget)}
+                                ) : (
+                                  <div className="flex items-center justify-end gap-1 group/row">
+                                    <span>{formatMoneyBRL(val.budget)}</span>
+                                    <Pencil className="w-2.5 h-2.5 opacity-0 group-hover/cell:opacity-40 transition-opacity" />
+                                  </div>
+                                )}
                               </TableCell>
                               <TableCell className="text-right text-[11px] font-medium w-[60px]">{formatMoneyBRL(val.realized)}</TableCell>
-                              <TableCell className={cn("text-right text-[10px] w-[60px]", pct > 1 ? "text-rose-600" : pct > 0 ? "text-emerald-600" : "text-slate-300")}>
+                              <TableCell className={cn("text-right text-[10px] w-[60px]", pct > 1 ? "text-rose-600 font-medium" : pct > 0 ? "text-emerald-600" : "text-slate-300")}>
                                 {pct > 0 ? `${(pct * 100).toFixed(0)}%` : "—"}
                               </TableCell>
                             </React.Fragment>
@@ -2484,7 +2494,7 @@ export function FinancialLedgerPanel() {
 
                     {/* Net Result */}
                     <TableRow className="bg-slate-100 dark:bg-slate-900 font-bold border-t-2 border-slate-300 dark:border-slate-700 hover:bg-slate-100">
-                      <TableCell className="sticky left-0 bg-slate-100 dark:bg-slate-900 z-10 border-r shadow-[2px_0_5px_rgba(0,0,0,0.05)] overflow-hidden text-ellipsis whitespace-nowrap">RESULTADO LÍQUIDO</TableCell>
+                      <TableCell className="sticky left-0 bg-slate-100 dark:bg-slate-900 z-10 border-r-2 border-slate-200 dark:border-slate-800 shadow-[4px_0_8px_rgba(0,0,0,0.05)] overflow-hidden text-ellipsis whitespace-nowrap pl-6">RESULTADO LÍQUIDO</TableCell>
                       {drePeriods.map(p => {
                         const revRows = dreData.filter(r => r.category.type === "revenue");
                         const expRows = dreData.filter(r => r.category.type !== "revenue");
