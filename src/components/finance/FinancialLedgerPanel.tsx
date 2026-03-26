@@ -324,7 +324,7 @@ export function FinancialLedgerPanel() {
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
 
   // DRE State
-  const [editingBudget, setEditingBudget] = useState<{ categoryId: string; value: string } | null>(null);
+  const [editingBudget, setEditingBudget] = useState<{ categoryId: string; periodKey: string; value: string } | null>(null);
   const [dreStartDate, setDreStartDate] = useState<string>(() => format(subMonths(new Date(), 2), "yyyy-MM-01"));
   const [dreEndDate, setDreEndDate] = useState<string>(() => format(addMonths(new Date(), 3), "yyyy-MM-dd"));
   const [dreGranularity, setDreGranularity] = useState<"monthly" | "daily">("monthly");
@@ -2306,11 +2306,13 @@ export function FinancialLedgerPanel() {
             </div>
           </div>
 
-          <div className="overflow-x-auto rounded-2xl border border-slate-200 dark:border-slate-800 [scrollbar-gutter:stable]">
-            <Table className="min-w-max">
-              <TableHeader>
-                <TableRow className="bg-slate-50/50 dark:bg-slate-900/20 border-b">
-                  <TableHead className="min-w-[220px] sticky left-0 bg-slate-50 dark:bg-slate-900 z-20 shadow-[2px_0_5px_rgba(0,0,0,0.05)]">Categoria</TableHead>
+          <div className="relative overflow-x-auto rounded-2xl border border-slate-200 dark:border-slate-800 [scrollbar-gutter:stable] max-w-full">
+            <Table className="min-w-max w-full table-fixed border-collapse">
+              <TableHeader className="sticky top-0 z-30">
+                <TableRow className="bg-slate-50 dark:bg-slate-900 border-b">
+                  <TableHead className="w-[220px] min-w-[220px] sticky left-0 bg-slate-50 dark:bg-slate-900 z-40 border-r shadow-[2px_0_5px_rgba(0,0,0,0.05)]">
+                    Categoria
+                  </TableHead>
                   {drePeriods.map((p) => (
                     <TableHead key={p.key} colSpan={3} className="text-center border-l bg-slate-100/30 dark:bg-slate-800/20 w-[180px] min-w-[180px]">
                       <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">{p.label}</div>
@@ -2359,17 +2361,17 @@ export function FinancialLedgerPanel() {
                     </TableRow>
                     {dreData.filter(r => r.category.type === "revenue").map(row => (
                       <TableRow key={row.category.id} className="group hover:bg-slate-50 dark:hover:bg-slate-900/40">
-                        <TableCell className="pl-6 text-sm text-slate-700 dark:text-slate-300 sticky left-0 bg-white dark:bg-slate-950 group-hover:bg-slate-50 dark:group-hover:bg-slate-900/40 z-10 shadow-[2px_0_5px_rgba(0,0,0,0.05)]">{row.category.name}</TableCell>
+                        <TableCell className="pl-6 text-sm text-slate-700 dark:text-slate-300 sticky left-0 bg-white dark:bg-slate-950 group-hover:bg-slate-50 dark:group-hover:bg-slate-900/40 z-10 border-r shadow-[2px_0_5px_rgba(0,0,0,0.05)] overflow-hidden text-ellipsis whitespace-nowrap">{row.category.name}</TableCell>
                         {drePeriods.map(p => {
                           const val = row.periods[p.key];
                           const pct = val.budget > 0 ? (val.realized / val.budget) : 0;
-                          const isEditing = editingBudget?.categoryId === row.category.id;
+                          const isEditing = editingBudget?.categoryId === row.category.id && editingBudget?.periodKey === p.key;
 
                           return (
                             <React.Fragment key={p.key}>
                               <TableCell 
                                 className="text-right text-[11px] text-slate-500 border-l w-[60px] cursor-pointer hover:bg-blue-50/50 dark:hover:bg-blue-900/20"
-                                onClick={() => setEditingBudget({ categoryId: row.category.id, value: String(val.budget) })}
+                                onClick={() => setEditingBudget({ categoryId: row.category.id, periodKey: p.key, value: String(val.budget) })}
                               >
                                 {isEditing ? (
                                   <Input
@@ -2430,19 +2432,19 @@ export function FinancialLedgerPanel() {
                     </TableRow>
                     {dreData.filter(r => r.category.type !== "revenue").map(row => (
                       <TableRow key={row.category.id} className="group hover:bg-slate-50 dark:hover:bg-slate-900/40">
-                        <TableCell className="pl-6 text-sm text-slate-700 dark:text-slate-300 sticky left-0 bg-white dark:bg-slate-950 group-hover:bg-slate-50 dark:group-hover:bg-slate-900/40 z-10 shadow-[2px_0_5px_rgba(0,0,0,0.05)]">
+                        <TableCell className="pl-6 text-sm text-slate-700 dark:text-slate-300 sticky left-0 bg-white dark:bg-slate-950 group-hover:bg-slate-50 dark:group-hover:bg-slate-900/40 z-10 border-r shadow-[2px_0_5px_rgba(0,0,0,0.05)] overflow-hidden text-ellipsis whitespace-nowrap">
                           {row.category.name} <span className="text-[10px] opacity-40 uppercase">({CATEGORY_LABELS[row.category.type]})</span>
                         </TableCell>
                         {drePeriods.map(p => {
                           const val = row.periods[p.key];
                           const pct = val.budget > 0 ? (val.realized / val.budget) : 0;
-                          const isEditing = editingBudget?.categoryId === row.category.id;
+                          const isEditing = editingBudget?.categoryId === row.category.id && editingBudget?.periodKey === p.key;
 
                           return (
                             <React.Fragment key={p.key}>
                               <TableCell 
                                 className="text-right text-[11px] text-slate-500 border-l w-[60px] cursor-pointer hover:bg-rose-50/50 dark:hover:bg-rose-900/20"
-                                onClick={() => setEditingBudget({ categoryId: row.category.id, value: String(val.budget) })}
+                                onClick={() => setEditingBudget({ categoryId: row.category.id, periodKey: p.key, value: String(val.budget) })}
                               >
                                 {isEditing ? (
                                   <Input
@@ -2482,7 +2484,7 @@ export function FinancialLedgerPanel() {
 
                     {/* Net Result */}
                     <TableRow className="bg-slate-100 dark:bg-slate-900 font-bold border-t-2 border-slate-300 dark:border-slate-700 hover:bg-slate-100">
-                      <TableCell className="sticky left-0 bg-slate-100 dark:bg-slate-900 z-10 shadow-[2px_0_5px_rgba(0,0,0,0.05)]">RESULTADO LÍQUIDO</TableCell>
+                      <TableCell className="sticky left-0 bg-slate-100 dark:bg-slate-900 z-10 border-r shadow-[2px_0_5px_rgba(0,0,0,0.05)] overflow-hidden text-ellipsis whitespace-nowrap">RESULTADO LÍQUIDO</TableCell>
                       {drePeriods.map(p => {
                         const revRows = dreData.filter(r => r.category.type === "revenue");
                         const expRows = dreData.filter(r => r.category.type !== "revenue");
