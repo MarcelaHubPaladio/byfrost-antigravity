@@ -324,6 +324,7 @@ export function FinancialLedgerPanel() {
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
 
   // DRE State
+  const [editingBudget, setEditingBudget] = useState<{ categoryId: string; value: string } | null>(null);
   const [dreStartDate, setDreStartDate] = useState<string>(() => format(subMonths(new Date(), 2), "yyyy-MM-01"));
   const [dreEndDate, setDreEndDate] = useState<string>(() => format(addMonths(new Date(), 3), "yyyy-MM-dd"));
   const [dreGranularity, setDreGranularity] = useState<"monthly" | "daily">("monthly");
@@ -598,6 +599,45 @@ export function FinancialLedgerPanel() {
   const [bankAccountName, setBankAccountName] = useState("");
   const [bankAccountType, setBankAccountType] = useState("checking");
   const [bankCurrency, setBankCurrency] = useState("BRL");
+
+  const upsertBudgetM = useMutation({
+    mutationFn: async ({ categoryId, amount }: { categoryId: string; amount: number }) => {
+      if (!activeTenantId) throw new Error("Tenant inválido");
+
+      // Check if a base scenario budget exists for this category
+      const { data: existing } = await supabase
+        .from("financial_budgets")
+        .select("id")
+        .eq("tenant_id", activeTenantId)
+        .eq("category_id", categoryId)
+        .eq("scenario", "base")
+        .maybeSingle();
+
+      if (existing) {
+        const { error } = await supabase
+          .from("financial_budgets")
+          .update({ expected_amount: amount })
+          .eq("id", existing.id);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase
+          .from("financial_budgets")
+          .insert({
+            tenant_id: activeTenantId,
+            category_id: categoryId,
+            expected_amount: amount,
+            recurrence: "monthly",
+            scenario: "base",
+          });
+        if (error) throw error;
+      }
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["financial_dre_budgets", activeTenantId] });
+      setEditingBudget(null);
+    },
+    onError: (e: any) => showError(e?.message ?? "Falha ao salvar orçamento"),
+  });
 
   useEffect(() => {
     if (!bankDialogOpen) {
@@ -2266,13 +2306,13 @@ export function FinancialLedgerPanel() {
             </div>
           </div>
 
-          <div className="overflow-x-auto rounded-2xl border border-slate-200 dark:border-slate-800">
-            <Table>
+          <div className="overflow-x-auto rounded-2xl border border-slate-200 dark:border-slate-800 [scrollbar-gutter:stable]">
+            <Table className="min-w-max">
               <TableHeader>
                 <TableRow className="bg-slate-50/50 dark:bg-slate-900/20 border-b">
-                  <TableHead className="min-w-[220px] sticky left-0 bg-slate-50/50 dark:bg-slate-900/20 z-10">Categoria</TableHead>
+                  <TableHead className="min-w-[220px] sticky left-0 bg-slate-50 dark:bg-slate-900 z-20 shadow-[2px_0_5px_rgba(0,0,0,0.05)]">Categoria</TableHead>
                   {drePeriods.map((p) => (
-                    <TableHead key={p.key} colSpan={3} className="text-center border-l bg-slate-100/30 dark:bg-slate-800/20">
+                    <TableHead key={p.key} colSpan={3} className="text-center border-l bg-slate-100/30 dark:bg-slate-800/20 w-[180px] min-w-[180px]">
                       <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">{p.label}</div>
                       <div className="flex justify-around text-[9px] text-slate-400 border-t pt-1">
                         <span className="w-1/3 text-left pl-1">ORÇ.</span>
@@ -2308,9 +2348,9 @@ export function FinancialLedgerPanel() {
                         const pct = totalB > 0 ? (totalR / totalB) : 0;
                         return (
                           <React.Fragment key={p.key}>
-                            <TableCell className="text-right text-[11px] font-semibold border-l">{formatMoneyBRL(totalB)}</TableCell>
-                            <TableCell className="text-right text-[11px] font-bold text-blue-700 dark:text-blue-300">{formatMoneyBRL(totalR)}</TableCell>
-                            <TableCell className={cn("text-right text-[10px]", pct >= 1 ? "text-emerald-600" : "text-amber-600")}>
+                            <TableCell className="text-right text-[11px] font-semibold border-l w-[60px]">{formatMoneyBRL(totalB)}</TableCell>
+                            <TableCell className="text-right text-[11px] font-bold text-blue-700 dark:text-blue-300 w-[60px]">{formatMoneyBRL(totalR)}</TableCell>
+                            <TableCell className={cn("text-right text-[10px] w-[60px]", pct >= 1 ? "text-emerald-600" : "text-amber-600")}>
                                {pct > 0 ? `${(pct * 100).toFixed(0)}%` : "—"}
                             </TableCell>
                           </React.Fragment>
@@ -2319,15 +2359,46 @@ export function FinancialLedgerPanel() {
                     </TableRow>
                     {dreData.filter(r => r.category.type === "revenue").map(row => (
                       <TableRow key={row.category.id} className="group hover:bg-slate-50 dark:hover:bg-slate-900/40">
-                        <TableCell className="pl-6 text-sm text-slate-700 dark:text-slate-300 sticky left-0 bg-white dark:bg-slate-950 group-hover:bg-inherit z-10">{row.category.name}</TableCell>
+                        <TableCell className="pl-6 text-sm text-slate-700 dark:text-slate-300 sticky left-0 bg-white dark:bg-slate-950 group-hover:bg-slate-50 dark:group-hover:bg-slate-900/40 z-10 shadow-[2px_0_5px_rgba(0,0,0,0.05)]">{row.category.name}</TableCell>
                         {drePeriods.map(p => {
                           const val = row.periods[p.key];
                           const pct = val.budget > 0 ? (val.realized / val.budget) : 0;
+                          const isEditing = editingBudget?.categoryId === row.category.id;
+
                           return (
                             <React.Fragment key={p.key}>
-                              <TableCell className="text-right text-[11px] text-slate-500 border-l">{formatMoneyBRL(val.budget)}</TableCell>
-                              <TableCell className="text-right text-[11px] font-medium">{formatMoneyBRL(val.realized)}</TableCell>
-                              <TableCell className={cn("text-right text-[10px]", pct >= 1 ? "text-emerald-600" : pct > 0 ? "text-amber-600" : "text-slate-300")}>
+                              <TableCell 
+                                className="text-right text-[11px] text-slate-500 border-l w-[60px] cursor-pointer hover:bg-blue-50/50 dark:hover:bg-blue-900/20"
+                                onClick={() => setEditingBudget({ categoryId: row.category.id, value: String(val.budget) })}
+                              >
+                                {isEditing ? (
+                                  <Input
+                                    autoFocus
+                                    className="h-6 w-full text-right text-[11px] p-1 rounded-sm border-blue-400"
+                                    value={editingBudget.value}
+                                    onChange={(e) => setEditingBudget({ ...editingBudget, value: e.target.value })}
+                                    onBlur={() => {
+                                      const num = parseFloat(editingBudget.value);
+                                      if (!isNaN(num) && num !== val.budget) {
+                                        upsertBudgetM.mutate({ categoryId: row.category.id, amount: num });
+                                      } else {
+                                        setEditingBudget(null);
+                                      }
+                                    }}
+                                    onKeyDown={(e) => {
+                                      if (e.key === "Enter") {
+                                        const num = parseFloat(editingBudget.value);
+                                        if (!isNaN(num)) {
+                                          upsertBudgetM.mutate({ categoryId: row.category.id, amount: num });
+                                        }
+                                      }
+                                      if (e.key === "Escape") setEditingBudget(null);
+                                    }}
+                                  />
+                                ) : formatMoneyBRL(val.budget)}
+                              </TableCell>
+                              <TableCell className="text-right text-[11px] font-medium w-[60px]">{formatMoneyBRL(val.realized)}</TableCell>
+                              <TableCell className={cn("text-right text-[10px] w-[60px]", pct >= 1 ? "text-emerald-600" : pct > 0 ? "text-amber-600" : "text-slate-300")}>
                                 {pct > 0 ? `${(pct * 100).toFixed(0)}%` : "—"}
                               </TableCell>
                             </React.Fragment>
@@ -2348,9 +2419,9 @@ export function FinancialLedgerPanel() {
                         const pct = totalB > 0 ? (totalR / totalB) : 0;
                         return (
                           <React.Fragment key={p.key}>
-                            <TableCell className="text-right text-[11px] font-semibold border-l">{formatMoneyBRL(totalB)}</TableCell>
-                            <TableCell className="text-right text-[11px] font-bold text-rose-700 dark:text-rose-300">{formatMoneyBRL(totalR)}</TableCell>
-                            <TableCell className={cn("text-right text-[10px]", pct > 1 ? "text-rose-600" : pct > 0 ? "text-emerald-600" : "text-slate-300")}>
+                            <TableCell className="text-right text-[11px] font-semibold border-l w-[60px]">{formatMoneyBRL(totalB)}</TableCell>
+                            <TableCell className="text-right text-[11px] font-bold text-rose-700 dark:text-rose-300 w-[60px]">{formatMoneyBRL(totalR)}</TableCell>
+                            <TableCell className={cn("text-right text-[10px] w-[60px]", pct > 1 ? "text-rose-600" : pct > 0 ? "text-emerald-600" : "text-slate-300")}>
                                {pct > 0 ? `${(pct * 100).toFixed(0)}%` : "—"}
                             </TableCell>
                           </React.Fragment>
@@ -2359,17 +2430,48 @@ export function FinancialLedgerPanel() {
                     </TableRow>
                     {dreData.filter(r => r.category.type !== "revenue").map(row => (
                       <TableRow key={row.category.id} className="group hover:bg-slate-50 dark:hover:bg-slate-900/40">
-                        <TableCell className="pl-6 text-sm text-slate-700 dark:text-slate-300 sticky left-0 bg-white dark:bg-slate-950 group-hover:bg-inherit z-10">
+                        <TableCell className="pl-6 text-sm text-slate-700 dark:text-slate-300 sticky left-0 bg-white dark:bg-slate-950 group-hover:bg-slate-50 dark:group-hover:bg-slate-900/40 z-10 shadow-[2px_0_5px_rgba(0,0,0,0.05)]">
                           {row.category.name} <span className="text-[10px] opacity-40 uppercase">({CATEGORY_LABELS[row.category.type]})</span>
                         </TableCell>
                         {drePeriods.map(p => {
                           const val = row.periods[p.key];
                           const pct = val.budget > 0 ? (val.realized / val.budget) : 0;
+                          const isEditing = editingBudget?.categoryId === row.category.id;
+
                           return (
                             <React.Fragment key={p.key}>
-                              <TableCell className="text-right text-[11px] text-slate-500 border-l">{formatMoneyBRL(val.budget)}</TableCell>
-                              <TableCell className="text-right text-[11px] font-medium">{formatMoneyBRL(val.realized)}</TableCell>
-                              <TableCell className={cn("text-right text-[10px]", pct > 1 ? "text-rose-600" : pct > 0 ? "text-emerald-600" : "text-slate-300")}>
+                              <TableCell 
+                                className="text-right text-[11px] text-slate-500 border-l w-[60px] cursor-pointer hover:bg-rose-50/50 dark:hover:bg-rose-900/20"
+                                onClick={() => setEditingBudget({ categoryId: row.category.id, value: String(val.budget) })}
+                              >
+                                {isEditing ? (
+                                  <Input
+                                    autoFocus
+                                    className="h-6 w-full text-right text-[11px] p-1 rounded-sm border-rose-400"
+                                    value={editingBudget.value}
+                                    onChange={(e) => setEditingBudget({ ...editingBudget, value: e.target.value })}
+                                    onBlur={() => {
+                                      const num = parseFloat(editingBudget.value);
+                                      if (!isNaN(num) && num !== val.budget) {
+                                        upsertBudgetM.mutate({ categoryId: row.category.id, amount: num });
+                                      } else {
+                                        setEditingBudget(null);
+                                      }
+                                    }}
+                                    onKeyDown={(e) => {
+                                      if (e.key === "Enter") {
+                                        const num = parseFloat(editingBudget.value);
+                                        if (!isNaN(num)) {
+                                          upsertBudgetM.mutate({ categoryId: row.category.id, amount: num });
+                                        }
+                                      }
+                                      if (e.key === "Escape") setEditingBudget(null);
+                                    }}
+                                  />
+                                ) : formatMoneyBRL(val.budget)}
+                              </TableCell>
+                              <TableCell className="text-right text-[11px] font-medium w-[60px]">{formatMoneyBRL(val.realized)}</TableCell>
+                              <TableCell className={cn("text-right text-[10px] w-[60px]", pct > 1 ? "text-rose-600" : pct > 0 ? "text-emerald-600" : "text-slate-300")}>
                                 {pct > 0 ? `${(pct * 100).toFixed(0)}%` : "—"}
                               </TableCell>
                             </React.Fragment>
@@ -2380,7 +2482,7 @@ export function FinancialLedgerPanel() {
 
                     {/* Net Result */}
                     <TableRow className="bg-slate-100 dark:bg-slate-900 font-bold border-t-2 border-slate-300 dark:border-slate-700 hover:bg-slate-100">
-                      <TableCell className="sticky left-0 bg-slate-100 dark:bg-slate-900 z-10">RESULTADO LÍQUIDO</TableCell>
+                      <TableCell className="sticky left-0 bg-slate-100 dark:bg-slate-900 z-10 shadow-[2px_0_5px_rgba(0,0,0,0.05)]">RESULTADO LÍQUIDO</TableCell>
                       {drePeriods.map(p => {
                         const revRows = dreData.filter(r => r.category.type === "revenue");
                         const expRows = dreData.filter(r => r.category.type !== "revenue");
@@ -2396,11 +2498,11 @@ export function FinancialLedgerPanel() {
                         
                         return (
                           <React.Fragment key={p.key}>
-                            <TableCell className="text-right text-[11px] border-l">{formatMoneyBRL(netB)}</TableCell>
-                            <TableCell className={cn("text-right text-[11px] font-bold", netR >= 0 ? "text-emerald-600" : "text-rose-600")}>
+                            <TableCell className="text-right text-[11px] border-l w-[60px]">{formatMoneyBRL(netB)}</TableCell>
+                            <TableCell className={cn("text-right text-[11px] font-bold w-[60px]", netR >= 0 ? "text-emerald-600" : "text-rose-600")}>
                               {formatMoneyBRL(netR)}
                             </TableCell>
-                            <TableCell className="text-right text-[10px] text-slate-400">
+                            <TableCell className="text-right text-[10px] text-slate-400 w-[60px]">
                               {netB !== 0 ? `${(((netR - netB) / Math.abs(netB)) * 100).toFixed(0)}%` : "—"}
                             </TableCell>
                           </React.Fragment>
