@@ -195,10 +195,11 @@ export default function CommitmentDetail() {
     queryKey: ["active_journeys", activeTenantId],
     enabled: Boolean(activeTenantId),
     queryFn: async () => {
+      // Buscamos jornadas que não são CRM (estilo Trello/Tarefas)
       const { data, error } = await supabase
         .from("journeys")
-        .select("id, title, default_state_machine_json")
-        .eq("tenant_id", activeTenantId!)
+        .select("id, title, key, default_state_machine_json, is_crm")
+        .eq("is_crm", false)
         .order("title", { ascending: true });
       if (error) throw error;
       return (data ?? []) as any[];
