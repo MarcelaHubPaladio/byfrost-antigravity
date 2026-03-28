@@ -138,6 +138,8 @@ serve(async (req) => {
               commitment_id: commitmentId,
               entity_id: offeringEntityId,
               status: "planned",
+              name: String(tpl.name ?? ""),
+              template_id: templateId,
               owner_user_id: null,
               due_date: null,
               // Keep track of index/template for debugging and dependencies
