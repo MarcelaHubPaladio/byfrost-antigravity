@@ -428,7 +428,8 @@ const CORE_NAV_CHILDREN: CoreNavChild[] = [
     icon: FileSignature,
     routeKey: "app.settings",
   },
-  { to: "/app/commitments", label: "Compromissos", icon: Handshake, routeKey: "app.commitments" },
+  { to: "/app/commitments", label: "Venda", icon: Handshake, routeKey: "app.commitments" },
+  { to: "/app/contracts", label: "Gestor", icon: ClipboardCheck, routeKey: "app.commitments" },
 ];
 
 const CREATE_NAV_CHILDREN = [

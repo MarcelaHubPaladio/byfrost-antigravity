@@ -59,6 +59,7 @@ const FinanceTensions = lazyWithRetry(() => import("@/pages/FinanceTensions"));
 const FinanceDecisions = lazyWithRetry(() => import("@/pages/FinanceDecisions"));
 const FinanceControlTower = lazyWithRetry(() => import("@/pages/FinanceControlTower"));
 const FinanceDecisionBoard = lazyWithRetry(() => import("@/pages/FinanceDecisionBoard"));
+const Contracts = lazyWithRetry(() => import("@/pages/Contracts"));
 const Commitments = lazyWithRetry(() => import("@/pages/Commitments"));
 const CommitmentDetail = lazyWithRetry(() => import("@/pages/CommitmentDetail"));
 const Entities = lazyWithRetry(() => import("@/pages/Entities"));
@@ -376,6 +377,14 @@ const App = () => (
                     element={
                       <RequireRouteAccess routeKey="app.commitments">
                         <Commitments />
+                      </RequireRouteAccess>
+                    }
+                  />
+                  <Route
+                    path="/app/contracts"
+                    element={
+                      <RequireRouteAccess routeKey="app.commitments">
+                        <Contracts />
                       </RequireRouteAccess>
                     }
                   />

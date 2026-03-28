@@ -14,6 +14,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { CapacitySemaphore } from "@/components/core/CapacitySemaphore";
 import { showError, showSuccess } from "@/utils/toast";
+import { Activity, CheckCircle2, Clock, KanbanSquare } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 type CommitmentRow = {
   id: string;
@@ -129,7 +131,15 @@ export default function CommitmentDetail() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("deliverables")
-        .select("id,status,owner_user_id,due_date,entity_id,updated_at")
+        .select(`
+          id,
+          status,
+          owner_user_id,
+          due_date,
+          entity_id,
+          updated_at,
+          cases:cases(id, state, name, status)
+        `)
         .eq("tenant_id", activeTenantId!)
         .eq("commitment_id", commitmentId)
         .is("deleted_at", null)
@@ -275,21 +285,78 @@ export default function CommitmentDetail() {
               </Card>
 
               <Card className="rounded-2xl border-slate-200 p-4">
-                <div className="mb-2 text-sm font-semibold text-slate-900">Deliverables</div>
-                <div className="space-y-2">
+                <div className="mb-4 flex items-center justify-between">
+                  <div className="text-sm font-semibold text-slate-900 flex items-center gap-2">
+                    <Activity className="h-4 w-4 text-blue-500" />
+                    Deliverables & Operação
+                  </div>
+                  <Badge variant="outline" className="text-[10px]">
+                    {(deliverablesQ.data ?? []).length} total
+                  </Badge>
+                </div>
+                
+                <div className="space-y-3">
                   {(deliverablesQ.data ?? []).map((d) => (
-                    <div key={d.id} className="flex items-center justify-between rounded-xl border bg-white px-3 py-2">
-                      <div>
-                        <div className="text-sm font-semibold text-slate-900">{d.id.slice(0, 8)}</div>
-                        <div className="text-xs text-slate-600">
-                          status: {d.status ?? "—"} • due: {d.due_date ?? "—"}
+                    <div key={d.id} className="group relative rounded-2xl border bg-white p-4 transition-all hover:bg-slate-50/50">
+                      <div className="flex items-start justify-between">
+                        <div className="flex gap-3">
+                          <div className={cn(
+                            "mt-1 flex h-2 w-2 shrink-0 rounded-full",
+                            d.status === 'completed' ? "bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]" : "bg-slate-300 dark:bg-slate-700"
+                          )} />
+                          <div>
+                            <div className="flex items-center gap-2 text-sm font-bold text-slate-900">
+                              Entregável #{d.id.slice(0, 8)}
+                              {d.status === 'completed' && <CheckCircle2 className="h-4 w-4 text-emerald-500" />}
+                            </div>
+                            <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500">
+                              <span className="flex items-center gap-1"><Clock className="h-3 w-3" /> Due: {d.due_date ?? "—"}</span>
+                              <span className="flex items-center gap-1 font-mono uppercase text-[10px]">ID: {d.entity_id.slice(0, 8)}</span>
+                            </div>
+                          </div>
                         </div>
+                        <Badge variant={d.status === 'completed' ? 'default' : 'secondary'} className={cn(
+                          "uppercase text-[10px] font-bold px-1.5 py-0",
+                          d.status === 'completed' ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/20" : ""
+                        )}>
+                          {d.status ?? "pending"}
+                        </Badge>
                       </div>
-                      <Badge variant="secondary">{d.entity_id.slice(0, 8)}</Badge>
+
+                      {/* Linked Cases (Operational Status) */}
+                      <div className="mt-4 pt-3 border-t border-slate-100">
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2">Operação (Jornada)</p>
+                        {d.cases && d.cases.length > 0 ? (
+                          <div className="space-y-1.5">
+                            {d.cases.map((c: any) => (
+                              <Link 
+                                key={c.id} 
+                                to={`/cases/${c.id}`}
+                                className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2 text-xs transition hover:bg-slate-100"
+                              >
+                                <div className="flex items-center gap-2">
+                                  <KanbanSquare className="h-3 w-3 text-slate-400" />
+                                  <span className="font-medium text-slate-700">{c.name || "Tarefa sem nome"}</span>
+                                </div>
+                                <Badge variant="outline" className="h-5 px-1.5 text-[10px] bg-white">
+                                  {c.state}
+                                </Badge>
+                              </Link>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-2 rounded-lg border border-dashed border-slate-200 p-2 text-[10px] text-slate-400 italic">
+                            Sem tarefas operacionais vinculadas.
+                          </div>
+                        )}
+                      </div>
                     </div>
                   ))}
                   {(deliverablesQ.data ?? []).length === 0 ? (
-                    <div className="text-sm text-slate-600">Ainda não gerados (aguarde orquestrador).</div>
+                    <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed p-10 text-center">
+                      <Activity className="h-10 w-10 text-slate-200 mb-2" />
+                      <p className="text-sm text-slate-600 font-medium">Aguardando orquestrador para gerar entregáveis...</p>
+                    </div>
                   ) : null}
                 </div>
               </Card>
