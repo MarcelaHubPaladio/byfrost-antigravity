@@ -265,6 +265,49 @@ export default function CommitmentDetail() {
               </Card>
             )}
 
+            {/* Execution Stats Summary */}
+            {commitmentQ.data?.commitment_type === 'contract' && (
+              <Card className="overflow-hidden border-none bg-gradient-to-r from-slate-900 to-slate-800 p-6 text-white shadow-xl dark:from-slate-950 dark:to-slate-900">
+                <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
+                  <div className="space-y-1">
+                    <p className="text-xs font-bold uppercase tracking-widest opacity-60">Status de Execução</p>
+                    <h3 className="text-2xl font-black">Progresso do Contrato</h3>
+                  </div>
+                  
+                  <div className="flex flex-1 max-w-sm flex-col gap-2">
+                    <div className="flex items-center justify-between text-xs font-bold uppercase">
+                      <span>{Math.round(((deliverablesQ.data ?? []).filter(d => d.status === 'completed').length / Math.max((deliverablesQ.data ?? []).length, 1)) * 100)}% concluído</span>
+                      <span className="opacity-60">
+                        {(deliverablesQ.data ?? []).filter(d => d.status === 'completed').length} / {(deliverablesQ.data ?? []).length} entregáveis
+                      </span>
+                    </div>
+                    <div className="h-3 w-full overflow-hidden rounded-full bg-slate-700/50">
+                      <div 
+                        className="h-full bg-blue-500 transition-all duration-1000" 
+                        style={{ width: `${Math.round(((deliverablesQ.data ?? []).filter(d => d.status === 'completed').length / Math.max((deliverablesQ.data ?? []).length, 1)) * 100)}%` }}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex gap-4">
+                    <div className="text-center">
+                      <p className="text-[10px] font-bold uppercase opacity-50">Restantes</p>
+                      <p className="text-xl font-black text-amber-400">
+                        {(deliverablesQ.data ?? []).length - (deliverablesQ.data ?? []).filter(d => d.status === 'completed').length}
+                      </p>
+                    </div>
+                    <div className="w-[1px] bg-white/10" />
+                    <div className="text-center">
+                      <p className="text-[10px] font-bold uppercase opacity-50">Finalizados</p>
+                      <p className="text-xl font-black text-emerald-400">
+                        {(deliverablesQ.data ?? []).filter(d => d.status === 'completed').length}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </Card>
+            )}
+
             <div className="grid gap-4 lg:grid-cols-2">
               <Card className="rounded-2xl border-slate-200 p-4">
                 <div className="mb-2 text-sm font-semibold text-slate-900">Itens</div>
