@@ -199,7 +199,6 @@ export default function CommitmentDetail() {
         .from("journeys")
         .select("id, title, default_state_machine_json")
         .eq("tenant_id", activeTenantId!)
-        .is("deleted_at", null)
         .order("title", { ascending: true });
       if (error) throw error;
       return (data ?? []) as any[];
