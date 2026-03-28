@@ -62,8 +62,14 @@ export default function Contracts() {
   const processedContracts = useMemo(() => {
     const list = (contractsQ.data ?? []) as ContractWithProgress[];
     return list.map(c => {
-      const total = c.deliverables.length;
-      const completed = c.deliverables.filter(d => d.status === 'completed').length;
+      const deliverables = c.deliverables || [];
+      const total = deliverables.length;
+      // Count 'completed' OR 'done' as delivered to be safe
+      const completed = deliverables.filter(d => 
+        String(d.status || '').toLowerCase() === 'completed' || 
+        String(d.status || '').toLowerCase() === 'done' ||
+        String(d.status || '').toLowerCase() === 'entregue'
+      ).length;
       const percentage = total > 0 ? Math.round((completed / total) * 100) : 0;
       return {
         ...c,
@@ -222,20 +228,31 @@ export default function Contracts() {
 
                           <div className="mt-6 flex items-center justify-between rounded-xl bg-slate-50/50 p-3 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-800/50">
                             <div className="flex items-center gap-4">
-                              <div className="text-center">
-                                <p className="text-[10px] uppercase tracking-wider text-slate-400 font-bold">Total</p>
-                                <p className="text-sm font-bold text-slate-700 dark:text-slate-300">{c.metrics.total}</p>
-                              </div>
-                              <div className="h-6 w-[1px] bg-slate-200 dark:bg-slate-800" />
-                              <div className="text-center">
-                                <p className="text-[10px] uppercase tracking-wider text-slate-400 font-bold">Entregues</p>
-                                <p className="text-sm font-bold text-emerald-600 dark:text-emerald-400">{c.metrics.completed}</p>
-                              </div>
-                              <div className="h-6 w-[1px] bg-slate-200 dark:bg-slate-800" />
-                              <div className="text-center">
-                                <p className="text-[10px] uppercase tracking-wider text-slate-400 font-bold">Restantes</p>
-                                <p className="text-sm font-bold text-amber-600 dark:text-amber-500">{c.metrics.total - c.metrics.completed}</p>
-                              </div>
+                              {c.metrics.total > 0 ? (
+                                <>
+                                  <div className="text-center">
+                                    <p className="text-[10px] uppercase tracking-wider text-slate-400 font-bold">Total</p>
+                                    <p className="text-sm font-bold text-slate-700 dark:text-slate-300">{c.metrics.total}</p>
+                                  </div>
+                                  <div className="h-6 w-[1px] bg-slate-200 dark:bg-slate-800" />
+                                  <div className="text-center">
+                                    <p className="text-[10px] uppercase tracking-wider text-slate-400 font-bold">Entregues</p>
+                                    <p className="text-sm font-bold text-emerald-600 dark:text-emerald-400">{c.metrics.completed}</p>
+                                  </div>
+                                  <div className="h-6 w-[1px] bg-slate-200 dark:bg-slate-800" />
+                                  <div className="text-center">
+                                    <p className="text-[10px] uppercase tracking-wider text-slate-400 font-bold">Restantes</p>
+                                    <p className="text-sm font-bold text-amber-600 dark:text-amber-500">{c.metrics.total - c.metrics.completed}</p>
+                                  </div>
+                                </>
+                              ) : (
+                                <div className="py-1">
+                                  <p className="text-[10px] uppercase tracking-wider text-slate-400 font-bold">Status da Operação</p>
+                                  <p className="text-xs font-medium text-slate-500 italic">
+                                    {c.status === 'active' ? 'Gerando deliverables...' : 'Aguardando ativação'}
+                                  </p>
+                                </div>
+                              )}
                             </div>
                             <div className="flex h-8 w-8 items-center justify-center rounded-full bg-white text-slate-300 dark:bg-slate-800 transition-colors group-hover:bg-blue-500 group-hover:text-white">
                                <ChevronRight className="h-4 w-4" />

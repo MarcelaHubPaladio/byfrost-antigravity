@@ -15,6 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { CommitmentDeliverablesPreview, type CommitmentItemRow } from "@/components/core/CommitmentDeliverablesPreview";
 import { CapacitySemaphore } from "@/components/core/CapacitySemaphore";
 import { showError, showSuccess } from "@/utils/toast";
+import { cn } from "@/lib/utils";
 
 type EntityOpt = { id: string; display_name: string; entity_type: string };
 
@@ -141,6 +142,24 @@ export default function Commitments() {
       await qc.invalidateQueries({ queryKey: ["commitments", activeTenantId] });
     } catch (err: any) {
       showError(err.message ?? "Erro ao excluir");
+    }
+  };
+  
+  const handleUpdateCommitment = async (id: string, updates: Partial<CommitmentRow>) => {
+    if (!activeTenantId) return;
+    try {
+      const { error } = await supabase
+        .from("commercial_commitments")
+        .update(updates)
+        .eq("tenant_id", activeTenantId)
+        .eq("id", id);
+
+      if (error) throw error;
+      showSuccess("Atualizado.");
+      await qc.invalidateQueries({ queryKey: ["commitments", activeTenantId] });
+      await qc.invalidateQueries({ queryKey: ["contracts_dashboard", activeTenantId] });
+    } catch (err: any) {
+      showError(err.message ?? "Erro ao atualizar");
     }
   };
 
@@ -405,15 +424,9 @@ export default function Commitments() {
                       .join(", ");
 
                     return (
-                      <Link key={c.id} to={`/app/commitments/${c.id}`} className="group block px-4 py-3 hover:bg-slate-50 transition">
+                      <div key={c.id} className="group block px-4 py-3 hover:bg-slate-50 transition">
                         <div className="flex items-center justify-between gap-3">
-                          <div className="min-w-0">
-                            <div className="flex items-center gap-2">
-                              <span className="font-bold text-slate-900 capitalize">{c.commitment_type}</span>
-                              <Badge variant={c.status === "active" ? "default" : "secondary"} className="h-5 px-1.5 text-[10px] uppercase">
-                                {c.status ?? "draft"}
-                              </Badge>
-                            </div>
+                          <Link to={`/app/commitments/${c.id}`} className="min-w-0 flex-1 group-hover:opacity-80 transition-opacity">
                             <div className="mt-0.5 truncate text-sm font-medium text-slate-700">
                               {customerName}
                             </div>
@@ -422,22 +435,59 @@ export default function Commitments() {
                               <span className="text-slate-300">•</span>
                               <span className="truncate">{itemSummary || "Sem itens"}</span>
                             </div>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-8 w-8 p-0 text-slate-400 hover:text-rose-600 opacity-0 group-hover:opacity-100 transition"
-                              onClick={(e) => handleDelete(e, c.id)}
-                            >
-                              <span className="text-lg">×</span>
-                            </Button>
-                            <Badge variant="outline" className="font-mono text-[10px] text-slate-400">
-                              {c.id.slice(0, 8)}
-                            </Badge>
+                          </Link>
+                          <div className="flex items-center gap-3">
+                            <div className="flex flex-col items-center gap-1">
+                              <Select
+                                value={c.commitment_type}
+                                onValueChange={(v) => handleUpdateCommitment(c.id, { commitment_type: v })}
+                              >
+                                <SelectTrigger className="h-7 w-24 text-[10px] font-bold uppercase py-0 px-2 border-slate-200 bg-white">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="order">order</SelectItem>
+                                  <SelectItem value="contract">contract</SelectItem>
+                                  <SelectItem value="subscription">subscription</SelectItem>
+                                </SelectContent>
+                              </Select>
+                              
+                              <Select
+                                value={c.status || "draft"}
+                                onValueChange={(v) => handleUpdateCommitment(c.id, { status: v })}
+                              >
+                                <SelectTrigger className={cn(
+                                  "h-7 w-24 text-[10px] font-bold uppercase py-0 px-2",
+                                  c.status === "active" 
+                                    ? "bg-blue-500/10 text-blue-600 border-blue-500/20" 
+                                    : "bg-slate-100 text-slate-600 border-slate-200"
+                                )}>
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="draft">draft</SelectItem>
+                                  <SelectItem value="active">active</SelectItem>
+                                  <SelectItem value="completed">completed</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+
+                            <div className="flex items-center gap-2">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-8 w-8 p-0 text-slate-400 hover:text-rose-600 opacity-0 group-hover:opacity-100 transition"
+                                onClick={(e) => handleDelete(e, c.id)}
+                              >
+                                <span className="text-lg">×</span>
+                              </Button>
+                              <Badge variant="outline" className="font-mono text-[10px] text-slate-400">
+                                {c.id.slice(0, 8)}
+                              </Badge>
+                            </div>
                           </div>
                         </div>
-                      </Link>
+                      </div>
                     );
                   })
                 )}
