@@ -67,6 +67,7 @@ serve(async (req) => {
     }
 
     if ((existingAny as any)?.id) {
+      console.log(`[${fn}] deliverables already exist for commitment ${commitmentId}. Skipping.`);
       return json({ ok: true, skipped: true, reason: "deliverables_already_generated", tenant_id: tenantId, commitment_id: commitmentId });
     }
 
@@ -126,6 +127,8 @@ serve(async (req) => {
         const baseQty = Number(tpl.quantity ?? 1);
         const itemMultiplier = Number(it.quantity ?? 1);
         const finalQty = typeof overrideQty === "number" ? overrideQty : (baseQty * itemMultiplier);
+
+        console.log(`[${fn}] Generating ${finalQty} deliverables for item ${itemId} (template: ${templateId}, base: ${baseQty}, multiplier: ${itemMultiplier})`);
 
         for (let q = 0; q < Math.max(0, finalQty); q++) {
           const { data: inserted, error: dErr } = await supabase

@@ -86,15 +86,13 @@ export default function Contracts() {
       const progressRatio = totalDeliverables > 0 ? (completedDeliverablescount / totalDeliverables) : 0;
       const percentage = Math.round(progressRatio * 100);
       
-      // The user wants to see "X of Y units"
-      const completedUnits = Math.floor(totalUnits * progressRatio);
-      
       return {
         ...c,
         metrics: {
-          total: totalUnits || totalDeliverables, // Fallback to deliverable count if no units (e.g. migration)
-          completed: totalUnits > 0 ? completedUnits : completedDeliverablescount,
+          total: totalDeliverables,
+          completed: completedDeliverablescount,
           percentage,
+          total_units: totalUnits,
           total_deliverables: totalDeliverables
         }
       };
@@ -247,6 +245,12 @@ export default function Contracts() {
                                   <span>#{c.id.slice(0, 8)}</span>
                                   <span>•</span>
                                   <span>{new Date(c.created_at).toLocaleDateString()}</span>
+                                  {c.metrics.total_units > 0 && (
+                                    <>
+                                      <span>•</span>
+                                      <span className="text-blue-600 dark:text-blue-400 font-bold">{c.metrics.total_units} itens</span>
+                                    </>
+                                  )}
                                 </div>
                               </div>
                             </div>
