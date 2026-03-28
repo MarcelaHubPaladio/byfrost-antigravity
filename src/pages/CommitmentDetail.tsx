@@ -30,6 +30,9 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import { cn } from "@/lib/utils";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
+import { QueryClient, useQueryClient } from "@tanstack/react-query";
 
 type CommitmentRow = {
   id: string;
@@ -85,6 +88,11 @@ export default function CommitmentDetail() {
   const [payload, setPayload] = useState<any>(null);
 
   const [saving, setSaving] = useState(false);
+
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [journeyOpen, setJourneyOpen] = useState(false);
+  const [targetJourneyId, setTargetJourneyId] = useState<string>("");
+  const qc = useQueryClient();
 
   const commitmentQ = useQuery({
     queryKey: ["commitment", activeTenantId, commitmentId],
@@ -183,6 +191,22 @@ export default function CommitmentDetail() {
     staleTime: 5_000,
   });
 
+  const journeysQ = useQuery({
+    queryKey: ["active_journeys", activeTenantId],
+    enabled: Boolean(activeTenantId),
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("journeys")
+        .select("id, title, default_state_machine_json")
+        .eq("tenant_id", activeTenantId!)
+        .is("deleted_at", null)
+        .order("title", { ascending: true });
+      if (error) throw error;
+      return (data ?? []) as any[];
+    },
+    staleTime: 30_000,
+  });
+
   const groupedDeliverables = useMemo(() => {
     const m = new Map<string, any[]>();
     for (const d of (deliverablesQ.data ?? [])) {
@@ -228,6 +252,49 @@ export default function CommitmentDetail() {
       showError(err.message ?? "Erro ao excluir");
       setSaving(false);
     }
+  };
+
+  const handleEmitCases = async () => {
+    if (!activeTenantId || !targetJourneyId || selectedIds.length === 0) return;
+    setSaving(true);
+    try {
+      const journey = journeysQ.data?.find(j => j.id === targetJourneyId);
+      const initialState = (journey?.default_state_machine_json as any)?.initial_state || "FILA";
+
+      const casesToInsert = selectedIds.map(dId => {
+        const d = deliverablesQ.data?.find(item => item.id === dId);
+        return {
+          tenant_id: activeTenantId,
+          journey_id: targetJourneyId,
+          entity_id: commitmentQ.data?.customer_entity_id,
+          deliverable_id: dId,
+          title: d?.name || "Tarefa de Contrato",
+          status: "open",
+          state: initialState,
+        };
+      });
+
+      const { error } = await supabase
+        .from("cases")
+        .insert(casesToInsert);
+
+      if (error) throw error;
+
+      showSuccess(`${selectedIds.length} tarefas criadas com sucesso.`);
+      setSelectedIds([]);
+      setJourneyOpen(false);
+      await deliverablesQ.refetch();
+    } catch (err: any) {
+      showError(err.message ?? "Erro ao criar tarefas");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds(prev => 
+      prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+    );
   };
 
   const title = useMemo(() => {
@@ -358,9 +425,21 @@ export default function CommitmentDetail() {
                     <Activity className="h-4 w-4 text-blue-500" />
                     Deliverables & Operação
                   </div>
-                  <Badge variant="outline" className="text-[10px]">
-                    {(deliverablesQ.data ?? []).length} total
-                  </Badge>
+                  <div className="flex items-center gap-2">
+                    {selectedIds.length > 0 && (
+                      <Button 
+                        size="sm" 
+                        className="h-6 px-2 gap-1.5 bg-blue-600 text-[9px] font-bold uppercase hover:bg-blue-700"
+                        onClick={() => setJourneyOpen(true)}
+                      >
+                        < KanbanSquare className="w-3 h-3" />
+                        Girar {selectedIds.length} Tarefas
+                      </Button>
+                    )}
+                    <Badge variant="outline" className="text-[10px]">
+                      {(deliverablesQ.data ?? []).length} total
+                    </Badge>
+                  </div>
                 </div>
                 
                 <div className="space-y-3">
@@ -416,14 +495,25 @@ export default function CommitmentDetail() {
                                 {group.map((d, idx) => (
                                   <div key={d.id} className="rounded-xl border bg-slate-50/30 p-3 transition-colors hover:bg-white hover:shadow-sm">
                                     <div className="flex items-start justify-between">
-                                      <div>
-                                        <div className="flex items-center gap-2 text-[11px] font-bold text-slate-800">
-                                          #{idx + 1} — ID: {d.id.slice(0, 8)}
-                                          {d.status === 'completed' && <CheckCircle2 className="h-3 w-3 text-emerald-500" />}
+                                      <div className="flex items-start gap-3">
+                                        <div className="pt-0.5">
+                                          <Checkbox 
+                                            checked={selectedIds.includes(d.id)}
+                                            onCheckedChange={() => toggleSelect(d.id)}
+                                            id={`check-${d.id}`}
+                                            className="h-4 w-4 rounded border-slate-300"
+                                            disabled={d.cases && d.cases.length > 0} // Disable if already has case? (User choice)
+                                          />
                                         </div>
-                                        <div className="mt-1 flex items-center gap-2 text-[10px] text-slate-500">
-                                          <Clock className="h-3 w-3" />
-                                          Vencimento: {d.due_date || "—"}
+                                        <div>
+                                          <div className="flex items-center gap-2 text-[11px] font-bold text-slate-800">
+                                            #{idx + 1} — ID: {d.id.slice(0, 8)}
+                                            {d.status === 'completed' && <CheckCircle2 className="h-3 w-3 text-emerald-500" />}
+                                          </div>
+                                          <div className="mt-1 flex items-center gap-2 text-[10px] text-slate-500">
+                                            <Clock className="h-3 w-3" />
+                                            Vencimento: {d.due_date || "—"}
+                                          </div>
                                         </div>
                                       </div>
                                       <Badge variant={d.status === 'completed' ? 'default' : 'secondary'} className="text-[9px] h-4">
@@ -502,6 +592,45 @@ export default function CommitmentDetail() {
                 ) : null}
               </div>
             </Card>
+
+            <Dialog open={journeyOpen} onOpenChange={setJourneyOpen}>
+              <DialogContent className="max-w-md">
+                <DialogHeader>
+                  <DialogTitle>Gerar Tarefas Operacionais</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4 py-4">
+                  <p className="text-sm text-slate-600">
+                    Você selecionou <span className="font-bold text-slate-900">{selectedIds.length}</span> entregáveis. 
+                    Escolha para qual Jornada (Pipeline) deseja enviar as tarefas.
+                  </p>
+                  
+                  <div className="space-y-2">
+                    <Label className="text-xs font-bold uppercase tracking-wider text-slate-500">Selecione a Jornada</Label>
+                    <Select value={targetJourneyId} onValueChange={setTargetJourneyId}>
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="Escolha uma jornada..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {(journeysQ.data ?? []).map(j => (
+                          <SelectItem key={j.id} value={j.id}>{j.title}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  
+                  <div className="flex justify-end gap-2 pt-4">
+                    <Button variant="ghost" onClick={() => setJourneyOpen(false)}>Cancelar</Button>
+                    <Button 
+                      className="bg-blue-600 hover:bg-blue-700" 
+                      onClick={handleEmitCases}
+                      disabled={saving || !targetJourneyId}
+                    >
+                      {saving ? "Gerando..." : "Confirmar e Gerar"}
+                    </Button>
+                  </div>
+                </div>
+              </DialogContent>
+            </Dialog>
 
             <Dialog open={open} onOpenChange={setOpen}>
               <DialogContent className="max-w-2xl">
