@@ -105,20 +105,31 @@ export default function Contracts() {
   const qc = useQueryClient();
   const [isOrchestrating, setIsOrchestrating] = useState<string | null>(null);
 
-  const handleOrchestrate = async (e: React.MouseEvent, id: string) => {
-    e.preventDefault();
-    e.stopPropagation();
+  const handleOrchestrate = async (id: string) => {
     setIsOrchestrating(id);
     try {
       // Direct call to edge function to force re-orchestration
-      const { data, error } = await supabase.functions.invoke("jobs-processor", {
-        body: { commitment_id: id }
+      const response = await supabase.functions.invoke("commitment-orchestrator", {
+        body: { commitment_id: id },
       });
-      if (error) throw error;
-      showSuccess("Orquestração iniciada.");
-      await qc.invalidateQueries({ queryKey: ["contracts_dashboard", activeTenantId] });
-    } catch (err: any) {
-      showError(err.message || "Erro ao orquestrar");
+
+      if (response.error) {
+        console.error("Orchestration error:", response.error);
+        showError(`Erro na orquestração: ${response.error.message || "Tente novamente"}`);
+        return;
+      }
+
+      const result = response.data;
+      if (result?.skipped) {
+        showSuccess(`Orquestração ignorada: ${result.reason || "Já processado"}`);
+      } else {
+        showSuccess("Orquestração concluída com sucesso!");
+      }
+
+      await contractsQ.refetch();
+    } catch (error: any) {
+      console.error("Error orchestrating:", error);
+      showError("Falha ao iniciar orquestração");
     } finally {
       setIsOrchestrating(null);
     }
@@ -295,24 +306,28 @@ export default function Contracts() {
                                 <div className="flex items-center gap-4 py-1">
                                   <div>
                                     <p className="text-[10px] uppercase tracking-wider text-slate-400 font-bold">Status da Operação</p>
-                                    <p className="text-xs font-medium text-slate-500 italic">
-                                      {c.status === 'active' ? 'Gerando tarefas...' : 'Aguardando ativação'}
+                                    <p className="text-xs font-semibold text-blue-600">
+                                      Nenhum entregável ativo
                                     </p>
                                   </div>
                                   {c.status === 'active' && (
-                                    <Button
-                                      size="sm"
-                                      variant="outline"
-                                      className="h-8 gap-1 text-[10px] font-bold uppercase border-blue-200 bg-blue-50/50 text-blue-600 hover:bg-blue-100 dark:border-blue-900/30 dark:bg-blue-900/10 dark:text-blue-400"
-                                      onClick={(e) => handleOrchestrate(e, c.id)}
+                                    <Button 
+                                      size="sm" 
+                                      className="h-9 px-4 gap-2 bg-blue-600 hover:bg-blue-700 text-white shadow-md transition-all active:scale-95"
+                                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleOrchestrate(c.id); }}
                                       disabled={isOrchestrating === c.id}
                                     >
                                       {isOrchestrating === c.id ? (
-                                        <Loader2 className="h-3 w-3 animate-spin" />
+                                        <>
+                                          <div className="h-3 w-3 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                                          Gerando...
+                                        </>
                                       ) : (
-                                        <Play className="h-3 w-3 fill-current" />
+                                        <>
+                                          <Play className="w-4 h-4 fill-current" />
+                                          Gerar Entregáveis
+                                        </>
                                       )}
-                                      Orquestrar
                                     </Button>
                                   )}
                                 </div>

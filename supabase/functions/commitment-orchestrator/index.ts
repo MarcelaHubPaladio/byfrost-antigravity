@@ -42,16 +42,21 @@ serve(async (req) => {
       return err("commitment_query_failed", 500, { message: cErr.message });
     }
 
-    if (!commitment || (commitment as any).deleted_at) return err("commitment_not_found", 404);
+    if (!commitment || (commitment as any).deleted_at) {
+      console.log(`[${fn}] Commitment not found or deleted: ${commitmentId}`);
+      return err("commitment_not_found", 404);
+    }
 
     const tenantId = String((commitment as any).tenant_id);
     const status = String((commitment as any).status ?? "");
 
     if (status !== "active") {
+      console.log(`[${fn}] Commitment ${commitmentId} is not active (status: ${status}). Skipping.`);
       return json({ ok: true, skipped: true, reason: "commitment_not_active", tenant_id: tenantId, commitment_id: commitmentId });
     }
 
     // 2) Idempotency guard: if deliverables already exist for this commitment, do nothing.
+    console.log(`[${fn}] Checking for existing deliverables...`);
     const { data: existingAny, error: eErr } = await supabase
       .from("deliverables")
       .select("id")
@@ -72,6 +77,7 @@ serve(async (req) => {
     }
 
     // 3) Read commitment_items
+    console.log(`[${fn}] Fetching commitment items...`);
     const { data: items, error: iErr } = await supabase
       .from("commitment_items")
       .select("id, offering_entity_id, quantity, price, requires_fulfillment, metadata, deleted_at")
