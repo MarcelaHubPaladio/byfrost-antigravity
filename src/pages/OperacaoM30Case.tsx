@@ -65,13 +65,14 @@ export default function OperacaoM30Case() {
     const qc = useQueryClient();
     const { activeTenantId } = useTenant();
     const { user } = useSession();
+    const [creatingTasks, setCreatingTasks] = useState(false);
+    const [deleting, setDeleting] = useState(false);
 
     const [transitionBlock, setTransitionBlock] = useState<{
         open: boolean;
         nextStateName: string;
         reasons: TransitionBlockReason[];
     }>({ open: false, nextStateName: "", reasons: [] });
-    const [deleting, setDeleting] = useState(false);
 
     const caseQ = useQuery({
         queryKey: ["case", activeTenantId, id],
@@ -274,36 +275,51 @@ export default function OperacaoM30Case() {
                     .update({ status: "completed" })
                     .eq("id", caseQ.data.deliverable_id);
             }
-            // Automação: Planejamento -> Gravação (Criação de Subtarefas)
-            if (next === "GRAVACAO" && caseQ.data?.case_type === "planejamento") {
-                const subtasks = (caseQ.data?.meta_json as any)?.pending_subtasks || [];
-                if (subtasks.length > 0) {
-                    for (const st of subtasks) {
-                        await supabase.from("cases").insert({
-                            tenant_id: activeTenantId,
-                            journey_id: caseQ.data.journey_id,
-                            parent_case_id: id,
-                            case_type: st.type, // 'arte_estatica' ou 'edicao' (vídeo)
-                            title: st.title,
-                            customer_entity_id: caseQ.data.customer_entity_id,
-                            deliverable_id: caseQ.data.deliverable_id,
-                            state: "DECUPAGEM_GRAVACAO",
-                            meta_json: {
-                                customer_entity_name: (caseQ.data.meta_json as any)?.customer_entity_name,
-                                commitment_id: (caseQ.data.meta_json as any)?.commitment_id,
-                            }
-                        });
-                    }
-                    // Limpar sub-tarefas pendentes se desejar, ou apenas marcar como processadas
-                    await supabase.from("cases").update({
-                        meta_json: {
-                            ...(caseQ.data.meta_json as any),
-                            subtasks_created: true
-                        }
-                    }).eq("id", id);
-                }
-            }
         } catch (e: any) { }
+    };
+
+    const handleCreateProductionTasks = async () => {
+        if (!activeTenantId || !id || !caseQ.data) return;
+        const subtasks = (caseQ.data?.meta_json as any)?.pending_subtasks || [];
+        if (subtasks.length === 0) {
+            showError("Não há subtarefas para criar.");
+            return;
+        }
+
+        setCreatingTasks(true);
+        try {
+            for (const st of subtasks) {
+                await supabase.from("cases").insert({
+                    tenant_id: activeTenantId,
+                    journey_id: caseQ.data.journey_id,
+                    parent_case_id: id,
+                    case_type: st.type, 
+                    title: st.title,
+                    customer_entity_id: caseQ.data.customer_entity_id,
+                    deliverable_id: caseQ.data.deliverable_id,
+                    state: "DECUPAGEM_UPLOAD",
+                    meta_json: {
+                        customer_entity_name: (caseQ.data.meta_json as any)?.customer_entity_name,
+                        commitment_id: (caseQ.data.meta_json as any)?.commitment_id,
+                    }
+                });
+            }
+            
+            await supabase.from("cases").update({
+                meta_json: {
+                    ...(caseQ.data.meta_json as any),
+                    pending_subtasks: [],
+                    subtasks_created_at: new Date().toISOString()
+                }
+            }).eq("id", id);
+            
+            showSuccess("Tarefas de produção criadas com sucesso!");
+            caseQ.refetch();
+        } catch (e: any) {
+            showError(`Erro ao criar: ${e?.message}`);
+        } finally {
+            setCreatingTasks(false);
+        }
     };
 
     if (caseQ.isLoading) {
@@ -485,6 +501,17 @@ export default function OperacaoM30Case() {
                                                 <PackageCheck className="h-4 w-4 text-indigo-600" />
                                                 Subtarefas de Produção
                                             </h3>
+
+                                            {caseQ.data?.state === "GRAVACAO" && (
+                                                <Button 
+                                                    size="sm" 
+                                                    className="h-8 rounded-xl bg-orange-600 hover:bg-orange-700 text-[10px] font-bold shadow-lg shadow-orange-100"
+                                                    onClick={handleCreateProductionTasks}
+                                                    disabled={creatingTasks}
+                                                >
+                                                    🚀 Criar Tarefas em Decupagem + Upload
+                                                </Button>
+                                            )}
                                         </div>
                                         <div className="space-y-2">
                                             {((caseQ.data?.meta_json as any)?.pending_subtasks || []).map((st: any, idx: number) => (
