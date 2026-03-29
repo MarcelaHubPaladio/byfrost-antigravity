@@ -43,6 +43,7 @@ const AdminUserDetail = lazyWithRetry(() => import("@/pages/AdminUserDetail"));
 const Crm = lazyWithRetry(() => import("@/pages/Crm"));
 const CrmCaseDetail = lazyWithRetry(() => import("@/pages/CrmCaseDetail"));
 const Orders = lazyWithRetry(() => import("@/pages/Orders"));
+const OperacaoM30 = lazyWithRetry(() => import("@/pages/OperacaoM30"));
 const Chats = lazyWithRetry(() => import("@/pages/Chats"));
 const Presence = lazyWithRetry(() => import("@/pages/Presence"));
 const PresenceManage = lazyWithRetry(() => import("@/pages/PresenceManage"));
@@ -281,6 +282,15 @@ const App = () => (
                     element={
                       <RequireRouteAccess routeKey="app.dashboard">
                         <Orders />
+                      </RequireRouteAccess>
+                    }
+                  />
+
+                  <Route
+                    path="/app/operacao-m30"
+                    element={
+                      <RequireRouteAccess routeKey="app.dashboard">
+                        <OperacaoM30 />
                       </RequireRouteAccess>
                     }
                   />
