@@ -607,7 +607,35 @@ export default function OperacaoM30Case() {
                                                             </Button>
                                                         </div>
                                                         <AccordionContent className="px-4 pb-4 space-y-4 pt-1 border-t border-slate-50">
-                                                            <div className="grid grid-cols-2 gap-4">
+                                                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                                                <div className="space-y-1.5">
+                                                                    <Label className="text-[10px] font-bold text-slate-500 uppercase">Tipo de Entrega</Label>
+                                                                    <Select 
+                                                                        value={st.type || "edicao"} 
+                                                                        onValueChange={async (val) => {
+                                                                            const current = [...((caseQ.data?.meta_json as any)?.pending_subtasks || [])];
+                                                                            current[idx] = { ...current[idx], type: val };
+                                                                            await supabase.from("cases").update({
+                                                                                meta_json: { ...(caseQ.data?.meta_json as any), pending_subtasks: current }
+                                                                            }).eq("id", id!);
+                                                                            caseQ.refetch();
+                                                                        }}
+                                                                    >
+                                                                        <SelectTrigger className="h-9 rounded-xl text-xs bg-slate-50/50 border-slate-200">
+                                                                            <SelectValue />
+                                                                        </SelectTrigger>
+                                                                        <SelectContent className="rounded-2xl">
+                                                                            <SelectItem value="edicao" className="rounded-xl text-xs">VÍDEO / EDIÇÃO</SelectItem>
+                                                                            <SelectItem value="arte_estatica" className="rounded-xl text-xs">ARTE ESTÁTICA</SelectItem>
+                                                                            <SelectItem value="trafego_pago" className="rounded-xl text-xs">TRÁFEGO PAGO</SelectItem>
+                                                                            <SelectItem value="planejamento" className="rounded-xl text-xs">PLANEJAMENTO</SelectItem>
+                                                                            <SelectItem value="relatorio" className="rounded-xl text-xs">RELATÓRIO</SelectItem>
+                                                                            <SelectItem value="validacao" className="rounded-xl text-xs">VALIDAÇÃO</SelectItem>
+                                                                            <SelectItem value="aprovacao" className="rounded-xl text-xs">APROVAÇÃO</SelectItem>
+                                                                            <SelectItem value="calendario" className="rounded-xl text-xs">CALENDÁRIO</SelectItem>
+                                                                        </SelectContent>
+                                                                    </Select>
+                                                                </div>
                                                                 <div className="space-y-1.5">
                                                                     <Label className="text-[10px] font-bold text-slate-500 uppercase">Data de Postagem</Label>
                                                                     <input 
