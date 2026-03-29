@@ -48,7 +48,7 @@ type CaseRow = {
     tenant_id: string;
     case_type: string;
     title: string | null;
-    status: string;
+    status: string | null;
     state: string;
     created_at: string;
     updated_at: string;
@@ -57,12 +57,29 @@ type CaseRow = {
     customer_entity_id: string | null;
     journey_id: string;
     deliverable_id: string | null;
-    is_chat?: boolean;
-    users_profile?: { display_name: string | null; email: string | null } | null;
-    journeys?: { key: string | null; name: string | null; is_crm?: boolean; default_state_machine_json?: any } | null;
-    customer_entity?: { display_name: string | null } | null;
-    meta_json?: any;
+    meta_json: any;
 };
+
+function SubtaskEditor({ initialValue, onSave }: { initialValue: string, onSave: (html: string) => void }) {
+    const [html, setHtml] = useState(initialValue);
+    
+    useEffect(() => {
+        const t = setTimeout(() => {
+            if (html !== initialValue) {
+                onSave(html);
+            }
+        }, 1000);
+        return () => clearTimeout(t);
+    }, [html, initialValue, onSave]);
+
+    return (
+        <RichTextEditor 
+            value={html}
+            minHeightClassName="min-h-[100px]"
+            onChange={setHtml}
+        />
+    );
+}
 
 export default function OperacaoM30Case() {
     const { id } = useParams();
@@ -673,16 +690,16 @@ export default function OperacaoM30Case() {
 
                                                             <div className="space-y-1.5">
                                                                 <Label className="text-[10px] font-bold text-slate-500 uppercase">Descrição da Pauta</Label>
-                                                                <RichTextEditor 
-                                                                    value={st.description || ""}
-                                                                    minHeightClassName="min-h-[100px]"
-                                                                    onChange={async (html) => {
+                                                                <SubtaskEditor 
+                                                                    initialValue={st.description || ""}
+                                                                    onSave={async (html) => {
                                                                         const current = [...((caseQ.data?.meta_json as any)?.pending_subtasks || [])];
                                                                         if (current[idx].description === html) return;
                                                                         current[idx] = { ...current[idx], description: html };
                                                                         await supabase.from("cases").update({
                                                                             meta_json: { ...(caseQ.data?.meta_json as any), pending_subtasks: current }
                                                                         }).eq("id", id!);
+                                                                        // Not refetching to avoid layout shift
                                                                     }}
                                                                 />
                                                             </div>
