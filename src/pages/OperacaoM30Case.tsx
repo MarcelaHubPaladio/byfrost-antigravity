@@ -55,6 +55,7 @@ type CaseRow = {
     users_profile?: { display_name: string | null; email: string | null } | null;
     journeys?: { key: string | null; name: string | null; is_crm?: boolean; default_state_machine_json?: any } | null;
     customer_entity?: { display_name: string | null } | null;
+    meta_json?: any;
 };
 
 export default function OperacaoM30Case() {
@@ -78,7 +79,7 @@ export default function OperacaoM30Case() {
             const { data, error } = await supabase
                 .from("cases")
                 .select(
-                    "id,tenant_id,case_type,customer_id,customer_entity_id,deliverable_id,title,status,state,created_at,updated_at,assigned_user_id,is_chat,users_profile:users_profile!fk_cases_users_profile(display_name,email),journeys:journeys!cases_journey_id_fkey(key,name,is_crm,default_state_machine_json)"
+                    "id,tenant_id,case_type,customer_id,customer_entity_id,deliverable_id,title,status,state,created_at,updated_at,assigned_user_id,is_chat,users_profile:users_profile!fk_cases_users_profile(display_name,email),journeys:journeys!cases_journey_id_fkey(key,name,is_crm,default_state_machine_json),meta_json"
                 )
                 .eq("tenant_id", activeTenantId!)
                 .eq("id", id!)
@@ -105,16 +106,43 @@ export default function OperacaoM30Case() {
     });
 
     const entityQ = useQuery({
-        queryKey: ["case_entity", activeTenantId, caseQ.data?.customer_entity_id],
-        enabled: Boolean(activeTenantId && caseQ.data?.customer_entity_id),
+        queryKey: ["case_entity", activeTenantId, caseQ.data?.customer_entity_id, (caseQ.data?.meta_json as any)?.entity_id],
+        enabled: Boolean(activeTenantId && (caseQ.data?.customer_entity_id || (caseQ.data?.meta_json as any)?.entity_id)),
         queryFn: async () => {
+            const eid = caseQ.data?.customer_entity_id || (caseQ.data?.meta_json as any)?.entity_id;
+            if (!eid) return null;
+
             const { data, error } = await supabase
                 .from("core_entities")
                 .select("display_name")
                 .eq("tenant_id", activeTenantId!)
-                .eq("id", caseQ.data!.customer_entity_id!)
+                .eq("id", eid)
                 .maybeSingle();
             if (error) throw error;
+            return data;
+        },
+    });
+
+    const accountEntityQ = useQuery({
+        queryKey: ["case_acc_entity", activeTenantId, caseQ.data?.customer_id],
+        enabled: Boolean(activeTenantId && caseQ.data?.customer_id && !entityQ.data),
+        queryFn: async () => {
+            const { data: acc } = await supabase
+                .from("customer_accounts")
+                .select("entity_id")
+                .eq("tenant_id", activeTenantId!)
+                .eq("id", caseQ.data!.customer_id!)
+                .maybeSingle();
+            
+            if (!acc?.entity_id) return null;
+
+            const { data } = await supabase
+                .from("core_entities")
+                .select("display_name")
+                .eq("tenant_id", activeTenantId!)
+                .eq("id", acc.entity_id)
+                .maybeSingle();
+
             return data;
         },
     });
@@ -232,9 +260,9 @@ export default function OperacaoM30Case() {
                                     {c?.title || "Tarefa"}
                                 </h2>
                                 <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
-                                    {entityQ.data?.display_name && (
+                                    {(entityQ.data?.display_name || accountEntityQ.data?.display_name) && (
                                         <Badge variant="outline" className="bg-indigo-50/50 text-indigo-700 border-indigo-100 font-bold px-1.5 h-5">
-                                            {entityQ.data.display_name}
+                                            {entityQ.data?.display_name || accountEntityQ.data?.display_name}
                                         </Badge>
                                     )}
                                     <span>ID: {id?.slice(0, 8)}</span>

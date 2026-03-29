@@ -278,6 +278,9 @@ export default function CommitmentDetail() {
           title: d?.name || "Tarefa de Contrato",
           status: "open",
           state: initialState,
+          meta_json: {
+            entity_id: commitmentQ.data?.customer_entity_id,
+          }
         };
       });
 
