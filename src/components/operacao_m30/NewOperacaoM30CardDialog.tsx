@@ -24,6 +24,7 @@ import { showError, showSuccess } from "@/utils/toast";
 import { cn } from "@/lib/utils";
 import { Plus, UserRound, Check, ChevronsUpDown, Search, PackageCheck } from "lucide-react";
 import { normalizeRichTextHtmlOrNull, RichTextEditor } from "@/components/RichTextEditor";
+import { Switch } from "@/components/ui/switch";
 import { FileText, Building2, Loader2 } from "lucide-react";
 import {
   Command,
@@ -68,6 +69,7 @@ export function NewOperacaoM30CardDialog(props: { tenantId: string; journeyId: s
   const [entityComboOpen, setEntityComboOpen] = useState(false);
   const [entitySearch, setEntitySearch] = useState("");
   const [caseType, setCaseType] = useState<string>("planejamento");
+  const [priority, setPriority] = useState(false);
 
   const usersQ = useQuery({
     queryKey: ["m30_users_hierarchy", props.tenantId, user?.id],
@@ -213,6 +215,7 @@ export function NewOperacaoM30CardDialog(props: { tenantId: string; journeyId: s
           entity_id: final_entity_id,
           customer_entity_name: entityName,
           commitment_id: final_commitment_id,
+          priority,
         },
       };
 
@@ -266,6 +269,7 @@ export function NewOperacaoM30CardDialog(props: { tenantId: string; journeyId: s
       setResponsibleId("__unassigned__");
       setEntityId("__unassigned__");
       setCommitmentId("__unassigned__");
+      setPriority(false);
     } catch (e: any) {
       const parts = [
         e?.message ? String(e.message) : null,
@@ -367,7 +371,7 @@ export function NewOperacaoM30CardDialog(props: { tenantId: string; journeyId: s
                   <PackageCheck className="h-4 w-4 text-slate-500" />
                   <Label className="text-xs text-indigo-700 font-semibold">Tipo de Caso</Label>
                 </div>
-                <Select value={caseType} onValueChange={setCaseType}>
+                  <Select value={caseType} onValueChange={setCaseType}>
                   <SelectTrigger className="mt-1 h-11 rounded-2xl bg-white text-xs">
                     <SelectValue placeholder="Escolher tipo…" />
                   </SelectTrigger>
@@ -385,6 +389,23 @@ export function NewOperacaoM30CardDialog(props: { tenantId: string; journeyId: s
                 </Select>
               </div>
 
+              <div>
+                <div className="flex items-center gap-2">
+                  <PackageCheck className="h-4 w-4 text-slate-500" />
+                  <Label className="text-xs text-rose-700 font-bold uppercase">Priorizar Card</Label>
+                </div>
+                <div className="mt-1 flex items-center justify-between h-11 px-4 rounded-2xl border border-dotted border-slate-300 bg-slate-50/50">
+                  <span className="text-[10px] text-slate-500 font-medium">Destacar com borda vermelha</span>
+                  <Switch 
+                    id="dialog-priority"
+                    checked={priority}
+                    onCheckedChange={setPriority}
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <div className="flex items-center gap-2">
                   <Building2 className="h-4 w-4 text-slate-500" />

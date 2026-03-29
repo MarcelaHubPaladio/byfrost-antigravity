@@ -31,7 +31,8 @@ import { checkTransitionBlocks, TransitionBlockReason } from "@/lib/journeys/val
 import { TransitionBlockDialog } from "@/components/case/TransitionBlockDialog";
 import { CaseTimeline, type CaseTimelineEvent } from "@/components/case/CaseTimeline";
 import { TrelloCardDetails } from "@/components/trello/TrelloCardDetails";
-import { ArrowLeft, Trash2, RefreshCw, FileText, PackageCheck, Check, AlertCircle, Plus } from "lucide-react";
+import { Card } from "@/components/ui/card";
+import { ArrowLeft, Trash2, RefreshCw, FileText, PackageCheck, Check, AlertCircle, Plus, Calendar } from "lucide-react";
 import { cn, titleizeState } from "@/lib/utils";
 import { showError, showSuccess } from "@/utils/toast";
 import { getStateLabel } from "@/lib/journeyLabels";
@@ -41,7 +42,6 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/
 import { RichTextEditor } from "@/components/RichTextEditor";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { Calendar } from "lucide-react";
 
 type CaseRow = {
     id: string;
@@ -366,181 +366,186 @@ export default function OperacaoM30Case() {
     return (
         <RequireAuth>
             <AppShell>
-                <div className="space-y-4">
-                    <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                        <div className="flex items-center gap-3">
-                            <Button
-                                variant="outline"
-                                className="h-10 rounded-2xl"
-                                onClick={() => nav("/app/operacao-m30")}
-                            >
-                                <ArrowLeft className="mr-2 h-4 w-4" /> Voltar
-                            </Button>
-                            <div className="min-w-0">
-                                <h2 className="line-clamp-1 text-lg font-semibold text-slate-900">
-                                    {c?.title || "Tarefa"}
-                                </h2>
-                                <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
+                <div className="flex flex-col gap-6 p-4 sm:p-6 lg:p-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                    <Card className={cn(
+                        "rounded-[32px] overflow-hidden border-slate-200/60 shadow-xl shadow-slate-200/20 transition-all duration-300",
+                        (caseQ.data?.meta_json as any)?.priority ? "ring-2 ring-rose-500 border-rose-500/50" : "border-slate-200/60"
+                    )}>
+                        <div className="flex flex-col border-b border-slate-100 bg-white p-6 sm:p-8">
+                            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                                <div className="flex flex-col gap-1">
+                                    <div className="flex items-center gap-2">
+                                        <Link to="/app/operacao-m30">
+                                            <Button variant="ghost" size="sm" className="h-8 rounded-full px-2 text-slate-500 hover:bg-slate-50">
+                                                <ArrowLeft className="mr-2 h-4 w-4" /> Voltar
+                                            </Button>
+                                        </Link>
+                                        <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                                            {(() => {
+                                                const eid = (caseQ.data as any).customer_entity_id || (caseQ.data.meta_json as any)?.entity_id;
+                                                const metaName = (caseQ.data.meta_json as any)?.customer_entity_name || (caseQ.data.meta_json as any)?.entity_name;
+                                                const entityName = metaName || (eid ? "(Vínculo externo)" : null);
+                                                return entityName;
+                                            })()}
+                                            <span>ID: {id?.slice(0, 8)}</span>
+                                            <Badge variant="secondary" className="rounded-full">Operação M30</Badge>
+                                            {(caseQ.data?.meta_json as any)?.priority && (
+                                                <Badge className="rounded-full bg-rose-500 text-white hover:bg-rose-600 border-none shadow-sm animate-pulse">
+                                                    PRIORITÁRIO
+                                                </Badge>
+                                            )}
+                                            <Select 
+                                                value={caseQ.data?.case_type} 
+                                                onValueChange={handleUpdateCaseType}
+                                                disabled={updatingState || saving}
+                                            >
+                                                <SelectTrigger className="h-6 rounded-full bg-slate-50 text-[10px] text-slate-600 drop-shadow-sm border-slate-200 font-bold uppercase px-2 w-auto min-w-[100px]">
+                                                    <SelectValue />
+                                                </SelectTrigger>
+                                                <SelectContent className="rounded-2xl">
+                                                    <SelectItem value="planejamento" className="rounded-xl text-[10px]">PLANEJAMENTO</SelectItem>
+                                                    <SelectItem value="trafego_pago" className="rounded-xl text-[10px]">TRÁFEGO PAGO</SelectItem>
+                                                    <SelectItem value="arte_estatica" className="rounded-xl text-[10px]">ARTE ESTÁTICA</SelectItem>
+                                                    <SelectItem value="gravacao" className="rounded-xl text-[10px]">GRAVAÇÃO</SelectItem>
+                                                    <SelectItem value="relatorio" className="rounded-xl text-[10px]">RELATÓRIO</SelectItem>
+                                                    <SelectItem value="edicao" className="rounded-xl text-[10px]">EDIÇÃO</SelectItem>
+                                                    <SelectItem value="validacao" className="rounded-xl text-[10px]">VALIDAÇÃO</SelectItem>
+                                                    <SelectItem value="aprovacao" className="rounded-xl text-[10px]">APROVAÇÃO</SelectItem>
+                                                    <SelectItem value="calendario" className="rounded-xl text-[10px]">CALENDÁRIO</SelectItem>
+                                                    <SelectItem value="order" className="rounded-xl text-[10px]">GERAL</SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+                                    </div>
+                                    <h1 className="text-2xl font-bold text-slate-900 sm:text-3xl">
+                                        {caseQ.data?.title || "Carregando..."}
+                                    </h1>
+                                </div>
+
+                                <div className="flex items-center gap-2">
                                     {(() => {
-                                        const metaName = (c?.meta_json as any)?.customer_entity_name || (c?.meta_json as any)?.entity_name;
-                                        const name = metaName || entityQ.data?.display_name || accountEntityQ.data?.display_name;
-                                        if (!name) return null;
+                                        const isFinalState = (s: string) => {
+                                            const up = s.toUpperCase();
+                                            return up.includes("CONCLU") || up.includes("FINAL") || up.includes("ENTREG");
+                                        };
+                                        const alreadyFinal = isFinalState(c?.state ?? "");
+                                        if (alreadyFinal) return null;
+
+                                        const targetFinal = states.find(s => isFinalState(s)) || states[states.length - 1];
+                                        if (!targetFinal) return null;
+
                                         return (
-                                            <Badge variant="outline" className="bg-indigo-50/50 text-indigo-700 border-indigo-100 font-bold px-1.5 h-5">
-                                                {name}
-                                            </Badge>
+                                            <AlertDialog>
+                                                <AlertDialogTrigger asChild>
+                                                    <Button 
+                                                        variant="default" 
+                                                        className="h-10 rounded-2xl bg-emerald-600 text-white hover:bg-emerald-700 shadow-sm"
+                                                    >
+                                                        <Check className="mr-2 h-4 w-4" /> Concluir tarefa
+                                                    </Button>
+                                                </AlertDialogTrigger>
+                                                <AlertDialogContent className="rounded-[24px]">
+                                                    <AlertDialogHeader>
+                                                        <div className="flex items-center gap-2 text-emerald-600 mb-2">
+                                                            <AlertCircle className="h-5 w-5" />
+                                                            <span className="font-bold">Ação Irreversível</span>
+                                                        </div>
+                                                        <AlertDialogTitle>Concluir esta tarefa?</AlertDialogTitle>
+                                                        <AlertDialogDescription>
+                                                            Uma vez concluída, apenas um **administrador** poderá reabri-la.
+                                                            Deseja prosseguir?
+                                                        </AlertDialogDescription>
+                                                    </AlertDialogHeader>
+                                                    <AlertDialogFooter>
+                                                        <AlertDialogCancel className="rounded-2xl">Cancelar</AlertDialogCancel>
+                                                        <AlertDialogAction
+                                                            onClick={() => updateState(targetFinal)}
+                                                            className="rounded-2xl bg-emerald-600 text-white hover:bg-emerald-700"
+                                                        >
+                                                            Sim, concluir
+                                                        </AlertDialogAction>
+                                                    </AlertDialogFooter>
+                                                </AlertDialogContent>
+                                            </AlertDialog>
                                         );
                                     })()}
-                                    <span>ID: {id?.slice(0, 8)}</span>
-                                    <Badge variant="secondary" className="rounded-full">Operação M30</Badge>
-                                    <Select 
-                                        value={caseQ.data?.case_type} 
-                                        onValueChange={handleUpdateCaseType}
-                                        disabled={updatingState || saving}
-                                    >
-                                        <SelectTrigger className="h-6 rounded-full bg-slate-50 text-[10px] text-slate-600 drop-shadow-sm border-slate-200 font-bold uppercase px-2 w-auto min-w-[100px]">
-                                            <SelectValue />
+
+                                    <Select value={c?.state} onValueChange={updateState} disabled={updatingState}>
+                                        <SelectTrigger className="h-10 w-[180px] rounded-2xl bg-white shadow-sm">
+                                            <SelectValue placeholder="Estado..." />
                                         </SelectTrigger>
                                         <SelectContent className="rounded-2xl">
-                                            <SelectItem value="planejamento" className="rounded-xl text-[10px]">PLANEJAMENTO</SelectItem>
-                                            <SelectItem value="trafego_pago" className="rounded-xl text-[10px]">TRÁFEGO PAGO</SelectItem>
-                                            <SelectItem value="arte_estatica" className="rounded-xl text-[10px]">ARTE ESTÁTICA</SelectItem>
-                                            <SelectItem value="gravacao" className="rounded-xl text-[10px]">GRAVAÇÃO</SelectItem>
-                                            <SelectItem value="relatorio" className="rounded-xl text-[10px]">RELATÓRIO</SelectItem>
-                                            <SelectItem value="edicao" className="rounded-xl text-[10px]">EDIÇÃO</SelectItem>
-                                            <SelectItem value="validacao" className="rounded-xl text-[10px]">VALIDAÇÃO</SelectItem>
-                                            <SelectItem value="aprovacao" className="rounded-xl text-[10px]">APROVAÇÃO</SelectItem>
-                                            <SelectItem value="calendario" className="rounded-xl text-[10px]">CALENDÁRIO</SelectItem>
-                                            <SelectItem value="order" className="rounded-xl text-[10px]">GERAL</SelectItem>
+                                            {states.map((s) => (
+                                                <SelectItem key={s} value={s} className="rounded-xl">
+                                                    {getStateLabel(journeyQ.data as any, s)}
+                                                </SelectItem>
+                                            ))}
                                         </SelectContent>
                                     </Select>
-                                </div>
-                            </div>
-                        </div>
 
-                        <div className="flex items-center gap-2">
-                            {(() => {
-                                const isFinalState = (s: string) => {
-                                    const up = s.toUpperCase();
-                                    return up.includes("CONCLU") || up.includes("FINAL") || up.includes("ENTREG");
-                                };
-                                const alreadyFinal = isFinalState(c?.state ?? "");
-                                if (alreadyFinal) return null;
-
-                                const targetFinal = states.find(s => isFinalState(s)) || states[states.length - 1];
-                                if (!targetFinal) return null;
-
-                                return (
                                     <AlertDialog>
                                         <AlertDialogTrigger asChild>
-                                            <Button 
-                                                variant="default" 
-                                                className="h-10 rounded-2xl bg-emerald-600 text-white hover:bg-emerald-700 shadow-sm"
-                                            >
-                                                <Check className="mr-2 h-4 w-4" /> Concluir tarefa
+                                            <Button variant="secondary" className="h-10 rounded-2xl border-rose-100 bg-rose-50 text-rose-700 hover:bg-rose-100">
+                                                <Trash2 className="h-4 w-4" />
                                             </Button>
                                         </AlertDialogTrigger>
                                         <AlertDialogContent className="rounded-[24px]">
                                             <AlertDialogHeader>
-                                                <div className="flex items-center gap-2 text-emerald-600 mb-2">
-                                                    <AlertCircle className="h-5 w-5" />
-                                                    <span className="font-bold">Ação Irreversível</span>
-                                                </div>
-                                                <AlertDialogTitle>Concluir esta tarefa?</AlertDialogTitle>
+                                                <AlertDialogTitle>Excluir tarefa?</AlertDialogTitle>
                                                 <AlertDialogDescription>
-                                                    Uma vez concluída, apenas um **administrador** poderá reabri-la.
-                                                    Deseja prosseguir?
+                                                    Esta ação não pode ser desfeita. A tarefa será marcada como excluída.
                                                 </AlertDialogDescription>
                                             </AlertDialogHeader>
                                             <AlertDialogFooter>
                                                 <AlertDialogCancel className="rounded-2xl">Cancelar</AlertDialogCancel>
                                                 <AlertDialogAction
-                                                    onClick={() => updateState(targetFinal)}
-                                                    className="rounded-2xl bg-emerald-600 text-white hover:bg-emerald-700"
+                                                    onClick={deleteCase}
+                                                    className="rounded-2xl bg-rose-600 text-white hover:bg-rose-700"
                                                 >
-                                                    Sim, concluir
+                                                    Excluir
                                                 </AlertDialogAction>
                                             </AlertDialogFooter>
                                         </AlertDialogContent>
                                     </AlertDialog>
-                                );
-                            })()}
-
-                            <Select value={c?.state} onValueChange={updateState} disabled={updatingState}>
-                                <SelectTrigger className="h-10 w-[180px] rounded-2xl bg-white shadow-sm">
-                                    <SelectValue placeholder="Estado..." />
-                                </SelectTrigger>
-                                <SelectContent className="rounded-2xl">
-                                    {states.map((s) => (
-                                        <SelectItem key={s} value={s} className="rounded-xl">
-                                            {getStateLabel(journeyQ.data as any, s)}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-
-                            <AlertDialog>
-                                <AlertDialogTrigger asChild>
-                                    <Button variant="secondary" className="h-10 rounded-2xl border-rose-100 bg-rose-50 text-rose-700 hover:bg-rose-100">
-                                        <Trash2 className="h-4 w-4" />
-                                    </Button>
-                                </AlertDialogTrigger>
-                                <AlertDialogContent className="rounded-[24px]">
-                                    <AlertDialogHeader>
-                                        <AlertDialogTitle>Excluir tarefa?</AlertDialogTitle>
-                                        <AlertDialogDescription>
-                                            Esta ação não pode ser desfeita. A tarefa será marcada como excluída.
-                                        </AlertDialogDescription>
-                                    </AlertDialogHeader>
-                                    <AlertDialogFooter>
-                                        <AlertDialogCancel className="rounded-2xl">Cancelar</AlertDialogCancel>
-                                        <AlertDialogAction
-                                            onClick={deleteCase}
-                                            className="rounded-2xl bg-rose-600 text-white hover:bg-rose-700"
-                                        >
-                                            Excluir
-                                        </AlertDialogAction>
-                                    </AlertDialogFooter>
-                                </AlertDialogContent>
-                            </AlertDialog>
-                        </div>
-                    </div>
-
-                    <div className="grid gap-4 lg:grid-cols-[1fr_400px]">
-                        <div className="space-y-4">
-                            {deliverableQ.data && (
-                                <div className="rounded-[22px] border border-blue-200 bg-blue-50/50 p-4">
-                                    <div className="flex items-start justify-between">
-                                        <div className="flex items-start gap-3">
-                                            <div className="rounded-xl bg-blue-100 p-2 text-blue-600">
-                                                <PackageCheck className="h-5 w-5" />
-                                            </div>
-                                            <div>
-                                                <div className="text-sm font-bold text-blue-900">
-                                                    Entregável: {deliverableQ.data.name || "Sem Nome"}
-                                                </div>
-                                                <div className="flex items-center gap-2 mt-1">
-                                                    <Badge variant="outline" className="text-[10px] bg-white text-blue-700 border-blue-200">
-                                                        Status: {deliverableQ.data.status || 'pending'}
-                                                    </Badge>
-                                                </div>
-                                            </div>
-                                        </div>
-                                        {deliverableQ.data.commitment_id && profileQ.data?.role === 'admin' && (
-                                            <Link 
-                                                to={`/app/commitments/${deliverableQ.data.commitment_id}`}
-                                                className="flex items-center gap-2 text-xs font-semibold text-blue-700 hover:text-blue-800 transition"
-                                            >
-                                                <FileText className="h-4 w-4" />
-                                                Ver Contrato
-                                            </Link>
-                                        )}
-                                    </div>
                                 </div>
-                            )}
+                            </div>
+                        </div>
+
+                        <div className="grid gap-6 p-6 sm:p-8 lg:grid-cols-[1fr_400px]">
+                            <div className="space-y-6">
+                                {deliverableQ.data && (
+                                    <div className="rounded-[22px] border border-blue-200 bg-blue-50/50 p-4">
+                                        <div className="flex items-start justify-between">
+                                            <div className="flex items-start gap-3">
+                                                <div className="rounded-xl bg-blue-100 p-2 text-blue-600">
+                                                    <PackageCheck className="h-5 w-5" />
+                                                </div>
+                                                <div>
+                                                    <div className="text-sm font-bold text-blue-900">
+                                                        Entregável: {deliverableQ.data.name || "Sem Nome"}
+                                                    </div>
+                                                    <div className="flex items-center gap-2 mt-1">
+                                                        <Badge variant="outline" className="text-[10px] bg-white text-blue-700 border-blue-200">
+                                                            Status: {deliverableQ.data.status || 'pending'}
+                                                        </Badge>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            {deliverableQ.data.commitment_id && profileQ.data?.role === 'admin' && (
+                                                <Link 
+                                                    to={`/app/commitments/${deliverableQ.data.commitment_id}`}
+                                                    className="flex items-center gap-2 text-xs font-semibold text-blue-700 hover:text-blue-800 transition"
+                                                >
+                                                    <FileText className="h-4 w-4" />
+                                                    Ver Contrato
+                                                </Link>
+                                            )}
+                                        </div>
+                                    </div>
+                                )}
 
                                 {caseQ.data?.case_type === "planejamento" && (
-                                    <div className="rounded-[32px] border border-slate-200 bg-white/60 p-6 backdrop-blur shadow-sm">
+                                    <div className="rounded-[32px] border border-slate-200 bg-slate-50/40 p-6 shadow-inner-sm">
                                         <div className="flex items-center justify-between mb-4">
                                             <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
                                                 <PackageCheck className="h-4 w-4 text-indigo-600" />
@@ -558,7 +563,7 @@ export default function OperacaoM30Case() {
                                                 </Button>
                                             )}
                                         </div>
-                                        <div className="space-y-3">
+                                        <div className="space-y-4">
                                             <Accordion type="multiple" className="space-y-2">
                                                 {((caseQ.data?.meta_json as any)?.pending_subtasks || []).map((st: any, idx: number) => (
                                                     <AccordionItem 
@@ -644,14 +649,12 @@ export default function OperacaoM30Case() {
                                                                     value={st.description || ""}
                                                                     minHeightClassName="min-h-[100px]"
                                                                     onChange={async (html) => {
-                                                                        // Usamos um timeout simples para não salvar a cada tecla, mas o ideal seria um debounce
                                                                         const current = [...((caseQ.data?.meta_json as any)?.pending_subtasks || [])];
                                                                         if (current[idx].description === html) return;
                                                                         current[idx] = { ...current[idx], description: html };
                                                                         await supabase.from("cases").update({
                                                                             meta_json: { ...(caseQ.data?.meta_json as any), pending_subtasks: current }
                                                                         }).eq("id", id!);
-                                                                        // Not refetching here to avoid editor layout jump
                                                                     }}
                                                                 />
                                                             </div>
@@ -673,7 +676,7 @@ export default function OperacaoM30Case() {
                                                         const el = document.getElementById("new-subtask-title") as HTMLInputElement;
                                                         if (!el || !el.value.trim()) return;
                                                         const current = (caseQ.data?.meta_json as any)?.pending_subtasks || [];
-                                                        const next = [...current, { title: el.value, type: "edicao" }]; // Default to Video/Editing
+                                                        const next = [...current, { title: el.value, type: "edicao" }];
                                                         await supabase.from("cases").update({
                                                             meta_json: { ...(caseQ.data?.meta_json as any), pending_subtasks: next }
                                                         }).eq("id", id!);
@@ -709,20 +712,21 @@ export default function OperacaoM30Case() {
                                     </div>
                                 )}
 
-                            {activeTenantId && id && (
-                                <TrelloCardDetails tenantId={activeTenantId} caseId={id} />
-                            )}
-                            <CaseTimeline events={timelineQ.data ?? []} />
-                        </div>
+                                {activeTenantId && id && (
+                                    <TrelloCardDetails tenantId={activeTenantId} caseId={id} />
+                                )}
+                                <CaseTimeline events={timelineQ.data ?? []} />
+                            </div>
 
-                        <div className="space-y-4">
-                            {id && (
-                                <div className="h-[600px] overflow-hidden rounded-[28px] border border-slate-200 bg-white/50 shadow-sm backdrop-blur-sm">
-                                    <WhatsAppConversation caseId={id} className="h-full" />
-                                </div>
-                            )}
+                            <div className="space-y-4">
+                                {id && (
+                                    <div className="h-[600px] overflow-hidden rounded-[28px] border border-slate-200 bg-white/50 shadow-sm backdrop-blur-sm">
+                                        <WhatsAppConversation caseId={id} className="h-full" />
+                                    </div>
+                                )}
+                            </div>
                         </div>
-                    </div>
+                    </Card>
                 </div>
 
                 <TransitionBlockDialog

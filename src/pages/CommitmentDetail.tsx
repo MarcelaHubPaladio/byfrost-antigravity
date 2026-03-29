@@ -22,7 +22,9 @@ import {
   Plus,
   KanbanSquare,
   PackageCheck,
+  AlertCircle,
 } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
 import {
   Accordion,
   AccordionContent,
@@ -93,6 +95,7 @@ export default function CommitmentDetail() {
   const [journeyOpen, setJourneyOpen] = useState(false);
   const [targetJourneyId, setTargetJourneyId] = useState<string>("");
   const [targetCaseType, setTargetCaseType] = useState<string>("order");
+  const [targetPriority, setTargetPriority] = useState(false);
   const qc = useQueryClient();
 
   const commitmentQ = useQuery({
@@ -284,6 +287,7 @@ export default function CommitmentDetail() {
             entity_id: commitmentQ.data?.customer_entity_id,
             customer_entity_name: commitmentQ.data?.customer?.display_name,
             commitment_id: commitmentId,
+            priority: targetPriority,
           }
         };
       });
@@ -297,6 +301,7 @@ export default function CommitmentDetail() {
       showSuccess(`${selectedIds.length} tarefas criadas com sucesso.`);
       setSelectedIds([]);
       setJourneyOpen(false);
+      setTargetPriority(false);
       await deliverablesQ.refetch();
     } catch (err: any) {
       showError(err.message ?? "Erro ao criar tarefas");
@@ -651,6 +656,18 @@ export default function CommitmentDetail() {
                         <SelectItem value="order">GERAL</SelectItem>
                       </SelectContent>
                     </Select>
+                  </div>
+
+                  <div className="flex items-center justify-between h-11 px-4 rounded-2xl border border-dotted border-slate-300 bg-slate-50/50">
+                    <div className="flex items-center gap-2">
+                        <AlertCircle className="h-4 w-4 text-rose-500" />
+                        <Label className="text-xs text-rose-700 font-bold uppercase cursor-pointer" htmlFor="emit-priority">Priorizar Tarefas</Label>
+                    </div>
+                    <Switch 
+                      id="emit-priority"
+                      checked={targetPriority}
+                      onCheckedChange={setTargetPriority}
+                    />
                   </div>
                   
                   <div className="flex justify-end gap-2 pt-4">
