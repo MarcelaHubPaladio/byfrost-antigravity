@@ -31,7 +31,7 @@ import { checkTransitionBlocks, TransitionBlockReason } from "@/lib/journeys/val
 import { TransitionBlockDialog } from "@/components/case/TransitionBlockDialog";
 import { CaseTimeline, type CaseTimelineEvent } from "@/components/case/CaseTimeline";
 import { TrelloCardDetails } from "@/components/trello/TrelloCardDetails";
-import { ArrowLeft, Trash2, RefreshCw, FileText, PackageCheck, Check, AlertCircle } from "lucide-react";
+import { ArrowLeft, Trash2, RefreshCw, FileText, PackageCheck, Check, AlertCircle, Plus } from "lucide-react";
 import { cn, titleizeState } from "@/lib/utils";
 import { showError, showSuccess } from "@/utils/toast";
 import { getStateLabel } from "@/lib/journeyLabels";
@@ -274,6 +274,35 @@ export default function OperacaoM30Case() {
                     .update({ status: "completed" })
                     .eq("id", caseQ.data.deliverable_id);
             }
+            // Automação: Planejamento -> Gravação (Criação de Subtarefas)
+            if (next === "GRAVACAO" && caseQ.data?.case_type === "planejamento") {
+                const subtasks = (caseQ.data?.meta_json as any)?.pending_subtasks || [];
+                if (subtasks.length > 0) {
+                    for (const st of subtasks) {
+                        await supabase.from("cases").insert({
+                            tenant_id: activeTenantId,
+                            journey_id: caseQ.data.journey_id,
+                            parent_case_id: id,
+                            case_type: st.type, // 'arte_estatica' ou 'edicao' (vídeo)
+                            title: st.title,
+                            customer_entity_id: caseQ.data.customer_entity_id,
+                            deliverable_id: caseQ.data.deliverable_id,
+                            state: "DECUPAGEM_GRAVACAO",
+                            meta_json: {
+                                customer_entity_name: (caseQ.data.meta_json as any)?.customer_entity_name,
+                                commitment_id: (caseQ.data.meta_json as any)?.commitment_id,
+                            }
+                        });
+                    }
+                    // Limpar sub-tarefas pendentes se desejar, ou apenas marcar como processadas
+                    await supabase.from("cases").update({
+                        meta_json: {
+                            ...(caseQ.data.meta_json as any),
+                            subtasks_created: true
+                        }
+                    }).eq("id", id);
+                }
+            }
         } catch (e: any) { }
     };
 
@@ -321,6 +350,9 @@ export default function OperacaoM30Case() {
                                     })()}
                                     <span>ID: {id?.slice(0, 8)}</span>
                                     <Badge variant="secondary" className="rounded-full">Operação M30</Badge>
+                                    <Badge variant="outline" className="rounded-full bg-slate-50 text-slate-600 drop-shadow-sm border-slate-200">
+                                        {caseQ.data?.case_type?.replace("_", " ").toUpperCase() || "GERAL"}
+                                    </Badge>
                                 </div>
                             </div>
                         </div>
@@ -445,6 +477,90 @@ export default function OperacaoM30Case() {
                                     </div>
                                 </div>
                             )}
+
+                                {caseQ.data?.case_type === "planejamento" && (
+                                    <div className="rounded-[32px] border border-slate-200 bg-white/60 p-6 backdrop-blur shadow-sm">
+                                        <div className="flex items-center justify-between mb-4">
+                                            <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                                                <PackageCheck className="h-4 w-4 text-indigo-600" />
+                                                Subtarefas de Produção
+                                            </h3>
+                                        </div>
+                                        <div className="space-y-2">
+                                            {((caseQ.data?.meta_json as any)?.pending_subtasks || []).map((st: any, idx: number) => (
+                                                <div key={idx} className="flex items-center justify-between p-3 rounded-2xl bg-white border border-slate-100 shadow-sm">
+                                                    <div className="flex items-center gap-3">
+                                                        <Badge variant="secondary" className="text-[10px] h-5">
+                                                            {st.type === "arte_estatica" ? "ARTE" : "VÍDEO"}
+                                                        </Badge>
+                                                        <span className="text-sm text-slate-700 font-medium">{st.title}</span>
+                                                    </div>
+                                                    <Button 
+                                                        variant="ghost" 
+                                                        size="sm" 
+                                                        className="h-8 w-8 rounded-full text-slate-400 hover:text-rose-600 hover:bg-rose-50"
+                                                        onClick={async () => {
+                                                            const current = (caseQ.data?.meta_json as any)?.pending_subtasks || [];
+                                                            const next = current.filter((_: any, i: number) => i !== idx);
+                                                            await supabase.from("cases").update({
+                                                                meta_json: { ...(caseQ.data?.meta_json as any), pending_subtasks: next }
+                                                            }).eq("id", id!);
+                                                            caseQ.refetch();
+                                                        }}
+                                                    >
+                                                        <Trash2 className="h-4 w-4" />
+                                                    </Button>
+                                                </div>
+                                            ))}
+                                            
+                                            <div className="flex items-center gap-2 mt-4 pt-4 border-t border-dashed border-slate-200">
+                                                <input 
+                                                    id="new-subtask-title"
+                                                    placeholder="Título da subtarefa..."
+                                                    className="flex-1 h-9 rounded-xl border border-slate-200 bg-white px-3 text-xs focus:ring-2 focus:ring-indigo-500 outline-none"
+                                                />
+                                                <Button 
+                                                    size="sm" 
+                                                    className="h-9 rounded-xl bg-indigo-600 hover:bg-indigo-700"
+                                                    onClick={async () => {
+                                                        const el = document.getElementById("new-subtask-title") as HTMLInputElement;
+                                                        if (!el || !el.value.trim()) return;
+                                                        const current = (caseQ.data?.meta_json as any)?.pending_subtasks || [];
+                                                        const next = [...current, { title: el.value, type: "edicao" }]; // Default to Video/Editing
+                                                        await supabase.from("cases").update({
+                                                            meta_json: { ...(caseQ.data?.meta_json as any), pending_subtasks: next }
+                                                        }).eq("id", id!);
+                                                        el.value = "";
+                                                        caseQ.refetch();
+                                                    }}
+                                                >
+                                                    <Plus className="h-4 w-4 mr-1" /> Vídeo
+                                                </Button>
+                                                <Button 
+                                                    size="sm" 
+                                                    variant="outline"
+                                                    className="h-9 rounded-xl border-indigo-200 text-indigo-700 hover:bg-indigo-50"
+                                                    onClick={async () => {
+                                                        const el = document.getElementById("new-subtask-title") as HTMLInputElement;
+                                                        if (!el || !el.value.trim()) return;
+                                                        const current = (caseQ.data?.meta_json as any)?.pending_subtasks || [];
+                                                        const next = [...current, { title: el.value, type: "arte_estatica" }];
+                                                        await supabase.from("cases").update({
+                                                            meta_json: { ...(caseQ.data?.meta_json as any), pending_subtasks: next }
+                                                        }).eq("id", id!);
+                                                        el.value = "";
+                                                        caseQ.refetch();
+                                                    }}
+                                                >
+                                                    <Plus className="h-4 w-4 mr-1" /> Arte
+                                                </Button>
+                                            </div>
+                                            <p className="text-[10px] text-slate-400 italic px-1 pt-1">
+                                                * Subtarefas serão transformadas em cards reais quando este planejamento for movido para "Gravação".
+                                            </p>
+                                        </div>
+                                    </div>
+                                )}
 
                             {activeTenantId && id && (
                                 <TrelloCardDetails tenantId={activeTenantId} caseId={id} />

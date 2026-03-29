@@ -22,7 +22,7 @@ import { supabase } from "@/lib/supabase";
 import { useSession } from "@/providers/SessionProvider";
 import { showError, showSuccess } from "@/utils/toast";
 import { cn } from "@/lib/utils";
-import { Plus, UserRound, Check, ChevronsUpDown, Search } from "lucide-react";
+import { Plus, UserRound, Check, ChevronsUpDown, Search, PackageCheck } from "lucide-react";
 import { normalizeRichTextHtmlOrNull, RichTextEditor } from "@/components/RichTextEditor";
 import { FileText, Building2, Loader2 } from "lucide-react";
 import {
@@ -67,6 +67,7 @@ export function NewOperacaoM30CardDialog(props: { tenantId: string; journeyId: s
   const [creating, setCreating] = useState(false);
   const [entityComboOpen, setEntityComboOpen] = useState(false);
   const [entitySearch, setEntitySearch] = useState("");
+  const [caseType, setCaseType] = useState<string>("planejamento");
 
   const usersQ = useQuery({
     queryKey: ["m30_users_hierarchy", props.tenantId, user?.id],
@@ -198,7 +199,7 @@ export function NewOperacaoM30CardDialog(props: { tenantId: string; journeyId: s
       const basePayload: any = {
         tenant_id: props.tenantId,
         journey_id: props.journeyId,
-        case_type: "TRELLO",
+        case_type: caseType,
         is_chat: false,
         created_by_channel: "panel",
         title: t,
@@ -361,6 +362,29 @@ export function NewOperacaoM30CardDialog(props: { tenantId: string; journeyId: s
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <div className="flex items-center gap-2">
+                  <PackageCheck className="h-4 w-4 text-slate-500" />
+                  <Label className="text-xs text-indigo-700 font-semibold">Tipo de Caso</Label>
+                </div>
+                <Select value={caseType} onValueChange={setCaseType}>
+                  <SelectTrigger className="mt-1 h-11 rounded-2xl bg-white text-xs">
+                    <SelectValue placeholder="Escolher tipo…" />
+                  </SelectTrigger>
+                  <SelectContent className="rounded-2xl">
+                    <SelectItem value="planejamento" className="rounded-xl">Planejamento</SelectItem>
+                    <SelectItem value="trafego_pago" className="rounded-xl">Tráfego Pago</SelectItem>
+                    <SelectItem value="arte_estatica" className="rounded-xl">Arte Estática</SelectItem>
+                    <SelectItem value="gravacao" className="rounded-xl">Gravação</SelectItem>
+                    <SelectItem value="relatorio" className="rounded-xl">Relatório</SelectItem>
+                    <SelectItem value="edicao" className="rounded-xl">Edição</SelectItem>
+                    <SelectItem value="validacao" className="rounded-xl">Validação</SelectItem>
+                    <SelectItem value="aprovacao" className="rounded-xl">Aprovação</SelectItem>
+                    <SelectItem value="calendario" className="rounded-xl">Calendário</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
               <div>
                 <div className="flex items-center gap-2">
                   <Building2 className="h-4 w-4 text-slate-500" />
