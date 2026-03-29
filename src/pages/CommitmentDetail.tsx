@@ -195,14 +195,21 @@ export default function CommitmentDetail() {
     queryKey: ["active_journeys", activeTenantId],
     enabled: Boolean(activeTenantId),
     queryFn: async () => {
-      // Buscamos jornadas que não são CRM (estilo Trello/Tarefas)
+      // Buscamos apenas jornadas HABILITADAS para este TENANT que não são CRM
       const { data, error } = await supabase
-        .from("journeys")
-        .select("id, name, key, default_state_machine_json, is_crm")
-        .eq("is_crm", false)
-        .order("name", { ascending: true });
+        .from("tenant_journeys")
+        .select(`
+          enabled,
+          journeys!inner(id, name, key, default_state_machine_json, is_crm)
+        `)
+        .eq("tenant_id", activeTenantId!)
+        .eq("enabled", true)
+        .eq("journeys.is_crm", false)
+        .order("journeys(name)", { ascending: true });
+        
       if (error) throw error;
-      return (data ?? []) as any[];
+      // Mapeamos para retornar a estrutura da jornada diretamente
+      return (data || []).map(row => row.journeys) as any[];
     },
     staleTime: 30_000,
   });
