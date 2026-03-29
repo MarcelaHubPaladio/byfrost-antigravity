@@ -112,8 +112,7 @@ export default function OperacaoM30Case() {
         queryFn: async () => {
             const { data, error } = await supabase
                 .from("journeys")
-                .select("key,name,is_crm,default_state_machine_json")
-                .eq("tenant_id", activeTenantId!)
+                .select("key,name,default_state_machine_json")
                 .eq("id", caseQ.data!.journey_id)
                 .maybeSingle();
             if (error) throw error;

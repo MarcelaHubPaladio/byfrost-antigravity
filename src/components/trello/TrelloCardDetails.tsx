@@ -97,7 +97,6 @@ export function TrelloCardDetails(props: { tenantId: string; caseId: string }) {
         .select("id,kind,storage_path,original_filename,created_at")
         .eq("case_id", props.caseId)
         .eq("tenant_id", props.tenantId)
-        .is("deleted_at", null)
         .order("created_at", { ascending: false })
         .limit(200);
       if (error) throw error;
