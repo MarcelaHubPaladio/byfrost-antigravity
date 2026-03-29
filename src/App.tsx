@@ -33,6 +33,7 @@ const ResetPassword = lazyWithRetry(() => import("@/pages/ResetPassword"));
 const Dashboard = lazyWithRetry(() => import("@/pages/Dashboard"));
 const Trello = lazyWithRetry(() => import("@/pages/Trello"));
 const TrelloCase = lazyWithRetry(() => import("@/pages/TrelloCase"));
+const OperacaoM30Case = lazyWithRetry(() => import("@/pages/OperacaoM30Case"));
 const CaseDetail = lazyWithRetry(() => import("@/pages/CaseDetail"));
 const Simulator = lazyWithRetry(() => import("@/pages/Simulator"));
 const Settings = lazyWithRetry(() => import("@/pages/Settings"));
@@ -596,7 +597,7 @@ const App = () => (
                     path="/app/operacao-m30/:id"
                     element={
                       <RequireRouteAccess routeKey="app.dashboard">
-                        <TrelloCase />
+                        <OperacaoM30Case />
                       </RequireRouteAccess>
                     }
                   />

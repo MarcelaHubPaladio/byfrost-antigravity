@@ -313,9 +313,15 @@ export function WhatsAppConversation({
     },
   });
 
+  const isValidEntityId = Boolean(
+    caseQ.data?.customer_entity_id &&
+    typeof caseQ.data.customer_entity_id === 'string' &&
+    caseQ.data.customer_entity_id.length === 36
+  );
+
   const entityQ = useQuery({
     queryKey: ["case_entity_phone", activeTenantId, caseQ.data?.customer_entity_id],
-    enabled: Boolean(activeTenantId && caseQ.data?.customer_entity_id),
+    enabled: Boolean(activeTenantId && isValidEntityId),
     queryFn: async () => {
       const { data, error } = await supabase
         .from("core_entities")

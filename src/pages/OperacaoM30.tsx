@@ -280,19 +280,70 @@ export default function OperacaoM30() {
   const [endDate, setEndDate] = useState("");
 
   const entitiesQ = useQuery({
-    queryKey: ["core_entities", activeTenantId],
+    queryKey: ["active_client_entities", activeTenantId],
     enabled: Boolean(activeTenantId),
     queryFn: async () => {
+      const { data: commitments } = await supabase
+        .from("commercial_commitments")
+        .select("customer_entity_id")
+        .eq("tenant_id", activeTenantId!)
+        .eq("commitment_type", "contract")
+        .eq("status", "active")
+        .is("deleted_at", null);
+      
+      const activeIds = Array.from(new Set(commitments?.map(c => c.customer_entity_id) || []));
+      if (!activeIds.length) return [];
+
       const { data, error } = await supabase
         .from("core_entities")
         .select("id,display_name")
         .eq("tenant_id", activeTenantId!)
+        .in("id", activeIds)
         .is("deleted_at", null)
         .order("display_name");
+        
       if (error) throw error;
       return (data ?? []) as any[];
     },
     staleTime: 60_000,
+  });
+
+  const tenantUsersQ = useQuery({
+    queryKey: ["tenant_users_hierarchy", activeTenantId, user?.id],
+    enabled: Boolean(activeTenantId && user?.id),
+    staleTime: 60_000,
+    queryFn: async () => {
+      const { data: meProfile } = await supabase
+        .from("users_profile")
+        .select("role")
+        .eq("tenant_id", activeTenantId!)
+        .eq("user_id", user!.id)
+        .single();
+
+      const isAdmin = meProfile?.role === "admin";
+
+      const { data: allUsers, error: usersErr } = await supabase
+        .from("users_profile")
+        .select("user_id, display_name, email")
+        .eq("tenant_id", activeTenantId!)
+        .is("deleted_at", null)
+        .order("display_name", { ascending: true });
+
+      if (usersErr) throw usersErr;
+      const list = (allUsers ?? []) as Array<{ user_id: string; display_name: string | null; email: string | null }>;
+
+      if (isAdmin) return list;
+
+      const { data: subordinateIds, error: rpcErr } = await supabase
+        .rpc("get_subordinates", { p_tenant_id: activeTenantId!, p_user_id: user!.id });
+
+      if (rpcErr) {
+        return list.filter(u => u.user_id === user!.id);
+      }
+
+      const subSet = new Set(subordinateIds as string[]);
+      return list.filter(u => u.user_id === user!.id || subSet.has(u.user_id));
+    },
   });
 
   const allInstancesQ = useQuery({
@@ -312,21 +363,7 @@ export default function OperacaoM30() {
     },
   });
 
-  const tenantUsersQ = useQuery({
-    queryKey: ["tenant_users_all", activeTenantId],
-    enabled: Boolean(activeTenantId),
-    staleTime: 60_000,
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("users_profile")
-        .select("user_id, display_name, email")
-        .eq("tenant_id", activeTenantId!)
-        .is("deleted_at", null)
-        .order("display_name", { ascending: true });
-      if (error) throw error;
-      return (data ?? []) as Array<{ user_id: string; display_name: string | null; email: string | null }>;
-    },
-  });
+
 
   const instanceQ = useQuery({
     queryKey: ["wa_instance_active_first", activeTenantId],
@@ -553,6 +590,15 @@ export default function OperacaoM30() {
       });
     }
 
+    // Filtro do Organograma Hierárquico (se não for Admin só vê os seus ou subordinados)
+    if (tenantUsersQ.data) {
+      const allowedSet = new Set(tenantUsersQ.data.map(u => u.user_id));
+      base = base.filter(r => {
+        if (!r.assigned_user_id) return true; // Mostra tarefas sem dono no quadro
+        return allowedSet.has(r.assigned_user_id);
+      });
+    }
+
     // Filtro de Entidade (Cliente)
     if (entityFilterId !== "all") {
       base = base.filter((r) => {
@@ -582,7 +628,7 @@ export default function OperacaoM30() {
 
       return t.includes(qq);
     });
-  }, [journeyRows, q, isCrm, customersQ.data, casePhoneQ.data, instanceFilterId, assigneeFilterId, entityFilterId, startDate, endDate]);
+  }, [journeyRows, q, isCrm, customersQ.data, casePhoneQ.data, instanceFilterId, assigneeFilterId, entityFilterId, startDate, endDate, tenantUsersQ.data]);
 
   const visibleCaseIds = useMemo(() => filteredRows.map((r) => r.id), [filteredRows]);
 
@@ -994,10 +1040,10 @@ export default function OperacaoM30() {
                 className="h-11 w-full sm:min-w-[180px] rounded-2xl border border-slate-200 bg-white px-3 text-sm text-slate-800 outline-none focus:border-[hsl(var(--byfrost-accent)/0.45)]"
               >
                 <option value="all">Todos</option>
-                <option value="__unassigned__">Sem responsável</option>
+                <option value="__unassigned__">Sem dono (Unassigned)</option>
                 {(tenantUsersQ.data ?? []).map((u) => (
                   <option key={u.user_id} value={u.user_id}>
-                    {u.display_name || u.email || "Sem nome"}
+                    {u.display_name ?? u.email ?? "Desconhecido"}
                   </option>
                 ))}
               </select>
