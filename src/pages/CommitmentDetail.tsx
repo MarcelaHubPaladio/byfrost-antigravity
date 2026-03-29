@@ -280,6 +280,8 @@ export default function CommitmentDetail() {
           state: initialState,
           meta_json: {
             entity_id: commitmentQ.data?.customer_entity_id,
+            customer_entity_name: commitmentQ.data?.customer?.display_name,
+            commitment_id: commitmentId,
           }
         };
       });

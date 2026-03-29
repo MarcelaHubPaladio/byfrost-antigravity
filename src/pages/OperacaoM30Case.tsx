@@ -79,7 +79,7 @@ export default function OperacaoM30Case() {
             const { data, error } = await supabase
                 .from("cases")
                 .select(
-                    "id,tenant_id,case_type,customer_id,customer_entity_id,deliverable_id,title,status,state,created_at,updated_at,assigned_user_id,is_chat,users_profile:users_profile!fk_cases_users_profile(display_name,email),journeys:journeys!cases_journey_id_fkey(key,name,is_crm,default_state_machine_json),meta_json"
+                    "id,tenant_id,case_type,customer_id,customer_entity_id,deliverable_id,title,status,state,created_at,updated_at,assigned_user_id,is_chat,users_profile:users_profile(display_name,email),meta_json"
                 )
                 .eq("tenant_id", activeTenantId!)
                 .eq("id", id!)
@@ -260,11 +260,16 @@ export default function OperacaoM30Case() {
                                     {c?.title || "Tarefa"}
                                 </h2>
                                 <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
-                                    {(entityQ.data?.display_name || accountEntityQ.data?.display_name) && (
-                                        <Badge variant="outline" className="bg-indigo-50/50 text-indigo-700 border-indigo-100 font-bold px-1.5 h-5">
-                                            {entityQ.data?.display_name || accountEntityQ.data?.display_name}
-                                        </Badge>
-                                    )}
+                                    {(() => {
+                                        const metaName = (c?.meta_json as any)?.customer_entity_name || (c?.meta_json as any)?.entity_name;
+                                        const name = metaName || entityQ.data?.display_name || accountEntityQ.data?.display_name;
+                                        if (!name) return null;
+                                        return (
+                                            <Badge variant="outline" className="bg-indigo-50/50 text-indigo-700 border-indigo-100 font-bold px-1.5 h-5">
+                                                {name}
+                                            </Badge>
+                                        );
+                                    })()}
                                     <span>ID: {id?.slice(0, 8)}</span>
                                     <Badge variant="secondary" className="rounded-full">Operação M30</Badge>
                                 </div>
