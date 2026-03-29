@@ -593,6 +593,15 @@ const App = () => (
                   />
 
                   <Route
+                    path="/app/operacao-m30/:id"
+                    element={
+                      <RequireRouteAccess routeKey="app.dashboard">
+                        <TrelloCase />
+                      </RequireRouteAccess>
+                    }
+                  />
+
+                  <Route
                     path="/cases/:id"
                     element={
                       <RequireRouteAccess routeKey="app.dashboard">

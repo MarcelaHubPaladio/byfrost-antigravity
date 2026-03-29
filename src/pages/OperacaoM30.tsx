@@ -228,7 +228,7 @@ function M30CalendarView({ cases, date, onChangeDate }: { cases: CaseRow[], date
                 {dayCases.map(c => (
                   <Link
                     key={c.id}
-                    to={`/app/trello/${c.id}`}
+                    to={`/app/operacao-m30/${c.id}`}
                     className="block p-2 rounded-[16px] border border-slate-100 bg-white hover:bg-slate-50 hover:border-slate-200 transition-colors cursor-pointer shadow-sm"
                     title={c.title ?? "Caso sem título"}
                   >
@@ -275,10 +275,25 @@ export default function OperacaoM30() {
   // Filtros jornada Auditoria e Responsável
   const [instanceFilterId, setInstanceFilterId] = useState<string>("all");
   const [assigneeFilterId, setAssigneeFilterId] = useState<string>("all");
+  const [entityFilterId, setEntityFilterId] = useState("all");
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
 
-  // Redireção custom removida pois é uma tela específica
-  const [startDate, setStartDate] = useState<string>("");
-  const [endDate, setEndDate] = useState<string>("");
+  const entitiesQ = useQuery({
+    queryKey: ["core_entities", activeTenantId],
+    enabled: Boolean(activeTenantId),
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("core_entities")
+        .select("id,display_name")
+        .eq("tenant_id", activeTenantId!)
+        .is("deleted_at", null)
+        .order("display_name");
+      if (error) throw error;
+      return (data ?? []) as any[];
+    },
+    staleTime: 60_000,
+  });
 
   const allInstancesQ = useQuery({
     queryKey: ["wa_instances_all", activeTenantId],
@@ -538,6 +553,15 @@ export default function OperacaoM30() {
       });
     }
 
+    // Filtro de Entidade (Cliente)
+    if (entityFilterId !== "all") {
+      base = base.filter((r) => {
+        const eid = String((r.meta_json as any)?.entity_id || r.customer_id || "");
+        if (entityFilterId === "__unassigned__") return !eid;
+        return eid === entityFilterId;
+      });
+    }
+
     const qq = q.trim().toLowerCase();
     if (!qq) return base;
 
@@ -558,7 +582,7 @@ export default function OperacaoM30() {
 
       return t.includes(qq);
     });
-  }, [journeyRows, q, isCrm, customersQ.data, casePhoneQ.data, instanceFilterId, assigneeFilterId, startDate, endDate]);
+  }, [journeyRows, q, isCrm, customersQ.data, casePhoneQ.data, instanceFilterId, assigneeFilterId, entityFilterId, startDate, endDate]);
 
   const visibleCaseIds = useMemo(() => filteredRows.map((r) => r.id), [filteredRows]);
 
@@ -946,6 +970,23 @@ export default function OperacaoM30() {
             </div>
 
             <div className="relative">
+              <div className="mb-1 text-[11px] font-semibold text-slate-700">Cliente (Entidade)</div>
+              <select
+                value={entityFilterId}
+                onChange={(e) => setEntityFilterId(e.target.value)}
+                className="h-11 w-full sm:min-w-[180px] rounded-2xl border border-slate-200 bg-white px-3 text-sm text-slate-800 outline-none focus:border-[hsl(var(--byfrost-accent)/0.45)]"
+              >
+                <option value="all">Todos</option>
+                <option value="__unassigned__">Sem cliente</option>
+                {(entitiesQ.data ?? []).map((e) => (
+                  <option key={e.id} value={e.id}>
+                    {e.display_name || "Sem nome"}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="relative">
               <div className="mb-1 text-[11px] font-semibold text-slate-700">Responsável</div>
               <select
                 value={assigneeFilterId}
@@ -1108,7 +1149,7 @@ export default function OperacaoM30() {
                           return (
                             <Link
                               key={c.id}
-                              to={`/app/trello/${c.id}`}
+                              to={`/app/operacao-m30/${c.id}`}
                               draggable
                               onDragStart={(e) => {
                                 e.dataTransfer.setData("text/caseId", c.id);
