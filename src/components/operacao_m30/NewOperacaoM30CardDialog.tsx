@@ -24,6 +24,7 @@ import { showError, showSuccess } from "@/utils/toast";
 import { cn } from "@/lib/utils";
 import { Plus, UserRound } from "lucide-react";
 import { normalizeRichTextHtmlOrNull, RichTextEditor } from "@/components/RichTextEditor";
+import { FileText, Building2 } from "lucide-react";
 
 type UserRow = { user_id: string; email: string | null; display_name: string | null };
 
@@ -48,6 +49,8 @@ export function NewOperacaoM30CardDialog(props: { tenantId: string; journeyId: s
   const [descriptionHtml, setDescriptionHtml] = useState("");
   const [dueDate, setDueDate] = useState("");
   const [responsibleId, setResponsibleId] = useState<string>("__unassigned__");
+  const [entityId, setEntityId] = useState<string>("__unassigned__");
+  const [commitmentId, setCommitmentId] = useState<string>("__unassigned__");
   const [creating, setCreating] = useState(false);
 
   const usersQ = useQuery({
@@ -99,6 +102,38 @@ export function NewOperacaoM30CardDialog(props: { tenantId: string; journeyId: s
     },
   });
 
+  const entitiesQ = useQuery({
+    queryKey: ["m30_creation_entities", props.tenantId],
+    enabled: open,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("core_entities")
+        .select("id, display_name")
+        .eq("tenant_id", props.tenantId)
+        .is("deleted_at", null)
+        .order("display_name");
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+
+  const commitmentsQ = useQuery({
+    queryKey: ["m30_creation_commitments", props.tenantId, entityId],
+    enabled: open && entityId !== "__unassigned__",
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("commercial_commitments")
+        .select("id, title, status")
+        .eq("tenant_id", props.tenantId)
+        .eq("customer_entity_id", entityId)
+        .is("deleted_at", null)
+        .in("status", ["active", "pending"])
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+
   const dueAtIso = useMemo(() => parseDateInput(dueDate), [dueDate]);
 
   const create = async () => {
@@ -108,9 +143,37 @@ export function NewOperacaoM30CardDialog(props: { tenantId: string; journeyId: s
     setCreating(true);
     try {
       const assigned_user_id = responsibleId === "__unassigned__" ? null : responsibleId;
+      const final_entity_id = entityId === "__unassigned__" ? null : entityId;
+      const final_commitment_id = commitmentId === "__unassigned__" ? null : commitmentId;
 
-      // Alguns ambientes têm um check constraint diferente em cases.status (ex.: 'OPEN' vs 'open').
-      // Para garantir compatibilidade, tentamos algumas variações e, se possível, deixamos o default do banco.
+      let deliverableId: string | null = null;
+      let entityName: string | null = null;
+
+      if (final_entity_id) {
+        entityName = entitiesQ.data?.find(e => e.id === final_entity_id)?.display_name ?? null;
+      }
+
+      // Se houver contrato, criamos um entregável 'Extra Escopo'
+      if (final_commitment_id && final_entity_id) {
+        const { data: del, error: delErr } = await supabase
+          .from("deliverables")
+          .insert({
+            tenant_id: props.tenantId,
+            commitment_id: final_commitment_id,
+            entity_id: final_entity_id,
+            name: `(Extra Escopo) ${t}`,
+            status: "pending",
+          })
+          .select("id")
+          .single();
+        
+        if (delErr) {
+          console.warn("[m30] Falha ao criar deliverable automático", delErr);
+        } else {
+          deliverableId = del.id;
+        }
+      }
+
       const basePayload: any = {
         tenant_id: props.tenantId,
         journey_id: props.journeyId,
@@ -120,18 +183,20 @@ export function NewOperacaoM30CardDialog(props: { tenantId: string; journeyId: s
         title: t,
         summary_text: normalizeRichTextHtmlOrNull(descriptionHtml),
         state: "BACKLOG",
+        customer_entity_id: final_entity_id,
+        deliverable_id: deliverableId,
         ...(assigned_user_id ? { assigned_user_id } : {}),
         meta_json: {
           due_at: dueAtIso,
+          entity_id: final_entity_id,
+          customer_entity_name: entityName,
+          commitment_id: final_commitment_id,
         },
       };
 
       const tryPayloads: any[] = [
-        // 1) Sem status (usa default do banco)
         basePayload,
-        // 2) Lowercase
         { ...basePayload, status: "open" },
-        // 3) Uppercase (alguns bancos usam enum/constraint em CAPS)
         { ...basePayload, status: "OPEN" },
       ];
 
@@ -177,6 +242,8 @@ export function NewOperacaoM30CardDialog(props: { tenantId: string; journeyId: s
       setDescriptionHtml("");
       setDueDate("");
       setResponsibleId("__unassigned__");
+      setEntityId("__unassigned__");
+      setCommitmentId("__unassigned__");
     } catch (e: any) {
       const parts = [
         e?.message ? String(e.message) : null,
@@ -240,41 +307,88 @@ export function NewOperacaoM30CardDialog(props: { tenantId: string; journeyId: s
               </div>
             </div>
 
-            <div>
-              <Label className="text-xs">Prazo (opcional)</Label>
-              <Input
-                type="date"
-                value={dueDate}
-                onChange={(e) => setDueDate(e.target.value)}
-                className="mt-1 h-11 rounded-2xl"
-              />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <Label className="text-xs">Prazo (opcional)</Label>
+                <Input
+                  type="date"
+                  value={dueDate}
+                  onChange={(e) => setDueDate(e.target.value)}
+                  className="mt-1 h-11 rounded-2xl"
+                />
+              </div>
+
+              <div>
+                <div className="flex items-center gap-2">
+                  <UserRound className="h-4 w-4 text-slate-500" />
+                  <Label className="text-xs">Responsável</Label>
+                </div>
+                <Select value={responsibleId} onValueChange={setResponsibleId}>
+                  <SelectTrigger className="mt-1 h-11 rounded-2xl bg-white text-xs truncate">
+                    <SelectValue placeholder="Selecionar…" />
+                  </SelectTrigger>
+                  <SelectContent className="rounded-2xl">
+                    <SelectItem value="__unassigned__" className="rounded-xl">(sem responsável)</SelectItem>
+                    {(usersQ.data ?? []).map((u) => (
+                      <SelectItem key={u.user_id} value={u.user_id} className="rounded-xl">
+                        {labelForUser(u)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
 
-            <div>
-              <div className="flex items-center gap-2">
-                <UserRound className="h-4 w-4 text-slate-500" />
-                <Label className="text-xs">Responsável (opcional)</Label>
-              </div>
-              <Select value={responsibleId} onValueChange={setResponsibleId} disabled={usersQ.isLoading}>
-                <SelectTrigger className="mt-1 h-11 rounded-2xl bg-white">
-                  <SelectValue placeholder="Selecionar…" />
-                </SelectTrigger>
-                <SelectContent className="rounded-2xl">
-                  <SelectItem value="__unassigned__" className="rounded-xl">
-                    (sem responsável)
-                  </SelectItem>
-                  {(usersQ.data ?? []).map((u) => (
-                    <SelectItem key={u.user_id} value={u.user_id} className="rounded-xl">
-                      {labelForUser(u)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {usersQ.isError ? (
-                <div className="mt-2 rounded-2xl border border-rose-200 bg-rose-50 p-3 text-[11px] text-rose-900">
-                  Erro ao carregar responsáveis: {(usersQ.error as any)?.message ?? ""}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <div className="flex items-center gap-2">
+                  <Building2 className="h-4 w-4 text-slate-500" />
+                  <Label className="text-xs text-indigo-700 font-semibold">Vincular Cliente</Label>
                 </div>
-              ) : null}
+                <Select value={entityId} onValueChange={(v) => {
+                  setEntityId(v);
+                  setCommitmentId("__unassigned__");
+                }}>
+                  <SelectTrigger className="mt-1 h-11 rounded-2xl bg-white text-xs">
+                    <SelectValue placeholder="Escolher cliente…" />
+                  </SelectTrigger>
+                  <SelectContent className="rounded-2xl">
+                    <SelectItem value="__unassigned__" className="rounded-xl">(nenhum)</SelectItem>
+                    {(entitiesQ.data ?? []).map((e) => (
+                      <SelectItem key={e.id} value={e.id} className="rounded-xl">
+                        {e.display_name || "Sem nome"}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <div className="flex items-center gap-2">
+                  <FileText className="h-4 w-4 text-slate-500" />
+                  <Label className="text-xs text-blue-700 font-semibold">Vincular Contrato</Label>
+                </div>
+                <Select 
+                  value={commitmentId} 
+                  onValueChange={setCommitmentId}
+                  disabled={entityId === "__unassigned__"}
+                >
+                  <SelectTrigger className="mt-1 h-11 rounded-2xl bg-white text-xs">
+                    <SelectValue placeholder={entityId === "__unassigned__" ? "Selecione cliente primeiro" : "Escolher contrato…"} />
+                  </SelectTrigger>
+                  <SelectContent className="rounded-2xl">
+                    <SelectItem value="__unassigned__" className="rounded-xl">(nenhum)</SelectItem>
+                    {(commitmentsQ.data ?? []).map((c) => (
+                      <SelectItem key={c.id} value={c.id} className="rounded-xl">
+                        {c.title || "Contrato sem título"}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {entityId !== "__unassigned__" && (commitmentsQ.data ?? []).length === 0 && !commitmentsQ.isLoading && (
+                  <p className="mt-1 text-[10px] text-slate-500">Nenhum contrato ativo para este cliente.</p>
+                )}
+              </div>
             </div>
 
             <div className="flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-end">

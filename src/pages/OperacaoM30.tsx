@@ -70,9 +70,10 @@ type CaseRow = {
   id: string;
   journey_id: string | null;
   customer_id?: string | null;
-  customer_entity_id?: string | null;
+  customer_entity_id: string | null;
+  deliverable_id: string | null;
   title: string | null;
-  status: string;
+  status: string | null;
   state: string;
   created_at: string;
   updated_at: string;
@@ -462,6 +463,26 @@ export default function OperacaoM30() {
 
       if (error) throw error;
       return (data ?? []) as any as CaseRow[];
+    },
+  });
+
+  const lastInboundByCase = useMemo(() => {
+    const m = new Map<string, any>();
+    return m;
+  }, []);
+
+  const profileQ = useQuery({
+    queryKey: ["current_user_profile", activeTenantId, user?.id],
+    enabled: Boolean(activeTenantId && user?.id),
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("users_profile")
+        .select("role")
+        .eq("tenant_id", activeTenantId!)
+        .eq("user_id", user!.id)
+        .maybeSingle();
+      if (error) throw error;
+      return data ?? { role: "user" };
     },
   });
 
@@ -921,6 +942,17 @@ export default function OperacaoM30() {
     const oldState = currentCase.state;
     if (oldState === nextState) return;
 
+    const isAdmin = profileQ.data?.role === 'admin' || (user as any)?.app_metadata?.role === 'super-admin';
+    const isFinal = (s: string) => {
+      const up = s.toUpperCase();
+      return up.includes("CONCLU") || up.includes("FINAL") || up.includes("ENTREG");
+    };
+
+    if (isFinal(oldState) && !isAdmin) {
+      showError("Apenas Admins podem reabrir tarefas concluídas.");
+      return;
+    }
+
     setMovingCaseId(caseId);
 
     try {
@@ -936,9 +968,13 @@ export default function OperacaoM30() {
 
       await transitionState(caseId, oldState, nextState, journeyConfig);
 
-      // Invalidation handled by hook, but Dashboard might need specific invalidations?
-      // Hook invalidates: case, timeline, cases_by_tenant, crm_cases_by_tenant.
-      // Dashboard uses: cases_by_tenant. So we are good.
+      // Sincronização com Entregáveis do Contrato
+      if (isFinal(nextState) && currentCase.deliverable_id) {
+        await supabase
+          .from("deliverables")
+          .update({ status: "completed" })
+          .eq("id", currentCase.deliverable_id);
+      }
     } catch (e: any) {
       // Toast already shown
     } finally {

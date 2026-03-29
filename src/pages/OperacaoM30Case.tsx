@@ -240,6 +240,17 @@ export default function OperacaoM30Case() {
         const prev = caseQ.data?.state ?? "";
         if (!next || next === prev) return;
 
+        const isAdmin = profileQ.data?.role === 'admin' || (user as any)?.app_metadata?.role === 'super-admin';
+        const isFinal = (s: string) => {
+            const up = s.toUpperCase();
+            return up.includes("CONCLU") || up.includes("FINAL") || up.includes("ENTREG");
+        };
+
+        if (isFinal(prev) && !isAdmin) {
+            showError("Apenas Admins podem reabrir tarefas concluídas.");
+            return;
+        }
+
         const sm = journeyQ.data?.default_state_machine_json as any;
         const blocksReasons = await checkTransitionBlocks(supabase, activeTenantId!, id!, caseQ.data?.state || "", next, sm);
 
@@ -255,6 +266,14 @@ export default function OperacaoM30Case() {
                 next,
                 journeyQ.data?.default_state_machine_json as unknown as StateMachine
             );
+
+            // Sincronização com Entregáveis do Contrato
+            if (isFinal(next) && caseQ.data?.deliverable_id) {
+                await supabase
+                    .from("deliverables")
+                    .update({ status: "completed" })
+                    .eq("id", caseQ.data.deliverable_id);
+            }
         } catch (e: any) { }
     };
 
