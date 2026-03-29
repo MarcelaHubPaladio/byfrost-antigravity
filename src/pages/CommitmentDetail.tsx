@@ -92,6 +92,7 @@ export default function CommitmentDetail() {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [journeyOpen, setJourneyOpen] = useState(false);
   const [targetJourneyId, setTargetJourneyId] = useState<string>("");
+  const [targetCaseType, setTargetCaseType] = useState<string>("order");
   const qc = useQueryClient();
 
   const commitmentQ = useQuery({
@@ -273,6 +274,7 @@ export default function CommitmentDetail() {
         return {
           tenant_id: activeTenantId,
           journey_id: targetJourneyId,
+          case_type: targetCaseType,
           customer_entity_id: commitmentQ.data?.customer_entity_id,
           deliverable_id: dId,
           title: d?.name || "Tarefa de Contrato",
@@ -626,6 +628,27 @@ export default function CommitmentDetail() {
                         {(journeysQ.data ?? []).map(j => (
                           <SelectItem key={j.id} value={j.id}>{j.name}</SelectItem>
                         ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label className="text-xs font-bold uppercase tracking-wider text-slate-500">Tipo de Caso</Label>
+                    <Select value={targetCaseType} onValueChange={setTargetCaseType}>
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="Escolha o tipo..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="planejamento">PLANEJAMENTO</SelectItem>
+                        <SelectItem value="trafego_pago">TRÁFEGO PAGO</SelectItem>
+                        <SelectItem value="arte_estatica">ARTE ESTÁTICA</SelectItem>
+                        <SelectItem value="gravacao">GRAVAÇÃO</SelectItem>
+                        <SelectItem value="relatorio">RELATÓRIO</SelectItem>
+                        <SelectItem value="edicao">EDIÇÃO</SelectItem>
+                        <SelectItem value="validacao">VALIDAÇÃO</SelectItem>
+                        <SelectItem value="aprovacao">APROVAÇÃO</SelectItem>
+                        <SelectItem value="calendario">CALENDÁRIO</SelectItem>
+                        <SelectItem value="order">GERAL</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>

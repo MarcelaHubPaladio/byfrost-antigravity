@@ -66,6 +66,7 @@ export default function OperacaoM30Case() {
     const { activeTenantId } = useTenant();
     const { user } = useSession();
     const [creatingTasks, setCreatingTasks] = useState(false);
+    const [saving, setSaving] = useState(false);
     const [deleting, setDeleting] = useState(false);
 
     const [transitionBlock, setTransitionBlock] = useState<{
@@ -322,6 +323,24 @@ export default function OperacaoM30Case() {
         }
     };
 
+    const handleUpdateCaseType = async (newType: string) => {
+        if (!activeTenantId || !id) return;
+        setSaving(true);
+        try {
+            const { error } = await supabase
+                .from("cases")
+                .update({ case_type: newType })
+                .eq("id", id);
+            if (error) throw error;
+            showSuccess("Tipo de caso atualizado.");
+            caseQ.refetch();
+        } catch (e: any) {
+            showError(`Erro ao atualizar tipo: ${e?.message}`);
+        } finally {
+            setSaving(false);
+        }
+    };
+
     if (caseQ.isLoading) {
         return (
             <RequireAuth>
@@ -366,9 +385,27 @@ export default function OperacaoM30Case() {
                                     })()}
                                     <span>ID: {id?.slice(0, 8)}</span>
                                     <Badge variant="secondary" className="rounded-full">Operação M30</Badge>
-                                    <Badge variant="outline" className="rounded-full bg-slate-50 text-slate-600 drop-shadow-sm border-slate-200">
-                                        {caseQ.data?.case_type?.replace("_", " ").toUpperCase() || "GERAL"}
-                                    </Badge>
+                                    <Select 
+                                        value={caseQ.data?.case_type} 
+                                        onValueChange={handleUpdateCaseType}
+                                        disabled={updatingState || saving}
+                                    >
+                                        <SelectTrigger className="h-6 rounded-full bg-slate-50 text-[10px] text-slate-600 drop-shadow-sm border-slate-200 font-bold uppercase px-2 w-auto min-w-[100px]">
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent className="rounded-2xl">
+                                            <SelectItem value="planejamento" className="rounded-xl text-[10px]">PLANEJAMENTO</SelectItem>
+                                            <SelectItem value="trafego_pago" className="rounded-xl text-[10px]">TRÁFEGO PAGO</SelectItem>
+                                            <SelectItem value="arte_estatica" className="rounded-xl text-[10px]">ARTE ESTÁTICA</SelectItem>
+                                            <SelectItem value="gravacao" className="rounded-xl text-[10px]">GRAVAÇÃO</SelectItem>
+                                            <SelectItem value="relatorio" className="rounded-xl text-[10px]">RELATÓRIO</SelectItem>
+                                            <SelectItem value="edicao" className="rounded-xl text-[10px]">EDIÇÃO</SelectItem>
+                                            <SelectItem value="validacao" className="rounded-xl text-[10px]">VALIDAÇÃO</SelectItem>
+                                            <SelectItem value="aprovacao" className="rounded-xl text-[10px]">APROVAÇÃO</SelectItem>
+                                            <SelectItem value="calendario" className="rounded-xl text-[10px]">CALENDÁRIO</SelectItem>
+                                            <SelectItem value="order" className="rounded-xl text-[10px]">GERAL</SelectItem>
+                                        </SelectContent>
+                                    </Select>
                                 </div>
                             </div>
                         </div>
