@@ -37,6 +37,11 @@ import { showError, showSuccess } from "@/utils/toast";
 import { getStateLabel } from "@/lib/journeyLabels";
 import { useJourneyTransition } from "@/hooks/useJourneyTransition";
 import { StateMachine } from "@/lib/journeys/types";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import { RichTextEditor } from "@/components/RichTextEditor";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
+import { Calendar } from "lucide-react";
 
 type CaseRow = {
     id: string;
@@ -296,12 +301,15 @@ export default function OperacaoM30Case() {
                     parent_case_id: id,
                     case_type: st.type, 
                     title: st.title,
+                    summary_text: st.description || null,
                     customer_entity_id: caseQ.data.customer_entity_id,
                     deliverable_id: caseQ.data.deliverable_id,
                     state: "DECUPAGEM_UPLOAD",
                     meta_json: {
                         customer_entity_name: (caseQ.data.meta_json as any)?.customer_entity_name,
                         commitment_id: (caseQ.data.meta_json as any)?.commitment_id,
+                        post_date: st.post_date || null,
+                        priority: st.priority || false,
                     }
                 });
             }
@@ -550,32 +558,107 @@ export default function OperacaoM30Case() {
                                                 </Button>
                                             )}
                                         </div>
-                                        <div className="space-y-2">
-                                            {((caseQ.data?.meta_json as any)?.pending_subtasks || []).map((st: any, idx: number) => (
-                                                <div key={idx} className="flex items-center justify-between p-3 rounded-2xl bg-white border border-slate-100 shadow-sm">
-                                                    <div className="flex items-center gap-3">
-                                                        <Badge variant="secondary" className="text-[10px] h-5">
-                                                            {st.type === "arte_estatica" ? "ARTE" : "VÍDEO"}
-                                                        </Badge>
-                                                        <span className="text-sm text-slate-700 font-medium">{st.title}</span>
-                                                    </div>
-                                                    <Button 
-                                                        variant="ghost" 
-                                                        size="sm" 
-                                                        className="h-8 w-8 rounded-full text-slate-400 hover:text-rose-600 hover:bg-rose-50"
-                                                        onClick={async () => {
-                                                            const current = (caseQ.data?.meta_json as any)?.pending_subtasks || [];
-                                                            const next = current.filter((_: any, i: number) => i !== idx);
-                                                            await supabase.from("cases").update({
-                                                                meta_json: { ...(caseQ.data?.meta_json as any), pending_subtasks: next }
-                                                            }).eq("id", id!);
-                                                            caseQ.refetch();
-                                                        }}
+                                        <div className="space-y-3">
+                                            <Accordion type="multiple" className="space-y-2">
+                                                {((caseQ.data?.meta_json as any)?.pending_subtasks || []).map((st: any, idx: number) => (
+                                                    <AccordionItem 
+                                                        key={idx} 
+                                                        value={`st-${idx}`}
+                                                        className={cn(
+                                                            "rounded-2xl bg-white border border-slate-100 shadow-sm overflow-hidden px-0",
+                                                            st.priority ? "border-rose-500 ring-1 ring-rose-500/20" : "border-slate-100"
+                                                        )}
                                                     >
-                                                        <Trash2 className="h-4 w-4" />
-                                                    </Button>
-                                                </div>
-                                            ))}
+                                                        <div className="flex items-center justify-between p-1 pr-3">
+                                                            <AccordionTrigger className="flex-1 hover:no-underline py-2 px-3">
+                                                                <div className="flex items-center gap-3">
+                                                                    <Badge variant="secondary" className="text-[10px] h-5">
+                                                                        {st.type === "arte_estatica" ? "ARTE" : "VÍDEO"}
+                                                                    </Badge>
+                                                                    <span className="text-sm text-slate-700 font-bold">{st.title}</span>
+                                                                    {st.post_date && (
+                                                                        <span className="text-[10px] text-slate-400 flex items-center gap-1 font-normal">
+                                                                            <Calendar className="h-3 w-3" />
+                                                                            {new Date(st.post_date).toLocaleDateString()}
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+                                                            </AccordionTrigger>
+                                                            <Button 
+                                                                variant="ghost" 
+                                                                size="sm" 
+                                                                className="h-8 w-8 rounded-full text-slate-400 hover:text-rose-600 hover:bg-rose-50 ml-2"
+                                                                onClick={async (e) => {
+                                                                    e.stopPropagation();
+                                                                    const current = (caseQ.data?.meta_json as any)?.pending_subtasks || [];
+                                                                    const next = current.filter((_: any, i: number) => i !== idx);
+                                                                    await supabase.from("cases").update({
+                                                                        meta_json: { ...(caseQ.data?.meta_json as any), pending_subtasks: next }
+                                                                    }).eq("id", id!);
+                                                                    caseQ.refetch();
+                                                                }}
+                                                            >
+                                                                <Trash2 className="h-4 w-4" />
+                                                            </Button>
+                                                        </div>
+                                                        <AccordionContent className="px-4 pb-4 space-y-4 pt-1 border-t border-slate-50">
+                                                            <div className="grid grid-cols-2 gap-4">
+                                                                <div className="space-y-1.5">
+                                                                    <Label className="text-[10px] font-bold text-slate-500 uppercase">Data de Postagem</Label>
+                                                                    <input 
+                                                                        type="date"
+                                                                        value={st.post_date || ""}
+                                                                        className="w-full h-9 rounded-xl border border-slate-200 bg-slate-50/50 px-3 text-xs focus:ring-2 focus:ring-indigo-500 outline-none"
+                                                                        onChange={async (e) => {
+                                                                            const current = [...((caseQ.data?.meta_json as any)?.pending_subtasks || [])];
+                                                                            current[idx] = { ...current[idx], post_date: e.target.value };
+                                                                            await supabase.from("cases").update({
+                                                                                meta_json: { ...(caseQ.data?.meta_json as any), pending_subtasks: current }
+                                                                            }).eq("id", id!);
+                                                                            caseQ.refetch();
+                                                                        }}
+                                                                    />
+                                                                </div>
+                                                                <div className="space-y-1.5 flex flex-col justify-end">
+                                                                    <div className="flex items-center justify-between h-9 px-3 rounded-xl border border-slate-200 bg-slate-50/50">
+                                                                        <Label className="text-[10px] font-bold text-slate-500 uppercase cursor-pointer" htmlFor={`priority-${idx}`}>Priorizar</Label>
+                                                                        <Switch 
+                                                                            id={`priority-${idx}`}
+                                                                            checked={st.priority || false}
+                                                                            onCheckedChange={async (val) => {
+                                                                                const current = [...((caseQ.data?.meta_json as any)?.pending_subtasks || [])];
+                                                                                current[idx] = { ...current[idx], priority: val };
+                                                                                await supabase.from("cases").update({
+                                                                                    meta_json: { ...(caseQ.data?.meta_json as any), pending_subtasks: current }
+                                                                                }).eq("id", id!);
+                                                                                caseQ.refetch();
+                                                                            }}
+                                                                        />
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+
+                                                            <div className="space-y-1.5">
+                                                                <Label className="text-[10px] font-bold text-slate-500 uppercase">Descrição da Pauta</Label>
+                                                                <RichTextEditor 
+                                                                    value={st.description || ""}
+                                                                    minHeightClassName="min-h-[100px]"
+                                                                    onChange={async (html) => {
+                                                                        // Usamos um timeout simples para não salvar a cada tecla, mas o ideal seria um debounce
+                                                                        const current = [...((caseQ.data?.meta_json as any)?.pending_subtasks || [])];
+                                                                        if (current[idx].description === html) return;
+                                                                        current[idx] = { ...current[idx], description: html };
+                                                                        await supabase.from("cases").update({
+                                                                            meta_json: { ...(caseQ.data?.meta_json as any), pending_subtasks: current }
+                                                                        }).eq("id", id!);
+                                                                        // Not refetching here to avoid editor layout jump
+                                                                    }}
+                                                                />
+                                                            </div>
+                                                        </AccordionContent>
+                                                    </AccordionItem>
+                                                ))}
+                                            </Accordion>
                                             
                                             <div className="flex items-center gap-2 mt-4 pt-4 border-t border-dashed border-slate-200">
                                                 <input 

@@ -1271,7 +1271,7 @@ export default function OperacaoM30() {
                               }}
                               className={cn(
                                 "block rounded-[22px] border bg-white p-4 shadow-sm transition hover:shadow-md",
-                                unread ? "border-rose-200 hover:border-rose-300" : "border-slate-200 hover:border-slate-300",
+                                (c.meta_json as any)?.priority ? "border-rose-500 ring-2 ring-rose-500/20" : unread ? "border-rose-200 hover:border-rose-300" : "border-slate-200 hover:border-slate-300",
                                 "cursor-grab active:cursor-grabbing",
                                 isMoving ? "opacity-60" : ""
                               )}
