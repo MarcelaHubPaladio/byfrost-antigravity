@@ -450,7 +450,7 @@ export default function OperacaoM30() {
       const { data, error } = await supabase
         .from("cases")
         .select(
-          "id,journey_id,customer_id,title,status,state,created_at,updated_at,assigned_user_id,is_chat,users_profile:users_profile!fk_cases_users_profile(display_name,email),journeys:journeys!cases_journey_id_fkey(key,name,is_crm),meta_json"
+          "id,journey_id,customer_id,customer_entity_id,title,status,state,created_at,updated_at,assigned_user_id,is_chat,users_profile:users_profile!fk_cases_users_profile(display_name,email),journeys:journeys!cases_journey_id_fkey(key,name,is_crm),meta_json"
         )
         .eq("tenant_id", activeTenantId!)
         .is("deleted_at", null)
@@ -555,6 +555,33 @@ export default function OperacaoM30() {
     },
   });
 
+  const caseEntityIds = useMemo(() => {
+    const s = new Set<string>();
+    for (const r of journeyRows) {
+      const eid = (r as any).customer_entity_id || (r as any).customer_id || (r.meta_json as any)?.entity_id;
+      if (eid && typeof eid === 'string') s.add(eid);
+    }
+    return Array.from(s);
+  }, [journeyRows]);
+
+  const caseEntitiesQ = useQuery({
+    queryKey: ["m30_case_entities", activeTenantId, caseEntityIds.join(",")],
+    enabled: Boolean(activeTenantId && caseEntityIds.length > 0),
+    staleTime: 60_000,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("core_entities")
+        .select("id, display_name")
+        .eq("tenant_id", activeTenantId!)
+        .in("id", caseEntityIds)
+        .is("deleted_at", null);
+      if (error) throw error;
+      const m = new Map<string, string>();
+      for (const d of data ?? []) m.set(d.id, d.display_name);
+      return m;
+    }
+  });
+
   // 3) Busca + Filtros Extras (Instância e Data)
   const filteredRows = useMemo(() => {
     let base = journeyRows;
@@ -602,7 +629,7 @@ export default function OperacaoM30() {
     // Filtro de Entidade (Cliente)
     if (entityFilterId !== "all") {
       base = base.filter((r) => {
-        const eid = String((r.meta_json as any)?.entity_id || r.customer_id || "");
+        const eid = String((r as any).customer_entity_id || (r.meta_json as any)?.entity_id || r.customer_id || "");
         if (entityFilterId === "__unassigned__") return !eid;
         return eid === entityFilterId;
       });
@@ -1210,8 +1237,25 @@ export default function OperacaoM30() {
                               title="Arraste para mudar de etapa"
                             >
                               <div className="flex items-start justify-between gap-3">
-                                <div className="min-w-0">
+                                <div className="min-w-0 flex-1 pr-1">
                                   <div className="truncate text-sm font-semibold text-slate-900">{titlePrimary}</div>
+                                  
+                                  {(() => {
+                                    const eid = (c as any).customer_entity_id || (c as any).customer_id || (c.meta_json as any)?.entity_id;
+                                    const entityFullName = eid ? caseEntitiesQ.data?.get(eid) : null;
+                                    const entityFirstName = entityFullName ? entityFullName.split(" ")[0] : null;
+                                    
+                                    if (!entityFirstName) return null;
+                                    return (
+                                      <div 
+                                        className="mt-1 inline-block truncate max-w-full rounded bg-indigo-50 px-1.5 py-0.5 text-[10px] uppercase tracking-wider font-bold text-indigo-700 ring-1 ring-inset ring-indigo-700/10"
+                                        title={entityFullName}
+                                      >
+                                        {entityFirstName}
+                                      </div>
+                                    );
+                                  })()}
+
                                   <div className="mt-1 truncate text-xs text-slate-500">
                                     {(c.users_profile?.display_name ?? c.users_profile?.email ?? "Sem dono")}
                                   </div>
