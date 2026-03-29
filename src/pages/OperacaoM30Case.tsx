@@ -31,7 +31,7 @@ import { checkTransitionBlocks, TransitionBlockReason } from "@/lib/journeys/val
 import { TransitionBlockDialog } from "@/components/case/TransitionBlockDialog";
 import { CaseTimeline, type CaseTimelineEvent } from "@/components/case/CaseTimeline";
 import { TrelloCardDetails } from "@/components/trello/TrelloCardDetails";
-import { ArrowLeft, Trash2, RefreshCw, FileText, PackageCheck } from "lucide-react";
+import { ArrowLeft, Trash2, RefreshCw, FileText, PackageCheck, Check, AlertCircle } from "lucide-react";
 import { cn, titleizeState } from "@/lib/utils";
 import { showError, showSuccess } from "@/utils/toast";
 import { getStateLabel } from "@/lib/journeyLabels";
@@ -326,6 +326,53 @@ export default function OperacaoM30Case() {
                         </div>
 
                         <div className="flex items-center gap-2">
+                            {(() => {
+                                const isFinalState = (s: string) => {
+                                    const up = s.toUpperCase();
+                                    return up.includes("CONCLU") || up.includes("FINAL") || up.includes("ENTREG");
+                                };
+                                const alreadyFinal = isFinalState(c?.state ?? "");
+                                if (alreadyFinal) return null;
+
+                                const targetFinal = states.find(s => isFinalState(s)) || states[states.length - 1];
+                                if (!targetFinal) return null;
+
+                                return (
+                                    <AlertDialog>
+                                        <AlertDialogTrigger asChild>
+                                            <Button 
+                                                variant="default" 
+                                                className="h-10 rounded-2xl bg-emerald-600 text-white hover:bg-emerald-700 shadow-sm"
+                                            >
+                                                <Check className="mr-2 h-4 w-4" /> Concluir tarefa
+                                            </Button>
+                                        </AlertDialogTrigger>
+                                        <AlertDialogContent className="rounded-[24px]">
+                                            <AlertDialogHeader>
+                                                <div className="flex items-center gap-2 text-emerald-600 mb-2">
+                                                    <AlertCircle className="h-5 w-5" />
+                                                    <span className="font-bold">Ação Irreversível</span>
+                                                </div>
+                                                <AlertDialogTitle>Concluir esta tarefa?</AlertDialogTitle>
+                                                <AlertDialogDescription>
+                                                    Uma vez concluída, apenas um **administrador** poderá reabri-la.
+                                                    Deseja prosseguir?
+                                                </AlertDialogDescription>
+                                            </AlertDialogHeader>
+                                            <AlertDialogFooter>
+                                                <AlertDialogCancel className="rounded-2xl">Cancelar</AlertDialogCancel>
+                                                <AlertDialogAction
+                                                    onClick={() => updateState(targetFinal)}
+                                                    className="rounded-2xl bg-emerald-600 text-white hover:bg-emerald-700"
+                                                >
+                                                    Sim, concluir
+                                                </AlertDialogAction>
+                                            </AlertDialogFooter>
+                                        </AlertDialogContent>
+                                    </AlertDialog>
+                                );
+                            })()}
+
                             <Select value={c?.state} onValueChange={updateState} disabled={updatingState}>
                                 <SelectTrigger className="h-10 w-[180px] rounded-2xl bg-white shadow-sm">
                                     <SelectValue placeholder="Estado..." />
