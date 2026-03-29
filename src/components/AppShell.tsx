@@ -724,6 +724,7 @@ export function AppShell({
     (r) => r.journeys?.key === "meta_content" && r.config_json?.meta_content_enabled === true
   );
   const hasTrello = journeys.some((r) => r.journeys?.key === "trello");
+  const hasOperacaoM30 = journeys.some((r) => r.journeys?.key === "operacao_m30");
   const hasOrders = journeys.some((r) => r.journeys?.key === "sales_order");
 
   const hasIncentivesCampaigns = Boolean(incentivesHasCampaignsQ.data);
@@ -898,6 +899,7 @@ export function AppShell({
               <div className="grid justify-items-center gap-2">
                 <NavTile to={prefs.startRoute || "/app"} icon={LayoutGrid} label="Dashboard" disabled={!can("app.dashboard")} />
                 {hasTrello && <NavTile to="/app/trello" icon={KanbanSquare} label="Tarefas" disabled={!can("app.trello")} />}
+                {hasOperacaoM30 && <NavTile to="/app/j/operacao_m30" icon={Users} label="Clientes M30" disabled={!can("app.dashboard")} />}
                 {hasOrders && <NavTile to="/app/orders" icon={Package} label="Pedidos" disabled={!can("app.dashboard")} />}
                 {hasCrm && <NavTile to="/app/crm" icon={LayoutDashboard} label="CRM" disabled={!can("app.crm")} />}
                 {hasMetaContent && (
@@ -1119,6 +1121,15 @@ export function AppShell({
                                 icon={KanbanSquare}
                                 label="Tarefas"
                                 disabled={!can("app.trello")}
+                                onNavigate={() => setMobileNavOpen(false)}
+                              />
+                            )}
+                            {hasOperacaoM30 && (
+                              <MobileNavItem
+                                to="/app/j/operacao_m30"
+                                icon={Users}
+                                label="Clientes M30"
+                                disabled={!can("app.dashboard")}
                                 onNavigate={() => setMobileNavOpen(false)}
                               />
                             )}
