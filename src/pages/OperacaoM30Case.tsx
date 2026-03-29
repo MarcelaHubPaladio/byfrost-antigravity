@@ -78,7 +78,7 @@ export default function OperacaoM30Case() {
             const { data, error } = await supabase
                 .from("cases")
                 .select(
-                    "id,tenant_id,case_type,customer_id,customer_entity_id,deliverable_id,title,status,state,created_at,updated_at,assigned_user_id,is_chat,users_profile:users_profile!fk_cases_users_profile(display_name,email),journeys:journeys!cases_journey_id_fkey(key,name,is_crm,default_state_machine_json),customer_entity:core_entities!cases_customer_entity_id_fkey(display_name)"
+                    "id,tenant_id,case_type,customer_id,customer_entity_id,deliverable_id,title,status,state,created_at,updated_at,assigned_user_id,is_chat,users_profile:users_profile!fk_cases_users_profile(display_name,email),journeys:journeys!cases_journey_id_fkey(key,name,is_crm,default_state_machine_json),customer_entity:core_entities!cases_customer_entity_fk(display_name)"
                 )
                 .eq("tenant_id", activeTenantId!)
                 .eq("id", id!)
