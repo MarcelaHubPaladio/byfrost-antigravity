@@ -40,6 +40,11 @@ import { GlobalJourneyLogsDialog } from "@/components/case/GlobalJourneyLogsDial
 import { checkTransitionBlocks, TransitionBlockReason } from "@/lib/journeys/validation";
 import { TransitionBlockDialog } from "@/components/case/TransitionBlockDialog";
 
+import { NewOperacaoM30CardDialog } from "@/components/operacao_m30/NewOperacaoM30CardDialog";
+import { format, startOfMonth, endOfMonth, eachDayOfInterval, getDay, isSameMonth, isToday, addMonths, subMonths } from "date-fns";
+import { ptBR } from "date-fns/locale";
+import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, ClipboardList } from "lucide-react";
+
 const DASHBOARD_VIEW_MODE_KEY_PREFIX = "dashboard_view_mode_v1:";
 
 function csvCell(v: any) {
@@ -141,6 +146,111 @@ function samePhoneLoose(a: string | null | undefined, b: string | null | undefin
   return da === db;
 }
 
+function M30CalendarView({ cases, date, onChangeDate }: { cases: CaseRow[], date: Date, onChangeDate: (d: Date) => void }) {
+  const monthStart = startOfMonth(date);
+  const monthEnd = endOfMonth(monthStart);
+  const daysInMonth = eachDayOfInterval({ start: monthStart, end: monthEnd });
+  const startDayOfWeek = getDay(monthStart);
+
+  // blanks before 1st day (0 = sunday)
+  const blanks = Array.from({ length: startDayOfWeek }).map((_, i) => <div key={`blank-${i}`} className="bg-slate-50/50 rounded-[24px] border border-transparent min-h-[140px]" />);
+
+  const nextMonth = () => onChangeDate(addMonths(date, 1));
+  const prevMonth = () => onChangeDate(subMonths(date, 1));
+
+  // group cases by day
+  const casesByDay = new Map<string, CaseRow[]>();
+  for (const c of cases) {
+    const rawDate = (c.meta_json as any)?.due_at;
+    if (!rawDate) continue;
+    
+    // ignore bad dates
+    const d = new Date(rawDate);
+    if (isNaN(d.getTime())) continue;
+
+    const dayKey = format(d, 'yyyy-MM-dd');
+    const arr = casesByDay.get(dayKey) ?? [];
+    arr.push(c);
+    casesByDay.set(dayKey, arr);
+  }
+
+  const weekDays = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+
+  return (
+    <div className="w-full">
+      <div className="flex items-center justify-between mb-4 bg-white/70 p-3 rounded-[24px] border border-slate-200">
+        <h3 className="text-lg font-semibold text-slate-800 capitalize ml-2">
+          {format(date, 'MMMM yyyy', { locale: ptBR })}
+        </h3>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" className="rounded-xl h-8 text-xs font-semibold" onClick={() => onChangeDate(new Date())}>
+            Hoje
+          </Button>
+          <Button variant="outline" size="icon" className="h-8 w-8 rounded-xl" onClick={prevMonth}>
+            <ChevronLeft className="h-4 w-4" />
+          </Button>
+          <Button variant="outline" size="icon" className="h-8 w-8 rounded-xl" onClick={nextMonth}>
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+        </div>
+      </div>
+      
+      <div className="grid grid-cols-7 gap-3 mb-2 px-1">
+        {weekDays.map(d => (
+          <div key={d} className="text-center text-[11px] font-semibold text-slate-500 uppercase tracking-wider">{d}</div>
+        ))}
+      </div>
+
+      <div className="grid grid-cols-7 gap-3">
+        {blanks}
+        {daysInMonth.map((day) => {
+          const dayKey = format(day, 'yyyy-MM-dd');
+          const dayCases = casesByDay.get(dayKey) ?? [];
+          const isTodayDate = isToday(day);
+
+          return (
+            <div key={dayKey} className={cn(
+              "bg-white/80 rounded-[24px] border p-2 min-h-[140px] shadow-sm transition-all flex flex-col",
+              isTodayDate ? "border-[hsl(var(--byfrost-accent)/0.4)] bg-[hsl(var(--byfrost-accent)/0.02)] ring-1 ring-[hsl(var(--byfrost-accent)/0.2)]" : "border-slate-200"
+            )}>
+              <div className="flex items-center justify-between mb-2 px-1">
+                <span className={cn(
+                  "text-xs font-bold w-6 h-6 flex items-center justify-center rounded-full tracking-tighter",
+                  isTodayDate ? "bg-[hsl(var(--byfrost-accent))] text-white" : "text-slate-700"
+                )}>{format(day, 'd')}</span>
+                {dayCases.length > 0 && (
+                  <span className="text-[10px] font-medium bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded-full">
+                    {dayCases.length} caso{dayCases.length > 1 ? 's' : ''}
+                  </span>
+                )}
+              </div>
+              <div className="flex flex-col gap-1.5 mt-1 max-h-[140px] overflow-y-auto no-scrollbar scroll-smooth">
+                {dayCases.map(c => (
+                  <Link
+                    key={c.id}
+                    to={`/app/trello/${c.id}`}
+                    className="block p-2 rounded-[16px] border border-slate-100 bg-white hover:bg-slate-50 hover:border-slate-200 transition-colors cursor-pointer shadow-sm"
+                    title={c.title ?? "Caso sem título"}
+                  >
+                    <div className="text-[11px] font-semibold text-slate-800 line-clamp-2 leading-tight">
+                      {c.title || "Caso sem título"}
+                    </div>
+                    {Boolean(c.users_profile?.display_name || c.users_profile?.email) && (
+                      <div className="text-[10px] text-slate-500 truncate mt-1 font-medium">
+                        {c.users_profile?.display_name || c.users_profile?.email}
+                      </div>
+                    )}
+                  </Link>
+                ))}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 export default function OperacaoM30() {
   const { activeTenantId } = useTenant();
   const { user } = useSession();
@@ -158,10 +268,13 @@ export default function OperacaoM30() {
     reasons: TransitionBlockReason[];
   }>({ open: false, nextStateName: "", reasons: [] });
   const [newSalesOrderOpen, setNewSalesOrderOpen] = useState(false);
-  const [exportingCsv, setExportingCsv] = useState(false);
+  // Tab e visualização
+  const [tab, setTab] = useState<"kanban" | "calendar">("kanban");
+  const [calendarDate, setCalendarDate] = useState(new Date());
 
-  // Filtros jornada Auditoria
+  // Filtros jornada Auditoria e Responsável
   const [instanceFilterId, setInstanceFilterId] = useState<string>("all");
+  const [assigneeFilterId, setAssigneeFilterId] = useState<string>("all");
 
   // Redireção custom removida pois é uma tela específica
   const [startDate, setStartDate] = useState<string>("");
@@ -261,139 +374,8 @@ export default function OperacaoM30() {
   const isCrm = Boolean(selectedJourney?.is_crm);
 
   // List view (only implemented for this journey right now)
-  const canChooseListView = false;
-  const [viewMode, setViewMode] = useState<"kanban" | "list">("kanban");
-
-  useEffect(() => {
-    if (!selectedKey) return;
-
-    // Default mode
-    const isAudit = false;
-    const defaultMode: "kanban" | "list" = isAudit ? "list" : "kanban";
-
-    try {
-      const saved = localStorage.getItem(DASHBOARD_VIEW_MODE_KEY_PREFIX + selectedKey);
-      if (saved === "kanban" || saved === "list") setViewMode(saved);
-      else setViewMode(defaultMode);
-    } catch {
-      setViewMode(defaultMode);
-    }
-  }, [selectedKey]);
-
-  const effectiveViewMode: "kanban" | "list" = canChooseListView ? viewMode : "kanban";
-
-  const setAndPersistViewMode = (next: "kanban" | "list") => {
-    setViewMode(next);
-    try {
-      if (selectedKey) localStorage.setItem(DASHBOARD_VIEW_MODE_KEY_PREFIX + selectedKey, next);
-    } catch {
-      // ignore
-    }
-  };
-
-  const exportConversationsCsv = async () => {
-    if (!activeTenantId) return;
-    if (exportingCsv) return;
-
-    const rowsToExport = journeyRows; // export all cases in this journey (ignores search filter)
-    const caseIds = rowsToExport.map((r) => r.id);
-
-    if (caseIds.length === 0) {
-      showError("Nenhum caso para exportar.");
-      return;
-    }
-
-    setExportingCsv(true);
-    try {
-      const msgs: Array<{
-        case_id: string | null;
-        occurred_at: string;
-        direction: "inbound" | "outbound";
-        from_phone: string | null;
-        to_phone: string | null;
-        type: string;
-        body_text: string | null;
-        media_url: string | null;
-      }> = [];
-
-      // Chunk caseIds to avoid very large IN lists.
-      const chunkSize = 50;
-      for (let i = 0; i < caseIds.length; i += chunkSize) {
-        const chunk = caseIds.slice(i, i + chunkSize);
-        const { data, error } = await supabase
-          .from("wa_messages")
-          .select("case_id,occurred_at,direction,from_phone,to_phone,type,body_text,media_url")
-          .eq("tenant_id", activeTenantId)
-          .in("case_id", chunk)
-          .order("occurred_at", { ascending: true })
-          .limit(10000);
-        if (error) throw error;
-        msgs.push(...((data ?? []) as any));
-      }
-
-      const msgsByCase = new Map<string, typeof msgs>();
-      for (const m of msgs) {
-        const cid = String((m as any).case_id ?? "");
-        if (!cid) continue;
-        const arr = msgsByCase.get(cid) ?? [];
-        arr.push(m);
-        msgsByCase.set(cid, arr);
-      }
-
-      const caseById = new Map<string, CaseRow>();
-      for (const r of rowsToExport) caseById.set(r.id, r);
-
-      const headers = ["nome", "numero", "case_id", "conversa"]; // conversa inclui timestamps
-      const out: string[] = [];
-      out.push(headers.map(csvCell).join(","));
-
-      for (const cid of caseIds) {
-        const c = caseById.get(cid);
-        if (!c) continue;
-
-        const cust = isCrm ? customersQ.data?.get(String((c as any).customer_id ?? "")) : null;
-
-        const name =
-          (isCrm
-            ? (cust?.name ??
-              casePhoneQ.data?.get(c.id) ??
-              getMetaPhone((c as any).meta_json) ??
-              cust?.phone_e164 ??
-              c.title ??
-              "Caso")
-            : c.title ?? "Caso") ?? "Caso";
-
-        const phone =
-          (isCrm
-            ? (cust?.phone_e164 ?? casePhoneQ.data?.get(c.id) ?? getMetaPhone((c as any).meta_json) ?? "")
-            : (getMetaPhone((c as any).meta_json) ?? "")) ?? "";
-
-        const transcript = (msgsByCase.get(cid) ?? [])
-          .map((m) => {
-            const ts = new Date(m.occurred_at).toISOString();
-            const dir = m.direction;
-            const body = (m.body_text ?? "").trim();
-            const media = m.media_url ? ` ${m.media_url}` : "";
-            const fallback = `[${m.type}]${media}`;
-            return `${ts} ${dir}: ${body || fallback}`;
-          })
-          .join("\n");
-
-        out.push([name, phone, cid, transcript].map(csvCell).join(","));
-      }
-
-      const csv = out.join("\n");
-      const fname = `conversas_${selectedKey || "journey"}_${new Date().toISOString().slice(0, 10)}.csv`;
-      downloadTextFile(fname, csv, "text/csv;charset=utf-8");
-      showSuccess("CSV exportado.");
-    } catch (e: any) {
-      showError(`Falha ao exportar CSV: ${e?.message ?? "erro"}`);
-    } finally {
-      setExportingCsv(false);
-    }
-  };
-
-  // Journey logic specific removal
+  // A visualização Trello/Calendar não usa listMode
+  // Journey logic specific
 
   const states = useMemo(() => {
     const st = (selectedJourney?.default_state_machine_json?.states ?? []) as string[];
@@ -548,6 +530,14 @@ export default function OperacaoM30() {
       base = base.filter((r) => new Date(r.created_at).getTime() <= endMs);
     }
 
+    // Filtro de Responsável
+    if (assigneeFilterId !== "all") {
+      base = base.filter((r) => {
+        if (assigneeFilterId === "__unassigned__") return !r.assigned_user_id;
+        return r.assigned_user_id === assigneeFilterId;
+      });
+    }
+
     const qq = q.trim().toLowerCase();
     if (!qq) return base;
 
@@ -568,7 +558,7 @@ export default function OperacaoM30() {
 
       return t.includes(qq);
     });
-  }, [journeyRows, q, isCrm, customersQ.data, casePhoneQ.data, instanceFilterId, startDate, endDate]);
+  }, [journeyRows, q, isCrm, customersQ.data, casePhoneQ.data, instanceFilterId, assigneeFilterId, startDate, endDate]);
 
   const visibleCaseIds = useMemo(() => filteredRows.map((r) => r.id), [filteredRows]);
 
@@ -886,74 +876,39 @@ export default function OperacaoM30() {
       <AppShell>
         <div className="rounded-[28px] border border-slate-200 bg-white/65 p-4 shadow-sm backdrop-blur md:p-5">
           <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-            <div className="min-w-0">
-              <h2 className="text-lg font-semibold tracking-tight text-slate-900">Casos</h2>
-              <p className="mt-1 text-sm text-slate-600">
-                Agora a jornada faz parte da rota: <span className="font-medium">/app/j/&lt;slug&gt;</span>.
-              </p>
-            </div>
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-              <div className="hidden items-center gap-2 md:flex">
-                <div className="rounded-2xl bg-[hsl(var(--byfrost-accent)/0.10)] px-3 py-2 text-xs font-medium text-[hsl(var(--byfrost-accent))]">
-                  <Sparkles className="mr-1 inline h-4 w-4" /> explicabilidade ativa
-                </div>
+            <div className="min-w-0 flex flex-col md:flex-row md:items-center gap-4">
+              <div>
+                <h2 className="text-lg font-semibold tracking-tight text-slate-900">Operação M30</h2>
+                <p className="mt-1 text-sm text-slate-600">
+                  Acompanhamento dos casos ativos desta jornada.
+                </p>
               </div>
-
-              {isSalesOrderJourney && activeTenantId && selectedJourney?.id ? (
-                <Button
-                  className="h-10 rounded-2xl bg-[hsl(var(--byfrost-accent))] text-white shadow-sm hover:bg-[hsl(var(--byfrost-accent)/0.92)]"
-                  onClick={() => setNewSalesOrderOpen(true)}
-                  title="Criar novo pedido (manual ou OCR)"
+              
+              <div className="flex bg-slate-100/80 p-1 rounded-2xl md:ml-4 self-start md:self-auto">
+                <button
+                  onClick={() => setTab("kanban")}
+                  className={cn(
+                    "px-4 py-1.5 text-sm font-medium rounded-xl transition-all",
+                    tab === "kanban" ? "bg-white text-slate-900 shadow-sm" : "text-slate-600 hover:text-slate-800"
+                  )}
                 >
-                  <Plus className="mr-2 h-4 w-4" /> Novo pedido
-                </Button>
-              ) : null}
-
-
-              {canChooseListView ? (
-                <div className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-white/70 p-1 shadow-sm">
-                  <Button
-                    type="button"
-                    variant={effectiveViewMode === "list" ? "default" : "secondary"}
-                    className={cn(
-                      "h-9 rounded-2xl",
-                      effectiveViewMode === "list"
-                        ? "bg-[hsl(var(--byfrost-accent))] text-white hover:bg-[hsl(var(--byfrost-accent)/0.92)]"
-                        : ""
-                    )}
-                    onClick={() => setAndPersistViewMode("list")}
-                    title="Visualização em lista"
-                  >
-                    <LayoutList className="mr-2 h-4 w-4" /> Lista
-                  </Button>
-                  <Button
-                    type="button"
-                    variant={effectiveViewMode === "kanban" ? "default" : "secondary"}
-                    className={cn(
-                      "h-9 rounded-2xl",
-                      effectiveViewMode === "kanban"
-                        ? "bg-[hsl(var(--byfrost-accent))] text-white hover:bg-[hsl(var(--byfrost-accent)/0.92)]"
-                        : ""
-                    )}
-                    onClick={() => setAndPersistViewMode("kanban")}
-                    title="Visualização em colunas (kanban)"
-                  >
-                    <Columns2 className="mr-2 h-4 w-4" /> Kanban
-                  </Button>
-                </div>
-              ) : null}
-
-              {selectedKey ? (
-                <Button
-                  variant="secondary"
-                  className="h-10 rounded-2xl"
-                  onClick={exportConversationsCsv}
-                  disabled={exportingCsv}
-                  title="Exporta as conversas (WhatsApp) dos casos desta jornada"
+                  Quadro
+                </button>
+                <button
+                  onClick={() => setTab("calendar")}
+                  className={cn(
+                    "px-4 py-1.5 text-sm font-medium rounded-xl transition-all",
+                    tab === "calendar" ? "bg-white text-slate-900 shadow-sm" : "text-slate-600 hover:text-slate-800"
+                  )}
                 >
-                  <Download className="mr-2 h-4 w-4" />
-                  {exportingCsv ? "Exportando…" : "Exportar conversas (CSV)"}
-                </Button>
+                  Calendário
+                </button>
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+              {activeTenantId && selectedJourney?.id ? (
+                <NewOperacaoM30CardDialog tenantId={activeTenantId} journeyId={selectedJourney.id} />
               ) : null}
 
               <Button
@@ -971,79 +926,59 @@ export default function OperacaoM30() {
               >
                 <RefreshCw className="mr-2 h-4 w-4" /> Atualizar
               </Button>
-
-              <div className="rounded-2xl border border-slate-200 bg-white/70 px-3 py-2 shadow-sm">
-                <div className="flex items-end justify-between gap-3">
-                  <div className="flex items-center gap-2">
-                    <div className="flex-1">
-                      <div className="text-[11px] font-semibold text-slate-700">Jornada</div>
-                      <select
-                        value={selectedKey}
-                        onChange={(e) => {
-                          const nextKey = e.target.value;
-                          if (!nextKey) return;
-                          nav(`/app/j/${encodeURIComponent(nextKey)}`);
-                        }}
-                        className="mt-1 h-9 w-full min-w-[260px] rounded-xl border border-slate-200 bg-white px-2 text-sm text-slate-800 outline-none focus:border-[hsl(var(--byfrost-accent)/0.45)]"
-                      >
-                        {(journeyQ.data ?? []).length === 0 ? (
-                          <option value="">(nenhuma jornada habilitada)</option>
-                        ) : (
-                          (journeyQ.data ?? []).map((j) => (
-                            <option key={j.key} value={j.key}>
-                              {j.name}
-                            </option>
-                          ))
-                        )}
-                      </select>
-                    </div>
-
-                    {selectedJourney && activeTenantId && (
-                      <div className="mt-5">
-                        <GlobalJourneyLogsDialog
-                          journeyId={selectedJourney.id}
-                          journeyName={selectedJourney.name}
-                          tenantId={activeTenantId}
-                        />
-                      </div>
-                    )}
-                  </div>
-
-                  <Button
-                    variant="secondary"
-                    className="h-9 rounded-2xl"
-                    onClick={() => nav("/app")}
-                    disabled={!journeyQ.data?.length}
-                    title="Voltar para o fluxo principal"
-                  >
-                    Principal
-                  </Button>
-                </div>
-              </div>
             </div>
           </div>
 
-          {isSalesOrderJourney && activeTenantId && selectedJourney?.id ? (
-            <NewSalesOrderDialog
-              open={newSalesOrderOpen}
-              onOpenChange={setNewSalesOrderOpen}
-              tenantId={activeTenantId}
-              journeyId={selectedJourney.id}
-            />
-          ) : null}
 
-          <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-end">
-            <div className="relative flex-1">
+
+          <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-end flex-wrap">
+            <div className="relative flex-1 min-w-[200px]">
               <div className="mb-1 text-[11px] font-semibold text-slate-700">Busca rápida</div>
               <div className="relative">
                 <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                 <Input
                   value={q}
                   onChange={(e) => setQ(e.target.value)}
-                  placeholder="Título, telefone, vendedor…"
+                  placeholder="Título, telefone, cliente…"
                   className="h-11 rounded-2xl pl-10"
                 />
               </div>
+            </div>
+
+            <div className="relative">
+              <div className="mb-1 text-[11px] font-semibold text-slate-700">Responsável</div>
+              <select
+                value={assigneeFilterId}
+                onChange={(e) => setAssigneeFilterId(e.target.value)}
+                className="h-11 w-full sm:min-w-[180px] rounded-2xl border border-slate-200 bg-white px-3 text-sm text-slate-800 outline-none focus:border-[hsl(var(--byfrost-accent)/0.45)]"
+              >
+                <option value="all">Todos</option>
+                <option value="__unassigned__">Sem responsável</option>
+                {(tenantUsersQ.data ?? []).map((u) => (
+                  <option key={u.user_id} value={u.user_id}>
+                    {u.display_name || u.email || "Sem nome"}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="relative">
+              <div className="mb-1 text-[11px] font-semibold text-slate-700">Data Inicial</div>
+              <Input
+                type="date"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                className="h-11 rounded-2xl w-full sm:w-[150px]"
+              />
+            </div>
+            <div className="relative">
+              <div className="mb-1 text-[11px] font-semibold text-slate-700">Data Final</div>
+              <Input
+                type="date"
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+                className="h-11 rounded-2xl w-full sm:w-[150px]"
+              />
             </div>
 
 
@@ -1120,144 +1055,7 @@ export default function OperacaoM30() {
 
           {selectedKey && (
             <div className="mt-4 overflow-x-auto pb-1">
-              {effectiveViewMode === "list" ? (
-                <div className="min-w-[980px]">
-                  <div className="rounded-[24px] border border-slate-200 bg-white">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead className="w-[34%]">Caso</TableHead>
-                          <TableHead className="w-[18%]">Vendedor</TableHead>
-                          <TableHead className="w-[20%]">Etapa</TableHead>
-                          <TableHead className="w-[10%]">Pendências</TableHead>
-                          <TableHead className="w-[10%]">Atualizado</TableHead>
-                          <TableHead className="w-[8%]">Status</TableHead>
-                        </TableRow>
-                      </TableHeader>
-
-                      <TableBody>
-                        {listRows.map((c) => {
-                          const pend = pendQ.data?.get(c.id);
-                          const unread = unreadByCase.has(c.id);
-                          const ageMin = minutesAgo(c.updated_at);
-                          const cust = isCrm ? customersQ.data?.get(String((c as any).customer_id ?? "")) : null;
-
-                          const titlePrimary =
-                            isCrm
-                              ? (cust?.name ??
-                                casePhoneQ.data?.get(c.id) ??
-                                getMetaPhone((c as any).meta_json) ??
-                                cust?.phone_e164 ??
-                                c.title ??
-                                "Caso")
-                              : c.title ?? "Caso";
-
-                          return (
-                            <TableRow key={c.id} className="hover:bg-slate-50/70">
-                              <TableCell className="py-3">
-                                <div className="flex items-start gap-3">
-                                  <div className="pt-1">
-                                    {unread ? (
-                                      <span
-                                        className="block h-2.5 w-2.5 rounded-full bg-rose-600 ring-4 ring-rose-100"
-                                        title="Mensagem nova"
-                                        aria-label="Mensagem nova"
-                                      />
-                                    ) : (
-                                      <span className="block h-2.5 w-2.5 rounded-full bg-slate-200" />
-                                    )}
-                                  </div>
-                                  <div className="min-w-0">
-                                    <Link
-                                      to={`/cases/${c.id}`}
-                                      className="block truncate text-sm font-semibold text-slate-900 hover:underline"
-                                      title={titlePrimary}
-                                    >
-                                      {titlePrimary}
-                                    </Link>
-                                    <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
-                                      <span className="font-mono">{c.id.slice(0, 8)}…</span>
-                                      {pend?.need_location ? (
-                                        <span className="inline-flex items-center gap-1 rounded-full bg-rose-50 px-2 py-1 text-rose-700">
-                                          <MapPin className="h-3.5 w-3.5" /> localização
-                                        </span>
-                                      ) : null}
-                                    </div>
-                                  </div>
-                                </div>
-                              </TableCell>
-
-                              <TableCell className="py-3">
-                                <div className="text-sm text-slate-800">
-                                  {c.users_profile?.display_name ?? c.users_profile?.email ?? "—"}
-                                </div>
-                                <div className="mt-0.5 text-[11px] text-slate-500">
-                                </div>
-                              </TableCell>
-
-                              <TableCell className="py-3">
-                                <select
-                                  value={c.state}
-                                  onChange={(e) => updateCaseState(c.id, e.target.value)}
-                                  disabled={Boolean(movingCaseId)}
-                                  className={cn(
-                                    "h-9 w-full rounded-xl border border-slate-200 bg-white px-2 text-sm text-slate-800 outline-none",
-                                    "focus:border-[hsl(var(--byfrost-accent)/0.45)]",
-                                    movingCaseId === c.id ? "opacity-60" : ""
-                                  )}
-                                >
-                                  {listStateOptions.map((opt) => (
-                                    <option key={opt.value} value={opt.value}>
-                                      {opt.label}
-                                    </option>
-                                  ))}
-                                </select>
-                              </TableCell>
-
-                              <TableCell className="py-3">
-                                {pend?.open ? (
-                                  <Badge className="rounded-full border-0 bg-amber-100 text-amber-900 hover:bg-amber-100">
-                                    {pend.open}
-                                  </Badge>
-                                ) : (
-                                  <Badge className="rounded-full border-0 bg-emerald-100 text-emerald-900 hover:bg-emerald-100">
-                                    0
-                                  </Badge>
-                                )}
-                              </TableCell>
-
-                              <TableCell className="py-3">
-                                <div className="inline-flex items-center gap-1 text-xs text-slate-600">
-                                  <Clock className="h-3.5 w-3.5 text-slate-400" />
-                                  {ageMin} min
-                                </div>
-                              </TableCell>
-
-                              <TableCell className="py-3">
-                                <Badge className="rounded-full border-0 bg-slate-100 text-slate-700 hover:bg-slate-100">
-                                  {c.status}
-                                </Badge>
-                              </TableCell>
-                            </TableRow>
-                          );
-                        })}
-
-                        {listRows.length === 0 ? (
-                          <TableRow>
-                            <TableCell colSpan={6} className="py-10 text-center text-sm text-slate-600">
-                              Nenhum caso encontrado.
-                            </TableCell>
-                          </TableRow>
-                        ) : null}
-                      </TableBody>
-                    </Table>
-                  </div>
-
-                  <div className="mt-2 text-xs text-slate-500">
-                    Dica: use a busca acima para filtrar. Para abrir, clique no nome do caso.
-                  </div>
-                </div>
-              ) : (
+              {tab === "kanban" ? (
                 <div className="flex min-w-[980px] gap-4">
                   {columns.map((col) => (
                     <div
@@ -1310,7 +1108,7 @@ export default function OperacaoM30() {
                           return (
                             <Link
                               key={c.id}
-                              to={`/cases/${c.id}`}
+                              to={`/app/trello/${c.id}`}
                               draggable
                               onDragStart={(e) => {
                                 e.dataTransfer.setData("text/caseId", c.id);
@@ -1378,7 +1176,9 @@ export default function OperacaoM30() {
                     </div>
                   ))}
                 </div>
-              )}
+              ) : tab === "calendar" ? (
+                <M30CalendarView cases={filteredRows} date={calendarDate} onChangeDate={setCalendarDate} />
+              ) : null}
             </div>
           )}
 
