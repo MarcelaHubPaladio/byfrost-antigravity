@@ -144,7 +144,7 @@ export function NewOperacaoM30CardDialog(props: { tenantId: string; journeyId: s
     queryFn: async () => {
       const { data, error } = await supabase
         .from("commercial_commitments")
-        .select("id, title, status")
+        .select("id, commitment_type, status, created_at")
         .eq("tenant_id", props.tenantId)
         .eq("customer_entity_id", entityId)
         .is("deleted_at", null)
@@ -457,11 +457,17 @@ export function NewOperacaoM30CardDialog(props: { tenantId: string; journeyId: s
                   </SelectTrigger>
                   <SelectContent className="rounded-2xl">
                     <SelectItem value="__unassigned__" className="rounded-xl">(nenhum)</SelectItem>
-                    {(commitmentsQ.data ?? []).map((c) => (
-                      <SelectItem key={c.id} value={c.id} className="rounded-xl">
-                        {c.title || "Contrato sem título"}
-                      </SelectItem>
-                    ))}
+                    {(commitmentsQ.data ?? []).map((c) => {
+                      const dateStr = c.created_at ? new Date(c.created_at).toLocaleDateString('pt-BR') : 'Sem data';
+                      const typeLabel = c.commitment_type === 'contract' ? 'Contrato' : 
+                                        c.commitment_type === 'order' ? 'Pedido' : 
+                                        c.commitment_type === 'subscription' ? 'Assinatura' : 'Compromisso';
+                      return (
+                        <SelectItem key={c.id} value={c.id} className="rounded-xl">
+                          {typeLabel} - {dateStr} ({c.id.slice(0, 4)})
+                        </SelectItem>
+                      );
+                    })}
                   </SelectContent>
                 </Select>
                 {entityId !== "__unassigned__" && (commitmentsQ.data ?? []).length === 0 && !commitmentsQ.isLoading && (
