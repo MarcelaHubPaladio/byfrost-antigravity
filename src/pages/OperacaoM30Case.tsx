@@ -45,7 +45,7 @@ import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Save, ListChecks, FileText, CheckCircle2, Clock } from "lucide-react";
+import { Save, ListChecks, FileText, CheckCircle2, Clock, Trash2 as TrashIcon, Pencil, PlusCircle, X, Check as CheckIcon } from "lucide-react";
 
 type CaseRow = {
     id: string;
@@ -123,6 +123,43 @@ function SubtaskItemContent({ st, idx, caseMeta, caseId, onRefetch }: { st: any,
     const toggleItem = (itemId: string) => {
         const next = scriptItems.map(it => it.id === itemId ? { ...it, checked: !it.checked } : it);
         setScriptItems(next);
+    };
+
+    const removeItem = (itemId: string) => {
+        const next = scriptItems.filter(it => it.id !== itemId);
+        setScriptItems(next);
+    };
+
+    const addItem = () => {
+        const newItem = {
+            id: `manual-${Date.now()}`,
+            text: "",
+            checked: false
+        };
+        setScriptItems([...scriptItems, newItem]);
+        setEditingId(newItem.id);
+        setEditingText("");
+    };
+
+    const [editingId, setEditingId] = useState<string | null>(null);
+    const [editingText, setEditingText] = useState("");
+
+    const startEditing = (it: any) => {
+        setEditingId(it.id);
+        setEditingText(it.text);
+    };
+
+    const saveEdit = () => {
+        if (!editingId) return;
+        const next = scriptItems.map(it => it.id === editingId ? { ...it, text: editingText } : it);
+        setScriptItems(next);
+        setEditingId(null);
+        setEditingText("");
+    };
+
+    const cancelEdit = () => {
+        setEditingId(null);
+        setEditingText("");
     };
 
     return (
@@ -207,36 +244,98 @@ function SubtaskItemContent({ st, idx, caseMeta, caseId, onRefetch }: { st: any,
                         </Button>
                     </div>
 
-                    {scriptItems.length > 0 && (
-                        <div className="space-y-3 pt-4 border-t border-slate-100">
+                    <div className="space-y-3 pt-4 border-t border-slate-100">
+                        <div className="flex items-center justify-between">
                             <Label className="text-[10px] font-bold text-slate-500 uppercase flex items-center gap-2">
                                 <ListChecks className="h-3.5 w-3.5" /> Checklist de Gravação
                             </Label>
+                            <Button 
+                                variant="ghost" 
+                                size="sm" 
+                                className="h-7 text-[10px] font-bold text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 gap-1 rounded-lg"
+                                onClick={addItem}
+                            >
+                                <PlusCircle className="h-3.5 w-3.5" /> Adicionar Ponto
+                            </Button>
+                        </div>
+                        {scriptItems.length > 0 ? (
                             <div className="space-y-2">
                                 {scriptItems.map((it) => (
                                     <div 
                                         key={it.id} 
                                         className={cn(
-                                            "flex items-start gap-3 p-3 rounded-xl border transition-all cursor-pointer group",
+                                            "flex items-start gap-3 p-3 rounded-xl border transition-all group relative",
                                             it.checked ? "bg-emerald-50 border-emerald-100/50" : "bg-white border-slate-100 hover:border-slate-200"
                                         )}
-                                        onClick={() => toggleItem(it.id)}
                                     >
                                         <Checkbox 
                                             checked={it.checked} 
-                                            className="mt-0.5 rounded-md border-slate-300 data-[state=checked]:bg-emerald-600 data-[state=checked]:border-emerald-600"
+                                            onCheckedChange={() => toggleItem(it.id)}
+                                            className="mt-1 rounded-md border-slate-300 data-[state=checked]:bg-emerald-600 data-[state=checked]:border-emerald-600"
                                         />
-                                        <span className={cn(
-                                            "text-xs leading-relaxed",
-                                            it.checked ? "text-emerald-900/60 line-through font-medium" : "text-slate-700 font-semibold"
-                                        )}>
-                                            {it.text}
-                                        </span>
+                                        
+                                        <div className="flex-1 min-w-0 pr-16">
+                                            {editingId === it.id ? (
+                                                <div className="flex flex-col gap-2">
+                                                    <Textarea 
+                                                        autoFocus
+                                                        value={editingText}
+                                                        onChange={(e) => setEditingText(e.target.value)}
+                                                        className="text-xs min-h-[60px] rounded-xl border-slate-200"
+                                                    />
+                                                    <div className="flex items-center gap-2">
+                                                        <Button size="sm" className="h-7 px-3 rounded-lg bg-indigo-600 text-[10px] font-bold gap-1" onClick={saveEdit}>
+                                                            <CheckIcon className="h-3 w-3" /> Salvar
+                                                        </Button>
+                                                        <Button size="sm" variant="ghost" className="h-7 px-3 rounded-lg text-[10px] font-bold gap-1" onClick={cancelEdit}>
+                                                            <X className="h-3 w-3" /> Cancelar
+                                                        </Button>
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                <span 
+                                                    className={cn(
+                                                        "text-xs leading-relaxed block cursor-pointer",
+                                                        it.checked ? "text-emerald-900/60 line-through font-medium" : "text-slate-700 font-semibold"
+                                                    )}
+                                                    onClick={() => toggleItem(it.id)}
+                                                >
+                                                    {it.text || <em className="text-slate-400 font-normal">Ponto vazio...</em>}
+                                                </span>
+                                            )}
+                                        </div>
+
+                                        {!editingId && (
+                                            <div className="absolute right-2 top-2 hidden group-hover:flex items-center gap-1">
+                                                <Button 
+                                                    variant="ghost" 
+                                                    size="sm" 
+                                                    className="h-7 w-7 p-0 rounded-lg text-slate-400 hover:text-indigo-600 hover:bg-white shadow-sm"
+                                                    onClick={(e) => { e.stopPropagation(); startEditing(it); }}
+                                                >
+                                                    <Pencil className="h-3.5 w-3.5" />
+                                                </Button>
+                                                <Button 
+                                                    variant="ghost" 
+                                                    size="sm" 
+                                                    className="h-7 w-7 p-0 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-white shadow-sm"
+                                                    onClick={(e) => { e.stopPropagation(); removeItem(it.id); }}
+                                                >
+                                                    <TrashIcon className="h-3.5 w-3.5" />
+                                                </Button>
+                                            </div>
+                                        )}
                                     </div>
                                 ))}
                             </div>
-                        </div>
-                    )}
+                        ) : (
+                            <div className="flex flex-col items-center justify-center py-8 px-4 rounded-2xl border border-dashed border-slate-200 bg-slate-50/30 text-center">
+                                <ListChecks className="h-8 w-8 text-slate-300 mb-2" />
+                                <p className="text-[11px] text-slate-500 font-medium">Nenhum item no checklist.</p>
+                                <p className="text-[10px] text-slate-400">Gere a partir do roteiro ou adicione manualmente.</p>
+                            </div>
+                        )}
+                    </div>
                 </TabsContent>
             </Tabs>
 
