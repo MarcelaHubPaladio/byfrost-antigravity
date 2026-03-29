@@ -360,7 +360,6 @@ export function TrelloCardDetails(props: { tenantId: string; caseId: string }) {
         </DialogContent>
       </Dialog>
 
-      <CaseTimeline events={timelineQ.data ?? []} />
     </div>
   );
 }

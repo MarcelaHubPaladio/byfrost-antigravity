@@ -50,6 +50,7 @@ type CaseRow = {
     assigned_user_id: string | null;
     customer_id: string | null;
     customer_entity_id: string | null;
+    journey_id: string;
     deliverable_id: string | null;
     is_chat?: boolean;
     users_profile?: { display_name: string | null; email: string | null } | null;
@@ -79,7 +80,7 @@ export default function OperacaoM30Case() {
             const { data, error } = await supabase
                 .from("cases")
                 .select(
-                    "id,tenant_id,case_type,customer_id,customer_entity_id,deliverable_id,title,status,state,created_at,updated_at,assigned_user_id,is_chat,users_profile:users_profile(display_name,email),meta_json"
+                    "id,tenant_id,journey_id,case_type,customer_id,customer_entity_id,deliverable_id,title,status,state,created_at,updated_at,assigned_user_id,is_chat,users_profile:users_profile(display_name,email),meta_json"
                 )
                 .eq("tenant_id", activeTenantId!)
                 .eq("id", id!)
@@ -102,6 +103,36 @@ export default function OperacaoM30Case() {
                 .maybeSingle();
             if (error) throw error;
             return (data ?? null) as any;
+        },
+    });
+
+    const journeyQ = useQuery({
+        queryKey: ["case_journey", activeTenantId, caseQ.data?.journey_id],
+        enabled: Boolean(activeTenantId && caseQ.data?.journey_id),
+        queryFn: async () => {
+            const { data, error } = await supabase
+                .from("journeys")
+                .select("key,name,is_crm,default_state_machine_json")
+                .eq("tenant_id", activeTenantId!)
+                .eq("id", caseQ.data!.journey_id)
+                .maybeSingle();
+            if (error) throw error;
+            return data;
+        },
+    });
+
+    const profileQ = useQuery({
+        queryKey: ["current_user_profile", activeTenantId, user?.id],
+        enabled: Boolean(activeTenantId && user?.id),
+        queryFn: async () => {
+            const { data, error } = await supabase
+                .from("users_profile")
+                .select("role")
+                .eq("tenant_id", activeTenantId!)
+                .eq("user_id", user!.id)
+                .maybeSingle();
+            if (error) throw error;
+            return data;
         },
     });
 
@@ -171,7 +202,7 @@ export default function OperacaoM30Case() {
             });
 
             showSuccess("Tarefa excluída.");
-            nav("/app/jornada", { replace: true });
+            nav("/app/operacao-m30", { replace: true });
         } catch (e: any) {
             showError(`Falha ao excluir: ${e?.message ?? "erro"}`);
         } finally {
@@ -196,11 +227,11 @@ export default function OperacaoM30Case() {
     });
 
     const states = useMemo(() => {
-        const st = (caseQ.data?.journeys as any)?.default_state_machine_json?.states;
+        const st = (journeyQ.data as any)?.default_state_machine_json?.states;
         const arr = Array.isArray(st) ? st.map((x: any) => String(x)).filter(Boolean) : [];
         const fallback = caseQ.data?.state ? [caseQ.data.state] : [];
         return Array.from(new Set([...(arr.length ? arr : fallback)]));
-    }, [caseQ.data?.journeys, caseQ.data?.state]);
+    }, [journeyQ.data, caseQ.data?.state]);
 
     const { transitionState, updating: updatingState } = useJourneyTransition();
 
@@ -210,7 +241,7 @@ export default function OperacaoM30Case() {
         const prev = caseQ.data?.state ?? "";
         if (!next || next === prev) return;
 
-        const sm = caseQ.data?.journeys?.default_state_machine_json as any;
+        const sm = journeyQ.data?.default_state_machine_json as any;
         const blocksReasons = await checkTransitionBlocks(supabase, activeTenantId!, id!, caseQ.data?.state || "", next, sm);
 
         if (blocksReasons.length > 0) {
@@ -221,9 +252,9 @@ export default function OperacaoM30Case() {
         try {
             await transitionState(
                 id,
-                prev,
+                caseQ.data?.state ?? "",
                 next,
-                caseQ.data?.journeys?.default_state_machine_json as unknown as StateMachine
+                journeyQ.data?.default_state_machine_json as unknown as StateMachine
             );
         } catch (e: any) { }
     };
@@ -251,7 +282,7 @@ export default function OperacaoM30Case() {
                             <Button
                                 variant="outline"
                                 className="h-10 rounded-2xl"
-                                onClick={() => nav("/app/jornada")}
+                                onClick={() => nav("/app/operacao-m30")}
                             >
                                 <ArrowLeft className="mr-2 h-4 w-4" /> Voltar
                             </Button>
@@ -284,7 +315,7 @@ export default function OperacaoM30Case() {
                                 <SelectContent className="rounded-2xl">
                                     {states.map((s) => (
                                         <SelectItem key={s} value={s} className="rounded-xl">
-                                            {getStateLabel(c?.journeys as any, s)}
+                                            {getStateLabel(journeyQ.data as any, s)}
                                         </SelectItem>
                                     ))}
                                 </SelectContent>
@@ -337,7 +368,7 @@ export default function OperacaoM30Case() {
                                                 </div>
                                             </div>
                                         </div>
-                                        {deliverableQ.data.commitment_id && (
+                                        {deliverableQ.data.commitment_id && profileQ.data?.role === 'admin' && (
                                             <Link 
                                                 to={`/app/commitments/${deliverableQ.data.commitment_id}`}
                                                 className="flex items-center gap-2 text-xs font-semibold text-blue-700 hover:text-blue-800 transition"
