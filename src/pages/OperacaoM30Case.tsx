@@ -78,7 +78,7 @@ export default function OperacaoM30Case() {
             const { data, error } = await supabase
                 .from("cases")
                 .select(
-                    "id,tenant_id,case_type,customer_id,customer_entity_id,deliverable_id,title,status,state,created_at,updated_at,assigned_user_id,is_chat,users_profile:users_profile!fk_cases_users_profile(display_name,email),journeys:journeys!cases_journey_id_fkey(key,name,is_crm,default_state_machine_json),customer_entity:core_entities!cases_customer_entity_fk(display_name)"
+                    "id,tenant_id,case_type,customer_id,customer_entity_id,deliverable_id,title,status,state,created_at,updated_at,assigned_user_id,is_chat,users_profile:users_profile!fk_cases_users_profile(display_name,email),journeys:journeys!cases_journey_id_fkey(key,name,is_crm,default_state_machine_json)"
                 )
                 .eq("tenant_id", activeTenantId!)
                 .eq("id", id!)
@@ -98,6 +98,21 @@ export default function OperacaoM30Case() {
                 .select("id, name, commitment_id, status, due_date")
                 .eq("tenant_id", activeTenantId!)
                 .eq("id", caseQ.data!.deliverable_id!)
+                .maybeSingle();
+            if (error) throw error;
+            return (data ?? null) as any;
+        },
+    });
+
+    const entityQ = useQuery({
+        queryKey: ["case_entity", activeTenantId, caseQ.data?.customer_entity_id],
+        enabled: Boolean(activeTenantId && caseQ.data?.customer_entity_id),
+        queryFn: async () => {
+            const { data, error } = await supabase
+                .from("core_entities")
+                .select("display_name")
+                .eq("tenant_id", activeTenantId!)
+                .eq("id", caseQ.data!.customer_entity_id!)
                 .maybeSingle();
             if (error) throw error;
             return data;
@@ -217,9 +232,9 @@ export default function OperacaoM30Case() {
                                     {c?.title || "Tarefa"}
                                 </h2>
                                 <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
-                                    {c?.customer_entity?.display_name && (
+                                    {entityQ.data?.display_name && (
                                         <Badge variant="outline" className="bg-indigo-50/50 text-indigo-700 border-indigo-100 font-bold px-1.5 h-5">
-                                            {c.customer_entity.display_name}
+                                            {entityQ.data.display_name}
                                         </Badge>
                                     )}
                                     <span>ID: {id?.slice(0, 8)}</span>
