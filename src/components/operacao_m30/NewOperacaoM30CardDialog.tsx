@@ -22,9 +22,22 @@ import { supabase } from "@/lib/supabase";
 import { useSession } from "@/providers/SessionProvider";
 import { showError, showSuccess } from "@/utils/toast";
 import { cn } from "@/lib/utils";
-import { Plus, UserRound } from "lucide-react";
+import { Plus, UserRound, Check, ChevronsUpDown, Search } from "lucide-react";
 import { normalizeRichTextHtmlOrNull, RichTextEditor } from "@/components/RichTextEditor";
-import { FileText, Building2 } from "lucide-react";
+import { FileText, Building2, Loader2 } from "lucide-react";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 
 type UserRow = { user_id: string; email: string | null; display_name: string | null };
 
@@ -52,6 +65,8 @@ export function NewOperacaoM30CardDialog(props: { tenantId: string; journeyId: s
   const [entityId, setEntityId] = useState<string>("__unassigned__");
   const [commitmentId, setCommitmentId] = useState<string>("__unassigned__");
   const [creating, setCreating] = useState(false);
+  const [entityComboOpen, setEntityComboOpen] = useState(false);
+  const [entitySearch, setEntitySearch] = useState("");
 
   const usersQ = useQuery({
     queryKey: ["m30_users_hierarchy", props.tenantId, user?.id],
@@ -108,12 +123,18 @@ export function NewOperacaoM30CardDialog(props: { tenantId: string; journeyId: s
     queryFn: async () => {
       const { data, error } = await supabase
         .from("core_entities")
-        .select("id, display_name")
+        .select("id, display_name, commercial_commitments!inner(id)")
         .eq("tenant_id", props.tenantId)
         .is("deleted_at", null)
         .order("display_name");
       if (error) throw error;
-      return data ?? [];
+
+      // Remove duplicatas se houver múltiplos contratos para a mesma entidade (devido ao join)
+      const unique = new Map<string, any>();
+      for (const e of (data ?? [])) {
+        if (!unique.has(e.id)) unique.set(e.id, { id: e.id, display_name: e.display_name });
+      }
+      return Array.from(unique.values());
     },
   });
 
@@ -345,22 +366,80 @@ export function NewOperacaoM30CardDialog(props: { tenantId: string; journeyId: s
                   <Building2 className="h-4 w-4 text-slate-500" />
                   <Label className="text-xs text-indigo-700 font-semibold">Vincular Cliente</Label>
                 </div>
-                <Select value={entityId} onValueChange={(v) => {
-                  setEntityId(v);
-                  setCommitmentId("__unassigned__");
-                }}>
-                  <SelectTrigger className="mt-1 h-11 rounded-2xl bg-white text-xs">
-                    <SelectValue placeholder="Escolher cliente…" />
-                  </SelectTrigger>
-                  <SelectContent className="rounded-2xl">
-                    <SelectItem value="__unassigned__" className="rounded-xl">(nenhum)</SelectItem>
-                    {(entitiesQ.data ?? []).map((e) => (
-                      <SelectItem key={e.id} value={e.id} className="rounded-xl">
-                        {e.display_name || "Sem nome"}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                
+                <Popover open={entityComboOpen} onOpenChange={setEntityComboOpen}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      role="combobox"
+                      aria-expanded={entityComboOpen}
+                      className="mt-1 h-11 w-full justify-between rounded-2xl bg-white px-3 text-xs font-normal"
+                    >
+                      <span className="truncate">
+                        {entityId !== "__unassigned__"
+                          ? (entitiesQ.data?.find((e) => e.id === entityId)?.display_name ?? "Selecionar...")
+                          : "Escolher cliente..."}
+                      </span>
+                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[300px] p-0 rounded-2xl shadow-xl" align="start">
+                    <Command shouldFilter={true}>
+                      <CommandInput 
+                        placeholder="Buscar cliente..." 
+                        value={entitySearch}
+                        onValueChange={setEntitySearch}
+                      />
+                      <CommandList>
+                        {entitiesQ.isLoading && (
+                          <div className="flex items-center justify-center p-4">
+                            <Loader2 className="h-4 w-4 animate-spin text-slate-400" />
+                          </div>
+                        )}
+                        <CommandEmpty>Nenhum cliente com contrato.</CommandEmpty>
+                        <CommandGroup>
+                          <CommandItem
+                            value="__unassigned__"
+                            onSelect={() => {
+                              setEntityId("__unassigned__");
+                              setCommitmentId("__unassigned__");
+                              setEntityComboOpen(false);
+                            }}
+                            className="rounded-lg"
+                          >
+                            <Check
+                              className={cn(
+                                "mr-2 h-4 w-4",
+                                entityId === "__unassigned__" ? "opacity-100" : "opacity-0"
+                              )}
+                            />
+                            (nenhum)
+                          </CommandItem>
+                          {(entitiesQ.data ?? []).map((e) => (
+                            <CommandItem
+                              key={e.id}
+                              value={e.display_name}
+                              onSelect={() => {
+                                setEntityId(e.id);
+                                setCommitmentId("__unassigned__");
+                                setEntityComboOpen(false);
+                              }}
+                              className="rounded-lg"
+                            >
+                              <Check
+                                className={cn(
+                                  "mr-2 h-4 w-4",
+                                  entityId === e.id ? "opacity-100" : "opacity-0"
+                                )}
+                              />
+                              {e.display_name}
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
               </div>
 
               <div>
