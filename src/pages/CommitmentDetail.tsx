@@ -161,7 +161,7 @@ export default function CommitmentDetail() {
           entity_id,
           updated_at,
           name,
-          cases:cases(id, state, title, status)
+          cases:cases(id, state, title, status, deleted_at)
         `)
         .eq("tenant_id", activeTenantId!)
         .eq("commitment_id", commitmentId)
@@ -509,7 +509,7 @@ export default function CommitmentDetail() {
                                             onCheckedChange={() => toggleSelect(d.id)}
                                             id={`check-${d.id}`}
                                             className="h-4 w-4 rounded border-slate-300"
-                                            disabled={d.cases && d.cases.length > 0} // Disable if already has case? (User choice)
+                                            disabled={d.cases && d.cases.filter((c:any) => !c.deleted_at).length > 0} // Disable if already has case
                                           />
                                         </div>
                                         <div>
@@ -530,11 +530,11 @@ export default function CommitmentDetail() {
 
                                     {/* Linked Cases per occurrence */}
                                     <div className="mt-3 space-y-1.5">
-                                      {d.cases && d.cases.length > 0 ? (
-                                        d.cases.map((c: any) => (
+                                      {d.cases && d.cases.filter((c:any) => !c.deleted_at).length > 0 ? (
+                                        d.cases.filter((c:any) => !c.deleted_at).map((c: any) => (
                                           <Link 
                                             key={c.id} 
-                                            to={`/cases/${c.id}`}
+                                            to={`/app/operacao-m30/${c.id}`}
                                             className="flex items-center justify-between rounded-lg bg-white p-2 text-xs shadow-sm ring-1 ring-slate-200 transition hover:ring-blue-300"
                                           >
                                             <div className="flex items-center gap-2 truncate">
