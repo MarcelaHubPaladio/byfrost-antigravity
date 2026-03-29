@@ -273,7 +273,7 @@ export default function CommitmentDetail() {
         return {
           tenant_id: activeTenantId,
           journey_id: targetJourneyId,
-          entity_id: commitmentQ.data?.customer_entity_id,
+          customer_entity_id: commitmentQ.data?.customer_entity_id,
           deliverable_id: dId,
           title: d?.name || "Tarefa de Contrato",
           status: "open",
