@@ -198,9 +198,9 @@ export default function CommitmentDetail() {
       // Buscamos jornadas que não são CRM (estilo Trello/Tarefas)
       const { data, error } = await supabase
         .from("journeys")
-        .select("id, title, key, default_state_machine_json, is_crm")
+        .select("id, name, key, default_state_machine_json, is_crm")
         .eq("is_crm", false)
-        .order("title", { ascending: true });
+        .order("name", { ascending: true });
       if (error) throw error;
       return (data ?? []) as any[];
     },
@@ -612,7 +612,7 @@ export default function CommitmentDetail() {
                       </SelectTrigger>
                       <SelectContent>
                         {(journeysQ.data ?? []).map(j => (
-                          <SelectItem key={j.id} value={j.id}>{j.title}</SelectItem>
+                          <SelectItem key={j.id} value={j.id}>{j.name}</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
