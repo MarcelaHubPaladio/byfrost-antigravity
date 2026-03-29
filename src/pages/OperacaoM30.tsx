@@ -70,6 +70,7 @@ type CaseRow = {
   id: string;
   journey_id: string | null;
   customer_id?: string | null;
+  customer_entity_id?: string | null;
   title: string | null;
   status: string;
   state: string;
@@ -81,6 +82,7 @@ type CaseRow = {
   // Nem sempre existe FK/relacionamento exposto; então mantemos também meta_json.
   journeys?: { key: string | null; name: string | null; is_crm?: boolean } | null;
   meta_json?: any;
+  customer_entity?: { display_name: string | null } | null;
 };
 
 type JourneyOpt = {
@@ -450,7 +452,7 @@ export default function OperacaoM30() {
       const { data, error } = await supabase
         .from("cases")
         .select(
-          "id,journey_id,customer_id,customer_entity_id,title,status,state,created_at,updated_at,assigned_user_id,is_chat,users_profile:users_profile!fk_cases_users_profile(display_name,email),journeys:journeys!cases_journey_id_fkey(key,name,is_crm),meta_json"
+          "id,journey_id,customer_id,customer_entity_id,title,status,state,created_at,updated_at,assigned_user_id,is_chat,users_profile:users_profile!fk_cases_users_profile(display_name,email),journeys:journeys!cases_journey_id_fkey(key,name,is_crm),meta_json,customer_entity:core_entities!cases_customer_entity_id_fkey(display_name)"
         )
         .eq("tenant_id", activeTenantId!)
         .is("deleted_at", null)
@@ -639,11 +641,14 @@ export default function OperacaoM30() {
     if (!qq) return base;
 
     return base.filter((r) => {
+      const eid = (r as any).customer_entity_id || (r.meta_json as any)?.entity_id || r.customer_id;
+      const entityName = eid ? caseEntitiesQ.data?.get(eid) : null;
+      
       const cust = isCrm ? customersQ.data?.get(String((r as any).customer_id ?? "")) : null;
       const metaPhone = getMetaPhone(r.meta_json);
       const fieldPhone = isCrm ? casePhoneQ.data?.get(r.id) : null;
 
-      const t = `${r.title ?? ""} ${(r.users_profile?.display_name ?? "")} ${(r.users_profile?.email ?? "")} ${cust?.name ?? ""} ${cust?.phone_e164 ?? ""} ${cust?.email ?? ""} ${metaPhone ?? ""} ${fieldPhone ?? ""}`.toLowerCase();
+      const t = `${r.title ?? ""} ${(r.users_profile?.display_name ?? "")} ${(r.users_profile?.email ?? "")} ${entityName ?? ""} ${cust?.name ?? ""} ${cust?.phone_e164 ?? ""} ${cust?.email ?? ""} ${metaPhone ?? ""} ${fieldPhone ?? ""}`.toLowerCase();
 
       // Busca por número exata ou parcial sem formatação
       const cleanQ = qq.replace(/\D/g, "");
@@ -655,7 +660,7 @@ export default function OperacaoM30() {
 
       return t.includes(qq);
     });
-  }, [journeyRows, q, isCrm, customersQ.data, casePhoneQ.data, instanceFilterId, assigneeFilterId, entityFilterId, startDate, endDate, tenantUsersQ.data]);
+  }, [journeyRows, q, isCrm, customersQ.data, caseEntitiesQ.data, casePhoneQ.data, instanceFilterId, assigneeFilterId, entityFilterId, startDate, endDate, tenantUsersQ.data]);
 
   const visibleCaseIds = useMemo(() => filteredRows.map((r) => r.id), [filteredRows]);
 
@@ -1242,7 +1247,7 @@ export default function OperacaoM30() {
                                   
                                   {(() => {
                                     const eid = (c as any).customer_entity_id || (c as any).customer_id || (c.meta_json as any)?.entity_id;
-                                    const entityFullName = eid ? caseEntitiesQ.data?.get(eid) : null;
+                                    const entityFullName = (c as any).customer_entity?.display_name || (eid ? caseEntitiesQ.data?.get(eid) : null);
                                     const entityFirstName = entityFullName ? entityFullName.split(" ")[0] : null;
                                     
                                     if (!entityFirstName) return null;

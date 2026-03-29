@@ -49,10 +49,12 @@ type CaseRow = {
     updated_at: string;
     assigned_user_id: string | null;
     customer_id: string | null;
+    customer_entity_id: string | null;
     deliverable_id: string | null;
     is_chat?: boolean;
     users_profile?: { display_name: string | null; email: string | null } | null;
     journeys?: { key: string | null; name: string | null; is_crm?: boolean; default_state_machine_json?: any } | null;
+    customer_entity?: { display_name: string | null } | null;
 };
 
 export default function OperacaoM30Case() {
@@ -76,7 +78,7 @@ export default function OperacaoM30Case() {
             const { data, error } = await supabase
                 .from("cases")
                 .select(
-                    "id,tenant_id,case_type,customer_id,deliverable_id,title,status,state,created_at,updated_at,assigned_user_id,is_chat,users_profile:users_profile!fk_cases_users_profile(display_name,email),journeys:journeys!cases_journey_id_fkey(key,name,is_crm,default_state_machine_json)"
+                    "id,tenant_id,case_type,customer_id,customer_entity_id,deliverable_id,title,status,state,created_at,updated_at,assigned_user_id,is_chat,users_profile:users_profile!fk_cases_users_profile(display_name,email),journeys:journeys!cases_journey_id_fkey(key,name,is_crm,default_state_machine_json),customer_entity:core_entities!cases_customer_entity_id_fkey(display_name)"
                 )
                 .eq("tenant_id", activeTenantId!)
                 .eq("id", id!)
@@ -214,7 +216,12 @@ export default function OperacaoM30Case() {
                                 <h2 className="line-clamp-1 text-lg font-semibold text-slate-900">
                                     {c?.title || "Tarefa"}
                                 </h2>
-                                <div className="flex items-center gap-2 text-xs text-slate-500">
+                                <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
+                                    {c?.customer_entity?.display_name && (
+                                        <Badge variant="outline" className="bg-indigo-50/50 text-indigo-700 border-indigo-100 font-bold px-1.5 h-5">
+                                            {c.customer_entity.display_name}
+                                        </Badge>
+                                    )}
                                     <span>ID: {id?.slice(0, 8)}</span>
                                     <Badge variant="secondary" className="rounded-full">Operação M30</Badge>
                                 </div>
