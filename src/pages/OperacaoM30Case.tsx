@@ -32,7 +32,7 @@ import { TransitionBlockDialog } from "@/components/case/TransitionBlockDialog";
 import { CaseTimeline, type CaseTimelineEvent } from "@/components/case/CaseTimeline";
 import { TrelloCardDetails } from "@/components/trello/TrelloCardDetails";
 import { Card } from "@/components/ui/card";
-import { ArrowLeft, Trash2, RefreshCw, FileText, PackageCheck, Check, AlertCircle, Plus, Calendar } from "lucide-react";
+import { ArrowLeft, Trash2, RefreshCw, PackageCheck, Check, AlertCircle, Plus, Calendar } from "lucide-react";
 import { cn, titleizeState } from "@/lib/utils";
 import { showError, showSuccess } from "@/utils/toast";
 import { getStateLabel } from "@/lib/journeyLabels";
@@ -42,6 +42,10 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/
 import { RichTextEditor } from "@/components/RichTextEditor";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Save, ListChecks, FileText, CheckCircle2, Clock } from "lucide-react";
 
 type CaseRow = {
     id: string;
@@ -60,24 +64,207 @@ type CaseRow = {
     meta_json: any;
 };
 
-function SubtaskEditor({ initialValue, onSave }: { initialValue: string, onSave: (html: string) => void }) {
-    const [html, setHtml] = useState(initialValue);
+function SubtaskItemContent({ st, idx, caseMeta, caseId, onRefetch }: { st: any, idx: number, caseMeta: any, caseId: string, onRefetch: () => void }) {
+    const [title, setTitle] = useState(st.title || "");
+    const [type, setType] = useState(st.type || "edicao");
+    const [postDate, setPostDate] = useState(st.post_date || "");
+    const [priority, setPriority] = useState(st.priority || false);
+    const [description, setDescription] = useState(st.description || "");
+    const [scriptRaw, setScriptRaw] = useState(st.script_raw || "");
+    const [scriptItems, setScriptItems] = useState<any[]>(st.script_items || []);
     
-    useEffect(() => {
-        const t = setTimeout(() => {
-            if (html !== initialValue) {
-                onSave(html);
-            }
-        }, 1000);
-        return () => clearTimeout(t);
-    }, [html, initialValue, onSave]);
+    const [saving, setSaving] = useState(false);
+    const [lastSaved, setLastSaved] = useState<Date | null>(null);
+
+    const handleSave = async () => {
+        setSaving(true);
+        try {
+            const currentSubtasks = [...(caseMeta?.pending_subtasks || [])];
+            currentSubtasks[idx] = {
+                ...currentSubtasks[idx],
+                title,
+                type,
+                post_date: postDate,
+                priority,
+                description,
+                script_raw: scriptRaw,
+                script_items: scriptItems
+            };
+
+            const { error } = await supabase
+                .from("cases")
+                .update({
+                    meta_json: { ...caseMeta, pending_subtasks: currentSubtasks }
+                })
+                .eq("id", caseId);
+
+            if (error) throw error;
+            setLastSaved(new Date());
+            // showSuccess("Alterações salvas.");
+        } catch (e: any) {
+            showError("Erro ao salvar: " + e.message);
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const generateChecklist = () => {
+        if (!scriptRaw.trim()) return;
+        // Divide por quebra de linha e limpa vazios
+        const lines = scriptRaw.split("\n").map(l => l.trim()).filter(Boolean);
+        const nextItems = lines.map((text, i) => ({
+            id: `line-${i}-${Date.now()}`,
+            text,
+            checked: false
+        }));
+        setScriptItems(nextItems);
+    };
+
+    const toggleItem = (itemId: string) => {
+        const next = scriptItems.map(it => it.id === itemId ? { ...it, checked: !it.checked } : it);
+        setScriptItems(next);
+    };
 
     return (
-        <RichTextEditor 
-            value={html}
-            minHeightClassName="min-h-[100px]"
-            onChange={setHtml}
-        />
+        <div className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="space-y-1.5">
+                    <Label className="text-[10px] font-bold text-slate-500 uppercase">Tipo de Entrega</Label>
+                    <Select value={type} onValueChange={setType}>
+                        <SelectTrigger className="h-9 rounded-xl text-xs bg-slate-50/50 border-slate-200">
+                            <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent className="rounded-2xl">
+                            <SelectItem value="edicao" className="rounded-xl text-xs">VÍDEO / EDIÇÃO</SelectItem>
+                            <SelectItem value="arte_estatica" className="rounded-xl text-xs">ARTE ESTÁTICA</SelectItem>
+                            <SelectItem value="trafego_pago" className="rounded-xl text-xs">TRÁFEGO PAGO</SelectItem>
+                            <SelectItem value="planejamento" className="rounded-xl text-xs">PLANEJAMENTO</SelectItem>
+                            <SelectItem value="relatorio" className="rounded-xl text-xs">RELATÓRIO</SelectItem>
+                            <SelectItem value="validacao" className="rounded-xl text-xs">VALIDAÇÃO</SelectItem>
+                            <SelectItem value="aprovacao" className="rounded-xl text-xs">APROVAÇÃO</SelectItem>
+                            <SelectItem value="calendario" className="rounded-xl text-xs">CALENDÁRIO</SelectItem>
+                        </SelectContent>
+                    </Select>
+                </div>
+                <div className="space-y-1.5">
+                    <Label className="text-[10px] font-bold text-slate-500 uppercase">Data de Postagem</Label>
+                    <input 
+                        type="date"
+                        value={postDate}
+                        className="w-full h-9 rounded-xl border border-slate-200 bg-slate-50/50 px-3 text-xs focus:ring-2 focus:ring-indigo-500 outline-none"
+                        onChange={(e) => setPostDate(e.target.value)}
+                    />
+                </div>
+                <div className="space-y-1.5 flex flex-col justify-end">
+                    <div className="flex items-center justify-between h-9 px-3 rounded-xl border border-slate-200 bg-slate-50/50">
+                        <Label className="text-[10px] font-bold text-slate-500 uppercase cursor-pointer" htmlFor={`priority-${idx}`}>Priorizar</Label>
+                        <Switch 
+                            id={`priority-${idx}`}
+                            checked={priority}
+                            onCheckedChange={setPriority}
+                        />
+                    </div>
+                </div>
+            </div>
+
+            <Tabs defaultValue="briefing" className="w-full">
+                <TabsList className="bg-slate-100/50 p-1 rounded-xl h-10 mb-4">
+                    <TabsTrigger value="briefing" className="rounded-lg text-xs font-bold data-[state=active]:bg-white data-[state=active]:shadow-sm gap-2">
+                        <FileText className="h-3.5 w-3.5" /> Briefing
+                    </TabsTrigger>
+                    <TabsTrigger value="roteiro" className="rounded-lg text-xs font-bold data-[state=active]:bg-white data-[state=active]:shadow-sm gap-2">
+                        <ListChecks className="h-3.5 w-3.5" /> Roteiro
+                    </TabsTrigger>
+                </TabsList>
+                
+                <TabsContent value="briefing" className="mt-0 focus-visible:ring-0">
+                    <div className="space-y-2">
+                        <Label className="text-[10px] font-bold text-slate-500 uppercase">Descrição da Pauta</Label>
+                        <RichTextEditor 
+                            value={description}
+                            minHeightClassName="min-h-[150px]"
+                            onChange={setDescription}
+                        />
+                    </div>
+                </TabsContent>
+
+                <TabsContent value="roteiro" className="mt-0 focus-visible:ring-0 space-y-4">
+                    <div className="space-y-2">
+                        <Label className="text-[10px] font-bold text-slate-500 uppercase">Texto do Roteiro</Label>
+                        <Textarea 
+                            placeholder="Cole o texto do roteiro aqui..."
+                            className="min-h-[120px] rounded-2xl border-slate-200 text-xs focus:ring-indigo-500/20"
+                            value={scriptRaw}
+                            onChange={(e) => setScriptRaw(e.target.value)}
+                        />
+                        <Button 
+                            variant="secondary" 
+                            size="sm" 
+                            className="w-full h-8 rounded-xl text-[10px] font-bold gap-2 bg-slate-100 hover:bg-slate-200"
+                            onClick={generateChecklist}
+                        >
+                            <RefreshCw className="h-3 w-3" /> Gerar Checklist de Gravação
+                        </Button>
+                    </div>
+
+                    {scriptItems.length > 0 && (
+                        <div className="space-y-3 pt-4 border-t border-slate-100">
+                            <Label className="text-[10px] font-bold text-slate-500 uppercase flex items-center gap-2">
+                                <ListChecks className="h-3.5 w-3.5" /> Checklist de Gravação
+                            </Label>
+                            <div className="space-y-2">
+                                {scriptItems.map((it) => (
+                                    <div 
+                                        key={it.id} 
+                                        className={cn(
+                                            "flex items-start gap-3 p-3 rounded-xl border transition-all cursor-pointer group",
+                                            it.checked ? "bg-emerald-50 border-emerald-100/50" : "bg-white border-slate-100 hover:border-slate-200"
+                                        )}
+                                        onClick={() => toggleItem(it.id)}
+                                    >
+                                        <Checkbox 
+                                            checked={it.checked} 
+                                            className="mt-0.5 rounded-md border-slate-300 data-[state=checked]:bg-emerald-600 data-[state=checked]:border-emerald-600"
+                                        />
+                                        <span className={cn(
+                                            "text-xs leading-relaxed",
+                                            it.checked ? "text-emerald-900/60 line-through font-medium" : "text-slate-700 font-semibold"
+                                        )}>
+                                            {it.text}
+                                        </span>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+                </TabsContent>
+            </Tabs>
+
+            <div className="flex items-center justify-between pt-4 border-t border-slate-50">
+                <div className="flex items-center gap-2">
+                    {lastSaved && (
+                        <span className="text-[10px] text-slate-400 flex items-center gap-1 font-medium bg-slate-50 px-2 py-1 rounded-lg">
+                            <Clock className="h-3 w-3" /> Salvo às {lastSaved.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                    )}
+                </div>
+                <Button 
+                    onClick={handleSave} 
+                    disabled={saving}
+                    className={cn(
+                        "h-9 rounded-xl px-6 font-bold text-xs gap-2 transition-all shadow-md",
+                        saving ? "bg-slate-400" : (lastSaved ? "bg-emerald-600 hover:bg-emerald-700 shadow-emerald-100" : "bg-slate-900 hover:bg-slate-800")
+                    )}
+                >
+                    {saving ? (
+                        <RefreshCw className="h-4 w-4 animate-spin" />
+                    ) : (
+                        lastSaved ? <CheckCircle2 className="h-4 w-4" /> : <Save className="h-4 w-4" />
+                    )}
+                    {saving ? "Salvando..." : (lastSaved ? "Salvo" : "Salvar Alterações")}
+                </Button>
+            </div>
+        </div>
     );
 }
 
@@ -327,6 +514,8 @@ export default function OperacaoM30Case() {
                         commitment_id: (caseQ.data.meta_json as any)?.commitment_id,
                         post_date: st.post_date || null,
                         priority: st.priority || false,
+                        script_raw: st.script_raw || null,
+                        script_items: st.script_items || null,
                     }
                 });
             }
@@ -624,85 +813,13 @@ export default function OperacaoM30Case() {
                                                             </Button>
                                                         </div>
                                                         <AccordionContent className="px-4 pb-4 space-y-4 pt-1 border-t border-slate-50">
-                                                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                                                <div className="space-y-1.5">
-                                                                    <Label className="text-[10px] font-bold text-slate-500 uppercase">Tipo de Entrega</Label>
-                                                                    <Select 
-                                                                        value={st.type || "edicao"} 
-                                                                        onValueChange={async (val) => {
-                                                                            const current = [...((caseQ.data?.meta_json as any)?.pending_subtasks || [])];
-                                                                            current[idx] = { ...current[idx], type: val };
-                                                                            await supabase.from("cases").update({
-                                                                                meta_json: { ...(caseQ.data?.meta_json as any), pending_subtasks: current }
-                                                                            }).eq("id", id!);
-                                                                            caseQ.refetch();
-                                                                        }}
-                                                                    >
-                                                                        <SelectTrigger className="h-9 rounded-xl text-xs bg-slate-50/50 border-slate-200">
-                                                                            <SelectValue />
-                                                                        </SelectTrigger>
-                                                                        <SelectContent className="rounded-2xl">
-                                                                            <SelectItem value="edicao" className="rounded-xl text-xs">VÍDEO / EDIÇÃO</SelectItem>
-                                                                            <SelectItem value="arte_estatica" className="rounded-xl text-xs">ARTE ESTÁTICA</SelectItem>
-                                                                            <SelectItem value="trafego_pago" className="rounded-xl text-xs">TRÁFEGO PAGO</SelectItem>
-                                                                            <SelectItem value="planejamento" className="rounded-xl text-xs">PLANEJAMENTO</SelectItem>
-                                                                            <SelectItem value="relatorio" className="rounded-xl text-xs">RELATÓRIO</SelectItem>
-                                                                            <SelectItem value="validacao" className="rounded-xl text-xs">VALIDAÇÃO</SelectItem>
-                                                                            <SelectItem value="aprovacao" className="rounded-xl text-xs">APROVAÇÃO</SelectItem>
-                                                                            <SelectItem value="calendario" className="rounded-xl text-xs">CALENDÁRIO</SelectItem>
-                                                                        </SelectContent>
-                                                                    </Select>
-                                                                </div>
-                                                                <div className="space-y-1.5">
-                                                                    <Label className="text-[10px] font-bold text-slate-500 uppercase">Data de Postagem</Label>
-                                                                    <input 
-                                                                        type="date"
-                                                                        value={st.post_date || ""}
-                                                                        className="w-full h-9 rounded-xl border border-slate-200 bg-slate-50/50 px-3 text-xs focus:ring-2 focus:ring-indigo-500 outline-none"
-                                                                        onChange={async (e) => {
-                                                                            const current = [...((caseQ.data?.meta_json as any)?.pending_subtasks || [])];
-                                                                            current[idx] = { ...current[idx], post_date: e.target.value };
-                                                                            await supabase.from("cases").update({
-                                                                                meta_json: { ...(caseQ.data?.meta_json as any), pending_subtasks: current }
-                                                                            }).eq("id", id!);
-                                                                            caseQ.refetch();
-                                                                        }}
-                                                                    />
-                                                                </div>
-                                                                <div className="space-y-1.5 flex flex-col justify-end">
-                                                                    <div className="flex items-center justify-between h-9 px-3 rounded-xl border border-slate-200 bg-slate-50/50">
-                                                                        <Label className="text-[10px] font-bold text-slate-500 uppercase cursor-pointer" htmlFor={`priority-${idx}`}>Priorizar</Label>
-                                                                        <Switch 
-                                                                            id={`priority-${idx}`}
-                                                                            checked={st.priority || false}
-                                                                            onCheckedChange={async (val) => {
-                                                                                const current = [...((caseQ.data?.meta_json as any)?.pending_subtasks || [])];
-                                                                                current[idx] = { ...current[idx], priority: val };
-                                                                                await supabase.from("cases").update({
-                                                                                    meta_json: { ...(caseQ.data?.meta_json as any), pending_subtasks: current }
-                                                                                }).eq("id", id!);
-                                                                                caseQ.refetch();
-                                                                            }}
-                                                                        />
-                                                                    </div>
-                                                                </div>
-                                                            </div>
-
-                                                            <div className="space-y-1.5">
-                                                                <Label className="text-[10px] font-bold text-slate-500 uppercase">Descrição da Pauta</Label>
-                                                                <SubtaskEditor 
-                                                                    initialValue={st.description || ""}
-                                                                    onSave={async (html) => {
-                                                                        const current = [...((caseQ.data?.meta_json as any)?.pending_subtasks || [])];
-                                                                        if (current[idx].description === html) return;
-                                                                        current[idx] = { ...current[idx], description: html };
-                                                                        await supabase.from("cases").update({
-                                                                            meta_json: { ...(caseQ.data?.meta_json as any), pending_subtasks: current }
-                                                                        }).eq("id", id!);
-                                                                        // Not refetching to avoid layout shift
-                                                                    }}
-                                                                />
-                                                            </div>
+                                                            <SubtaskItemContent 
+                                                                st={st} 
+                                                                idx={idx} 
+                                                                caseMeta={caseQ.data?.meta_json}
+                                                                caseId={id!}
+                                                                onRefetch={() => caseQ.refetch()}
+                                                            />
                                                         </AccordionContent>
                                                     </AccordionItem>
                                                 ))}
