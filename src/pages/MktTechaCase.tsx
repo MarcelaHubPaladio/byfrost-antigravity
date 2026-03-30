@@ -26,7 +26,6 @@ import {
     AlertDialogTitle,
     AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { WhatsAppConversation } from "@/components/case/WhatsAppConversation";
 import { checkTransitionBlocks, TransitionBlockReason } from "@/lib/journeys/validation";
 import { TransitionBlockDialog } from "@/components/case/TransitionBlockDialog";
 import { CaseTimeline, type CaseTimelineEvent } from "@/components/case/CaseTimeline";
@@ -129,12 +128,12 @@ export default function MktTechaCase() {
         queryFn: async () => {
             const { data, error } = await supabase
                 .from("users_profile")
-                .select("user_id, display_name")
+                .select("user_id, display_name, email")
                 .eq("tenant_id", activeTenantId!)
                 .is("deleted_at", null)
                 .order("display_name", { ascending: true });
             if (error) throw error;
-            return data as { user_id: string; display_name: string | null }[];
+            return data as { user_id: string; display_name: string | null; email: string | null }[];
         },
     });
 
@@ -437,8 +436,8 @@ export default function MktTechaCase() {
                             </div>
                         </div>
 
-                        <div className="grid gap-6 p-6 sm:p-8 lg:grid-cols-[1fr_400px]">
-                            <div className="space-y-8">
+                        <div className="flex flex-col lg:flex-row gap-6 p-6 sm:p-8">
+                            <div className="flex-1 space-y-8">
                                 <div className="flex items-center justify-between">
                                     <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
                                         <Target className="h-4 w-4" /> ETAPA: {getStateLabel(journeyQ.data as any, stateKey).toUpperCase()}
@@ -743,36 +742,78 @@ export default function MktTechaCase() {
                                     <div className="space-y-4">
                                         <div className="space-y-2">
                                             <Label className="text-[10px] font-bold text-slate-500 uppercase px-1">Título do Card</Label>
-                                            <input value={mainTitle} onChange={(e) => setMainTitle(e.target.value)} className="w-full h-11 rounded-2xl border border-slate-200 px-4 text-sm font-bold outline-none" />
+                                            <input 
+                                                value={mainTitle} 
+                                                onChange={(e) => setMainTitle(e.target.value)} 
+                                                className="w-full h-11 rounded-2xl border border-slate-200 px-4 text-sm font-bold outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all" 
+                                            />
                                         </div>
                                         <div className="space-y-2">
                                             <Label className="text-[10px] font-bold text-slate-500 uppercase px-1">Resumo Executivo / Notas</Label>
-                                            <RichTextEditor value={mainSummary} minHeightClassName="min-h-[150px]" onChange={setMainSummary} />
+                                            <RichTextEditor value={mainSummary} minHeightClassName="min-h-[200px]" onChange={setMainSummary} />
                                         </div>
                                     </div>
                                 </div>
 
-                                {activeTenantId && id && <TrelloCardDetails tenantId={activeTenantId} caseId={id} />}
                                 <CaseTimeline events={timelineQ.data ?? []} />
                             </div>
 
-                            <div className="space-y-4">
-                                <div className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
-                                    <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4">Informações</h3>
-                                    <div className="space-y-3">
-                                        <div className="p-3 rounded-2xl bg-slate-50 border border-slate-100">
-                                            <div className="text-[10px] text-slate-400 font-bold uppercase">ID do Caso</div>
-                                            <div className="text-xs font-mono text-slate-700 mt-1 truncate">{id}</div>
+                            <div className="w-full lg:w-[320px] space-y-4">
+                                <div className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm space-y-6">
+                                    <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest">Informações da Campanha</h3>
+                                    
+                                    <div className="space-y-4">
+                                        <div className="space-y-2">
+                                            <Label className="text-[10px] font-bold text-slate-500 uppercase px-1">Responsável</Label>
+                                            <Select 
+                                                value={c.assigned_user_id || "__none__"} 
+                                                onValueChange={async (v) => {
+                                                    const val = v === "__none__" ? null : v;
+                                                    await supabase.from("cases").update({ assigned_user_id: val }).eq("id", id);
+                                                    caseQ.refetch();
+                                                    showSuccess("Responsável atualizado");
+                                                }}
+                                            >
+                                                <SelectTrigger className="h-11 rounded-2xl border-slate-100 bg-slate-50/50">
+                                                    <SelectValue placeholder="Selecionar responsável" />
+                                                </SelectTrigger>
+                                                <SelectContent className="rounded-xl">
+                                                    <SelectItem value="__none__">Sem responsável</SelectItem>
+                                                    {tenantUsersQ.data?.map(u => (
+                                                        <SelectItem key={u.user_id} value={u.user_id}>{u.display_name || u.email}</SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
                                         </div>
-                                        <div className="p-3 rounded-2xl bg-slate-50 border border-slate-100">
-                                            <div className="text-[10px] text-slate-400 font-bold uppercase">Criado em</div>
-                                            <div className="text-xs font-semibold text-slate-700 mt-1">
-                                                {new Date(c.created_at).toLocaleDateString()}
+
+                                        <div className="space-y-2">
+                                            <Label className="text-[10px] font-bold text-slate-500 uppercase px-1">Prazo Final da Campanha</Label>
+                                            <Input 
+                                                type="date" 
+                                                value={meta.due_at || ""} 
+                                                onChange={(e) => {
+                                                    const newMeta = { ...meta, due_at: e.target.value };
+                                                    setMeta(newMeta);
+                                                    handleSaveMainCard(newMeta);
+                                                }}
+                                                className="h-11 rounded-2xl border-slate-100 bg-slate-50/50" 
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div className="pt-4 border-t border-slate-50 space-y-3">
+                                        <div className="p-3 rounded-2xl bg-slate-50/50 border border-slate-100/50">
+                                            <div className="text-[10px] text-slate-400 font-bold uppercase">ID do Caso</div>
+                                            <div className="text-[10px] font-mono text-slate-400 mt-1 truncate">{id}</div>
+                                        </div>
+                                        <div className="p-3 rounded-2xl bg-slate-50/50 border border-slate-100/50">
+                                            <div className="text-[10px] text-slate-400 font-bold uppercase">Início da Jornada</div>
+                                            <div className="text-xs font-semibold text-slate-600 mt-1">
+                                                {new Date(c.created_at).toLocaleDateString("pt-BR", { day: '2-digit', month: 'long', year: 'numeric' })}
                                             </div>
                                         </div>
                                     </div>
                                 </div>
-                                {id && <div className="h-[600px] overflow-hidden rounded-[28px] border border-slate-200 bg-white/50 shadow-sm"><WhatsAppConversation caseId={id} className="h-full" /></div>}
                             </div>
                         </div>
                     </Card>
