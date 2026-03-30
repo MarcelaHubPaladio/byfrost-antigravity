@@ -54,7 +54,9 @@ import {
     ExternalLink,
     MoreHorizontal,
     Share2,
-    Lock
+    Lock,
+    Upload,
+    Paperclip
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { showError, showSuccess } from "@/utils/toast";
@@ -182,7 +184,7 @@ export default function MktTechaCase() {
         }
     };
 
-    const copyShareLink = async (type: 'approve' | 'summary') => {
+    const copyShareLink = async (type: 'approve' | 'summary' | 'planning') => {
         let token = caseQ.data?.share_token;
         if (!token) {
             token = await generateShareToken();
@@ -190,11 +192,20 @@ export default function MktTechaCase() {
         if (!token) return;
 
         const baseUrl = window.location.origin;
-        const path = type === 'approve' ? 'approve' : 'summary';
-        const url = `${baseUrl}/public/mkt-techa/${path}/${token}`;
+        let path = type === 'summary' ? 'summary' : 'approve';
+        let url = `${baseUrl}/public/mkt-techa/${path}/${token}`;
+        
+        if (type === 'planning') {
+            url += '?mode=planning';
+        }
 
         await navigator.clipboard.writeText(url);
-        showSuccess(`Link de ${type === 'approve' ? 'aprovação' : 'resumo'} copiado!`);
+        
+        let label = 'link de aprovação';
+        if (type === 'summary') label = 'link de resumo';
+        if (type === 'planning') label = 'link de aprovação do planejamento';
+        
+        showSuccess(`${label.charAt(0).toUpperCase() + label.slice(1)} copiado!`);
     };
 
     const states = useMemo(() => {
@@ -376,6 +387,39 @@ export default function MktTechaCase() {
         current[field] = value;
         stageData[st] = current;
         setMeta({ ...meta, stage_data: stageData });
+    };
+
+    const handleFileUpload = async (st: string, type: string, file: File) => {
+        if (!id || !activeTenantId) return;
+        try {
+            const fileExt = file.name.split('.').pop();
+            const filePath = `${activeTenantId}/${id}/${st}/${type}-${Date.now()}.${fileExt}`;
+            
+            const { error: uploadError } = await supabase.storage
+                .from('cases')
+                .upload(filePath, file);
+
+            if (uploadError) throw uploadError;
+
+            const { data: { publicUrl } } = supabase.storage
+                .from('cases')
+                .getPublicUrl(filePath);
+
+            const stageData = { ...(meta.stage_data || {}) };
+            const current = { ...(stageData[st] || {}) };
+            const evidences = { ...(current.evidences || {}) };
+            const list = [...(evidences[type] || [])];
+            
+            list.push({ name: file.name, url: publicUrl });
+            evidences[type] = list;
+            current.evidences = evidences;
+            stageData[st] = current;
+            
+            setMeta({ ...meta, stage_data: stageData });
+            showSuccess(`Arquivo "${file.name}" anexado com sucesso!`);
+        } catch (e: any) {
+            showError(`Erro no upload: ${e.message}`);
+        }
     };
 
     const toggleChannel = (channel: string) => {
@@ -599,84 +643,118 @@ export default function MktTechaCase() {
 
                                                                 {st === "planejamento" && (
                                                                     <div className="space-y-8">
-                                                                        <div className="space-y-4">
+                                                                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-1 -mb-4">
+                                                                            <div>
+                                                                                <h4 className="text-sm font-black text-slate-800 tracking-tight">Detalhamento Estratégico</h4>
+                                                                                <p className="text-[10px] text-slate-500 font-medium">Configure a mensagem, cronograma e anexe evidências.</p>
+                                                                            </div>
+                                                                            <div className="flex items-center gap-2">
+                                                                                {meta.stage_data?.planejamento?.approved_at ? (
+                                                                                    <Badge className="bg-emerald-500/10 text-emerald-600 border-emerald-100 px-3 py-1.5 rounded-xl flex items-center gap-2 border shadow-sm">
+                                                                                        <CheckCircle2 className="h-3.5 w-3.5" />
+                                                                                        <span className="text-[10px] font-black uppercase tracking-tight">Planejamento Aprovado pelo Cliente</span>
+                                                                                    </Badge>
+                                                                                ) : (
+                                                                                    <Button 
+                                                                                        variant="outline" 
+                                                                                        onClick={() => copyShareLink('planning')}
+                                                                                        className="rounded-xl h-9 text-[10px] font-black gap-2 border-indigo-100 text-indigo-600 hover:bg-indigo-50 hover:border-indigo-200 transition-all shadow-sm"
+                                                                                    >
+                                                                                        <Share2 className="h-4 w-4" /> COPIAR LINK DE APROVAÇÃO ESTRATÉGICA
+                                                                                    </Button>
+                                                                                )}
+                                                                            </div>
+                                                                        </div>
+
+                                                                        <div className="space-y-6 pt-4">
                                                                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                                                                 <div className="space-y-2">
-                                                                                    <Label className="text-[10px] font-bold text-slate-500 uppercase px-1">Mensagem Central</Label>
+                                                                                    <Label className="text-[10px] font-bold text-slate-500 uppercase px-1">Início da Campanha</Label>
                                                                                     <Input 
-                                                                                        value={meta.stage_data?.planejamento?.mensagem_central || ""} 
-                                                                                        onChange={(e) => updateStageData("planejamento", "mensagem_central", e.target.value)}
-                                                                                        className="h-11 rounded-2xl" placeholder="Slogan ou ideia central"
+                                                                                        type="date"
+                                                                                        value={meta.stage_data?.planejamento?.start_date || ""} 
+                                                                                        onChange={(e) => updateStageData("planejamento", "start_date", e.target.value)}
+                                                                                        className="h-11 rounded-2xl font-medium"
                                                                                     />
                                                                                 </div>
                                                                                 <div className="space-y-2">
-                                                                                    <Label className="text-[10px] font-bold text-slate-500 uppercase px-1">Duração</Label>
+                                                                                    <Label className="text-[10px] font-bold text-slate-500 uppercase px-1">Fim da Campanha</Label>
                                                                                     <Input 
-                                                                                        value={meta.stage_data?.planejamento?.duracao || ""} 
-                                                                                        onChange={(e) => updateStageData("planejamento", "duracao", e.target.value)}
-                                                                                        className="h-11 rounded-2xl" placeholder="Ex: 15 dias"
+                                                                                        type="date"
+                                                                                        value={meta.stage_data?.planejamento?.end_date || ""} 
+                                                                                        onChange={(e) => updateStageData("planejamento", "end_date", e.target.value)}
+                                                                                        className="h-11 rounded-2xl font-medium"
                                                                                     />
                                                                                 </div>
                                                                             </div>
-                                                                                <div className="space-y-4">
-                                                                                    <Label className="text-[10px] font-black text-slate-500 uppercase px-1 tracking-widest">Estratégia de Canais</Label>
-                                                                                    <div className="flex flex-wrap gap-2">
-                                                                                        {allAvailableChannels.map(ch => {
-                                                                                            const isSelected = (meta.selected_channels || []).includes(ch);
-                                                                                            return (
-                                                                                                <Badge 
-                                                                                                    key={ch}
-                                                                                                    onClick={() => toggleChannel(ch)}
-                                                                                                    className={cn(
-                                                                                                        "px-4 py-2 rounded-2xl cursor-pointer transition-all border-2 text-[11px] font-bold",
-                                                                                                        isSelected 
-                                                                                                            ? "bg-indigo-600 border-indigo-600 text-white shadow-lg shadow-indigo-100" 
-                                                                                                            : "bg-white border-slate-100 text-slate-500 hover:border-indigo-200 hover:text-indigo-600"
-                                                                                                    )}
-                                                                                                >
-                                                                                                    {ch.toUpperCase()}
-                                                                                                </Badge>
-                                                                                            );
-                                                                                        })}
-                                                                                        {isAddingChannel ? (
-                                                                                            <div className="flex items-center gap-2 animate-in slide-in-from-left-2 duration-300">
-                                                                                                <Input 
-                                                                                                    autoFocus
-                                                                                                    value={newChannelName}
-                                                                                                    onChange={(e) => setNewChannelName(e.target.value)}
-                                                                                                    onKeyDown={(e) => e.key === 'Enter' && addCustomChannel(newChannelName)}
-                                                                                                    className="h-9 w-32 rounded-xl text-[10px]"
-                                                                                                    placeholder="Nome do canal..."
-                                                                                                />
-                                                                                                <Button 
-                                                                                                    size="sm" variant="ghost" className="h-9 w-9 rounded-xl text-green-600 hover:bg-green-50"
-                                                                                                    onClick={() => addCustomChannel(newChannelName)}
-                                                                                                >
-                                                                                                    <Plus className="h-4 w-4" />
-                                                                                                </Button>
-                                                                                                <Button 
-                                                                                                    size="sm" variant="ghost" className="h-9 w-9 rounded-xl text-slate-400"
-                                                                                                    onClick={() => setIsAddingChannel(false)}
-                                                                                                >
-                                                                                                    <RefreshCw className="h-3 w-3" />
-                                                                                                </Button>
-                                                                                            </div>
-                                                                                        ) : (
+                                                                            <div className="space-y-2">
+                                                                                <Label className="text-[10px] font-bold text-slate-500 uppercase px-1">Mensagem Central</Label>
+                                                                                <Textarea 
+                                                                                    value={meta.stage_data?.planejamento?.mensagem_central || ""} 
+                                                                                    onChange={(e) => updateStageData("planejamento", "mensagem_central", e.target.value)}
+                                                                                    className="rounded-2xl min-h-[80px]" placeholder="Slogan ou ideia central que guia a campanha..."
+                                                                                />
+                                                                            </div>
+
+                                                                            <div className="space-y-4">
+                                                                                <Label className="text-[10px] font-black text-slate-500 uppercase px-1 tracking-widest">Estratégia de Canais</Label>
+                                                                                <div className="flex flex-wrap gap-2">
+                                                                                    {allAvailableChannels.map(ch => {
+                                                                                        const isSelected = (meta.selected_channels || []).includes(ch);
+                                                                                        return (
                                                                                             <Badge 
-                                                                                                onClick={() => setIsAddingChannel(true)}
-                                                                                                className="px-4 py-2 rounded-2xl cursor-pointer transition-all border-2 border-dashed border-slate-200 bg-slate-50/30 text-slate-400 hover:border-indigo-300 hover:text-indigo-600 font-bold text-[11px]"
+                                                                                                key={ch}
+                                                                                                onClick={() => toggleChannel(ch)}
+                                                                                                className={cn(
+                                                                                                    "px-4 py-2 rounded-2xl cursor-pointer transition-all border-2 text-[11px] font-bold",
+                                                                                                    isSelected 
+                                                                                                        ? "bg-indigo-600 border-indigo-600 text-white shadow-lg shadow-indigo-100" 
+                                                                                                        : "bg-white border-slate-100 text-slate-500 hover:border-indigo-200 hover:text-indigo-600"
+                                                                                                )}
                                                                                             >
-                                                                                                <Plus className="h-3 w-3 mr-2" /> NOVO CANAL
+                                                                                                {ch.toUpperCase()}
                                                                                             </Badge>
-                                                                                        )}
-                                                                                    </div>
-                                                                                    {/* Hidden input to maintain back-compat or textual reference if needed */}
-                                                                                    <input 
-                                                                                        type="hidden" 
-                                                                                        value={(meta.selected_channels || []).join(", ")} 
-                                                                                        onChange={() => {}}
-                                                                                    />
+                                                                                        );
+                                                                                    })}
+                                                                                    {isAddingChannel ? (
+                                                                                        <div className="flex items-center gap-2 animate-in slide-in-from-left-2 duration-300">
+                                                                                            <Input 
+                                                                                                autoFocus
+                                                                                                value={newChannelName}
+                                                                                                onChange={(e) => setNewChannelName(e.target.value)}
+                                                                                                onKeyDown={(e) => e.key === 'Enter' && addCustomChannel(newChannelName)}
+                                                                                                className="h-9 w-32 rounded-xl text-[10px]"
+                                                                                                placeholder="Nome do canal..."
+                                                                                            />
+                                                                                            <Button 
+                                                                                                size="sm" variant="ghost" className="h-9 w-9 rounded-xl text-green-600 hover:bg-green-50"
+                                                                                                onClick={() => addCustomChannel(newChannelName)}
+                                                                                            >
+                                                                                                <Plus className="h-4 w-4" />
+                                                                                            </Button>
+                                                                                            <Button 
+                                                                                                size="sm" variant="ghost" className="h-9 w-9 rounded-xl text-slate-400"
+                                                                                                onClick={() => setIsAddingChannel(false)}
+                                                                                            >
+                                                                                                <RefreshCw className="h-3 w-3" />
+                                                                                            </Button>
+                                                                                        </div>
+                                                                                    ) : (
+                                                                                        <Badge 
+                                                                                            onClick={() => setIsAddingChannel(true)}
+                                                                                            className="px-4 py-2 rounded-2xl cursor-pointer transition-all border-2 border-dashed border-slate-200 bg-slate-50/30 text-slate-400 hover:border-indigo-300 hover:text-indigo-600 font-bold text-[11px]"
+                                                                                        >
+                                                                                            <Plus className="h-3 w-3 mr-2" /> NOVO CANAL
+                                                                                        </Badge>
+                                                                                    )}
                                                                                 </div>
+                                                                                <input 
+                                                                                    type="hidden" 
+                                                                                    value={(meta.selected_channels || []).join(", ")} 
+                                                                                    onChange={() => {}}
+                                                                                />
+                                                                            </div>
+
                                                                             <div className="space-y-2">
                                                                                 <Label className="text-[10px] font-bold text-slate-500 uppercase px-1">Objetivos Estratégicos</Label>
                                                                                 <Textarea 
@@ -684,6 +762,62 @@ export default function MktTechaCase() {
                                                                                     onChange={(e) => updateStageData("planejamento", "objetivo", e.target.value)}
                                                                                     className="rounded-2xl min-h-[100px]" placeholder="Defina o que se espera alcançar..."
                                                                                 />
+                                                                            </div>
+
+                                                                            {/* Evidências Técnicas */}
+                                                                            <div className="space-y-4 pt-4">
+                                                                                <Label className="text-[10px] font-black tracking-widest uppercase text-slate-400 px-1">Evidências Técnicas (ERP / CRM)</Label>
+                                                                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                                                                                    <div className="p-4 rounded-3xl border border-slate-100 bg-slate-50/30 space-y-4">
+                                                                                        <div className="flex items-center justify-between">
+                                                                                            <span className="text-[11px] font-bold text-slate-700">Evidência ERP</span>
+                                                                                            <label className="cursor-pointer">
+                                                                                                <input 
+                                                                                                    type="file" className="hidden" 
+                                                                                                    onChange={(e) => e.target.files?.[0] && handleFileUpload("planejamento", "erp", e.target.files[0])}
+                                                                                                />
+                                                                                                <div className="h-8 w-8 rounded-xl bg-white border border-slate-100 flex items-center justify-center text-indigo-600 hover:bg-slate-50 transition-colors shadow-sm">
+                                                                                                    <Upload className="h-4 w-4" />
+                                                                                                </div>
+                                                                                            </label>
+                                                                                        </div>
+                                                                                        <div className="space-y-2">
+                                                                                            {(meta.stage_data?.planejamento?.evidences?.erp || []).map((f: any, i: number) => (
+                                                                                                <a key={i} href={f.url} target="_blank" className="flex items-center gap-2 p-2 rounded-xl bg-white border border-slate-100 text-[10px] font-medium text-slate-600 hover:text-indigo-600 truncate group">
+                                                                                                    <Paperclip className="h-3 w-3 shrink-0" /> {f.name}
+                                                                                                </a>
+                                                                                            ))}
+                                                                                            {!(meta.stage_data?.planejamento?.evidences?.erp?.length) && (
+                                                                                                <p className="text-[9px] text-slate-400 italic">Nenhum documento ERP anexado.</p>
+                                                                                            )}
+                                                                                        </div>
+                                                                                    </div>
+
+                                                                                    <div className="p-4 rounded-3xl border border-slate-100 bg-slate-50/30 space-y-4">
+                                                                                        <div className="flex items-center justify-between">
+                                                                                            <span className="text-[11px] font-bold text-slate-700">Evidência CRM</span>
+                                                                                            <label className="cursor-pointer">
+                                                                                                <input 
+                                                                                                    type="file" className="hidden" 
+                                                                                                    onChange={(e) => e.target.files?.[0] && handleFileUpload("planejamento", "crm", e.target.files[0])}
+                                                                                                />
+                                                                                                <div className="h-8 w-8 rounded-xl bg-white border border-slate-100 flex items-center justify-center text-indigo-600 hover:bg-slate-50 transition-colors shadow-sm">
+                                                                                                    <Upload className="h-4 w-4" />
+                                                                                                </div>
+                                                                                            </label>
+                                                                                        </div>
+                                                                                        <div className="space-y-2">
+                                                                                            {(meta.stage_data?.planejamento?.evidences?.crm || []).map((f: any, i: number) => (
+                                                                                                <a key={i} href={f.url} target="_blank" className="flex items-center gap-2 p-2 rounded-xl bg-white border border-slate-100 text-[10px] font-medium text-slate-600 hover:text-indigo-600 truncate">
+                                                                                                    <Paperclip className="h-3 w-3 shrink-0" /> {f.name}
+                                                                                                </a>
+                                                                                            ))}
+                                                                                            {!(meta.stage_data?.planejamento?.evidences?.crm?.length) && (
+                                                                                                <p className="text-[9px] text-slate-400 italic">Nenhum documento CRM anexado.</p>
+                                                                                            )}
+                                                                                        </div>
+                                                                                    </div>
+                                                                                </div>
                                                                             </div>
                                                                         </div>
 

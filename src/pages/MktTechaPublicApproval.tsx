@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useSearchParams } from "react-router-dom";
 import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -13,13 +13,26 @@ import {
     Layers,
     FileImage,
     Video,
-    Smartphone
+    Smartphone,
+    Calendar,
+    Target,
+    Rocket,
+    FileText,
+    Check,
+    Download,
+    ExternalLink,
+    Hash
 } from "lucide-react";
 import { showSuccess, showError } from "@/utils/toast";
 import { cn } from "@/lib/utils";
+import { format } from "date-fns";
+import { ptBR } from "date-fns/locale";
 
 export default function MktTechaPublicApproval() {
     const { id } = useParams();
+    const [searchParams] = useSearchParams();
+    const isPlanningMode = searchParams.get("mode") === "planning";
+    
     const [loading, setLoading] = useState(true);
     const [acting, setActing] = useState<string | null>(null);
     const [campaign, setCampaign] = useState<any>(null);
@@ -69,6 +82,30 @@ export default function MktTechaPublicApproval() {
         }
     };
 
+    const handleApprovePlanning = async () => {
+        if (!id) return;
+        setActing('planning');
+        try {
+            // Trying a potential RPC for planning approval
+            const { data, error } = await supabase.rpc("approve_mkt_techa_planning", { 
+                p_token: id
+            });
+            
+            if (error) {
+                // If RPC doesn't exist, we fallback to a message or a more generic update if allowed
+                console.error("RPC Error:", error);
+                showError("A função de aprovação estratégica ainda não foi configurada no servidor.");
+            } else {
+                showSuccess("Planejamento Estratégico Aprovado! 🚀");
+                fetchCampaign();
+            }
+        } catch (e) {
+            showError("Falha na aprovação do planejamento.");
+        } finally {
+            setActing(null);
+        }
+    };
+
     if (loading) {
         return (
             <div className="min-h-screen bg-slate-950 flex items-center justify-center p-6">
@@ -104,22 +141,182 @@ export default function MktTechaPublicApproval() {
             <header className="bg-slate-950/50 backdrop-blur-xl border-b border-white/5 px-6 py-10 text-center sticky top-0 z-20 shadow-2xl">
                 <div className="mx-auto max-w-4xl">
                     <Badge variant="outline" className="mb-4 bg-indigo-500/10 text-indigo-400 border-indigo-500/20 px-3 py-1 text-[10px] uppercase font-black tracking-widest rounded-full">
-                        Portal de Aprovação • MKT Técha
+                        {isPlanningMode ? "Aprovação Estratégica" : "Portal de Aprovação"} • MKT Técha
                     </Badge>
                     <h1 className="text-3xl font-black text-white tracking-tight sm:text-4xl">
                         {campaign.title || "Campanha Digital"}
                     </h1>
                     <div className="mt-4 flex items-center justify-center gap-4 text-xs font-bold text-slate-400">
-                        <div className="flex items-center gap-1.5">
-                            <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
-                            <span>{approvedCount} de {creatives.length} aprovados</span>
-                        </div>
+                        {isPlanningMode ? (
+                            <div className="flex items-center gap-1.5">
+                                <Target className="h-3.5 w-3.5 text-indigo-400" />
+                                <span>Validação do Planejamento e Estratégia</span>
+                            </div>
+                        ) : (
+                            <div className="flex items-center gap-1.5">
+                                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
+                                <span>{approvedCount} de {creatives.length} aprovados</span>
+                            </div>
+                        )}
                     </div>
                 </div>
             </header>
 
             <main className="mx-auto max-w-5xl px-6 py-12">
-                {creatives.length > 0 ? (
+                {isPlanningMode ? (
+                    <div className="space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-700">
+                        {/* Planning Stage UI */}
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                            <Card className="p-8 rounded-[40px] bg-slate-900 border-none shadow-2xl ring-1 ring-white/5 relative overflow-hidden group">
+                                <div className="absolute top-0 right-0 p-8 opacity-5 group-hover:scale-110 transition-transform duration-700">
+                                    <Calendar className="h-24 w-24" />
+                                </div>
+                                <div className="relative z-10 space-y-3">
+                                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">Cronograma</p>
+                                    <div className="space-y-1">
+                                        <div className="text-lg font-black text-white leading-tight">
+                                            {campaign.meta_json?.stage_data?.planejamento?.start_date ? format(new Date(campaign.meta_json.stage_data.planejamento.start_date), "dd/MM/yy", { locale: ptBR }) : "--"}
+                                            <span className="text-slate-600 mx-2">→</span>
+                                            {campaign.meta_json?.stage_data?.planejamento?.end_date ? format(new Date(campaign.meta_json.stage_data.planejamento.end_date), "dd/MM/yy", { locale: ptBR }) : "--"}
+                                        </div>
+                                        <p className="text-[10px] font-medium text-slate-400 uppercase tracking-widest">Período de Ativação</p>
+                                    </div>
+                                </div>
+                            </Card>
+
+                            <Card className="p-8 rounded-[40px] bg-indigo-600 shadow-2xl shadow-indigo-500/20 border-none relative overflow-hidden group md:col-span-2">
+                                <div className="absolute top-0 right-0 p-8 opacity-10 group-hover:scale-110 transition-transform duration-700">
+                                    <Rocket className="h-24 w-24" />
+                                </div>
+                                <div className="relative z-10 space-y-3">
+                                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-indigo-200/60">Objetivo Central</p>
+                                    <h3 className="text-2xl font-black text-white leading-tight">
+                                        {campaign.meta_json?.stage_data?.planejamento?.objetivo || "Aceleração de Vendas e Branding"}
+                                    </h3>
+                                </div>
+                            </Card>
+                        </div>
+
+                        <div className="grid grid-cols-1 lg:grid-cols-[1fr_350px] gap-8">
+                            <div className="space-y-8">
+                                <section className="space-y-4">
+                                    <div className="flex items-center gap-3 px-2">
+                                        <div className="h-10 w-10 rounded-2xl bg-slate-900 flex items-center justify-center text-indigo-400 ring-1 ring-white/10">
+                                            <MessageCircle className="h-5 w-5" />
+                                        </div>
+                                        <h2 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">MENSAGEM CENTRAL</h2>
+                                    </div>
+                                    <Card className="rounded-[40px] border-none bg-slate-900 shadow-2xl p-10 ring-1 ring-white/5 leading-relaxed">
+                                        <p className="text-lg font-medium text-slate-200 whitespace-pre-wrap leading-relaxed italic">
+                                            "{campaign.meta_json?.stage_data?.planejamento?.mensagem_central || "Nenhuma mensagem definida."}"
+                                        </p>
+                                    </Card>
+                                </section>
+
+                                <section className="space-y-4">
+                                    <div className="flex items-center gap-3 px-2">
+                                        <div className="h-10 w-10 rounded-2xl bg-slate-900 flex items-center justify-center text-emerald-400 ring-1 ring-white/10">
+                                            <CheckCircle2 className="h-5 w-5" />
+                                        </div>
+                                        <h2 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Canais e Criativos</h2>
+                                    </div>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                        {(campaign.meta_json?.selected_channels || []).map((ch: string) => (
+                                            <div key={ch} className="p-5 rounded-3xl bg-slate-900 ring-1 ring-white/5 flex items-center justify-between group hover:bg-slate-800/50 transition-colors">
+                                                <div className="flex items-center gap-3">
+                                                    <div className="h-10 w-10 rounded-xl bg-slate-800 flex items-center justify-center text-indigo-400">
+                                                        <Hash className="h-4 w-4" />
+                                                    </div>
+                                                    <span className="text-sm font-black text-white uppercase tracking-widest">{ch}</span>
+                                                </div>
+                                                <Badge className="bg-emerald-500/10 text-emerald-500 border-none text-[8px] font-black tracking-widest">ATIVO</Badge>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </section>
+                            </div>
+
+                            <aside className="space-y-8">
+                                <section className="space-y-4">
+                                    <h2 className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] px-2">EVIDÊNCIAS TÉCNICAS</h2>
+                                    <Card className="rounded-[40px] border-none bg-slate-900 shadow-2xl p-8 ring-1 ring-white/5 space-y-6">
+                                        <div className="space-y-4">
+                                            {/* ERP Evidence */}
+                                            <div className="space-y-2">
+                                                <LabelPublic title="EVIDÊNCIA ERP" />
+                                                {campaign.meta_json?.stage_data?.planejamento?.erp_evidence_url ? (
+                                                    <a 
+                                                        href={campaign.meta_json.stage_data.planejamento.erp_evidence_url} 
+                                                        target="_blank" 
+                                                        rel="noopener noreferrer"
+                                                        className="flex items-center justify-between p-4 bg-slate-800/50 rounded-2xl group hover:bg-slate-800 transition-all border border-white/5"
+                                                    >
+                                                        <div className="flex items-center gap-3">
+                                                            <FileText className="h-4 w-4 text-slate-400" />
+                                                            <span className="text-[11px] font-bold text-slate-300">Documento ERP</span>
+                                                        </div>
+                                                        <Download className="h-3.5 w-3.5 text-indigo-400 opacity-0 group-hover:opacity-100 transition-all" />
+                                                    </a>
+                                                ) : (
+                                                    <p className="text-[10px] italic text-slate-600 px-1">Nenhuma evidência ERP anexada.</p>
+                                                )}
+                                            </div>
+
+                                            {/* CRM Evidence */}
+                                            <div className="space-y-2">
+                                                <LabelPublic title="EVIDÊNCIA CRM" />
+                                                {campaign.meta_json?.stage_data?.planejamento?.crm_evidence_url ? (
+                                                    <a 
+                                                        href={campaign.meta_json.stage_data.planejamento.crm_evidence_url} 
+                                                        target="_blank" 
+                                                        rel="noopener noreferrer"
+                                                        className="flex items-center justify-between p-4 bg-slate-800/50 rounded-2xl group hover:bg-slate-800 transition-all border border-white/5"
+                                                    >
+                                                        <div className="flex items-center gap-3">
+                                                            <FileText className="h-4 w-4 text-slate-400" />
+                                                            <span className="text-[11px] font-bold text-slate-300">Documento CRM</span>
+                                                        </div>
+                                                        <Download className="h-3.5 w-3.5 text-indigo-400 opacity-0 group-hover:opacity-100 transition-all" />
+                                                    </a>
+                                                ) : (
+                                                    <p className="text-[10px] italic text-slate-600 px-1">Nenhuma evidência CRM anexada.</p>
+                                                )}
+                                            </div>
+                                        </div>
+
+                                        <div className="pt-4 border-t border-white/5">
+                                            <div className="flex items-center gap-2 p-4 bg-indigo-500/5 rounded-2xl border border-indigo-500/10 text-indigo-400">
+                                                <AlertCircle className="h-4 w-4 shrink-0" />
+                                                <p className="text-[9px] font-medium leading-relaxed">
+                                                    As evidências técnicas comprovam a viabilidade operacional e comercial da estratégia proposta.
+                                                </p>
+                                            </div>
+                                        </div>
+                                    </Card>
+                                </section>
+
+                                <div className="space-y-4">
+                                    {campaign.meta_json?.stage_data?.planejamento?.approved_at ? (
+                                        <div className="w-full h-16 rounded-[24px] bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center gap-3">
+                                            <Check className="h-5 w-5 text-emerald-500" />
+                                            <span className="text-xs font-black text-emerald-500 uppercase tracking-widest leading-none pt-0.5">Planejamento Aprovado</span>
+                                        </div>
+                                    ) : (
+                                        <Button 
+                                            onClick={handleApprovePlanning}
+                                            disabled={acting === 'planning'}
+                                            className="w-full h-16 rounded-[24px] bg-indigo-600 hover:bg-indigo-700 text-white font-black text-sm shadow-2xl shadow-indigo-500/20 transition-all active:scale-95 gap-3"
+                                        >
+                                            {acting === 'planning' ? <Loader2 className="h-5 w-5 animate-spin" /> : <CheckCircle2 className="h-5 w-5" />}
+                                            APROVAR ESTRATÉGIA AGORA 🚀
+                                        </Button>
+                                    )}
+                                </div>
+                            </aside>
+                        </div>
+                    </div>
+                ) : (
+                    creatives.length > 0 ? (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
                         {creatives.map((cr: any) => (
                             <Card 
@@ -205,13 +402,17 @@ export default function MktTechaPublicApproval() {
                         <Layers className="h-12 w-12 text-slate-800 mx-auto" />
                         <p className="text-slate-500 font-medium italic">Nenhum criativo disponível para aprovação no momento.</p>
                     </div>
-                )}
+                )
+            )}
             </main>
 
             <footer className="mt-24 border-t border-white/5 py-12 text-center">
                 <div className="mx-auto max-w-2xl px-6 space-y-6">
-                    <p className="text-[10px] text-slate-500 uppercase font-black tracking-widest leading-relaxed">
-                        Ao aprovar os criativos, você autoriza a distribuição imediata nos canais vinculados.
+                    <p className="text-[10px] text-slate-500 uppercase font-black tracking-widest leading-relaxed px-10">
+                        {isPlanningMode 
+                            ? "A validação do planejamento inicia o processo oficial de produção de criativos." 
+                            : "Ao aprovar os criativos, você autoriza a distribuição imediata nos canais vinculados."
+                        }
                     </p>
                     <div className="flex items-center justify-center gap-6 pt-4">
                          <div className="text-[10px] font-bold text-slate-700 uppercase tracking-[0.3em]">Powered by MKT Técha</div>
@@ -220,4 +421,29 @@ export default function MktTechaPublicApproval() {
             </footer>
         </div>
     );
+}
+
+function LabelPublic({ title }: { title: string }) {
+    return (
+        <div className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1.5 px-1">{title}</div>
+    );
+}
+
+function MessageCircle(props: any) {
+    return (
+        <svg
+            {...props}
+            xmlns="http://www.w3.org/2000/svg"
+            width="24"
+            height="24"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+        >
+            <path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z" />
+        </svg>
+    )
 }
