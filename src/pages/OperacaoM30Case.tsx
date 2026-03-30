@@ -45,7 +45,24 @@ import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Save, ListChecks, FileText, CheckCircle2, Clock, Trash2 as TrashIcon, Pencil, PlusCircle, X, Check as CheckIcon } from "lucide-react";
+import { Save, ListChecks, FileText, CheckCircle2, Clock, Trash2 as TrashIcon, Pencil, PlusCircle, X, Check as CheckIcon, GripVertical } from "lucide-react";
+import {
+    DndContext,
+    closestCenter,
+    KeyboardSensor,
+    PointerSensor,
+    useSensor,
+    useSensors,
+    DragEndEvent,
+} from "@dnd-kit/core";
+import {
+    arrayMove,
+    SortableContext,
+    sortableKeyboardCoordinates,
+    verticalListSortingStrategy,
+    useSortable,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 
 type CaseRow = {
     id: string;
@@ -77,8 +94,6 @@ function SubtaskItemContent({ st, idx, caseMeta, caseId, onRefetch, caseState, c
     const [saving, setSaving] = useState(false);
     const [lastSaved, setLastSaved] = useState<Date | null>(null);
 
-    // Sincronizar estado local quando a prop 'st' mudar (ex: após refetch do pai)
-
     const handleSave = async () => {
         setSaving(true);
         try {
@@ -94,16 +109,9 @@ function SubtaskItemContent({ st, idx, caseMeta, caseId, onRefetch, caseState, c
                 script_items: scriptItems
             };
 
-            const { error } = await supabase
-                .from("cases")
-                .update({
-                    meta_json: { ...caseMeta, pending_subtasks: currentSubtasks }
-                })
-                .eq("id", caseId);
-
-            if (error) throw error;
-            setLastSaved(new Date());
-            onRefetch(); // Notificar o pai para recarregar os dados
+            await supabase.from("cases").update({
+                meta_json: { ...caseMeta, pending_subtasks: currentSubtasks }
+            }).eq("id", caseId);
 
             // Log Timeline
             await supabase.from("timeline_events").insert({
@@ -111,23 +119,134 @@ function SubtaskItemContent({ st, idx, caseMeta, caseId, onRefetch, caseState, c
                 case_id: caseId,
                 event_type: "subtask_updated",
                 actor_type: "admin",
-                actor_id: user?.id ?? null,
-                message: `Subtarefa atualizada: ${title}`,
-                meta_json: { subtask_idx: idx },
+                actor_id: (user as any)?.id ?? null,
+                message: `Subtarefa ${title} atualizada (briefing/roteiro/checklist).`,
+                meta_json: {},
                 occurred_at: new Date().toISOString(),
             });
 
-            // showSuccess("Alterações salvas.");
+            setLastSaved(new Date());
+            onRefetch();
+            showSuccess("Alterações salvas.");
         } catch (e: any) {
-            showError("Erro ao salvar: " + e.message);
+            showError("Erro ao salvar.");
         } finally {
             setSaving(false);
         }
     };
 
+    const sensors = useSensors(
+        useSensor(PointerSensor, {
+            activationConstraint: {
+                distance: 8,
+            },
+        }),
+        useSensor(KeyboardSensor, {
+            coordinateGetter: sortableKeyboardCoordinates,
+        })
+    );
+
+    const handleDragEnd = (event: DragEndEvent) => {
+        const { active, over } = event;
+
+        if (over && active.id !== over.id) {
+            const oldIndex = scriptItems.findIndex((it) => it.id === active.id);
+            const newIndex = scriptItems.findIndex((it) => it.id === over.id);
+            const next = arrayMove(scriptItems, oldIndex, newIndex);
+            setScriptItems(next);
+        }
+    };
+
+    function SortableChecklistItem({ it, editingId, editingText, setEditingText, saveEdit, cancelEdit, startEditing, toggleItem, removeItem }: any) {
+        const {
+            attributes,
+            listeners,
+            setNodeRef,
+            transform,
+            transition,
+            isDragging,
+        } = useSortable({ id: it.id });
+
+        const style = {
+            transform: CSS.Transform.toString(transform),
+            transition,
+            zIndex: isDragging ? 50 : undefined,
+        };
+
+        return (
+            <div
+                ref={setNodeRef}
+                style={style}
+                className={cn(
+                    "flex items-start gap-4 p-4 rounded-2xl border border-slate-100 bg-white transition-all group",
+                    isDragging ? "opacity-50 shadow-xl border-indigo-200 z-50 bg-slate-50" : "hover:border-slate-200"
+                )}
+            >
+                <div 
+                    {...attributes} 
+                    {...listeners}
+                    className="mt-1 cursor-grab active:cursor-grabbing p-1 text-slate-300 hover:text-indigo-400 opacity-0 group-hover:opacity-100 transition-opacity"
+                >
+                    <GripVertical className="h-4 w-4" />
+                </div>
+
+                <div className="flex-1 space-y-3">
+                    <div className="flex items-start justify-between gap-4">
+                        <div className="flex items-start gap-3 flex-1">
+                            <Checkbox 
+                                id={`check-${it.id}`}
+                                checked={it.checked}
+                                onCheckedChange={() => toggleItem(it.id)}
+                                className="mt-1 rounded-full w-5 h-5 border-2 data-[state=checked]:bg-indigo-600 data-[state=checked]:border-indigo-600"
+                            />
+                            {editingId === it.id ? (
+                                <Textarea 
+                                    value={editingText}
+                                    onChange={(e) => setEditingText(e.target.value)}
+                                    className="min-h-[80px] text-sm focus:ring-indigo-600 rounded-xl"
+                                    autoFocus
+                                />
+                            ) : (
+                                <label 
+                                    htmlFor={`check-${it.id}`} 
+                                    className={cn(
+                                        "text-sm font-medium leading-relaxed cursor-pointer transition-colors pt-0.5",
+                                        it.checked ? "text-slate-400 line-through" : "text-slate-700 hover:text-slate-900"
+                                    )}
+                                >
+                                    {it.text}
+                                </label>
+                            )}
+                        </div>
+                        <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                            {editingId === it.id ? (
+                                <>
+                                    <Button size="icon" variant="ghost" className="h-8 w-8 text-emerald-600 hover:bg-emerald-50 rounded-full" onClick={saveEdit}>
+                                        <CheckIcon className="h-4 w-4" />
+                                    </Button>
+                                    <Button size="icon" variant="ghost" className="h-8 w-8 text-slate-400 hover:bg-slate-100 rounded-full" onClick={cancelEdit}>
+                                        <X className="h-4 w-4" />
+                                    </Button>
+                                </>
+                            ) : (
+                                <>
+                                    <Button size="icon" variant="ghost" className="h-8 w-8 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-full" onClick={() => startEditing(it)}>
+                                        <Pencil className="h-3.5 w-3.5" />
+                                    </Button>
+                                    <Button size="icon" variant="ghost" className="h-8 w-8 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-full" onClick={() => removeItem(it.id)}>
+                                        <TrashIcon className="h-3.5 w-3.5" />
+                                    </Button>
+                                </>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
     const generateChecklist = async () => {
         if (!scriptRaw.trim()) return;
-        // Divide por quebra de linha e limpa vazios
         const lines = scriptRaw.split("\n").map(l => l.trim()).filter(Boolean);
         const nextItems = lines.map((text, i) => ({
             id: `line-${i}-${Date.now()}`,
@@ -135,20 +254,6 @@ function SubtaskItemContent({ st, idx, caseMeta, caseId, onRefetch, caseState, c
             checked: false
         }));
         setScriptItems(nextItems);
-
-        // Log Timeline
-        if (caseData) {
-            await supabase.from("timeline_events").insert({
-                tenant_id: caseData.tenant_id,
-                case_id: caseId,
-                event_type: "checklist_generated",
-                actor_type: "admin",
-                actor_id: user?.id ?? null,
-                message: `Checklist de gravação gerado para: ${title}`,
-                meta_json: { subtask_idx: idx },
-                occurred_at: new Date().toISOString(),
-            });
-        }
     };
 
     const toggleItem = (itemId: string) => {
@@ -159,17 +264,6 @@ function SubtaskItemContent({ st, idx, caseMeta, caseId, onRefetch, caseState, c
     const removeItem = (itemId: string) => {
         const next = scriptItems.filter(it => it.id !== itemId);
         setScriptItems(next);
-    };
-
-    const addItem = () => {
-        const newItem = {
-            id: `manual-${Date.now()}`,
-            text: "",
-            checked: false
-        };
-        setScriptItems([...scriptItems, newItem]);
-        setEditingId(newItem.id);
-        setEditingText("");
     };
 
     const [editingId, setEditingId] = useState<string | null>(null);
@@ -296,97 +390,61 @@ function SubtaskItemContent({ st, idx, caseMeta, caseId, onRefetch, caseState, c
                         </Button>
                     </div>
 
-                    <div className="space-y-3 pt-4 border-t border-slate-100">
-                        <div className="flex items-center justify-between">
-                            <Label className="text-[10px] font-bold text-slate-500 uppercase flex items-center gap-2">
-                                <ListChecks className="h-3.5 w-3.5" /> Checklist de Gravação
-                            </Label>
+                    <div className="pt-4 border-t border-slate-100">
+                        <div className="flex items-center justify-between mb-4">
+                            <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                                <ListChecks className="h-4 w-4 text-indigo-600" />
+                                CHECKLIST DE GRAVAÇÃO
+                            </h3>
                             <Button 
                                 variant="ghost" 
                                 size="sm" 
-                                className="h-7 text-[10px] font-bold text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 gap-1 rounded-lg"
-                                onClick={addItem}
+                                className="text-indigo-600 hover:bg-indigo-50 font-bold h-8 gap-1.5"
+                                onClick={() => {
+                                    const nextId = `manual-${Date.now()}`;
+                                    setScriptItems([...scriptItems, { id: nextId, text: "", checked: false }]);
+                                    setEditingId(nextId);
+                                    setEditingText("");
+                                }}
                             >
-                                <PlusCircle className="h-3.5 w-3.5" /> Adicionar Ponto
+                                <PlusCircle className="h-4 w-4" />
+                                Adicionar Ponto
                             </Button>
                         </div>
-                        {scriptItems.length > 0 ? (
-                            <div className="space-y-2">
-                                {scriptItems.map((it) => (
-                                    <div 
-                                        key={it.id} 
-                                        className={cn(
-                                            "flex items-start gap-3 p-3 rounded-xl border transition-all group relative",
-                                            it.checked ? "bg-emerald-50 border-emerald-100/50" : "bg-white border-slate-100 hover:border-slate-200"
-                                        )}
-                                    >
-                                        <Checkbox 
-                                            checked={it.checked} 
-                                            onCheckedChange={() => toggleItem(it.id)}
-                                            className="mt-1 rounded-md border-slate-300 data-[state=checked]:bg-emerald-600 data-[state=checked]:border-emerald-600"
+                        
+                        <DndContext
+                            sensors={sensors}
+                            collisionDetection={closestCenter}
+                            onDragEnd={handleDragEnd}
+                        >
+                            <SortableContext 
+                                items={scriptItems.map(i => i.id)}
+                                strategy={verticalListSortingStrategy}
+                            >
+                                <div className="space-y-3">
+                                    {scriptItems.map((it) => (
+                                        <SortableChecklistItem 
+                                            key={it.id}
+                                            it={it}
+                                            editingId={editingId}
+                                            editingText={editingText}
+                                            setEditingText={setEditingText}
+                                            saveEdit={saveEdit}
+                                            cancelEdit={cancelEdit}
+                                            startEditing={startEditing}
+                                            toggleItem={toggleItem}
+                                            removeItem={removeItem}
                                         />
-                                        
-                                        <div className="flex-1 min-w-0 pr-16">
-                                            {editingId === it.id ? (
-                                                <div className="flex flex-col gap-2">
-                                                    <Textarea 
-                                                        autoFocus
-                                                        value={editingText}
-                                                        onChange={(e) => setEditingText(e.target.value)}
-                                                        className="text-xs min-h-[60px] rounded-xl border-slate-200"
-                                                    />
-                                                    <div className="flex items-center gap-2">
-                                                        <Button size="sm" className="h-7 px-3 rounded-lg bg-indigo-600 text-[10px] font-bold gap-1" onClick={saveEdit}>
-                                                            <CheckIcon className="h-3 w-3" /> Salvar
-                                                        </Button>
-                                                        <Button size="sm" variant="ghost" className="h-7 px-3 rounded-lg text-[10px] font-bold gap-1" onClick={cancelEdit}>
-                                                            <X className="h-3 w-3" /> Cancelar
-                                                        </Button>
-                                                    </div>
-                                                </div>
-                                            ) : (
-                                                <span 
-                                                    className={cn(
-                                                        "text-xs leading-relaxed block cursor-pointer",
-                                                        it.checked ? "text-emerald-900/60 line-through font-medium" : "text-slate-700 font-semibold"
-                                                    )}
-                                                    onClick={() => toggleItem(it.id)}
-                                                >
-                                                    {it.text || <em className="text-slate-400 font-normal">Ponto vazio...</em>}
-                                                </span>
-                                            )}
+                                    ))}
+                                    {scriptItems.length === 0 && (
+                                        <div className="py-12 flex flex-col items-center justify-center border-2 border-dashed border-slate-100 rounded-3xl bg-slate-50/50">
+                                            <ListChecks className="h-10 w-10 text-slate-200 mb-3" />
+                                            <p className="text-xs text-slate-400 font-medium">Nenhum item no checklist.</p>
                                         </div>
-
-                                        {!editingId && (
-                                            <div className="absolute right-2 top-2 hidden group-hover:flex items-center gap-1">
-                                                <Button 
-                                                    variant="ghost" 
-                                                    size="sm" 
-                                                    className="h-7 w-7 p-0 rounded-lg text-slate-400 hover:text-indigo-600 hover:bg-white shadow-sm"
-                                                    onClick={(e) => { e.stopPropagation(); startEditing(it); }}
-                                                >
-                                                    <Pencil className="h-3.5 w-3.5" />
-                                                </Button>
-                                                <Button 
-                                                    variant="ghost" 
-                                                    size="sm" 
-                                                    className="h-7 w-7 p-0 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-white shadow-sm"
-                                                    onClick={(e) => { e.stopPropagation(); removeItem(it.id); }}
-                                                >
-                                                    <TrashIcon className="h-3.5 w-3.5" />
-                                                </Button>
-                                            </div>
-                                        )}
-                                    </div>
-                                ))}
-                            </div>
-                        ) : (
-                            <div className="flex flex-col items-center justify-center py-8 px-4 rounded-2xl border border-dashed border-slate-200 bg-slate-50/30 text-center">
-                                <ListChecks className="h-8 w-8 text-slate-300 mb-2" />
-                                <p className="text-[11px] text-slate-500 font-medium">Nenhum item no checklist.</p>
-                                <p className="text-[10px] text-slate-400">Gere a partir do roteiro ou adicione manualmente.</p>
-                            </div>
-                        )}
+                                    )}
+                                </div>
+                            </SortableContext>
+                        </DndContext>
                     </div>
                 </TabsContent>
             </Tabs>
@@ -609,7 +667,7 @@ export default function OperacaoM30Case() {
                 summary_text: st.description || null,
                 customer_entity_id: caseQ.data.customer_entity_id,
                 deliverable_id: caseQ.data.deliverable_id,
-                state: "DECUPAGEM_UPLOAD",
+                state: "decupagem__upload",
                 meta_json: {
                     parent_case_id: id,
                     customer_entity_name: (caseQ.data.meta_json as any)?.customer_entity_name,
@@ -723,7 +781,7 @@ export default function OperacaoM30Case() {
                     customer_entity_id: caseQ.data.customer_entity_id,
                     deliverable_id: caseQ.data.deliverable_id,
                     status: "open",
-                    state: "DECUPAGEM_UPLOAD",
+                    state: "decupagem__upload",
                     meta_json: {
                         parent_case_id: id,
                         customer_entity_name: (caseQ.data.meta_json as any)?.customer_entity_name,
