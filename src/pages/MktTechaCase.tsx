@@ -54,6 +54,7 @@ import {
     ExternalLink,
     MoreHorizontal,
     Share2,
+    Lock
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { showError, showSuccess } from "@/utils/toast";
@@ -374,6 +375,7 @@ export default function MktTechaCase() {
         setMeta({ ...meta, stage_data: stageData });
     };
 
+
     const getChecklistForState = (st: string) => {
         const saved = meta.stage_checklists?.[st];
         if (saved) return saved;
@@ -421,6 +423,7 @@ export default function MktTechaCase() {
 
     const c = caseQ.data!;
     const stateKey = c.state;
+    const currentIndex = STAGES.indexOf(stateKey);
 
     return (
         <RequireAuth>
@@ -495,30 +498,36 @@ export default function MktTechaCase() {
                                             const checklist = getChecklistForState(st);
                                             const label = getStateLabel(journeyQ.data as any, st);
                                             const isCurrent = stateKey === st;
+                                            const stIndex = STAGES.indexOf(st);
+                                            const isLocked = stIndex > currentIndex;
 
                                             return (
                                                 <AccordionItem 
                                                     key={st} 
                                                     value={st} 
+                                                    disabled={isLocked}
                                                     className={cn(
                                                         "rounded-[32px] border px-6 transition-all duration-300",
-                                                        isCurrent ? "bg-white border-indigo-100 shadow-xl shadow-indigo-50/50" : "bg-slate-50/30 border-slate-100 opacity-80 hover:opacity-100"
+                                                        isCurrent ? "bg-white border-indigo-100 shadow-xl shadow-indigo-50/50" : "bg-slate-50/30 border-slate-100 opacity-80",
+                                                        isLocked ? "opacity-40 cursor-not-allowed bg-slate-100/50" : "hover:opacity-100"
                                                     )}
                                                 >
-                                                    <AccordionTrigger className="hover:no-underline group py-6">
+                                                    <AccordionTrigger className={cn("hover:no-underline group py-6", isLocked && "cursor-not-allowed")}>
                                                         <div className="flex items-center gap-4 text-left">
                                                             <div className={cn(
                                                                 "h-10 w-10 rounded-2xl flex items-center justify-center transition-colors shadow-sm",
-                                                                isCurrent ? "bg-indigo-600 text-white shadow-indigo-200" : "bg-white text-slate-400 group-hover:text-indigo-500 border border-slate-100"
+                                                                isCurrent ? "bg-indigo-600 text-white shadow-indigo-200" : "bg-white text-slate-400 group-hover:text-indigo-500 border border-slate-100",
+                                                                isLocked && "bg-slate-100 text-slate-300"
                                                             )}>
-                                                                <Target className="h-5 w-5" />
+                                                                {isLocked ? <Lock className="h-5 w-5" /> : <Target className="h-5 w-5" />}
                                                             </div>
                                                             <div>
                                                                 <div className="flex items-center gap-2">
                                                                     <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Etapa</span>
                                                                     {isCurrent && <Badge className="bg-indigo-50 text-indigo-600 border-none rounded-full h-4 text-[8px] font-black px-2 uppercase">Atual</Badge>}
+                                                                    {isLocked && <Badge className="bg-slate-100 text-slate-400 border-none rounded-full h-4 text-[8px] font-black px-2 uppercase">Bloqueada</Badge>}
                                                                 </div>
-                                                                <h3 className={cn("text-lg font-black tracking-tight", isCurrent ? "text-slate-900" : "text-slate-600")}>
+                                                                <h3 className={cn("text-lg font-black tracking-tight", isCurrent ? "text-slate-900" : isLocked ? "text-slate-400" : "text-slate-600")}>
                                                                     {label}
                                                                 </h3>
                                                             </div>
@@ -558,40 +567,70 @@ export default function MktTechaCase() {
                                                                 )}
 
                                                                 {st === "planejamento" && (
-                                                                    <div className="space-y-4">
-                                                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                                                    <div className="space-y-8">
+                                                                        <div className="space-y-4">
+                                                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                                                                <div className="space-y-2">
+                                                                                    <Label className="text-[10px] font-bold text-slate-500 uppercase px-1">Mensagem Central</Label>
+                                                                                    <Input 
+                                                                                        value={meta.stage_data?.planejamento?.mensagem_central || ""} 
+                                                                                        onChange={(e) => updateStageData("planejamento", "mensagem_central", e.target.value)}
+                                                                                        className="h-11 rounded-2xl" placeholder="Slogan ou ideia central"
+                                                                                    />
+                                                                                </div>
+                                                                                <div className="space-y-2">
+                                                                                    <Label className="text-[10px] font-bold text-slate-500 uppercase px-1">Duração</Label>
+                                                                                    <Input 
+                                                                                        value={meta.stage_data?.planejamento?.duracao || ""} 
+                                                                                        onChange={(e) => updateStageData("planejamento", "duracao", e.target.value)}
+                                                                                        className="h-11 rounded-2xl" placeholder="Ex: 15 dias"
+                                                                                    />
+                                                                                </div>
+                                                                            </div>
                                                                             <div className="space-y-2">
-                                                                                <Label className="text-[10px] font-bold text-slate-500 uppercase px-1">Mensagem Central</Label>
+                                                                                <Label className="text-[10px] font-bold text-slate-500 uppercase px-1">Canais</Label>
                                                                                 <Input 
-                                                                                    value={meta.stage_data?.planejamento?.mensagem_central || ""} 
-                                                                                    onChange={(e) => updateStageData("planejamento", "mensagem_central", e.target.value)}
-                                                                                    className="h-11 rounded-2xl" placeholder="Slogan ou ideia central"
+                                                                                    value={meta.stage_data?.planejamento?.canais || ""} 
+                                                                                    onChange={(e) => updateStageData("planejamento", "canais", e.target.value)}
+                                                                                    className="h-11 rounded-2xl" placeholder="Ex: Instagram, WhatsApp, E-mail"
                                                                                 />
                                                                             </div>
                                                                             <div className="space-y-2">
-                                                                                <Label className="text-[10px] font-bold text-slate-500 uppercase px-1">Duração</Label>
-                                                                                <Input 
-                                                                                    value={meta.stage_data?.planejamento?.duracao || ""} 
-                                                                                    onChange={(e) => updateStageData("planejamento", "duracao", e.target.value)}
-                                                                                    className="h-11 rounded-2xl" placeholder="Ex: 15 dias"
+                                                                                <Label className="text-[10px] font-bold text-slate-500 uppercase px-1">Objetivos Estratégicos</Label>
+                                                                                <Textarea 
+                                                                                    value={meta.stage_data?.planejamento?.objetivo || ""} 
+                                                                                    onChange={(e) => updateStageData("planejamento", "objetivo", e.target.value)}
+                                                                                    className="rounded-2xl min-h-[100px]" placeholder="Defina o que se espera alcançar..."
                                                                                 />
                                                                             </div>
                                                                         </div>
-                                                                        <div className="space-y-2">
-                                                                            <Label className="text-[10px] font-bold text-slate-500 uppercase px-1">Canais</Label>
-                                                                            <Input 
-                                                                                value={meta.stage_data?.planejamento?.canais || ""} 
-                                                                                onChange={(e) => updateStageData("planejamento", "canais", e.target.value)}
-                                                                                className="h-11 rounded-2xl" placeholder="Ex: Instagram, WhatsApp, E-mail"
-                                                                            />
-                                                                        </div>
-                                                                        <div className="space-y-2">
-                                                                            <Label className="text-[10px] font-bold text-slate-500 uppercase px-1">Objetivos Estratégicos</Label>
-                                                                            <Textarea 
-                                                                                value={meta.stage_data?.planejamento?.objetivo || ""} 
-                                                                                onChange={(e) => updateStageData("planejamento", "objetivo", e.target.value)}
-                                                                                className="rounded-2xl min-h-[100px]" placeholder="Defina o que se espera alcançar..."
-                                                                            />
+
+                                                                        {/* Duplicated Creatives UI in Planning */}
+                                                                        <div className="pt-8 border-t border-slate-50 space-y-6">
+                                                                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-1">
+                                                                                <div>
+                                                                                    <h4 className="text-sm font-bold text-slate-800">Criativos (Antecipados)</h4>
+                                                                                    <p className="text-[10px] text-slate-500 font-medium">Já pode começar a planejar os criativos da campanha aqui.</p>
+                                                                                </div>
+                                                                                <div className="flex items-center gap-2">
+                                                                                    <Button onClick={addCreative} size="sm" className="rounded-xl h-8 text-[10px] font-bold gap-2 bg-indigo-600 hover:bg-indigo-700">
+                                                                                        <Plus className="h-3.5 w-3.5" /> NOVO CRIATIVO
+                                                                                    </Button>
+                                                                                </div>
+                                                                            </div>
+                                                                            {/* List of creatives */}
+                                                                            <div className="space-y-4">
+                                                                                {(meta.creatives || []).length > 0 && (
+                                                                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                                                                        {(meta.creatives || []).map((cr: MktTechaCreative) => (
+                                                                                            <div key={cr.id} className="p-4 rounded-2xl border border-slate-100 bg-slate-50/20 text-xs flex items-center justify-between">
+                                                                                                <div className="font-bold text-slate-700">{cr.channel} - {cr.type}</div>
+                                                                                                <Badge className="bg-slate-200 text-slate-600 text-[8px]">{cr.status}</Badge>
+                                                                                            </div>
+                                                                                        ))}
+                                                                                    </div>
+                                                                                )}
+                                                                            </div>
                                                                         </div>
                                                                     </div>
                                                                 )}
