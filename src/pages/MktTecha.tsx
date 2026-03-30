@@ -20,12 +20,22 @@ import {
   ShieldAlert,
   ChevronLeft,
   ChevronRight,
+  HelpCircle,
+  Target,
+  Settings,
+  Layers,
+  ArrowRightCircle,
 } from "lucide-react";
 import { getStateLabel } from "@/lib/journeyLabels";
 import { useJourneyTransition } from "@/hooks/useJourneyTransition";
 import { StateMachine } from "@/lib/journeys/types"
 import { checkTransitionBlocks, TransitionBlockReason } from "@/lib/journeys/validation";
 import { TransitionBlockDialog } from "@/components/case/TransitionBlockDialog";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 
 import { NewMktTechaCardDialog } from "@/components/mkt_techa/NewMktTechaCardDialog";
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, getDay, isToday, addMonths, subMonths } from "date-fns";
@@ -60,6 +70,83 @@ type JourneyOpt = {
 type ReadRow = { case_id: string; last_seen_at: string };
 type WaMsgLite = { case_id: string | null; occurred_at: string; from_phone: string | null };
 type WaInstanceRow = { id: string; phone_number: string | null };
+
+const STAGE_INSTRUCTIONS: Record<string, {
+  what_is: string;
+  objective: string;
+  what_needs_to_happen: string[];
+  subtasks: string[];
+  output: string;
+  extra?: string;
+}> = {
+  ideias: {
+    what_is: "Registro inicial de uma oportunidade de campanha.",
+    objective: "Garantir que toda campanha nasça com contexto e rastreabilidade.",
+    what_needs_to_happen: ["criar campanha", "definir origem", "definir prioridade", "nomear campanha"],
+    subtasks: ["responsável", "prazo", "status", "observação"],
+    output: "Campanha criada"
+  },
+  planejamento: {
+    what_is: "Estruturação estratégica da campanha.",
+    objective: "Definir a campanha central que guiará todos os canais.",
+    what_needs_to_happen: ["definir objetivo", "definir mensagem central", "definir mecânica", "definir duração", "definir canais"],
+    subtasks: ["objetivo", "mensagem central", "mecânica", "canais", "aprovação"],
+    output: "Campanha estruturada",
+    extra: "Toda campanha deve ter uma mensagem central única e uma visão multi-canal desde o início."
+  },
+  ofertas_definidas: {
+    what_is: "Definição comercial da campanha.",
+    objective: "Garantir viabilidade e clareza do que será vendido.",
+    what_needs_to_happen: ["selecionar produtos", "definir preços", "validar estoque"],
+    subtasks: ["produtos", "preços", "estoque", "aprovação"],
+    output: "Ofertas definidas"
+  },
+  cadastro_big2be: {
+    what_is: "Registro das ofertas no sistema.",
+    objective: "Garantir execução operacional correta.",
+    what_needs_to_happen: ["cadastrar ofertas", "validar dados", "definir vigência"],
+    subtasks: ["cadastro", "conferência", "validação"],
+    output: "Ofertas ativas"
+  },
+  criativos: {
+    what_is: "Produção dos criativos da campanha.",
+    objective: "Transformar a campanha central em peças multi-canais.",
+    what_needs_to_happen: ["criar criativos por canal", "vincular à campanha", "classificar por tipo e formato", "permitir tarefas flexíveis", "anexar arquivos"],
+    subtasks: ["briefing", "produção", "revisão", "envio para aprovação", "ajustes", "aprovação final"],
+    output: "Kit multi-canal criado e aprovado",
+    extra: "Apenas criativos aprovados podem ser distribuídos. Todos são aprovados em um link único."
+  },
+  distribuio: {
+    what_is: "Ativação dos criativos nos canais.",
+    objective: "Garantir execução coordenada da campanha.",
+    what_needs_to_happen: ["selecionar criativos aprovados", "vincular aos canais", "definir datas", "executar publicação"],
+    subtasks: ["agendamento", "publicação", "envio", "ativação mídia"],
+    output: "Campanha ativa nos canais",
+    extra: "Todo criativo distribuído precisa estar aprovado."
+  },
+  analise: {
+    what_is: "Leitura de desempenho da campanha.",
+    objective: "Entender o que funcionou e o que não funcionou.",
+    what_needs_to_happen: ["coletar dados de vendas", "coletar dados de mídia", "analisar por canal", "analisar por criativo"],
+    subtasks: ["vendas", "métricas", "produtos destaque", "canais destaque"],
+    output: "Insights da campanha"
+  },
+  relatrio: {
+    what_is: "Consolidação final da campanha.",
+    objective: "Transformar execução em inteligência.",
+    what_needs_to_happen: ["consolidar dados", "registrar aprendizados", "comparar histórico", "gerar resumo"],
+    subtasks: ["consolidar dados", "escrever insights", "comparar campanhas", "validar relatório"],
+    output: "Relatório estruturado + resumo compartilhável",
+    extra: "O link de resumo é ideal para compartilhar com sócios ou clientes."
+  },
+  concluido: {
+    what_is: "Encerramento da campanha.",
+    objective: "Transformar a campanha em ativo reutilizável.",
+    what_needs_to_happen: ["finalizar campanha", "arquivar dados", "manter histórico", "alimentar biblioteca"],
+    subtasks: ["finalizar", "arquivar", "manter histórico"],
+    output: "Campanha concluída e reutilizável"
+  }
+};
 
 function minutesAgo(iso: string) {
   const diff = Date.now() - new Date(iso).getTime();
@@ -525,24 +612,90 @@ export default function MktTecha() {
           <div className="mt-6 overflow-x-auto">
             {tab === "kanban" ? (
               <div className="flex gap-4 min-w-[1000px]">
-                {columns.map((col) => (
-                  <div key={col.key} className="w-[320px] flex-shrink-0" onDragOver={(e) => col.key !== "__other__" && e.preventDefault()} onDrop={(e) => {
-                    const cid = e.dataTransfer.getData("text/caseId");
-                    if (cid && col.key !== "__other__") updateCaseState(cid, col.key);
-                  }}>
-                    <div className="flex items-center justify-between px-1 mb-2">
-                      <div className="text-sm font-bold text-slate-800">{col.label}</div>
-                      <Badge variant="secondary" className="rounded-full">{col.items.length}</Badge>
+                {columns.map((col) => {
+                  const inst = STAGE_INSTRUCTIONS[col.key];
+                  return (
+                    <div key={col.key} className="w-[320px] flex-shrink-0" onDragOver={(e) => col.key !== "__other__" && e.preventDefault()} onDrop={(e) => {
+                      const cid = e.dataTransfer.getData("text/caseId");
+                      if (cid && col.key !== "__other__") updateCaseState(cid, col.key);
+                    }}>
+                      <div className="flex items-center justify-between px-1 mb-2">
+                        <div className="flex items-center gap-1.5">
+                          <div className="text-sm font-bold text-slate-800">{col.label}</div>
+                          {inst && (
+                            <Popover>
+                              <PopoverTrigger asChild>
+                                <Button variant="ghost" size="icon" className="h-5 w-5 rounded-full text-slate-400 hover:text-[hsl(var(--byfrost-accent))] hover:bg-[hsl(var(--byfrost-accent)/0.1)]">
+                                  <HelpCircle className="h-3.5 w-3.5" />
+                                </Button>
+                              </PopoverTrigger>
+                              <PopoverContent className="w-[340px] rounded-[24px] border-slate-200 bg-white p-5 shadow-2xl animate-in zoom-in-95 duration-200" align="start">
+                                <div className="space-y-4">
+                                  <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
+                                    <Target className="h-4 w-4 text-[hsl(var(--byfrost-accent))]" />
+                                    <h4 className="font-black text-xs uppercase tracking-widest text-slate-800">{col.label}</h4>
+                                  </div>
+                                  
+                                  <div className="space-y-3">
+                                    <div>
+                                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter mb-1">O que é</p>
+                                      <p className="text-xs text-slate-600 leading-relaxed font-medium">{inst.what_is}</p>
+                                    </div>
+                                    
+                                    <div>
+                                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter mb-1">Objetivo</p>
+                                      <p className="text-xs text-slate-700 leading-relaxed font-semibold">{inst.objective}</p>
+                                    </div>
+
+                                    <div>
+                                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter mb-1.5">O que precisa acontecer</p>
+                                      <div className="grid grid-cols-1 gap-1.5">
+                                        {inst.what_needs_to_happen.map((item, i) => (
+                                          <div key={i} className="flex items-center gap-2 bg-slate-50 border border-slate-100 px-2.5 py-1.5 rounded-xl">
+                                            <Settings className="h-3 w-3 text-slate-400" />
+                                            <span className="text-[11px] text-slate-600 font-bold lowercase">{item}</span>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    </div>
+
+                                    <div>
+                                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter mb-1.5">Sugestão de Subtarefas</p>
+                                      <div className="flex flex-wrap gap-1.5">
+                                        {inst.subtasks.map((st, i) => (
+                                          <Badge key={i} variant="secondary" className="rounded-lg bg-slate-100 border-none text-[10px] font-bold text-slate-500 py-0.5">{st}</Badge>
+                                        ))}
+                                      </div>
+                                    </div>
+
+                                    {inst.extra && (
+                                      <div className="bg-[hsl(var(--byfrost-accent)/0.03)] border border-[hsl(var(--byfrost-accent)/0.1)] p-3 rounded-2xl">
+                                        <p className="text-[10px] text-[hsl(var(--byfrost-accent))] font-bold leading-relaxed">{inst.extra}</p>
+                                      </div>
+                                    )}
+
+                                    <div className="flex items-center gap-2 pt-2 text-[11px] font-black italic text-emerald-600 border-t border-slate-100">
+                                      <ArrowRightCircle className="h-3.5 w-3.5" />
+                                      ENTREGA: {inst.output.toUpperCase()}
+                                    </div>
+                                  </div>
+                                </div>
+                              </PopoverContent>
+                            </Popover>
+                          )}
+                        </div>
+                        <Badge variant="secondary" className="rounded-full">{col.items.length}</Badge>
+                      </div>
+                      <div className="space-y-3 rounded-[24px] bg-slate-50/50 p-2 border border-slate-100 min-h-[500px]">
+                        {col.items.map((c) => (
+                          <Link key={c.id} to={`/app/mkt-techa/${c.id}`} draggable onDragStart={(e) => e.dataTransfer.setData("text/caseId", c.id)} className={cn("block rounded-[22px] border bg-white p-4 shadow-sm transition hover:shadow-md cursor-grab active:cursor-grabbing", (c.meta_json as any)?.priority ? "border-rose-500 ring-1 ring-rose-500/20" : "border-slate-200")}>
+                            <div className="text-sm font-bold text-slate-900 truncate">{c.title}</div>
+                          </Link>
+                        ))}
+                      </div>
                     </div>
-                    <div className="space-y-3 rounded-[24px] bg-slate-50/50 p-2 border border-slate-100 min-h-[500px]">
-                      {col.items.map((c) => (
-                        <Link key={c.id} to={`/app/mkt-techa/${c.id}`} draggable onDragStart={(e) => e.dataTransfer.setData("text/caseId", c.id)} className={cn("block rounded-[22px] border bg-white p-4 shadow-sm transition hover:shadow-md cursor-grab active:cursor-grabbing", (c.meta_json as any)?.priority ? "border-rose-500 ring-1 ring-rose-500/20" : "border-slate-200")}>
-                          <div className="text-sm font-bold text-slate-900 truncate">{c.title}</div>
-                        </Link>
-                      ))}
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             ) : (
               <TechaCalendarView cases={filteredRows} date={calendarDate} onChangeDate={setCalendarDate} />
