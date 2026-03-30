@@ -586,6 +586,11 @@ export default function OperacaoM30Case() {
         const all = allDeliverablesQ.data || [];
         const usedIds = new Set(usedDeliverablesQ.data || []);
         
+        const usedIdsArray = Array.from(usedIds);
+        if (all.length > 0) {
+            console.log(`[M30] CRM Availability Sync: ${all.length} deliverables total, ${usedIds.size} used. IDs:`, usedIdsArray);
+        }
+        
         const groups: Record<string, any[]> = {};
         all.forEach(d => {
             if (!groups[d.name]) groups[d.name] = [];
@@ -594,6 +599,9 @@ export default function OperacaoM30Case() {
 
         return Object.entries(groups).map(([name, items]) => {
             const available = items.filter(d => !usedIds.has(d.id));
+            if (usedIds.size > 0 && name.includes("Vídeo")) {
+                console.log(`[M30 DEBUG] Group ${name}: ${available.length} available out of ${items.length}. Used count: ${usedIds.size}`);
+            }
             return {
                 name,
                 nextId: available[0]?.id,
@@ -1000,6 +1008,10 @@ export default function OperacaoM30Case() {
                                                 </SelectContent>
                                             </Select>
                                         </div>
+                                    </div>
+                                    <div className="flex gap-2 mb-1">
+                                        <Badge variant="outline" className="text-[9px] font-mono opacity-40">T:{activeTenantId?.slice(0,8)}</Badge>
+                                        <Badge variant="outline" className="text-[9px] font-mono opacity-40">C:{(caseQ.data?.meta_json as any)?.commitment_id?.slice(0,8)}</Badge>
                                     </div>
                                     <h1 className="text-2xl font-bold text-slate-900 sm:text-3xl">
                                         {caseQ.data?.title || "Carregando..."}

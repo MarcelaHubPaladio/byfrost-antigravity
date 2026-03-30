@@ -293,7 +293,8 @@ export default function CommitmentDetail() {
 
   const groupedDeliverables = useMemo(() => {
     const deliverables = deliverablesQ.data ?? [];
-    const cases = casesQ.data ?? [];
+    // We use allTenantCasesQ instead of casesQ for broader visibility
+    const cases = allTenantCasesQ.data ?? [];
     
     // Map cases to deliverables
     const deliverableCasesMap = new Map<string, any[]>();
@@ -301,6 +302,7 @@ export default function CommitmentDetail() {
       if (!c.deliverable_id) continue;
       if (!deliverableCasesMap.has(c.deliverable_id)) deliverableCasesMap.set(c.deliverable_id, []);
       deliverableCasesMap.get(c.deliverable_id)!.push(c);
+      console.log(`[CRM] Mapping case ${c.id} to deliverable ${c.deliverable_id}`);
     }
 
     const merged = deliverables.map(d => ({
@@ -315,7 +317,7 @@ export default function CommitmentDetail() {
       m.get(k)!.push(d);
     }
     return Array.from(m.entries()).sort((a, b) => a[0].localeCompare(b[0]));
-  }, [deliverablesQ.data, casesQ.data]);
+  }, [deliverablesQ.data, allTenantCasesQ.data]);
 
   const orphanCases = useMemo(() => {
     if (!allTenantCasesQ.data || !deliverablesQ.data) return [];
@@ -432,7 +434,9 @@ export default function CommitmentDetail() {
                   <div className="text-sm font-medium text-slate-700">
                     Cliente: <span className="font-bold">{customerName}</span>
                   </div>
-                  <div className="flex items-center gap-1">
+                  <div className="flex items-center gap-2">
+                    <Badge variant="outline" className="text-[9px] font-mono opacity-50">T:{activeTenantId?.slice(0,8)}</Badge>
+                    <Badge variant="outline" className="text-[9px] font-mono opacity-50">C:{commitmentId?.slice(0,8)}</Badge>
                     <Select
                       disabled={saving}
                       value={commitmentQ.data?.status ?? "draft"}
