@@ -604,7 +604,6 @@ export default function OperacaoM30Case() {
             const { data: newCase, error: insertError } = await supabase.from("cases").insert({
                 tenant_id: activeTenantId,
                 journey_id: caseQ.data.journey_id,
-                parent_case_id: id,
                 case_type: st.type || 'edicao', 
                 title: st.title,
                 summary_text: st.description || null,
@@ -612,6 +611,7 @@ export default function OperacaoM30Case() {
                 deliverable_id: caseQ.data.deliverable_id,
                 state: "DECUPAGEM_UPLOAD",
                 meta_json: {
+                    parent_case_id: id,
                     customer_entity_name: (caseQ.data.meta_json as any)?.customer_entity_name,
                     commitment_id: (caseQ.data.meta_json as any)?.commitment_id,
                     post_date: st.post_date || null,
@@ -717,14 +717,15 @@ export default function OperacaoM30Case() {
                 await supabase.from("cases").insert({
                     tenant_id: activeTenantId,
                     journey_id: caseQ.data.journey_id,
-                    parent_case_id: id,
                     case_type: st.type, 
                     title: st.title,
                     summary_text: st.description || null,
                     customer_entity_id: caseQ.data.customer_entity_id,
                     deliverable_id: caseQ.data.deliverable_id,
+                    status: "open",
                     state: "DECUPAGEM_UPLOAD",
                     meta_json: {
+                        parent_case_id: id,
                         customer_entity_name: (caseQ.data.meta_json as any)?.customer_entity_name,
                         commitment_id: (caseQ.data.meta_json as any)?.commitment_id,
                         post_date: st.post_date || null,
