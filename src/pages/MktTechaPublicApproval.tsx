@@ -176,7 +176,8 @@ export default function MktTechaPublicApproval() {
     const approvedCount = creatives.filter(c => c.status === 'approved').length;
 
     const palette = tenant?.branding_json?.palette as PublicPalette;
-    const primaryColor = palette?.primary?.hex || "#4f46e5";
+    const rawPrimary = (palette as any)?.primary;
+    const primaryColor = (typeof rawPrimary === 'string' ? rawPrimary : rawPrimary?.hex) || "#4f46e5";
     const primaryText = palette?.primary?.text || "#ffffff";
 
     if (campaign && !isAuthorized) {
@@ -224,7 +225,7 @@ export default function MktTechaPublicApproval() {
     }
 
     return (
-        <PublicPortalShell palette={{ ...palette, primary: { hex: "#0f172a", text: "#ffffff" } }}>
+        <PublicPortalShell palette={{ ...palette, primary: { hex: primaryColor, text: primaryText } }}>
             <div className="min-h-screen bg-slate-950 pb-24 font-sans selection:bg-indigo-500/30">
                 <header className="bg-slate-900/50 backdrop-blur-xl border border-white/5 rounded-[40px] px-6 py-10 text-center sticky top-4 z-20 shadow-2xl mx-auto max-w-5xl">
                     <div className="mx-auto max-w-4xl">
@@ -318,8 +319,8 @@ export default function MktTechaPublicApproval() {
                                 <section className="space-y-4">
                                     <div className="flex items-center gap-3 px-2">
                                         <div 
-                                            style={{ color: primaryColor }}
-                                            className="h-10 w-10 rounded-2xl bg-slate-900 flex items-center justify-center ring-1 ring-white/10"
+                                            style={{ color: primaryColor, backgroundColor: `${primaryColor}15` }}
+                                            className="h-10 w-10 rounded-2xl flex items-center justify-center ring-1 ring-white/10"
                                         >
                                             <LucideMessageCircle className="h-5 w-5" />
                                         </div>
@@ -334,7 +335,10 @@ export default function MktTechaPublicApproval() {
 
                                 <section className="space-y-4">
                                     <div className="flex items-center gap-3 px-2">
-                                        <div className="h-10 w-10 rounded-2xl bg-slate-900 flex items-center justify-center text-emerald-400 ring-1 ring-white/10">
+                                        <div 
+                                            style={{ color: "#34d399", backgroundColor: "#34d39915" }}
+                                            className="h-10 w-10 rounded-2xl flex items-center justify-center ring-1 ring-white/10"
+                                        >
                                             <CheckCircle2 className="h-5 w-5" />
                                         </div>
                                         <h2 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Canais e Criativos</h2>
@@ -344,8 +348,8 @@ export default function MktTechaPublicApproval() {
                                             <div key={ch} className="p-5 rounded-3xl bg-slate-900 ring-1 ring-white/5 flex items-center justify-between group hover:bg-slate-800/50 transition-colors">
                                                 <div className="flex items-center gap-3">
                                                     <div 
-                                                        style={{ color: primaryColor }}
-                                                        className="h-10 w-10 rounded-xl bg-slate-800 flex items-center justify-center"
+                                                        style={{ color: primaryColor, backgroundColor: `${primaryColor}15` }}
+                                                        className="h-10 w-10 rounded-xl flex items-center justify-center"
                                                     >
                                                         <Hash className="h-4 w-4" />
                                                     </div>
