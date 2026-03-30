@@ -296,11 +296,27 @@ export default function MktTechaCase() {
     };
 
     const updateCreative = (id: string, field: keyof MktTechaCreative, value: any) => {
-        const list = [...(meta.creatives || [])];
-        const idx = list.findIndex(c => c.id === id);
-        if (idx === -1) return;
-        list[idx] = { ...list[idx], [field]: value };
-        setMeta({ ...meta, creatives: list });
+        const newCreatives = (meta.creatives || []).map((c: MktTechaCreative) => {
+            if (c.id === id) return { ...c, [field]: value };
+            return c;
+        });
+        setMeta({ ...meta, creatives: newCreatives });
+    };
+
+    const updateCreativeMetric = (id: string, metric: string, value: any) => {
+        const newCreatives = (meta.creatives || []).map((c: MktTechaCreative) => {
+            if (c.id === id) {
+                return { 
+                    ...c, 
+                    metrics: { 
+                        ...(c.metrics || {}), 
+                        [metric]: value 
+                    } 
+                };
+            }
+            return c;
+        });
+        setMeta({ ...meta, creatives: newCreatives });
     };
 
     const toggleCreativeSubtask = (creativeId: string, subtaskId: string) => {
@@ -1249,6 +1265,141 @@ export default function MktTechaCase() {
                                                                     </div>
                                                                 </div>
                                                             )}
+
+                                                            {st === "analise" && (
+                                                                <div className="space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                                                                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-1">
+                                                                        <div>
+                                                                            <h4 className="text-sm font-black text-slate-800 tracking-tight">Performance e Análise de Resultados</h4>
+                                                                            <p className="text-[10px] text-slate-500 font-medium">Documente os resultados reais atingidos em vendas e engajamento.</p>
+                                                                        </div>
+                                                                    </div>
+
+                                                                    {/* Vendas e Evidências */}
+                                                                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                                                                        <div className="p-8 rounded-[40px] border border-emerald-100 bg-emerald-50/20 space-y-6">
+                                                                            <div className="flex items-center gap-3">
+                                                                                <div className="h-10 w-10 rounded-2xl bg-emerald-500/10 flex items-center justify-center text-emerald-600">
+                                                                                    <Target className="h-5 w-5" />
+                                                                                </div>
+                                                                                <h5 className="text-[11px] font-black text-emerald-900 uppercase tracking-widest">Destaques de Vendas</h5>
+                                                                            </div>
+                                                                            <Textarea 
+                                                                                value={meta.stage_data?.analise?.sales_highlights || ""} 
+                                                                                onChange={(e) => updateStageData("analise", "sales_highlights", e.target.value)}
+                                                                                placeholder="Quais foram os produtos campeões? Algum insight de precificação ou estoque?"
+                                                                                className="rounded-3xl min-h-[150px] bg-white border-emerald-100 shadow-sm text-sm"
+                                                                            />
+                                                                        </div>
+
+                                                                        <div className="p-8 rounded-[40px] border border-slate-200 bg-white space-y-6 shadow-sm">
+                                                                            <div className="flex items-center gap-3">
+                                                                                <div className="h-10 w-10 rounded-2xl bg-slate-100 flex items-center justify-center text-slate-600">
+                                                                                    <Paperclip className="h-5 w-5" />
+                                                                                </div>
+                                                                                <h5 className="text-[11px] font-black text-slate-800 uppercase tracking-widest">Evidências Técnicas</h5>
+                                                                            </div>
+                                                                            
+                                                                            <div className="grid grid-cols-1 gap-4">
+                                                                                <div className="space-y-3">
+                                                                                    <div className="flex items-center justify-between">
+                                                                                        <Label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Relatórios ERP (Vendas Finais)</Label>
+                                                                                        <label className="cursor-pointer">
+                                                                                            <input type="file" className="hidden" onChange={(e) => e.target.files?.[0] && handleFileUpload("analise", "erp_evidence", e.target.files[0])} />
+                                                                                            <div className="text-[9px] font-black text-indigo-600 hover:text-indigo-700 flex items-center gap-1"><Upload className="h-3 w-3" /> ADICIONAR</div>
+                                                                                        </label>
+                                                                                    </div>
+                                                                                    <div className="space-y-2">
+                                                                                        {(meta.stage_data?.analise?.evidences?.erp_evidence || []).map((f: any, i: number) => (
+                                                                                            <a key={i} href={f.url} target="_blank" className="flex items-center justify-between p-3 rounded-2xl bg-slate-50 border border-slate-100 text-[10px] font-bold text-slate-600 hover:text-indigo-600 transition-all">
+                                                                                                <div className="flex items-center gap-2 truncate"><Paperclip className="h-3 w-3" /> {f.name}</div>
+                                                                                                <ExternalLink className="h-3 w-3" />
+                                                                                            </a>
+                                                                                        ))}
+                                                                                    </div>
+                                                                                </div>
+
+                                                                                <div className="space-y-3">
+                                                                                    <div className="flex items-center justify-between">
+                                                                                        <Label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Relatórios CRM (Conversão)</Label>
+                                                                                        <label className="cursor-pointer">
+                                                                                            <input type="file" className="hidden" onChange={(e) => e.target.files?.[0] && handleFileUpload("analise", "crm_evidence", e.target.files[0])} />
+                                                                                            <div className="text-[9px] font-black text-indigo-600 hover:text-indigo-700 flex items-center gap-1"><Upload className="h-3 w-3" /> ADICIONAR</div>
+                                                                                        </label>
+                                                                                    </div>
+                                                                                    <div className="space-y-2">
+                                                                                        {(meta.stage_data?.analise?.evidences?.crm_evidence || []).map((f: any, i: number) => (
+                                                                                            <a key={i} href={f.url} target="_blank" className="flex items-center justify-between p-3 rounded-2xl bg-slate-50 border border-slate-100 text-[10px] font-bold text-slate-600 hover:text-indigo-600 transition-all">
+                                                                                                <div className="flex items-center gap-2 truncate"><Paperclip className="h-3 w-3" /> {f.name}</div>
+                                                                                                <ExternalLink className="h-3 w-3" />
+                                                                                            </a>
+                                                                                        ))}
+                                                                                    </div>
+                                                                                </div>
+                                                                            </div>
+                                                                        </div>
+                                                                    </div>
+
+                                                                    {/* Métricas por Criativo */}
+                                                                    <div className="space-y-6">
+                                                                        <div className="flex items-center gap-2 px-1">
+                                                                            <Settings className="h-4 w-4 text-indigo-500" />
+                                                                            <h5 className="text-[11px] font-black text-slate-800 uppercase tracking-widest">Indicadores por Criativo</h5>
+                                                                        </div>
+
+                                                                        <div className="grid grid-cols-1 gap-6">
+                                                                            {(meta.creatives || []).filter((cr: MktTechaCreative) => cr.status === 'approved').map((cr: MktTechaCreative) => (
+                                                                                <div key={cr.id} className="p-8 rounded-[40px] border border-slate-200 bg-white shadow-sm space-y-6 transition-all hover:shadow-md">
+                                                                                    <div className="flex items-center justify-between">
+                                                                                        <div className="flex items-center gap-3">
+                                                                                            <div className="h-10 w-10 rounded-2xl bg-slate-50 flex items-center justify-center">
+                                                                                                {cr.channel === 'Instagram' && <Instagram className="h-5 w-5 text-pink-500" />}
+                                                                                                {cr.channel === 'TikTok' && <Smartphone className="h-5 w-5 text-slate-400" />}
+                                                                                                {cr.channel === 'YouTube' && <Youtube className="h-5 w-5 text-red-500" />}
+                                                                                            </div>
+                                                                                            <div>
+                                                                                                <p className="text-[11px] font-black text-slate-900 leading-none">{cr.channel}</p>
+                                                                                                <p className="text-[9px] text-slate-400 font-bold uppercase tracking-tighter mt-1.5">{cr.type} - {cr.format}</p>
+                                                                                            </div>
+                                                                                        </div>
+                                                                                    </div>
+
+                                                                                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+                                                                                        {[
+                                                                                            { key: 'views', label: 'Views', icon: <Clock className="h-3 w-3" /> },
+                                                                                            { key: 'likes', label: 'Curtidas', icon: <CheckCircle2 className="h-3 w-3" /> },
+                                                                                            { key: 'comments', label: 'Coment.', icon: <FileText className="h-3 w-3" /> },
+                                                                                            { key: 'sales_count', label: 'Vendas (Qtd)', icon: <Target className="h-3 w-3" /> },
+                                                                                            { key: 'sales_amount', label: 'Vendas (R$)', icon: <RefreshCw className="h-3 w-3" /> },
+                                                                                        ].map(metric => (
+                                                                                            <div key={metric.key} className="space-y-1.5">
+                                                                                                <Label className="text-[9px] font-black text-slate-400 uppercase flex items-center gap-1 px-1">
+                                                                                                    {metric.icon} {metric.label}
+                                                                                                </Label>
+                                                                                                <Input 
+                                                                                                    type="number" 
+                                                                                                    value={cr.metrics?.[metric.key as keyof typeof cr.metrics] || ""} 
+                                                                                                    onChange={(e) => updateCreativeMetric(cr.id, metric.key, parseFloat(e.target.value) || 0)}
+                                                                                                    className="h-10 rounded-xl text-[11px] font-bold bg-slate-50/50 border-slate-100"
+                                                                                                />
+                                                                                            </div>
+                                                                                        ))}
+                                                                                    </div>
+
+                                                                                    <div className="space-y-2">
+                                                                                        <Label className="text-[9px] font-black text-slate-400 uppercase px-1">Análise Qualitativa Técnica</Label>
+                                                                                        <RichTextEditor 
+                                                                                            value={cr.metrics?.qualitative_feedback || ""} 
+                                                                                            onChange={(v) => updateCreativeMetric(cr.id, "qualitative_feedback", v)}
+                                                                                            minHeightClassName="min-h-[100px]"
+                                                                                        />
+                                                                                    </div>
+                                                                                </div>
+                                                                            ))}
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                             )}
 
                                                             {st === "concluido" && (
                                                                 <div className="p-8 border-2 border-emerald-100 rounded-[32px] bg-emerald-50/30 flex flex-col items-center justify-center text-center gap-4">

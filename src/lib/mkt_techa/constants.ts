@@ -22,6 +22,17 @@ export type MktTechaCreative = {
   final_files?: { name: string; url: string }[];
   publish_start_date?: string;
   publish_end_date?: string;
+  metrics?: {
+    views?: number;
+    likes?: number;
+    comments?: number;
+    shares?: number;
+    clicks?: number;
+    sales_amount?: number;
+    sales_count?: number;
+    followers_gained?: number;
+    qualitative_feedback?: string;
+  };
   version: number;
   subtasks: StageSubtask[];
 };
