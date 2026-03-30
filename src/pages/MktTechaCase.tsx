@@ -16,6 +16,12 @@ import {
     SelectValue,
 } from "@/components/ui/select";
 import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
     AlertDialog,
     AlertDialogAction,
     AlertDialogCancel,
@@ -605,14 +611,31 @@ export default function MktTechaCase() {
                                         </SelectContent>
                                     </Select>
 
-                                    <Button 
-                                        variant="outline" 
-                                        onClick={() => copyShareLink('approve')}
-                                        className="h-10 px-4 rounded-2xl border-slate-200 bg-white shadow-sm text-[10px] font-black gap-2 text-slate-600 hover:bg-slate-50 hover:text-indigo-600 transition-all"
-                                        title="Copiar Link de Aprovação"
-                                    >
-                                        <Share2 className="h-4 w-4" /> LINK
-                                    </Button>
+                                    <DropdownMenu>
+                                        <DropdownMenuTrigger asChild>
+                                            <Button 
+                                                variant="outline" 
+                                                className="h-10 px-4 rounded-2xl border-slate-200 bg-white shadow-sm text-[10px] font-black gap-2 text-slate-600 hover:bg-slate-50 hover:text-indigo-600 transition-all"
+                                                title="Links da Campanha"
+                                            >
+                                                <Share2 className="h-4 w-4" /> LINK
+                                            </Button>
+                                        </DropdownMenuTrigger>
+                                        <DropdownMenuContent align="end" className="rounded-2xl w-64 p-2">
+                                            <DropdownMenuItem onClick={() => copyShareLink('planning')} className="text-xs font-bold cursor-pointer rounded-xl p-2 h-10">
+                                                Aprovação da Campanha
+                                            </DropdownMenuItem>
+                                            <DropdownMenuItem onClick={() => copyShareLink('approve')} className="text-xs font-bold cursor-pointer rounded-xl p-2 h-10">
+                                                Aprovação dos Criativos
+                                            </DropdownMenuItem>
+                                            <DropdownMenuItem onClick={() => copyShareLink('summary')} className="text-xs font-bold cursor-pointer rounded-xl p-2 h-10">
+                                                Resumo da Campanha
+                                            </DropdownMenuItem>
+                                            <DropdownMenuItem onClick={() => copyShareLink('report')} className="text-xs font-bold cursor-pointer rounded-xl p-2 h-10">
+                                                Dashboard de Resultados
+                                            </DropdownMenuItem>
+                                        </DropdownMenuContent>
+                                    </DropdownMenu>
 
                                     {meta.share_access_code && (
                                         <div className="flex items-center gap-3 px-4 h-10 rounded-2xl bg-slate-900 border border-slate-800 shadow-xl">
