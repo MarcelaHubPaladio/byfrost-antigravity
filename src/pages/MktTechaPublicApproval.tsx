@@ -551,6 +551,12 @@ export default function MktTechaPublicApproval() {
                     <div className="flex items-center justify-center gap-6 pt-4">
                          <div className="text-[10px] font-bold text-slate-700 uppercase tracking-[0.3em]">Powered by MKT Técha</div>
                     </div>
+                    {/* Debug Indicator - Help trace branding issues */}
+                    <div className="mt-8 pt-8 border-t border-white/5 opacity-10 hover:opacity-100 transition-opacity">
+                        <p className="text-[8px] font-mono text-slate-600">
+                            TID: {tenant?.id || "N/A"} • CC: {primaryColor} • B: {JSON.stringify(tenant?.branding_json?.palette?.primary || "N/A")}
+                        </p>
+                    </div>
                 </div>
             </footer>
             </div>

@@ -1,12 +1,15 @@
 import { ReactNode, useEffect } from "react";
 
 function isValidHex(hex: string) {
-  return /^#[0-9a-fA-F]{6}$/.test(hex);
+  return /^#([0-9a-fA-F]{3}){1,2}$/.test(hex);
 }
 
 function hexToRgb(hex: string) {
   if (!isValidHex(hex)) return null;
-  const v = hex.replace("#", "");
+  let v = hex.replace("#", "");
+  if (v.length === 3) {
+    v = v[0] + v[0] + v[1] + v[1] + v[2] + v[2];
+  }
   const r = parseInt(v.slice(0, 2), 16);
   const g = parseInt(v.slice(2, 4), 16);
   const b = parseInt(v.slice(4, 6), 16);
