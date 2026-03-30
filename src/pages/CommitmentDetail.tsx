@@ -164,14 +164,30 @@ export default function CommitmentDetail() {
           due_date,
           entity_id,
           updated_at,
-          name,
-          cases:cases(id, state, title, status, deleted_at, deliverable_id)
+          name
         `)
         .eq("tenant_id", activeTenantId!)
         .eq("commitment_id", commitmentId)
         .is("deleted_at", null)
         .order("created_at", { ascending: true })
         .limit(200);
+      if (error) throw error;
+      return (data ?? []) as any[];
+    },
+    staleTime: 5_000,
+  });
+
+  const casesQ = useQuery({
+    queryKey: ["commitment_cases", activeTenantId, deliverablesQ.data?.map(d => d.id)],
+    enabled: Boolean(activeTenantId && deliverablesQ.data && deliverablesQ.data.length > 0),
+    queryFn: async () => {
+      const delIds = deliverablesQ.data!.map(d => d.id);
+      const { data, error } = await supabase
+        .from("cases")
+        .select("id, state, title, status, deleted_at, deliverable_id")
+        .eq("tenant_id", activeTenantId!)
+        .in("deliverable_id", delIds)
+        .is("deleted_at", null);
       if (error) throw error;
       return (data ?? []) as any[];
     },
@@ -219,14 +235,30 @@ export default function CommitmentDetail() {
   });
 
   const groupedDeliverables = useMemo(() => {
+    const deliverables = deliverablesQ.data ?? [];
+    const cases = casesQ.data ?? [];
+    
+    // Map cases to deliverables
+    const deliverableCasesMap = new Map<string, any[]>();
+    for (const c of cases) {
+      if (!c.deliverable_id) continue;
+      if (!deliverableCasesMap.has(c.deliverable_id)) deliverableCasesMap.set(c.deliverable_id, []);
+      deliverableCasesMap.get(c.deliverable_id)!.push(c);
+    }
+
+    const merged = deliverables.map(d => ({
+      ...d,
+      cases: deliverableCasesMap.get(d.id) || []
+    }));
+
     const m = new Map<string, any[]>();
-    for (const d of (deliverablesQ.data ?? [])) {
+    for (const d of merged) {
       const k = d.name || 'Sem nome (legado)';
       if (!m.has(k)) m.set(k, []);
       m.get(k)!.push(d);
     }
     return Array.from(m.entries()).sort((a, b) => a[0].localeCompare(b[0]));
-  }, [deliverablesQ.data]);
+  }, [deliverablesQ.data, casesQ.data]);
 
   const updateStatus = async (newStatus: string) => {
     if (!activeTenantId || !commitmentId) return;
