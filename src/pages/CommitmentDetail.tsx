@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import React, { useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { AppShell } from "@/components/AppShell";
@@ -857,10 +857,17 @@ export default function CommitmentDetail() {
                           <SelectValue placeholder="Vincular a este contrato..." />
                         </SelectTrigger>
                         <SelectContent className="rounded-xl">
-                          {deliverablesQ.data?.map(d => (
-                            <SelectItem key={d.id} value={d.id} className="text-[10px]">
-                              {d.name} (#{d.id.substring(0, 6)})
-                            </SelectItem>
+                          {groupedDeliverables.map(([groupName, items]) => (
+                            <React.Fragment key={groupName}>
+                              <div className="px-2 py-1 bg-slate-100/50 text-[9px] font-black text-slate-500 uppercase tracking-tighter">
+                                {groupName}
+                              </div>
+                              {items.map(d => (
+                                <SelectItem key={d.id} value={d.id} className="text-[10px] pl-4">
+                                  Item #{items.indexOf(d) + 1} ({d.id.substring(0, 4)})
+                                </SelectItem>
+                              ))}
+                            </React.Fragment>
                           ))}
                         </SelectContent>
                       </Select>

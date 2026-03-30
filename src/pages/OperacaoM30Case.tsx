@@ -625,10 +625,14 @@ export default function OperacaoM30Case() {
         // Mapeamento de prioridade
         const mapping: Record<string, string[]> = {
             'edicao': ['Vídeos Promocionais', 'Vídeo', 'Edição'],
+            'gravacao': ['Vídeos Promocionais', 'Vídeo', 'Gravação'],
+            'planejamento': ['Planejamento de Vídeos', 'Extra Escopo', 'Estratégia'],
             'whatsapp_copy': ['Planejamento de Vídeos', 'Texto', 'Copy'],
             'roteiro': ['Planejamento de Vídeos', 'Roteiro'],
             'artes': ['Artes / Criativo', 'Artes'],
             'campanhas': ['Gestão de Tráfego Pago', 'Campanhas'],
+            'validacao': ['Vídeos Promocionais', 'Vídeo', 'Aprovação'],
+            'aprovacao': ['Vídeos Promocionais', 'Vídeo', 'Aprovação'],
         };
         
         const possibleGroupNames = mapping[type] || [];
