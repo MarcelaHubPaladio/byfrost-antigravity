@@ -85,6 +85,7 @@ const MediaKitTemplates = lazyWithRetry(() => import("@/pages/MediaKitTemplates"
 const MediaKitMasks = lazyWithRetry(() => import("@/pages/MediaKitMasks"));
 const MediaKitEditor = lazyWithRetry(() => import("@/pages/MediaKitEditor"));
 const Communication = lazyWithRetry(() => import("@/pages/Communication"));
+const PublicScriptApproval = lazyWithRetry(() => import("@/pages/PublicScriptApproval"));
 
 const GlobalLoading = () => (
   <div className="flex h-screen w-full items-center justify-center bg-slate-50 dark:bg-slate-950">
@@ -152,6 +153,9 @@ const App = () => (
                   <Route path="/portal/:tenantSlug/:slug" element={<PublicPortal />} />
                   <Route path="/l/:tenantSlug/p/:slug" element={<PublicPortal />} />
                   <Route path="/l/:slug" element={<PublicPortal />} />
+
+                  {/* M30 Public Script Approval (no auth) */}
+                  <Route path="/public/m30/approve/:token" element={<PublicScriptApproval />} />
 
                   {/* Incentives (gestão interna; protegido por matriz de acesso) */}
                   <Route

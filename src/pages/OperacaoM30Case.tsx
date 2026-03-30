@@ -527,16 +527,20 @@ function VideoDeliverySection({
     setImportantLinks: (v: any[]) => void,
     isVideo: boolean
 }) {
-    const getDriveEmbedUrl = (url: string) => {
+    const getDriveInfo = (url: string) => {
         if (!url) return null;
-        const match = url.match(/\/d\/([a-zA-Z0-9_-]+)/);
-        if (match && match[1]) {
-            return `https://drive.google.com/file/d/${match[1]}/preview`;
+        const fileMatch = url.match(/\/file\/d\/([a-zA-Z0-9_-]+)/) || url.match(/\/d\/([a-zA-Z0-9_-]+)/);
+        if (fileMatch && fileMatch[1]) {
+            return { type: 'file', id: fileMatch[1], embedUrl: `https://drive.google.com/file/d/${fileMatch[1]}/preview` };
+        }
+        const folderMatch = url.match(/\/drive\/folders\/([a-zA-Z0-9_-]+)/) || url.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+        if (folderMatch && folderMatch[1] && url.includes('folder')) {
+            return { type: 'folder', id: folderMatch[1], url };
         }
         return null;
     };
 
-    const embedUrl = getDriveEmbedUrl(videoUrl);
+    const driveInfo = getDriveInfo(videoUrl);
 
     return (
         <div className="space-y-6 mt-8 p-6 rounded-[32px] border border-slate-200 bg-white shadow-sm animate-in fade-in slide-in-from-top-4 duration-500">
@@ -612,30 +616,42 @@ function VideoDeliverySection({
                     </div>
                 </div>
 
-                <div className="space-y-2">
-                    <Label className="text-[10px] font-bold text-slate-500 uppercase px-1">Visualização do Vídeo</Label>
-                    <div className="aspect-video rounded-2xl border-2 border-dashed border-slate-100 bg-slate-50 overflow-hidden flex items-center justify-center relative group">
-                        {embedUrl ? (
+                <div className="space-y-4">
+                    <Label className="text-[10px] font-bold text-slate-500 uppercase px-1 flex items-center gap-2">
+                        Visualização do Vídeo
+                        {driveInfo?.type === 'folder' && <Badge variant="secondary" className="bg-blue-50 text-blue-600 text-[9px] h-4">Pasta Detectada</Badge>}
+                    </Label>
+                    
+                    <div className="aspect-video w-full rounded-[24px] bg-slate-50 border-2 border-dashed border-slate-200 flex items-center justify-center overflow-hidden relative group">
+                        {driveInfo?.type === 'file' ? (
                             <iframe 
-                                src={embedUrl}
+                                src={driveInfo.embedUrl}
                                 className="w-full h-full border-none"
                                 allow="autoplay"
                             />
-                        ) : (
-                            <div className="text-center p-6">
-                                <Rocket className="mx-auto h-10 w-10 text-slate-200 mb-3" />
-                                <p className="text-xs text-slate-400 font-medium max-w-[200px]">Insira um link do Google Drive para habilitar o player.</p>
+                        ) : driveInfo?.type === 'folder' ? (
+                            <div className="flex flex-col items-center gap-4 text-center px-8">
+                                <div className="h-16 w-16 rounded-3xl bg-blue-100 flex items-center justify-center text-blue-600 shadow-inner group-hover:scale-110 transition-transform">
+                                    <Building2 className="h-8 w-8" />
+                                </div>
+                                <div className="space-y-1">
+                                    <p className="text-sm font-bold text-slate-700">Pasta de Entrega</p>
+                                    <p className="text-[10px] text-slate-400 max-w-[200px]">Link de diretório detectado. Clique para abrir os recursos em nova aba.</p>
+                                </div>
+                                <Button 
+                                    variant="outline" 
+                                    size="sm" 
+                                    className="rounded-xl h-8 text-[10px] font-bold gap-2 bg-white"
+                                    onClick={() => window.open(videoUrl, '_blank')}
+                                >
+                                    <ExternalLink className="h-3 w-3" /> Abrir no Drive
+                                </Button>
                             </div>
-                        )}
-                        {embedUrl && (
-                            <a 
-                                href={videoUrl} 
-                                target="_blank" 
-                                rel="noreferrer"
-                                className="absolute top-2 right-2 h-8 w-8 rounded-lg bg-black/50 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/70"
-                            >
-                                <ExternalLink className="h-4 w-4" />
-                            </a>
+                        ) : (
+                            <div className="flex flex-col items-center gap-3 text-slate-300">
+                                <Rocket className="h-10 w-10 opacity-20" />
+                                <p className="text-[10px] font-medium max-w-[180px] text-center leading-relaxed">Insira um link de arquivo ou pasta do Google Drive para habilitar o player.</p>
+                            </div>
                         )}
                     </div>
                 </div>
@@ -1180,7 +1196,8 @@ export default function OperacaoM30Case() {
                         video_url: videoUrl,
                         important_links: importantLinks,
                         script_raw: mainScript
-                    }
+                    },
+                    updated_at: new Date().toISOString()
                 })
                 .eq("id", id);
             if (error) throw error;
