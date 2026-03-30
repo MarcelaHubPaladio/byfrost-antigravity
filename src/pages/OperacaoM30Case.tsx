@@ -289,7 +289,7 @@ function SubtaskItemContent({ st, idx, caseMeta, caseId, onRefetch, caseState, c
 
     return (
         <div className="space-y-6">
-            {caseState === 'GRAVACAO' && (
+            {caseState === 'gravao' && (
                 <div className="bg-orange-50 border border-orange-100 rounded-2xl p-4 flex items-center justify-between gap-4 mb-2">
                     <div className="flex items-center gap-3">
                         <div className="h-10 w-10 rounded-xl bg-orange-100 flex items-center justify-center text-orange-600">
@@ -1005,7 +1005,7 @@ export default function OperacaoM30Case() {
                                                 Subtarefas de Produção
                                             </h3>
 
-                                            {caseQ.data?.state === "GRAVACAO" && (
+                                            {caseQ.data?.state === "gravao" && (
                                                 <Button 
                                                     size="sm" 
                                                     className="h-8 rounded-xl bg-orange-600 hover:bg-orange-700 text-[10px] font-bold shadow-lg shadow-orange-100"
