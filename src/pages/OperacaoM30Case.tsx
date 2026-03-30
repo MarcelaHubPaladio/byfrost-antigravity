@@ -81,12 +81,13 @@ type CaseRow = {
     meta_json: any;
 };
 
-function SubtaskItemContent({ st, idx, caseMeta, caseId, onRefetch, caseState, caseData }: { st: any, idx: number, caseMeta: any, caseId: string, onRefetch: () => void, caseState?: string, caseData?: any }) {
+function SubtaskItemContent({ st, idx, caseMeta, caseId, onRefetch, caseState, caseData, allDeliverables }: { st: any, idx: number, caseMeta: any, caseId: string, onRefetch: () => void, caseState?: string, caseData?: any, allDeliverables: any[] }) {
     const { user } = useSession();
     const [title, setTitle] = useState(st.title || "");
     const [type, setType] = useState(st.type || "edicao");
     const [postDate, setPostDate] = useState(st.post_date || "");
     const [priority, setPriority] = useState(st.priority || false);
+    const [deliverableId, setDeliverableId] = useState(st.deliverable_id || caseData?.deliverable_id || "");
     const [description, setDescription] = useState(st.description || "");
     const [scriptRaw, setScriptRaw] = useState(st.script_raw || "");
     const [scriptItems, setScriptItems] = useState<any[]>(st.script_items || []);
@@ -104,6 +105,7 @@ function SubtaskItemContent({ st, idx, caseMeta, caseId, onRefetch, caseState, c
                 type,
                 post_date: postDate,
                 priority,
+                deliverable_id: deliverableId,
                 description,
                 script_raw: scriptRaw,
                 script_items: scriptItems
@@ -310,36 +312,55 @@ function SubtaskItemContent({ st, idx, caseMeta, caseId, onRefetch, caseState, c
 
     return (
         <div className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="space-y-1.5">
-                    <Label className="text-[10px] font-bold text-slate-500 uppercase">Tipo de Entrega</Label>
-                    <Select value={type} onValueChange={setType}>
-                        <SelectTrigger className="h-9 rounded-xl text-xs bg-slate-50/50 border-slate-200">
-                            <SelectValue />
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="space-y-2">
+                    <Label className="text-[10px] font-bold text-slate-500 uppercase">Entregável do Contrato</Label>
+                    <Select value={deliverableId} onValueChange={setDeliverableId}>
+                        <SelectTrigger className="h-9 rounded-xl border-slate-200 text-xs focus:ring-indigo-500/20 bg-white shadow-sm">
+                            <SelectValue placeholder="Selecione o entregável..." />
                         </SelectTrigger>
-                        <SelectContent className="rounded-2xl">
-                            <SelectItem value="edicao" className="rounded-xl text-xs">VÍDEO / EDIÇÃO</SelectItem>
-                            <SelectItem value="arte_estatica" className="rounded-xl text-xs">ARTE ESTÁTICA</SelectItem>
-                            <SelectItem value="trafego_pago" className="rounded-xl text-xs">TRÁFEGO PAGO</SelectItem>
-                            <SelectItem value="planejamento" className="rounded-xl text-xs">PLANEJAMENTO</SelectItem>
-                            <SelectItem value="relatorio" className="rounded-xl text-xs">RELATÓRIO</SelectItem>
-                            <SelectItem value="validacao" className="rounded-xl text-xs">VALIDAÇÃO</SelectItem>
-                            <SelectItem value="aprovacao" className="rounded-xl text-xs">APROVAÇÃO</SelectItem>
-                            <SelectItem value="calendario" className="rounded-xl text-xs">CALENDÁRIO</SelectItem>
+                        <SelectContent className="rounded-xl border-slate-200">
+                            {allDeliverables.map((d: any) => (
+                                <SelectItem key={d.id} value={d.id} className="text-xs focus:bg-indigo-50 focus:text-indigo-900 rounded-lg">
+                                    {d.name}
+                                    {d.due_date && <span className="ml-2 text-[10px] text-slate-400">({new Date(d.due_date).toLocaleDateString()})</span>}
+                                </SelectItem>
+                            ))}
+                            {allDeliverables.length === 0 && (
+                                <SelectItem value="__none__" disabled className="text-xs italic text-slate-400">Nenhum entregável encontrado</SelectItem>
+                            )}
                         </SelectContent>
                     </Select>
                 </div>
-                <div className="space-y-1.5">
+
+                <div className="space-y-2">
+                    <Label className="text-[10px] font-bold text-slate-500 uppercase">Tipo de Entrega</Label>
+                    <Select value={type} onValueChange={setType}>
+                        <SelectTrigger className="h-9 rounded-xl border-slate-200 text-xs focus:ring-indigo-500/20 bg-white shadow-sm">
+                            <SelectValue placeholder="Selecione..." />
+                        </SelectTrigger>
+                        <SelectContent className="rounded-xl border-slate-200">
+                            <SelectItem value="edicao" className="text-xs focus:bg-indigo-50 focus:text-indigo-900 rounded-lg">VÍDEO / EDIÇÃO</SelectItem>
+                            <SelectItem value="artes" className="text-xs focus:bg-indigo-50 focus:text-indigo-900 rounded-lg">ARTES / CRIATIVO</SelectItem>
+                            <SelectItem value="texto" className="text-xs focus:bg-indigo-50 focus:text-indigo-900 rounded-lg">TEXTO / COPY</SelectItem>
+                            <SelectItem value="campanhas" className="text-xs focus:bg-indigo-50 focus:text-indigo-900 rounded-lg">TRÁFEGO / CAMPANHAS</SelectItem>
+                            <SelectItem value="outros" className="text-xs focus:bg-indigo-50 focus:text-indigo-900 rounded-lg">OUTROS</SelectItem>
+                        </SelectContent>
+                    </Select>
+                </div>
+
+                <div className="space-y-2">
                     <Label className="text-[10px] font-bold text-slate-500 uppercase">Data de Postagem</Label>
                     <input 
                         type="date"
                         value={postDate}
-                        className="w-full h-9 rounded-xl border border-slate-200 bg-slate-50/50 px-3 text-xs focus:ring-2 focus:ring-indigo-500 outline-none"
+                        className="w-full h-9 rounded-xl border border-slate-200 bg-white px-3 text-xs focus:ring-indigo-500/20 outline-none shadow-sm"
                         onChange={(e) => setPostDate(e.target.value)}
                     />
                 </div>
-                <div className="space-y-1.5 flex flex-col justify-end">
-                    <div className="flex items-center justify-between h-9 px-3 rounded-xl border border-slate-200 bg-slate-50/50">
+
+                <div className="space-y-2 flex flex-col justify-end pb-0.5">
+                    <div className="flex items-center justify-between h-9 px-3 rounded-xl border border-slate-200 bg-white shadow-sm">
                         <Label className="text-[10px] font-bold text-slate-500 uppercase cursor-pointer" htmlFor={`priority-${idx}`}>Priorizar</Label>
                         <Switch 
                             id={`priority-${idx}`}
@@ -526,6 +547,25 @@ export default function OperacaoM30Case() {
         },
     });
 
+    const allDeliverablesQ = useQuery({
+        queryKey: ["case_all_deliverables", activeTenantId, caseQ.data?.meta_json?.commitment_id, deliverableQ.data?.commitment_id],
+        enabled: Boolean(activeTenantId && (caseQ.data?.meta_json?.commitment_id || deliverableQ.data?.commitment_id)),
+        queryFn: async () => {
+            const cid = (caseQ.data?.meta_json as any)?.commitment_id || deliverableQ.data?.commitment_id;
+            if (!cid) return [];
+
+            const { data, error } = await supabase
+                .from("deliverables")
+                .select("id, name, status, due_date")
+                .eq("tenant_id", activeTenantId!)
+                .eq("commitment_id", cid)
+                .order("due_date", { ascending: true });
+            
+            if (error) throw error;
+            return data ?? [];
+        },
+    });
+
     const journeyQ = useQuery({
         queryKey: ["case_journey", activeTenantId, caseQ.data?.journey_id],
         enabled: Boolean(activeTenantId && caseQ.data?.journey_id),
@@ -666,7 +706,7 @@ export default function OperacaoM30Case() {
                 title: st.title,
                 summary_text: st.description || null,
                 customer_entity_id: caseQ.data.customer_entity_id,
-                deliverable_id: caseQ.data.deliverable_id,
+                deliverable_id: st.deliverable_id || caseQ.data.deliverable_id,
                 state: "decupagem__upload",
                 meta_json: {
                     parent_case_id: id,
@@ -779,7 +819,7 @@ export default function OperacaoM30Case() {
                     title: st.title,
                     summary_text: st.description || null,
                     customer_entity_id: caseQ.data.customer_entity_id,
-                    deliverable_id: caseQ.data.deliverable_id,
+                    deliverable_id: st.deliverable_id || caseQ.data.deliverable_id,
                     status: "open",
                     state: "decupagem__upload",
                     meta_json: {
@@ -1116,6 +1156,7 @@ export default function OperacaoM30Case() {
                                                                 onRefetch={() => caseQ.refetch()}
                                                                 caseState={caseQ.data?.state}
                                                                 caseData={caseQ.data}
+                                                                allDeliverables={allDeliverablesQ.data || []}
                                                             />
                                                         </AccordionContent>
                                                     </AccordionItem>
