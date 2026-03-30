@@ -746,8 +746,8 @@ export default function OperacaoM30Case() {
                 customer_entity_id: caseQ.data.customer_entity_id,
                 deliverable_id: deliverableId || st.deliverable_id || caseQ.data.deliverable_id,
                 state: "decupagem__upload",
-                parent_case_id: id,
                 meta_json: {
+                    parent_case_id: id,
                     customer_entity_name: (caseQ.data.meta_json as any)?.customer_entity_name,
                     commitment_id: (caseQ.data.meta_json as any)?.commitment_id,
                     post_date: st.post_date || null,
@@ -860,8 +860,8 @@ export default function OperacaoM30Case() {
                     deliverable_id: st.deliverable_id || caseQ.data.deliverable_id,
                     status: "open",
                     state: "decupagem__upload",
-                    parent_case_id: id,
                     meta_json: {
+                        parent_case_id: id,
                         customer_entity_name: (caseQ.data.meta_json as any)?.customer_entity_name,
                         commitment_id: (caseQ.data.meta_json as any)?.commitment_id,
                         post_date: st.post_date || null,
