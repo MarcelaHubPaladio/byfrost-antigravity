@@ -4,8 +4,10 @@ import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { CheckCircle2, FileText, ListChecks, Loader2, AlertCircle, Rocket } from "lucide-react";
+import { CheckCircle2, FileText, ListChecks, Loader2, AlertCircle, Rocket, ChevronDown } from "lucide-react";
 import { showSuccess, showError } from "@/utils/toast";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import { cn } from "@/lib/utils";
 
 export default function PublicScriptApproval() {
     const { token } = useParams();
@@ -29,7 +31,8 @@ export default function PublicScriptApproval() {
             } else {
                 const c = data[0];
                 setCaseData(c);
-                if (c.state !== "aprovar_roteiro") {
+                // In M30 flow, once it leaves 'aprovar_roteiro', it means it was approved
+                if (c.state !== "aprovar_roteiro" && c.journey_name?.includes("M30")) {
                     setAlreadyApproved(true);
                 }
             }
@@ -102,6 +105,9 @@ export default function PublicScriptApproval() {
         );
     }
 
+    const subtasks = (caseData.meta_json?.pending_subtasks || []) as any[];
+    const hasSubtasks = subtasks.length > 0;
+
     return (
         <div className="min-h-screen bg-slate-50 pb-24">
             <header className="bg-white border-b border-slate-100 px-6 py-8 text-center sticky top-0 z-10 shadow-sm shadow-slate-200/20">
@@ -119,33 +125,92 @@ export default function PublicScriptApproval() {
             </header>
 
             <main className="mx-auto max-w-2xl px-6 py-10 space-y-10">
-                {/* Briefing Section */}
-                <section className="space-y-4">
-                    <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                        <FileText className="h-4 w-4" /> Briefing da Pauta
-                    </h3>
-                    <Card className="rounded-[32px] border-none shadow-xl shadow-slate-200/40 p-8 bg-white">
-                        <div 
-                            className="prose prose-slate prose-sm max-w-none prose-p:leading-relaxed prose-p:text-slate-600"
-                            dangerouslySetInnerHTML={{ __html: caseData.summary_text || "<p className='italic text-slate-400'>Nenhuma descrição adicional.</p>" }}
-                        />
-                    </Card>
-                </section>
+                {hasSubtasks ? (
+                    <div className="space-y-6">
+                        <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 px-2">
+                            <ListChecks className="h-4 w-4" /> Fila de Conteúdos para Aprovação
+                        </h3>
+                        <Accordion type="multiple" defaultValue={[`video-0`]} className="space-y-4">
+                            {subtasks.map((st, idx) => (
+                                <AccordionItem 
+                                    key={idx} 
+                                    value={`video-${idx}`}
+                                    className="border-none rounded-[32px] bg-white shadow-xl shadow-slate-200/40 overflow-hidden"
+                                >
+                                    <AccordionTrigger className="px-8 py-6 hover:no-underline hover:bg-slate-50/50 transition-all [&[data-state=open]>div>svg]:rotate-180">
+                                        <div className="flex items-center gap-4 text-left">
+                                            <div className="h-10 w-10 rounded-2xl bg-indigo-50 flex items-center justify-center text-indigo-600 font-black text-xs shrink-0">
+                                                {idx + 1}
+                                            </div>
+                                            <div>
+                                                <div className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-0.5">
+                                                    {st.type === 'arte_estatica' ? 'Design/Arte' : 'Vídeo/Roteiro'}
+                                                </div>
+                                                <div className="text-base font-black text-slate-900">{st.title}</div>
+                                            </div>
+                                        </div>
+                                    </AccordionTrigger>
+                                    <AccordionContent className="px-8 pb-8 pt-0 space-y-8 animate-in slide-in-from-top-2 duration-300">
+                                        {/* sub-briefing */}
+                                        <div className="space-y-3">
+                                            <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                                                <FileText className="h-3 w-3" /> Briefing da Pauta
+                                            </div>
+                                            <div 
+                                                className="prose prose-slate prose-sm max-w-none prose-p:leading-relaxed prose-p:text-slate-600 bg-slate-50/50 p-6 rounded-3xl"
+                                                dangerouslySetInnerHTML={{ __html: st.summary || "<p className='italic text-slate-400'>Nenhum detalhe adicional informado.</p>" }}
+                                            />
+                                        </div>
 
-                {/* Script Section */}
-                <section className="space-y-4">
-                    <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                        <ListChecks className="h-4 w-4" /> Roteiro Completo
-                    </h3>
-                    <Card className="rounded-[32px] border-none shadow-xl shadow-slate-200/40 p-8 bg-slate-900 text-slate-100 overflow-hidden relative">
-                        <div className="absolute top-0 right-0 p-8 opacity-5">
-                            <Rocket className="h-24 w-24" />
-                        </div>
-                        <div className="relative z-10 whitespace-pre-wrap leading-relaxed text-sm font-medium font-sans">
-                            {caseData.meta_json?.script_raw || "O roteiro está sendo finalizado..."}
-                        </div>
-                    </Card>
-                </section>
+                                        {/* sub-script */}
+                                        <div className="space-y-3">
+                                            <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                                                <ListChecks className="h-3 w-3" /> Roteiro Completo
+                                            </div>
+                                            <div className="rounded-3xl bg-slate-900 p-8 text-slate-100 relative overflow-hidden">
+                                                <div className="absolute top-0 right-0 p-6 opacity-5">
+                                                    <Rocket className="h-20 w-20" />
+                                                </div>
+                                                <div className="relative z-10 whitespace-pre-wrap leading-relaxed text-sm font-medium font-sans">
+                                                    {st.script || "O roteiro deste vídeo está sendo finalizado..."}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </AccordionContent>
+                                </AccordionItem>
+                            ))}
+                        </Accordion>
+                    </div>
+                ) : (
+                    <>
+                        {/* Legacy/Single Case View */}
+                        <section className="space-y-4">
+                            <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                                <FileText className="h-4 w-4" /> Briefing da Pauta
+                            </h3>
+                            <Card className="rounded-[32px] border-none shadow-xl shadow-slate-200/40 p-8 bg-white">
+                                <div 
+                                    className="prose prose-slate prose-sm max-w-none prose-p:leading-relaxed prose-p:text-slate-600"
+                                    dangerouslySetInnerHTML={{ __html: caseData.summary_text || "<p className='italic text-slate-400'>Nenhuma descrição adicional.</p>" }}
+                                />
+                            </Card>
+                        </section>
+
+                        <section className="space-y-4">
+                            <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                                <ListChecks className="h-4 w-4" /> Roteiro Completo
+                            </h3>
+                            <Card className="rounded-[32px] border-none shadow-xl shadow-slate-200/40 p-8 bg-slate-900 text-slate-100 overflow-hidden relative">
+                                <div className="absolute top-0 right-0 p-8 opacity-5">
+                                    <Rocket className="h-24 w-24" />
+                                </div>
+                                <div className="relative z-10 whitespace-pre-wrap leading-relaxed text-sm font-medium font-sans">
+                                    {caseData.meta_json?.script_raw || "O roteiro está sendo finalizado..."}
+                                </div>
+                            </Card>
+                        </section>
+                    </>
+                )}
 
                 {/* Terms Note */}
                 <p className="text-[11px] text-slate-400 text-center px-10 leading-relaxed font-medium">
