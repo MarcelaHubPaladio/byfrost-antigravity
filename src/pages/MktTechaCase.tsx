@@ -62,7 +62,10 @@ import {
     Youtube,
     Smartphone,
     Calendar,
-    ArrowRight
+    ArrowRight,
+    Users,
+    Zap,
+    DollarSign
 } from "lucide-react";
 import { format, eachDayOfInterval, startOfDay, endOfDay, addDays, differenceInDays, parseISO, isWithinInterval } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -207,12 +210,12 @@ export default function MktTechaCase() {
         }
     };
 
-    const copyShareLink = async (type: 'approve' | 'summary' | 'planning') => {
+    const copyShareLink = async (type: 'approve' | 'summary' | 'planning' | 'report') => {
         let token = await ensureShareAccess();
         if (!token) return;
 
         const baseUrl = window.location.origin;
-        let path = type === 'summary' ? 'summary' : 'approve';
+        let path = type === 'summary' ? 'summary' : type === 'report' ? 'report' : 'approve';
         let url = `${baseUrl}/public/mkt-techa/${path}/${token}`;
         
         if (type === 'planning') {
@@ -224,6 +227,7 @@ export default function MktTechaCase() {
         let label = 'link de aprovação';
         if (type === 'summary') label = 'link de resumo';
         if (type === 'planning') label = 'link de aprovação estratégica';
+        if (type === 'report') label = 'link do dashboard de resultados';
         
         showSuccess(`${label.charAt(0).toUpperCase() + label.slice(1)} copiado!`);
     };
@@ -1400,6 +1404,66 @@ export default function MktTechaCase() {
                                                                     </div>
                                                                 </div>
                                                              )}
+
+                                                            {st === "relatrio" && (
+                                                                <div className="space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                                                                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-1">
+                                                                        <div className="flex flex-col">
+                                                                            <h4 className="text-sm font-black text-slate-800 tracking-tight leading-none">Consolidação e Dashboard Final</h4>
+                                                                            <p className="text-[10px] text-slate-500 font-medium">Resumo executivo de performance para apresentação ao cliente.</p>
+                                                                        </div>
+                                                                        <Button 
+                                                                            onClick={() => copyShareLink('report')}
+                                                                            style={{ backgroundColor: primaryColor }}
+                                                                            className="h-10 px-6 rounded-2xl text-[10px] font-black uppercase tracking-widest gap-2 shadow-xl hover:scale-105 transition-all text-white"
+                                                                        >
+                                                                            <Share2 className="h-4 w-4" /> Copiar Link do Dashboard
+                                                                        </Button>
+                                                                    </div>
+
+                                                                    {/* Resumo de Métricas Agregadas */}
+                                                                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                                                                        {[
+                                                                            { label: 'Total Views', key: 'views', icon: <Users className="h-4 w-4" /> },
+                                                                            { label: 'Total Interações', custom: (cr: any) => (cr.metrics?.likes || 0) + (cr.metrics?.comments || 0), icon: <Zap className="h-4 w-4" /> },
+                                                                            { label: 'Conversões', key: 'sales_count', icon: <Target className="h-4 w-4" /> },
+                                                                            { label: 'Faturamento', key: 'sales_amount', prefix: 'R$', icon: <DollarSign className="h-4 w-4" /> },
+                                                                        ].map((stat, i) => {
+                                                                            const total = (meta.creatives || []).filter((c: any) => c.status === 'approved').reduce((acc: number, curr: any) => {
+                                                                                if (stat.custom) return acc + stat.custom(curr);
+                                                                                return acc + (Number(curr.metrics?.[stat.key as any]) || 0);
+                                                                            }, 0);
+
+                                                                            return (
+                                                                                <div key={i} className="p-6 rounded-[32px] bg-slate-50 border border-slate-100 space-y-2">
+                                                                                    <div className="flex items-center gap-2 text-slate-400">
+                                                                                        {stat.icon}
+                                                                                        <span className="text-[9px] font-black uppercase tracking-widest">{stat.label}</span>
+                                                                                    </div>
+                                                                                    <div className="text-xl font-black text-slate-900">
+                                                                                        {stat.prefix} {total.toLocaleString()}
+                                                                                    </div>
+                                                                                </div>
+                                                                            );
+                                                                        })}
+                                                                    </div>
+
+                                                                    <div className="space-y-4">
+                                                                        <div className="flex items-center gap-3 px-1">
+                                                                            <div className="h-10 w-10 rounded-2xl bg-slate-900 flex items-center justify-center text-white">
+                                                                                <FileText className="h-5 w-5" />
+                                                                            </div>
+                                                                            <h5 className="text-[11px] font-black text-slate-800 uppercase tracking-widest">Insights Executivos da Campanha</h5>
+                                                                        </div>
+                                                                        <RichTextEditor 
+                                                                            value={meta.stage_data?.relatrio?.insights || ""} 
+                                                                            onChange={(v) => updateStageData("relatrio", "insights", v)}
+                                                                            minHeightClassName="min-h-[300px]"
+                                                                            placeholder="Escreva aqui a análise final, principais aprendizados e próximos passos recomendados..."
+                                                                        />
+                                                                    </div>
+                                                                </div>
+                                                            )}
 
                                                             {st === "concluido" && (
                                                                 <div className="p-8 border-2 border-emerald-100 rounded-[32px] bg-emerald-50/30 flex flex-col items-center justify-center text-center gap-4">

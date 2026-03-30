@@ -90,6 +90,7 @@ const Communication = lazyWithRetry(() => import("@/pages/Communication"));
 const PublicScriptApproval = lazyWithRetry(() => import("@/pages/PublicScriptApproval"));
 const MktTechaPublicApproval = lazyWithRetry(() => import("@/pages/MktTechaPublicApproval"));
 const MktTechaPublicSummary = lazyWithRetry(() => import("@/pages/MktTechaPublicSummary"));
+const MktTechaPublicReport = lazyWithRetry(() => import("@/pages/MktTechaPublicReport"));
 
 
 const GlobalLoading = () => (
@@ -165,6 +166,7 @@ const App = () => (
                   {/* MKT Techa Public Approval & Summary (no auth) */}
                   <Route path="/public/mkt-techa/approve/:id" element={<MktTechaPublicApproval />} />
                   <Route path="/public/mkt-techa/summary/:id" element={<MktTechaPublicSummary />} />
+                  <Route path="/public/mkt-techa/report/:id" element={<MktTechaPublicReport />} />
 
                   {/* Incentives (gestão interna; protegido por matriz de acesso) */}
                   <Route
