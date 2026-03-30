@@ -179,10 +179,19 @@ export default function MktTechaCase() {
     const generateShareToken = async () => {
         if (!id) return;
         const newToken = crypto.randomUUID();
-        const { error } = await supabase.from("cases").update({ share_token: newToken }).eq("id", id);
+        const accessCode = Math.floor(1000 + Math.random() * 9000).toString();
+        
+        const newMeta = { ...meta, share_access_code: accessCode };
+        
+        const { error } = await supabase.from("cases").update({ 
+            share_token: newToken,
+            meta_json: newMeta
+        }).eq("id", id);
+
         if (error) {
             showError("Erro ao gerar link compartilhado");
         } else {
+            setMeta(newMeta);
             caseQ.refetch();
             return newToken;
         }
@@ -526,18 +535,27 @@ export default function MktTechaCase() {
                                 </div>
 
                                 <div className="flex items-center gap-2">
-                                    <Select value={c.state} onValueChange={updateState} disabled={updatingState}>
-                                        <SelectTrigger className="h-10 w-[180px] rounded-2xl bg-white shadow-sm border-slate-200">
-                                            <SelectValue placeholder="Estado..." />
-                                        </SelectTrigger>
-                                        <SelectContent className="rounded-2xl">
-                                            {states.map((s) => (
-                                                <SelectItem key={s} value={s} className="rounded-xl">
-                                                    {getStateLabel(journeyQ.data as any, s)}
-                                                </SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
+                                    <div className="flex items-center gap-1">
+                                        <Select value={c.state} onValueChange={updateState} disabled={updatingState}>
+                                            <SelectTrigger className="h-10 w-[180px] rounded-2xl bg-white shadow-sm border-slate-200">
+                                                <SelectValue placeholder="Estado..." />
+                                            </SelectTrigger>
+                                            <SelectContent className="rounded-2xl">
+                                                {states.map((s) => (
+                                                    <SelectItem key={s} value={s} className="rounded-xl">
+                                                        {getStateLabel(journeyQ.data as any, s)}
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+
+                                        {c.share_token && meta.share_access_code && (
+                                            <div className="flex items-center gap-1.5 px-3 h-10 rounded-2xl bg-slate-900 border border-slate-800 shadow-sm ml-2">
+                                                <Lock className="h-3.5 w-3.5 text-amber-500" />
+                                                <span className="text-[10px] font-black text-white tracking-widest">{meta.share_access_code}</span>
+                                            </div>
+                                        )}
+                                    </div>
 
                                     <AlertDialog>
                                         <AlertDialogTrigger asChild>
@@ -682,14 +700,21 @@ export default function MktTechaCase() {
                                                                                         <span className="text-[10px] font-black uppercase tracking-tight">Planejamento Aprovado pelo Cliente</span>
                                                                                     </Badge>
                                                                                 ) : (
-                                                                                    <Button 
-                                                                                        variant="outline" 
-                                                                                        onClick={() => copyShareLink('planning')}
-                                                                                        style={{ color: primaryColor, borderColor: `${primaryColor}20` }}
-                                                                                        className="rounded-xl h-9 text-[10px] font-black gap-2 hover:bg-slate-50 transition-all shadow-sm"
-                                                                                    >
-                                                                                        <Share2 className="h-4 w-4" /> COPIAR LINK DE APROVAÇÃO ESTRATÉGICA
-                                                                                    </Button>
+                                                                                    <div className="flex items-center gap-2">
+                                                                                        {meta.share_access_code && (
+                                                                                            <Badge className="h-9 px-3 rounded-xl bg-slate-900 text-amber-500 border-slate-800 font-black text-[10px] tracking-widest">
+                                                                                                PIN: {meta.share_access_code}
+                                                                                            </Badge>
+                                                                                        )}
+                                                                                        <Button 
+                                                                                            variant="outline" 
+                                                                                            onClick={() => copyShareLink('planning')}
+                                                                                            style={{ color: primaryColor, borderColor: `${primaryColor}20` }}
+                                                                                            className="rounded-xl h-9 text-[10px] font-black gap-2 hover:bg-slate-50 transition-all shadow-sm"
+                                                                                        >
+                                                                                            <Share2 className="h-4 w-4" /> COPIAR LINK DE APROVAÇÃO ESTRATÉGICA
+                                                                                        </Button>
+                                                                                    </div>
                                                                                 )}
                                                                             </div>
                                                                         </div>

@@ -21,7 +21,9 @@ import {
     Check,
     Download,
     ExternalLink,
-    Hash
+    Hash,
+    Lock,
+    MessageCircle as LucideMessageCircle
 } from "lucide-react";
 import { showSuccess, showError } from "@/utils/toast";
 import { cn } from "@/lib/utils";
@@ -39,6 +41,11 @@ export default function MktTechaPublicApproval() {
     const [campaign, setCampaign] = useState<any>(null);
     const [tenant, setTenant] = useState<any>(null);
     const [notFound, setNotFound] = useState(false);
+    
+    // Auth state for access code
+    const [isAuthorized, setIsAuthorized] = useState(false);
+    const [pin, setPin] = useState("");
+    const [pinError, setPinError] = useState(false);
 
     useEffect(() => {
         fetchCampaign();
@@ -57,6 +64,11 @@ export default function MktTechaPublicApproval() {
                 const campaignData = data[0];
                 setCampaign(campaignData);
                 
+                // If there's no access code required, authorize immediately
+                if (!campaignData.meta_json?.share_access_code) {
+                    setIsAuthorized(true);
+                }
+
                 // Fetch tenant branding
                 if (campaignData.tenant_id) {
                     const { data: tData } = await supabase
@@ -71,6 +83,20 @@ export default function MktTechaPublicApproval() {
             setNotFound(true);
         } finally {
             setLoading(false);
+        }
+    };
+
+    const handlePinSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        const correctPin = campaign?.meta_json?.share_access_code;
+        if (pin === correctPin) {
+            setIsAuthorized(true);
+            setPinError(false);
+            showSuccess("Acesso liberado!");
+        } else {
+            setPinError(true);
+            setPin("");
+            showError("Código de acesso incorreto.");
         }
     };
 
@@ -153,10 +179,54 @@ export default function MktTechaPublicApproval() {
     const primaryColor = palette?.primary?.hex || "#4f46e5";
     const primaryText = palette?.primary?.text || "#ffffff";
 
+    if (campaign && !isAuthorized) {
+        return (
+            <div className="min-h-screen bg-slate-950 flex items-center justify-center p-6 font-sans">
+                <Card className="w-full max-w-sm rounded-[40px] bg-slate-900 border-none shadow-2xl p-8 ring-1 ring-white/5 space-y-8 animate-in fade-in zoom-in duration-500">
+                    <div className="text-center space-y-2">
+                        <div className="h-16 w-16 bg-slate-800 rounded-3xl flex items-center justify-center mx-auto mb-4 ring-1 ring-white/10">
+                            <Lock className="h-8 w-8 text-amber-500" />
+                        </div>
+                        <h1 className="text-xl font-black text-white uppercase tracking-tight">Conteúdo Protegido</h1>
+                        <p className="text-xs text-slate-500 font-medium leading-relaxed">Insira o código de 4 dígitos enviado por nossa equipe para acessar os detalhes da campanha.</p>
+                    </div>
+
+                    <form onSubmit={handlePinSubmit} className="space-y-6">
+                        <div className="flex justify-center gap-3">
+                            <input 
+                                type="text"
+                                maxLength={4}
+                                value={pin}
+                                onChange={(e) => setPin(e.target.value.replace(/\D/g, ''))}
+                                placeholder="----"
+                                autoFocus
+                                className={cn(
+                                    "w-full h-16 bg-slate-800 border-none rounded-2xl text-center text-3xl font-black tracking-[0.5em] text-white focus:ring-2 focus:ring-indigo-500 transition-all",
+                                    pinError && "ring-2 ring-rose-500 animate-shake"
+                                )}
+                            />
+                        </div>
+                        <Button 
+                            type="submit"
+                            style={{ backgroundColor: primaryColor, color: primaryText }}
+                            className="w-full h-14 rounded-2xl font-black text-sm shadow-xl active:scale-95 transition-all"
+                        >
+                            ACESSAR PORTAL
+                        </Button>
+                    </form>
+                    
+                    {tenant?.name && (
+                        <p className="text-center text-[10px] font-bold text-slate-700 uppercase tracking-widest pt-4 border-t border-white/5">{tenant.name}</p>
+                    )}
+                </Card>
+            </div>
+        );
+    }
+
     return (
-        <PublicPortalShell palette={palette}>
-            <div className="min-h-screen pb-24 font-sans">
-                <header className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-[40px] px-6 py-10 text-center sticky top-4 z-20 shadow-2xl mx-auto max-w-5xl">
+        <PublicPortalShell palette={{ ...palette, primary: { hex: "#0f172a", text: "#ffffff" } }}>
+            <div className="min-h-screen bg-slate-950 pb-24 font-sans selection:bg-indigo-500/30">
+                <header className="bg-slate-900/50 backdrop-blur-xl border border-white/5 rounded-[40px] px-6 py-10 text-center sticky top-4 z-20 shadow-2xl mx-auto max-w-5xl">
                     <div className="mx-auto max-w-4xl">
                         <Badge 
                             variant="outline" 
@@ -243,7 +313,7 @@ export default function MktTechaPublicApproval() {
                                             style={{ color: primaryColor }}
                                             className="h-10 w-10 rounded-2xl bg-slate-900 flex items-center justify-center ring-1 ring-white/10"
                                         >
-                                            <MessageCircle className="h-5 w-5" />
+                                            <LucideMessageCircle className="h-5 w-5" />
                                         </div>
                                         <h2 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">MENSAGEM CENTRAL</h2>
                                     </div>
