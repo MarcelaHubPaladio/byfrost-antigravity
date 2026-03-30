@@ -32,7 +32,37 @@ import { TransitionBlockDialog } from "@/components/case/TransitionBlockDialog";
 import { CaseTimeline, type CaseTimelineEvent } from "@/components/case/CaseTimeline";
 import { TrelloCardDetails } from "@/components/trello/TrelloCardDetails";
 import { Card } from "@/components/ui/card";
-import { ArrowLeft, Trash2, RefreshCw, PackageCheck, Check, AlertCircle, Plus, Calendar, Link as LinkIcon, ExternalLink, Rocket } from "lucide-react";
+import {
+    AlertCircle,
+    AlertTriangle,
+    ArrowLeft,
+    Calendar,
+    Check,
+    CheckCircle2,
+    Clock,
+    ExternalLink,
+    FileText,
+    GripVertical,
+    Link as LinkIcon,
+    ListChecks,
+    PackageCheck,
+    Pencil,
+    Plus,
+    PlusCircle,
+    RefreshCw,
+    Rocket,
+    Save,
+    Trash2,
+    X
+} from "lucide-react";
+
+const CheckIcon = Check;
+const TrashIcon = Trash2;
+const RefreshCwIcon = RefreshCw;
+const RocketIcon = Rocket;
+const ExternalLinkIcon = ExternalLink;
+const CalendarIcon = Calendar;
+const PlusIcon = Plus;
 import { cn, titleizeState } from "@/lib/utils";
 import { showError, showSuccess } from "@/utils/toast";
 import { getStateLabel } from "@/lib/journeyLabels";
@@ -45,7 +75,6 @@ import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Save, ListChecks, FileText, CheckCircle2, Clock, Trash2 as TrashIcon, Pencil, PlusCircle, X, Check as CheckIcon, GripVertical } from "lucide-react";
 import {
     DndContext,
     closestCenter,
@@ -529,6 +558,46 @@ export default function OperacaoM30Case() {
             return data ?? [];
         },
     });
+
+    const usedDeliverablesQ = useQuery({
+        queryKey: ["case_used_deliverables", activeTenantId, caseQ.data?.meta_json?.commitment_id, deliverableQ.data?.commitment_id],
+        enabled: Boolean(activeTenantId && (caseQ.data?.meta_json?.commitment_id || deliverableQ.data?.commitment_id)),
+        queryFn: async () => {
+            const cid = (caseQ.data?.meta_json as any)?.commitment_id || deliverableQ.data?.commitment_id;
+            if (!cid) return [];
+
+            const { data, error } = await supabase
+                .from("cases")
+                .select("deliverable_id")
+                .eq("tenant_id", activeTenantId!)
+                .is("deleted_at", null)
+                .not("deliverable_id", "is", null);
+            
+            if (error) throw error;
+            return data.map(c => c.deliverable_id);
+        }
+    });
+
+    const availableDeliverableGroups = useMemo(() => {
+        const all = allDeliverablesQ.data || [];
+        const usedIds = new Set(usedDeliverablesQ.data || []);
+        
+        const groups: Record<string, any[]> = {};
+        all.forEach(d => {
+            if (!groups[d.name]) groups[d.name] = [];
+            groups[d.name].push(d);
+        });
+
+        return Object.entries(groups).map(([name, items]) => {
+            const available = items.filter(d => !usedIds.has(d.id));
+            return {
+                name,
+                nextId: available[0]?.id,
+                remaining: available.length,
+                total: items.length
+            };
+        }).sort((a, b) => b.remaining - a.remaining);
+    }, [allDeliverablesQ.data, usedDeliverablesQ.data]);
 
     const journeyQ = useQuery({
         queryKey: ["case_journey", activeTenantId, caseQ.data?.journey_id],
@@ -1222,7 +1291,7 @@ export default function OperacaoM30Case() {
                                 Criar Card de Produção
                             </AlertDialogTitle>
                             <AlertDialogDescription className="text-slate-500 text-sm">
-                                Vincule esta subtarefa ao entregável correto do contrato antes de iniciar a produção.
+                                Vincule esta subtarefa ao próximo entregável disponível na fila do contrato.
                             </AlertDialogDescription>
                         </AlertDialogHeader>
 
@@ -1230,7 +1299,7 @@ export default function OperacaoM30Case() {
                             <div className="space-y-2">
                                 <Label className="text-[10px] font-bold text-slate-500 uppercase px-1">Entregável do Contrato</Label>
                                 <Select 
-                                    defaultValue={taskToCreate?.st?.deliverable_id || caseQ.data?.deliverable_id || ""}
+                                    value={taskToCreate?.st?.deliverable_id || (availableDeliverableGroups.find(g => g.remaining > 0)?.nextId) || ""}
                                     onValueChange={(val) => {
                                         if (taskToCreate) {
                                             setTaskToCreate({
@@ -1241,16 +1310,31 @@ export default function OperacaoM30Case() {
                                     }}
                                 >
                                     <SelectTrigger className="h-11 rounded-2xl border-slate-200 focus:ring-indigo-500/20 bg-slate-50/50">
-                                        <SelectValue placeholder="Selecione o entregável..." />
+                                        <SelectValue placeholder="Selecione a categoria..." />
                                     </SelectTrigger>
                                     <SelectContent className="rounded-2xl border-slate-200">
-                                        {(allDeliverablesQ.data || []).map((d: any) => (
-                                            <SelectItem key={d.id} value={d.id} className="text-sm focus:bg-indigo-50 focus:text-indigo-900 rounded-xl">
-                                                {d.name}
+                                        {availableDeliverableGroups.map((g) => (
+                                            <SelectItem 
+                                                key={g.name} 
+                                                value={g.nextId || `exhausted-${g.name}`} 
+                                                disabled={g.remaining === 0}
+                                                className="text-sm focus:bg-indigo-50 focus:text-indigo-900 rounded-xl"
+                                            >
+                                                <div className="flex items-center justify-between w-full gap-4">
+                                                    <span>{g.name}</span>
+                                                    <Badge variant={g.remaining > 0 ? "secondary" : "outline"} className="text-[9px] h-4">
+                                                        {g.remaining > 0 ? `${g.remaining} restantes` : "ESGOTADO"}
+                                                    </Badge>
+                                                </div>
                                             </SelectItem>
                                         ))}
                                     </SelectContent>
                                 </Select>
+                                {taskToCreate?.st?.deliverable_id?.startsWith("exhausted-") && (
+                                    <p className="text-[10px] text-rose-500 font-bold px-1 mt-1 flex items-center gap-1">
+                                        <AlertTriangle className="h-3 w-3" /> Todos os itens desta categoria já foram utilizados.
+                                    </p>
+                                )}
                             </div>
 
                             <div className="space-y-2">
@@ -1284,15 +1368,19 @@ export default function OperacaoM30Case() {
                             <AlertDialogCancel className="rounded-2xl border-slate-200 text-slate-500 text-xs font-bold hover:bg-slate-50">Cancelar</AlertDialogCancel>
                             <AlertDialogAction 
                                 className="rounded-2xl bg-indigo-600 text-white text-xs font-bold hover:bg-indigo-700 shadow-indigo-100 shadow-lg px-6"
+                                disabled={!taskToCreate?.st?.deliverable_id || taskToCreate.st.deliverable_id.startsWith("exhausted-")}
                                 onClick={() => {
                                     if (taskToCreate) {
-                                        handleCreateIndividualTask(
-                                            taskToCreate.st, 
-                                            taskToCreate.idx,
-                                            taskToCreate.st.deliverable_id || caseQ.data?.deliverable_id || "",
-                                            taskToCreate.st.type || "edicao"
-                                        );
-                                        setTaskToCreate(null);
+                                        const finalDelId = taskToCreate.st.deliverable_id || (availableDeliverableGroups.find(g => g.remaining > 0)?.nextId);
+                                        if (finalDelId && !finalDelId.startsWith("exhausted-")) {
+                                            handleCreateIndividualTask(
+                                                taskToCreate.st, 
+                                                taskToCreate.idx,
+                                                finalDelId,
+                                                taskToCreate.st.type || "edicao"
+                                            );
+                                            setTaskToCreate(null);
+                                        }
                                     }
                                 }}
                             >
