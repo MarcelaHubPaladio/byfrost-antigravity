@@ -595,11 +595,12 @@ export default function MktTechaCase() {
                                     </Button>
 
                                     {meta.share_access_code && (
-                                        <div className="flex items-center gap-2 px-3 h-10 rounded-2xl bg-slate-900 border border-slate-800 shadow-sm">
-                                            <div className="flex flex-col -space-y-1">
-                                                <span className="text-[8px] font-black text-amber-500/50 uppercase tracking-widest leading-none">Acesso PIN</span>
-                                                <span className="text-xs font-black text-white tracking-widest leading-none mt-0.5">{meta.share_access_code}</span>
+                                        <div className="flex items-center gap-3 px-4 h-10 rounded-2xl bg-slate-900 border border-slate-800 shadow-xl">
+                                            <div className="flex flex-col justify-center">
+                                                <span className="text-[7px] font-black text-amber-500/60 uppercase tracking-[0.2em] leading-none mb-0.5">Acesso PIN</span>
+                                                <span className="text-[13px] font-black text-white tracking-widest leading-none">{meta.share_access_code}</span>
                                             </div>
+                                            <div className="h-6 w-px bg-slate-800 mx-1" />
                                             <Lock className="h-3.5 w-3.5 text-amber-500" />
                                         </div>
                                     )}
@@ -1127,7 +1128,7 @@ export default function MktTechaCase() {
                                                                                         {/* Timeline Header (Days) */}
                                                                                         <div className="flex border-b border-white/5 pb-4 ml-[150px]">
                                                                                             {days.map((day, i) => (
-                                                                                                <div key={i} className="w-10 flex-shrink-0 flex flex-col items-center gap-1.5">
+                                                                                                <div key={i} className="w-10 min-w-[40px] flex-shrink-0 flex flex-col items-center gap-1.5">
                                                                                                     <span className="text-[8px] font-bold text-slate-600 uppercase tracking-tighter">{format(day, 'EEE', { locale: ptBR })}</span>
                                                                                                     <span className={cn(
                                                                                                         "text-[10px] font-black w-7 h-7 flex items-center justify-center rounded-xl transition-all", 
@@ -1180,7 +1181,7 @@ export default function MktTechaCase() {
                                                                                                             )}
                                                                                                             {/* Background Grid */}
                                                                                                             <div className="absolute inset-0 flex pointer-events-none opacity-[0.03]">
-                                                                                                                {Array.from({ length: 30 }).map((_, i) => <div key={i} className="w-10 h-full border-l border-white" />)}
+                                                                                                                {days.map((_, i) => <div key={i} className="w-10 min-w-[40px] h-full border-l border-white" />)}
                                                                                                             </div>
                                                                                                         </div>
                                                                                                     </div>
