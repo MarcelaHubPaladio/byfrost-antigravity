@@ -262,6 +262,28 @@ export default function CommitmentDetail() {
     }
     setSaving(false);
   };
+  const claimAllOrphans = async () => {
+    if (orphanCases.length === 0) return;
+    if (!window.confirm(`Deseja REIVINDICAR os ${orphanCases.length} cards órfãos e trazê-los para este contrato? Isso afetará os metadados de todos eles.`)) return;
+
+    setSaving(true);
+    let successCount = 0;
+    for (const c of orphanCases) {
+      const newMeta = { ...(c.meta_json || {}), commitment_id: commitmentId };
+      const { error } = await supabase
+        .from("cases")
+        .update({ meta_json: newMeta })
+        .eq("id", c.id);
+      if (!error) successCount++;
+    }
+
+    if (successCount > 0) {
+      showSuccess(`${successCount} cards resgatados com sucesso!`);
+      qc.invalidateQueries({ queryKey: ["commitment_cases"] });
+      allTenantCasesQ.refetch();
+    }
+    setSaving(false);
+  };
 
   const eventsQ = useQuery({
     queryKey: ["commitment_events", activeTenantId, commitmentId],
@@ -830,9 +852,23 @@ export default function CommitmentDetail() {
                   <AlertCircle className="h-5 w-5 text-amber-600" />
                   Modo Diagnóstico: Tarefas Órfãs (Toda a Empresa)
                 </div>
-                <Badge variant="outline" className="border-amber-200 text-amber-700 bg-white">
-                  {orphanCases.length} detectadas
-                </Badge>
+                <div className="flex items-center gap-2">
+                  <Badge variant="outline" className="border-amber-200 text-amber-700 bg-white">
+                    {orphanCases.length} detectadas
+                  </Badge>
+                  {orphanCases.length > 0 && (
+                    <Button 
+                      size="sm" 
+                      variant="outline" 
+                      onClick={claimAllOrphans}
+                      disabled={saving}
+                      className="h-7 rounded-xl text-[10px] font-bold border-amber-300 text-amber-700 bg-amber-50 hover:bg-amber-100 shadow-sm"
+                    >
+                      <RefreshCw className={cn("h-3 w-3 mr-1", saving && "animate-spin")} />
+                      Reivindicar Todos
+                    </Button>
+                  )}
+                </div>
               </div>
               
               <p className="mb-4 text-xs text-amber-700 leading-relaxed italic">

@@ -36,6 +36,7 @@ import {
     AlertCircle,
     AlertTriangle,
     ArrowLeft,
+    Building2,
     Calendar,
     Check,
     CheckCircle2,
@@ -643,6 +644,44 @@ export default function OperacaoM30Case() {
         
         // Fallback: primeiro com saldo
         return availableDeliverableGroups.find(g => g.remaining > 0)?.nextId || null;
+    };
+
+    const commitmentQ = useQuery({
+        queryKey: ["m30_case_commitment", activeTenantId, (caseQ.data?.meta_json as any)?.commitment_id || deliverableQ.data?.commitment_id],
+        enabled: Boolean(activeTenantId && ((caseQ.data?.meta_json as any)?.commitment_id || deliverableQ.data?.commitment_id)),
+        queryFn: async () => {
+            const cid = (caseQ.data?.meta_json as any)?.commitment_id || deliverableQ.data?.commitment_id;
+            const { data, error } = await supabase
+                .from("commercial_commitments")
+                .select("id, commitment_type, status, customer_entity_id, core_entities(display_name)")
+                .eq("id", cid!)
+                .single();
+            if (error) throw error;
+            return data;
+        }
+    });
+
+    const repairDna = async (targetCid: string) => {
+        if (!id || !activeTenantId) return;
+        setSaving(true);
+        try {
+            const currentMeta = (caseQ.data?.meta_json as any) || {};
+            const { error } = await supabase
+                .from("cases")
+                .update({ 
+                    meta_json: { ...currentMeta, commitment_id: targetCid },
+                    deliverable_id: null // Reset to force re-link
+                })
+                .eq("id", id);
+            
+            if (error) throw error;
+            showSuccess("DNA do card reparado. O orquestrador agora está alinhado.");
+            caseQ.refetch();
+        } catch (e: any) {
+            showError("Falha no reparo: " + e.message);
+        } finally {
+            setSaving(false);
+        }
     };
 
     const journeyQ = useQuery({
@@ -1321,6 +1360,53 @@ export default function OperacaoM30Case() {
                             </div>
 
                             <div className="space-y-4">
+                                <div className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
+                                    <div className="flex items-center justify-between mb-4">
+                                        <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                                            <FileText className="h-4 w-4" /> Vínculo de Contrato
+                                        </h3>
+                                        <Badge variant="outline" className={cn(
+                                            "text-[9px] font-bold uppercase",
+                                            commitmentQ.data ? "border-green-200 text-green-700 bg-green-50" : "border-rose-200 text-rose-700 bg-rose-50"
+                                        )}>
+                                            {commitmentQ.data ? "ALINHADO" : "NÃO VINCULADO"}
+                                        </Badge>
+                                    </div>
+
+                                    {!commitmentQ.data ? (
+                                        <div className="text-center py-4 bg-slate-50 rounded-2xl border border-dashed border-slate-200 px-4">
+                                            <p className="text-[10px] text-slate-500 font-medium leading-relaxed">
+                                                Este card nasceu sem DNA de contrato. Use o modo diagnóstico no CRM para resgatá-lo.
+                                            </p>
+                                        </div>
+                                    ) : (
+                                        <div className="space-y-3">
+                                            <div className="p-3 rounded-2xl bg-slate-50 border border-slate-100">
+                                                <div className="text-[10px] text-slate-400 font-bold uppercase">ID do Contrato</div>
+                                                <div className="text-xs font-mono text-slate-700 mt-1 truncate">{commitmentQ.data.id}</div>
+                                                <div className="mt-2 text-[11px] font-bold text-indigo-700 flex items-center gap-1">
+                                                    <Building2 className="h-3 w-3" />
+                                                    {(commitmentQ.data as any).core_entities?.display_name || "Cliente"}
+                                                </div>
+                                            </div>
+
+                                            <Button 
+                                                variant="outline" 
+                                                size="sm" 
+                                                className="w-full h-9 rounded-xl text-[10px] font-bold border-rose-200 text-rose-700 hover:bg-rose-50 hover:text-rose-800"
+                                                onClick={() => {
+                                                    const target = window.prompt("Cole o UUID do contrato correto:", commitmentQ.data?.id);
+                                                    if (target && target.length > 20) repairDna(target);
+                                                }}
+                                                disabled={saving}
+                                            >
+                                                <RefreshCw className={cn("h-3 w-3 mr-1", saving && "animate-spin")} />
+                                                Reparar DNA (Trocar Contrato)
+                                            </Button>
+                                        </div>
+                                    )}
+                                </div>
+
                                 {id && (
                                     <div className="h-[600px] overflow-hidden rounded-[28px] border border-slate-200 bg-white/50 shadow-sm backdrop-blur-sm">
                                         <WhatsAppConversation caseId={id} className="h-full" />
