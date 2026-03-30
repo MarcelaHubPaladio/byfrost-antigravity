@@ -27,6 +27,7 @@ import { showSuccess, showError } from "@/utils/toast";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { PublicPortalShell, type PublicPalette } from "@/components/public/PublicPortalShell";
 
 export default function MktTechaPublicApproval() {
     const { id } = useParams();
@@ -36,6 +37,7 @@ export default function MktTechaPublicApproval() {
     const [loading, setLoading] = useState(true);
     const [acting, setActing] = useState<string | null>(null);
     const [campaign, setCampaign] = useState<any>(null);
+    const [tenant, setTenant] = useState<any>(null);
     const [notFound, setNotFound] = useState(false);
 
     useEffect(() => {
@@ -52,7 +54,18 @@ export default function MktTechaPublicApproval() {
             if (error || !data || data.length === 0) {
                 setNotFound(true);
             } else {
-                setCampaign(data[0]);
+                const campaignData = data[0];
+                setCampaign(campaignData);
+                
+                // Fetch tenant branding
+                if (campaignData.tenant_id) {
+                    const { data: tData } = await supabase
+                        .from("tenants")
+                        .select("id, name, branding_json")
+                        .eq("id", campaignData.tenant_id)
+                        .maybeSingle();
+                    if (tData) setTenant(tData);
+                }
             }
         } catch (e) {
             setNotFound(true);
@@ -136,33 +149,47 @@ export default function MktTechaPublicApproval() {
     const creatives = (campaign.meta_json?.creatives || []) as any[];
     const approvedCount = creatives.filter(c => c.status === 'approved').length;
 
-    return (
-        <div className="min-h-screen bg-slate-950 pb-24 font-sans selection:bg-indigo-500/30">
-            <header className="bg-slate-950/50 backdrop-blur-xl border-b border-white/5 px-6 py-10 text-center sticky top-0 z-20 shadow-2xl">
-                <div className="mx-auto max-w-4xl">
-                    <Badge variant="outline" className="mb-4 bg-indigo-500/10 text-indigo-400 border-indigo-500/20 px-3 py-1 text-[10px] uppercase font-black tracking-widest rounded-full">
-                        {isPlanningMode ? "Aprovação Estratégica" : "Portal de Aprovação"} • MKT Técha
-                    </Badge>
-                    <h1 className="text-3xl font-black text-white tracking-tight sm:text-4xl">
-                        {campaign.title || "Campanha Digital"}
-                    </h1>
-                    <div className="mt-4 flex items-center justify-center gap-4 text-xs font-bold text-slate-400">
-                        {isPlanningMode ? (
-                            <div className="flex items-center gap-1.5">
-                                <Target className="h-3.5 w-3.5 text-indigo-400" />
-                                <span>Validação do Planejamento e Estratégia</span>
-                            </div>
-                        ) : (
-                            <div className="flex items-center gap-1.5">
-                                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
-                                <span>{approvedCount} de {creatives.length} aprovados</span>
-                            </div>
-                        )}
-                    </div>
-                </div>
-            </header>
+    const palette = tenant?.branding_json?.palette as PublicPalette;
+    const primaryColor = palette?.primary?.hex || "#4f46e5";
+    const primaryText = palette?.primary?.text || "#ffffff";
 
-            <main className="mx-auto max-w-5xl px-6 py-12">
+    return (
+        <PublicPortalShell palette={palette}>
+            <div className="min-h-screen pb-24 font-sans">
+                <header className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-[40px] px-6 py-10 text-center sticky top-4 z-20 shadow-2xl mx-auto max-w-5xl">
+                    <div className="mx-auto max-w-4xl">
+                        <Badge 
+                            variant="outline" 
+                            style={{ backgroundColor: `${primaryColor}20`, color: primaryColor, borderColor: `${primaryColor}30` }}
+                            className="mb-4 px-3 py-1 text-[10px] uppercase font-black tracking-widest rounded-full border-none"
+                        >
+                            {isPlanningMode ? "Aprovação Estratégica" : "Portal de Aprovação"} • MKT Técha
+                        </Badge>
+                        <h1 className="text-3xl font-black text-white tracking-tight sm:text-4xl">
+                            {campaign.title || "Campanha Digital"}
+                        </h1>
+                        <div className="mt-4 flex items-center justify-center gap-4 text-xs font-bold text-slate-400">
+                            {isPlanningMode ? (
+                                <div className="flex items-center gap-1.5">
+                                    <Target className="h-3.5 w-3.5" style={{ color: primaryColor }} />
+                                    <span>Validação do Planejamento e Estratégia</span>
+                                </div>
+                            ) : (
+                                <div className="flex items-center gap-1.5">
+                                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
+                                    <span>{approvedCount} de {creatives.length} aprovados</span>
+                                </div>
+                            )}
+                            {tenant?.name && (
+                                <div className="flex items-center gap-1.5 before:content-['•'] before:mr-2 before:text-slate-700">
+                                    <span>{tenant.name}</span>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </header>
+
+                <main className="mx-auto max-w-5xl px-0 py-12">
                 {isPlanningMode ? (
                     <div className="space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-700">
                         {/* Planning Stage UI */}
@@ -184,13 +211,24 @@ export default function MktTechaPublicApproval() {
                                 </div>
                             </Card>
 
-                            <Card className="p-8 rounded-[40px] bg-indigo-600 shadow-2xl shadow-indigo-500/20 border-none relative overflow-hidden group md:col-span-2">
+                            <Card 
+                                style={{ backgroundColor: primaryColor }}
+                                className="p-8 rounded-[40px] shadow-2xl shadow-indigo-500/20 border-none relative overflow-hidden group md:col-span-2"
+                            >
                                 <div className="absolute top-0 right-0 p-8 opacity-10 group-hover:scale-110 transition-transform duration-700">
-                                    <Rocket className="h-24 w-24" />
+                                    <Rocket className="h-24 w-24" style={{ color: primaryText }} />
                                 </div>
                                 <div className="relative z-10 space-y-3">
-                                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-indigo-200/60">Objetivo Central</p>
-                                    <h3 className="text-2xl font-black text-white leading-tight">
+                                    <p 
+                                        style={{ color: `${primaryText}80` }}
+                                        className="text-[10px] font-black uppercase tracking-[0.2em]"
+                                    >
+                                        Objetivo Central
+                                    </p>
+                                    <h3 
+                                        style={{ color: primaryText }}
+                                        className="text-2xl font-black leading-tight"
+                                    >
                                         {campaign.meta_json?.stage_data?.planejamento?.objetivo || "Aceleração de Vendas e Branding"}
                                     </h3>
                                 </div>
@@ -201,7 +239,10 @@ export default function MktTechaPublicApproval() {
                             <div className="space-y-8">
                                 <section className="space-y-4">
                                     <div className="flex items-center gap-3 px-2">
-                                        <div className="h-10 w-10 rounded-2xl bg-slate-900 flex items-center justify-center text-indigo-400 ring-1 ring-white/10">
+                                        <div 
+                                            style={{ color: primaryColor }}
+                                            className="h-10 w-10 rounded-2xl bg-slate-900 flex items-center justify-center ring-1 ring-white/10"
+                                        >
                                             <MessageCircle className="h-5 w-5" />
                                         </div>
                                         <h2 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">MENSAGEM CENTRAL</h2>
@@ -224,7 +265,10 @@ export default function MktTechaPublicApproval() {
                                         {(campaign.meta_json?.selected_channels || []).map((ch: string) => (
                                             <div key={ch} className="p-5 rounded-3xl bg-slate-900 ring-1 ring-white/5 flex items-center justify-between group hover:bg-slate-800/50 transition-colors">
                                                 <div className="flex items-center gap-3">
-                                                    <div className="h-10 w-10 rounded-xl bg-slate-800 flex items-center justify-center text-indigo-400">
+                                                    <div 
+                                                        style={{ color: primaryColor }}
+                                                        className="h-10 w-10 rounded-xl bg-slate-800 flex items-center justify-center"
+                                                    >
                                                         <Hash className="h-4 w-4" />
                                                     </div>
                                                     <span className="text-sm font-black text-white uppercase tracking-widest">{ch}</span>
@@ -285,7 +329,10 @@ export default function MktTechaPublicApproval() {
                                         </div>
 
                                         <div className="pt-4 border-t border-white/5">
-                                            <div className="flex items-center gap-2 p-4 bg-indigo-500/5 rounded-2xl border border-indigo-500/10 text-indigo-400">
+                                            <div 
+                                                style={{ color: primaryColor, backgroundColor: `${primaryColor}05`, borderColor: `${primaryColor}15` }}
+                                                className="flex items-center gap-2 p-4 rounded-2xl border text-indigo-400"
+                                            >
                                                 <AlertCircle className="h-4 w-4 shrink-0" />
                                                 <p className="text-[9px] font-medium leading-relaxed">
                                                     As evidências técnicas comprovam a viabilidade operacional e comercial da estratégia proposta.
@@ -305,7 +352,8 @@ export default function MktTechaPublicApproval() {
                                         <Button 
                                             onClick={handleApprovePlanning}
                                             disabled={acting === 'planning'}
-                                            className="w-full h-16 rounded-[24px] bg-indigo-600 hover:bg-indigo-700 text-white font-black text-sm shadow-2xl shadow-indigo-500/20 transition-all active:scale-95 gap-3"
+                                            style={{ backgroundColor: primaryColor, color: primaryText }}
+                                            className="w-full h-16 rounded-[24px] font-black text-sm shadow-2xl transition-all active:scale-95 gap-3 hover:opacity-90"
                                         >
                                             {acting === 'planning' ? <Loader2 className="h-5 w-5 animate-spin" /> : <CheckCircle2 className="h-5 w-5" />}
                                             APROVAR ESTRATÉGIA AGORA 🚀
@@ -419,7 +467,8 @@ export default function MktTechaPublicApproval() {
                     </div>
                 </div>
             </footer>
-        </div>
+            </div>
+        </PublicPortalShell>
     );
 }
 

@@ -101,7 +101,11 @@ export default function MktTechaCase() {
     const { id } = useParams();
     const nav = useNavigate();
     const qc = useQueryClient();
-    const { activeTenantId } = useTenant();
+    const { activeTenantId, activeTenant } = useTenant();
+    const branding = activeTenant?.branding_json;
+    const palette = branding?.palette;
+    const primaryColor = palette?.primary?.hex || "#4f46e5";
+    const primaryText = palette?.primary?.text || "#ffffff";
     const { user } = useSession();
     const [saving, setSaving] = useState(false);
     const [deleting, setDeleting] = useState(false);
@@ -562,7 +566,12 @@ export default function MktTechaCase() {
                                     <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
                                         <Target className="h-4 w-4" /> ETAPA: {getStateLabel(journeyQ.data as any, stateKey).toUpperCase()}
                                     </h3>
-                                    <Button onClick={() => handleSaveMainCard()} disabled={saving} className="h-8 rounded-xl bg-slate-900 text-white font-bold text-[10px] gap-2">
+                                    <Button 
+                                        onClick={() => handleSaveMainCard()} 
+                                        disabled={saving} 
+                                        style={{ backgroundColor: primaryColor, color: primaryText }}
+                                        className="h-8 rounded-xl font-bold text-[10px] gap-2 hover:opacity-90"
+                                    >
                                         <Save className="h-3 w-3"/> SALVAR TUDO
                                     </Button>
                                 </div>
@@ -581,25 +590,43 @@ export default function MktTechaCase() {
                                                     key={st} 
                                                     value={st} 
                                                     disabled={isLocked}
+                                                    style={{ 
+                                                        borderColor: isCurrent ? `${primaryColor}20` : undefined,
+                                                        boxShadow: isCurrent ? `0 20px 25px -5px ${primaryColor}10` : undefined
+                                                    }}
                                                     className={cn(
                                                         "rounded-[32px] border px-6 transition-all duration-300",
-                                                        isCurrent ? "bg-white border-indigo-100 shadow-xl shadow-indigo-50/50" : "bg-slate-50/30 border-slate-100 opacity-80",
+                                                        isCurrent ? "bg-white" : "bg-slate-50/30 border-slate-100 opacity-80",
                                                         isLocked ? "opacity-40 cursor-not-allowed bg-slate-100/50" : "hover:opacity-100"
                                                     )}
                                                 >
                                                     <AccordionTrigger className={cn("hover:no-underline group py-6", isLocked && "cursor-not-allowed")}>
                                                         <div className="flex items-center gap-4 text-left">
-                                                            <div className={cn(
-                                                                "h-10 w-10 rounded-2xl flex items-center justify-center transition-colors shadow-sm",
-                                                                isCurrent ? "bg-indigo-600 text-white shadow-indigo-200" : "bg-white text-slate-400 group-hover:text-indigo-500 border border-slate-100",
-                                                                isLocked && "bg-slate-100 text-slate-300"
-                                                            )}>
+                                                            <div 
+                                                                style={{ 
+                                                                    backgroundColor: isCurrent ? primaryColor : undefined,
+                                                                    color: isCurrent ? primaryText : undefined,
+                                                                    borderColor: !isCurrent ? '#f1f5f9' : undefined
+                                                                }}
+                                                                className={cn(
+                                                                    "h-10 w-10 rounded-2xl flex items-center justify-center transition-colors shadow-sm",
+                                                                    !isCurrent && "bg-white text-slate-400 group-hover:text-indigo-500 border",
+                                                                    isLocked && "bg-slate-100 text-slate-300 border-none"
+                                                                )}
+                                                            >
                                                                 {isLocked ? <Lock className="h-5 w-5" /> : <Target className="h-5 w-5" />}
                                                             </div>
                                                             <div>
                                                                 <div className="flex items-center gap-2">
                                                                     <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Etapa</span>
-                                                                    {isCurrent && <Badge className="bg-indigo-50 text-indigo-600 border-none rounded-full h-4 text-[8px] font-black px-2 uppercase">Atual</Badge>}
+                                                                    {isCurrent && (
+                                                                        <Badge 
+                                                                            style={{ backgroundColor: `${primaryColor}10`, color: primaryColor }}
+                                                                            className="border-none rounded-full h-4 text-[8px] font-black px-2 uppercase"
+                                                                        >
+                                                                            Atual
+                                                                        </Badge>
+                                                                    )}
                                                                     {isLocked && <Badge className="bg-slate-100 text-slate-400 border-none rounded-full h-4 text-[8px] font-black px-2 uppercase">Bloqueada</Badge>}
                                                                 </div>
                                                                 <h3 className={cn("text-lg font-black tracking-tight", isCurrent ? "text-slate-900" : isLocked ? "text-slate-400" : "text-slate-600")}>
@@ -658,7 +685,8 @@ export default function MktTechaCase() {
                                                                                     <Button 
                                                                                         variant="outline" 
                                                                                         onClick={() => copyShareLink('planning')}
-                                                                                        className="rounded-xl h-9 text-[10px] font-black gap-2 border-indigo-100 text-indigo-600 hover:bg-indigo-50 hover:border-indigo-200 transition-all shadow-sm"
+                                                                                        style={{ color: primaryColor, borderColor: `${primaryColor}20` }}
+                                                                                        className="rounded-xl h-9 text-[10px] font-black gap-2 hover:bg-slate-50 transition-all shadow-sm"
                                                                                     >
                                                                                         <Share2 className="h-4 w-4" /> COPIAR LINK DE APROVAÇÃO ESTRATÉGICA
                                                                                     </Button>
@@ -705,11 +733,14 @@ export default function MktTechaCase() {
                                                                                             <Badge 
                                                                                                 key={ch}
                                                                                                 onClick={() => toggleChannel(ch)}
+                                                                                                style={{ 
+                                                                                                    backgroundColor: isSelected ? primaryColor : 'white',
+                                                                                                    color: isSelected ? primaryText : undefined,
+                                                                                                    borderColor: isSelected ? primaryColor : '#f1f5f9'
+                                                                                                }}
                                                                                                 className={cn(
                                                                                                     "px-4 py-2 rounded-2xl cursor-pointer transition-all border-2 text-[11px] font-bold",
-                                                                                                    isSelected 
-                                                                                                        ? "bg-indigo-600 border-indigo-600 text-white shadow-lg shadow-indigo-100" 
-                                                                                                        : "bg-white border-slate-100 text-slate-500 hover:border-indigo-200 hover:text-indigo-600"
+                                                                                                    !isSelected && "text-slate-500 hover:border-indigo-200 hover:text-indigo-600"
                                                                                                 )}
                                                                                             >
                                                                                                 {ch.toUpperCase()}
