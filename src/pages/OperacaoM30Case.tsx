@@ -32,7 +32,7 @@ import { TransitionBlockDialog } from "@/components/case/TransitionBlockDialog";
 import { CaseTimeline, type CaseTimelineEvent } from "@/components/case/CaseTimeline";
 import { TrelloCardDetails } from "@/components/trello/TrelloCardDetails";
 import { Card } from "@/components/ui/card";
-import { ArrowLeft, Trash2, RefreshCw, PackageCheck, Check, AlertCircle, Plus, Calendar } from "lucide-react";
+import { ArrowLeft, Trash2, RefreshCw, PackageCheck, Check, AlertCircle, Plus, Calendar, Link as LinkIcon, ExternalLink, Rocket } from "lucide-react";
 import { cn, titleizeState } from "@/lib/utils";
 import { showError, showSuccess } from "@/utils/toast";
 import { getStateLabel } from "@/lib/journeyLabels";
@@ -64,7 +64,8 @@ type CaseRow = {
     meta_json: any;
 };
 
-function SubtaskItemContent({ st, idx, caseMeta, caseId, onRefetch }: { st: any, idx: number, caseMeta: any, caseId: string, onRefetch: () => void }) {
+function SubtaskItemContent({ st, idx, caseMeta, caseId, onRefetch, caseState, caseData }: { st: any, idx: number, caseMeta: any, caseId: string, onRefetch: () => void, caseState?: string, caseData?: any }) {
+    const { user } = useSession();
     const [title, setTitle] = useState(st.title || "");
     const [type, setType] = useState(st.type || "edicao");
     const [postDate, setPostDate] = useState(st.post_date || "");
@@ -74,6 +75,7 @@ function SubtaskItemContent({ st, idx, caseMeta, caseId, onRefetch }: { st: any,
     const [scriptItems, setScriptItems] = useState<any[]>(st.script_items || []);
     
     const [saving, setSaving] = useState(false);
+    const [creatingCard, setCreatingCard] = useState(false);
     const [lastSaved, setLastSaved] = useState<Date | null>(null);
 
     // Sincronizar estado local quando a prop 'st' mudar (ex: após refetch do pai)
@@ -86,6 +88,69 @@ function SubtaskItemContent({ st, idx, caseMeta, caseId, onRefetch }: { st: any,
         setScriptRaw(st.script_raw || "");
         setScriptItems(st.script_items || []);
     }, [st]);
+
+    const handleCreateProductionCard = async () => {
+        if (!caseId || !caseData) return;
+        setCreatingCard(true);
+        try {
+            const { data: newCase, error: insertError } = await supabase.from("cases").insert({
+                tenant_id: caseData.tenant_id,
+                journey_id: caseData.journey_id,
+                parent_case_id: caseId,
+                case_type: st.type, 
+                title: st.title,
+                summary_text: st.description || null,
+                customer_entity_id: caseData.customer_entity_id,
+                deliverable_id: caseData.deliverable_id,
+                state: "DECUPAGEM_UPLOAD",
+                meta_json: {
+                    customer_entity_name: (caseData.meta_json as any)?.customer_entity_name,
+                    commitment_id: (caseData.meta_json as any)?.commitment_id,
+                    post_date: st.post_date || null,
+                    priority: st.priority || false,
+                    script_raw: st.script_raw || null,
+                    script_items: st.script_items || null,
+                }
+            }).select("id").single();
+
+            if (insertError) throw insertError;
+
+            // Vincular no card pai
+            const currentSubtasks = [...(caseMeta?.pending_subtasks || [])];
+            currentSubtasks[idx] = {
+                ...currentSubtasks[idx],
+                linked_case_id: newCase.id
+            };
+
+            const { error: updateError } = await supabase
+                .from("cases")
+                .update({
+                    meta_json: { ...caseMeta, pending_subtasks: currentSubtasks }
+                })
+                .eq("id", caseId);
+
+            if (updateError) throw updateError;
+            
+            // Log Timeline
+            await supabase.from("timeline_events").insert({
+                tenant_id: caseData.tenant_id,
+                case_id: caseId,
+                event_type: "production_card_created",
+                actor_type: "admin",
+                actor_id: user?.id ?? null,
+                message: `Card de produção criado a partir da subtarefa: ${st.title}`,
+                meta_json: { linked_case_id: newCase.id },
+                occurred_at: new Date().toISOString(),
+            });
+
+            showSuccess("Tarefa de produção criada com sucesso!");
+            onRefetch();
+        } catch (e: any) {
+            showError(`Erro ao criar tarefa: ${e.message}`);
+        } finally {
+            setCreatingCard(false);
+        }
+    };
 
     const handleSave = async () => {
         setSaving(true);
@@ -112,6 +177,19 @@ function SubtaskItemContent({ st, idx, caseMeta, caseId, onRefetch }: { st: any,
             if (error) throw error;
             setLastSaved(new Date());
             onRefetch(); // Notificar o pai para recarregar os dados
+
+            // Log Timeline
+            await supabase.from("timeline_events").insert({
+                tenant_id: caseData.tenant_id,
+                case_id: caseId,
+                event_type: "subtask_updated",
+                actor_type: "admin",
+                actor_id: user?.id ?? null,
+                message: `Subtarefa atualizada: ${title}`,
+                meta_json: { subtask_idx: idx },
+                occurred_at: new Date().toISOString(),
+            });
+
             // showSuccess("Alterações salvas.");
         } catch (e: any) {
             showError("Erro ao salvar: " + e.message);
@@ -120,7 +198,7 @@ function SubtaskItemContent({ st, idx, caseMeta, caseId, onRefetch }: { st: any,
         }
     };
 
-    const generateChecklist = () => {
+    const generateChecklist = async () => {
         if (!scriptRaw.trim()) return;
         // Divide por quebra de linha e limpa vazios
         const lines = scriptRaw.split("\n").map(l => l.trim()).filter(Boolean);
@@ -130,6 +208,20 @@ function SubtaskItemContent({ st, idx, caseMeta, caseId, onRefetch }: { st: any,
             checked: false
         }));
         setScriptItems(nextItems);
+
+        // Log Timeline
+        if (caseData) {
+            await supabase.from("timeline_events").insert({
+                tenant_id: caseData.tenant_id,
+                case_id: caseId,
+                event_type: "checklist_generated",
+                actor_type: "admin",
+                actor_id: user?.id ?? null,
+                message: `Checklist de gravação gerado para: ${title}`,
+                meta_json: { subtask_idx: idx },
+                occurred_at: new Date().toISOString(),
+            });
+        }
     };
 
     const toggleItem = (itemId: string) => {
@@ -174,8 +266,52 @@ function SubtaskItemContent({ st, idx, caseMeta, caseId, onRefetch }: { st: any,
         setEditingText("");
     };
 
+    if (st.linked_case_id) {
+        return (
+            <div className="bg-indigo-50/50 border border-indigo-100 rounded-2xl p-6 flex flex-col items-center justify-center text-center gap-4 animate-in fade-in zoom-in-95 duration-300">
+                <div className="h-12 w-12 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600">
+                    <LinkIcon className="h-6 w-6" />
+                </div>
+                <div className="space-y-1">
+                    <h4 className="text-sm font-bold text-indigo-900">Subtarefa Vinculada</h4>
+                    <p className="text-xs text-indigo-700/70 max-w-[280px]">
+                        Esta subtarefa já foi transformada em um card de produção individual.
+                    </p>
+                </div>
+                <Link to={`/app/operacao-m30/${st.linked_case_id}`}>
+                    <Button size="sm" className="rounded-xl bg-indigo-600 hover:bg-indigo-700 font-bold gap-2">
+                        <ExternalLink className="h-4 w-4" /> Ver Tarefa de Produção
+                    </Button>
+                </Link>
+            </div>
+        );
+    }
+
     return (
         <div className="space-y-6">
+            {caseState === 'GRAVACAO' && (
+                <div className="bg-orange-50 border border-orange-100 rounded-2xl p-4 flex items-center justify-between gap-4 mb-2">
+                    <div className="flex items-center gap-3">
+                        <div className="h-10 w-10 rounded-xl bg-orange-100 flex items-center justify-center text-orange-600">
+                            <Rocket className="h-5 w-5" />
+                        </div>
+                        <div>
+                            <div className="text-xs font-bold text-orange-900 uppercase tracking-tight">Pronto para Gravação?</div>
+                            <div className="text-[10px] text-orange-700">Inicie a produção individual deste conteúdo.</div>
+                        </div>
+                    </div>
+                    <Button 
+                        size="sm" 
+                        disabled={creatingCard}
+                        onClick={handleCreateProductionCard}
+                        className="h-9 rounded-xl bg-orange-600 hover:bg-orange-700 font-bold gap-2 shadow-lg shadow-orange-200/50"
+                    >
+                        {creatingCard ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Rocket className="h-3.5 w-3.5" />}
+                        {creatingCard ? "Criando..." : "Iniciar Produção"}
+                    </Button>
+                </div>
+            )}
+
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="space-y-1.5">
                     <Label className="text-[10px] font-bold text-slate-500 uppercase">Tipo de Entrega</Label>
@@ -898,6 +1034,11 @@ export default function OperacaoM30Case() {
                                                                         {st.type === "arte_estatica" ? "ARTE" : "VÍDEO"}
                                                                     </Badge>
                                                                     <span className="text-sm text-slate-700 font-bold">{st.title}</span>
+                                                                    {st.linked_case_id && (
+                                                                        <Badge variant="outline" className="text-[9px] border-indigo-200 text-indigo-600 bg-indigo-50/50 flex items-center gap-1 font-bold">
+                                                                            <LinkIcon className="h-2.5 w-2.5" /> VINCULADO
+                                                                        </Badge>
+                                                                    )}
                                                                     {st.post_date && (
                                                                         <span className="text-[10px] text-slate-400 flex items-center gap-1 font-normal">
                                                                             <Calendar className="h-3 w-3" />
@@ -930,6 +1071,8 @@ export default function OperacaoM30Case() {
                                                                 caseMeta={caseQ.data?.meta_json}
                                                                 caseId={id!}
                                                                 onRefetch={() => caseQ.refetch()}
+                                                                caseState={caseQ.data?.state}
+                                                                caseData={caseQ.data}
                                                             />
                                                         </AccordionContent>
                                                     </AccordionItem>
