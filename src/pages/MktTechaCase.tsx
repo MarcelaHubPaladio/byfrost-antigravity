@@ -1115,72 +1115,81 @@ export default function MktTechaCase() {
                                                                             <span className="text-[10px] font-black uppercase text-slate-400 tracking-[0.2em]">Linha do Tempo de Veiculação</span>
                                                                         </div>
 
-                                                                        <div className="relative overflow-x-auto pb-4 no-scrollbar cursor-grab active:cursor-grabbing scroll-smooth">
-                                                                            <div className="min-w-[800px] space-y-4">
-                                                                                {/* Timeline Header (Days) */}
-                                                                                <div className="flex border-b border-white/5 pb-2 ml-[150px]">
-                                                                                    {(() => {
-                                                                                        const start = meta.stage_data?.cadastro_big2be?.inicio ? parseISO(meta.stage_data.cadastro_big2be.inicio) : startOfDay(new Date());
-                                                                                        const end = meta.stage_data?.cadastro_big2be?.fim ? parseISO(meta.stage_data.cadastro_big2be.fim) : addDays(start, 21);
-                                                                                        const days = eachDayOfInterval({ start, end });
-                                                                                        return days.map((day, i) => (
-                                                                                            <div key={i} className="w-10 flex-shrink-0 flex flex-col items-center gap-1">
-                                                                                                <span className="text-[8px] font-bold text-slate-600 uppercase tracking-tighter">{format(day, 'EEE', { locale: ptBR })}</span>
-                                                                                                <span className={cn("text-[10px] font-black w-6 h-6 flex items-center justify-center rounded-lg", isWithinInterval(new Date(), { start: startOfDay(day), end: endOfDay(day) }) ? "bg-indigo-500 text-white" : "text-slate-400")}>
-                                                                                                    {format(day, 'd')}
-                                                                                                </span>
-                                                                                            </div>
-                                                                                        ));
-                                                                                    })()}
-                                                                                </div>
+                                                                        <div className="relative overflow-x-auto pb-4 no-scrollbar cursor-grab active:cursor-grabbing scroll-smooth border border-white/5 rounded-3xl bg-slate-950/50">
+                                                                            {(() => {
+                                                                                const campaignStart = meta.stage_data?.cadastro_big2be?.inicio ? parseISO(meta.stage_data.cadastro_big2be.inicio) : startOfDay(new Date());
+                                                                                const campaignEnd = meta.stage_data?.cadastro_big2be?.fim ? parseISO(meta.stage_data.cadastro_big2be.fim) : addDays(campaignStart, 21);
+                                                                                const days = eachDayOfInterval({ start: campaignStart, end: campaignEnd });
+                                                                                const totalWidth = 150 + (days.length * 40);
 
-                                                                                {/* Timeline Rows */}
-                                                                                <div className="space-y-6">
-                                                                                    {(meta.creatives || []).filter((cr: MktTechaCreative) => cr.status === 'approved').map((cr: MktTechaCreative) => {
-                                                                                        const campaignStart = meta.stage_data?.cadastro_big2be?.inicio ? parseISO(meta.stage_data.cadastro_big2be.inicio) : startOfDay(new Date());
-                                                                                        const start = cr.publish_start_date ? parseISO(cr.publish_start_date) : null;
-                                                                                        const end = cr.publish_end_date ? parseISO(cr.publish_end_date) : null;
-                                                                                        
-                                                                                        const offset = start ? differenceInDays(start, campaignStart) : 0;
-                                                                                        const duration = (start && end) ? differenceInDays(end, start) + 1 : 0;
-
-                                                                                        return (
-                                                                                            <div key={cr.id} className="flex items-center">
-                                                                                                <div className="w-[150px] pr-4 flex-shrink-0 space-y-1">
-                                                                                                    <div className="flex items-center gap-1.5 ">
-                                                                                                        {cr.channel === 'Instagram' && <Instagram className="h-3 w-3 text-pink-500" />}
-                                                                                                        {cr.channel === 'TikTok' && <Smartphone className="h-3 w-3 text-white" />}
-                                                                                                        {cr.channel === 'YouTube' && <Youtube className="h-3 w-3 text-red-500" />}
-                                                                                                        <span className="text-[9px] font-black text-white uppercase truncate">{cr.channel}</span>
-                                                                                                    </div>
-                                                                                                    <p className="text-[8px] text-slate-500 font-bold truncate tracking-widest">{cr.type.toUpperCase()}</p>
+                                                                                return (
+                                                                                    <div style={{ minWidth: `${totalWidth}px` }} className="space-y-4 p-4">
+                                                                                        {/* Timeline Header (Days) */}
+                                                                                        <div className="flex border-b border-white/5 pb-4 ml-[150px]">
+                                                                                            {days.map((day, i) => (
+                                                                                                <div key={i} className="w-10 flex-shrink-0 flex flex-col items-center gap-1.5">
+                                                                                                    <span className="text-[8px] font-bold text-slate-600 uppercase tracking-tighter">{format(day, 'EEE', { locale: ptBR })}</span>
+                                                                                                    <span className={cn(
+                                                                                                        "text-[10px] font-black w-7 h-7 flex items-center justify-center rounded-xl transition-all", 
+                                                                                                        isWithinInterval(new Date(), { start: startOfDay(day), end: endOfDay(day) }) 
+                                                                                                            ? "bg-indigo-500 text-white shadow-lg shadow-indigo-500/20 scale-110 ring-2 ring-indigo-500/20" 
+                                                                                                            : "text-slate-500 hover:text-slate-300"
+                                                                                                    )}>
+                                                                                                        {format(day, 'd')}
+                                                                                                    </span>
                                                                                                 </div>
-                                                                                                <div className="flex-grow flex relative h-4 items-center">
-                                                                                                    {duration > 0 && (
-                                                                                                        <div 
-                                                                                                            className={cn(
-                                                                                                                "absolute h-3 rounded-full shadow-lg shadow-indigo-500/10 border border-white/10 group/bar flex items-center justify-end px-2",
-                                                                                                                cr.channel === 'Instagram' ? "bg-gradient-to-r from-pink-500 to-rose-500" :
-                                                                                                                cr.channel === 'YouTube' ? "bg-red-600" : "bg-indigo-500"
-                                                                                                            )}
-                                                                                                            style={{ 
-                                                                                                                left: `${offset * 40}px`, 
-                                                                                                                width: `${duration * 40}px` 
-                                                                                                            }}
-                                                                                                        >
-                                                                                                            <div className="h-1.5 w-1.5 rounded-full bg-white/50 animate-pulse" />
+                                                                                            ))}
+                                                                                        </div>
+
+                                                                                        {/* Timeline Rows */}
+                                                                                        <div className="space-y-6">
+                                                                                            {(meta.creatives || []).filter((cr: MktTechaCreative) => cr.status === 'approved').map((cr: MktTechaCreative) => {
+                                                                                                const campaignStart = meta.stage_data?.cadastro_big2be?.inicio ? parseISO(meta.stage_data.cadastro_big2be.inicio) : startOfDay(new Date());
+                                                                                                const start = cr.publish_start_date ? parseISO(cr.publish_start_date) : null;
+                                                                                                const end = cr.publish_end_date ? parseISO(cr.publish_end_date) : null;
+                                                                                                
+                                                                                                const offset = start ? differenceInDays(start, campaignStart) : 0;
+                                                                                                const duration = (start && end) ? differenceInDays(end, start) + 1 : 0;
+
+                                                                                                return (
+                                                                                                    <div key={cr.id} className="flex items-center">
+                                                                                                        <div className="w-[150px] pr-4 flex-shrink-0 space-y-1">
+                                                                                                            <div className="flex items-center gap-1.5 ">
+                                                                                                                {cr.channel === 'Instagram' && <Instagram className="h-3 w-3 text-pink-500" />}
+                                                                                                                {cr.channel === 'TikTok' && <Smartphone className="h-3 w-3 text-white" />}
+                                                                                                                {cr.channel === 'YouTube' && <Youtube className="h-3 w-3 text-red-500" />}
+                                                                                                                <span className="text-[9px] font-black text-white uppercase truncate">{cr.channel}</span>
+                                                                                                            </div>
+                                                                                                            <p className="text-[8px] text-slate-500 font-bold truncate tracking-widest">{cr.type.toUpperCase()}</p>
                                                                                                         </div>
-                                                                                                    )}
-                                                                                                    {/* Background Grid */}
-                                                                                                    <div className="absolute inset-0 flex pointer-events-none opacity-[0.03]">
-                                                                                                        {Array.from({ length: 30 }).map((_, i) => <div key={i} className="w-10 h-full border-l border-white" />)}
+                                                                                                        <div className="flex-grow flex relative h-4 items-center">
+                                                                                                            {duration > 0 && (
+                                                                                                                <div 
+                                                                                                                    className={cn(
+                                                                                                                        "absolute h-3 rounded-full shadow-lg shadow-indigo-500/10 border border-white/10 group/bar flex items-center justify-end px-2",
+                                                                                                                        cr.channel === 'Instagram' ? "bg-gradient-to-r from-pink-500 to-rose-500" :
+                                                                                                                        cr.channel === 'YouTube' ? "bg-red-600" : "bg-indigo-500"
+                                                                                                                    )}
+                                                                                                                    style={{ 
+                                                                                                                        left: `${offset * 40}px`, 
+                                                                                                                        width: `${duration * 40}px` 
+                                                                                                                    }}
+                                                                                                                >
+                                                                                                                    <div className="h-1.5 w-1.5 rounded-full bg-white/50 animate-pulse" />
+                                                                                                                </div>
+                                                                                                            )}
+                                                                                                            {/* Background Grid */}
+                                                                                                            <div className="absolute inset-0 flex pointer-events-none opacity-[0.03]">
+                                                                                                                {Array.from({ length: 30 }).map((_, i) => <div key={i} className="w-10 h-full border-l border-white" />)}
+                                                                                                            </div>
+                                                                                                        </div>
                                                                                                     </div>
-                                                                                                </div>
-                                                                                            </div>
-                                                                                        );
-                                                                                    })}
-                                                                                </div>
-                                                                            </div>
+                                                                                                );
+                                                                                            })}
+                                                                                        </div>
+                                                                                    </div>
+                                                                                );
+                                                                            })()}
                                                                         </div>
                                                                     </div>
 
