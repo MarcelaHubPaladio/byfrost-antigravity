@@ -561,15 +561,19 @@ export default function OperacaoM30Case() {
 
     const usedDeliverablesQ = useQuery({
         queryKey: ["case_used_deliverables", activeTenantId, caseQ.data?.meta_json?.commitment_id, deliverableQ.data?.commitment_id],
-        enabled: Boolean(activeTenantId && (caseQ.data?.meta_json?.commitment_id || deliverableQ.data?.commitment_id)),
+        enabled: Boolean(activeTenantId && (caseQ.data?.meta_json?.commitment_id || deliverableQ.data?.commitment_id) && allDeliverablesQ.data),
         queryFn: async () => {
             const cid = (caseQ.data?.meta_json as any)?.commitment_id || deliverableQ.data?.commitment_id;
             if (!cid) return [];
+
+            const allDelIds = (allDeliverablesQ.data ?? []).map((d: any) => d.id);
+            if (allDelIds.length === 0) return [];
 
             const { data, error } = await supabase
                 .from("cases")
                 .select("deliverable_id")
                 .eq("tenant_id", activeTenantId!)
+                .in("deliverable_id", allDelIds)
                 .is("deleted_at", null)
                 .not("deliverable_id", "is", null);
             
@@ -742,8 +746,8 @@ export default function OperacaoM30Case() {
                 customer_entity_id: caseQ.data.customer_entity_id,
                 deliverable_id: deliverableId || st.deliverable_id || caseQ.data.deliverable_id,
                 state: "decupagem__upload",
+                parent_case_id: id,
                 meta_json: {
-                    parent_case_id: id,
                     customer_entity_name: (caseQ.data.meta_json as any)?.customer_entity_name,
                     commitment_id: (caseQ.data.meta_json as any)?.commitment_id,
                     post_date: st.post_date || null,
@@ -856,8 +860,8 @@ export default function OperacaoM30Case() {
                     deliverable_id: st.deliverable_id || caseQ.data.deliverable_id,
                     status: "open",
                     state: "decupagem__upload",
+                    parent_case_id: id,
                     meta_json: {
-                        parent_case_id: id,
                         customer_entity_name: (caseQ.data.meta_json as any)?.customer_entity_name,
                         commitment_id: (caseQ.data.meta_json as any)?.commitment_id,
                         post_date: st.post_date || null,
