@@ -178,11 +178,10 @@ export default function MktTechaCase() {
 
     const ensureShareAccess = async () => {
         if (!id) return;
-        const newToken = c.share_token || crypto.randomUUID();
+        const newToken = caseQ.data?.share_token || crypto.randomUUID();
         const accessCode = meta.share_access_code || Math.floor(1000 + Math.random() * 9000).toString();
         
-        // If already has both, just return current token
-        if (c.share_token && meta.share_access_code) return c.share_token;
+        if (caseQ.data?.share_token && meta.share_access_code) return caseQ.data.share_token;
 
         const newMeta = { ...meta, share_access_code: accessCode };
         
@@ -235,7 +234,6 @@ export default function MktTechaCase() {
         const prev = caseQ.data?.state ?? "";
         if (!next || next === prev) return;
 
-        // Custom MKT Techa Validation: Check current stage subtasks
         const currentChecklist = meta.stage_checklists?.[prev] || [];
         const incomplete = currentChecklist.filter((s: any) => !s.done);
         
@@ -463,7 +461,6 @@ export default function MktTechaCase() {
 
     const allAvailableChannels = [...CREATIVE_CHANNELS, ...(meta.custom_channels || [])];
 
-
     const getChecklistForState = (st: string) => {
         const saved = meta.stage_checklists?.[st];
         if (saved) return saved;
@@ -475,7 +472,6 @@ export default function MktTechaCase() {
         }));
     };
 
-    // Ensure checklist exists in meta if it doesn't
     useEffect(() => {
         if (caseQ.data?.state && !meta.stage_checklists?.[caseQ.data.state]) {
             const stateKey = caseQ.data.state;
@@ -596,450 +592,363 @@ export default function MktTechaCase() {
                                     </h3>
                                 </div>
 
-                                {/* STAGE SPECIFIC CONTENT */}
-                                    <Accordion type="multiple" defaultValue={[stateKey]} className="space-y-4">
-                                        {STAGES.map((st) => {
-                                            const checklist = getChecklistForState(st);
-                                            const label = getStateLabel(journeyQ.data as any, st);
-                                            const isCurrent = stateKey === st;
-                                            const stIndex = STAGES.indexOf(st);
-                                            const isLocked = stIndex > currentIndex;
+                                <Accordion type="multiple" defaultValue={[stateKey]} className="space-y-4">
+                                    {STAGES.map((st) => {
+                                        const checklist = getChecklistForState(st);
+                                        const label = getStateLabel(journeyQ.data as any, st);
+                                        const isCurrent = stateKey === st;
+                                        const stIndex = STAGES.indexOf(st);
+                                        const isLocked = stIndex > currentIndex;
 
-                                            return (
-                                                <AccordionItem 
-                                                    key={st} 
-                                                    value={st} 
-                                                    disabled={isLocked}
-                                                    style={{ 
-                                                        borderColor: isCurrent ? `${primaryColor}20` : undefined,
-                                                        boxShadow: isCurrent ? `0 20px 25px -5px ${primaryColor}10` : undefined
-                                                    }}
-                                                    className={cn(
-                                                        "rounded-[32px] border px-6 transition-all duration-300",
-                                                        isCurrent ? "bg-white" : "bg-slate-50/30 border-slate-100 opacity-80",
-                                                        isLocked ? "opacity-40 cursor-not-allowed bg-slate-100/50" : "hover:opacity-100"
-                                                    )}
-                                                >
-                                                    <AccordionTrigger className={cn("hover:no-underline group py-6", isLocked && "cursor-not-allowed")}>
-                                                        <div className="flex items-center gap-4 text-left">
-                                                            <div 
-                                                                style={{ 
-                                                                    backgroundColor: isCurrent ? primaryColor : undefined,
-                                                                    color: isCurrent ? primaryText : undefined,
-                                                                    borderColor: !isCurrent ? '#f1f5f9' : undefined
-                                                                }}
-                                                                className={cn(
-                                                                    "h-10 w-10 rounded-2xl flex items-center justify-center transition-colors shadow-sm",
-                                                                    !isCurrent && "bg-white text-slate-400 group-hover:text-indigo-500 border",
-                                                                    isLocked && "bg-slate-100 text-slate-300 border-none"
-                                                                )}
-                                                            >
-                                                                {isLocked ? <Lock className="h-5 w-5" /> : <Target className="h-5 w-5" />}
-                                                            </div>
-                                                            <div>
-                                                                <div className="flex items-center gap-2">
-                                                                    <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Etapa</span>
-                                                                    {isCurrent && (
-                                                                        <Badge 
-                                                                            style={{ backgroundColor: `${primaryColor}10`, color: primaryColor }}
-                                                                            className="border-none rounded-full h-4 text-[8px] font-black px-2 uppercase"
-                                                                        >
-                                                                            Atual
-                                                                        </Badge>
-                                                                    )}
-                                                                    {isLocked && <Badge className="bg-slate-100 text-slate-400 border-none rounded-full h-4 text-[8px] font-black px-2 uppercase">Bloqueada</Badge>}
-                                                                </div>
-                                                                <h3 className={cn("text-lg font-black tracking-tight", isCurrent ? "text-slate-900" : isLocked ? "text-slate-400" : "text-slate-600")}>
-                                                                    {label}
-                                                                </h3>
-                                                            </div>
+                                        return (
+                                            <AccordionItem 
+                                                key={st} 
+                                                value={st} 
+                                                disabled={isLocked}
+                                                style={{ 
+                                                    borderColor: isCurrent ? `${primaryColor}20` : undefined,
+                                                    boxShadow: isCurrent ? `0 20px 25px -5px ${primaryColor}10` : undefined
+                                                }}
+                                                className={cn(
+                                                    "rounded-[32px] border px-6 transition-all duration-300",
+                                                    isCurrent ? "bg-white" : "bg-slate-50/30 border-slate-100 opacity-80",
+                                                    isLocked ? "opacity-40 cursor-not-allowed bg-slate-100/50" : "hover:opacity-100"
+                                                )}
+                                            >
+                                                <AccordionTrigger className={cn("hover:no-underline group py-6", isLocked && "cursor-not-allowed")}>
+                                                    <div className="flex items-center gap-4 text-left">
+                                                        <div 
+                                                            style={{ 
+                                                                backgroundColor: isCurrent ? primaryColor : undefined,
+                                                                color: isCurrent ? primaryText : undefined,
+                                                                borderColor: !isCurrent ? '#f1f5f9' : undefined
+                                                            }}
+                                                            className={cn(
+                                                                "h-10 w-10 rounded-2xl flex items-center justify-center transition-colors shadow-sm",
+                                                                !isCurrent && "bg-white text-slate-400 group-hover:text-indigo-500 border",
+                                                                isLocked && "bg-slate-100 text-slate-300 border-none"
+                                                            )}
+                                                        >
+                                                            {isLocked ? <Lock className="h-5 w-5" /> : <Target className="h-5 w-5" />}
                                                         </div>
-                                                    </AccordionTrigger>
-                                                    <AccordionContent className="pt-2 pb-8">
-                                                        <div className="space-y-8 animate-in fade-in slide-in-from-top-2 duration-500">
-                                                            {/* CAMPOS ESPECIFICOS */}
-                                                            <div className="space-y-6">
-                                                                {st === "ideias" && (
-                                                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                                                        <div className="space-y-2">
-                                                                            <Label className="text-[10px] font-bold text-slate-500 uppercase px-1">Origem</Label>
-                                                                            <Input 
-                                                                                value={meta.stage_data?.ideias?.origem || ""} 
-                                                                                onChange={(e) => updateStageData("ideias", "origem", e.target.value)}
-                                                                                className="h-11 rounded-2xl" placeholder="Ex: Campanha Sazonal"
-                                                                            />
-                                                                        </div>
-                                                                        <div className="space-y-2">
-                                                                            <Label className="text-[10px] font-bold text-slate-500 uppercase px-1">Prioridade</Label>
-                                                                            <Select 
-                                                                                value={meta.stage_data?.ideias?.prioridade || "media"}
-                                                                                onValueChange={(v) => updateStageData("ideias", "prioridade", v)}
-                                                                            >
-                                                                                <SelectTrigger className="h-11 rounded-2xl">
-                                                                                    <SelectValue />
-                                                                                </SelectTrigger>
-                                                                                <SelectContent className="rounded-xl">
-                                                                                    <SelectItem value="baixa">Baixa</SelectItem>
-                                                                                    <SelectItem value="media">Média</SelectItem>
-                                                                                    <SelectItem value="alta">Alta</SelectItem>
-                                                                                </SelectContent>
-                                                                            </Select>
-                                                                        </div>
-                                                                    </div>
-                                                                )}
-
-                                                                {st === "planejamento" && (
-                                                                    <div className="space-y-8">
-                                                                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-1 -mb-4">
-                                                                            <div className="flex flex-col">
-                                                                                <h4 className="text-sm font-black text-slate-800 tracking-tight leading-none">Detalhamento Estratégico</h4>
-                                                                                <p className="text-[10px] text-slate-500 font-medium">Configure a mensagem, cronograma e anexe evidências.</p>
-                                                                            </div>
-                                                                            
-                                                                            {meta.stage_data?.planejamento?.approved_at && (
-                                                                                <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-50 border border-emerald-100">
-                                                                                    <div className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-                                                                                    <span className="text-[10px] font-black text-emerald-600 uppercase tracking-widest">Aprovado pelo Cliente</span>
-                                                                                </div>
-                                                                            )}
-                                                                        </div>
-
-                                                                        <div className="space-y-6 pt-4">
-                                                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                                                                <div className="space-y-2">
-                                                                                    <Label className="text-[10px] font-bold text-slate-500 uppercase px-1">Início da Campanha</Label>
-                                                                                    <Input 
-                                                                                        type="date"
-                                                                                        value={meta.stage_data?.planejamento?.start_date || ""} 
-                                                                                        onChange={(e) => updateStageData("planejamento", "start_date", e.target.value)}
-                                                                                        className="h-11 rounded-2xl font-medium"
-                                                                                    />
-                                                                                </div>
-                                                                                <div className="space-y-2">
-                                                                                    <Label className="text-[10px] font-bold text-slate-500 uppercase px-1">Fim da Campanha</Label>
-                                                                                    <Input 
-                                                                                        type="date"
-                                                                                        value={meta.stage_data?.planejamento?.end_date || ""} 
-                                                                                        onChange={(e) => updateStageData("planejamento", "end_date", e.target.value)}
-                                                                                        className="h-11 rounded-2xl font-medium"
-                                                                                    />
-                                                                                </div>
-                                                                            </div>
-                                                                            <div className="space-y-2">
-                                                                                <Label className="text-[10px] font-bold text-slate-500 uppercase px-1">Mensagem Central</Label>
-                                                                                <Textarea 
-                                                                                    value={meta.stage_data?.planejamento?.mensagem_central || ""} 
-                                                                                    onChange={(e) => updateStageData("planejamento", "mensagem_central", e.target.value)}
-                                                                                    className="rounded-2xl min-h-[80px]" placeholder="Slogan ou ideia central que guia a campanha..."
-                                                                                />
-                                                                            </div>
-
-                                                                            <div className="space-y-4">
-                                                                                <Label className="text-[10px] font-black text-slate-500 uppercase px-1 tracking-widest">Estratégia de Canais</Label>
-                                                                                <div className="flex flex-wrap gap-2">
-                                                                                    {allAvailableChannels.map(ch => {
-                                                                                        const isSelected = (meta.selected_channels || []).includes(ch);
-                                                                                        return (
-                                                                                            <Badge 
-                                                                                                key={ch}
-                                                                                                onClick={() => toggleChannel(ch)}
-                                                                                                style={{ 
-                                                                                                    backgroundColor: isSelected ? primaryColor : 'white',
-                                                                                                    color: isSelected ? primaryText : undefined,
-                                                                                                    borderColor: isSelected ? primaryColor : '#f1f5f9'
-                                                                                                }}
-                                                                                                className={cn(
-                                                                                                    "px-4 py-2 rounded-2xl cursor-pointer transition-all border-2 text-[11px] font-bold",
-                                                                                                    !isSelected && "text-slate-500 hover:border-indigo-200 hover:text-indigo-600"
-                                                                                                )}
-                                                                                            >
-                                                                                                {ch.toUpperCase()}
-                                                                                            </Badge>
-                                                                                        );
-                                                                                    })}
-                                                                                    {isAddingChannel ? (
-                                                                                        <div className="flex items-center gap-2 animate-in slide-in-from-left-2 duration-300">
-                                                                                            <Input 
-                                                                                                autoFocus
-                                                                                                value={newChannelName}
-                                                                                                onChange={(e) => setNewChannelName(e.target.value)}
-                                                                                                onKeyDown={(e) => e.key === 'Enter' && addCustomChannel(newChannelName)}
-                                                                                                className="h-9 w-32 rounded-xl text-[10px]"
-                                                                                                placeholder="Nome do canal..."
-                                                                                            />
-                                                                                            <Button 
-                                                                                                size="sm" variant="ghost" className="h-9 w-9 rounded-xl text-green-600 hover:bg-green-50"
-                                                                                                onClick={() => addCustomChannel(newChannelName)}
-                                                                                            >
-                                                                                                <Plus className="h-4 w-4" />
-                                                                                            </Button>
-                                                                                            <Button 
-                                                                                                size="sm" variant="ghost" className="h-9 w-9 rounded-xl text-slate-400"
-                                                                                                onClick={() => setIsAddingChannel(false)}
-                                                                                            >
-                                                                                                <RefreshCw className="h-3 w-3" />
-                                                                                            </Button>
-                                                                                        </div>
-                                                                                    ) : (
-                                                                                        <Badge 
-                                                                                            onClick={() => setIsAddingChannel(true)}
-                                                                                            className="px-4 py-2 rounded-2xl cursor-pointer transition-all border-2 border-dashed border-slate-200 bg-slate-50/30 text-slate-400 hover:border-indigo-300 hover:text-indigo-600 font-bold text-[11px]"
-                                                                                        >
-                                                                                            <Plus className="h-3 w-3 mr-2" /> NOVO CANAL
-                                                                                        </Badge>
-                                                                                    )}
-                                                                                </div>
-                                                                                <input 
-                                                                                    type="hidden" 
-                                                                                    value={(meta.selected_channels || []).join(", ")} 
-                                                                                    onChange={() => {}}
-                                                                                />
-                                                                            </div>
-
-                                                                            <div className="space-y-2">
-                                                                                <Label className="text-[10px] font-bold text-slate-500 uppercase px-1">Objetivos Estratégicos</Label>
-                                                                                <Textarea 
-                                                                                    value={meta.stage_data?.planejamento?.objetivo || ""} 
-                                                                                    onChange={(e) => updateStageData("planejamento", "objetivo", e.target.value)}
-                                                                                    className="rounded-2xl min-h-[100px]" placeholder="Defina o que se espera alcançar..."
-                                                                                />
-                                                                            </div>
-
-                                                                            <div className="space-y-4 pt-4">
-                                                                                <Label className="text-[10px] font-black tracking-widest uppercase text-slate-400 px-1">Evidências Técnicas (ERP / CRM)</Label>
-                                                                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                                                                                    <div className="p-4 rounded-3xl border border-slate-100 bg-slate-50/30 space-y-4">
-                                                                                        <div className="flex items-center justify-between">
-                                                                                            <span className="text-[11px] font-bold text-slate-700">Evidência ERP</span>
-                                                                                            <label className="cursor-pointer">
-                                                                                                <input 
-                                                                                                    type="file" className="hidden" 
-                                                                                                    onChange={(e) => e.target.files?.[0] && handleFileUpload("planejamento", "erp", e.target.files[0])}
-                                                                                                />
-                                                                                                <div className="h-8 w-8 rounded-xl bg-white border border-slate-100 flex items-center justify-center text-indigo-600 hover:bg-slate-50 transition-colors shadow-sm">
-                                                                                                    <Upload className="h-4 w-4" />
-                                                                                                </div>
-                                                                                            </label>
-                                                                                        </div>
-                                                                                        <div className="space-y-2">
-                                                                                            {(meta.stage_data?.planejamento?.evidences?.erp || []).map((f: any, i: number) => (
-                                                                                                <a key={i} href={f.url} target="_blank" className="flex items-center gap-2 p-2 rounded-xl bg-white border border-slate-100 text-[10px] font-medium text-slate-600 hover:text-indigo-600 truncate group">
-                                                                                                    <Paperclip className="h-3 w-3 shrink-0" /> {f.name}
-                                                                                                </a>
-                                                                                            ))}
-                                                                                            {!(meta.stage_data?.planejamento?.evidences?.erp?.length) && (
-                                                                                                <p className="text-[9px] text-slate-400 italic">Nenhum documento ERP anexado.</p>
-                                                                                            )}
-                                                                                        </div>
-                                                                                    </div>
-
-                                                                                    <div className="p-4 rounded-3xl border border-slate-100 bg-slate-50/30 space-y-4">
-                                                                                        <div className="flex items-center justify-between">
-                                                                                            <span className="text-[11px] font-bold text-slate-700">Evidência CRM</span>
-                                                                                            <label className="cursor-pointer">
-                                                                                                <input 
-                                                                                                    type="file" className="hidden" 
-                                                                                                    onChange={(e) => e.target.files?.[0] && handleFileUpload("planejamento", "crm", e.target.files[0])}
-                                                                                                />
-                                                                                                <div className="h-8 w-8 rounded-xl bg-white border border-slate-100 flex items-center justify-center text-indigo-600 hover:bg-slate-50 transition-colors shadow-sm">
-                                                                                                    <Upload className="h-4 w-4" />
-                                                                                                </div>
-                                                                                            </label>
-                                                                                        </div>
-                                                                                        <div className="space-y-2">
-                                                                                            {(meta.stage_data?.planejamento?.evidences?.crm || []).map((f: any, i: number) => (
-                                                                                                <a key={i} href={f.url} target="_blank" className="flex items-center gap-2 p-2 rounded-xl bg-white border border-slate-100 text-[10px] font-medium text-slate-600 hover:text-indigo-600 truncate">
-                                                                                                    <Paperclip className="h-3 w-3 shrink-0" /> {f.name}
-                                                                                                </a>
-                                                                                            ))}
-                                                                                            {!(meta.stage_data?.planejamento?.evidences?.crm?.length) && (
-                                                                                                <p className="text-[9px] text-slate-400 italic">Nenhum documento CRM anexado.</p>
-                                                                                            )}
-                                                                                        </div>
-                                                                                    </div>
-                                                                                </div>
-                                                                            </div>
-                                                                        </div>
-                                                                    </div>
-                                                                )}
-
-                                                                {st === "criativos" && (
-                                                                    <div className="space-y-8">
-                                                                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-1">
-                                                                            <div>
-                                                                                <h4 className="text-sm font-black text-slate-800 tracking-tight">Gestão de Criativos</h4>
-                                                                                <p className="text-[10px] text-slate-500 font-medium">Gerencie o status da produção e envie para aprovação.</p>
-                                                                            </div>
-                                                                            <div className="flex items-center gap-2">
-                                                                                <Button 
-                                                                                    variant="outline" 
-                                                                                    onClick={() => copyShareLink('approve')}
-                                                                                    className="rounded-xl h-8 text-[10px] font-black gap-2 border-indigo-100 text-indigo-600 hover:bg-indigo-50"
-                                                                                >
-                                                                                    <Share2 className="h-3.5 w-3.5" /> COPIAR LINK DE APROVAÇÃO
-                                                                                </Button>
-                                                                                <Button onClick={addCreative} size="sm" className="rounded-xl h-8 text-[10px] font-bold gap-2 bg-indigo-600 hover:bg-indigo-700">
-                                                                                    <Plus className="h-3.5 w-3.5" /> NOVO CRIATIVO
-                                                                                </Button>
-                                                                            </div>
-                                                                        </div>
-
-                                                                        <div className="space-y-6">
-                                                                            {(meta.creatives || []).map((cr: MktTechaCreative) => (
-                                                                                <div key={cr.id} className="p-6 rounded-[32px] border border-slate-200 bg-white shadow-sm space-y-6 relative group/card overflow-hidden">
-                                                                                    <div className="absolute top-0 left-0 w-1.5 h-full bg-indigo-500" />
-                                                                                    <Button 
-                                                                                        variant="ghost" 
-                                                                                        size="icon" 
-                                                                                        onClick={() => removeCreative(cr.id)}
-                                                                                        className="absolute top-4 right-4 h-8 w-8 rounded-full text-slate-300 hover:text-rose-600 hover:bg-rose-50 opacity-0 group-hover/card:opacity-100 transition-opacity"
-                                                                                    >
-                                                                                        <Trash2 className="h-4 w-4" />
-                                                                                    </Button>
-
-                                                                                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                                                                                        <div className="space-y-1.5">
-                                                                                            <Label className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-1">Canal</Label>
-                                                                                            <Select value={cr.channel} onValueChange={(v) => updateCreative(cr.id, "channel", v)}>
-                                                                                                <SelectTrigger className="h-10 rounded-2xl text-xs font-bold border-slate-100"><SelectValue /></SelectTrigger>
-                                                                                                <SelectContent className="rounded-xl">
-                                                                                                    {((meta.selected_channels && meta.selected_channels.length > 0) ? meta.selected_channels : allAvailableChannels).map(ch => (
-                                                                                                        <SelectItem key={ch} value={ch}>{ch}</SelectItem>
-                                                                                                    ))}
-                                                                                                </SelectContent>
-                                                                                            </Select>
-                                                                                        </div>
-                                                                                        <div className="space-y-1.5">
-                                                                                            <Label className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-1">Tipo</Label>
-                                                                                            <Select value={cr.type} onValueChange={(v) => updateCreative(cr.id, "type", v)}>
-                                                                                                <SelectTrigger className="h-10 rounded-2xl text-xs font-bold border-slate-100"><SelectValue /></SelectTrigger>
-                                                                                                <SelectContent className="rounded-xl">
-                                                                                                    <SelectItem value="imagem">Arte Estática (Imagem)</SelectItem>
-                                                                                                    <SelectItem value="video">VÍDEO</SelectItem>
-                                                                                                    <SelectItem value="audio">ÁUDIO</SelectItem>
-                                                                                                    <SelectItem value="texto">TEXTO</SelectItem>
-                                                                                                </SelectContent>
-                                                                                            </Select>
-                                                                                        </div>
-                                                                                        <div className="space-y-1.5">
-                                                                                            <Label className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-1">Status Produção</Label>
-                                                                                            <Select value={cr.status} onValueChange={(v) => updateCreative(cr.id, "status", v)}>
-                                                                                                <SelectTrigger className="h-10 rounded-2xl text-xs font-black ring-1 ring-inset ring-slate-100 bg-slate-50/50">
-                                                                                                    <SelectValue />
-                                                                                                </SelectTrigger>
-                                                                                                <SelectContent className="rounded-xl">
-                                                                                                    {CREATIVE_STATUSES.map(s => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}
-                                                                                                </SelectContent>
-                                                                                            </Select>
-                                                                                        </div>
-                                                                                        <div className="space-y-1.5">
-                                                                                            <Label className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-1">Responsável</Label>
-                                                                                            <Select value={cr.responsible_id || "__none__"} onValueChange={(v) => updateCreative(cr.id, "responsible_id", v === "__none__" ? null : v)}>
-                                                                                                <SelectTrigger className="h-10 rounded-2xl text-xs font-bold border-slate-100"><SelectValue /></SelectTrigger>
-                                                                                                <SelectContent className="rounded-xl">
-                                                                                                    <SelectItem value="__none__">Não atribuído</SelectItem>
-                                                                                                    {tenantUsersQ.data?.map(u => <SelectItem key={u.user_id} value={u.user_id}>{u.display_name || "Sem nome"}</SelectItem>)}
-                                                                                                </SelectContent>
-                                                                                            </Select>
-                                                                                        </div>
-                                                                                    </div>
-                                                                                </div>
-                                                                            ))}
-                                                                        </div>
-                                                                    </div>
-                                                                )}
-
-                                                                {st === "cadastro_big2be" && (
-                                                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                                                        <div className="space-y-2">
-                                                                            <Label className="text-[10px] font-bold text-slate-500 uppercase px-1">Data de Início (Vigência)</Label>
-                                                                            <Input type="date" value={meta.stage_data?.cadastro_big2be?.inicio || ""} onChange={(e) => updateStageData("cadastro_big2be", "inicio", e.target.value)} className="h-11 rounded-2xl" />
-                                                                        </div>
-                                                                        <div className="space-y-2">
-                                                                            <Label className="text-[10px] font-bold text-slate-500 uppercase px-1">Data de Fim (Vigência)</Label>
-                                                                            <Input type="date" value={meta.stage_data?.cadastro_big2be?.fim || ""} onChange={(e) => updateStageData("cadastro_big2be", "fim", e.target.value)} className="h-11 rounded-2xl" />
-                                                                        </div>
-                                                                    </div>
-                                                                )}
-
-                                                                {st === "distribuio" && (
-                                                                    <div className="space-y-4">
-                                                                        <div className="space-y-2">
-                                                                            <Label className="text-[10px] font-bold text-slate-500 uppercase px-1">Plano de Ativação / Notas de Mídia</Label>
-                                                                            <Textarea 
-                                                                                value={meta.stage_data?.distribuio?.plano || ""} 
-                                                                                onChange={(e) => updateStageData("distribuio", "plano", e.target.value)}
-                                                                                className="rounded-2xl" placeholder="Observações de tráfego, agendamentos, etc."
-                                                                            />
-                                                                        </div>
-                                                                    </div>
-                                                                )}
-
-                                                                {st === "concluido" && (
-                                                                    <div className="p-8 border-2 border-emerald-100 rounded-[32px] bg-emerald-50/30 flex flex-col items-center justify-center text-center gap-4">
-                                                                        <CheckCircle2 className="h-12 w-12 text-emerald-500" />
-                                                                        <div className="space-y-1">
-                                                                            <h4 className="text-sm font-bold text-emerald-900">Campanha Finalizada</h4>
-                                                                            <p className="text-xs text-emerald-700/70 max-w-[300px]">Todos os dados foram arquivados e o histórico está preservado como ativo reutilizável.</p>
-                                                                        </div>
-                                                                    </div>
-                                                                )}
-                                                            </div>
-
-                                                            <div className="space-y-4 pt-6 border-t border-slate-50">
-                                                                <div className="flex items-center justify-between px-1">
-                                                                    <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                                                                        <ListChecks className="h-4 w-4 text-indigo-400" /> CHECKLIST
-                                                                    </h4>
-                                                                    <Badge variant="secondary" className="rounded-full bg-slate-100 text-slate-500 font-bold text-[9px]">
-                                                                        {checklist.filter(s => s.done).length} / {checklist.length}
+                                                        <div>
+                                                            <div className="flex items-center gap-2">
+                                                                <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Etapa</span>
+                                                                {isCurrent && (
+                                                                    <Badge 
+                                                                        style={{ backgroundColor: `${primaryColor}10`, color: primaryColor }}
+                                                                        className="border-none rounded-full h-4 text-[8px] font-black px-2 uppercase"
+                                                                    >
+                                                                        Atual
                                                                     </Badge>
-                                                                </div>
-                                                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                                                    {checklist.map((item) => (
-                                                                        <div 
-                                                                            key={item.id} 
-                                                                            onClick={() => toggleSubtask(st, item.id)}
-                                                                            className={cn(
-                                                                                "flex items-center gap-3 p-4 rounded-2xl border transition-all cursor-pointer group/item",
-                                                                                item.done ? "bg-emerald-50/50 border-emerald-100" : "bg-white border-slate-100 hover:border-slate-200"
-                                                                            )}
+                                                                )}
+                                                                {isLocked && <Badge className="bg-slate-100 text-slate-400 border-none rounded-full h-4 text-[8px] font-black px-2 uppercase">Bloqueada</Badge>}
+                                                            </div>
+                                                            <h3 className={cn("text-lg font-black tracking-tight", isCurrent ? "text-slate-900" : isLocked ? "text-slate-400" : "text-slate-600")}>
+                                                                {label}
+                                                            </h3>
+                                                        </div>
+                                                    </div>
+                                                </AccordionTrigger>
+                                                <AccordionContent className="pt-2 pb-8">
+                                                    <div className="space-y-8 animate-in fade-in slide-in-from-top-2 duration-500">
+                                                        <div className="space-y-6">
+                                                            {st === "ideias" && (
+                                                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                                                    <div className="space-y-2">
+                                                                        <Label className="text-[10px] font-bold text-slate-500 uppercase px-1">Origem</Label>
+                                                                        <Input 
+                                                                            value={meta.stage_data?.ideias?.origem || ""} 
+                                                                            onChange={(e) => updateStageData("ideias", "origem", e.target.value)}
+                                                                            className="h-11 rounded-2xl" placeholder="Ex: Campanha Sazonal"
+                                                                        />
+                                                                    </div>
+                                                                    <div className="space-y-2">
+                                                                        <Label className="text-[10px] font-bold text-slate-500 uppercase px-1">Prioridade</Label>
+                                                                        <Select 
+                                                                            value={meta.stage_data?.ideias?.prioridade || "media"}
+                                                                            onValueChange={(v) => updateStageData("ideias", "prioridade", v)}
                                                                         >
-                                                                            <Checkbox checked={item.done} className="rounded-full data-[state=checked]:bg-emerald-500 border-slate-200" />
-                                                                            <span className={cn(
-                                                                                "text-xs font-semibold transition-colors",
-                                                                                item.done ? "text-emerald-700 line-through opacity-70" : "text-slate-700 group-hover/item:text-slate-900"
-                                                                            )}>
-                                                                                {item.label}
-                                                                            </span>
-                                                                        </div>
-                                                                    ))}
+                                                                            <SelectTrigger className="h-11 rounded-2xl">
+                                                                                <SelectValue />
+                                                                            </SelectTrigger>
+                                                                            <SelectContent className="rounded-xl">
+                                                                                <SelectItem value="baixa">Baixa</SelectItem>
+                                                                                <SelectItem value="media">Média</SelectItem>
+                                                                                <SelectItem value="alta">Alta</SelectItem>
+                                                                            </SelectContent>
+                                                                        </Select>
+                                                                    </div>
                                                                 </div>
+                                                            )}
+
+                                                            {st === "planejamento" && (
+                                                                <div className="space-y-8">
+                                                                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-1 -mb-4">
+                                                                        <div className="flex flex-col">
+                                                                            <h4 className="text-sm font-black text-slate-800 tracking-tight leading-none">Detalhamento Estratégico</h4>
+                                                                            <p className="text-[10px] text-slate-500 font-medium">Configure a mensagem, cronograma e anexe evidências.</p>
+                                                                        </div>
+                                                                        {meta.stage_data?.planejamento?.approved_at && (
+                                                                            <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-50 border border-emerald-100">
+                                                                                <div className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+                                                                                <span className="text-[10px] font-black text-emerald-600 uppercase tracking-widest">Aprovado pelo Cliente</span>
+                                                                            </div>
+                                                                        )}
+                                                                    </div>
+
+                                                                    <div className="space-y-6 pt-4">
+                                                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                                                            <div className="space-y-2">
+                                                                                <Label className="text-[10px] font-bold text-slate-500 uppercase px-1">Início da Campanha</Label>
+                                                                                <Input 
+                                                                                    type="date"
+                                                                                    value={meta.stage_data?.planejamento?.start_date || ""} 
+                                                                                    onChange={(e) => updateStageData("planejamento", "start_date", e.target.value)}
+                                                                                    className="h-11 rounded-2xl font-medium"
+                                                                                />
+                                                                            </div>
+                                                                            <div className="space-y-2">
+                                                                                <Label className="text-[10px] font-bold text-slate-500 uppercase px-1">Fim da Campanha</Label>
+                                                                                <Input 
+                                                                                    type="date"
+                                                                                    value={meta.stage_data?.planejamento?.end_date || ""} 
+                                                                                    onChange={(e) => updateStageData("planejamento", "end_date", e.target.value)}
+                                                                                    className="h-11 rounded-2xl font-medium"
+                                                                                />
+                                                                            </div>
+                                                                        </div>
+                                                                        <div className="space-y-2">
+                                                                            <Label className="text-[10px] font-bold text-slate-500 uppercase px-1">Mensagem Central</Label>
+                                                                            <Textarea 
+                                                                                value={meta.stage_data?.planejamento?.mensagem_central || ""} 
+                                                                                onChange={(e) => updateStageData("planejamento", "mensagem_central", e.target.value)}
+                                                                                className="rounded-2xl min-h-[80px]" placeholder="Slogan ou ideia central que guia a campanha..."
+                                                                            />
+                                                                        </div>
+
+                                                                        <div className="space-y-4">
+                                                                            <Label className="text-[10px] font-black text-slate-500 uppercase px-1 tracking-widest">Estratégia de Canais</Label>
+                                                                            <div className="flex flex-wrap gap-2">
+                                                                                {allAvailableChannels.map(ch => {
+                                                                                    const isSelected = (meta.selected_channels || []).includes(ch);
+                                                                                    return (
+                                                                                        <Badge 
+                                                                                            key={ch}
+                                                                                            onClick={() => toggleChannel(ch)}
+                                                                                            style={{ 
+                                                                                                backgroundColor: isSelected ? primaryColor : 'white',
+                                                                                                color: isSelected ? primaryText : undefined,
+                                                                                                borderColor: isSelected ? primaryColor : '#f1f5f9'
+                                                                                            }}
+                                                                                            className={cn(
+                                                                                                "px-4 py-2 rounded-2xl cursor-pointer transition-all border-2 text-[11px] font-bold",
+                                                                                                !isSelected && "text-slate-500 hover:border-indigo-200 hover:text-indigo-600"
+                                                                                            )}
+                                                                                        >
+                                                                                            {ch.toUpperCase()}
+                                                                                        </Badge>
+                                                                                    );
+                                                                                })}
+                                                                                {isAddingChannel ? (
+                                                                                    <div className="flex items-center gap-2 animate-in slide-in-from-left-2 duration-300">
+                                                                                        <Input 
+                                                                                            autoFocus
+                                                                                            value={newChannelName}
+                                                                                            onChange={(e) => setNewChannelName(e.target.value)}
+                                                                                            onKeyDown={(e) => e.key === 'Enter' && addCustomChannel(newChannelName)}
+                                                                                            className="h-9 w-32 rounded-xl text-[10px]"
+                                                                                            placeholder="Nome do canal..."
+                                                                                        />
+                                                                                        <Button size="sm" variant="ghost" className="h-9 w-9 rounded-xl text-green-600" onClick={() => addCustomChannel(newChannelName)}>
+                                                                                            <Plus className="h-4 w-4" />
+                                                                                        </Button>
+                                                                                        <Button size="sm" variant="ghost" className="h-9 w-9 rounded-xl text-slate-400" onClick={() => setIsAddingChannel(false)}>
+                                                                                            <X className="h-3 w-3" />
+                                                                                        </Button>
+                                                                                    </div>
+                                                                                ) : (
+                                                                                    <Badge onClick={() => setIsAddingChannel(true)} className="px-4 py-2 rounded-2xl cursor-pointer border-2 border-dashed border-slate-200 bg-slate-50/30 text-slate-400 font-bold text-[11px]">
+                                                                                        <Plus className="h-3 w-3 mr-2" /> NOVO CANAL
+                                                                                    </Badge>
+                                                                                )}
+                                                                            </div>
+                                                                        </div>
+
+                                                                        <div className="space-y-2">
+                                                                            <Label className="text-[10px] font-bold text-slate-500 uppercase px-1">Objetivos Estratégicos</Label>
+                                                                            <Textarea 
+                                                                                value={meta.stage_data?.planejamento?.objetivo || ""} 
+                                                                                onChange={(e) => updateStageData("planejamento", "objetivo", e.target.value)}
+                                                                                className="rounded-2xl min-h-[100px]" placeholder="Defina o que se espera alcançar..."
+                                                                            />
+                                                                        </div>
+
+                                                                        <div className="space-y-4 pt-4">
+                                                                            <Label className="text-[10px] font-black tracking-widest uppercase text-slate-400 px-1">Evidências Técnicas (ERP / CRM)</Label>
+                                                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                                                                                <div className="p-4 rounded-3xl border border-slate-100 bg-slate-50/30 space-y-4">
+                                                                                    <div className="flex items-center justify-between">
+                                                                                        <span className="text-[11px] font-bold text-slate-700">Evidência ERP</span>
+                                                                                        <label className="cursor-pointer">
+                                                                                            <input type="file" className="hidden" onChange={(e) => e.target.files?.[0] && handleFileUpload("planejamento", "erp", e.target.files[0])} />
+                                                                                            <div className="h-8 w-8 rounded-xl bg-white border border-slate-100 flex items-center justify-center text-indigo-600 shadow-sm"><Upload className="h-4 w-4" /></div>
+                                                                                        </label>
+                                                                                    </div>
+                                                                                    <div className="space-y-2">
+                                                                                        {(meta.stage_data?.planejamento?.evidences?.erp || []).map((f: any, i: number) => (
+                                                                                            <a key={i} href={f.url} target="_blank" className="flex items-center gap-2 p-2 rounded-xl bg-white border border-slate-100 text-[10px] font-medium text-slate-600 truncate"><Paperclip className="h-3 w-3" /> {f.name}</a>
+                                                                                        ))}
+                                                                                        {!(meta.stage_data?.planejamento?.evidences?.erp?.length) && <p className="text-[9px] text-slate-400 italic">Nenhum documento ERP anexado.</p>}
+                                                                                    </div>
+                                                                                </div>
+                                                                                <div className="p-4 rounded-3xl border border-slate-100 bg-slate-50/30 space-y-4">
+                                                                                    <div className="flex items-center justify-between">
+                                                                                        <span className="text-[11px] font-bold text-slate-700">Evidência CRM</span>
+                                                                                        <label className="cursor-pointer">
+                                                                                            <input type="file" className="hidden" onChange={(e) => e.target.files?.[0] && handleFileUpload("planejamento", "crm", e.target.files[0])} />
+                                                                                            <div className="h-8 w-8 rounded-xl bg-white border border-slate-100 flex items-center justify-center text-indigo-600 shadow-sm"><Upload className="h-4 w-4" /></div>
+                                                                                        </label>
+                                                                                    </div>
+                                                                                    <div className="space-y-2">
+                                                                                        {(meta.stage_data?.planejamento?.evidences?.crm || []).map((f: any, i: number) => (
+                                                                                            <a key={i} href={f.url} target="_blank" className="flex items-center gap-2 p-2 rounded-xl bg-white border border-slate-100 text-[10px] font-medium text-slate-600 truncate"><Paperclip className="h-3 w-3" /> {f.name}</a>
+                                                                                        ))}
+                                                                                        {!(meta.stage_data?.planejamento?.evidences?.crm?.length) && <p className="text-[9px] text-slate-400 italic">Nenhum documento CRM anexado.</p>}
+                                                                                    </div>
+                                                                                </div>
+                                                                            </div>
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                            )}
+
+                                                            {st === "criativos" && (
+                                                                <div className="space-y-8">
+                                                                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-1">
+                                                                        <div>
+                                                                            <h4 className="text-sm font-black text-slate-800 tracking-tight">Gestão de Criativos</h4>
+                                                                            <p className="text-[10px] text-slate-500 font-medium">Gerencie o status da produção e envie para aprovação.</p>
+                                                                        </div>
+                                                                        <div className="flex items-center gap-2">
+                                                                            <Button variant="outline" onClick={() => copyShareLink('approve')} className="rounded-xl h-8 text-[10px] font-black gap-2 border-indigo-100 text-indigo-600"><Share2 className="h-3.5 w-3.5" /> LINK DE APROVAÇÃO</Button>
+                                                                            <Button onClick={addCreative} size="sm" className="rounded-xl h-8 text-[10px] font-bold gap-2 bg-indigo-600"><Plus className="h-3.5 w-3.5" /> NOVO CRIATIVO</Button>
+                                                                        </div>
+                                                                    </div>
+                                                                    <div className="space-y-6">
+                                                                        {(meta.creatives || []).map((cr: MktTechaCreative) => (
+                                                                            <div key={cr.id} className="p-6 rounded-[32px] border border-slate-200 bg-white shadow-sm space-y-6 relative group/card overflow-hidden">
+                                                                                <div className="absolute top-0 left-0 w-1.5 h-full bg-indigo-500" />
+                                                                                <Button variant="ghost" size="icon" onClick={() => removeCreative(cr.id)} className="absolute top-4 right-4 h-8 w-8 rounded-full text-slate-300 hover:text-rose-600 opacity-0 group-hover/card:opacity-100 transition-opacity"><Trash2 className="h-4 w-4" /></Button>
+                                                                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                                                                                    <div className="space-y-1.5">
+                                                                                        <Label className="text-[9px] font-black text-slate-400 uppercase px-1">Canal</Label>
+                                                                                        <Select value={cr.channel} onValueChange={(v) => updateCreative(cr.id, "channel", v)}>
+                                                                                            <SelectTrigger className="h-10 rounded-2xl text-xs font-bold border-slate-100"><SelectValue /></SelectTrigger>
+                                                                                            <SelectContent className="rounded-xl">
+                                                                                                {allAvailableChannels.map(ch => <SelectItem key={ch} value={ch}>{ch}</SelectItem>)}
+                                                                                            </SelectContent>
+                                                                                        </Select>
+                                                                                    </div>
+                                                                                    <div className="space-y-1.5">
+                                                                                        <Label className="text-[9px] font-black text-slate-400 uppercase px-1">Tipo</Label>
+                                                                                        <Select value={cr.type} onValueChange={(v) => updateCreative(cr.id, "type", v)}>
+                                                                                            <SelectTrigger className="h-10 rounded-2xl text-xs font-bold border-slate-100"><SelectValue /></SelectTrigger>
+                                                                                            <SelectContent className="rounded-xl">
+                                                                                                <SelectItem value="imagem">Imagem</SelectItem>
+                                                                                                <SelectItem value="video">Vídeo</SelectItem>
+                                                                                                <SelectItem value="audio">Áudio</SelectItem>
+                                                                                                <SelectItem value="texto">Texto</SelectItem>
+                                                                                            </SelectContent>
+                                                                                        </Select>
+                                                                                    </div>
+                                                                                    <div className="space-y-1.5">
+                                                                                        <Label className="text-[9px] font-black text-slate-400 uppercase px-1">Status</Label>
+                                                                                        <Select value={cr.status} onValueChange={(v) => updateCreative(cr.id, "status", v)}>
+                                                                                            <SelectTrigger className="h-10 rounded-2xl text-xs font-black bg-slate-50/50"><SelectValue /></SelectTrigger>
+                                                                                            <SelectContent className="rounded-xl">
+                                                                                                {Object.entries(CREATIVE_STATUSES).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
+                                                                                            </SelectContent>
+                                                                                        </Select>
+                                                                                    </div>
+                                                                                    <div className="space-y-1.5">
+                                                                                        <Label className="text-[9px] font-black text-slate-400 uppercase px-1">Responsável</Label>
+                                                                                        <Select value={cr.responsible_id || "__none__"} onValueChange={(v) => updateCreative(cr.id, "responsible_id", v === "__none__" ? null : v)}>
+                                                                                            <SelectTrigger className="h-10 rounded-2xl text-xs font-bold border-slate-100"><SelectValue /></SelectTrigger>
+                                                                                            <SelectContent className="rounded-xl">
+                                                                                                <SelectItem value="__none__">Não atribuído</SelectItem>
+                                                                                                {tenantUsersQ.data?.map(u => <SelectItem key={u.user_id} value={u.user_id}>{u.display_name || u.email}</SelectItem>)}
+                                                                                            </SelectContent>
+                                                                                        </Select>
+                                                                                    </div>
+                                                                                </div>
+                                                                            </div>
+                                                                        ))}
+                                                                    </div>
+                                                                </div>
+                                                            )}
+
+                                                            {st === "cadastro_big2be" && (
+                                                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                                                    <div className="space-y-2">
+                                                                        <Label className="text-[10px] font-bold text-slate-500 uppercase px-1">Início (Vigência)</Label>
+                                                                        <Input type="date" value={meta.stage_data?.cadastro_big2be?.inicio || ""} onChange={(e) => updateStageData("cadastro_big2be", "inicio", e.target.value)} className="h-11 rounded-2xl" />
+                                                                    </div>
+                                                                    <div className="space-y-2">
+                                                                        <Label className="text-[10px] font-bold text-slate-500 uppercase px-1">Fim (Vigência)</Label>
+                                                                        <Input type="date" value={meta.stage_data?.cadastro_big2be?.fim || ""} onChange={(e) => updateStageData("cadastro_big2be", "fim", e.target.value)} className="h-11 rounded-2xl" />
+                                                                    </div>
+                                                                </div>
+                                                            )}
+
+                                                            {st === "distribuio" && (
+                                                                <div className="space-y-4">
+                                                                    <Label className="text-[10px] font-bold text-slate-500 uppercase px-1">Notas de Mídia</Label>
+                                                                    <Textarea value={meta.stage_data?.distribuio?.plano || ""} onChange={(e) => updateStageData("distribuio", "plano", e.target.value)} className="rounded-2xl" placeholder="Observações de tráfego..." />
+                                                                </div>
+                                                            )}
+
+                                                            {st === "concluido" && (
+                                                                <div className="p-8 border-2 border-emerald-100 rounded-[32px] bg-emerald-50/30 flex flex-col items-center justify-center text-center gap-4">
+                                                                    <CheckCircle2 className="h-12 w-12 text-emerald-500" />
+                                                                    <div className="space-y-1">
+                                                                        <h4 className="text-sm font-bold text-emerald-900">Campanha Finalizada</h4>
+                                                                        <p className="text-xs text-emerald-700/70">Histórico preservado.</p>
+                                                                    </div>
+                                                                </div>
+                                                            )}
+                                                        </div>
+
+                                                        <div className="space-y-4 pt-6 border-t border-slate-50">
+                                                            <div className="flex items-center justify-between px-1">
+                                                                <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2"><ListChecks className="h-4 w-4" /> CHECKLIST</h4>
+                                                                <Badge variant="secondary" className="rounded-full bg-slate-100 text-slate-500 font-bold text-[9px]">{checklist.filter(s => s.done).length} / {checklist.length}</Badge>
+                                                            </div>
+                                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                                                {checklist.map((item) => (
+                                                                    <div key={item.id} onClick={() => toggleSubtask(st, item.id)} className={cn("flex items-center gap-3 p-4 rounded-2xl border transition-all cursor-pointer", item.done ? "bg-emerald-50/50 border-emerald-100" : "bg-white border-slate-100")}>
+                                                                        <Checkbox checked={item.done} className="rounded-full data-[state=checked]:bg-emerald-500" />
+                                                                        <span className={cn("text-xs font-semibold", item.done ? "text-emerald-700 line-through opacity-70" : "text-slate-700")}>{item.label}</span>
+                                                                    </div>
+                                                                ))}
                                                             </div>
                                                         </div>
-                                                    </AccordionContent>
-                                                </AccordionItem>
-                                            );
-                                        })}
-                                    </Accordion>
+                                                    </div>
+                                                </AccordionContent>
+                                            </AccordionItem>
+                                        );
+                                    })}
+                                </Accordion>
 
                                 <div className="space-y-4 pt-6 border-t border-slate-100">
-                                    <div className="flex items-center justify-between">
-                                        <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                                            <FileText className="h-4 w-4" /> DESCRIÇÃO GERAL
-                                        </h3>
-                                    </div>
+                                    <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-2"><FileText className="h-4 w-4" /> DESCRIÇÃO GERAL</h3>
                                     <div className="space-y-4">
                                         <div className="space-y-2">
                                             <Label className="text-[10px] font-bold text-slate-500 uppercase px-1">Título do Card</Label>
-                                            <input 
-                                                value={mainTitle} 
-                                                onChange={(e) => setMainTitle(e.target.value)} 
-                                                className="w-full h-11 rounded-2xl border border-slate-200 px-4 text-sm font-bold outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all" 
-                                            />
+                                            <input value={mainTitle} onChange={(e) => setMainTitle(e.target.value)} className="w-full h-11 rounded-2xl border border-slate-200 px-4 text-sm font-bold outline-none focus:ring-2 focus:ring-indigo-500/20" />
                                         </div>
                                         <div className="space-y-2">
-                                            <Label className="text-[10px] font-bold text-slate-500 uppercase px-1">Resumo Executivo / Notas</Label>
+                                            <Label className="text-[10px] font-bold text-slate-500 uppercase px-1">Resumo Executivo</Label>
                                             <RichTextEditor value={mainSummary} minHeightClassName="min-h-[200px]" onChange={setMainSummary} />
                                         </div>
                                     </div>
@@ -1048,74 +957,47 @@ export default function MktTechaCase() {
                                 <CaseTimeline events={timelineQ.data ?? []} />
                             </div>
 
-                            <div className="w-full lg:w-[320px] space-y-4">
+                            <div className="w-full lg:w-[320px] space-y-4 lg:sticky lg:top-8 self-start">
                                 <div className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm space-y-6">
-                                    <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest">Informações da Campanha</h3>
-                                    
+                                    <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest">Informações</h3>
                                     <div className="space-y-4">
                                         <div className="space-y-2">
                                             <Label className="text-[10px] font-bold text-slate-500 uppercase px-1">Responsável</Label>
-                                            <Select 
-                                                value={c.assigned_user_id || "__none__"} 
-                                                onValueChange={async (v) => {
-                                                    const val = v === "__none__" ? null : v;
-                                                    await supabase.from("cases").update({ assigned_user_id: val }).eq("id", id);
-                                                    caseQ.refetch();
-                                                    showSuccess("Responsável atualizado");
-                                                }}
-                                            >
-                                                <SelectTrigger className="h-11 rounded-2xl border-slate-100 bg-slate-50/50">
-                                                    <SelectValue placeholder="Selecionar responsável" />
-                                                </SelectTrigger>
+                                            <Select value={c.assigned_user_id || "__none__"} onValueChange={async (v) => {
+                                                const val = v === "__none__" ? null : v;
+                                                await supabase.from("cases").update({ assigned_user_id: val }).eq("id", id);
+                                                caseQ.refetch();
+                                                showSuccess("Responsável atualizado");
+                                            }}>
+                                                <SelectTrigger className="h-11 rounded-2xl border-slate-100 bg-slate-50/50"><SelectValue placeholder="Selecionar" /></SelectTrigger>
                                                 <SelectContent className="rounded-xl">
                                                     <SelectItem value="__none__">Sem responsável</SelectItem>
-                                                    {tenantUsersQ.data?.map(u => (
-                                                        <SelectItem key={u.user_id} value={u.user_id}>{u.display_name || u.email}</SelectItem>
-                                                    ))}
+                                                    {tenantUsersQ.data?.map(u => <SelectItem key={u.user_id} value={u.user_id}>{u.display_name || u.email}</SelectItem>)}
                                                 </SelectContent>
                                             </Select>
                                         </div>
-
                                         <div className="space-y-2">
-                                            <Label className="text-[10px] font-bold text-slate-500 uppercase px-1">Prazo Final da Campanha</Label>
-                                            <Input 
-                                                type="date" 
-                                                value={meta.due_at || ""} 
-                                                onChange={(e) => {
-                                                    const newMeta = { ...meta, due_at: e.target.value };
-                                                    setMeta(newMeta);
-                                                    handleSaveMainCard(newMeta);
-                                                }}
-                                                className="h-11 rounded-2xl border-slate-100 bg-slate-50/50" 
-                                            />
+                                            <Label className="text-[10px] font-bold text-slate-500 uppercase px-1">Prazo Final</Label>
+                                            <Input type="date" value={meta.due_at || ""} onChange={(e) => {
+                                                const newMeta = { ...meta, due_at: e.target.value };
+                                                setMeta(newMeta);
+                                                handleSaveMainCard(newMeta);
+                                            }} className="h-11 rounded-2xl border-slate-100 bg-slate-50/50" />
                                         </div>
                                     </div>
-
                                     <div className="pt-4 border-t border-slate-50 space-y-3">
                                         <div className="p-3 rounded-2xl bg-slate-50/50 border border-slate-100/50">
-                                            <div className="text-[10px] text-slate-400 font-bold uppercase">ID do Caso</div>
+                                            <div className="text-[10px] text-slate-400 font-bold uppercase">ID</div>
                                             <div className="text-[10px] font-mono text-slate-400 mt-1 truncate">{id}</div>
                                         </div>
                                         <div className="p-3 rounded-2xl bg-slate-50/50 border border-slate-100/50">
-                                            <div className="text-[10px] text-slate-400 font-bold uppercase">Início da Jornada</div>
-                                            <div className="text-xs font-semibold text-slate-600 mt-1">
-                                                {new Date(c.created_at).toLocaleDateString("pt-BR", { day: '2-digit', month: 'long', year: 'numeric' })}
-                                            </div>
+                                            <div className="text-[10px] text-slate-400 font-bold uppercase">Criado em</div>
+                                            <div className="text-xs font-semibold text-slate-600 mt-1">{new Date(c.created_at).toLocaleDateString("pt-BR")}</div>
                                         </div>
                                     </div>
                                 </div>
-                                <Button 
-                                    onClick={() => handleSaveMainCard()} 
-                                    disabled={saving} 
-                                    style={{ 
-                                        backgroundColor: primaryColor, 
-                                        color: primaryText,
-                                        boxShadow: `0 10px 20px -5px ${primaryColor}40`
-                                    }}
-                                    className="w-full h-14 rounded-2xl font-black text-xs uppercase tracking-widest gap-2 hover:opacity-90 transition-all active:scale-95 shadow-xl mt-4"
-                                >
-                                    {saving ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4"/>}
-                                    SALVAR TUDO
+                                <Button onClick={() => handleSaveMainCard()} disabled={saving} style={{ backgroundColor: primaryColor, color: primaryText, boxShadow: `0 10px 20px -5px ${primaryColor}40` }} className="w-full h-14 rounded-2xl font-black text-xs uppercase tracking-widest gap-2 shadow-xl">
+                                    {saving ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4"/>} SALVAR TUDO
                                 </Button>
                             </div>
                         </div>
