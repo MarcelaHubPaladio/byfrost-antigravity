@@ -1515,6 +1515,11 @@ export default function OperacaoM30Case() {
                                                                         {st.type === "arte_estatica" ? "ARTE" : "VÍDEO"}
                                                                     </Badge>
                                                                     <span className="text-sm text-slate-700 font-bold">{st.title}</span>
+                                                                    {st.is_approved && (
+                                                                        <Badge className="bg-emerald-500 text-white border-none h-4 px-1.5 text-[8px] font-black animate-in fade-in zoom-in duration-300">
+                                                                            APROVADO PELO CLIENTE
+                                                                        </Badge>
+                                                                    )}
                                                                     {st.linked_case_id && (
                                                                         <Badge variant="outline" className="text-[9px] border-indigo-200 text-indigo-600 bg-indigo-50/50 flex items-center gap-1 font-bold">
                                                                             <LinkIcon className="h-2.5 w-2.5" /> VINCULADO

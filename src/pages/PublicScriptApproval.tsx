@@ -43,15 +43,36 @@ export default function PublicScriptApproval() {
         }
     };
 
+    const handleApproveSubtask = async (idx: number) => {
+        if (!token) return;
+        setApproving(true);
+        try {
+            const { data, error } = await supabase.rpc("approve_m30_subtask", { 
+                p_token: token, 
+                p_idx: idx 
+            });
+            if (error || !data) {
+                showError("Não foi possível aprovar este vídeo agora.");
+            } else {
+                showSuccess("Vídeo aprovado com sucesso!");
+                fetchCase(); // Refresh to show approved state
+            }
+        } catch (e) {
+            showError("Falha na aprovação individual.");
+        } finally {
+            setApproving(false);
+        }
+    };
+
     const handleApprove = async () => {
         if (!token) return;
         setApproving(true);
         try {
             const { data, error } = await supabase.rpc("approve_m30_case", { p_token: token });
             if (error || !data) {
-                showError("Não foi possível aprovar o roteiro agora.");
+                showError("Não foi possível finalizar a aprovação agora.");
             } else {
-                showSuccess("Roteiro Aprovado! O time de produção receberá o sinal imediatamente.");
+                showSuccess("Roteiros Aprovados! O time de produção receberá o sinal imediatamente.");
                 setAlreadyApproved(true);
             }
         } catch (e) {
@@ -109,7 +130,7 @@ export default function PublicScriptApproval() {
     const hasSubtasks = subtasks.length > 0;
 
     return (
-        <div className="min-h-screen bg-slate-50 pb-24">
+        <div className="min-h-screen bg-slate-50 pb-24 font-sans">
             <header className="bg-white border-b border-slate-100 px-6 py-8 text-center sticky top-0 z-10 shadow-sm shadow-slate-200/20">
                 <div className="mx-auto max-w-2xl">
                     <Badge variant="outline" className="mb-4 bg-indigo-50 text-indigo-600 border-indigo-100 px-3 py-1 text-[10px] uppercase font-black tracking-widest">
@@ -127,38 +148,53 @@ export default function PublicScriptApproval() {
             <main className="mx-auto max-w-2xl px-6 py-10 space-y-10">
                 {hasSubtasks ? (
                     <div className="space-y-6">
-                        <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 px-2">
-                            <ListChecks className="h-4 w-4" /> Fila de Conteúdos para Aprovação
-                        </h3>
+                        <div className="flex items-center justify-between px-2">
+                            <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                                <ListChecks className="h-4 w-4" /> Conteúdos para Aprovação
+                            </h3>
+                            <div className="text-[10px] font-bold text-slate-400">
+                                {subtasks.filter(s => s.is_approved).length} de {subtasks.length} aprovados
+                            </div>
+                        </div>
+
                         <Accordion type="multiple" defaultValue={[`video-0`]} className="space-y-4">
                             {subtasks.map((st, idx) => (
                                 <AccordionItem 
                                     key={idx} 
                                     value={`video-${idx}`}
-                                    className="border-none rounded-[32px] bg-white shadow-xl shadow-slate-200/40 overflow-hidden"
+                                    className={cn(
+                                        "border-none rounded-[32px] bg-white shadow-xl shadow-slate-200/40 overflow-hidden transition-all",
+                                        st.is_approved && "ring-2 ring-emerald-500/30 bg-emerald-50/10"
+                                    )}
                                 >
                                     <AccordionTrigger className="px-8 py-6 hover:no-underline hover:bg-slate-50/50 transition-all [&[data-state=open]>div>svg]:rotate-180">
-                                        <div className="flex items-center gap-4 text-left">
-                                            <div className="h-10 w-10 rounded-2xl bg-indigo-50 flex items-center justify-center text-indigo-600 font-black text-xs shrink-0">
-                                                {idx + 1}
-                                            </div>
-                                            <div>
-                                                <div className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-0.5">
-                                                    {st.type === 'arte_estatica' ? 'Design/Arte' : 'Vídeo/Roteiro'}
+                                        <div className="flex items-center gap-4 text-left w-full justify-between pr-4">
+                                            <div className="flex items-center gap-4">
+                                                <div className={cn(
+                                                    "h-10 w-10 rounded-2xl flex items-center justify-center font-black text-xs shrink-0 transition-colors",
+                                                    st.is_approved ? "bg-emerald-100 text-emerald-600" : "bg-indigo-50 text-indigo-600"
+                                                )}>
+                                                    {st.is_approved ? <CheckCircle2 className="h-5 w-5" /> : idx + 1}
                                                 </div>
-                                                <div className="text-base font-black text-slate-900">{st.title}</div>
+                                                <div>
+                                                    <div className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-0.5 flex items-center gap-2">
+                                                        {st.type === 'arte_estatica' ? 'Design/Arte' : 'Vídeo/Roteiro'}
+                                                        {st.is_approved && <Badge className="bg-emerald-500 text-white border-none h-4 px-1.5 text-[8px]">APROVADO</Badge>}
+                                                    </div>
+                                                    <div className="text-base font-black text-slate-900 truncate max-w-[180px] sm:max-w-xs">{st.title}</div>
+                                                </div>
                                             </div>
                                         </div>
                                     </AccordionTrigger>
-                                    <AccordionContent className="px-8 pb-8 pt-0 space-y-8 animate-in slide-in-from-top-2 duration-300">
+                                    <AccordionContent className="px-8 pb-8 pt-0 space-y-8 animate-in slide-in-from-top-2 duration-300 border-t border-slate-50">
                                         {/* sub-briefing */}
-                                        <div className="space-y-3">
+                                        <div className="space-y-3 mt-6">
                                             <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
                                                 <FileText className="h-3 w-3" /> Briefing da Pauta
                                             </div>
                                             <div 
                                                 className="prose prose-slate prose-sm max-w-none prose-p:leading-relaxed prose-p:text-slate-600 bg-slate-50/50 p-6 rounded-3xl"
-                                                dangerouslySetInnerHTML={{ __html: st.summary || "<p className='italic text-slate-400'>Nenhum detalhe adicional informado.</p>" }}
+                                                dangerouslySetInnerHTML={{ __html: st.description || "<p className='italic text-slate-400'>Nenhum detalhe adicional informado.</p>" }}
                                             />
                                         </div>
 
@@ -172,10 +208,41 @@ export default function PublicScriptApproval() {
                                                     <Rocket className="h-20 w-20" />
                                                 </div>
                                                 <div className="relative z-10 whitespace-pre-wrap leading-relaxed text-sm font-medium font-sans">
-                                                    {st.script || "O roteiro deste vídeo está sendo finalizado..."}
+                                                    {st.script_raw || "O roteiro deste vídeo está sendo finalizado..."}
                                                 </div>
                                             </div>
                                         </div>
+
+                                        {/* checklist items (Itens do Roteiro) */}
+                                        {st.script_items && st.script_items.length > 0 && (
+                                            <div className="space-y-3">
+                                                <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                                                    <ListChecks className="h-3 w-3 text-indigo-500" /> Itens do Roteiro (Checklist)
+                                                </div>
+                                                <div className="grid gap-2">
+                                                    {st.script_items.map((item: any, i: number) => (
+                                                        <div key={i} className="flex gap-3 p-4 bg-white border border-slate-100 rounded-2xl social-item shadow-sm">
+                                                            <div className="h-5 w-5 rounded-full border-2 border-slate-200 mt-0.5 shrink-0" />
+                                                            <span className="text-sm font-medium text-slate-700 leading-relaxed">{item.text}</span>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {/* Individual Approval Button */}
+                                        {!st.is_approved && (
+                                            <div className="pt-4">
+                                                <Button 
+                                                    onClick={() => handleApproveSubtask(idx)}
+                                                    disabled={approving}
+                                                    className="w-full h-12 rounded-2xl bg-emerald-500 hover:bg-emerald-600 text-white font-black text-xs shadow-lg shadow-emerald-100 transition-all active:scale-95 gap-3"
+                                                >
+                                                    {approving ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+                                                    APROVAR ESTE VÍDEO ✅
+                                                </Button>
+                                            </div>
+                                        )}
                                     </AccordionContent>
                                 </AccordionItem>
                             ))}
