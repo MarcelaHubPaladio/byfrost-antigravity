@@ -137,7 +137,7 @@ export default function MktTechaPublicReport() {
     const approvedCreatives = creatives.filter(c => c.status === 'approved');
     
     // Aggregates
-    const totals = approvedCreatives.reduce((acc, curr) => {
+    const creativeTotals = approvedCreatives.reduce((acc, curr) => {
         const m = curr.metrics || {};
         return {
             views: acc.views + (Number(m.views) || 0),
@@ -149,6 +149,18 @@ export default function MktTechaPublicReport() {
             sales_amount: acc.sales_amount + (Number(m.sales_amount) || 0)
         };
     }, { views: 0, likes: 0, comments: 0, shares: 0, clicks: 0, sales_count: 0, sales_amount: 0 });
+
+    const analiseData = meta.stage_data?.analise || {};
+    const auditedSalesCount = Number(analiseData.erp_sales_count) || 0;
+    const auditedSalesAmount = Number(analiseData.erp_sales_amount) || 0;
+    const auditedLeadsCount = Number(analiseData.crm_leads_count) || 0;
+
+    const totals = {
+        ...creativeTotals,
+        sales_count: auditedSalesCount > 0 ? auditedSalesCount : creativeTotals.sales_count,
+        sales_amount: auditedSalesAmount > 0 ? auditedSalesAmount : creativeTotals.sales_amount,
+        leads_count: auditedLeadsCount
+    };
 
     const palette = tenant?.branding_json?.palette as PublicPalette;
     const rawPrimary = (palette as any)?.primary;
@@ -256,7 +268,7 @@ export default function MktTechaPublicReport() {
                             { label: 'Alcance Global', value: totals.views.toLocaleString(), sub: 'Impressões Totais', icon: <Users />, color: 'indigo' },
                             { label: 'Engajamento', value: (totals.likes + totals.comments).toLocaleString(), sub: 'Interações', icon: <Zap />, color: 'rose' },
                             { label: 'Clique / CTA', value: totals.clicks.toLocaleString(), sub: 'Acessos Diretos', icon: <MousePointer2 />, color: 'emerald' },
-                            { label: 'Volume Vendas', value: `R$ ${totals.sales_amount.toLocaleString()}`, sub: `${totals.sales_count} Conversões`, icon: <ShoppingCart />, color: 'amber' },
+                            { label: 'Volume Vendas', value: `R$ ${totals.sales_amount.toLocaleString()}`, sub: `${totals.sales_count} Conversões ${totals.leads_count > 0 ? `• ${totals.leads_count} Leads` : ''}`, icon: <ShoppingCart />, color: 'amber' },
                         ].map((stat, i) => (
                             <Card key={i} className="p-8 rounded-[40px] bg-white/5 border-white/5 backdrop-blur-xl shadow-2xl space-y-6 group hover:bg-white/[0.08] transition-all duration-500 hover:-translate-y-1">
                                 <div className={cn("h-12 w-12 rounded-2xl flex items-center justify-center mb-4 transition-transform group-hover:scale-110 duration-500", 
@@ -297,16 +309,27 @@ export default function MktTechaPublicReport() {
                                         </p>
                                     </div>
                                     
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                                         <div className="p-6 rounded-3xl bg-emerald-500/5 border border-emerald-500/10 flex items-center gap-4">
                                             <div className="h-10 w-10 rounded-xl bg-emerald-500/20 flex items-center justify-center text-emerald-400">
                                                 <TrendingUp className="h-5 w-5" />
                                             </div>
                                             <div>
                                                 <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest leading-none mb-1.5">Eficiência</p>
-                                                <p className="text-sm font-black text-white uppercase">+ {Math.round(totals.sales_count / (approvedCreatives.length || 1) * 100) / 100} vendas/peça</p>
+                                                <p className="text-sm font-black text-white uppercase">{Math.round(totals.sales_count / (approvedCreatives.length || 1) * 100) / 100} vendas/peça</p>
                                             </div>
                                         </div>
+                                        {totals.leads_count > 0 && (
+                                            <div className="p-6 rounded-3xl bg-amber-500/5 border border-amber-500/10 flex items-center gap-4">
+                                                <div className="h-10 w-10 rounded-xl bg-amber-500/20 flex items-center justify-center text-amber-400">
+                                                    <Users className="h-5 w-5" />
+                                                </div>
+                                                <div>
+                                                    <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest leading-none mb-1.5">Geração de Leads</p>
+                                                    <p className="text-sm font-black text-white uppercase">{totals.leads_count} Novos Leads</p>
+                                                </div>
+                                            </div>
+                                        )}
                                         <div className="p-6 rounded-3xl bg-indigo-500/5 border border-indigo-500/10 flex items-center gap-4">
                                             <div className="h-10 w-10 rounded-xl bg-indigo-500/20 flex items-center justify-center text-indigo-400">
                                                 <Zap className="h-5 w-5" />

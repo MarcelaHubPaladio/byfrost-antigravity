@@ -1304,15 +1304,37 @@ export default function MktTechaCase() {
                                                                                 <h5 className="text-[11px] font-black text-slate-800 uppercase tracking-widest">Evidências Técnicas</h5>
                                                                             </div>
                                                                             
-                                                                            <div className="grid grid-cols-1 gap-4">
-                                                                                <div className="space-y-3">
-                                                                                    <div className="flex items-center justify-between">
+                                                                            <div className="grid grid-cols-1 gap-6">
+                                                                                <div className="space-y-4">
+                                                                                    <div className="flex items-center justify-between px-1">
                                                                                         <Label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Relatórios ERP (Vendas Finais)</Label>
                                                                                         <label className="cursor-pointer">
                                                                                             <input type="file" className="hidden" onChange={(e) => e.target.files?.[0] && handleFileUpload("analise", "erp_evidence", e.target.files[0])} />
-                                                                                            <div className="text-[9px] font-black text-indigo-600 hover:text-indigo-700 flex items-center gap-1"><Upload className="h-3 w-3" /> ADICIONAR</div>
+                                                                                            <div className="text-[9px] font-black text-indigo-600 hover:text-indigo-700 flex items-center gap-1"><Upload className="h-3 w-3" /> ANEXAR PDF</div>
                                                                                         </label>
                                                                                     </div>
+                                                                                    
+                                                                                    <div className="grid grid-cols-2 gap-3 p-4 rounded-2xl bg-slate-50/50 border border-slate-100 mb-2">
+                                                                                        <div className="space-y-1.5">
+                                                                                            <Label className="text-[9px] font-black text-slate-500 uppercase px-1 tracking-tighter">Vendas ERP (Qtd)</Label>
+                                                                                            <Input 
+                                                                                                type="number"
+                                                                                                value={meta.stage_data?.analise?.erp_sales_count || ""}
+                                                                                                onChange={(e) => updateStageData("analise", "erp_sales_count", parseFloat(e.target.value) || 0)}
+                                                                                                className="h-10 rounded-xl text-[11px] font-bold bg-white border-slate-200"
+                                                                                            />
+                                                                                        </div>
+                                                                                        <div className="space-y-1.5">
+                                                                                            <Label className="text-[9px] font-black text-slate-500 uppercase px-1 tracking-tighter">Vendas ERP (Valor R$)</Label>
+                                                                                            <Input 
+                                                                                                type="number"
+                                                                                                value={meta.stage_data?.analise?.erp_sales_amount || ""}
+                                                                                                onChange={(e) => updateStageData("analise", "erp_sales_amount", parseFloat(e.target.value) || 0)}
+                                                                                                className="h-10 rounded-xl text-[11px] font-bold bg-white border-slate-200"
+                                                                                            />
+                                                                                        </div>
+                                                                                    </div>
+
                                                                                     <div className="space-y-2">
                                                                                         {(meta.stage_data?.analise?.evidences?.erp_evidence || []).map((f: any, i: number) => (
                                                                                             <a key={i} href={f.url} target="_blank" className="flex items-center justify-between p-3 rounded-2xl bg-slate-50 border border-slate-100 text-[10px] font-bold text-slate-600 hover:text-indigo-600 transition-all">
@@ -1323,14 +1345,36 @@ export default function MktTechaCase() {
                                                                                     </div>
                                                                                 </div>
 
-                                                                                <div className="space-y-3">
-                                                                                    <div className="flex items-center justify-between">
+                                                                                <div className="space-y-4">
+                                                                                    <div className="flex items-center justify-between px-1">
                                                                                         <Label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Relatórios CRM (Conversão)</Label>
                                                                                         <label className="cursor-pointer">
                                                                                             <input type="file" className="hidden" onChange={(e) => e.target.files?.[0] && handleFileUpload("analise", "crm_evidence", e.target.files[0])} />
-                                                                                            <div className="text-[9px] font-black text-indigo-600 hover:text-indigo-700 flex items-center gap-1"><Upload className="h-3 w-3" /> ADICIONAR</div>
+                                                                                            <div className="text-[9px] font-black text-indigo-600 hover:text-indigo-700 flex items-center gap-1"><Upload className="h-3 w-3" /> ANEXAR PDF</div>
                                                                                         </label>
                                                                                     </div>
+
+                                                                                    <div className="grid grid-cols-2 gap-3 p-4 rounded-2xl bg-slate-50/50 border border-slate-100 mb-2">
+                                                                                        <div className="space-y-1.5">
+                                                                                            <Label className="text-[9px] font-black text-slate-500 uppercase px-1 tracking-tighter">Leads CRM (Qtd)</Label>
+                                                                                            <Input 
+                                                                                                type="number"
+                                                                                                value={meta.stage_data?.analise?.crm_leads_count || ""}
+                                                                                                onChange={(e) => updateStageData("analise", "crm_leads_count", parseFloat(e.target.value) || 0)}
+                                                                                                className="h-10 rounded-xl text-[11px] font-bold bg-white border-slate-200"
+                                                                                            />
+                                                                                        </div>
+                                                                                        <div className="space-y-1.5">
+                                                                                            <Label className="text-[9px] font-black text-slate-500 uppercase px-1 tracking-tighter">Influência Vendas</Label>
+                                                                                            <Input 
+                                                                                                type="number"
+                                                                                                value={meta.stage_data?.analise?.crm_sales_count || ""}
+                                                                                                onChange={(e) => updateStageData("analise", "crm_sales_count", parseFloat(e.target.value) || 0)}
+                                                                                                className="h-10 rounded-xl text-[11px] font-bold bg-white border-slate-200"
+                                                                                            />
+                                                                                        </div>
+                                                                                    </div>
+
                                                                                     <div className="space-y-2">
                                                                                         {(meta.stage_data?.analise?.evidences?.crm_evidence || []).map((f: any, i: number) => (
                                                                                             <a key={i} href={f.url} target="_blank" className="flex items-center justify-between p-3 rounded-2xl bg-slate-50 border border-slate-100 text-[10px] font-bold text-slate-600 hover:text-indigo-600 transition-all">
@@ -1431,8 +1475,26 @@ export default function MktTechaCase() {
                                                                         ].map((stat, i) => {
                                                                             const total = (meta.creatives || []).filter((c: any) => c.status === 'approved').reduce((acc: number, curr: any) => {
                                                                                 if (stat.custom) return acc + stat.custom(curr);
+                                                                                // For Report main stats, prioritize the global audited numbers (erp/crm) if present
+                                                                                if (stat.key === 'sales_count') {
+                                                                                    const audited = (Number(meta.stage_data?.analise?.erp_sales_count) || 0);
+                                                                                    return audited > 0 ? audited : acc + (Number(curr.metrics?.[stat.key as any]) || 0);
+                                                                                }
+                                                                                if (stat.key === 'sales_amount') {
+                                                                                    const audited = (Number(meta.stage_data?.analise?.erp_sales_amount) || 0);
+                                                                                    return audited > 0 ? audited : acc + (Number(curr.metrics?.[stat.key as any]) || 0);
+                                                                                }
                                                                                 return acc + (Number(curr.metrics?.[stat.key as any]) || 0);
                                                                             }, 0);
+                                                                            
+                                                                            // Fix for audited values (they should not be re-calculated per creative in a loop)
+                                                                            let finalValue = total;
+                                                                            if (stat.key === 'sales_count' && (Number(meta.stage_data?.analise?.erp_sales_count) || 0) > 0) {
+                                                                                finalValue = Number(meta.stage_data?.analise?.erp_sales_count);
+                                                                            }
+                                                                            if (stat.key === 'sales_amount' && (Number(meta.stage_data?.analise?.erp_sales_amount) || 0) > 0) {
+                                                                                finalValue = Number(meta.stage_data?.analise?.erp_sales_amount);
+                                                                            }
 
                                                                             return (
                                                                                 <div key={i} className="p-6 rounded-[32px] bg-slate-50 border border-slate-100 space-y-2">
@@ -1441,7 +1503,7 @@ export default function MktTechaCase() {
                                                                                         <span className="text-[9px] font-black uppercase tracking-widest">{stat.label}</span>
                                                                                     </div>
                                                                                     <div className="text-xl font-black text-slate-900">
-                                                                                        {stat.prefix} {total.toLocaleString()}
+                                                                                        {stat.prefix} {finalValue.toLocaleString()}
                                                                                     </div>
                                                                                 </div>
                                                                             );
