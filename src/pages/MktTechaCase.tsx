@@ -176,11 +176,14 @@ export default function MktTechaCase() {
         },
     });
 
-    const generateShareToken = async () => {
+    const ensureShareAccess = async () => {
         if (!id) return;
-        const newToken = crypto.randomUUID();
-        const accessCode = Math.floor(1000 + Math.random() * 9000).toString();
+        const newToken = c.share_token || crypto.randomUUID();
+        const accessCode = meta.share_access_code || Math.floor(1000 + Math.random() * 9000).toString();
         
+        // If already has both, just return current token
+        if (c.share_token && meta.share_access_code) return c.share_token;
+
         const newMeta = { ...meta, share_access_code: accessCode };
         
         const { error } = await supabase.from("cases").update({ 
@@ -189,7 +192,7 @@ export default function MktTechaCase() {
         }).eq("id", id);
 
         if (error) {
-            showError("Erro ao gerar link compartilhado");
+            showError("Erro ao configurar acesso compartilhado");
         } else {
             setMeta(newMeta);
             caseQ.refetch();
@@ -198,10 +201,7 @@ export default function MktTechaCase() {
     };
 
     const copyShareLink = async (type: 'approve' | 'summary' | 'planning') => {
-        let token = caseQ.data?.share_token;
-        if (!token) {
-            token = await generateShareToken();
-        }
+        let token = await ensureShareAccess();
         if (!token) return;
 
         const baseUrl = window.location.origin;
@@ -216,7 +216,7 @@ export default function MktTechaCase() {
         
         let label = 'link de aprovação';
         if (type === 'summary') label = 'link de resumo';
-        if (type === 'planning') label = 'link de aprovação do planejamento';
+        if (type === 'planning') label = 'link de aprovação estratégica';
         
         showSuccess(`${label.charAt(0).toUpperCase() + label.slice(1)} copiado!`);
     };
