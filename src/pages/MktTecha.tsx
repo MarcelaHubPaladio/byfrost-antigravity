@@ -314,7 +314,7 @@ function TechaCalendarView({ cases, date, onChangeDate }: { cases: CaseRow[], da
 }
 
 export default function MktTecha() {
-  const { activeTenantId } = useTenant();
+  const { activeTenantId, isSuperAdmin } = useTenant();
   const { user } = useSession();
   const loc = useLocation();
   const { prefs } = useTheme();
@@ -339,14 +339,18 @@ export default function MktTecha() {
     enabled: Boolean(activeTenantId && user?.id),
     staleTime: 60_000,
     queryFn: async () => {
-      const { data: meProfile } = await supabase
-        .from("users_profile")
-        .select("role")
-        .eq("tenant_id", activeTenantId!)
-        .eq("user_id", user!.id)
-        .maybeSingle();
-
-      const isAdmin = meProfile?.role === "admin";
+      let isAdmin = isSuperAdmin;
+      
+      if (!isAdmin) {
+        const { data: meProfile } = await supabase
+          .from("users_profile")
+          .select("role")
+          .eq("tenant_id", activeTenantId!)
+          .eq("user_id", user!.id)
+          .maybeSingle();
+        
+        isAdmin = meProfile?.role === "admin";
+      }
 
       const { data: allUsers, error: usersErr } = await supabase
         .from("users_profile")

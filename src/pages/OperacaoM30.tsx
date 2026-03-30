@@ -255,7 +255,7 @@ function M30CalendarView({ cases, date, onChangeDate }: { cases: CaseRow[], date
 }
 
 export default function OperacaoM30() {
-  const { activeTenantId } = useTenant();
+  const { activeTenantId, isSuperAdmin } = useTenant();
   const { user } = useSession();
   const nav = useNavigate();
   const loc = useLocation();
@@ -316,14 +316,18 @@ export default function OperacaoM30() {
     enabled: Boolean(activeTenantId && user?.id),
     staleTime: 60_000,
     queryFn: async () => {
-      const { data: meProfile } = await supabase
-        .from("users_profile")
-        .select("role")
-        .eq("tenant_id", activeTenantId!)
-        .eq("user_id", user!.id)
-        .single();
+      let isAdmin = isSuperAdmin;
+      
+      if (!isAdmin) {
+        const { data: meProfile } = await supabase
+          .from("users_profile")
+          .select("role")
+          .eq("tenant_id", activeTenantId!)
+          .eq("user_id", user!.id)
+          .maybeSingle();
 
-      const isAdmin = meProfile?.role === "admin";
+        isAdmin = meProfile?.role === "admin";
+      }
 
       const { data: allUsers, error: usersErr } = await supabase
         .from("users_profile")
@@ -475,6 +479,7 @@ export default function OperacaoM30() {
     queryKey: ["current_user_profile", activeTenantId, user?.id],
     enabled: Boolean(activeTenantId && user?.id),
     queryFn: async () => {
+      if (isSuperAdmin) return { role: "admin" };
       const { data, error } = await supabase
         .from("users_profile")
         .select("role")

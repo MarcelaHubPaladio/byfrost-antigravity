@@ -664,7 +664,7 @@ export default function OperacaoM30Case() {
     const { id } = useParams();
     const nav = useNavigate();
     const qc = useQueryClient();
-    const { activeTenantId } = useTenant();
+    const { activeTenantId, isSuperAdmin } = useTenant();
     const { user } = useSession();
     const [creatingTasks, setCreatingTasks] = useState(false);
     const [saving, setSaving] = useState(false);
@@ -887,6 +887,7 @@ export default function OperacaoM30Case() {
         queryKey: ["current_user_profile", activeTenantId, user?.id],
         enabled: Boolean(activeTenantId && user?.id),
         queryFn: async () => {
+            if (isSuperAdmin) return { role: "admin" } as any;
             const { data, error } = await supabase
                 .from("users_profile")
                 .select("role")

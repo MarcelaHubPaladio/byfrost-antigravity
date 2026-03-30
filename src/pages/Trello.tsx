@@ -61,7 +61,7 @@ function minutesAgo(iso: string) {
 }
 
 export default function Trello() {
-    const { activeTenantId } = useTenant();
+    const { activeTenantId, isSuperAdmin } = useTenant();
     const { user } = useSession();
     const nav = useNavigate();
     const loc = useLocation();
@@ -83,15 +83,18 @@ export default function Trello() {
         enabled: Boolean(activeTenantId && user?.id),
         staleTime: 60_000,
         queryFn: async () => {
-            // 1. Get current user's role
-            const { data: meProfile } = await supabase
-                .from("users_profile")
-                .select("role")
-                .eq("tenant_id", activeTenantId!)
-                .eq("user_id", user!.id)
-                .single();
+            let isAdmin = isSuperAdmin;
+            
+            if (!isAdmin) {
+                const { data: meProfile } = await supabase
+                    .from("users_profile")
+                    .select("role")
+                    .eq("tenant_id", activeTenantId!)
+                    .eq("user_id", user!.id)
+                    .maybeSingle();
 
-            const isAdmin = meProfile?.role === "admin";
+                isAdmin = meProfile?.role === "admin";
+            }
 
             // 2. Fetch all profiles in tenant
             const { data: allUsers, error: usersErr } = await supabase

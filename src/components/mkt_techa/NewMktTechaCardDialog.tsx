@@ -22,6 +22,7 @@ import { supabase } from "@/lib/supabase";
 import { useSession } from "@/providers/SessionProvider";
 import { showError, showSuccess } from "@/utils/toast";
 import { cn } from "@/lib/utils";
+import { useTenant } from "@/providers/TenantProvider";
 import { Plus, UserRound, PackageCheck } from "lucide-react";
 import { normalizeRichTextHtmlOrNull, RichTextEditor } from "@/components/RichTextEditor";
 import { Switch } from "@/components/ui/switch";
@@ -51,6 +52,7 @@ export function NewMktTechaCardDialog(props: { tenantId: string; journeyId: stri
   const [responsibleId, setResponsibleId] = useState<string>("__unassigned__");
   const [creating, setCreating] = useState(false);
   const [caseType, setCaseType] = useState<string>("planejamento");
+  const { isSuperAdmin } = useTenant();
   const [priority, setPriority] = useState(false);
 
   const usersQ = useQuery({
@@ -58,14 +60,18 @@ export function NewMktTechaCardDialog(props: { tenantId: string; journeyId: stri
     enabled: Boolean(open && props.tenantId && user?.id),
     staleTime: 30_000,
     queryFn: async () => {
-      const { data: meProfile } = await supabase
-        .from("users_profile")
-        .select("role")
-        .eq("tenant_id", props.tenantId)
-        .eq("user_id", user!.id)
-        .maybeSingle();
+      let isAdmin = isSuperAdmin;
+      
+      if (!isAdmin) {
+        const { data: meProfile } = await supabase
+          .from("users_profile")
+          .select("role")
+          .eq("tenant_id", props.tenantId)
+          .eq("user_id", user!.id)
+          .maybeSingle();
 
-      const isAdmin = meProfile?.role === "admin";
+        isAdmin = meProfile?.role === "admin";
+      }
 
       const { data: allUsers, error: usersErr } = await supabase
         .from("users_profile")
