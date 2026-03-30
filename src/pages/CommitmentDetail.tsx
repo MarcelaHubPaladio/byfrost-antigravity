@@ -165,7 +165,7 @@ export default function CommitmentDetail() {
           entity_id,
           updated_at,
           name,
-          cases:cases!deliverable_id(id, state, title, status, deleted_at)
+          cases:cases(id, state, title, status, deleted_at)
         `)
         .eq("tenant_id", activeTenantId!)
         .eq("commitment_id", commitmentId)
