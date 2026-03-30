@@ -367,6 +367,9 @@ export default function MktTechaCase() {
         await handleSaveMainCard(newMeta);
     };
 
+    const [isAddingChannel, setIsAddingChannel] = useState(false);
+    const [newChannelName, setNewChannelName] = useState("");
+
     const updateStageData = (st: string, field: string, value: any) => {
         const stageData = { ...(meta.stage_data || {}) };
         const current = { ...(stageData[st] || {}) };
@@ -385,6 +388,23 @@ export default function MktTechaCase() {
         }
         setMeta({ ...meta, selected_channels: current });
     };
+
+    const addCustomChannel = (name: string) => {
+        if (!name.trim()) return;
+        const custom = [...(meta.custom_channels || [])];
+        if (!custom.includes(name)) {
+            custom.push(name);
+        }
+        const selected = [...(meta.selected_channels || [])];
+        if (!selected.includes(name)) {
+            selected.push(name);
+        }
+        setMeta({ ...meta, custom_channels: custom, selected_channels: selected });
+        setNewChannelName("");
+        setIsAddingChannel(false);
+    };
+
+    const allAvailableChannels = [...CREATIVE_CHANNELS, ...(meta.custom_channels || [])];
 
 
     const getChecklistForState = (st: string) => {
@@ -601,7 +621,7 @@ export default function MktTechaCase() {
                                                                                 <div className="space-y-4">
                                                                                     <Label className="text-[10px] font-black text-slate-500 uppercase px-1 tracking-widest">Estratégia de Canais</Label>
                                                                                     <div className="flex flex-wrap gap-2">
-                                                                                        {CREATIVE_CHANNELS.map(ch => {
+                                                                                        {allAvailableChannels.map(ch => {
                                                                                             const isSelected = (meta.selected_channels || []).includes(ch);
                                                                                             return (
                                                                                                 <Badge 
@@ -618,6 +638,37 @@ export default function MktTechaCase() {
                                                                                                 </Badge>
                                                                                             );
                                                                                         })}
+                                                                                        {isAddingChannel ? (
+                                                                                            <div className="flex items-center gap-2 animate-in slide-in-from-left-2 duration-300">
+                                                                                                <Input 
+                                                                                                    autoFocus
+                                                                                                    value={newChannelName}
+                                                                                                    onChange={(e) => setNewChannelName(e.target.value)}
+                                                                                                    onKeyDown={(e) => e.key === 'Enter' && addCustomChannel(newChannelName)}
+                                                                                                    className="h-9 w-32 rounded-xl text-[10px]"
+                                                                                                    placeholder="Nome do canal..."
+                                                                                                />
+                                                                                                <Button 
+                                                                                                    size="sm" variant="ghost" className="h-9 w-9 rounded-xl text-green-600 hover:bg-green-50"
+                                                                                                    onClick={() => addCustomChannel(newChannelName)}
+                                                                                                >
+                                                                                                    <Plus className="h-4 w-4" />
+                                                                                                </Button>
+                                                                                                <Button 
+                                                                                                    size="sm" variant="ghost" className="h-9 w-9 rounded-xl text-slate-400"
+                                                                                                    onClick={() => setIsAddingChannel(false)}
+                                                                                                >
+                                                                                                    <RefreshCw className="h-3 w-3" />
+                                                                                                </Button>
+                                                                                            </div>
+                                                                                        ) : (
+                                                                                            <Badge 
+                                                                                                onClick={() => setIsAddingChannel(true)}
+                                                                                                className="px-4 py-2 rounded-2xl cursor-pointer transition-all border-2 border-dashed border-slate-200 bg-slate-50/30 text-slate-400 hover:border-indigo-300 hover:text-indigo-600 font-bold text-[11px]"
+                                                                                            >
+                                                                                                <Plus className="h-3 w-3 mr-2" /> NOVO CANAL
+                                                                                            </Badge>
+                                                                                        )}
                                                                                     </div>
                                                                                     {/* Hidden input to maintain back-compat or textual reference if needed */}
                                                                                     <input 
@@ -664,7 +715,7 @@ export default function MktTechaCase() {
                                                                                                 <Select value={cr.channel} onValueChange={(v) => updateCreative(cr.id, "channel", v)}>
                                                                                                     <SelectTrigger className="h-9 rounded-xl text-[11px] font-bold"><SelectValue /></SelectTrigger>
                                                                                                     <SelectContent className="rounded-xl">
-                                                                                                        {((meta.selected_channels && meta.selected_channels.length > 0) ? meta.selected_channels : CREATIVE_CHANNELS).map(ch => (
+                                                                                                        {((meta.selected_channels && meta.selected_channels.length > 0) ? meta.selected_channels : allAvailableChannels).map(ch => (
                                                                                                             <SelectItem key={ch} value={ch}>{ch}</SelectItem>
                                                                                                         ))}
                                                                                                     </SelectContent>
@@ -775,7 +826,7 @@ export default function MktTechaCase() {
                                                                                             <Select value={cr.channel} onValueChange={(v) => updateCreative(cr.id, "channel", v)}>
                                                                                                 <SelectTrigger className="h-10 rounded-2xl text-xs font-bold border-slate-100"><SelectValue /></SelectTrigger>
                                                                                                 <SelectContent className="rounded-xl">
-                                                                                                    {((meta.selected_channels && meta.selected_channels.length > 0) ? meta.selected_channels : CREATIVE_CHANNELS).map(ch => (
+                                                                                                    {((meta.selected_channels && meta.selected_channels.length > 0) ? meta.selected_channels : allAvailableChannels).map(ch => (
                                                                                                         <SelectItem key={ch} value={ch}>{ch}</SelectItem>
                                                                                                     ))}
                                                                                                 </SelectContent>
