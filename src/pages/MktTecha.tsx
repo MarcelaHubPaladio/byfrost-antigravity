@@ -25,6 +25,10 @@ import {
   Settings,
   Layers,
   ArrowRightCircle,
+  Instagram,
+  Youtube,
+  Smartphone,
+  Video
 } from "lucide-react";
 import { getStateLabel } from "@/lib/journeyLabels";
 import { useJourneyTransition } from "@/hooks/useJourneyTransition";
@@ -38,7 +42,7 @@ import {
 } from "@/components/ui/popover";
 
 import { NewMktTechaCardDialog } from "@/components/mkt_techa/NewMktTechaCardDialog";
-import { format, startOfMonth, endOfMonth, eachDayOfInterval, getDay, isToday, addMonths, subMonths } from "date-fns";
+import { format, startOfMonth, endOfMonth, eachDayOfInterval, getDay, isToday, addMonths, subMonths, parseISO, isWithinInterval, startOfDay, endOfDay } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
 type CaseRow = {
@@ -178,18 +182,44 @@ function TechaCalendarView({ cases, date, onChangeDate }: { cases: CaseRow[], da
   const nextMonth = () => onChangeDate(addMonths(date, 1));
   const prevMonth = () => onChangeDate(subMonths(date, 1));
 
-  const casesByDay = new Map<string, CaseRow[]>();
-  for (const c of cases) {
-    const rawDate = (c.meta_json as any)?.due_at;
-    if (!rawDate) continue;
-    
-    const d = new Date(rawDate);
-    if (isNaN(d.getTime())) continue;
+  // Build map of day -> { cases: CaseRow[], creatives: { caseTitle: string, creative: any, caseId: string }[] }
+  const calendarData = new Map<string, { cases: CaseRow[], creatives: any[] }>();
 
-    const dayKey = format(d, 'yyyy-MM-dd');
-    const arr = casesByDay.get(dayKey) ?? [];
-    arr.push(c);
-    casesByDay.set(dayKey, arr);
+  for (const c of cases) {
+    const meta = c.meta_json || {};
+    
+    // 1. Main case due_at
+    if (meta.due_at) {
+      const d = parseISO(meta.due_at);
+      if (!isNaN(d.getTime())) {
+        const dayKey = format(d, 'yyyy-MM-dd');
+        const entry = calendarData.get(dayKey) ?? { cases: [], creatives: [] };
+        entry.cases.push(c);
+        calendarData.set(dayKey, entry);
+      }
+    }
+
+    // 2. Active creatives intervals
+    const creativesList = (meta.creatives || []) as any[];
+    for (const cr of creativesList) {
+      if (cr.publish_start_date && cr.publish_end_date) {
+        const start = startOfDay(parseISO(cr.publish_start_date));
+        const end = endOfDay(parseISO(cr.publish_end_date));
+        if (!isNaN(start.getTime()) && !isNaN(end.getTime())) {
+          // Iterate days in interval overlap with current month to avoid massive loops
+          // But actually let's just use eachDayOfInterval if it's reasonable
+          try {
+            const crDays = eachDayOfInterval({ start, end });
+            for (const crDay of crDays) {
+              const dayKey = format(crDay, 'yyyy-MM-dd');
+              const entry = calendarData.get(dayKey) ?? { cases: [], creatives: [] };
+              entry.creatives.push({ caseTitle: c.title, creative: cr, caseId: c.id });
+              calendarData.set(dayKey, entry);
+            }
+          } catch (e) {}
+        }
+      }
+    }
   }
 
   const weekDays = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
@@ -223,35 +253,54 @@ function TechaCalendarView({ cases, date, onChangeDate }: { cases: CaseRow[], da
         {blanks}
         {daysInMonth.map((day) => {
           const dayKey = format(day, 'yyyy-MM-dd');
-          const dayCases = casesByDay.get(dayKey) ?? [];
+          const data = calendarData.get(dayKey) || { cases: [], creatives: [] };
           const isTodayDate = isToday(day);
 
           return (
             <div key={dayKey} className={cn(
-              "bg-white/80 rounded-[24px] border p-2 min-h-[140px] shadow-sm transition-all flex flex-col",
-              isTodayDate ? "border-[hsl(var(--byfrost-accent)/0.4)] bg-[hsl(var(--byfrost-accent)/0.02)] ring-1 ring-[hsl(var(--byfrost-accent)/0.2)]" : "border-slate-200"
+              "bg-white/80 rounded-[24px] border p-2 min-h-[160px] shadow-sm transition-all flex flex-col group/day",
+              isTodayDate ? "border-[hsl(var(--byfrost-accent)/0.4)] bg-[hsl(var(--byfrost-accent)/0.02)] ring-1 ring-[hsl(var(--byfrost-accent)/0.2)]" : "border-slate-200 hover:border-slate-300"
             )}>
               <div className="flex items-center justify-between mb-2 px-1">
                 <span className={cn(
-                  "text-xs font-bold w-6 h-6 flex items-center justify-center rounded-full tracking-tighter",
-                  isTodayDate ? "bg-[hsl(var(--byfrost-accent))] text-white" : "text-slate-700"
+                  "text-[10px] font-black w-6 h-6 flex items-center justify-center rounded-lg tracking-tighter",
+                  isTodayDate ? "bg-[hsl(var(--byfrost-accent))] text-white" : "text-slate-400"
                 )}>{format(day, 'd')}</span>
-                {dayCases.length > 0 && (
-                  <span className="text-[10px] font-medium bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded-full">
-                    {dayCases.length} caso{dayCases.length > 1 ? 's' : ''}
-                  </span>
+                {(data.cases.length > 0 || data.creatives.length > 0) && (
+                  <div className="flex -space-x-1">
+                    {data.cases.length > 0 && <div className="w-2 h-2 rounded-full bg-indigo-500 ring-2 ring-white" />}
+                    {data.creatives.length > 0 && <div className="w-2 h-2 rounded-full bg-emerald-500 ring-2 ring-white" />}
+                  </div>
                 )}
               </div>
-              <div className="flex flex-col gap-1.5 mt-1 max-h-[140px] overflow-y-auto no-scrollbar scroll-smooth">
-                {dayCases.map(c => (
+
+              <div className="flex flex-col gap-1.5 overflow-y-auto no-scrollbar flex-1 max-h-[180px]">
+                {/* Main Cases */}
+                {data.cases.map(c => (
                   <Link
                     key={c.id}
                     to={`/app/mkt-techa/${c.id}`}
-                    className="block p-2 rounded-[16px] border border-slate-100 bg-white hover:bg-slate-50 hover:border-slate-200 transition-colors cursor-pointer shadow-sm"
-                    title={c.title ?? "Caso sem título"}
+                    className="block p-1.5 rounded-xl border border-indigo-100 bg-indigo-50/50 hover:bg-indigo-100 transition-colors shadow-sm"
                   >
-                    <div className="text-[11px] font-semibold text-slate-800 line-clamp-2 leading-tight">
-                      {c.title || "Caso sem título"}
+                    <div className="text-[10px] font-black text-indigo-700 truncate tracking-tight">{c.title || "Untitled"}</div>
+                  </Link>
+                ))}
+
+                {/* Creatives (Sub-events) */}
+                {data.creatives.map((item, idx) => (
+                  <Link
+                    key={`${item.caseId}-${idx}`}
+                    to={`/app/mkt-techa/${item.caseId}`}
+                    className="block p-1.5 rounded-xl border border-slate-100 bg-white hover:border-emerald-200 transition-all shadow-sm group/item"
+                  >
+                    <div className="flex items-center gap-1.5 mb-1">
+                       {item.creative.channel === 'Instagram' && <Instagram className="h-2.5 w-2.5 text-pink-500" />}
+                       {item.creative.channel === 'TikTok' && <Smartphone className="h-2.5 w-2.5 text-slate-400" />}
+                       {item.creative.channel === 'YouTube' && <Youtube className="h-2.5 w-2.5 text-red-500" />}
+                       <span className="text-[8px] font-bold text-slate-400 uppercase tracking-widest truncate">{item.creative.channel}</span>
+                    </div>
+                    <div className="text-[9px] font-bold text-slate-600 truncate leading-none">
+                      {item.creative.type.toUpperCase()}: {item.caseTitle}
                     </div>
                   </Link>
                 ))}

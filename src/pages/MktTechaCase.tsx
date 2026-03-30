@@ -57,8 +57,15 @@ import {
     Share2,
     Lock,
     Upload,
-    Paperclip
+    Paperclip,
+    Instagram,
+    Youtube,
+    Smartphone,
+    Calendar,
+    ArrowRight
 } from "lucide-react";
+import { format, eachDayOfInterval, startOfDay, endOfDay, addDays, differenceInDays, parseISO, isWithinInterval } from "date-fns";
+import { ptBR } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 import { showError, showSuccess } from "@/utils/toast";
 import { getStateLabel } from "@/lib/journeyLabels";
@@ -1079,9 +1086,147 @@ export default function MktTechaCase() {
                                                             )}
 
                                                             {st === "distribuio" && (
-                                                                <div className="space-y-4">
-                                                                    <Label className="text-[10px] font-bold text-slate-500 uppercase px-1">Notas de Mídia</Label>
-                                                                    <Textarea value={meta.stage_data?.distribuio?.plano || ""} onChange={(e) => updateStageData("distribuio", "plano", e.target.value)} className="rounded-2xl" placeholder="Observações de tráfego..." />
+                                                                <div className="space-y-10">
+                                                                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-1">
+                                                                        <div>
+                                                                            <h4 className="text-sm font-black text-slate-800 tracking-tight">Cronograma de Distribuição</h4>
+                                                                            <p className="text-[10px] text-slate-500 font-medium">Agende a veiculação de cada criativo aprovado.</p>
+                                                                        </div>
+                                                                        <Badge variant="outline" className="rounded-xl h-7 px-3 text-[9px] font-black border-indigo-100 text-indigo-600 bg-indigo-50/30">
+                                                                            {(meta.creatives || []).filter((cr: MktTechaCreative) => cr.status === 'approved').length} CRIATIVOS APROVADOS
+                                                                        </Badge>
+                                                                    </div>
+
+                                                                    <div className="bg-slate-900 rounded-[32px] p-6 shadow-2xl shadow-slate-900/10 overflow-hidden border border-white/5">
+                                                                        <div className="flex items-center gap-3 mb-6 px-2">
+                                                                            <div className="h-8 w-8 rounded-xl bg-indigo-500/20 flex items-center justify-center text-indigo-400">
+                                                                                <Calendar className="h-4 w-4" />
+                                                                            </div>
+                                                                            <span className="text-[10px] font-black uppercase text-slate-400 tracking-[0.2em]">Linha do Tempo de Veiculação</span>
+                                                                        </div>
+
+                                                                        <div className="relative overflow-x-auto pb-4 no-scrollbar cursor-grab active:cursor-grabbing scroll-smooth">
+                                                                            <div className="min-w-[800px] space-y-4">
+                                                                                {/* Timeline Header (Days) */}
+                                                                                <div className="flex border-b border-white/5 pb-2 ml-[150px]">
+                                                                                    {(() => {
+                                                                                        const start = meta.stage_data?.cadastro_big2be?.inicio ? parseISO(meta.stage_data.cadastro_big2be.inicio) : startOfDay(new Date());
+                                                                                        const end = meta.stage_data?.cadastro_big2be?.fim ? parseISO(meta.stage_data.cadastro_big2be.fim) : addDays(start, 21);
+                                                                                        const days = eachDayOfInterval({ start, end });
+                                                                                        return days.map((day, i) => (
+                                                                                            <div key={i} className="w-10 flex-shrink-0 flex flex-col items-center gap-1">
+                                                                                                <span className="text-[8px] font-bold text-slate-600 uppercase tracking-tighter">{format(day, 'EEE', { locale: ptBR })}</span>
+                                                                                                <span className={cn("text-[10px] font-black w-6 h-6 flex items-center justify-center rounded-lg", isWithinInterval(new Date(), { start: startOfDay(day), end: endOfDay(day) }) ? "bg-indigo-500 text-white" : "text-slate-400")}>
+                                                                                                    {format(day, 'd')}
+                                                                                                </span>
+                                                                                            </div>
+                                                                                        ));
+                                                                                    })()}
+                                                                                </div>
+
+                                                                                {/* Timeline Rows */}
+                                                                                <div className="space-y-6">
+                                                                                    {(meta.creatives || []).filter((cr: MktTechaCreative) => cr.status === 'approved').map((cr: MktTechaCreative) => {
+                                                                                        const campaignStart = meta.stage_data?.cadastro_big2be?.inicio ? parseISO(meta.stage_data.cadastro_big2be.inicio) : startOfDay(new Date());
+                                                                                        const start = cr.publish_start_date ? parseISO(cr.publish_start_date) : null;
+                                                                                        const end = cr.publish_end_date ? parseISO(cr.publish_end_date) : null;
+                                                                                        
+                                                                                        const offset = start ? differenceInDays(start, campaignStart) : 0;
+                                                                                        const duration = (start && end) ? differenceInDays(end, start) + 1 : 0;
+
+                                                                                        return (
+                                                                                            <div key={cr.id} className="flex items-center">
+                                                                                                <div className="w-[150px] pr-4 flex-shrink-0 space-y-1">
+                                                                                                    <div className="flex items-center gap-1.5 ">
+                                                                                                        {cr.channel === 'Instagram' && <Instagram className="h-3 w-3 text-pink-500" />}
+                                                                                                        {cr.channel === 'TikTok' && <Smartphone className="h-3 w-3 text-white" />}
+                                                                                                        {cr.channel === 'YouTube' && <Youtube className="h-3 w-3 text-red-500" />}
+                                                                                                        <span className="text-[9px] font-black text-white uppercase truncate">{cr.channel}</span>
+                                                                                                    </div>
+                                                                                                    <p className="text-[8px] text-slate-500 font-bold truncate tracking-widest">{cr.type.toUpperCase()}</p>
+                                                                                                </div>
+                                                                                                <div className="flex-grow flex relative h-4 items-center">
+                                                                                                    {duration > 0 && (
+                                                                                                        <div 
+                                                                                                            className={cn(
+                                                                                                                "absolute h-3 rounded-full shadow-lg shadow-indigo-500/10 border border-white/10 group/bar flex items-center justify-end px-2",
+                                                                                                                cr.channel === 'Instagram' ? "bg-gradient-to-r from-pink-500 to-rose-500" :
+                                                                                                                cr.channel === 'YouTube' ? "bg-red-600" : "bg-indigo-500"
+                                                                                                            )}
+                                                                                                            style={{ 
+                                                                                                                left: `${offset * 40}px`, 
+                                                                                                                width: `${duration * 40}px` 
+                                                                                                            }}
+                                                                                                        >
+                                                                                                            <div className="h-1.5 w-1.5 rounded-full bg-white/50 animate-pulse" />
+                                                                                                        </div>
+                                                                                                    )}
+                                                                                                    {/* Background Grid */}
+                                                                                                    <div className="absolute inset-0 flex pointer-events-none opacity-[0.03]">
+                                                                                                        {Array.from({ length: 30 }).map((_, i) => <div key={i} className="w-10 h-full border-l border-white" />)}
+                                                                                                    </div>
+                                                                                                </div>
+                                                                                            </div>
+                                                                                        );
+                                                                                    })}
+                                                                                </div>
+                                                                            </div>
+                                                                        </div>
+                                                                    </div>
+
+                                                                    <div className="space-y-6">
+                                                                        <div className="flex items-center gap-2 px-1">
+                                                                            <Settings className="h-4 w-4 text-slate-400" />
+                                                                            <h5 className="text-[10px] font-black text-slate-800 uppercase tracking-widest">Configuração de Agendamento</h5>
+                                                                        </div>
+                                                                        
+                                                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                                            {(meta.creatives || []).filter((cr: MktTechaCreative) => cr.status === 'approved').map((cr: MktTechaCreative) => (
+                                                                                <div key={cr.id} className="p-5 rounded-[24px] border border-slate-100 bg-white hover:border-indigo-100 transition-all flex flex-col gap-4">
+                                                                                    <div className="flex items-center justify-between">
+                                                                                        <div className="flex items-center gap-2">
+                                                                                            <div className="h-8 w-8 rounded-lg bg-slate-50 flex items-center justify-center group-hover:bg-indigo-50 transition-colors">
+                                                                                                {cr.channel === 'Instagram' && <Instagram className="h-4 w-4 text-pink-500" />}
+                                                                                                {cr.channel === 'TikTok' && <Smartphone className="h-4 w-4 text-slate-400" />}
+                                                                                                {cr.channel === 'YouTube' && <Youtube className="h-4 w-4 text-red-500" />}
+                                                                                            </div>
+                                                                                            <div>
+                                                                                                <p className="text-[11px] font-black text-slate-700 leading-none">{cr.channel}</p>
+                                                                                                <p className="text-[9px] text-slate-400 font-bold uppercase tracking-tighter mt-0.5">{cr.type} - {cr.format}</p>
+                                                                                            </div>
+                                                                                        </div>
+                                                                                        <Badge variant="outline" className="rounded-lg h-5 px-2 text-[8px] font-black border-emerald-100 text-emerald-600 bg-emerald-50/30">APROVADO</Badge>
+                                                                                    </div>
+
+                                                                                    <div className="grid grid-cols-2 gap-3">
+                                                                                        <div className="space-y-1.5">
+                                                                                            <Label className="text-[9px] font-bold text-slate-400 uppercase px-1">Início veiculação</Label>
+                                                                                            <Input 
+                                                                                                type="date" 
+                                                                                                value={cr.publish_start_date || ""} 
+                                                                                                onChange={(e) => updateCreative(cr.id, "publish_start_date", e.target.value)} 
+                                                                                                className="h-9 rounded-xl text-[11px] font-semibold"
+                                                                                            />
+                                                                                        </div>
+                                                                                        <div className="space-y-1.5">
+                                                                                            <Label className="text-[9px] font-bold text-slate-400 uppercase px-1">Fim veiculação</Label>
+                                                                                            <Input 
+                                                                                                type="date" 
+                                                                                                value={cr.publish_end_date || ""} 
+                                                                                                onChange={(e) => updateCreative(cr.id, "publish_end_date", e.target.value)} 
+                                                                                                className="h-9 rounded-xl text-[11px] font-semibold"
+                                                                                            />
+                                                                                        </div>
+                                                                                    </div>
+                                                                                </div>
+                                                                            ))}
+                                                                        </div>
+                                                                    </div>
+
+                                                                    <div className="space-y-4 pt-6 border-t border-slate-50">
+                                                                        <Label className="text-[10px] font-bold text-slate-500 uppercase px-1 flex items-center gap-2"><ArrowRight className="h-3 w-3" /> Notas Adicionais de Mídia</Label>
+                                                                        <Textarea value={meta.stage_data?.distribuio?.plano || ""} onChange={(e) => updateStageData("distribuio", "plano", e.target.value)} className="rounded-3xl min-h-[100px] border-slate-100 bg-slate-50/20" placeholder="Especifique detalhes sobre o tráfego, orçamentos ou contas vinculadas..." />
+                                                                    </div>
                                                                 </div>
                                                             )}
 

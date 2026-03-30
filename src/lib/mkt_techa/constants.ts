@@ -20,6 +20,8 @@ export type MktTechaCreative = {
   review_link?: string;
   review_files?: { name: string; url: string }[];
   final_files?: { name: string; url: string }[];
+  publish_start_date?: string;
+  publish_end_date?: string;
   version: number;
   subtasks: StageSubtask[];
 };
