@@ -757,6 +757,10 @@ export default function OperacaoM30Case() {
 
     const handleCreateIndividualTask = async (st: any, idx: number, deliverableId: string, type: string) => {
         if (!activeTenantId || !id || !caseQ.data) return;
+        if (!deliverableId) {
+            showError("Falha técnica: entregável não identificado. A tarefa não pode ser vinculada ao contrato.");
+            return;
+        }
         setCreatingIndividualId(idx);
         try {
             const { data: newCase, error: insertError } = await supabase.from("cases").insert({

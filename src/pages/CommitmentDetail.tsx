@@ -202,22 +202,37 @@ export default function CommitmentDetail() {
     },
     staleTime: 5_000,
   });
-
   const allTenantCasesQ = useQuery({
-    queryKey: ["all_tenant_cases", activeTenantId],
-    enabled: Boolean(activeTenantId),
+    queryKey: ["all_tenant_cases", activeTenantId, commitmentId],
+    enabled: Boolean(activeTenantId && commitmentId),
     queryFn: async () => {
-      const { data, error } = await supabase
+      // 1. Fetch cases with ANY deliverable_id (possible orphans from other contracts)
+      const qOrphans = supabase
         .from("cases")
-        .select("id, title, state, deliverable_id, created_at, status")
+        .select("id, title, state, deliverable_id, created_at, status, meta_json")
         .eq("tenant_id", activeTenantId!)
         .not("deliverable_id", "is", null)
-        .is("deleted_at", null)
-        .order("created_at", { ascending: false });
-      if (error) throw error;
-      return (data ?? []) as any[];
+        .is("deleted_at", null);
+
+      // 2. Fetch cases that MENTION this commitment in metadata but might have NULL deliverable_id
+      const qUnlinked = supabase
+        .from("cases")
+        .select("id, title, state, deliverable_id, created_at, status, meta_json")
+        .eq("tenant_id", activeTenantId!)
+        .eq("meta_json->>commitment_id", commitmentId)
+        .is("deleted_at", null);
+
+      const [res1, res2] = await Promise.all([qOrphans, qUnlinked]);
+      if (res1.error) throw res1.error;
+      if (res2.error) throw res2.error;
+
+      const map = new Map();
+      (res1.data || []).forEach(c => map.set(c.id, c));
+      (res2.data || []).forEach(c => map.set(c.id, c));
+
+      return Array.from(map.values()).sort((a,b) => (b.created_at || '').localeCompare(a.created_at || ''));
     },
-    staleTime: 5_000,
+    staleTime: 3_000,
   });
 
   const fixLink = async (caseId: string, deliverableId: string) => {
