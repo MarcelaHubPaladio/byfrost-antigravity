@@ -76,6 +76,17 @@ function SubtaskItemContent({ st, idx, caseMeta, caseId, onRefetch }: { st: any,
     const [saving, setSaving] = useState(false);
     const [lastSaved, setLastSaved] = useState<Date | null>(null);
 
+    // Sincronizar estado local quando a prop 'st' mudar (ex: após refetch do pai)
+    useEffect(() => {
+        setTitle(st.title || "");
+        setType(st.type || "edicao");
+        setPostDate(st.post_date || "");
+        setPriority(st.priority || false);
+        setDescription(st.description || "");
+        setScriptRaw(st.script_raw || "");
+        setScriptItems(st.script_items || []);
+    }, [st]);
+
     const handleSave = async () => {
         setSaving(true);
         try {
@@ -100,6 +111,7 @@ function SubtaskItemContent({ st, idx, caseMeta, caseId, onRefetch }: { st: any,
 
             if (error) throw error;
             setLastSaved(new Date());
+            onRefetch(); // Notificar o pai para recarregar os dados
             // showSuccess("Alterações salvas.");
         } catch (e: any) {
             showError("Erro ao salvar: " + e.message);
