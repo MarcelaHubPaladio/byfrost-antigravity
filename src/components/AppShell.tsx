@@ -725,6 +725,7 @@ export function AppShell({
   );
   const hasTrello = journeys.some((r) => r.journeys?.key === "trello");
   const hasOperacaoM30 = journeys.some((r) => r.journeys?.key === "operacao_m30");
+  const hasMktTecha = journeys.some((r) => r.journeys?.key === "mkt-super-techa");
   const hasOrders = journeys.some((r) => r.journeys?.key === "sales_order");
 
   const hasIncentivesCampaigns = Boolean(incentivesHasCampaignsQ.data);
@@ -900,6 +901,7 @@ export function AppShell({
                 <NavTile to={prefs.startRoute || "/app"} icon={LayoutGrid} label="Dashboard" disabled={!can("app.dashboard")} />
                 {hasTrello && <NavTile to="/app/trello" icon={KanbanSquare} label="Tarefas" disabled={!can("app.trello")} />}
                 {hasOperacaoM30 && <NavTile to="/app/operacao-m30" icon={Users} label="Clientes M30" disabled={!can("app.dashboard")} />}
+                {hasMktTecha && <NavTile to="/app/mkt-techa" icon={Star} label="MKT Técha" disabled={!can("app.dashboard")} />}
                 {hasOrders && <NavTile to="/app/orders" icon={Package} label="Pedidos" disabled={!can("app.dashboard")} />}
                 {hasCrm && <NavTile to="/app/crm" icon={LayoutDashboard} label="CRM" disabled={!can("app.crm")} />}
                 {hasMetaContent && (
@@ -1129,6 +1131,15 @@ export function AppShell({
                                 to="/app/operacao-m30"
                                 icon={Users}
                                 label="Clientes M30"
+                                disabled={!can("app.dashboard")}
+                                onNavigate={() => setMobileNavOpen(false)}
+                              />
+                            )}
+                            {hasMktTecha && (
+                              <MobileNavItem
+                                to="/app/mkt-techa"
+                                icon={Star}
+                                label="MKT Técha"
                                 disabled={!can("app.dashboard")}
                                 onNavigate={() => setMobileNavOpen(false)}
                               />

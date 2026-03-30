@@ -45,6 +45,8 @@ const Crm = lazyWithRetry(() => import("@/pages/Crm"));
 const CrmCaseDetail = lazyWithRetry(() => import("@/pages/CrmCaseDetail"));
 const Orders = lazyWithRetry(() => import("@/pages/Orders"));
 const OperacaoM30 = lazyWithRetry(() => import("@/pages/OperacaoM30"));
+const MktTecha = lazyWithRetry(() => import("@/pages/MktTecha"));
+const MktTechaCase = lazyWithRetry(() => import("@/pages/MktTechaCase"));
 const Chats = lazyWithRetry(() => import("@/pages/Chats"));
 const Presence = lazyWithRetry(() => import("@/pages/Presence"));
 const PresenceManage = lazyWithRetry(() => import("@/pages/PresenceManage"));
@@ -296,6 +298,15 @@ const App = () => (
                     element={
                       <RequireRouteAccess routeKey="app.dashboard">
                         <OperacaoM30 />
+                      </RequireRouteAccess>
+                    }
+                  />
+
+                  <Route
+                    path="/app/mkt-techa"
+                    element={
+                      <RequireRouteAccess routeKey="app.dashboard">
+                        <MktTecha />
                       </RequireRouteAccess>
                     }
                   />
@@ -602,6 +613,15 @@ const App = () => (
                     element={
                       <RequireRouteAccess routeKey="app.dashboard">
                         <OperacaoM30Case />
+                      </RequireRouteAccess>
+                    }
+                  />
+
+                  <Route
+                    path="/app/mkt-techa/:id"
+                    element={
+                      <RequireRouteAccess routeKey="app.dashboard">
+                        <MktTechaCase />
                       </RequireRouteAccess>
                     }
                   />
