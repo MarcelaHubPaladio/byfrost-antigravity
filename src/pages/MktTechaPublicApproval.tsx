@@ -230,8 +230,13 @@ export default function MktTechaPublicApproval() {
                     <div className="mx-auto max-w-4xl">
                         <Badge 
                             variant="outline" 
-                            style={{ backgroundColor: `${primaryColor}20`, color: primaryColor, borderColor: `${primaryColor}30` }}
-                            className="mb-4 px-3 py-1 text-[10px] uppercase font-black tracking-widest rounded-full border-none"
+                            style={{ 
+                                backgroundColor: `${primaryColor}10`, 
+                                color: primaryColor, 
+                                borderColor: `${primaryColor}40`,
+                                boxShadow: `0 0 20px ${primaryColor}15`
+                            }}
+                            className="mb-4 px-4 py-1.5 text-[10px] uppercase font-black tracking-widest rounded-full border shadow-lg"
                         >
                             {isPlanningMode ? "Aprovação Estratégica" : "Portal de Aprovação"} • MKT Técha
                         </Badge>
@@ -282,22 +287,25 @@ export default function MktTechaPublicApproval() {
                             </Card>
 
                             <Card 
-                                style={{ backgroundColor: primaryColor }}
-                                className="p-8 rounded-[40px] shadow-2xl shadow-indigo-500/20 border-none relative overflow-hidden group md:col-span-2"
+                                className="p-8 rounded-[40px] bg-slate-900 border-none shadow-2xl ring-1 ring-white/5 relative overflow-hidden group md:col-span-2"
+                                style={{ borderLeft: `6px solid ${primaryColor}` }}
                             >
-                                <div className="absolute top-0 right-0 p-8 opacity-10 group-hover:scale-110 transition-transform duration-700">
-                                    <Rocket className="h-24 w-24" style={{ color: primaryText }} />
+                                <div 
+                                    className="absolute -right-20 -top-20 w-64 h-64 blur-[120px] opacity-20 pointer-events-none transition-all duration-1000 group-hover:opacity-30"
+                                    style={{ backgroundColor: primaryColor }}
+                                />
+                                <div className="absolute top-0 right-0 p-8 opacity-5 group-hover:scale-110 transition-transform duration-700">
+                                    <Rocket className="h-24 w-24" style={{ color: primaryColor }} />
                                 </div>
                                 <div className="relative z-10 space-y-3">
                                     <p 
-                                        style={{ color: `${primaryText}80` }}
-                                        className="text-[10px] font-black uppercase tracking-[0.2em]"
+                                        style={{ color: primaryColor }}
+                                        className="text-[10px] font-black uppercase tracking-[0.2em] opacity-60"
                                     >
                                         Objetivo Central
                                     </p>
                                     <h3 
-                                        style={{ color: primaryText }}
-                                        className="text-2xl font-black leading-tight"
+                                        className="text-2xl font-black leading-tight text-white"
                                     >
                                         {campaign.meta_json?.stage_data?.planejamento?.objetivo || "Aceleração de Vendas e Branding"}
                                     </h3>
@@ -422,8 +430,12 @@ export default function MktTechaPublicApproval() {
                                         <Button 
                                             onClick={handleApprovePlanning}
                                             disabled={acting === 'planning'}
-                                            style={{ backgroundColor: primaryColor, color: primaryText }}
-                                            className="w-full h-16 rounded-[24px] font-black text-sm shadow-2xl transition-all active:scale-95 gap-3 hover:opacity-90"
+                                            style={{ 
+                                                backgroundColor: primaryColor, 
+                                                color: primaryText,
+                                                boxShadow: `0 20px 40px -10px ${primaryColor}40`
+                                            }}
+                                            className="w-full h-16 rounded-[24px] font-black text-xs uppercase tracking-widest shadow-2xl transition-all active:scale-95 gap-3 hover:opacity-90 hover:-translate-y-1"
                                         >
                                             {acting === 'planning' ? <Loader2 className="h-5 w-5 animate-spin" /> : <CheckCircle2 className="h-5 w-5" />}
                                             APROVAR ESTRATÉGIA AGORA 🚀

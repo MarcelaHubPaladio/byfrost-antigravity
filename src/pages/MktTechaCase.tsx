@@ -587,14 +587,6 @@ export default function MktTechaCase() {
                                     <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
                                         <Target className="h-4 w-4" /> ETAPA: {getStateLabel(journeyQ.data as any, stateKey).toUpperCase()}
                                     </h3>
-                                    <Button 
-                                        onClick={() => handleSaveMainCard()} 
-                                        disabled={saving} 
-                                        style={{ backgroundColor: primaryColor, color: primaryText }}
-                                        className="h-8 rounded-xl font-bold text-[10px] gap-2 hover:opacity-90"
-                                    >
-                                        <Save className="h-3 w-3"/> SALVAR TUDO
-                                    </Button>
                                 </div>
 
                                 {/* STAGE SPECIFIC CONTENT */}
@@ -1258,6 +1250,19 @@ export default function MktTechaCase() {
                                         </div>
                                     </div>
                                 </div>
+                                <Button 
+                                    onClick={() => handleSaveMainCard()} 
+                                    disabled={saving} 
+                                    style={{ 
+                                        backgroundColor: primaryColor, 
+                                        color: primaryText,
+                                        boxShadow: `0 10px 20px -5px ${primaryColor}40`
+                                    }}
+                                    className="w-full h-14 rounded-2xl font-black text-xs uppercase tracking-widest gap-2 hover:opacity-90 transition-all active:scale-95 shadow-xl mt-4"
+                                >
+                                    {saving ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4"/>}
+                                    SALVAR TUDO
+                                </Button>
                             </div>
                         </div>
                     </Card>
