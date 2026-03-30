@@ -1015,6 +1015,16 @@ export default function MktTechaCase() {
                                                                                                     </a>
                                                                                                 ))}
                                                                                             </div>
+                                                                                            {cr.status !== 'approved' && (
+                                                                                                <div className="pt-2 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                                                                                                    <Button 
+                                                                                                        onClick={() => updateCreative(cr.id, "status", "approved")} 
+                                                                                                        className="w-full h-12 rounded-[22px] bg-emerald-600 hover:bg-emerald-700 text-white font-black text-[11px] uppercase tracking-widest gap-2 shadow-lg shadow-emerald-600/20 transition-all active:scale-95"
+                                                                                                    >
+                                                                                                        <CheckCircle2 className="h-4 w-4" /> APROVAR ESTE CRIATIVO
+                                                                                                    </Button>
+                                                                                                </div>
+                                                                                            )}
                                                                                         </div>
                                                                                     </div>
                                                                                 </div>
