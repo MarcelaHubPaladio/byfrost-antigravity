@@ -367,12 +367,23 @@ export default function MktTechaCase() {
         await handleSaveMainCard(newMeta);
     };
 
-    const updateStageData = (stateKey: string, field: string, value: any) => {
+    const updateStageData = (st: string, field: string, value: any) => {
         const stageData = { ...(meta.stage_data || {}) };
-        const current = { ...(stageData[stateKey] || {}) };
+        const current = { ...(stageData[st] || {}) };
         current[field] = value;
-        stageData[stateKey] = current;
+        stageData[st] = current;
         setMeta({ ...meta, stage_data: stageData });
+    };
+
+    const toggleChannel = (channel: string) => {
+        const current = [...(meta.selected_channels || [])];
+        const idx = current.indexOf(channel);
+        if (idx > -1) {
+            current.splice(idx, 1);
+        } else {
+            current.push(channel);
+        }
+        setMeta({ ...meta, selected_channels: current });
     };
 
 
@@ -587,14 +598,34 @@ export default function MktTechaCase() {
                                                                                     />
                                                                                 </div>
                                                                             </div>
-                                                                            <div className="space-y-2">
-                                                                                <Label className="text-[10px] font-bold text-slate-500 uppercase px-1">Canais</Label>
-                                                                                <Input 
-                                                                                    value={meta.stage_data?.planejamento?.canais || ""} 
-                                                                                    onChange={(e) => updateStageData("planejamento", "canais", e.target.value)}
-                                                                                    className="h-11 rounded-2xl" placeholder="Ex: Instagram, WhatsApp, E-mail"
-                                                                                />
-                                                                            </div>
+                                                                                <div className="space-y-4">
+                                                                                    <Label className="text-[10px] font-black text-slate-500 uppercase px-1 tracking-widest">Estratégia de Canais</Label>
+                                                                                    <div className="flex flex-wrap gap-2">
+                                                                                        {CREATIVE_CHANNELS.map(ch => {
+                                                                                            const isSelected = (meta.selected_channels || []).includes(ch);
+                                                                                            return (
+                                                                                                <Badge 
+                                                                                                    key={ch}
+                                                                                                    onClick={() => toggleChannel(ch)}
+                                                                                                    className={cn(
+                                                                                                        "px-4 py-2 rounded-2xl cursor-pointer transition-all border-2 text-[11px] font-bold",
+                                                                                                        isSelected 
+                                                                                                            ? "bg-indigo-600 border-indigo-600 text-white shadow-lg shadow-indigo-100" 
+                                                                                                            : "bg-white border-slate-100 text-slate-500 hover:border-indigo-200 hover:text-indigo-600"
+                                                                                                    )}
+                                                                                                >
+                                                                                                    {ch.toUpperCase()}
+                                                                                                </Badge>
+                                                                                            );
+                                                                                        })}
+                                                                                    </div>
+                                                                                    {/* Hidden input to maintain back-compat or textual reference if needed */}
+                                                                                    <input 
+                                                                                        type="hidden" 
+                                                                                        value={(meta.selected_channels || []).join(", ")} 
+                                                                                        onChange={() => {}}
+                                                                                    />
+                                                                                </div>
                                                                             <div className="space-y-2">
                                                                                 <Label className="text-[10px] font-bold text-slate-500 uppercase px-1">Objetivos Estratégicos</Label>
                                                                                 <Textarea 
@@ -605,12 +636,12 @@ export default function MktTechaCase() {
                                                                             </div>
                                                                         </div>
 
-                                                                        {/* Duplicated Creatives UI in Planning */}
+                                                                        {/* Full Creatives CRUD in Planning */}
                                                                         <div className="pt-8 border-t border-slate-50 space-y-6">
                                                                             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-1">
                                                                                 <div>
-                                                                                    <h4 className="text-sm font-bold text-slate-800">Criativos (Antecipados)</h4>
-                                                                                    <p className="text-[10px] text-slate-500 font-medium">Já pode começar a planejar os criativos da campanha aqui.</p>
+                                                                                    <h4 className="text-sm font-black text-slate-800">Criativos (Antecipados)</h4>
+                                                                                    <p className="text-[10px] text-slate-500 font-medium tracking-tight">Gerencie as peças e formatos da campanha desde o planejamento.</p>
                                                                                 </div>
                                                                                 <div className="flex items-center gap-2">
                                                                                     <Button onClick={addCreative} size="sm" className="rounded-xl h-8 text-[10px] font-bold gap-2 bg-indigo-600 hover:bg-indigo-700">
@@ -618,16 +649,54 @@ export default function MktTechaCase() {
                                                                                     </Button>
                                                                                 </div>
                                                                             </div>
-                                                                            {/* List of creatives */}
                                                                             <div className="space-y-4">
-                                                                                {(meta.creatives || []).length > 0 && (
-                                                                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                                                                        {(meta.creatives || []).map((cr: MktTechaCreative) => (
-                                                                                            <div key={cr.id} className="p-4 rounded-2xl border border-slate-100 bg-slate-50/20 text-xs flex items-center justify-between">
-                                                                                                <div className="font-bold text-slate-700">{cr.channel} - {cr.type}</div>
-                                                                                                <Badge className="bg-slate-200 text-slate-600 text-[8px]">{cr.status}</Badge>
+                                                                                {(meta.creatives || []).map((cr: MktTechaCreative) => (
+                                                                                    <div key={cr.id} className="p-5 rounded-[24px] border border-slate-100 bg-white shadow-sm space-y-5 relative group/card">
+                                                                                        <Button 
+                                                                                            variant="ghost" size="icon" onClick={() => removeCreative(cr.id)}
+                                                                                            className="absolute top-3 right-3 h-7 w-7 rounded-full text-slate-300 hover:text-rose-600 hover:bg-rose-50 opacity-0 group-hover/card:opacity-100 transition-opacity"
+                                                                                        >
+                                                                                            <Trash2 className="h-4 w-4" />
+                                                                                        </Button>
+                                                                                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                                                                                            <div className="space-y-1.5">
+                                                                                                <Label className="text-[9px] font-black text-slate-400 uppercase px-1">Canal</Label>
+                                                                                                <Select value={cr.channel} onValueChange={(v) => updateCreative(cr.id, "channel", v)}>
+                                                                                                    <SelectTrigger className="h-9 rounded-xl text-[11px] font-bold"><SelectValue /></SelectTrigger>
+                                                                                                    <SelectContent className="rounded-xl">
+                                                                                                        {((meta.selected_channels && meta.selected_channels.length > 0) ? meta.selected_channels : CREATIVE_CHANNELS).map(ch => (
+                                                                                                            <SelectItem key={ch} value={ch}>{ch}</SelectItem>
+                                                                                                        ))}
+                                                                                                    </SelectContent>
+                                                                                                </Select>
                                                                                             </div>
-                                                                                        ))}
+                                                                                            <div className="space-y-1.5">
+                                                                                                <Label className="text-[9px] font-black text-slate-400 uppercase px-1">Tipo / Formato</Label>
+                                                                                                <Select value={cr.type} onValueChange={(v) => updateCreative(cr.id, "type", v)}>
+                                                                                                    <SelectTrigger className="h-9 rounded-xl text-[11px] font-bold"><SelectValue /></SelectTrigger>
+                                                                                                    <SelectContent className="rounded-xl">
+                                                                                                        <SelectItem value="imagem">Arte Estática (Imagem)</SelectItem>
+                                                                                                        <SelectItem value="video">VÍDEO</SelectItem>
+                                                                                                        <SelectItem value="audio">ÁUDIO</SelectItem>
+                                                                                                        <SelectItem value="texto">TEXTO</SelectItem>
+                                                                                                    </SelectContent>
+                                                                                                </Select>
+                                                                                            </div>
+                                                                                            <div className="space-y-1.5">
+                                                                                                <Label className="text-[9px] font-black text-slate-400 uppercase px-1">Resumo (Dimensões)</Label>
+                                                                                                <Input 
+                                                                                                    value={cr.format} 
+                                                                                                    onChange={(e) => updateCreative(cr.id, "format", e.target.value)} 
+                                                                                                    className="h-9 rounded-xl text-[11px] font-medium" 
+                                                                                                    placeholder="Ex: 1080x1920"
+                                                                                                />
+                                                                                            </div>
+                                                                                        </div>
+                                                                                    </div>
+                                                                                ))}
+                                                                                {(meta.creatives || []).length === 0 && (
+                                                                                    <div className="p-8 border-2 border-dashed border-slate-50 rounded-[28px] bg-slate-50/20 flex flex-col items-center justify-center text-center gap-2">
+                                                                                        <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Nenhum criativo planejado</p>
                                                                                     </div>
                                                                                 )}
                                                                             </div>
@@ -667,17 +736,17 @@ export default function MktTechaCase() {
                                                                 )}
 
                                                                 {st === "criativos" && (
-                                                                    <div className="space-y-6">
+                                                                    <div className="space-y-8">
                                                                         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-1">
                                                                             <div>
-                                                                                <h4 className="text-sm font-bold text-slate-800">Criativos por Canal</h4>
-                                                                                <p className="text-[10px] text-slate-500 font-medium">Gerencie as peças e envie o link para o cliente aprovar.</p>
+                                                                                <h4 className="text-sm font-black text-slate-800 tracking-tight">Gestão de Criativos</h4>
+                                                                                <p className="text-[10px] text-slate-500 font-medium">Gerencie o status da produção e envie para aprovação.</p>
                                                                             </div>
                                                                             <div className="flex items-center gap-2">
                                                                                 <Button 
                                                                                     variant="outline" 
                                                                                     onClick={() => copyShareLink('approve')}
-                                                                                    className="rounded-xl h-8 text-[10px] font-bold gap-2 border-indigo-200 text-indigo-600 hover:bg-indigo-50"
+                                                                                    className="rounded-xl h-8 text-[10px] font-black gap-2 border-indigo-100 text-indigo-600 hover:bg-indigo-50"
                                                                                 >
                                                                                     <Share2 className="h-3.5 w-3.5" /> COPIAR LINK DE APROVAÇÃO
                                                                                 </Button>
@@ -687,9 +756,10 @@ export default function MktTechaCase() {
                                                                             </div>
                                                                         </div>
 
-                                                                        <div className="space-y-4">
+                                                                        <div className="space-y-6">
                                                                             {(meta.creatives || []).map((cr: MktTechaCreative) => (
-                                                                                <div key={cr.id} className="p-6 rounded-[28px] border border-slate-200 bg-white shadow-sm space-y-6 relative group/card">
+                                                                                <div key={cr.id} className="p-6 rounded-[32px] border border-slate-200 bg-white shadow-sm space-y-6 relative group/card overflow-hidden">
+                                                                                    <div className="absolute top-0 left-0 w-1.5 h-full bg-indigo-500" />
                                                                                     <Button 
                                                                                         variant="ghost" 
                                                                                         size="icon" 
@@ -700,28 +770,33 @@ export default function MktTechaCase() {
                                                                                     </Button>
 
                                                                                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                                                                                        <div className="space-y-2">
-                                                                                            <Label className="text-[10px] font-bold text-slate-500 uppercase">Canal</Label>
+                                                                                        <div className="space-y-1.5">
+                                                                                            <Label className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-1">Canal</Label>
                                                                                             <Select value={cr.channel} onValueChange={(v) => updateCreative(cr.id, "channel", v)}>
-                                                                                                <SelectTrigger className="h-9 rounded-xl text-xs"><SelectValue /></SelectTrigger>
+                                                                                                <SelectTrigger className="h-10 rounded-2xl text-xs font-bold border-slate-100"><SelectValue /></SelectTrigger>
                                                                                                 <SelectContent className="rounded-xl">
-                                                                                                    {CREATIVE_CHANNELS.map(ch => <SelectItem key={ch} value={ch}>{ch}</SelectItem>)}
+                                                                                                    {((meta.selected_channels && meta.selected_channels.length > 0) ? meta.selected_channels : CREATIVE_CHANNELS).map(ch => (
+                                                                                                        <SelectItem key={ch} value={ch}>{ch}</SelectItem>
+                                                                                                    ))}
                                                                                                 </SelectContent>
                                                                                             </Select>
                                                                                         </div>
-                                                                                        <div className="space-y-2">
-                                                                                            <Label className="text-[10px] font-bold text-slate-500 uppercase">Tipo</Label>
+                                                                                        <div className="space-y-1.5">
+                                                                                            <Label className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-1">Tipo</Label>
                                                                                             <Select value={cr.type} onValueChange={(v) => updateCreative(cr.id, "type", v)}>
-                                                                                                <SelectTrigger className="h-9 rounded-xl text-xs"><SelectValue /></SelectTrigger>
+                                                                                                <SelectTrigger className="h-10 rounded-2xl text-xs font-bold border-slate-100"><SelectValue /></SelectTrigger>
                                                                                                 <SelectContent className="rounded-xl">
-                                                                                                    {CREATIVE_TYPES.map(t => <SelectItem key={t} value={t} className="capitalize">{t}</SelectItem>)}
+                                                                                                    <SelectItem value="imagem">Arte Estática (Imagem)</SelectItem>
+                                                                                                    <SelectItem value="video">VÍDEO</SelectItem>
+                                                                                                    <SelectItem value="audio">ÁUDIO</SelectItem>
+                                                                                                    <SelectItem value="texto">TEXTO</SelectItem>
                                                                                                 </SelectContent>
                                                                                             </Select>
                                                                                         </div>
-                                                                                        <div className="space-y-2">
-                                                                                            <Label className="text-[10px] font-bold text-slate-500 uppercase">Status</Label>
+                                                                                        <div className="space-y-1.5">
+                                                                                            <Label className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-1">Status Produção</Label>
                                                                                             <Select value={cr.status} onValueChange={(v) => updateCreative(cr.id, "status", v)}>
-                                                                                                <SelectTrigger className="h-9 rounded-xl text-xs font-bold ring-1 ring-inset ring-slate-100">
+                                                                                                <SelectTrigger className="h-10 rounded-2xl text-xs font-black ring-1 ring-inset ring-slate-100 bg-slate-50/50">
                                                                                                     <SelectValue />
                                                                                                 </SelectTrigger>
                                                                                                 <SelectContent className="rounded-xl">
@@ -729,24 +804,53 @@ export default function MktTechaCase() {
                                                                                                 </SelectContent>
                                                                                             </Select>
                                                                                         </div>
+                                                                                        <div className="space-y-1.5">
+                                                                                            <Label className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-1">Responsável</Label>
+                                                                                            <Select value={cr.responsible_id || "__none__"} onValueChange={(v) => updateCreative(cr.id, "responsible_id", v === "__none__" ? null : v)}>
+                                                                                                <SelectTrigger className="h-10 rounded-2xl text-xs font-bold border-slate-100"><SelectValue /></SelectTrigger>
+                                                                                                <SelectContent className="rounded-xl">
+                                                                                                    <SelectItem value="__none__">Não atribuído</SelectItem>
+                                                                                                    {tenantUsersQ.data?.map(u => <SelectItem key={u.user_id} value={u.user_id}>{u.display_name || "Sem nome"}</SelectItem>)}
+                                                                                                </SelectContent>
+                                                                                            </Select>
+                                                                                        </div>
                                                                                     </div>
 
                                                                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                                                                        <div className="space-y-2">
-                                                                                            <Label className="text-[10px] font-bold text-slate-500 uppercase">Formato</Label>
-                                                                                            <Input value={cr.format} onChange={(e) => updateCreative(cr.id, "format", e.target.value)} className="h-9 rounded-xl text-xs" />
+                                                                                        <div className="space-y-1.5">
+                                                                                            <Label className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-1">Formato / Medida</Label>
+                                                                                            <Input value={cr.format} onChange={(e) => updateCreative(cr.id, "format", e.target.value)} className="h-10 rounded-2xl text-xs font-semibold border-slate-100" />
                                                                                         </div>
-                                                                                        <div className="space-y-2">
-                                                                                            <Label className="text-[10px] font-bold text-slate-500 uppercase">Prazo</Label>
-                                                                                            <Input type="date" value={cr.due_at || ""} onChange={(e) => updateCreative(cr.id, "due_at", e.target.value)} className="h-9 rounded-xl text-xs" />
+                                                                                        <div className="space-y-1.5">
+                                                                                            <Label className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-1">Prazo Entrega</Label>
+                                                                                            <Input type="date" value={cr.due_at || ""} onChange={(e) => updateCreative(cr.id, "due_at", e.target.value)} className="h-10 rounded-2xl text-xs font-semibold border-slate-100" />
+                                                                                        </div>
+                                                                                    </div>
+
+                                                                                    <div className="space-y-3 pt-5 border-t border-slate-50">
+                                                                                        <Label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Produção em Andamento</Label>
+                                                                                        <div className="flex flex-wrap gap-2">
+                                                                                            {cr.subtasks.map(st => (
+                                                                                                <div 
+                                                                                                    key={st.id} 
+                                                                                                    onClick={() => toggleCreativeSubtask(cr.id, st.id)}
+                                                                                                    className={cn(
+                                                                                                        "flex items-center gap-2 px-4 py-2 rounded-2xl border text-[10px] font-black transition-all cursor-pointer",
+                                                                                                        st.done ? "bg-emerald-50 border-emerald-100 text-emerald-700" : "bg-slate-50/50 border-slate-100 text-slate-500 hover:bg-white hover:border-slate-300"
+                                                                                                    )}
+                                                                                                >
+                                                                                                    {st.done ? <CheckCircle2 className="h-3 w-3" /> : <Clock className="h-3 w-3" />}
+                                                                                                    {st.label.toUpperCase()}
+                                                                                                </div>
+                                                                                            ))}
                                                                                         </div>
                                                                                     </div>
                                                                                 </div>
                                                                             ))}
                                                                             {(meta.creatives || []).length === 0 && (
-                                                                                <div className="p-12 border-2 border-dashed border-slate-100 rounded-[32px] bg-slate-50/30 flex flex-col items-center justify-center text-center gap-3">
-                                                                                    <Settings className="h-8 w-8 text-slate-200" />
-                                                                                    <p className="text-xs text-slate-400 font-medium">Nenhum criativo adicionado ainda.</p>
+                                                                                <div className="p-16 border-2 border-dashed border-slate-100 rounded-[40px] bg-slate-50/30 flex flex-col items-center justify-center text-center gap-4">
+                                                                                    <Settings className="h-10 w-10 text-slate-200" />
+                                                                                    <p className="text-xs text-slate-400 font-bold uppercase tracking-widest">Aguardando criativos da etapa de planejamento.</p>
                                                                                 </div>
                                                                             )}
                                                                         </div>
