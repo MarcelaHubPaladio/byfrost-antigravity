@@ -87,7 +87,7 @@ function SubtaskItemContent({ st, idx, caseMeta, caseId, onRefetch, caseState, c
     const [type, setType] = useState(st.type || "edicao");
     const [postDate, setPostDate] = useState(st.post_date || "");
     const [priority, setPriority] = useState(st.priority || false);
-    const [deliverableId, setDeliverableId] = useState(st.deliverable_id || caseData?.deliverable_id || "");
+    const [deliverableId, setDeliverableId] = useState(st.deliverable_id || "");
     const [description, setDescription] = useState(st.description || "");
     const [scriptRaw, setScriptRaw] = useState(st.script_raw || "");
     const [scriptItems, setScriptItems] = useState<any[]>(st.script_items || []);
@@ -312,43 +312,7 @@ function SubtaskItemContent({ st, idx, caseMeta, caseId, onRefetch, caseState, c
 
     return (
         <div className="space-y-6">
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div className="space-y-2">
-                    <Label className="text-[10px] font-bold text-slate-500 uppercase">Entregável do Contrato</Label>
-                    <Select value={deliverableId} onValueChange={setDeliverableId}>
-                        <SelectTrigger className="h-9 rounded-xl border-slate-200 text-xs focus:ring-indigo-500/20 bg-white shadow-sm">
-                            <SelectValue placeholder="Selecione o entregável..." />
-                        </SelectTrigger>
-                        <SelectContent className="rounded-xl border-slate-200">
-                            {allDeliverables.map((d: any) => (
-                                <SelectItem key={d.id} value={d.id} className="text-xs focus:bg-indigo-50 focus:text-indigo-900 rounded-lg">
-                                    {d.name}
-                                    {d.due_date && <span className="ml-2 text-[10px] text-slate-400">({new Date(d.due_date).toLocaleDateString()})</span>}
-                                </SelectItem>
-                            ))}
-                            {allDeliverables.length === 0 && (
-                                <SelectItem value="__none__" disabled className="text-xs italic text-slate-400">Nenhum entregável encontrado</SelectItem>
-                            )}
-                        </SelectContent>
-                    </Select>
-                </div>
-
-                <div className="space-y-2">
-                    <Label className="text-[10px] font-bold text-slate-500 uppercase">Tipo de Entrega</Label>
-                    <Select value={type} onValueChange={setType}>
-                        <SelectTrigger className="h-9 rounded-xl border-slate-200 text-xs focus:ring-indigo-500/20 bg-white shadow-sm">
-                            <SelectValue placeholder="Selecione..." />
-                        </SelectTrigger>
-                        <SelectContent className="rounded-xl border-slate-200">
-                            <SelectItem value="edicao" className="text-xs focus:bg-indigo-50 focus:text-indigo-900 rounded-lg">VÍDEO / EDIÇÃO</SelectItem>
-                            <SelectItem value="artes" className="text-xs focus:bg-indigo-50 focus:text-indigo-900 rounded-lg">ARTES / CRIATIVO</SelectItem>
-                            <SelectItem value="texto" className="text-xs focus:bg-indigo-50 focus:text-indigo-900 rounded-lg">TEXTO / COPY</SelectItem>
-                            <SelectItem value="campanhas" className="text-xs focus:bg-indigo-50 focus:text-indigo-900 rounded-lg">TRÁFEGO / CAMPANHAS</SelectItem>
-                            <SelectItem value="outros" className="text-xs focus:bg-indigo-50 focus:text-indigo-900 rounded-lg">OUTROS</SelectItem>
-                        </SelectContent>
-                    </Select>
-                </div>
-
+            <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                     <Label className="text-[10px] font-bold text-slate-500 uppercase">Data de Postagem</Label>
                     <input 
@@ -694,19 +658,20 @@ export default function OperacaoM30Case() {
 
     const { transitionState, updating: updatingState } = useJourneyTransition();
     const [creatingIndividualId, setCreatingIndividualId] = useState<number | null>(null);
+    const [taskToCreate, setTaskToCreate] = useState<{ st: any, idx: number } | null>(null);
 
-    const handleCreateIndividualTask = async (st: any, idx: number) => {
+    const handleCreateIndividualTask = async (st: any, idx: number, deliverableId: string, type: string) => {
         if (!activeTenantId || !id || !caseQ.data) return;
         setCreatingIndividualId(idx);
         try {
             const { data: newCase, error: insertError } = await supabase.from("cases").insert({
                 tenant_id: activeTenantId,
                 journey_id: caseQ.data.journey_id,
-                case_type: st.type || 'edicao', 
+                case_type: type || st.type || 'edicao', 
                 title: st.title,
                 summary_text: st.description || null,
                 customer_entity_id: caseQ.data.customer_entity_id,
-                deliverable_id: st.deliverable_id || caseQ.data.deliverable_id,
+                deliverable_id: deliverableId || st.deliverable_id || caseQ.data.deliverable_id,
                 state: "decupagem__upload",
                 meta_json: {
                     parent_case_id: id,
@@ -1115,37 +1080,50 @@ export default function OperacaoM30Case() {
                                                                 </div>
                                                             </AccordionTrigger>
                                                             
-                                                            {caseQ.data?.state === 'gravao' && !st.linked_case_id && (
+                                                            <div className="flex items-center gap-1">
+                                                                {caseQ.data?.state === 'gravao' && !st.linked_case_id && (
+                                                                    <Button 
+                                                                        size="sm" 
+                                                                        variant="ghost"
+                                                                        className={cn(
+                                                                            "h-9 w-9 rounded-xl flex items-center justify-center p-0 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition-all"
+                                                                        )}
+                                                                        disabled={creatingIndividualId === idx}
+                                                                        onClick={(e) => {
+                                                                            e.stopPropagation();
+                                                                            setTaskToCreate({ st, idx });
+                                                                        }}
+                                                                        title="Criar card de produção individual"
+                                                                    >
+                                                                        <Rocket className={cn("h-4 w-4", creatingIndividualId === idx && "animate-spin")} />
+                                                                    </Button>
+                                                                )}
+
+                                                                {st.linked_case_id && (
+                                                                    <Link to={`/app/operacao-m30/${st.linked_case_id}`} onClick={(e) => e.stopPropagation()}>
+                                                                        <Button size="sm" variant="ghost" className="h-9 w-9 rounded-xl text-emerald-500 bg-emerald-50 hover:bg-emerald-100/50">
+                                                                            <ExternalLink className="h-4 w-4" />
+                                                                        </Button>
+                                                                    </Link>
+                                                                )}
+
                                                                 <Button 
                                                                     variant="ghost" 
                                                                     size="sm" 
-                                                                    disabled={creatingIndividualId === idx}
-                                                                    className="h-8 w-8 rounded-full text-orange-600 hover:text-orange-700 hover:bg-orange-50 ml-1"
-                                                                    onClick={(e) => {
+                                                                    className="h-9 w-9 rounded-xl text-slate-400 hover:text-rose-600 hover:bg-rose-50"
+                                                                    onClick={async (e) => {
                                                                         e.stopPropagation();
-                                                                        handleCreateIndividualTask(st, idx);
+                                                                        const current = (caseQ.data?.meta_json as any)?.pending_subtasks || [];
+                                                                        const next = current.filter((_: any, i: number) => i !== idx);
+                                                                        await supabase.from("cases").update({
+                                                                            meta_json: { ...(caseQ.data?.meta_json as any), pending_subtasks: next }
+                                                                        }).eq("id", id!);
+                                                                        caseQ.refetch();
                                                                     }}
                                                                 >
-                                                                    {creatingIndividualId === idx ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Rocket className="h-4 w-4" />}
+                                                                    <Trash2 className="h-4 w-4" />
                                                                 </Button>
-                                                            )}
-
-                                                            <Button 
-                                                                variant="ghost" 
-                                                                size="sm" 
-                                                                className="h-8 w-8 rounded-full text-slate-400 hover:text-rose-600 hover:bg-rose-50 ml-1"
-                                                                onClick={async (e) => {
-                                                                    e.stopPropagation();
-                                                                    const current = (caseQ.data?.meta_json as any)?.pending_subtasks || [];
-                                                                    const next = current.filter((_: any, i: number) => i !== idx);
-                                                                    await supabase.from("cases").update({
-                                                                        meta_json: { ...(caseQ.data?.meta_json as any), pending_subtasks: next }
-                                                                    }).eq("id", id!);
-                                                                    caseQ.refetch();
-                                                                }}
-                                                            >
-                                                                <Trash2 className="h-4 w-4" />
-                                                            </Button>
+                                                            </div>
                                                         </div>
                                                         <AccordionContent className="px-4 pb-4 space-y-4 pt-1 border-t border-slate-50">
                                                             <SubtaskItemContent 
@@ -1235,6 +1213,94 @@ export default function OperacaoM30Case() {
                     nextStateName={transitionBlock.nextStateName}
                     blocks={transitionBlock.reasons}
                 />
+
+                <AlertDialog open={!!taskToCreate} onOpenChange={(open) => !open && setTaskToCreate(null)}>
+                    <AlertDialogContent className="max-w-md rounded-3xl border-slate-200">
+                        <AlertDialogHeader>
+                            <AlertDialogTitle className="text-xl font-bold flex items-center gap-2">
+                                <Rocket className="h-5 w-5 text-indigo-600" />
+                                Criar Card de Produção
+                            </AlertDialogTitle>
+                            <AlertDialogDescription className="text-slate-500 text-sm">
+                                Vincule esta subtarefa ao entregável correto do contrato antes de iniciar a produção.
+                            </AlertDialogDescription>
+                        </AlertDialogHeader>
+
+                        <div className="space-y-4 py-4">
+                            <div className="space-y-2">
+                                <Label className="text-[10px] font-bold text-slate-500 uppercase px-1">Entregável do Contrato</Label>
+                                <Select 
+                                    defaultValue={taskToCreate?.st?.deliverable_id || caseQ.data?.deliverable_id || ""}
+                                    onValueChange={(val) => {
+                                        if (taskToCreate) {
+                                            setTaskToCreate({
+                                                ...taskToCreate,
+                                                st: { ...taskToCreate.st, deliverable_id: val }
+                                            });
+                                        }
+                                    }}
+                                >
+                                    <SelectTrigger className="h-11 rounded-2xl border-slate-200 focus:ring-indigo-500/20 bg-slate-50/50">
+                                        <SelectValue placeholder="Selecione o entregável..." />
+                                    </SelectTrigger>
+                                    <SelectContent className="rounded-2xl border-slate-200">
+                                        {(allDeliverablesQ.data || []).map((d: any) => (
+                                            <SelectItem key={d.id} value={d.id} className="text-sm focus:bg-indigo-50 focus:text-indigo-900 rounded-xl">
+                                                {d.name}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+
+                            <div className="space-y-2">
+                                <Label className="text-[10px] font-bold text-slate-500 uppercase px-1">Tipo de Entrega</Label>
+                                <Select 
+                                    defaultValue={taskToCreate?.st?.type || "edicao"}
+                                    onValueChange={(val) => {
+                                        if (taskToCreate) {
+                                            setTaskToCreate({
+                                                ...taskToCreate,
+                                                st: { ...taskToCreate.st, type: val }
+                                            });
+                                        }
+                                    }}
+                                >
+                                    <SelectTrigger className="h-11 rounded-2xl border-slate-200 focus:ring-indigo-500/20 bg-slate-50/50">
+                                        <SelectValue placeholder="Selecione o tipo..." />
+                                    </SelectTrigger>
+                                    <SelectContent className="rounded-2xl border-slate-200">
+                                        <SelectItem value="edicao" className="text-sm focus:bg-indigo-50 focus:text-indigo-900 rounded-xl">VÍDEO / EDIÇÃO</SelectItem>
+                                        <SelectItem value="artes" className="text-sm focus:bg-indigo-50 focus:text-indigo-900 rounded-xl">ARTES / CRIATIVO</SelectItem>
+                                        <SelectItem value="texto" className="text-sm focus:bg-indigo-50 focus:text-indigo-900 rounded-xl">TEXTO / COPY</SelectItem>
+                                        <SelectItem value="campanhas" className="text-sm focus:bg-indigo-50 focus:text-indigo-900 rounded-xl">TRÁFEGO / CAMPANHAS</SelectItem>
+                                        <SelectItem value="outros" className="text-sm focus:bg-indigo-50 focus:text-indigo-900 rounded-xl">OUTROS</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        </div>
+
+                        <AlertDialogFooter className="gap-2 sm:gap-0">
+                            <AlertDialogCancel className="rounded-2xl border-slate-200 text-slate-500 text-xs font-bold hover:bg-slate-50">Cancelar</AlertDialogCancel>
+                            <AlertDialogAction 
+                                className="rounded-2xl bg-indigo-600 text-white text-xs font-bold hover:bg-indigo-700 shadow-indigo-100 shadow-lg px-6"
+                                onClick={() => {
+                                    if (taskToCreate) {
+                                        handleCreateIndividualTask(
+                                            taskToCreate.st, 
+                                            taskToCreate.idx,
+                                            taskToCreate.st.deliverable_id || caseQ.data?.deliverable_id || "",
+                                            taskToCreate.st.type || "edicao"
+                                        );
+                                        setTaskToCreate(null);
+                                    }
+                                }}
+                            >
+                                Criar Tarefa 🚀
+                            </AlertDialogAction>
+                        </AlertDialogFooter>
+                    </AlertDialogContent>
+                </AlertDialog>
             </AppShell>
         </RequireAuth>
     );
