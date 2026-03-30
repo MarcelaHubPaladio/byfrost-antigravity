@@ -1652,7 +1652,7 @@ export default function OperacaoM30Case() {
                                 <div className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
                                     <div className="flex items-center justify-between mb-4">
                                         <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                                            <FileText className="h-4 w-4" /> Vínculo de Contrato
+                                            <FileText className="h-4 w-4" /> DNA do Contrato
                                         </h3>
                                         <Badge variant="outline" className={cn(
                                             "text-[9px] font-bold uppercase",
@@ -1678,6 +1678,22 @@ export default function OperacaoM30Case() {
                                                     {(commitmentQ.data as any).core_entities?.display_name || "Cliente"}
                                                 </div>
                                             </div>
+
+                                            {(caseQ.data?.state === 'planejamento' || caseQ.data?.state === 'aprovar_roteiro') && (
+                                                <Button 
+                                                    variant="default"
+                                                    className="w-full h-10 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[11px] gap-2 shadow-lg shadow-indigo-100 mt-2"
+                                                    onClick={() => {
+                                                        const shareToken = (caseQ.data?.meta_json as any)?.share_token || (caseQ.data as any).share_token || id;
+                                                        const url = `${window.location.origin}/public/m30/approve/${shareToken}`;
+                                                        navigator.clipboard.writeText(url);
+                                                        showSuccess("Link de aprovação copiado! Envie para o cliente validar o roteiro.");
+                                                    }}
+                                                >
+                                                    <ExternalLink className="h-4 w-4" />
+                                                    COPIAR LINK DO CLIENTE 🔗
+                                                </Button>
+                                            )}
 
                                             <Button 
                                                 variant="outline" 
