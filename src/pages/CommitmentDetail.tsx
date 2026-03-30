@@ -243,9 +243,15 @@ export default function CommitmentDetail() {
     }
 
     setSaving(true);
+    const curr = (allTenantCasesQ.data || []).find(x => x.id === caseId);
+    const newMeta = { ...(curr?.meta_json || {}), commitment_id: commitmentId };
+
     const { error } = await supabase
       .from("cases")
-      .update({ deliverable_id: deliverableId })
+      .update({ 
+        deliverable_id: deliverableId,
+        meta_json: newMeta
+      })
       .eq("id", caseId);
     if (error) {
       showError("Erro ao corrigir: " + error.message);

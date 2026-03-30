@@ -541,10 +541,11 @@ export default function OperacaoM30Case() {
     });
 
     const allDeliverablesQ = useQuery({
-        queryKey: ["case_all_deliverables", activeTenantId, caseQ.data?.meta_json?.commitment_id, deliverableQ.data?.commitment_id],
-        enabled: Boolean(activeTenantId && (caseQ.data?.meta_json?.commitment_id || deliverableQ.data?.commitment_id)),
+        queryKey: ["case_all_deliverables", activeTenantId, (caseQ.data?.meta_json as any)?.commitment_id, deliverableQ.data?.commitment_id],
+        enabled: Boolean(activeTenantId && ((caseQ.data?.meta_json as any)?.commitment_id || deliverableQ.data?.commitment_id)),
         queryFn: async () => {
             const cid = (caseQ.data?.meta_json as any)?.commitment_id || deliverableQ.data?.commitment_id;
+            console.log(`[M30] LOCKED CID FOR DELIVERABLES: ${cid}`);
             if (!cid) return [];
 
             const { data, error } = await supabase
