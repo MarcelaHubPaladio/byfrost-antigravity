@@ -47,7 +47,6 @@ type CaseRow = {
   users_profile?: { display_name: string | null; email: string | null } | null;
   journeys?: { key: string | null; name: string | null; is_crm?: boolean } | null;
   meta_json?: any;
-  customer_entity?: { display_name: string | null } | null;
 };
 
 type JourneyOpt = {
@@ -58,23 +57,6 @@ type JourneyOpt = {
   default_state_machine_json?: any;
 };
 
-type DebugRpc = {
-  tenant_id: string;
-  journey_key: string;
-  journey_ids: string[];
-  cases_total: number;
-  by_status: Array<{ status: string; qty: number }>;
-  latest: Array<{
-    id: string;
-    status: string;
-    state: string;
-    journey_id: string | null;
-    meta_journey_key: string | null;
-    created_at: string;
-    updated_at: string;
-  }>;
-};
-
 type ReadRow = { case_id: string; last_seen_at: string };
 type WaMsgLite = { case_id: string | null; occurred_at: string; from_phone: string | null };
 type WaInstanceRow = { id: string; phone_number: string | null };
@@ -82,19 +64,6 @@ type WaInstanceRow = { id: string; phone_number: string | null };
 function minutesAgo(iso: string) {
   const diff = Date.now() - new Date(iso).getTime();
   return Math.max(0, Math.round(diff / 60000));
-}
-
-function getMetaPhone(meta: any): string | null {
-  if (!meta || typeof meta !== "object") return null;
-  const direct =
-    meta.customer_phone ??
-    meta.customerPhone ??
-    meta.phone ??
-    meta.whatsapp ??
-    meta.to_phone ??
-    meta.toPhone ??
-    null;
-  return typeof direct === "string" && direct.trim() ? direct.trim() : null;
 }
 
 function digitsTail(s: string | null | undefined, tail = 11) {
@@ -215,7 +184,6 @@ export default function MktTecha() {
   const { prefs } = useTheme();
   const qc = useQueryClient();
 
-  const [refreshingToken, setRefreshingToken] = useState(false);
   const [q, setQ] = useState("");
   const [movingCaseId, setMovingCaseId] = useState<string | null>(null);
   const [transitionBlock, setTransitionBlock] = useState<{
@@ -227,38 +195,8 @@ export default function MktTecha() {
   const [calendarDate, setCalendarDate] = useState(new Date());
 
   const [assigneeFilterId, setAssigneeFilterId] = useState<string>("all");
-  const [entityFilterId, setEntityFilterId] = useState("all");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
-
-  const entitiesQ = useQuery({
-    queryKey: ["mkt_techa_active_client_entities", activeTenantId],
-    enabled: Boolean(activeTenantId),
-    queryFn: async () => {
-      const { data: commitments } = await supabase
-        .from("commercial_commitments")
-        .select("customer_entity_id")
-        .eq("tenant_id", activeTenantId!)
-        .eq("commitment_type", "contract")
-        .eq("status", "active")
-        .is("deleted_at", null);
-      
-      const activeIds = Array.from(new Set(commitments?.map(c => c.customer_entity_id) || []));
-      if (!activeIds.length) return [];
-
-      const { data, error } = await supabase
-        .from("core_entities")
-        .select("id,display_name")
-        .eq("tenant_id", activeTenantId!)
-        .in("id", activeIds)
-        .is("deleted_at", null)
-        .order("display_name");
-        
-      if (error) throw error;
-      return (data ?? []) as any[];
-    },
-    staleTime: 60_000,
-  });
 
   const tenantUsersQ = useQuery({
     queryKey: ["tenant_users_hierarchy_techa", activeTenantId, user?.id],
@@ -394,32 +332,6 @@ export default function MktTecha() {
     });
   }, [casesQ.data, selectedKey, selectedJourney?.id]);
 
-  const caseEntityIds = useMemo(() => {
-    const s = new Set<string>();
-    for (const r of journeyRows) {
-      const eid = (r as any).customer_entity_id || (r.meta_json as any)?.entity_id;
-      if (eid) s.add(eid);
-    }
-    return Array.from(s);
-  }, [journeyRows]);
-
-  const caseEntitiesQ = useQuery({
-    queryKey: ["techa_case_entities", activeTenantId, caseEntityIds.join(",")],
-    enabled: Boolean(activeTenantId && caseEntityIds.length > 0),
-    staleTime: 60_000,
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("core_entities")
-        .select("id, display_name")
-        .eq("tenant_id", activeTenantId!)
-        .in("id", caseEntityIds);
-      if (error) throw error;
-      const m = new Map<string, string>();
-      for (const d of data ?? []) m.set(d.id, d.display_name);
-      return m;
-    }
-  });
-
   const filteredRows = useMemo(() => {
     let base = journeyRows;
 
@@ -440,24 +352,14 @@ export default function MktTecha() {
       });
     }
 
-    if (entityFilterId !== "all") {
-      base = base.filter((r) => {
-        const eid = String((r as any).customer_entity_id || (r.meta_json as any)?.entity_id || "");
-        if (entityFilterId === "__unassigned__") return !eid;
-        return eid === entityFilterId;
-      });
-    }
-
     const qq = q.trim().toLowerCase();
     if (!qq) return base;
 
     return base.filter((r) => {
-      const eid = (r as any).customer_entity_id || (r.meta_json as any)?.entity_id;
-      const entityName = eid ? caseEntitiesQ.data?.get(eid) : null;
-      const t = `${r.title ?? ""} ${(r.users_profile?.display_name ?? "")} ${entityName ?? ""}`.toLowerCase();
+      const t = `${r.title ?? ""} ${(r.users_profile?.display_name ?? "")}`.toLowerCase();
       return t.includes(qq);
     });
-  }, [journeyRows, q, caseEntitiesQ.data, assigneeFilterId, entityFilterId, startDate, endDate]);
+  }, [journeyRows, q, assigneeFilterId, startDate, endDate]);
 
   const visibleCaseIds = useMemo(() => filteredRows.map((r) => r.id), [filteredRows]);
 
@@ -521,19 +423,6 @@ export default function MktTecha() {
     return s;
   }, [lastInboundAtByCase, readByCase]);
 
-  const debugRpcQ = useQuery({
-    queryKey: ["debug_cases_techa", activeTenantId, selectedKey],
-    enabled: Boolean(activeTenantId && selectedKey),
-    queryFn: async () => {
-      const { data, error } = await supabase.rpc("debug_cases_for_tenant_journey", {
-        p_tenant_id: activeTenantId!,
-        p_journey_key: selectedKey,
-      });
-      if (error) throw error;
-      return data as any as DebugRpc;
-    },
-  });
-
   const columns = useMemo(() => {
     const baseStates = states.length ? states : Array.from(new Set(filteredRows.map((r) => r.state)));
     const known = new Set(baseStates);
@@ -558,16 +447,6 @@ export default function MktTecha() {
       };
     });
   }, [filteredRows, states, unreadByCase, lastInboundAtByCase, selectedJourney]);
-
-  const refreshToken = async () => {
-    setRefreshingToken(true);
-    try {
-      await supabase.auth.refreshSession();
-      await Promise.all([journeyQ.refetch(), casesQ.refetch(), debugRpcQ.refetch()]);
-    } finally {
-      setRefreshingToken(false);
-    }
-  };
 
   const { transitionState, updating: updatingCaseState } = useJourneyTransition();
 
@@ -630,7 +509,7 @@ export default function MktTecha() {
               <div className="mb-1 text-[11px] font-semibold text-slate-700">Busca rápida</div>
               <div className="relative">
                 <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Título, cliente…" className="h-11 rounded-2xl pl-10" />
+                <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Título..." className="h-11 rounded-2xl pl-10" />
               </div>
             </div>
 
@@ -659,12 +538,6 @@ export default function MktTecha() {
                       {col.items.map((c) => (
                         <Link key={c.id} to={`/app/mkt-techa/${c.id}`} draggable onDragStart={(e) => e.dataTransfer.setData("text/caseId", c.id)} className={cn("block rounded-[22px] border bg-white p-4 shadow-sm transition hover:shadow-md cursor-grab active:cursor-grabbing", (c.meta_json as any)?.priority ? "border-rose-500 ring-1 ring-rose-500/20" : "border-slate-200")}>
                           <div className="text-sm font-bold text-slate-900 truncate">{c.title}</div>
-                          {(() => {
-                            const eid = (c as any).customer_entity_id || (c.meta_json as any)?.entity_id;
-                            const entityName = eid ? caseEntitiesQ.data?.get(eid) : null;
-                            if (!entityName) return null;
-                            return <div className="mt-1 text-[10px] font-bold text-indigo-600 truncate">{entityName}</div>;
-                          })()}
                         </Link>
                       ))}
                     </div>

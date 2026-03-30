@@ -35,7 +35,6 @@ import { Card } from "@/components/ui/card";
 import {
     AlertCircle,
     ArrowLeft,
-    Building2,
     Check,
     CheckCircle2,
     Clock,
@@ -62,10 +61,7 @@ type CaseRow = {
     created_at: string;
     updated_at: string;
     assigned_user_id: string | null;
-    customer_id: string | null;
-    customer_entity_id: string | null;
     journey_id: string;
-    deliverable_id: string | null;
     summary_text: string | null;
     meta_json: any;
 };
@@ -89,7 +85,7 @@ export default function MktTechaCase() {
             const { data, error } = await supabase
                 .from("cases")
                 .select(
-                    "id,tenant_id,journey_id,case_type,customer_id,customer_entity_id,deliverable_id,title,status,state,created_at,updated_at,assigned_user_id,is_chat,users_profile:users_profile(display_name,email),meta_json"
+                    "id,tenant_id,journey_id,case_type,title,status,state,created_at,updated_at,assigned_user_id,is_chat,users_profile:users_profile(display_name,email),meta_json"
                 )
                 .eq("tenant_id", activeTenantId!)
                 .eq("id", id!)
