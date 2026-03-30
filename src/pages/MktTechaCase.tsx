@@ -867,7 +867,7 @@ export default function MktTechaCase() {
                                                                                         <Select value={cr.status} onValueChange={(v) => updateCreative(cr.id, "status", v)}>
                                                                                             <SelectTrigger className="h-10 rounded-2xl text-xs font-black bg-slate-50/50"><SelectValue /></SelectTrigger>
                                                                                             <SelectContent className="rounded-xl">
-                                                                                                {Object.entries(CREATIVE_STATUSES).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
+                                                                                                {CREATIVE_STATUSES.map(s => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}
                                                                                             </SelectContent>
                                                                                         </Select>
                                                                                     </div>
@@ -884,6 +884,54 @@ export default function MktTechaCase() {
                                                                                 </div>
                                                                             </div>
                                                                         ))}
+                                                                    </div>
+                                                                </div>
+                                                            )}
+
+                                                            {st === "ofertas_definidas" && (
+                                                                <div className="space-y-6">
+                                                                    <div className="flex flex-col">
+                                                                        <h4 className="text-sm font-black text-slate-800 tracking-tight leading-none">Definição de Produtos e Preços</h4>
+                                                                        <p className="text-[10px] text-slate-500 font-medium">Anexe a planilha com a listagem de ofertas aprovadas para esta campanha.</p>
+                                                                    </div>
+
+                                                                    <div className="p-4 rounded-3xl border border-slate-100 bg-slate-50/30 space-y-4">
+                                                                        <div className="flex items-center justify-between">
+                                                                            <div className="flex items-center gap-2">
+                                                                                <div className="h-8 w-8 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600">
+                                                                                    <FileText className="h-4 w-4" />
+                                                                                </div>
+                                                                                <span className="text-[11px] font-bold text-slate-700">Planilha de Produtos / Ofertas</span>
+                                                                            </div>
+                                                                            <label className="cursor-pointer">
+                                                                                <input 
+                                                                                    type="file" 
+                                                                                    className="hidden" 
+                                                                                    accept=".xlsx,.xls,.csv"
+                                                                                    onChange={(e) => e.target.files?.[0] && handleFileUpload("ofertas_definidas", "produtos", e.target.files[0])} 
+                                                                                />
+                                                                                <div className="h-9 px-4 rounded-xl bg-white border border-slate-200 flex items-center justify-center text-[10px] font-black text-indigo-600 shadow-sm hover:bg-slate-50 transition-all gap-2">
+                                                                                    <Upload className="h-3.5 w-3.5" /> SUBIR PLANILHA
+                                                                                </div>
+                                                                            </label>
+                                                                        </div>
+                                                                        
+                                                                        <div className="space-y-2">
+                                                                            {(meta.stage_data?.ofertas_definidas?.evidences?.produtos || []).map((f: any, i: number) => (
+                                                                                <a key={i} href={f.url} target="_blank" className="flex items-center justify-between p-3 rounded-2xl bg-white border border-slate-100 text-[10px] font-bold text-slate-600 hover:text-indigo-600 hover:border-indigo-100 transition-all group">
+                                                                                    <div className="flex items-center gap-2 truncate">
+                                                                                        <Paperclip className="h-3.5 w-3.5 text-slate-400 group-hover:text-indigo-400" /> 
+                                                                                        {f.name}
+                                                                                    </div>
+                                                                                    <ExternalLink className="h-3 w-3 opacity-0 group-hover:opacity-100" />
+                                                                                </a>
+                                                                            ))}
+                                                                            {!(meta.stage_data?.ofertas_definidas?.evidences?.produtos?.length) && (
+                                                                                <div className="py-4 flex flex-col items-center justify-center border-2 border-dashed border-slate-100 rounded-2xl bg-white/50">
+                                                                                    <p className="text-[10px] text-slate-400 font-medium">Nenhuma planilha anexada.</p>
+                                                                                </div>
+                                                                            )}
+                                                                        </div>
                                                                     </div>
                                                                 </div>
                                                             )}
