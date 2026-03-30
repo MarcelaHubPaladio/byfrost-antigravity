@@ -23,6 +23,7 @@ import {
   KanbanSquare,
   PackageCheck,
   AlertCircle,
+  RefreshCw,
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import {
@@ -97,6 +98,14 @@ export default function CommitmentDetail() {
   const [targetCaseType, setTargetCaseType] = useState<string>("order");
   const [targetPriority, setTargetPriority] = useState(false);
   const qc = useQueryClient();
+
+  const refreshAll = () => {
+    qc.invalidateQueries({ queryKey: ["commitment", activeTenantId, commitmentId] });
+    qc.invalidateQueries({ queryKey: ["commitment_items", activeTenantId, commitmentId] });
+    qc.invalidateQueries({ queryKey: ["commitment_deliverables", activeTenantId, commitmentId] });
+    qc.invalidateQueries({ queryKey: ["commitment_cases", activeTenantId] });
+    showSuccess("Dados atualizados 🔄");
+  };
 
   const commitmentQ = useQuery({
     queryKey: ["commitment", activeTenantId, commitmentId],
@@ -389,6 +398,14 @@ export default function CommitmentDetail() {
                 </div>
               </div>
               <div className="flex items-center gap-2">
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  className="rounded-xl border-slate-200 text-slate-600 hover:bg-slate-50"
+                  onClick={refreshAll}
+                >
+                  <RefreshCw className="h-4 w-4 mr-2" /> Atualizar
+                </Button>
                 <Button variant="outline" size="sm" className="rounded-xl border-rose-200 text-rose-600 hover:bg-rose-50" onClick={deleteCommitment} disabled={saving}>
                   Excluir
                 </Button>
