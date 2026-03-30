@@ -108,10 +108,18 @@ type CaseRow = {
     customer_entity_id: string | null;
     journey_id: string;
     deliverable_id: string | null;
+    summary_text: string | null;
     meta_json: any;
 };
 
-function SubtaskItemContent({ st, idx, caseMeta, caseId, onRefetch, caseState, caseData, allDeliverables }: { st: any, idx: number, caseMeta: any, caseId: string, onRefetch: () => void, caseState?: string, caseData?: any, allDeliverables: any[] }) {
+function SubtaskItemContent({ 
+    st, idx, caseMeta, caseId, onRefetch, caseState, caseData, allDeliverables,
+    getBestDeliverableId, handleCreateIndividualTask 
+}: { 
+    st: any, idx: number, caseMeta: any, caseId: string, onRefetch: () => void, caseState?: string, caseData?: any, allDeliverables: any[],
+    getBestDeliverableId: (type: string) => string | null,
+    handleCreateIndividualTask: (st: any, idx: number, deliverableId: string, type: string) => Promise<void>
+}) {
     const { user } = useSession();
     const [title, setTitle] = useState(st.title || "");
     const [type, setType] = useState(st.type || "edicao");
@@ -487,6 +495,150 @@ function SubtaskItemContent({ st, idx, caseMeta, caseId, onRefetch, caseState, c
                     )}
                     {saving ? "Salvando..." : (lastSaved ? "Salvo" : "Salvar Alterações")}
                 </Button>
+
+                {!st.linked_case_id && (
+                    <Button 
+                        size="sm"
+                        variant="secondary"
+                        className="h-9 rounded-xl px-6 font-bold text-xs gap-2 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-100"
+                        onClick={async () => {
+                            await handleSave();
+                            const bestId = getBestDeliverableId(type || "edicao");
+                            if (bestId) {
+                                handleCreateIndividualTask({ ...st, title, type, post_date: postDate, priority, description, script_raw: scriptRaw, script_items: scriptItems }, idx, bestId, type);
+                            }
+                        }}
+                    >
+                        <Rocket className="h-4 w-4" />
+                        Salvar e Criar Card 🚀
+                    </Button>
+                )}
+            </div>
+        </div>
+    );
+}
+
+function VideoDeliverySection({ 
+    videoUrl, setVideoUrl, importantLinks, setImportantLinks, isVideo 
+}: { 
+    videoUrl: string, 
+    setVideoUrl: (v: string) => void, 
+    importantLinks: any[], 
+    setImportantLinks: (v: any[]) => void,
+    isVideo: boolean
+}) {
+    const getDriveEmbedUrl = (url: string) => {
+        if (!url) return null;
+        const match = url.match(/\/d\/([a-zA-Z0-9_-]+)/);
+        if (match && match[1]) {
+            return `https://drive.google.com/file/d/${match[1]}/preview`;
+        }
+        return null;
+    };
+
+    const embedUrl = getDriveEmbedUrl(videoUrl);
+
+    return (
+        <div className="space-y-6 mt-8 p-6 rounded-[32px] border border-slate-200 bg-white shadow-sm animate-in fade-in slide-in-from-top-4 duration-500">
+            <div className="flex items-center justify-between">
+                <h3 className="text-sm font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                    <Rocket className="h-4 w-4" /> Entrega & Links
+                </h3>
+            </div>
+
+            <div className="grid gap-6 lg:grid-cols-2">
+                <div className="space-y-4">
+                    <div className="space-y-2">
+                        <Label className="text-[10px] font-bold text-slate-500 uppercase px-1">Link do Vídeo Final (Drive)</Label>
+                        <div className="flex gap-2">
+                            <input 
+                                value={videoUrl}
+                                onChange={(e) => setVideoUrl(e.target.value)}
+                                placeholder="https://drive.google.com/..."
+                                className="flex-1 h-10 rounded-xl border border-slate-200 px-3 text-xs focus:ring-2 focus:ring-indigo-500 outline-none"
+                            />
+                        </div>
+                    </div>
+
+                    <div className="space-y-2">
+                        <div className="flex items-center justify-between px-1">
+                            <Label className="text-[10px] font-bold text-slate-500 uppercase">Links Importantes</Label>
+                            <Button 
+                                variant="ghost" 
+                                size="sm" 
+                                className="h-6 text-[10px] font-bold text-indigo-600 hover:bg-indigo-50 rounded-lg"
+                                onClick={() => setImportantLinks([...importantLinks, { title: "Novo Link", url: "" }])}
+                            >
+                                <Plus className="h-3 w-3 mr-1" /> Adicionar
+                            </Button>
+                        </div>
+                        <div className="space-y-2">
+                            {importantLinks.map((link, idx) => (
+                                <div key={idx} className="flex gap-2 group">
+                                    <input 
+                                        value={link.title}
+                                        onChange={(e) => {
+                                            const next = [...importantLinks];
+                                            next[idx].title = e.target.value;
+                                            setImportantLinks(next);
+                                        }}
+                                        placeholder="Título"
+                                        className="w-1/3 h-9 rounded-xl border border-slate-200 px-3 text-[10px] focus:ring-1 focus:ring-indigo-500 outline-none"
+                                    />
+                                    <input 
+                                        value={link.url}
+                                        onChange={(e) => {
+                                            const next = [...importantLinks];
+                                            next[idx].url = e.target.value;
+                                            setImportantLinks(next);
+                                        }}
+                                        placeholder="URL"
+                                        className="flex-1 h-9 rounded-xl border border-slate-200 px-3 text-[10px] focus:ring-1 focus:ring-indigo-500 outline-none"
+                                    />
+                                    <Button 
+                                        variant="ghost" 
+                                        size="sm" 
+                                        className="h-9 w-9 text-slate-300 hover:text-rose-600 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity"
+                                        onClick={() => setImportantLinks(importantLinks.filter((_, i) => i !== idx))}
+                                    >
+                                        <Trash2 className="h-4 w-4" />
+                                    </Button>
+                                </div>
+                            ))}
+                            {importantLinks.length === 0 && (
+                                <p className="text-[10px] text-slate-400 italic px-1 pt-1 underline decoration-indigo-200 decoration-2">Nenhum link adicionado.</p>
+                            )}
+                        </div>
+                    </div>
+                </div>
+
+                <div className="space-y-2">
+                    <Label className="text-[10px] font-bold text-slate-500 uppercase px-1">Visualização do Vídeo</Label>
+                    <div className="aspect-video rounded-2xl border-2 border-dashed border-slate-100 bg-slate-50 overflow-hidden flex items-center justify-center relative group">
+                        {embedUrl ? (
+                            <iframe 
+                                src={embedUrl}
+                                className="w-full h-full border-none"
+                                allow="autoplay"
+                            />
+                        ) : (
+                            <div className="text-center p-6">
+                                <Rocket className="mx-auto h-10 w-10 text-slate-200 mb-3" />
+                                <p className="text-xs text-slate-400 font-medium max-w-[200px]">Insira um link do Google Drive para habilitar o player.</p>
+                            </div>
+                        )}
+                        {embedUrl && (
+                            <a 
+                                href={videoUrl} 
+                                target="_blank" 
+                                rel="noreferrer"
+                                className="absolute top-2 right-2 h-8 w-8 rounded-lg bg-black/50 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/70"
+                            >
+                                <ExternalLink className="h-4 w-4" />
+                            </a>
+                        )}
+                    </div>
+                </div>
             </div>
         </div>
     );
@@ -501,12 +653,6 @@ export default function OperacaoM30Case() {
     const [creatingTasks, setCreatingTasks] = useState(false);
     const [saving, setSaving] = useState(false);
     const [deleting, setDeleting] = useState(false);
-
-    const [transitionBlock, setTransitionBlock] = useState<{
-        open: boolean;
-        nextStateName: string;
-        reasons: TransitionBlockReason[];
-    }>({ open: false, nextStateName: "", reasons: [] });
 
     const caseQ = useQuery({
         queryKey: ["case", activeTenantId, id],
@@ -525,6 +671,29 @@ export default function OperacaoM30Case() {
             return data as any as CaseRow;
         },
     });
+
+    const [videoUrl, setVideoUrl] = useState("");
+    const [importantLinks, setImportantLinks] = useState<{ title: string; url: string }[]>([]);
+    const [mainTitle, setMainTitle] = useState("");
+    const [mainSummary, setMainSummary] = useState("");
+    const [mainScript, setMainScript] = useState("");
+
+    useEffect(() => {
+        if (caseQ.data) {
+            const meta = caseQ.data.meta_json as any;
+            setVideoUrl(meta.video_url || "");
+            setImportantLinks(meta.important_links || []);
+            setMainTitle(caseQ.data.title || "");
+            setMainSummary(caseQ.data.summary_text || "");
+            setMainScript(meta.script_raw || "");
+        }
+    }, [caseQ.data]);
+
+    const [transitionBlock, setTransitionBlock] = useState<{
+        open: boolean;
+        nextStateName: string;
+        reasons: TransitionBlockReason[];
+    }>({ open: false, nextStateName: "", reasons: [] });
 
     const deliverableQ = useQuery({
         queryKey: ["case_deliverable", activeTenantId, caseQ.data?.deliverable_id],
@@ -817,9 +986,12 @@ export default function OperacaoM30Case() {
     const handleCreateIndividualTask = async (st: any, idx: number, deliverableId: string, type: string) => {
         if (!activeTenantId || !id || !caseQ.data) return;
         if (!deliverableId) {
-            showError("Falha técnica: entregável não identificado. A tarefa não pode ser vinculada ao contrato.");
+            showError("Falha técnica: entregável não identificado.");
             return;
         }
+        
+        console.log(`[M30] ROCKET: Creating task for ${st.title} (type: ${type}) with script head: ${st.script_raw?.substring(0, 30)}`);
+        
         setCreatingIndividualId(idx);
         try {
             const { data: newCase, error: insertError } = await supabase.from("cases").insert({
@@ -827,17 +999,17 @@ export default function OperacaoM30Case() {
                 journey_id: caseQ.data.journey_id,
                 case_type: type || st.type || 'edicao', 
                 title: st.title,
-                summary_text: st.description || null,
+                summary_text: st.description || st.summary_text || null, // MAP BRIEFING
                 customer_entity_id: caseQ.data.customer_entity_id,
-                deliverable_id: deliverableId || st.deliverable_id || caseQ.data.deliverable_id,
+                deliverable_id: deliverableId,
                 state: "decupagem__upload",
                 meta_json: {
                     parent_case_id: id,
                     customer_entity_name: (caseQ.data.meta_json as any)?.customer_entity_name,
-                    commitment_id: (caseQ.data.meta_json as any)?.commitment_id,
-                    post_date: st.post_date || null,
+                    commitment_id: (caseQ.data.meta_json as any)?.commitment_id || deliverableQ.data?.commitment_id,
+                    post_date: st.post_date || null, // MAP DATE
                     priority: st.priority || false,
-                    script_raw: st.script_raw || null,
+                    script_raw: st.script_raw || null, // MAP SCRIPT
                     script_items: st.script_items || null,
                 }
             }).select("id").single();
@@ -933,14 +1105,16 @@ export default function OperacaoM30Case() {
         }
 
         setCreatingTasks(true);
+        const parentCommitmentId = (caseQ.data.meta_json as any)?.commitment_id || deliverableQ.data?.commitment_id;
+
         try {
             for (const st of subtasks) {
                 await supabase.from("cases").insert({
                     tenant_id: activeTenantId,
                     journey_id: caseQ.data.journey_id,
-                    case_type: st.type, 
+                    case_type: st.type || 'edicao', 
                     title: st.title,
-                    summary_text: st.description || null,
+                    summary_text: st.description || null, 
                     customer_entity_id: caseQ.data.customer_entity_id,
                     deliverable_id: st.deliverable_id || caseQ.data.deliverable_id,
                     status: "open",
@@ -948,7 +1122,7 @@ export default function OperacaoM30Case() {
                     meta_json: {
                         parent_case_id: id,
                         customer_entity_name: (caseQ.data.meta_json as any)?.customer_entity_name,
-                        commitment_id: (caseQ.data.meta_json as any)?.commitment_id,
+                        commitment_id: parentCommitmentId,
                         post_date: st.post_date || null,
                         priority: st.priority || false,
                         script_raw: st.script_raw || null,
@@ -987,6 +1161,33 @@ export default function OperacaoM30Case() {
             caseQ.refetch();
         } catch (e: any) {
             showError(`Erro ao atualizar tipo: ${e?.message}`);
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const handleSaveMainCard = async () => {
+        if (!activeTenantId || !id || !caseQ.data) return;
+        setSaving(true);
+        try {
+            const { error } = await supabase
+                .from("cases")
+                .update({ 
+                    title: mainTitle, 
+                    summary_text: mainSummary,
+                    meta_json: {
+                        ...(caseQ.data.meta_json as any),
+                        video_url: videoUrl,
+                        important_links: importantLinks,
+                        script_raw: mainScript
+                    }
+                })
+                .eq("id", id);
+            if (error) throw error;
+            showSuccess("Card atualizado com sucesso.");
+            caseQ.refetch();
+        } catch (e: any) {
+            showError(`Erro ao salvar: ${e?.message}`);
         } finally {
             setSaving(false);
         }
@@ -1191,6 +1392,75 @@ export default function OperacaoM30Case() {
                                     </div>
                                 )}
 
+                                {(caseQ.data?.case_type === 'edicao' || caseQ.data?.case_type === 'artes' || caseQ.data?.case_type === 'video' || caseQ.data?.case_type === 'texto' || caseQ.data?.case_type === 'campanhas') && (
+                                    <div className="space-y-6">
+                                        <div className="flex items-center justify-between">
+                                            <h3 className="text-sm font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                                                <FileText className="h-4 w-4" /> CONTEÚDO DA ENTREGA
+                                            </h3>
+                                            <Button 
+                                                onClick={handleSaveMainCard} 
+                                                disabled={saving}
+                                                className="h-8 rounded-xl bg-slate-900 text-white font-bold text-[10px] gap-2 shadow-lg shadow-slate-100"
+                                            >
+                                                {saving ? <RefreshCw className="h-3 w-3 animate-spin"/> : <Save className="h-3 w-3"/>}
+                                                SALVAR CARD ⚓️
+                                            </Button>
+                                        </div>
+
+                                        <div className="space-y-4">
+                                            <div className="space-y-2">
+                                                <Label className="text-[10px] font-bold text-slate-500 uppercase px-1">Título do Card</Label>
+                                                <input 
+                                                    value={mainTitle}
+                                                    onChange={(e) => setMainTitle(e.target.value)}
+                                                    className="w-full h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-bold focus:ring-2 focus:ring-indigo-500 outline-none shadow-sm"
+                                                />
+                                            </div>
+
+                                            <Tabs defaultValue="briefing" className="w-full">
+                                                <TabsList className="bg-slate-100/50 p-1 rounded-2xl h-12 mb-4 w-full sm:w-auto">
+                                                    <TabsTrigger value="briefing" className="rounded-xl text-xs font-bold data-[state=active]:bg-white data-[state=active]:shadow-sm gap-2 px-6">
+                                                        <FileText className="h-4 w-4" /> Briefing / Pauta
+                                                    </TabsTrigger>
+                                                    <TabsTrigger value="roteiro" className="rounded-xl text-xs font-bold data-[state=active]:bg-white data-[state=active]:shadow-sm gap-2 px-6">
+                                                        <ListChecks className="h-4 w-4" /> Roteiro Completo
+                                                    </TabsTrigger>
+                                                </TabsList>
+                                                
+                                                <TabsContent value="briefing" className="mt-0 focus-visible:ring-0">
+                                                    <div className="space-y-2">
+                                                        <RichTextEditor 
+                                                            value={mainSummary}
+                                                            minHeightClassName="min-h-[200px]"
+                                                            onChange={setMainSummary}
+                                                        />
+                                                    </div>
+                                                </TabsContent>
+
+                                                <TabsContent value="roteiro" className="mt-0 focus-visible:ring-0">
+                                                    <div className="space-y-2">
+                                                        <Textarea 
+                                                            placeholder="O roteiro herdado aparecerá aqui..."
+                                                            className="min-h-[250px] rounded-[24px] border-slate-200 text-sm focus:ring-2 focus:ring-indigo-500 bg-white p-4 leading-relaxed"
+                                                            value={mainScript}
+                                                            onChange={(e) => setMainScript(e.target.value)}
+                                                        />
+                                                    </div>
+                                                </TabsContent>
+                                            </Tabs>
+                                        </div>
+
+                                        <VideoDeliverySection 
+                                            videoUrl={videoUrl} 
+                                            setVideoUrl={setVideoUrl} 
+                                            importantLinks={importantLinks} 
+                                            setImportantLinks={setImportantLinks}
+                                            isVideo={caseQ.data?.case_type === 'edicao' || caseQ.data?.case_type === 'video'}
+                                        />
+                                    </div>
+                                )}
+
                                 {caseQ.data?.case_type === "planejamento" && (
                                     <div className="rounded-[32px] border border-slate-200 bg-slate-50/40 p-6 shadow-inner-sm">
                                         <div className="flex items-center justify-between mb-4">
@@ -1298,6 +1568,8 @@ export default function OperacaoM30Case() {
                                                                 caseState={caseQ.data?.state}
                                                                 caseData={caseQ.data}
                                                                 allDeliverables={allDeliverablesQ.data || []}
+                                                                getBestDeliverableId={getBestDeliverableId}
+                                                                handleCreateIndividualTask={handleCreateIndividualTask}
                                                             />
                                                         </AccordionContent>
                                                     </AccordionItem>
