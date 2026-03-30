@@ -203,6 +203,39 @@ export default function CommitmentDetail() {
     staleTime: 5_000,
   });
 
+  const allTenantCasesQ = useQuery({
+    queryKey: ["all_tenant_cases", activeTenantId],
+    enabled: Boolean(activeTenantId),
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("cases")
+        .select("id, title, state, deliverable_id, created_at, status")
+        .eq("tenant_id", activeTenantId!)
+        .not("deliverable_id", "is", null)
+        .is("deleted_at", null)
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      return (data ?? []) as any[];
+    },
+    staleTime: 5_000,
+  });
+
+  const fixLink = async (caseId: string, deliverableId: string) => {
+    setSaving(true);
+    const { error } = await supabase
+      .from("cases")
+      .update({ deliverable_id: deliverableId })
+      .eq("id", caseId);
+    if (error) {
+      showError("Erro ao corrigir: " + error.message);
+    } else {
+      showSuccess("Vínculo corrigido!");
+      qc.invalidateQueries({ queryKey: ["commitment_cases"] });
+      allTenantCasesQ.refetch();
+    }
+    setSaving(false);
+  };
+
   const eventsQ = useQuery({
     queryKey: ["commitment_events", activeTenantId, commitmentId],
     enabled: Boolean(activeTenantId && commitmentId),
@@ -268,6 +301,12 @@ export default function CommitmentDetail() {
     }
     return Array.from(m.entries()).sort((a, b) => a[0].localeCompare(b[0]));
   }, [deliverablesQ.data, casesQ.data]);
+
+  const orphanCases = useMemo(() => {
+    if (!allTenantCasesQ.data || !deliverablesQ.data) return [];
+    const currentDelIds = new Set(deliverablesQ.data.map(d => d.id));
+    return allTenantCasesQ.data.filter(c => !currentDelIds.has(c.deliverable_id));
+  }, [allTenantCasesQ.data, deliverablesQ.data]);
 
   const updateStatus = async (newStatus: string) => {
     if (!activeTenantId || !commitmentId) return;
@@ -743,6 +782,68 @@ export default function CommitmentDetail() {
                 </pre>
               </DialogContent>
             </Dialog>
+
+            {/* Diagnostic Panel - Orphan Cases */}
+            <Card className="mt-8 rounded-2xl border-amber-200 bg-amber-50/30 p-6">
+              <div className="mb-4 flex items-center justify-between">
+                <div className="flex items-center gap-2 text-sm font-bold text-amber-900">
+                  <AlertCircle className="h-5 w-5 text-amber-600" />
+                  Modo Diagnóstico: Tarefas Órfãs (Toda a Empresa)
+                </div>
+                <Badge variant="outline" className="border-amber-200 text-amber-700 bg-white">
+                  {orphanCases.length} detectadas
+                </Badge>
+              </div>
+              
+              <p className="mb-4 text-xs text-amber-700 leading-relaxed italic">
+                Abaixo estão listadas TODAS as tarefas que possuem um entregável vinculado, mas que **não pertencem a este contrato**. 
+                Se você criou um card e ele não apareceu acima, use o seletor para corrigi-lo.
+              </p>
+
+              <div className="space-y-3">
+                {orphanCases.map(c => (
+                  <div key={c.id} className="flex items-center justify-between rounded-xl border border-amber-100 bg-white p-3 shadow-sm">
+                    <div className="min-w-0">
+                      <div className="truncate text-sm font-bold text-slate-900">{c.title || "Sem título"}</div>
+                      <div className="mt-1 flex items-center gap-3">
+                        <Badge variant="outline" className="text-[10px] uppercase h-4 px-1">{c.state}</Badge>
+                        <span className="text-[9px] font-mono text-slate-400">UUID: {c.deliverable_id?.substring(0, 8)}</span>
+                      </div>
+                    </div>
+                    
+                    <div className="flex items-center gap-2">
+                      <Select disabled={saving} onValueChange={(delId) => fixLink(c.id, delId)}>
+                        <SelectTrigger className="h-8 w-[200px] rounded-xl text-[10px] bg-amber-50/50 border-amber-100">
+                          <SelectValue placeholder="Vincular a este contrato..." />
+                        </SelectTrigger>
+                        <SelectContent className="rounded-xl">
+                          {deliverablesQ.data?.map(d => (
+                            <SelectItem key={d.id} value={d.id} className="text-[10px]">
+                              {d.name} (#{d.id.substring(0, 6)})
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        asChild
+                        className="h-8 w-8 rounded-xl p-0 hover:bg-amber-100 text-amber-600"
+                      >
+                        <Link to={`/app/operacao-m30/${c.id}`} target="_blank">
+                          <ExternalLink className="h-3 w-3" />
+                        </Link>
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+                {orphanCases.length === 0 && (
+                  <div className="rounded-xl border border-dashed border-amber-200 py-6 text-center text-[10px] text-amber-600 italic">
+                    Nenhuma tarefa órfã detectada.
+                  </div>
+                )}
+              </div>
+            </Card>
           </div>
         </AppShell>
       </RequireRouteAccess>
