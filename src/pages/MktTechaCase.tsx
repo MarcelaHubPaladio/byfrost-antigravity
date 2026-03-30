@@ -1108,7 +1108,7 @@ export default function MktTechaCase() {
                                                                         </Badge>
                                                                     </div>
 
-                                                                    <div className="bg-slate-900 rounded-[32px] p-6 shadow-2xl shadow-slate-900/10 overflow-hidden border border-white/5">
+                                                                    <div className="bg-slate-900 rounded-[32px] p-6 shadow-2xl shadow-slate-900/10 overflow-hidden border border-white/5 max-w-full">
                                                                         <div className="flex items-center gap-3 mb-6 px-2">
                                                                             <div className="h-8 w-8 rounded-xl bg-indigo-500/20 flex items-center justify-center text-indigo-400">
                                                                                 <Calendar className="h-4 w-4" />
