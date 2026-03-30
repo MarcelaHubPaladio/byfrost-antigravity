@@ -1159,10 +1159,22 @@ export default function MktTechaCase() {
                                                                             <span className="text-[10px] font-black uppercase text-slate-400 tracking-[0.2em]">Linha do Tempo de Veiculação</span>
                                                                         </div>
 
-                                                                        <div className="relative overflow-x-auto pb-4 no-scrollbar cursor-grab active:cursor-grabbing scroll-smooth border border-white/5 rounded-3xl bg-slate-950/50">
+                                                                        <div className="relative overflow-x-auto overflow-y-hidden pb-4 scroll-smooth border border-white/5 rounded-3xl bg-slate-950/50">
                                                                             {(() => {
-                                                                                const campaignStart = meta.stage_data?.cadastro_big2be?.inicio ? parseISO(meta.stage_data.cadastro_big2be.inicio) : startOfDay(new Date());
-                                                                                const campaignEnd = meta.stage_data?.cadastro_big2be?.fim ? parseISO(meta.stage_data.cadastro_big2be.fim) : addDays(campaignStart, 21);
+                                                                                let d1 = meta.stage_data?.planejamento?.start_date ? parseISO(meta.stage_data.planejamento.start_date) : startOfDay(new Date());
+                                                                                let d2 = meta.stage_data?.planejamento?.end_date ? parseISO(meta.stage_data.planejamento.end_date) : addDays(d1, 21);
+                                                                                
+                                                                                if (!isNaN(d1.getTime()) && !isNaN(d2.getTime()) && d1.getTime() > d2.getTime()) {
+                                                                                    const temp = d1;
+                                                                                    d1 = d2;
+                                                                                    d2 = temp;
+                                                                                } else if (isNaN(d1.getTime()) || isNaN(d2.getTime())) {
+                                                                                    d1 = startOfDay(new Date());
+                                                                                    d2 = addDays(d1, 21);
+                                                                                }
+
+                                                                                const campaignStart = d1;
+                                                                                const campaignEnd = d2;
                                                                                 const days = eachDayOfInterval({ start: campaignStart, end: campaignEnd });
                                                                                 const totalWidth = 150 + (days.length * 40);
 
@@ -1172,7 +1184,7 @@ export default function MktTechaCase() {
                                                                                         <div className="flex border-b border-white/5 pb-4 ml-[150px]">
                                                                                             {days.map((day, i) => (
                                                                                                 <div key={i} className="w-10 min-w-[40px] flex-shrink-0 flex flex-col items-center gap-1.5">
-                                                                                                    <span className="text-[8px] font-bold text-slate-600 uppercase tracking-tighter">{format(day, 'EEE', { locale: ptBR })}</span>
+                                                                                                    <span className="text-[8px] font-bold text-slate-600 uppercase tracking-tighter">{format(day, 'EEEEEE', { locale: ptBR })}</span>
                                                                                                     <span className={cn(
                                                                                                         "text-[10px] font-black w-7 h-7 flex items-center justify-center rounded-xl transition-all", 
                                                                                                         isWithinInterval(new Date(), { start: startOfDay(day), end: endOfDay(day) }) 
@@ -1188,7 +1200,6 @@ export default function MktTechaCase() {
                                                                                         {/* Timeline Rows */}
                                                                                         <div className="space-y-6">
                                                                                             {(meta.creatives || []).filter((cr: MktTechaCreative) => cr.status === 'approved').map((cr: MktTechaCreative) => {
-                                                                                                const campaignStart = meta.stage_data?.cadastro_big2be?.inicio ? parseISO(meta.stage_data.cadastro_big2be.inicio) : startOfDay(new Date());
                                                                                                 const start = cr.publish_start_date ? parseISO(cr.publish_start_date) : null;
                                                                                                 const end = cr.publish_end_date ? parseISO(cr.publish_end_date) : null;
                                                                                                 
