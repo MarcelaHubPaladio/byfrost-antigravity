@@ -236,6 +236,12 @@ export default function CommitmentDetail() {
   });
 
   const fixLink = async (caseId: string, deliverableId: string) => {
+    // Check if slot is already occupied
+    const existing = (allTenantCasesQ.data || []).find(c => c.deliverable_id === deliverableId && c.id !== caseId);
+    if (existing && !window.confirm(`Este entregável já possui a tarefa "${existing.title}". Deseja vincular assim mesmo e ter DUAS tarefas no mesmo slot?`)) {
+      return;
+    }
+
     setSaving(true);
     const { error } = await supabase
       .from("cases")
@@ -316,7 +322,12 @@ export default function CommitmentDetail() {
       if (!m.has(k)) m.set(k, []);
       m.get(k)!.push(d);
     }
-    return Array.from(m.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+    const res = Array.from(m.entries()).map(([name, delivs]) => {
+      const total = delivs.length;
+      const started = delivs.filter(d => d.cases.length > 0).length;
+      return [name, delivs, { started, total }] as [string, any[], any];
+    }).sort((a, b) => a[0].localeCompare(b[0]));
+    return res;
   }, [deliverablesQ.data, allTenantCasesQ.data]);
 
   const orphanCases = useMemo(() => {
@@ -604,7 +615,11 @@ export default function CommitmentDetail() {
                                       "text-xs font-black",
                                       isFullyDone ? "text-emerald-600" : "text-slate-600"
                                     )}>
-                                      {completed}/{total}
+                                      {(() => {
+                                        const countTotal = group.length;
+                                        const started = group.filter(d => (d.cases || []).length > 0).length;
+                                        return <span>{started}/{countTotal}</span>;
+                                      })()}
                                     </p>
                                     <div className="mt-1 h-1 w-16 overflow-hidden rounded-full bg-slate-100">
                                       <div 

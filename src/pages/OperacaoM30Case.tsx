@@ -571,13 +571,20 @@ export default function OperacaoM30Case() {
 
             const { data, error } = await supabase
                 .from("cases")
-                .select("deliverable_id")
+                .select("id, title, status, deliverable_id")
                 .eq("tenant_id", activeTenantId!)
                 .in("deliverable_id", allDelIds)
                 .is("deleted_at", null)
                 .not("deliverable_id", "is", null);
             
             if (error) throw error;
+            if (data.length > 0) {
+                console.table(data.map(c => ({ 
+                    Card: c.title, 
+                    Status: c.status, 
+                    Deliverable: c.deliverable_id.slice(0,8) 
+                })));
+            }
             return data.map(c => c.deliverable_id);
         }
     });
