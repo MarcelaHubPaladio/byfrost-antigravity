@@ -13,6 +13,13 @@ export type MktTechaCreative = {
   due_at: string | null;
   status: "draft" | "production" | "review" | "adjustment" | "approved";
   files: { name: string; url: string }[];
+  briefing?: string;
+  script?: string;
+  references?: string;
+  text_content?: string;
+  review_link?: string;
+  review_files?: { name: string; url: string }[];
+  final_files?: { name: string; url: string }[];
   version: number;
   subtasks: StageSubtask[];
 };

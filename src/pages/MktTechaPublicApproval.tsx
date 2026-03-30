@@ -21,8 +21,10 @@ import {
     Check,
     Download,
     ExternalLink,
+    ArrowRight,
     Hash,
     Lock,
+    Paperclip,
     MessageCircle as LucideMessageCircle
 } from "lucide-react";
 import { showSuccess, showError } from "@/utils/toast";
@@ -484,46 +486,100 @@ export default function MktTechaPublicApproval() {
                                     </div>
                                 </div>
 
-                                <div className="p-6 space-y-6">
-                                    <div className="space-y-1">
-                                        <h3 className="text-base font-black text-white">{cr.type.toUpperCase()} - {cr.format}</h3>
-                                        <p className="text-[10px] font-bold text-slate-500 uppercase tracking-tighter">Versão {cr.version || 1.0}</p>
-                                    </div>
-
-                                    <div className="space-y-3 pt-4 border-t border-white/5">
-                                        <div className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-2">Checklist de Produção</div>
-                                        <div className="grid gap-2">
-                                            {cr.subtasks?.map((st: any) => (
-                                                <div key={st.id} className="flex items-center gap-2">
-                                                    <div className={cn(
-                                                        "h-4 w-4 rounded-full flex items-center justify-center shrink-0 border",
-                                                        st.done ? "bg-emerald-500/20 border-emerald-500/50 text-emerald-500" : "border-slate-700 bg-slate-800"
-                                                    )}>
-                                                        {st.done && <CheckCircle2 className="h-2.5 w-2.5" />}
-                                                    </div>
-                                                    <span className={cn("text-[11px] font-medium transition-colors", st.done ? "text-emerald-400/70" : "text-slate-400")}>
-                                                        {st.label}
-                                                    </span>
-                                                </div>
-                                            ))}
+                                <div className="p-8 space-y-8">
+                                    <div className="flex items-center justify-between">
+                                        <div className="space-y-1">
+                                            <h3 className="text-lg font-black text-white leading-tight">{cr.type.toUpperCase()}</h3>
+                                            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">{cr.format || "Formato não definido"}</p>
+                                        </div>
+                                        <div className="text-right">
+                                            <Badge className="bg-slate-800 text-slate-400 border-none text-[8px] font-black uppercase">v.{cr.version || 1.0}</Badge>
                                         </div>
                                     </div>
 
-                                    {!cr.status || cr.status !== 'approved' ? (
-                                        <Button 
-                                            onClick={() => handleApprove(cr.id)}
-                                            disabled={acting === cr.id}
-                                            className="w-full h-14 rounded-2xl bg-emerald-500 hover:bg-emerald-600 text-white font-black text-xs shadow-xl shadow-emerald-500/20 transition-all active:scale-95 gap-3 mt-4"
-                                        >
-                                            {acting === cr.id ? <Loader2 className="h-5 w-5 animate-spin" /> : <CheckCircle2 className="h-5 w-5" />}
-                                            APROVAR CRIATIVO ✅
-                                        </Button>
-                                    ) : (
-                                        <div className="w-full h-14 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center gap-3 mt-4">
-                                            <CheckCircle2 className="h-5 w-5 text-emerald-500" />
-                                            <span className="text-[10px] font-black text-emerald-500 uppercase">PEÇA APROVADA</span>
+                                    {cr.briefing && (
+                                        <div className="space-y-2">
+                                            <div className="flex items-center gap-2 text-slate-500">
+                                                <LucideMessageCircle className="h-3 w-3" />
+                                                <span className="text-[9px] font-black uppercase tracking-widest">Briefing Criativo</span>
+                                            </div>
+                                            <p className="text-xs text-slate-400 leading-relaxed italic border-l-2 border-slate-800 pl-4 py-1">
+                                                {cr.briefing}
+                                            </p>
                                         </div>
                                     )}
+
+                                    {(cr.script || cr.references || cr.text_content) && (
+                                        <div className="space-y-4 pt-4 border-t border-white/5">
+                                            <div className="text-[9px] font-black text-indigo-400 uppercase tracking-[0.2em] mb-3">Conteúdo da Peça</div>
+                                            <div className="text-[11px] text-slate-300 leading-relaxed prose prose-invert max-w-none prose-sm prose-p:my-1" 
+                                                dangerouslySetInnerHTML={{ __html: cr.script || cr.references || cr.text_content || "" }} 
+                                            />
+                                        </div>
+                                    )}
+
+                                    {/* Review Materials */}
+                                    {(cr.review_link || (cr.review_files && cr.review_files.length > 0)) && (
+                                        <div className="space-y-4 pt-4 border-t border-white/5">
+                                            <div className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Material para Revisão</div>
+                                            <div className="grid gap-2">
+                                                {cr.review_link && (
+                                                    <a href={cr.review_link} target="_blank" className="flex items-center justify-between p-3 bg-indigo-500/10 border border-indigo-500/20 rounded-2xl group hover:bg-indigo-500/20 transition-all">
+                                                        <div className="flex items-center gap-3">
+                                                            <ExternalLink className="h-4 w-4 text-indigo-400" />
+                                                            <span className="text-[11px] font-bold text-indigo-100">Ver no Link Externo</span>
+                                                        </div>
+                                                        <ArrowRight className="h-3.5 w-3.5 text-indigo-400 opacity-0 group-hover:opacity-100 transition-all" />
+                                                    </a>
+                                                )}
+                                                {(cr.review_files || []).map((f: any, i: number) => (
+                                                    <a key={i} href={f.url} target="_blank" className="flex items-center justify-between p-3 bg-slate-800/50 border border-white/5 rounded-2xl group hover:bg-slate-800 transition-all">
+                                                        <div className="flex items-center gap-3">
+                                                            <Paperclip className="h-4 w-4 text-slate-500" />
+                                                            <span className="text-[11px] font-medium text-slate-300 truncate">{f.name}</span>
+                                                        </div>
+                                                        <Download className="h-3.5 w-3.5 text-indigo-400 opacity-0 group-hover:opacity-100 transition-all" />
+                                                    </a>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Final Materials (Social Proof/Finished Asset) - Only if approved and has files */}
+                                    {cr.status === 'approved' && cr.final_files && cr.final_files.length > 0 && (
+                                        <div className="space-y-4 pt-4 border-t border-emerald-500/10">
+                                            <div className="text-[9px] font-black text-emerald-500 uppercase tracking-widest">Material Finalizado</div>
+                                            <div className="grid gap-2">
+                                                {cr.final_files.map((f: any, i: number) => (
+                                                    <a key={i} href={f.url} target="_blank" className="flex items-center justify-between p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl group hover:bg-emerald-500/20 transition-all">
+                                                        <div className="flex items-center gap-3 text-emerald-400">
+                                                            <CheckCircle2 className="h-4 w-4" />
+                                                            <span className="text-[11px] font-black">{f.name}</span>
+                                                        </div>
+                                                        <Download className="h-4 w-4" />
+                                                    </a>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    <div className="space-y-3 pt-6">
+                                        {!cr.status || cr.status !== 'approved' ? (
+                                            <Button 
+                                                onClick={() => handleApprove(cr.id)}
+                                                disabled={acting === cr.id}
+                                                className="w-full h-14 rounded-2xl bg-emerald-500 hover:bg-emerald-600 text-white font-black text-xs shadow-xl shadow-emerald-500/20 transition-all active:scale-95 gap-3 mt-4"
+                                            >
+                                                {acting === cr.id ? <Loader2 className="h-5 w-5 animate-spin" /> : <CheckCircle2 className="h-5 w-5" />}
+                                                APROVAR CRIATIVO ✅
+                                            </Button>
+                                        ) : (
+                                            <div className="w-full h-14 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center gap-3 mt-4">
+                                                <CheckCircle2 className="h-5 w-5 text-emerald-500" />
+                                                <span className="text-[10px] font-black text-emerald-500 uppercase">PEÇA APROVADA</span>
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
                             </Card>
                         ))}
