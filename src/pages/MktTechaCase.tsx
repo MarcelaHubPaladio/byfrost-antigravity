@@ -549,10 +549,13 @@ export default function MktTechaCase() {
                                             </SelectContent>
                                         </Select>
 
-                                        {c.share_token && meta.share_access_code && (
-                                            <div className="flex items-center gap-1.5 px-3 h-10 rounded-2xl bg-slate-900 border border-slate-800 shadow-sm ml-2">
+                                        {meta.share_access_code && (
+                                            <div className="flex items-center gap-2 px-3 h-10 rounded-2xl bg-slate-900 border border-slate-800 shadow-sm ml-2">
+                                                <div className="flex flex-col -space-y-1">
+                                                    <span className="text-[8px] font-black text-amber-500/50 uppercase tracking-widest">Acesso PIN</span>
+                                                    <span className="text-xs font-black text-white tracking-widest leading-none">{meta.share_access_code}</span>
+                                                </div>
                                                 <Lock className="h-3.5 w-3.5 text-amber-500" />
-                                                <span className="text-[10px] font-black text-white tracking-widest">{meta.share_access_code}</span>
                                             </div>
                                         )}
                                     </div>

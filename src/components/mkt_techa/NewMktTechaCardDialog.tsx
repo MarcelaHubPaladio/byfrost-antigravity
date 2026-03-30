@@ -115,7 +115,7 @@ export function NewMktTechaCardDialog(props: { tenantId: string; journeyId: stri
         created_by_channel: "panel",
         title: t,
         summary_text: normalizeRichTextHtmlOrNull(descriptionHtml),
-        state: "BACKLOG",
+        state: "ideias",
         assigned_user_id,
         meta_json: {
           due_at: dueAtIso,
