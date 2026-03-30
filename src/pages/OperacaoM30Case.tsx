@@ -603,6 +603,28 @@ export default function OperacaoM30Case() {
         }).sort((a, b) => b.remaining - a.remaining);
     }, [allDeliverablesQ.data, usedDeliverablesQ.data]);
 
+    const getBestDeliverableId = (type: string) => {
+        if (!availableDeliverableGroups.length) return null;
+        
+        // Mapeamento de prioridade
+        const mapping: Record<string, string[]> = {
+            'edicao': ['Vídeos Promocionais', 'Vídeo', 'Edição'],
+            'whatsapp_copy': ['Planejamento de Vídeos', 'Texto', 'Copy'],
+            'roteiro': ['Planejamento de Vídeos', 'Roteiro'],
+            'artes': ['Artes / Criativo', 'Artes'],
+            'campanhas': ['Gestão de Tráfego Pago', 'Campanhas'],
+        };
+        
+        const possibleGroupNames = mapping[type] || [];
+        for (const name of possibleGroupNames) {
+            const g = availableDeliverableGroups.find(x => x.name.toLowerCase().includes(name.toLowerCase()) && x.remaining > 0);
+            if (g) return g.nextId;
+        }
+        
+        // Fallback: primeiro com saldo
+        return availableDeliverableGroups.find(g => g.remaining > 0)?.nextId || null;
+    };
+
     const journeyQ = useQuery({
         queryKey: ["case_journey", activeTenantId, caseQ.data?.journey_id],
         enabled: Boolean(activeTenantId && caseQ.data?.journey_id),
@@ -1164,7 +1186,8 @@ export default function OperacaoM30Case() {
                                                                         disabled={creatingIndividualId === idx}
                                                                         onClick={(e) => {
                                                                             e.stopPropagation();
-                                                                            setTaskToCreate({ st, idx });
+                                                                            const bestId = getBestDeliverableId(st.type || "edicao");
+                                                                            setTaskToCreate({ st: { ...st, deliverable_id: bestId }, idx });
                                                                         }}
                                                                         title="Criar card de produção individual"
                                                                     >
