@@ -75,82 +75,9 @@ function SubtaskItemContent({ st, idx, caseMeta, caseId, onRefetch, caseState, c
     const [scriptItems, setScriptItems] = useState<any[]>(st.script_items || []);
     
     const [saving, setSaving] = useState(false);
-    const [creatingCard, setCreatingCard] = useState(false);
     const [lastSaved, setLastSaved] = useState<Date | null>(null);
 
     // Sincronizar estado local quando a prop 'st' mudar (ex: após refetch do pai)
-    useEffect(() => {
-        setTitle(st.title || "");
-        setType(st.type || "edicao");
-        setPostDate(st.post_date || "");
-        setPriority(st.priority || false);
-        setDescription(st.description || "");
-        setScriptRaw(st.script_raw || "");
-        setScriptItems(st.script_items || []);
-    }, [st]);
-
-    const handleCreateProductionCard = async () => {
-        if (!caseId || !caseData) return;
-        setCreatingCard(true);
-        try {
-            const { data: newCase, error: insertError } = await supabase.from("cases").insert({
-                tenant_id: caseData.tenant_id,
-                journey_id: caseData.journey_id,
-                parent_case_id: caseId,
-                case_type: st.type, 
-                title: st.title,
-                summary_text: st.description || null,
-                customer_entity_id: caseData.customer_entity_id,
-                deliverable_id: caseData.deliverable_id,
-                state: "DECUPAGEM_UPLOAD",
-                meta_json: {
-                    customer_entity_name: (caseData.meta_json as any)?.customer_entity_name,
-                    commitment_id: (caseData.meta_json as any)?.commitment_id,
-                    post_date: st.post_date || null,
-                    priority: st.priority || false,
-                    script_raw: st.script_raw || null,
-                    script_items: st.script_items || null,
-                }
-            }).select("id").single();
-
-            if (insertError) throw insertError;
-
-            // Vincular no card pai
-            const currentSubtasks = [...(caseMeta?.pending_subtasks || [])];
-            currentSubtasks[idx] = {
-                ...currentSubtasks[idx],
-                linked_case_id: newCase.id
-            };
-
-            const { error: updateError } = await supabase
-                .from("cases")
-                .update({
-                    meta_json: { ...caseMeta, pending_subtasks: currentSubtasks }
-                })
-                .eq("id", caseId);
-
-            if (updateError) throw updateError;
-            
-            // Log Timeline
-            await supabase.from("timeline_events").insert({
-                tenant_id: caseData.tenant_id,
-                case_id: caseId,
-                event_type: "production_card_created",
-                actor_type: "admin",
-                actor_id: user?.id ?? null,
-                message: `Card de produção criado a partir da subtarefa: ${st.title}`,
-                meta_json: { linked_case_id: newCase.id },
-                occurred_at: new Date().toISOString(),
-            });
-
-            showSuccess("Tarefa de produção criada com sucesso!");
-            onRefetch();
-        } catch (e: any) {
-            showError(`Erro ao criar tarefa: ${e.message}`);
-        } finally {
-            setCreatingCard(false);
-        }
-    };
 
     const handleSave = async () => {
         setSaving(true);
@@ -289,29 +216,6 @@ function SubtaskItemContent({ st, idx, caseMeta, caseId, onRefetch, caseState, c
 
     return (
         <div className="space-y-6">
-            {caseState === 'gravao' && (
-                <div className="bg-orange-50 border border-orange-100 rounded-2xl p-4 flex items-center justify-between gap-4 mb-2">
-                    <div className="flex items-center gap-3">
-                        <div className="h-10 w-10 rounded-xl bg-orange-100 flex items-center justify-center text-orange-600">
-                            <Rocket className="h-5 w-5" />
-                        </div>
-                        <div>
-                            <div className="text-xs font-bold text-orange-900 uppercase tracking-tight">Pronto para Gravação?</div>
-                            <div className="text-[10px] text-orange-700">Inicie a produção individual deste conteúdo.</div>
-                        </div>
-                    </div>
-                    <Button 
-                        size="sm" 
-                        disabled={creatingCard}
-                        onClick={handleCreateProductionCard}
-                        className="h-9 rounded-xl bg-orange-600 hover:bg-orange-700 font-bold gap-2 shadow-lg shadow-orange-200/50"
-                    >
-                        {creatingCard ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Rocket className="h-3.5 w-3.5" />}
-                        {creatingCard ? "Criando..." : "Iniciar Produção"}
-                    </Button>
-                </div>
-            )}
-
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="space-y-1.5">
                     <Label className="text-[10px] font-bold text-slate-500 uppercase">Tipo de Entrega</Label>
@@ -691,6 +595,70 @@ export default function OperacaoM30Case() {
     }, [journeyQ.data, caseQ.data?.state]);
 
     const { transitionState, updating: updatingState } = useJourneyTransition();
+    const [creatingIndividualId, setCreatingIndividualId] = useState<number | null>(null);
+
+    const handleCreateIndividualTask = async (st: any, idx: number) => {
+        if (!activeTenantId || !id || !caseQ.data) return;
+        setCreatingIndividualId(idx);
+        try {
+            const { data: newCase, error: insertError } = await supabase.from("cases").insert({
+                tenant_id: activeTenantId,
+                journey_id: caseQ.data.journey_id,
+                parent_case_id: id,
+                case_type: st.type || 'edicao', 
+                title: st.title,
+                summary_text: st.description || null,
+                customer_entity_id: caseQ.data.customer_entity_id,
+                deliverable_id: caseQ.data.deliverable_id,
+                state: "DECUPAGEM_UPLOAD",
+                meta_json: {
+                    customer_entity_name: (caseQ.data.meta_json as any)?.customer_entity_name,
+                    commitment_id: (caseQ.data.meta_json as any)?.commitment_id,
+                    post_date: st.post_date || null,
+                    priority: st.priority || false,
+                    script_raw: st.script_raw || null,
+                    script_items: st.script_items || null,
+                }
+            }).select("id").single();
+
+            if (insertError) throw insertError;
+
+            // Vincular no card pai
+            const currentSubtasks = [...((caseQ.data.meta_json as any)?.pending_subtasks || [])];
+            currentSubtasks[idx] = {
+                ...currentSubtasks[idx],
+                linked_case_id: newCase.id
+            };
+
+            const { error: updateError } = await supabase
+                .from("cases")
+                .update({
+                    meta_json: { ...(caseQ.data.meta_json as any), pending_subtasks: currentSubtasks }
+                })
+                .eq("id", id);
+
+            if (updateError) throw updateError;
+            
+            // Log Timeline
+            await supabase.from("timeline_events").insert({
+                tenant_id: activeTenantId,
+                case_id: id,
+                event_type: "production_card_created",
+                actor_type: "admin",
+                actor_id: user?.id ?? null,
+                message: `Card de produção criado a partir da subtarefa: ${st.title}`,
+                meta_json: { linked_case_id: newCase.id },
+                occurred_at: new Date().toISOString(),
+            });
+
+            showSuccess("Tarefa de produção criada com sucesso!");
+            caseQ.refetch();
+        } catch (e: any) {
+            showError(`Erro ao criar tarefa: ${e.message}`);
+        } finally {
+            setCreatingIndividualId(null);
+        }
+    };
 
     const updateState = async (next: string) => {
         if (!activeTenantId || !id) return;
@@ -1047,10 +1015,26 @@ export default function OperacaoM30Case() {
                                                                     )}
                                                                 </div>
                                                             </AccordionTrigger>
+                                                            
+                                                            {caseQ.data?.state === 'gravao' && !st.linked_case_id && (
+                                                                <Button 
+                                                                    variant="ghost" 
+                                                                    size="sm" 
+                                                                    disabled={creatingIndividualId === idx}
+                                                                    className="h-8 w-8 rounded-full text-orange-600 hover:text-orange-700 hover:bg-orange-50 ml-1"
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        handleCreateIndividualTask(st, idx);
+                                                                    }}
+                                                                >
+                                                                    {creatingIndividualId === idx ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Rocket className="h-4 w-4" />}
+                                                                </Button>
+                                                            )}
+
                                                             <Button 
                                                                 variant="ghost" 
                                                                 size="sm" 
-                                                                className="h-8 w-8 rounded-full text-slate-400 hover:text-rose-600 hover:bg-rose-50 ml-2"
+                                                                className="h-8 w-8 rounded-full text-slate-400 hover:text-rose-600 hover:bg-rose-50 ml-1"
                                                                 onClick={async (e) => {
                                                                     e.stopPropagation();
                                                                     const current = (caseQ.data?.meta_json as any)?.pending_subtasks || [];
