@@ -295,7 +295,7 @@ export default function MktTecha() {
         .select("role")
         .eq("tenant_id", activeTenantId!)
         .eq("user_id", user!.id)
-        .single();
+        .maybeSingle();
 
       const isAdmin = meProfile?.role === "admin";
 
@@ -553,6 +553,7 @@ export default function MktTecha() {
       }
 
       await transitionState(caseId, currentCase.state, nextState, journeyConfig);
+      casesQ.refetch();
     } catch (e: any) {
     } finally {
       setMovingCaseId(null);

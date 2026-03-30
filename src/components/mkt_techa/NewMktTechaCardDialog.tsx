@@ -63,7 +63,7 @@ export function NewMktTechaCardDialog(props: { tenantId: string; journeyId: stri
         .select("role")
         .eq("tenant_id", props.tenantId)
         .eq("user_id", user!.id)
-        .single();
+        .maybeSingle();
 
       const isAdmin = meProfile?.role === "admin";
 

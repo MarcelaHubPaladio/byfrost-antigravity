@@ -48,6 +48,7 @@ import {
     X,
     ExternalLink,
     MoreHorizontal,
+    Share2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { showError, showSuccess } from "@/utils/toast";
@@ -74,6 +75,7 @@ type CaseRow = {
     journey_id: string;
     summary_text: string | null;
     meta_json: any;
+    share_token: string | null;
 };
 
 export default function MktTechaCase() {
@@ -95,7 +97,7 @@ export default function MktTechaCase() {
             const { data, error } = await supabase
                 .from("cases")
                 .select(
-                    "id,tenant_id,journey_id,case_type,title,status,state,created_at,updated_at,assigned_user_id,is_chat,users_profile:users_profile(display_name,email),meta_json"
+                    "id,tenant_id,journey_id,case_type,title,status,state,created_at,updated_at,assigned_user_id,is_chat,share_token,users_profile:users_profile(display_name,email),meta_json"
                 )
                 .eq("tenant_id", activeTenantId!)
                 .eq("id", id!)
@@ -151,6 +153,33 @@ export default function MktTechaCase() {
         },
     });
 
+    const generateShareToken = async () => {
+        if (!id) return;
+        const newToken = crypto.randomUUID();
+        const { error } = await supabase.from("cases").update({ share_token: newToken }).eq("id", id);
+        if (error) {
+            showError("Erro ao gerar link compartilhado");
+        } else {
+            caseQ.refetch();
+            return newToken;
+        }
+    };
+
+    const copyShareLink = async (type: 'approve' | 'summary') => {
+        let token = caseQ.data?.share_token;
+        if (!token) {
+            token = await generateShareToken();
+        }
+        if (!token) return;
+
+        const baseUrl = window.location.origin;
+        const path = type === 'approve' ? 'approve' : 'summary';
+        const url = `${baseUrl}/public/mkt-techa/${path}/${token}`;
+
+        await navigator.clipboard.writeText(url);
+        showSuccess(`Link de ${type === 'approve' ? 'aprovação' : 'resumo'} copiado!`);
+    };
+
     const states = useMemo(() => {
         const st = (journeyQ.data as any)?.default_state_machine_json?.states;
         const arr = Array.isArray(st) ? st.map((x: any) => String(x)).filter(Boolean) : [];
@@ -192,6 +221,7 @@ export default function MktTechaCase() {
         try {
             await transitionState(id, prev, next, sm as unknown as StateMachine);
             showSuccess(`Estado alterado para ${getStateLabel(journeyQ.data as any, next)}`);
+            caseQ.refetch();
         } catch (e: any) { }
     };
 
@@ -353,17 +383,16 @@ export default function MktTechaCase() {
                     label,
                     done: false
                 }));
-                const newMeta = {
-                    ...meta,
+                setMeta((prev: any) => ({
+                    ...prev,
                     stage_checklists: {
-                        ...(meta.stage_checklists || {}),
+                        ...(prev.stage_checklists || {}),
                         [stateKey]: list
                     }
-                };
-                setMeta(newMeta);
+                }));
             }
         }
-    }, [caseQ.data?.state, meta]);
+    }, [caseQ.data?.state]);
 
     if (caseQ.isLoading) {
         return (
@@ -550,11 +579,23 @@ export default function MktTechaCase() {
 
                                     {stateKey === "criativos" && (
                                         <div className="space-y-6">
-                                            <div className="flex items-center justify-between px-1">
-                                                <h4 className="text-sm font-bold text-slate-800">Criativos por Canal</h4>
-                                                <Button onClick={addCreative} size="sm" className="rounded-xl h-8 text-[10px] font-bold gap-2 bg-indigo-600 hover:bg-indigo-700">
-                                                    <Plus className="h-3.5 w-3.5" /> NOVO CRIATIVO
-                                                </Button>
+                                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-1">
+                                                <div>
+                                                    <h4 className="text-sm font-bold text-slate-800">Criativos por Canal</h4>
+                                                    <p className="text-[10px] text-slate-500 font-medium">Gerencie as peças e envie o link para o cliente aprovar.</p>
+                                                </div>
+                                                <div className="flex items-center gap-2">
+                                                    <Button 
+                                                        variant="outline" 
+                                                        onClick={() => copyShareLink('approve')}
+                                                        className="rounded-xl h-8 text-[10px] font-bold gap-2 border-indigo-200 text-indigo-600 hover:bg-indigo-50"
+                                                    >
+                                                        <Share2 className="h-3.5 w-3.5" /> COPIAR LINK DE APROVAÇÃO
+                                                    </Button>
+                                                    <Button onClick={addCreative} size="sm" className="rounded-xl h-8 text-[10px] font-bold gap-2 bg-indigo-600 hover:bg-indigo-700">
+                                                        <Plus className="h-3.5 w-3.5" /> NOVO CRIATIVO
+                                                    </Button>
+                                                </div>
                                             </div>
 
                                             <div className="space-y-4">

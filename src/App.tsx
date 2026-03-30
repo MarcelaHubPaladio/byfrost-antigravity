@@ -88,6 +88,9 @@ const MediaKitMasks = lazyWithRetry(() => import("@/pages/MediaKitMasks"));
 const MediaKitEditor = lazyWithRetry(() => import("@/pages/MediaKitEditor"));
 const Communication = lazyWithRetry(() => import("@/pages/Communication"));
 const PublicScriptApproval = lazyWithRetry(() => import("@/pages/PublicScriptApproval"));
+const MktTechaPublicApproval = lazyWithRetry(() => import("@/pages/MktTechaPublicApproval"));
+const MktTechaPublicSummary = lazyWithRetry(() => import("@/pages/MktTechaPublicSummary"));
+
 
 const GlobalLoading = () => (
   <div className="flex h-screen w-full items-center justify-center bg-slate-50 dark:bg-slate-950">
@@ -158,6 +161,10 @@ const App = () => (
 
                   {/* M30 Public Script Approval (no auth) */}
                   <Route path="/public/m30/approve/:token" element={<PublicScriptApproval />} />
+
+                  {/* MKT Techa Public Approval & Summary (no auth) */}
+                  <Route path="/public/mkt-techa/approve/:id" element={<MktTechaPublicApproval />} />
+                  <Route path="/public/mkt-techa/summary/:id" element={<MktTechaPublicSummary />} />
 
                   {/* Incentives (gestão interna; protegido por matriz de acesso) */}
                   <Route
