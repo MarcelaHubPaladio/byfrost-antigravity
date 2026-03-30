@@ -1405,20 +1405,21 @@ export default function MktTechaCase() {
                                                                                                 {cr.channel === 'TikTok' && <Smartphone className="h-5 w-5 text-slate-400" />}
                                                                                                 {cr.channel === 'YouTube' && <Youtube className="h-5 w-5 text-red-500" />}
                                                                                             </div>
-                                                                                            <div>
+                                                                            <div>
                                                                                                 <p className="text-[11px] font-black text-slate-900 leading-none">{cr.channel}</p>
                                                                                                 <p className="text-[9px] text-slate-400 font-bold uppercase tracking-tighter mt-1.5">{cr.type} - {cr.format}</p>
                                                                                             </div>
                                                                                         </div>
                                                                                     </div>
 
-                                                                                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+                                                                                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
                                                                                         {[
                                                                                             { key: 'views', label: 'Views', icon: <Clock className="h-3 w-3" /> },
                                                                                             { key: 'likes', label: 'Curtidas', icon: <CheckCircle2 className="h-3 w-3" /> },
                                                                                             { key: 'comments', label: 'Coment.', icon: <FileText className="h-3 w-3" /> },
                                                                                             { key: 'sales_count', label: 'Vendas (Qtd)', icon: <Target className="h-3 w-3" /> },
                                                                                             { key: 'sales_amount', label: 'Vendas (R$)', icon: <RefreshCw className="h-3 w-3" /> },
+                                                                                            { key: 'spend', label: 'Invest. (R$)', icon: <DollarSign className="h-3 w-3" /> },
                                                                                         ].map(metric => (
                                                                                             <div key={metric.key} className="space-y-1.5">
                                                                                                 <Label className="text-[9px] font-black text-slate-400 uppercase flex items-center gap-1 px-1">
@@ -1427,7 +1428,7 @@ export default function MktTechaCase() {
                                                                                                 <Input 
                                                                                                     type="number" 
                                                                                                     value={cr.metrics?.[metric.key as keyof typeof cr.metrics] || ""} 
-                                                                                                    onChange={(e) => updateCreativeMetric(cr.id, metric.key, parseFloat(e.target.value) || 0)}
+                                                                                                    onChange={(e) => updateCreativeMetric(cr.id, metric.key as any, parseFloat(e.target.value) || 0)}
                                                                                                     className="h-10 rounded-xl text-[11px] font-bold bg-slate-50/50 border-slate-100"
                                                                                                 />
                                                                                             </div>
@@ -1466,10 +1467,11 @@ export default function MktTechaCase() {
                                                                     </div>
 
                                                                     {/* Resumo de Métricas Agregadas */}
-                                                                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                                                                    <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
                                                                         {[
                                                                             { label: 'Total Views', key: 'views', icon: <Users className="h-4 w-4" /> },
                                                                             { label: 'Total Interações', custom: (cr: any) => (cr.metrics?.likes || 0) + (cr.metrics?.comments || 0), icon: <Zap className="h-4 w-4" /> },
+                                                                            { label: 'Investimento', key: 'spend', prefix: 'R$', icon: <DollarSign className="h-4 w-4" /> },
                                                                             { label: 'Conversões', key: 'sales_count', icon: <Target className="h-4 w-4" /> },
                                                                             { label: 'Faturamento', key: 'sales_amount', prefix: 'R$', icon: <DollarSign className="h-4 w-4" /> },
                                                                         ].map((stat, i) => {
@@ -1528,11 +1530,102 @@ export default function MktTechaCase() {
                                                             )}
 
                                                             {st === "concluido" && (
-                                                                <div className="p-8 border-2 border-emerald-100 rounded-[32px] bg-emerald-50/30 flex flex-col items-center justify-center text-center gap-4">
-                                                                    <CheckCircle2 className="h-12 w-12 text-emerald-500" />
-                                                                    <div className="space-y-1">
-                                                                        <h4 className="text-sm font-bold text-emerald-900">Campanha Finalizada</h4>
-                                                                        <p className="text-xs text-emerald-700/70">Histórico preservado.</p>
+                                                                <div className="space-y-12 py-8">
+                                                                    <div className="text-center space-y-4 max-w-2xl mx-auto">
+                                                                        <div className="h-20 w-20 rounded-[32px] bg-emerald-500 flex items-center justify-center mx-auto shadow-2xl shadow-emerald-500/20 ring-8 ring-emerald-500/10">
+                                                                            <CheckCircle2 className="h-10 w-10 text-white" />
+                                                                        </div>
+                                                                        <div>
+                                                                            <h2 className="text-3xl font-black text-slate-900 tracking-tight">Campanha Concluída!</h2>
+                                                                            <p className="text-slate-500 font-medium mt-2">Todos os objetivos foram processados e o relatório final está disponível para consulta.</p>
+                                                                        </div>
+                                                                    </div>
+
+                                                                    {/* KPIs Finais */}
+                                                                    <div className="max-w-5xl mx-auto w-full">
+                                                                        <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+                                                                            {[
+                                                                                { label: 'Visualizações', key: 'views', icon: <Users className="h-4 w-4" /> },
+                                                                                { label: 'Engajamento', custom: (cr: any) => (cr.metrics?.likes || 0) + (cr.metrics?.comments || 0), icon: <Zap className="h-4 w-4" /> },
+                                                                                { label: 'Investimento', key: 'spend', prefix: 'R$', icon: <DollarSign className="h-4 w-4" /> },
+                                                                                { label: 'Conversões', key: 'sales_count', icon: <Target className="h-4 w-4" /> },
+                                                                                { label: 'Faturamento', key: 'sales_amount', prefix: 'R$', icon: <DollarSign className="h-4 w-4" /> },
+                                                                            ].map((stat, i) => {
+                                                                                const approvedCreatives = (meta.creatives || []).filter((c: any) => c.status === 'approved');
+                                                                                const total = approvedCreatives.reduce((acc: number, curr: any) => {
+                                                                                    if (stat.custom) return acc + stat.custom(curr);
+                                                                                    if (stat.key === 'sales_count' && (Number(meta.stage_data?.analise?.erp_sales_count) || 0) > 0) return Number(meta.stage_data?.analise?.erp_sales_count);
+                                                                                    if (stat.key === 'sales_amount' && (Number(meta.stage_data?.analise?.erp_sales_amount) || 0) > 0) return Number(meta.stage_data?.analise?.erp_sales_amount);
+                                                                                    return acc + (Number(curr.metrics?.[stat.key as any]) || 0);
+                                                                                }, 0);
+                                                                                
+                                                                                let finalValue = total;
+                                                                                if (stat.key === 'sales_count' && (Number(meta.stage_data?.analise?.erp_sales_count) || 0) > 0) finalValue = Number(meta.stage_data?.analise?.erp_sales_count);
+                                                                                if (stat.key === 'sales_amount' && (Number(meta.stage_data?.analise?.erp_sales_amount) || 0) > 0) finalValue = Number(meta.stage_data?.analise?.erp_sales_amount);
+
+                                                                                return (
+                                                                                    <div key={i} className="p-6 rounded-[32px] bg-white border border-slate-100 shadow-sm space-y-2">
+                                                                                        <div className="flex items-center gap-2 text-slate-400">
+                                                                                            {stat.icon}
+                                                                                            <span className="text-[9px] font-black uppercase tracking-widest">{stat.label}</span>
+                                                                                        </div>
+                                                                                        <div className="text-xl font-black text-slate-900">
+                                                                                            {stat.prefix} {finalValue.toLocaleString()}
+                                                                                        </div>
+                                                                                    </div>
+                                                                                );
+                                                                            })}
+                                                                        </div>
+                                                                    </div>
+
+                                                                    {/* Insights e Vitrine */}
+                                                                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 max-w-6xl mx-auto w-full">
+                                                                        <div className="space-y-6">
+                                                                            <div className="flex items-center gap-2 px-1">
+                                                                                <FileText className="h-4 w-4 text-indigo-500" />
+                                                                                <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest">Resumo de Insights</h3>
+                                                                            </div>
+                                                                            <Card className="p-8 rounded-[40px] border-slate-100 shadow-sm bg-white min-h-[300px]">
+                                                                                <div 
+                                                                                    className="prose prose-sm prose-slate max-w-none prose-p:leading-relaxed prose-p:text-slate-600 prose-headings:text-slate-900 prose-headings:font-black"
+                                                                                    dangerouslySetInnerHTML={{ __html: meta.stage_data?.relatrio?.insights || "Nenhum insight registrado." }}
+                                                                                />
+                                                                            </Card>
+                                                                        </div>
+
+                                                                        <div className="space-y-6">
+                                                                            <div className="flex items-center gap-2 px-1">
+                                                                                <Settings className="h-4 w-4 text-indigo-500" />
+                                                                                <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest">Vitrini de Ativos</h3>
+                                                                            </div>
+                                                                            <div className="space-y-3">
+                                                                                {(meta.creatives || []).filter((c: any) => c.status === 'approved').map((c: any) => (
+                                                                                    <div key={c.id} className="p-4 rounded-3xl border border-slate-100 bg-white shadow-sm flex items-center justify-between group hover:border-indigo-100 transition-all">
+                                                                                        <div className="flex items-center gap-4">
+                                                                                            <div className="h-12 w-12 rounded-2xl bg-slate-50 flex items-center justify-center text-slate-400 group-hover:text-indigo-500 transition-colors">
+                                                                                                {c.channel === 'Instagram' && <Instagram className="h-6 w-6" />}
+                                                                                                {c.channel === 'TikTok' && <Smartphone className="h-6 w-6" />}
+                                                                                                {c.channel === 'YouTube' && <Youtube className="h-6 w-6" />}
+                                                                                            </div>
+                                                                                            <div>
+                                                                                                <p className="text-[11px] font-black text-slate-900 leading-tight">{c.channel}</p>
+                                                                                                <p className="text-[9px] font-bold text-slate-400 uppercase mt-0.5">{c.type} • {c.metrics?.views?.toLocaleString() || 0} views</p>
+                                                                                            </div>
+                                                                                        </div>
+                                                                                        <div className="flex items-center gap-2">
+                                                                                            {(c.final_files || []).map((f: any, fi: number) => (
+                                                                                                <Button key={fi} size="sm" variant="ghost" className="h-8 w-8 rounded-xl p-0 hover:bg-slate-50" asChild>
+                                                                                                    <a href={f.url} target="_blank" rel="noreferrer">
+                                                                                                        <Download className="h-3.5 w-3.5 text-slate-400" />
+                                                                                                    </a>
+                                                                                                </Button>
+                                                                                            ))}
+                                                                                            <Badge className="rounded-lg bg-emerald-50 text-emerald-600 border-none font-black text-[8px] px-2 py-0.5">FINAL</Badge>
+                                                                                        </div>
+                                                                                    </div>
+                                                                                ))}
+                                                                            </div>
+                                                                        </div>
                                                                     </div>
                                                                 </div>
                                                             )}

@@ -146,9 +146,10 @@ export default function MktTechaPublicReport() {
             shares: acc.shares + (Number(m.shares) || 0),
             clicks: acc.clicks + (Number(m.clicks) || 0),
             sales_count: acc.sales_count + (Number(m.sales_count) || 0),
-            sales_amount: acc.sales_amount + (Number(m.sales_amount) || 0)
+            sales_amount: acc.sales_amount + (Number(m.sales_amount) || 0),
+            spend: acc.spend + (Number(m.spend) || 0)
         };
-    }, { views: 0, likes: 0, comments: 0, shares: 0, clicks: 0, sales_count: 0, sales_amount: 0 });
+    }, { views: 0, likes: 0, comments: 0, shares: 0, clicks: 0, sales_count: 0, sales_amount: 0, spend: 0 });
 
     const analiseData = meta.stage_data?.analise || {};
     const auditedSalesCount = Number(analiseData.erp_sales_count) || 0;
@@ -263,10 +264,11 @@ export default function MktTechaPublicReport() {
 
                 <main className="relative z-10 mx-auto max-w-7xl px-6 py-6 space-y-12">
                     {/* Global Stats Grid */}
-                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
+                    <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 md:gap-6">
                         {[
                             { label: 'Alcance Global', value: totals.views.toLocaleString(), sub: 'Impressões Totais', icon: <Users />, color: 'indigo' },
                             { label: 'Engajamento', value: (totals.likes + totals.comments).toLocaleString(), sub: 'Interações', icon: <Zap />, color: 'rose' },
+                            { label: 'Investimento', value: `R$ ${totals.spend.toLocaleString()}`, sub: 'Verba Utilizada', icon: <DollarSign />, color: 'slate' },
                             { label: 'Clique / CTA', value: totals.clicks.toLocaleString(), sub: 'Acessos Diretos', icon: <MousePointer2 />, color: 'emerald' },
                             { label: 'Volume Vendas', value: `R$ ${totals.sales_amount.toLocaleString()}`, sub: `${totals.sales_count} Conversões ${totals.leads_count > 0 ? `• ${totals.leads_count} Leads` : ''}`, icon: <ShoppingCart />, color: 'amber' },
                         ].map((stat, i) => (

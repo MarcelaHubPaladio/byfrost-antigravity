@@ -30,6 +30,7 @@ export type MktTechaCreative = {
     clicks?: number;
     sales_amount?: number;
     sales_count?: number;
+    spend?: number;
     followers_gained?: number;
     qualitative_feedback?: string;
   };
