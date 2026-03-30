@@ -319,8 +319,8 @@ export default function MktTechaPublicApproval() {
                                 <section className="space-y-4">
                                     <div className="flex items-center gap-3 px-2">
                                         <div 
-                                            style={{ color: primaryColor, backgroundColor: `${primaryColor}15` }}
-                                            className="h-10 w-10 rounded-2xl flex items-center justify-center ring-1 ring-white/10"
+                                            style={{ color: primaryColor }}
+                                            className="h-10 w-10 rounded-2xl bg-slate-900 flex items-center justify-center ring-1 ring-white/10"
                                         >
                                             <LucideMessageCircle className="h-5 w-5" />
                                         </div>
@@ -335,10 +335,7 @@ export default function MktTechaPublicApproval() {
 
                                 <section className="space-y-4">
                                     <div className="flex items-center gap-3 px-2">
-                                        <div 
-                                            style={{ color: "#34d399", backgroundColor: "#34d39915" }}
-                                            className="h-10 w-10 rounded-2xl flex items-center justify-center ring-1 ring-white/10"
-                                        >
+                                        <div className="h-10 w-10 rounded-2xl bg-slate-900 flex items-center justify-center text-emerald-400 ring-1 ring-white/10">
                                             <CheckCircle2 className="h-5 w-5" />
                                         </div>
                                         <h2 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Canais e Criativos</h2>
@@ -348,8 +345,8 @@ export default function MktTechaPublicApproval() {
                                             <div key={ch} className="p-5 rounded-3xl bg-slate-900 ring-1 ring-white/5 flex items-center justify-between group hover:bg-slate-800/50 transition-colors">
                                                 <div className="flex items-center gap-3">
                                                     <div 
-                                                        style={{ color: primaryColor, backgroundColor: `${primaryColor}15` }}
-                                                        className="h-10 w-10 rounded-xl flex items-center justify-center"
+                                                        style={{ color: primaryColor }}
+                                                        className="h-10 w-10 rounded-xl bg-slate-800 flex items-center justify-center"
                                                     >
                                                         <Hash className="h-4 w-4" />
                                                     </div>
@@ -435,11 +432,11 @@ export default function MktTechaPublicApproval() {
                                             onClick={handleApprovePlanning}
                                             disabled={acting === 'planning'}
                                             style={{ 
-                                                backgroundColor: primaryColor, 
-                                                color: primaryText,
-                                                boxShadow: `0 20px 40px -10px ${primaryColor}40`
+                                                backgroundColor: "#0f172a", 
+                                                color: "#ffffff",
+                                                boxShadow: `0 20px 40px -10px rgba(0,0,0,0.4)`
                                             }}
-                                            className="w-full h-16 rounded-[24px] font-black text-xs uppercase tracking-widest shadow-2xl transition-all active:scale-95 gap-3 hover:opacity-90 hover:-translate-y-1"
+                                            className="w-full h-16 rounded-[24px] font-black text-xs uppercase tracking-widest shadow-2xl transition-all active:scale-95 gap-3 hover:bg-slate-800 hover:-translate-y-1"
                                         >
                                             {acting === 'planning' ? <Loader2 className="h-5 w-5 animate-spin" /> : <CheckCircle2 className="h-5 w-5" />}
                                             APROVAR ESTRATÉGIA AGORA 🚀
@@ -550,12 +547,6 @@ export default function MktTechaPublicApproval() {
                     </p>
                     <div className="flex items-center justify-center gap-6 pt-4">
                          <div className="text-[10px] font-bold text-slate-700 uppercase tracking-[0.3em]">Powered by MKT Técha</div>
-                    </div>
-                    {/* Debug Indicator - Help trace branding issues */}
-                    <div className="mt-8 pt-8 border-t border-white/5 opacity-10 hover:opacity-100 transition-opacity">
-                        <p className="text-[8px] font-mono text-slate-600">
-                            TID: {tenant?.id || "N/A"} • CC: {primaryColor} • B: {JSON.stringify(tenant?.branding_json?.palette?.primary || "N/A")}
-                        </p>
                     </div>
                 </div>
             </footer>

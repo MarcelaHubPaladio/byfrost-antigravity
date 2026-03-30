@@ -92,9 +92,9 @@ export function PublicPortalShell({
         const accent = `${h} ${Math.max(35, Math.min(95, s))}% ${Math.max(25, Math.min(60, l))}%`;
         const bg = `${h} 40% 97%`;
 
-        // Inspired by mock: background is the primary brand color.
-        root.style.setProperty("--public-bg", primaryHex);
-        root.style.setProperty("--public-card-text", bestTextOnHex(primaryHex));
+        // Restoration: Hardcoded dark background for stability and elegance.
+        root.style.setProperty("--public-bg", "#0b1220");
+        root.style.setProperty("--public-card-text", "#fffdf5");
 
         // Keep byfrost/shadcn tokens coherent on this public portal.
         root.style.setProperty("--tenant-accent", accent);
