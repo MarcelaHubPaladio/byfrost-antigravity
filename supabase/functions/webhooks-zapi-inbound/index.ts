@@ -1818,7 +1818,8 @@ serve(async (req) => {
         create_case_on_location: cfgCreateCaseOnLocation,
         pendencies_on_image: cfgPendenciesOnImage,
         ocr_enabled: cfgOcrEnabled
-      }
+      },
+      p_assigned_user_id: instance.assigned_user_id
     });
 
     if (rpcError) {

@@ -152,7 +152,7 @@ serve(async (req) => {
         // 1. Lookup Instance
         const { data: instance } = await supabase
             .from("wa_instances")
-            .select("id, tenant_id, phone_number, webhook_secret, enable_v1_business, enable_v2_audit, default_journey_id")
+            .select("id, tenant_id, phone_number, webhook_secret, enable_v1_business, enable_v2_audit, default_journey_id, assigned_user_id")
             .eq("zapi_instance_id", zapiId)
             .eq("status", "active")
             .is("deleted_at", null)
@@ -267,7 +267,8 @@ serve(async (req) => {
                             create_case_on_location: cfgCreateCaseOnLocation,
                             pendencies_on_image: cfgPendenciesOnImage,
                             ocr_enabled: cfgOcrEnabled
-                        }
+                        },
+                        p_assigned_user_id: instance.assigned_user_id
                     });
 
                     if (!rpcErr) {

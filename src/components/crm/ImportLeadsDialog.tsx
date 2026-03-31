@@ -18,7 +18,7 @@ import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { showError, showSuccess } from "@/utils/toast";
 import { cn } from "@/lib/utils";
-import { FileUp, UploadCloud, AlertTriangle, CheckCircle2 } from "lucide-react";
+import { FileUp, UploadCloud, AlertTriangle, CheckCircle2, Download } from "lucide-react";
 
 type JourneyInfo = {
   id: string;
@@ -1382,7 +1382,27 @@ export function ImportLeadsDialog({
           </DialogHeader>
 
           <div className="mt-4 rounded-[18px] border border-slate-200 bg-slate-50 p-4">
-            <div className="text-sm font-semibold text-slate-900">Regras do Arquivo</div>
+            <div className="flex items-center justify-between">
+              <div className="text-sm font-semibold text-slate-900">Regras do Arquivo</div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-7 px-2.5 text-[11px] rounded-lg bg-white text-slate-600 hover:text-slate-900 border-slate-200 shrink-0"
+                onClick={() => {
+                  const content = 'Nome,Whatsapp,Email,Dono do Lead\nJoão da Silva,5511999999999,joao@exemplo.com,vendedor@email.com\nMaria Oliveira,11988887777,,';
+                  const blob = new Blob(['\uFEFF' + content], { type: 'text/csv;charset=utf-8;' });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement('a');
+                  a.href = url;
+                  a.download = 'modelo_importacao_leads.csv';
+                  a.click();
+                  URL.revokeObjectURL(url);
+                }}
+              >
+                <Download className="mr-1.5 h-3.5 w-3.5" /> Baixar Modelo
+              </Button>
+            </div>
             <ul className="mt-2 ml-4 list-disc text-xs text-slate-600 space-y-1">
               <li>Colunas ignoram maiúsculas/minúsculas e acentos (ex: <span className="font-mono bg-white px-1 py-0.5 rounded border border-slate-200">Whasapp</span> ou <span className="font-mono bg-white px-1 py-0.5 rounded border border-slate-200">whatsapp</span>).</li>
               <li>Coluna de número é **obrigatória** e deve conter nome derivado de whatsapp (ex: "Whasapp", "telefone").</li>

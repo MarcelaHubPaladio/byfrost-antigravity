@@ -227,7 +227,7 @@ export default function MktTechaPublicReport() {
                     />
                 </div>
 
-                <header className="relative z-10 px-6 pt-12 pb-8 max-w-7xl mx-auto">
+                <header className="relative z-10 px-4 sm:px-6 pt-12 pb-8 w-full max-w-[1600px] mx-auto">
                     <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 px-4">
                         <div className="space-y-4">
                             <Badge 
@@ -262,7 +262,7 @@ export default function MktTechaPublicReport() {
                     </div>
                 </header>
 
-                <main className="relative z-10 mx-auto max-w-7xl px-6 py-6 space-y-12">
+                <main className="relative z-10 mx-auto w-full max-w-[1600px] px-4 sm:px-6 py-6 space-y-12">
                     {/* Global Stats Grid */}
                     <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 md:gap-6">
                         {[

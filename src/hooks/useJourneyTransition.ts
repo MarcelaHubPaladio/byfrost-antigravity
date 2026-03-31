@@ -39,16 +39,20 @@ export function useJourneyTransition() {
             const label = getStateLabel(journeyConfig as any, newState);
             showSuccess(`Movido para ${label}. Atualizando...`);
 
-            // 2. Wait 1.5s to give Edge Function time to apply assignments/create pendencies
+            // 2. Invalidação imediata (para mover o card visualmente de coluna sem lag)
+            qc.invalidateQueries({ queryKey: ["cases_by_tenant", activeTenantId] });
+            qc.invalidateQueries({ queryKey: ["crm_cases_by_tenant", activeTenantId] });
+
+            // 3. Wait 1.5s to give Edge Function time to apply assignments/create pendencies
             await new Promise((resolve) => setTimeout(resolve, 1500));
 
-            // 3. Invalida queries para refletir mudança de estado (e novos assigns/pendências geradas pela Edge)
+            // 4. Invalida queries para refletir novos assigns/pendências geradas pela Edge
             await Promise.all([
                 qc.invalidateQueries({ queryKey: ["case", activeTenantId, caseId] }),
-                qc.invalidateQueries({ queryKey: ["timeline", activeTenantId, caseId] }), // Timeline updates async, but we invalidate anyway
+                qc.invalidateQueries({ queryKey: ["timeline", activeTenantId, caseId] }), 
                 qc.invalidateQueries({ queryKey: ["cases_by_tenant", activeTenantId] }),
                 qc.invalidateQueries({ queryKey: ["crm_cases_by_tenant", activeTenantId] }),
-                qc.invalidateQueries({ queryKey: ["pendencies", activeTenantId, caseId] }), // Mandatory tasks added here
+                qc.invalidateQueries({ queryKey: ["pendencies", activeTenantId, caseId] }), 
             ]);
 
         } catch (e: any) {

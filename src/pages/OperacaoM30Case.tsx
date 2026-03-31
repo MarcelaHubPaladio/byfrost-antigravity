@@ -965,6 +965,14 @@ export default function OperacaoM30Case() {
             });
 
             showSuccess("Tarefa excluída.");
+            
+            // Invalida cache para sumir do board imediatamente
+            await Promise.all([
+                qc.invalidateQueries({ queryKey: ["cases_by_tenant", activeTenantId] }),
+                qc.invalidateQueries({ queryKey: ["crm_cases_by_tenant", activeTenantId] }),
+                qc.invalidateQueries({ queryKey: ["debug_cases_for_tenant_journey", activeTenantId] })
+            ]);
+
             nav("/app/operacao-m30", { replace: true });
         } catch (e: any) {
             showError(`Falha ao excluir: ${e?.message ?? "erro"}`);
