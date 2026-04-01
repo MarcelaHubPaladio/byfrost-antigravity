@@ -1,4 +1,4 @@
--- Migration: Prioritize CRM journeys in ingest_whatsapp_audit_message
+-- Migration: Brazilian Loose Phone Matching in ingest_whatsapp_audit_message
 -- Author: Antigravity
 -- Date: 2026-04-01
 
@@ -38,7 +38,20 @@ declare
     v_journey_id uuid;
     v_lock_key bigint;
     v_audit_journey_keys text[] := array['ff_flow_20260129200457', 'auditoria-de-whatsapp', 'auditoria-de-whatsaoo'];
+    -- Normalization helpers
+    v_norm_p_phone text;
+    v_p_ddd text;
+    v_p_last8 text;
 begin
+    -- Normalizar o telefone do participante (apenas dígitos)
+    v_norm_p_phone := regexp_replace(p_participant_phone, '\D', '', 'g');
+    
+    -- Se for brasileiro (55), extrair DDD e os últimos 8 dígitos
+    if v_norm_p_phone ~ '^55' and length(v_norm_p_phone) >= 12 then
+        v_p_ddd := substr(v_norm_p_phone, 3, 2);
+        v_p_last8 := substr(v_norm_p_phone, length(v_norm_p_phone) - 7);
+    end if;
+
     -- 1. Advisory Lock
     v_lock_key := ('x' || substr(md5(p_tenant_id::text || coalesce(p_group_id, p_participant_phone)), 1, 16))::bit(64)::bigint;
     perform pg_advisory_xact_lock(v_lock_key);
@@ -65,18 +78,28 @@ begin
     -- Search in ALL journeys, prioritizing NON-AUDIT (CRM) journeys
     select c.id, c.journey_id into v_case_id, v_journey_id 
     from public.cases c
+    left join public.customer_accounts ca on ca.id = c.customer_id
     where c.tenant_id = p_tenant_id
       and c.status = 'open'
       and c.deleted_at is null
       and (
         (p_group_id is not null and c.meta_json->>'whatsapp_group_id' = p_group_id)
         or (p_group_id is null and (
-             c.customer_id = (select ca.id from public.customer_accounts ca where ca.tenant_id = p_tenant_id and ca.phone_e164 = p_participant_phone limit 1) 
-             or c.meta_json->>'counterpart_phone' = p_participant_phone
+             -- Busca Exata
+             c.meta_json->>'counterpart_phone' = p_participant_phone or
+             ca.phone_e164 = p_participant_phone or
+             -- Busca Flexível (para números brasileiros com/sem nono dígito)
+             (
+               v_p_ddd is not null and 
+               (
+                 (regexp_replace(c.meta_json->>'counterpart_phone', '\D', '', 'g') ~ ('^55' || v_p_ddd || '[9]? ' || v_p_last8)) or
+                 (regexp_replace(ca.phone_e164, '\D', '', 'g') ~ ('^55' || v_p_ddd || '[9]? ' || v_p_last8))
+               )
+             )
         ))
       )
     order by 
-      -- Prefer c.journey_id NOT in audit_keys (FALSE = 0 comes before TRUE = 1 in asc sort)
+      -- Prefer c.journey_id NOT in audit_keys
       (c.journey_id in (select j_sub.id from public.journeys j_sub where j_sub.key = any(v_audit_journey_keys))) asc, 
       c.updated_at desc 
     limit 1;
