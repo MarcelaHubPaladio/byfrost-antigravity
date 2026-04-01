@@ -443,8 +443,8 @@ export default function Dashboard() {
   // - buscamos os casos do tenant (respeita RLS)
   // - filtramos por key (preferência: journeys.key; fallback: meta_json.journey_key)
   const casesQ = useQuery({
-    queryKey: ["cases_by_tenant", activeTenantId],
-    enabled: Boolean(activeTenantId),
+    queryKey: ["cases_by_tenant_journey", activeTenantId, selectedJourney?.id],
+    enabled: Boolean(activeTenantId && selectedJourney?.id),
     refetchInterval: 60_000,
     staleTime: 30_000,
     refetchIntervalInBackground: false,
@@ -457,6 +457,7 @@ export default function Dashboard() {
           "id,journey_id,customer_id,title,status,state,created_at,updated_at,assigned_user_id,is_chat,users_profile:users_profile!fk_cases_users_profile(display_name,email),journeys:journeys!cases_journey_id_fkey(key,name,is_crm),meta_json"
         )
         .eq("tenant_id", activeTenantId!)
+        .eq("journey_id", selectedJourney!.id)
         .is("deleted_at", null)
         .eq("is_chat", false)
         .order("updated_at", { ascending: false })

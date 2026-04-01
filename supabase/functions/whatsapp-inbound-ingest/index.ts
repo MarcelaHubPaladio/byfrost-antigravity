@@ -295,7 +295,7 @@ serve(async (req) => {
         }
 
         // 5. Audit Fallback (V2) or Outbound
-        if (instance.enable_v2_audit && looksLikeChatEvent && (direction === "outbound" || !crmResult?.ok)) {
+        if (looksLikeChatEvent && (direction === "outbound" || (instance.enable_v2_audit && !crmResult?.ok))) {
             const fromPhone = direction === "outbound" ? instPhone : msgParticipantPhone;
             const toPhone = direction === "outbound"
                 ? (isGroup ? groupId : counterpartPhone)
