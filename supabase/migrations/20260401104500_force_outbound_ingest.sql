@@ -1,4 +1,4 @@
--- Migration: Allow matching any journey in ingest_whatsapp_audit_message
+-- Migration: Prioritize CRM journeys in ingest_whatsapp_audit_message
 -- Author: Antigravity
 -- Date: 2026-04-01
 
@@ -62,7 +62,7 @@ begin
     returning id into v_conv_id;
 
     -- 3. Case Resolution
-    -- Search in ALL journeys for an open case matching phone/group
+    -- Search in ALL journeys, prioritizing NON-AUDIT (CRM) journeys
     select c.id, c.journey_id into v_case_id, v_journey_id 
     from public.cases c
     where c.tenant_id = p_tenant_id
@@ -75,9 +75,13 @@ begin
              or c.meta_json->>'counterpart_phone' = p_participant_phone
         ))
       )
-    order by c.updated_at desc limit 1;
+    order by 
+      -- Prefer c.journey_id NOT in audit_keys (FALSE = 0 comes before TRUE = 1 in asc sort)
+      (c.journey_id in (select j_sub.id from public.journeys j_sub where j_sub.key = any(v_audit_journey_keys))) asc, 
+      c.updated_at desc 
+    limit 1;
 
-    -- If no case found, we still need a journey_id to create a new audit case
+    -- If no case found, fallback to audit journey
     if v_journey_id is null then
         select j.id into v_journey_id 
         from public.journeys j
