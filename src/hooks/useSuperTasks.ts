@@ -27,7 +27,7 @@ export function useSuperTasks(tenantId?: string | null) {
     queryFn: async () => {
       let query = supabase
         .from("super_tasks")
-        .select("*, users_profile:assigned_to(display_name, email)")
+        .select("*, users_profile!fk_super_tasks_assigned_user(display_name, email)")
         .order("order_index", { ascending: true })
         .order("created_at", { ascending: true });
 

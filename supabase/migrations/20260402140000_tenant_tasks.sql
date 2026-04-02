@@ -1,6 +1,16 @@
--- Migration: 20260402140000_tenant_tasks.sql
 -- Step 1: Add 'assigned_to' column to super_tasks referencing auth.users(id)
-ALTER TABLE public.super_tasks ADD COLUMN IF NOT EXISTS assigned_to UUID REFERENCES auth.users(id) ON DELETE SET NULL;
+ALTER TABLE public.super_tasks ADD COLUMN IF NOT EXISTS assigned_to UUID;
+
+-- Step 1.1: Add a composite FK to users_profile to allow PostgREST joins. 
+-- This also ensures that we only assign tasks to users who belong to the same tenant.
+ALTER TABLE public.super_tasks
+DROP CONSTRAINT IF EXISTS fk_super_tasks_assigned_user;
+
+ALTER TABLE public.super_tasks
+ADD CONSTRAINT fk_super_tasks_assigned_user
+FOREIGN KEY (assigned_to, tenant_id)
+REFERENCES public.users_profile(user_id, tenant_id)
+ON DELETE SET NULL;
 
 -- Step 2: Update RLS Policies for public.super_tasks
 DROP POLICY IF EXISTS "Super-Admin only access to super_tasks" ON public.super_tasks;
