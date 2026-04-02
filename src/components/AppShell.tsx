@@ -67,7 +67,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetTrigger } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import {
   Collapsible,
@@ -546,6 +546,14 @@ export function AppShell({
   const [mobileCoreOpen, setMobileCoreOpen] = useState(false);
   const [mobileCreateOpen, setMobileCreateOpen] = useState(false);
   const [isSuperTasksOpen, setIsSuperTasksOpen] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 768);
+    check();
+    window.addEventListener("resize", check);
+    return () => window.removeEventListener("resize", check);
+  }, []);
 
   const roleKey = String(activeTenant?.role ?? "");
   const financeEnabledForTenant = isFinanceEnabled(activeTenant?.modules_json);
@@ -1138,8 +1146,9 @@ export function AppShell({
                         </div>
 
                         <div className="p-4">
-                          <SheetHeader className="sr-only">
-                            <SheetTitle>Menu</SheetTitle>
+                          <SheetHeader>
+                            <SheetTitle className="sr-only">Menu de Navegação</SheetTitle>
+                            <SheetDescription className="sr-only">Escolha uma seção para navegar pelo sistema.</SheetDescription>
                           </SheetHeader>
 
                           <div className="grid gap-2">
@@ -1597,7 +1606,6 @@ export function AppShell({
                           </div>
                         </DropdownMenuLabel>
                         <DropdownMenuSeparator className="bg-slate-200 dark:bg-slate-800" />
-
                         <DropdownMenuItem
                           className="cursor-pointer rounded-xl px-2 py-2 text-sm"
                           onClick={() => nav("/app/me")}
@@ -1623,20 +1631,29 @@ export function AppShell({
           </div>
 
           {/* Desktop Persistent Tasks (Side-by-Side) */}
-          {isSuperTasksOpen && (
-            <aside className="hidden md:flex relative flex-col h-[calc(100vh-32px)] sticky top-4 overflow-hidden rounded-[28px] border border-slate-200 bg-white/65 shadow-sm backdrop-blur dark:border-slate-800 dark:bg-slate-950/40 animate-in slide-in-from-right-10 duration-500">
-                <SuperTasksPanel onClose={() => setIsSuperTasksOpen(false)} />
+          {!isMobile && isSuperTasksOpen && (
+            <aside className="relative flex flex-col h-[calc(100vh-32px)] sticky top-4 overflow-hidden rounded-[28px] border border-slate-200 bg-white/65 shadow-sm backdrop-blur dark:border-slate-800 dark:bg-slate-950/40 animate-in slide-in-from-right-10 duration-500">
+              <SuperTasksPanel onClose={() => setIsSuperTasksOpen(false)} />
             </aside>
           )}
         </div>
       </div>
 
       {/* Mobile-only Overlay Tasks */}
-      <Sheet open={isSuperTasksOpen} onOpenChange={setIsSuperTasksOpen}>
-        <SheetContent side="right" className="p-0 w-full md:hidden border-l border-slate-200 dark:border-slate-800 shadow-2xl">
-          <SuperTasksPanel onClose={() => setIsSuperTasksOpen(false)} />
-        </SheetContent>
-      </Sheet>
+      {isMobile && (
+        <Sheet open={isSuperTasksOpen} onOpenChange={setIsSuperTasksOpen}>
+          <SheetContent
+            side="right"
+            className="p-0 w-full border-l border-slate-200 dark:border-slate-800 shadow-2xl"
+          >
+            <SheetHeader className="sr-only">
+              <SheetTitle>Tarefas Master</SheetTitle>
+              <SheetDescription>Gerencie tarefas entre tenants e entidades.</SheetDescription>
+            </SheetHeader>
+            <SuperTasksPanel onClose={() => setIsSuperTasksOpen(false)} />
+          </SheetContent>
+        </Sheet>
+      )}
     </div>
   );
 }
