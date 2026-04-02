@@ -861,7 +861,10 @@ export function AppShell({
   return (
     <div className="min-h-screen bg-[hsl(var(--byfrost-bg))]">
       <div className="w-full px-3 py-3 md:px-5 md:py-4">
-        <div className="grid gap-3 md:grid-cols-[96px_1fr] md:gap-5">
+        <div className={cn(
+          "grid gap-3 transition-all duration-500 ease-in-out md:gap-5 h-full",
+          isSuperTasksOpen ? "md:grid-cols-[96px_1fr_350px]" : "md:grid-cols-[96px_1fr]"
+        )}>
           {/* Sidebar (desktop) */}
           <aside className="relative z-20 hidden flex-col overflow-visible rounded-[28px] border border-slate-200 bg-white/65 shadow-sm backdrop-blur md:sticky md:top-4 md:flex md:h-[calc(100vh-32px)] dark:border-slate-800 dark:bg-slate-950/40">
             {/* Top brand block */}
@@ -1059,7 +1062,7 @@ export function AppShell({
                     label="Tarefas Master" 
                     onClick={(e) => {
                         e.preventDefault();
-                        setIsSuperTasksOpen(true);
+                        setIsSuperTasksOpen(!isSuperTasksOpen);
                     }}
                   />
                 )}
@@ -1618,12 +1621,19 @@ export function AppShell({
 
             <div className={cn("mt-3 md:mt-5", hideTopBar && "mt-0")}>{children}</div>
           </div>
+
+          {/* Desktop Persistent Tasks (Side-by-Side) */}
+          {isSuperTasksOpen && (
+            <aside className="hidden md:flex relative flex-col h-[calc(100vh-32px)] sticky top-4 overflow-hidden rounded-[28px] border border-slate-200 bg-white/65 shadow-sm backdrop-blur dark:border-slate-800 dark:bg-slate-950/40 animate-in slide-in-from-right-10 duration-500">
+                <SuperTasksPanel onClose={() => setIsSuperTasksOpen(false)} />
+            </aside>
+          )}
         </div>
       </div>
 
-      {/* Super Tasks Panel (Right Side Drawer) */}
+      {/* Mobile-only Overlay Tasks */}
       <Sheet open={isSuperTasksOpen} onOpenChange={setIsSuperTasksOpen}>
-        <SheetContent side="right" className="p-0 w-full sm:max-w-md border-l border-slate-200 dark:border-slate-800 shadow-2xl">
+        <SheetContent side="right" className="p-0 w-full md:hidden border-l border-slate-200 dark:border-slate-800 shadow-2xl">
           <SuperTasksPanel onClose={() => setIsSuperTasksOpen(false)} />
         </SheetContent>
       </Sheet>
