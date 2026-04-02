@@ -141,6 +141,7 @@ serve(async (req) => {
         const supabase = createSupabaseAdmin();
         const rawBody = await req.text().catch(() => "");
         const payload = rawBody ? JSON.parse(rawBody) : null;
+        console.log(`[${fn}] RAW PAYLOAD:`, JSON.stringify(payload));
 
         if (!payload) return new Response("Invalid JSON", { status: 400, headers: corsHeaders });
 
@@ -300,6 +301,8 @@ serve(async (req) => {
             const toPhone = direction === "outbound"
                 ? (isGroup ? groupId : counterpartPhone)
                 : (isGroup ? groupId : instPhone);
+
+            console.log(`[${fn}] Executing Audit RPC. From: ${fromPhone}, To: ${toPhone}, Participant: ${participantPhone}`);
 
             const { data: rpcResult, error: rpcError } = await supabase.rpc("ingest_whatsapp_audit_message", {
                 p_tenant_id: instance.tenant_id,

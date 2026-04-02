@@ -116,6 +116,27 @@ const DEFAULT_ROUTES: RouteRow[] = [
     description: "Lista e gestão de inventário/estoque",
   },
   {
+    key: "app.commitments",
+    name: "Compromissos",
+    category: "App",
+    path_pattern: "/app/commitments",
+    description: "Lista de compromissos e marcos",
+  },
+  {
+    key: "app.contracts",
+    name: "Contratos",
+    category: "App",
+    path_pattern: "/app/contracts",
+    description: "Lista e gestão de contratos",
+  },
+  {
+    key: "app.commitment_detail",
+    name: "Detalhe do compromisso",
+    category: "App",
+    path_pattern: "/app/commitments/:id",
+    description: "Visualização detalhada de um compromisso",
+  },
+  {
     key: "app.communication",
     name: "Comunicação",
     category: "App",

@@ -418,7 +418,7 @@ const App = () => (
                   <Route
                     path="/app/contracts"
                     element={
-                      <RequireRouteAccess routeKey="app.commitments">
+                      <RequireRouteAccess routeKey="app.contracts">
                         <Contracts />
                       </RequireRouteAccess>
                     }
@@ -426,7 +426,7 @@ const App = () => (
                   <Route
                     path="/app/commitments/:id"
                     element={
-                      <RequireRouteAccess routeKey="app.commitments">
+                      <RequireRouteAccess routeKey="app.commitment_detail">
                         <CommitmentDetail />
                       </RequireRouteAccess>
                     }
