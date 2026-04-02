@@ -1074,7 +1074,7 @@ export function AppShell({
                   />
                 )}
 
-                {(isSuperAdmin || activeTenant?.modules_json?.tasks_enabled) && (
+                {(activeTenant?.modules_json?.tasks_enabled) && (
                   <NavTile 
                     icon={ClipboardList} 
                     label={isSuperAdmin ? "Tarefas Master" : "Tarefas"} 
@@ -1464,7 +1464,7 @@ export function AppShell({
                               />
                             )}
 
-                            {(isSuperAdmin || activeTenant?.modules_json?.tasks_enabled) && (
+                            {(activeTenant?.modules_json?.tasks_enabled) && (
                               <MobileNavItem
                                 to="#"
                                 icon={ClipboardList}

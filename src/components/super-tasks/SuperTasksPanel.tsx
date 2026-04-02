@@ -73,7 +73,7 @@ export function SuperTasksPanel({ onClose }: SuperTasksPanelProps) {
   const totalCompleted = tasks.filter(t => t.is_completed).length;
 
   const isModuleEnabled = activeTenant?.modules_json?.tasks_enabled === true;
-  const canSeeContent = isSuperAdmin || isModuleEnabled;
+  const canSeeContent = isModuleEnabled;
 
   return (
     <div className="flex h-full flex-col bg-white dark:bg-slate-950">

@@ -33,7 +33,7 @@ export default function SuperTasks() {
   const tenantUsers = listUsers.data ?? [];
 
   const isModuleEnabled = activeTenant?.modules_json?.tasks_enabled === true;
-  const canSeeContent = isSuperAdmin || isModuleEnabled;
+  const canSeeContent = isModuleEnabled;
 
   // Combine users with a "Not Assigned" group
   const usersWithTasks = useMemo(() => {
