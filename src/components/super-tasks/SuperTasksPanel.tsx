@@ -6,32 +6,68 @@ import { Button } from "@/components/ui/button";
 import { 
   Accordion, 
 } from "@/components/ui/accordion";
-import { Search, ClipboardList, X } from "lucide-react";
-import { TenantTaskGroup } from "./TenantTaskGroup";
+import { Search, ClipboardList, X, Users as UsersIcon, Building2 } from "lucide-react";
+import { UserTaskGroup } from "./UserTaskGroup";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { useSession } from "@/providers/SessionProvider";
+import { 
+  Select, 
+  SelectContent, 
+  SelectItem, 
+  SelectTrigger, 
+  SelectValue 
+} from "@/components/ui/select";
 
 interface SuperTasksPanelProps {
   onClose?: () => void;
 }
 
 export function SuperTasksPanel({ onClose }: SuperTasksPanelProps) {
-  const { tenants } = useTenant();
-  const { listTasks } = useSuperTasks();
+  const { user } = useSession();
+  const { tenants, activeTenantId, isSuperAdmin, setActiveTenantId } = useTenant();
+  const [selectedTenantId, setSelectedTenantId] = useState<string | null>(activeTenantId);
+  const { listTasks, listUsers } = useSuperTasks(selectedTenantId);
   const [search, setSearch] = useState("");
   const [activeTab, setActiveTab] = useState<"active" | "completed">("active");
 
   const tasks = listTasks.data ?? [];
+  const tenantUsers = listUsers.data ?? [];
 
-  const filteredTenants = useMemo(() => {
-    if (!search && activeTab === "active") return tenants;
-    
-    return tenants.filter(t => {
-        const hasMatch = t.name.toLowerCase().includes(search.toLowerCase());
-        const hasTasks = tasks.some(task => task.tenant_id === t.id);
-        return hasMatch || hasTasks;
+  // Combine users with a "Not Assigned" group
+  const usersWithTasks = useMemo(() => {
+    // Current user should be first
+    const sortedUsers = [...tenantUsers].sort((a, b) => {
+        if (a.user_id === user?.id) return -1;
+        if (b.user_id === user?.id) return 1;
+        return (a.display_name || "").localeCompare(b.display_name || "");
     });
-  }, [tenants, search, tasks, activeTab]);
+
+    const groups = sortedUsers.map(u => ({
+        id: u.user_id,
+        name: u.display_name || u.email || "Usuário",
+        email: u.email,
+        tasks: tasks.filter(t => t.assigned_to === u.user_id)
+    }));
+
+    // Add "Unassigned" if there are any
+    const unassignedTasks = tasks.filter(t => !t.assigned_to);
+    if (unassignedTasks.length > 0) {
+        groups.push({
+            id: "unassigned",
+            name: "Não Atribuídas",
+            email: "Tarefas sem responsável",
+            tasks: unassignedTasks
+        });
+    }
+
+    return groups.filter(g => {
+        if (!search) return true;
+        const matchesName = g.name.toLowerCase().includes(search.toLowerCase());
+        const hasMatchingTasks = g.tasks.some(t => t.title.toLowerCase().includes(search.toLowerCase()));
+        return matchesName || hasMatchingTasks;
+    });
+  }, [tenantUsers, tasks, user?.id, search]);
 
   const totalActive = tasks.filter(t => !t.is_completed).length;
   const totalCompleted = tasks.filter(t => t.is_completed).length;
@@ -45,7 +81,7 @@ export function SuperTasksPanel({ onClose }: SuperTasksPanelProps) {
             <ClipboardList className="h-4 w-4" />
           </div>
           <h2 className="text-sm font-bold tracking-tight text-slate-900 dark:text-slate-100">
-            Tarefas Master
+            {isSuperAdmin ? "Tarefas Master" : "Tarefas"}
           </h2>
         </div>
         {onClose && (
@@ -54,6 +90,32 @@ export function SuperTasksPanel({ onClose }: SuperTasksPanelProps) {
           </Button>
         )}
       </div>
+
+      {/* SuperAdmin Tenant Selection */}
+      {isSuperAdmin && tenants.length > 1 && (
+        <div className="px-4 pt-3">
+            <div className="flex items-center gap-2 mb-1">
+                <Building2 className="h-3 w-3 text-slate-400" />
+                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Tenant Ativo</span>
+            </div>
+            <Select 
+                value={selectedTenantId || undefined} 
+                onValueChange={(val) => {
+                    setSelectedTenantId(val);
+                    setActiveTenantId(val);
+                }}
+            >
+                <SelectTrigger className="h-9 text-xs rounded-xl bg-slate-50/50 border-slate-200">
+                    <SelectValue placeholder="Selecione um tenant" />
+                </SelectTrigger>
+                <SelectContent>
+                    {tenants.map(t => (
+                        <SelectItem key={t.id} value={t.id} className="text-xs">{t.name}</SelectItem>
+                    ))}
+                </SelectContent>
+            </Select>
+        </div>
+      )}
 
       {/* Tabs & Search */}
       <div className="space-y-3 p-4">
@@ -75,7 +137,7 @@ export function SuperTasksPanel({ onClose }: SuperTasksPanelProps) {
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
           <Input 
-            placeholder="Buscar..." 
+            placeholder="Buscar por usuário ou tarefa..." 
             className="pl-9 h-9 text-xs rounded-xl bg-slate-50/50 border-slate-200"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -85,22 +147,26 @@ export function SuperTasksPanel({ onClose }: SuperTasksPanelProps) {
 
       {/* Content Area */}
       <ScrollArea className="flex-1 px-4 pb-10">
-        {listTasks.isLoading ? (
+        {listTasks.isLoading || listUsers.isLoading ? (
           <div className="py-10 text-center text-xs text-slate-500">
             Carregando...
           </div>
-        ) : filteredTenants.length === 0 ? (
+        ) : usersWithTasks.length === 0 ? (
           <div className="py-10 text-center text-xs text-slate-400">
             Nenhum resultado.
           </div>
         ) : (
-          <Accordion type="multiple" className="space-y-3">
-            {filteredTenants.map((tenant) => (
-              <TenantTaskGroup 
-                  key={tenant.id} 
-                  tenant={tenant} 
-                  allTasks={tasks}
+          <Accordion type="multiple" defaultValue={[user?.id || ""]} className="space-y-3">
+            {usersWithTasks.map((group) => (
+              <UserTaskGroup 
+                  key={group.id} 
+                  userId={group.id}
+                  userName={group.name}
+                  userEmail={group.email}
+                  tasks={group.tasks}
                   activeTab={activeTab}
+                  allUsers={tenantUsers}
+                  tenantId={selectedTenantId!}
               />
             ))}
           </Accordion>

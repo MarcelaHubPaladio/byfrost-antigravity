@@ -1074,10 +1074,10 @@ export function AppShell({
                   />
                 )}
 
-                {isSuperAdmin && (
+                {(isSuperAdmin || activeTenant?.modules_json?.tasks_enabled) && (
                   <NavTile 
                     icon={ClipboardList} 
-                    label="Tarefas Master" 
+                    label={isSuperAdmin ? "Tarefas Master" : "Tarefas"} 
                     onClick={(e) => {
                         e.preventDefault();
                         setIsSuperTasksOpen(!isSuperTasksOpen);
@@ -1464,11 +1464,11 @@ export function AppShell({
                               />
                             )}
 
-                            {isSuperAdmin && (
+                            {(isSuperAdmin || activeTenant?.modules_json?.tasks_enabled) && (
                               <MobileNavItem
                                 to="#"
                                 icon={ClipboardList}
-                                label="Tarefas Master"
+                                label={isSuperAdmin ? "Tarefas Master" : "Tarefas"}
                                 onNavigate={() => {
                                     setMobileNavOpen(false);
                                     setIsSuperTasksOpen(true);

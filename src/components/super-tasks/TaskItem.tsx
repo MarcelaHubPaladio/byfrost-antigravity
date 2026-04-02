@@ -1,9 +1,11 @@
 import { useState, useRef, useEffect } from "react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { SuperTask, useSuperTasks } from "@/hooks/useSuperTasks";
-import { Trash2, Plus, ChevronDown, ChevronRight, CornerDownRight } from "lucide-react";
+import { Trash2, Plus, ChevronDown, CornerDownRight, Calendar as CalendarIcon, Clock } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { format, isPast, isToday } from "date-fns";
+import { ptBR } from "date-fns/locale";
 
 interface TaskItemProps {
   task: SuperTask;
@@ -38,6 +40,7 @@ export function TaskItem({ task, isSubtask = false }: TaskItemProps) {
       parent_id: task.id,
       title: newSubtaskTitle.trim(),
       is_completed: false,
+      assigned_to: task.assigned_to, // Inherit assignee
       order_index: (task.subtasks?.length || 0)
     });
     setNewSubtaskTitle("");
@@ -53,16 +56,29 @@ export function TaskItem({ task, isSubtask = false }: TaskItemProps) {
     setIsEditing(false);
   };
 
+  const handleDueDateChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value;
+    await upsertTask.mutateAsync({ 
+        id: task.id, 
+        due_date: val ? new Date(val).toISOString() : null 
+    });
+  };
+
   useEffect(() => {
     if (isEditing && inputRef.current) {
         inputRef.current.focus();
     }
   }, [isEditing]);
 
+  const hasDeadline = !!task.due_date;
+  const deadlineDate = hasDeadline ? new Date(task.due_date!) : null;
+  const isOverdue = deadlineDate && isPast(deadlineDate) && !isToday(deadlineDate) && !task.is_completed;
+  const isDeadlineToday = deadlineDate && isToday(deadlineDate) && !task.is_completed;
+
   return (
     <div className="space-y-1">
       <div className={cn(
-        "group flex items-center gap-3 px-3 py-1.5 rounded-xl transition-all",
+        "group flex items-center gap-3 px-3 py-2 rounded-xl transition-all",
         "hover:bg-slate-100/80 dark:hover:bg-slate-800/60",
         task.is_completed && "opacity-60"
       )}>
@@ -83,19 +99,55 @@ export function TaskItem({ task, isSubtask = false }: TaskItemProps) {
               className="w-full bg-transparent border-none outline-none text-sm font-medium text-slate-800 dark:text-slate-100"
             />
           ) : (
-            <div 
-              onClick={() => setIsEditing(true)}
-              className={cn(
-                "text-sm font-medium text-slate-800 dark:text-slate-100 cursor-text truncate",
-                task.is_completed && "line-through decoration-slate-400"
-              )}
-            >
-              {task.title}
+            <div className="space-y-0.5">
+                <div 
+                    onClick={() => setIsEditing(true)}
+                    className={cn(
+                        "text-sm font-medium text-slate-800 dark:text-slate-100 cursor-text truncate",
+                        task.is_completed && "line-through decoration-slate-400"
+                    )}
+                >
+                    {task.title}
+                </div>
+                
+                {hasDeadline && (
+                    <div className={cn(
+                        "flex items-center gap-1 text-[10px] font-bold",
+                        isOverdue ? "text-rose-500" : isDeadlineToday ? "text-amber-600" : "text-slate-500"
+                    )}>
+                        <Clock className="h-3 w-3" />
+                        <span>
+                            {format(deadlineDate!, "dd 'de' MMM", { locale: ptBR })}
+                            {isOverdue && " (Atrasado)"}
+                            {isDeadlineToday && " (Hoje)"}
+                        </span>
+                    </div>
+                )}
             </div>
           )}
         </div>
 
         <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+          {/* Due Date Trigger */}
+          <div className="relative">
+            <input 
+                type="date" 
+                className="absolute inset-0 opacity-0 cursor-pointer w-full"
+                onChange={handleDueDateChange}
+                value={task.due_date ? format(new Date(task.due_date), "yyyy-MM-dd") : ""}
+            />
+            <Button 
+                variant="ghost" 
+                size="icon" 
+                className={cn(
+                    "h-7 w-7 rounded-lg hover:bg-white shadow-sm",
+                    hasDeadline && "text-indigo-600 bg-indigo-50/50"
+                )}
+            >
+              <CalendarIcon className="h-3.5 w-3.5" />
+            </Button>
+          </div>
+
           {!isSubtask && (
             <Button 
                 variant="ghost" 

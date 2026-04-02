@@ -14,20 +14,28 @@ export type SuperTask = {
   order_index: number;
   created_at: string;
   created_by: string | null;
+  assigned_to: string | null;
+  users_profile?: { display_name: string | null; email: string | null } | null;
   subtasks?: SuperTask[];
 };
 
-export function useSuperTasks() {
+export function useSuperTasks(tenantId?: string | null) {
   const qc = useQueryClient();
 
   const listTasks = useQuery({
-    queryKey: ["super_tasks"],
+    queryKey: ["super_tasks", tenantId],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from("super_tasks")
-        .select("*")
+        .select("*, users_profile:assigned_to(display_name, email)")
         .order("order_index", { ascending: true })
         .order("created_at", { ascending: true });
+
+      if (tenantId) {
+        query = query.eq("tenant_id", tenantId);
+      }
+
+      const { data, error } = await query;
 
       if (error) throw error;
 
@@ -42,6 +50,21 @@ export function useSuperTasks() {
           .filter((s) => s.parent_id === p.id)
           .sort((a, b) => a.order_index - b.order_index),
       }));
+    },
+  });
+
+  const listUsers = useQuery({
+    queryKey: ["tenant_users", tenantId],
+    enabled: Boolean(tenantId),
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("users_profile")
+        .select("user_id, display_name, email")
+        .eq("tenant_id", tenantId!)
+        .is("deleted_at", null);
+
+      if (error) throw error;
+      return data;
     },
   });
 
@@ -97,6 +120,7 @@ export function useSuperTasks() {
 
   return {
     listTasks,
+    listUsers,
     upsertTask,
     deleteTask,
     toggleTask,
