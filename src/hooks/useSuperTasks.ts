@@ -1,5 +1,8 @@
 import { supabase } from "@/lib/supabase";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMemo } from "react";
+import { useSession } from "@/providers/SessionProvider";
+import { useTenant } from "@/providers/TenantProvider";
 
 export type SuperTask = {
   id: string;
@@ -19,8 +22,39 @@ export type SuperTask = {
   subtasks?: SuperTask[];
 };
 
+type OrgNode = { user_id: string; parent_user_id: string | null };
+
+/** Returns the set of all descendant user_ids (inclusive of root) */
+function getVisibleUserIds(currentUserId: string, nodes: OrgNode[]): Set<string> {
+  const childrenMap = new Map<string, string[]>();
+  for (const n of nodes) {
+    if (n.parent_user_id) {
+      const cur = childrenMap.get(n.parent_user_id) ?? [];
+      cur.push(n.user_id);
+      childrenMap.set(n.parent_user_id, cur);
+    }
+  }
+
+  const visible = new Set<string>([currentUserId]);
+  const stack = [currentUserId];
+  while (stack.length) {
+    const cur = stack.pop()!;
+    for (const child of childrenMap.get(cur) ?? []) {
+      if (!visible.has(child)) {
+        visible.add(child);
+        stack.push(child);
+      }
+    }
+  }
+  return visible;
+}
+
 export function useSuperTasks(tenantId?: string | null) {
   const qc = useQueryClient();
+  const { user } = useSession();
+  const { activeTenant, isSuperAdmin } = useTenant();
+
+  const isAdmin = isSuperAdmin || activeTenant?.role === "admin" || activeTenant?.role === "manager" || activeTenant?.role === "owner";
 
   const listTasks = useQuery({
     queryKey: ["super_tasks", tenantId],
@@ -53,9 +87,31 @@ export function useSuperTasks(tenantId?: string | null) {
     },
   });
 
-  const listUsers = useQuery({
-    queryKey: ["tenant_users", tenantId],
+  // Fetch org nodes to calculate hierarchy visibility
+  const orgNodesQ = useQuery({
+    queryKey: ["org_nodes_for_tasks", tenantId],
     enabled: Boolean(tenantId),
+    staleTime: 30_000,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("org_nodes")
+        .select("user_id, parent_user_id")
+        .eq("tenant_id", tenantId!);
+      if (error) throw error;
+      return (data ?? []) as OrgNode[];
+    },
+  });
+
+  // Compute the set of user IDs the current user can see based on hierarchy
+  const visibleUserIds = useMemo(() => {
+    if (isAdmin) return null; // null = see everyone
+    if (!user?.id || !orgNodesQ.data) return new Set<string>([user?.id ?? ""]);
+    return getVisibleUserIds(user.id, orgNodesQ.data);
+  }, [isAdmin, user?.id, orgNodesQ.data]);
+
+  const listUsers = useQuery({
+    queryKey: ["tenant_users", tenantId, isAdmin ? "admin" : Array.from(visibleUserIds ?? []).join(",")],
+    enabled: Boolean(tenantId) && (isAdmin || orgNodesQ.isFetched),
     queryFn: async () => {
       const { data, error } = await supabase
         .from("users_profile")
@@ -64,7 +120,12 @@ export function useSuperTasks(tenantId?: string | null) {
         .is("deleted_at", null);
 
       if (error) throw error;
-      return data;
+
+      const allUsers = data ?? [];
+
+      // Filter by hierarchy for non-admins
+      if (visibleUserIds === null) return allUsers; // admin sees all
+      return allUsers.filter((u) => visibleUserIds.has(u.user_id));
     },
   });
 
@@ -124,5 +185,7 @@ export function useSuperTasks(tenantId?: string | null) {
     upsertTask,
     deleteTask,
     toggleTask,
+    isAdmin,
+    visibleUserIds,
   };
 }
