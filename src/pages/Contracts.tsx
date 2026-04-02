@@ -58,6 +58,7 @@ export default function Contracts() {
           deliverables(id, status, deleted_at)
         `)
         .eq("commitment_type", "contract")
+        .eq("tenant_id", activeTenantId!)
         .is("deleted_at", null)
         .order("created_at", { ascending: false });
 
