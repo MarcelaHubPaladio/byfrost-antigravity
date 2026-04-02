@@ -25,7 +25,7 @@ interface SuperTasksPanelProps {
 
 export function SuperTasksPanel({ onClose }: SuperTasksPanelProps) {
   const { user } = useSession();
-  const { tenants, activeTenantId, isSuperAdmin, setActiveTenantId } = useTenant();
+  const { tenants, activeTenantId, activeTenant, isSuperAdmin, setActiveTenantId } = useTenant();
   const [selectedTenantId, setSelectedTenantId] = useState<string | null>(activeTenantId);
   const { listTasks, listUsers } = useSuperTasks(selectedTenantId);
   const [search, setSearch] = useState("");
@@ -72,6 +72,9 @@ export function SuperTasksPanel({ onClose }: SuperTasksPanelProps) {
   const totalActive = tasks.filter(t => !t.is_completed).length;
   const totalCompleted = tasks.filter(t => t.is_completed).length;
 
+  const isModuleEnabled = activeTenant?.modules_json?.tasks_enabled === true;
+  const canSeeContent = isSuperAdmin || isModuleEnabled;
+
   return (
     <div className="flex h-full flex-col bg-white dark:bg-slate-950">
       {/* Panel Header */}
@@ -91,87 +94,101 @@ export function SuperTasksPanel({ onClose }: SuperTasksPanelProps) {
         )}
       </div>
 
-      {/* SuperAdmin Tenant Selection */}
-      {isSuperAdmin && tenants.length > 1 && (
-        <div className="px-4 pt-3">
-            <div className="flex items-center gap-2 mb-1">
-                <Building2 className="h-3 w-3 text-slate-400" />
-                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Tenant Ativo</span>
+      {!canSeeContent ? (
+        <div className="flex flex-1 flex-col items-center justify-center p-8 text-center">
+            <div className="mb-4 rounded-full bg-slate-100 p-4 dark:bg-slate-900">
+                <ClipboardList className="h-8 w-8 text-slate-400" />
             </div>
-            <Select 
-                value={selectedTenantId || undefined} 
-                onValueChange={(val) => {
-                    setSelectedTenantId(val);
-                    setActiveTenantId(val);
-                }}
-            >
-                <SelectTrigger className="h-9 text-xs rounded-xl bg-slate-50/50 border-slate-200">
-                    <SelectValue placeholder="Selecione um tenant" />
-                </SelectTrigger>
-                <SelectContent>
-                    {tenants.map(t => (
-                        <SelectItem key={t.id} value={t.id} className="text-xs">{t.name}</SelectItem>
+            <h3 className="mb-2 text-sm font-bold text-slate-900 dark:text-slate-100">Módulo Desativado</h3>
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+                Este módulo não está ativo para o seu tenant. Entre em contato com um administrador para habilitar.
+            </p>
+        </div>
+      ) : (
+        <>
+            {/* SuperAdmin Tenant Selection */}
+            {isSuperAdmin && tenants.length > 1 && (
+                <div className="px-4 pt-3">
+                    <div className="flex items-center gap-2 mb-1">
+                        <Building2 className="h-3 w-3 text-slate-400" />
+                        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Tenant Ativo</span>
+                    </div>
+                    <Select 
+                        value={selectedTenantId || undefined} 
+                        onValueChange={(val) => {
+                            setSelectedTenantId(val);
+                            setActiveTenantId(val);
+                        }}
+                    >
+                        <SelectTrigger className="h-9 text-xs rounded-xl bg-slate-50/50 border-slate-200">
+                            <SelectValue placeholder="Selecione um tenant" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {tenants.map(t => (
+                                <SelectItem key={t.id} value={t.id} className="text-xs">{t.name}</SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                </div>
+            )}
+
+            {/* Tabs & Search */}
+            <div className="space-y-3 p-4">
+                <div className="flex items-center gap-1.5 p-1 bg-slate-100/50 dark:bg-slate-900/50 rounded-xl">
+                <button 
+                    className={`flex-1 text-[11px] font-bold py-1.5 rounded-lg transition ${activeTab === 'active' ? 'bg-white shadow-sm text-indigo-600' : 'text-slate-500 hover:text-slate-700'}`}
+                    onClick={() => setActiveTab("active")}
+                >
+                    Pendentes ({totalActive})
+                </button>
+                <button 
+                    className={`flex-1 text-[11px] font-bold py-1.5 rounded-lg transition ${activeTab === 'completed' ? 'bg-white shadow-sm text-indigo-600' : 'text-slate-500 hover:text-slate-700'}`}
+                    onClick={() => setActiveTab("completed")}
+                >
+                    Concluídas ({totalCompleted})
+                </button>
+                </div>
+
+                <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+                <Input 
+                    placeholder="Buscar por usuário ou tarefa..." 
+                    className="pl-9 h-9 text-xs rounded-xl bg-slate-50/50 border-slate-200"
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                />
+                </div>
+            </div>
+
+            {/* Content Area */}
+            <ScrollArea className="flex-1 px-4 pb-10">
+                {listTasks.isLoading || listUsers.isLoading ? (
+                <div className="py-10 text-center text-xs text-slate-500">
+                    Carregando...
+                </div>
+                ) : usersWithTasks.length === 0 ? (
+                <div className="py-10 text-center text-xs text-slate-400">
+                    Nenhum resultado.
+                </div>
+                ) : (
+                <Accordion type="multiple" defaultValue={[user?.id || ""]} className="space-y-3">
+                    {usersWithTasks.map((group) => (
+                    <UserTaskGroup 
+                        key={group.id} 
+                        userId={group.id}
+                        userName={group.name}
+                        userEmail={group.email}
+                        tasks={group.tasks}
+                        activeTab={activeTab}
+                        allUsers={tenantUsers}
+                        tenantId={selectedTenantId!}
+                    />
                     ))}
-                </SelectContent>
-            </Select>
-        </div>
+                </Accordion>
+                )}
+            </ScrollArea>
+        </>
       )}
-
-      {/* Tabs & Search */}
-      <div className="space-y-3 p-4">
-        <div className="flex items-center gap-1.5 p-1 bg-slate-100/50 dark:bg-slate-900/50 rounded-xl">
-          <button 
-            className={`flex-1 text-[11px] font-bold py-1.5 rounded-lg transition ${activeTab === 'active' ? 'bg-white shadow-sm text-indigo-600' : 'text-slate-500 hover:text-slate-700'}`}
-            onClick={() => setActiveTab("active")}
-          >
-            Pendentes ({totalActive})
-          </button>
-          <button 
-            className={`flex-1 text-[11px] font-bold py-1.5 rounded-lg transition ${activeTab === 'completed' ? 'bg-white shadow-sm text-indigo-600' : 'text-slate-500 hover:text-slate-700'}`}
-            onClick={() => setActiveTab("completed")}
-          >
-            Concluídas ({totalCompleted})
-          </button>
-        </div>
-
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
-          <Input 
-            placeholder="Buscar por usuário ou tarefa..." 
-            className="pl-9 h-9 text-xs rounded-xl bg-slate-50/50 border-slate-200"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-        </div>
-      </div>
-
-      {/* Content Area */}
-      <ScrollArea className="flex-1 px-4 pb-10">
-        {listTasks.isLoading || listUsers.isLoading ? (
-          <div className="py-10 text-center text-xs text-slate-500">
-            Carregando...
-          </div>
-        ) : usersWithTasks.length === 0 ? (
-          <div className="py-10 text-center text-xs text-slate-400">
-            Nenhum resultado.
-          </div>
-        ) : (
-          <Accordion type="multiple" defaultValue={[user?.id || ""]} className="space-y-3">
-            {usersWithTasks.map((group) => (
-              <UserTaskGroup 
-                  key={group.id} 
-                  userId={group.id}
-                  userName={group.name}
-                  userEmail={group.email}
-                  tasks={group.tasks}
-                  activeTab={activeTab}
-                  allUsers={tenantUsers}
-                  tenantId={selectedTenantId!}
-              />
-            ))}
-          </Accordion>
-        )}
-      </ScrollArea>
     </div>
   );
 }

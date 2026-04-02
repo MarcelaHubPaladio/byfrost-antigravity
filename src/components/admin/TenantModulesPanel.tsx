@@ -34,6 +34,10 @@ function getCommunicationEnabled(modulesJson: any) {
   return Boolean(modulesJson?.communication_enabled === true);
 }
 
+function getTasksEnabled(modulesJson: any) {
+  return Boolean(modulesJson?.tasks_enabled === true);
+}
+
 function setModuleFlag(modulesJson: any, key: string, enabled: boolean) {
   const base = (modulesJson ?? {}) as any;
   return { ...base, [key]: enabled };
@@ -66,6 +70,7 @@ export function TenantModulesPanel() {
   const linkManagerEnabled = useMemo(() => getLinkManagerEnabled(tenantQ.data?.modules_json), [tenantQ.data]);
   const portalEnabled = useMemo(() => getPortalEnabled(tenantQ.data?.modules_json), [tenantQ.data]);
   const communicationEnabled = useMemo(() => getCommunicationEnabled(tenantQ.data?.modules_json), [tenantQ.data]);
+  const tasksEnabled = useMemo(() => getTasksEnabled(tenantQ.data?.modules_json), [tenantQ.data]);
 
   const toggleModule = async (key: string, next: boolean) => {
     if (!activeTenantId) return;
@@ -196,6 +201,20 @@ export function TenantModulesPanel() {
                 checked={communicationEnabled}
                 disabled={saving || tenantQ.isLoading}
                 onCheckedChange={(v) => toggleModule("communication_enabled", v)}
+              />
+            </div>
+
+            <div className="flex items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2">
+              <div>
+                <div className="text-xs font-semibold text-slate-900">Módulo de Tarefas</div>
+                <div className="mt-0.5 text-[11px] text-slate-600">
+                  Habilita a gestão de tarefas, prazos e responsáveis por tenant.
+                </div>
+              </div>
+              <Switch
+                checked={tasksEnabled}
+                disabled={saving || tenantQ.isLoading}
+                onCheckedChange={(v) => toggleModule("tasks_enabled", v)}
               />
             </div>
 

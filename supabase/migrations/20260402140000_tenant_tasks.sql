@@ -13,7 +13,6 @@ REFERENCES public.users_profile(user_id, tenant_id)
 ON DELETE SET NULL;
 
 -- Step 2: Update RLS Policies for public.super_tasks
-DROP POLICY IF EXISTS "Super-Admin only access to super_tasks" ON public.super_tasks;
 DROP POLICY IF EXISTS "Super-admins full access" ON public.super_tasks;
 DROP POLICY IF EXISTS "Tenant admins access all tenant tasks" ON public.super_tasks;
 DROP POLICY IF EXISTS "Users access own or assigned tasks" ON public.super_tasks;
@@ -25,53 +24,81 @@ FOR ALL
 USING (public.is_super_admin())
 WITH CHECK (public.is_super_admin());
 
--- 2. Tenant admins can access all tasks in their tenant
+-- 2. Tenant admins can access all tasks in their tenant ONLY IF MODULE IS ENABLED
 CREATE POLICY "Tenant admins access all tenant tasks"
 ON public.super_tasks
 FOR ALL
 USING (
-    EXISTS (
-        SELECT 1 FROM public.users_profile up
-        WHERE up.user_id = auth.uid() 
-        AND up.tenant_id = super_tasks.tenant_id
-        AND up.role IN ('admin', 'manager', 'owner', 'supervisor')
-        AND up.deleted_at IS NULL
+    (
+        EXISTS (
+            SELECT 1 FROM public.tenants t
+            WHERE t.id = super_tasks.tenant_id
+            AND (t.modules_json->>'tasks_enabled')::boolean = true
+        )
+        AND EXISTS (
+            SELECT 1 FROM public.users_profile up
+            WHERE up.user_id = auth.uid() 
+            AND up.tenant_id = super_tasks.tenant_id
+            AND up.role IN ('admin', 'manager', 'owner', 'supervisor')
+            AND up.deleted_at IS NULL
+        )
     )
     OR public.is_super_admin()
 )
 WITH CHECK (
-    EXISTS (
-        SELECT 1 FROM public.users_profile up
-        WHERE up.user_id = auth.uid() 
-        AND up.tenant_id = super_tasks.tenant_id
-        AND up.role IN ('admin', 'manager', 'owner', 'supervisor')
-        AND up.deleted_at IS NULL
+    (
+        EXISTS (
+            SELECT 1 FROM public.tenants t
+            WHERE t.id = super_tasks.tenant_id
+            AND (t.modules_json->>'tasks_enabled')::boolean = true
+        )
+        AND EXISTS (
+            SELECT 1 FROM public.users_profile up
+            WHERE up.user_id = auth.uid() 
+            AND up.tenant_id = super_tasks.tenant_id
+            AND up.role IN ('admin', 'manager', 'owner', 'supervisor')
+            AND up.deleted_at IS NULL
+        )
     )
     OR public.is_super_admin()
 );
 
--- 3. Regular users can access tasks assigned to them or created by them
+-- 3. Regular users can access tasks assigned to them ONLY IF MODULE IS ENABLED
 CREATE POLICY "Users access own or assigned tasks"
 ON public.super_tasks
 FOR ALL
 USING (
-    (assigned_to = auth.uid() OR created_by = auth.uid())
-    AND (
+    (
         EXISTS (
+            SELECT 1 FROM public.tenants t
+            WHERE t.id = super_tasks.tenant_id
+            AND (t.modules_json->>'tasks_enabled')::boolean = true
+        )
+        AND (assigned_to = auth.uid() OR created_by = auth.uid())
+        AND EXISTS (
             SELECT 1 FROM public.users_profile up
             WHERE up.user_id = auth.uid()
             AND up.tenant_id = super_tasks.tenant_id
             AND up.deleted_at IS NULL
         )
     )
+    OR public.is_super_admin()
 )
 WITH CHECK (
-    EXISTS (
-        SELECT 1 FROM public.users_profile up
-        WHERE up.user_id = auth.uid()
-        AND up.tenant_id = super_tasks.tenant_id
-        AND up.deleted_at IS NULL
+    (
+        EXISTS (
+            SELECT 1 FROM public.tenants t
+            WHERE t.id = super_tasks.tenant_id
+            AND (t.modules_json->>'tasks_enabled')::boolean = true
+        )
+        AND EXISTS (
+            SELECT 1 FROM public.users_profile up
+            WHERE up.user_id = auth.uid()
+            AND up.tenant_id = super_tasks.tenant_id
+            AND up.deleted_at IS NULL
+        )
     )
+    OR public.is_super_admin()
 );
 
 -- Step 3: Add 'tasks_enabled' to modules_json defaults or existing tenants if needed (Optional, usually handled via UI/API)
