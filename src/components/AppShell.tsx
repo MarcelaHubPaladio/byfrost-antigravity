@@ -52,6 +52,7 @@ import {
   Palette,
   Bell,
 } from "lucide-react";
+import { SuperTasksPanel } from "@/components/super-tasks/SuperTasksPanel";
 import { UsageIndicator } from "@/components/admin/UsageIndicator";
 
 import { isTvCorporativaEnabled } from "@/components/RequireTvCorporativaEnabled";
@@ -199,20 +200,29 @@ function NavTile({
   icon: Icon,
   label,
   disabled,
+  onClick,
 }: {
-  to: string;
+  to?: string;
   icon: any;
   label: string;
   disabled?: boolean;
+  onClick?: (e: React.MouseEvent) => void;
 }) {
-  const base = "mx-auto flex w-[78px] flex-col items-center gap-1 rounded-2xl border px-2 py-2 text-center";
+  const base = "mx-auto flex w-[78px] flex-col items-center gap-1 rounded-2xl border px-2 py-2 text-center transition-all cursor-pointer";
+
+  const content = (
+    <>
+      <Icon className="h-5 w-5" />
+      <span className="text-[11px] font-semibold tracking-tight leading-none">{label}</span>
+    </>
+  );
 
   if (disabled) {
     return (
       <div
         className={cn(
           base,
-          "border-slate-200 bg-white/40 text-slate-400",
+          "border-slate-200 bg-white/40 text-slate-400 opacity-60 cursor-not-allowed",
           "dark:border-slate-800 dark:bg-slate-950/30 dark:text-slate-500"
         )}
         title={`${label} (sem permissão)`}
@@ -228,10 +238,27 @@ function NavTile({
     );
   }
 
+  if (!to && onClick) {
+    return (
+        <button
+            type="button"
+            onClick={onClick}
+            className={cn(
+                base,
+                "border-slate-200 bg-white/70 text-slate-700 hover:border-slate-300 hover:bg-white dark:border-slate-800 dark:bg-slate-950/40 dark:text-slate-100"
+            )}
+            title={label}
+        >
+            {content}
+        </button>
+    );
+  }
+
   return (
     <NavLink
-      to={to}
+      to={to || "#"}
       end={to === "/app"}
+      onClick={onClick}
       className={({ isActive }) =>
         cn(
           base,
@@ -518,6 +545,7 @@ export function AppShell({
   const [mobilePresenceOpen, setMobilePresenceOpen] = useState(false);
   const [mobileCoreOpen, setMobileCoreOpen] = useState(false);
   const [mobileCreateOpen, setMobileCreateOpen] = useState(false);
+  const [isSuperTasksOpen, setIsSuperTasksOpen] = useState(false);
 
   const roleKey = String(activeTenant?.role ?? "");
   const financeEnabledForTenant = isFinanceEnabled(activeTenant?.modules_json);
@@ -1026,7 +1054,14 @@ export function AppShell({
                 )}
 
                 {isSuperAdmin && (
-                  <NavTile to="/app/super-tasks" icon={ClipboardList} label="Tarefas Master" />
+                  <NavTile 
+                    icon={ClipboardList} 
+                    label="Tarefas Master" 
+                    onClick={(e) => {
+                        e.preventDefault();
+                        setIsSuperTasksOpen(true);
+                    }}
+                  />
                 )}
                 {can("app.admin") && (
                   <NavTile to="/app/admin" icon={Settings2} label="Admin" />
@@ -1409,10 +1444,13 @@ export function AppShell({
 
                             {isSuperAdmin && (
                               <MobileNavItem
-                                to="/app/super-tasks"
+                                to="#"
                                 icon={ClipboardList}
                                 label="Tarefas Master"
-                                onNavigate={() => setMobileNavOpen(false)}
+                                onNavigate={() => {
+                                    setMobileNavOpen(false);
+                                    setIsSuperTasksOpen(true);
+                                }}
                               />
                             )}
                             {can("app.admin") && (
@@ -1582,6 +1620,13 @@ export function AppShell({
           </div>
         </div>
       </div>
+
+      {/* Super Tasks Panel (Right Side Drawer) */}
+      <Sheet open={isSuperTasksOpen} onOpenChange={setIsSuperTasksOpen}>
+        <SheetContent side="right" className="p-0 w-full sm:max-w-md border-l border-slate-200 dark:border-slate-800 shadow-2xl">
+          <SuperTasksPanel onClose={() => setIsSuperTasksOpen(false)} />
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }
