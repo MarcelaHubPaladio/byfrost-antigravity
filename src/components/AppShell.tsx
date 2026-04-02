@@ -1025,9 +1025,13 @@ export function AppShell({
                   />
                 )}
 
+                {isSuperAdmin && (
+                  <NavTile to="/app/super-tasks" icon={ClipboardList} label="Tarefas Master" />
+                )}
                 {can("app.admin") && (
                   <NavTile to="/app/admin" icon={Settings2} label="Admin" />
                 )}
+
                 <NavTile to="/app/settings" icon={Settings} label="Config" disabled={!can("app.settings")} />
               </div>
             </div>
@@ -1403,6 +1407,14 @@ export function AppShell({
                               />
                             )}
 
+                            {isSuperAdmin && (
+                              <MobileNavItem
+                                to="/app/super-tasks"
+                                icon={ClipboardList}
+                                label="Tarefas Master"
+                                onNavigate={() => setMobileNavOpen(false)}
+                              />
+                            )}
                             {can("app.admin") && (
                               <MobileNavItem
                                 to="/app/admin"
@@ -1411,6 +1423,7 @@ export function AppShell({
                                 onNavigate={() => setMobileNavOpen(false)}
                               />
                             )}
+
                             <MobileNavItem
                               to="/app/settings"
                               icon={Settings}

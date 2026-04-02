@@ -91,6 +91,8 @@ const PublicScriptApproval = lazyWithRetry(() => import("@/pages/PublicScriptApp
 const MktTechaPublicApproval = lazyWithRetry(() => import("@/pages/MktTechaPublicApproval"));
 const MktTechaPublicSummary = lazyWithRetry(() => import("@/pages/MktTechaPublicSummary"));
 const MktTechaPublicReport = lazyWithRetry(() => import("@/pages/MktTechaPublicReport"));
+const SuperTasks = lazyWithRetry(() => import("@/pages/SuperTasks"));
+
 
 
 const GlobalLoading = () => (
@@ -558,6 +560,16 @@ const App = () => (
                       </RequireRouteAccess>
                     }
                   />
+
+                  <Route
+                    path="/app/super-tasks"
+                    element={
+                      <RequireRouteAccess routeKey="app.super_tasks">
+                        <SuperTasks />
+                      </RequireRouteAccess>
+                    }
+                  />
+
 
                   <Route
                     path="/app/me"

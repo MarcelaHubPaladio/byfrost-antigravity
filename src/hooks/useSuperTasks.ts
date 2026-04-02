@@ -1,0 +1,104 @@
+import { supabase } from "@/lib/supabase";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+
+export type SuperTask = {
+  id: string;
+  tenant_id: string;
+  entity_id: string | null;
+  parent_id: string | null;
+  title: string;
+  description: string | null;
+  is_completed: boolean;
+  completed_at: string | null;
+  due_date: string | null;
+  order_index: number;
+  created_at: string;
+  created_by: string | null;
+  subtasks?: SuperTask[];
+};
+
+export function useSuperTasks() {
+  const qc = useQueryClient();
+
+  const listTasks = useQuery({
+    queryKey: ["super_tasks"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("super_tasks")
+        .select("*")
+        .order("order_index", { ascending: true })
+        .order("created_at", { ascending: true });
+
+      if (error) throw error;
+
+      // Build hierarchy
+      const tasks = (data as SuperTask[]) || [];
+      const parentTasks = tasks.filter((t) => !t.parent_id);
+      const subtasks = tasks.filter((t) => t.parent_id);
+
+      return parentTasks.map((p) => ({
+        ...p,
+        subtasks: subtasks
+          .filter((s) => s.parent_id === p.id)
+          .sort((a, b) => a.order_index - b.order_index),
+      }));
+    },
+  });
+
+  const upsertTask = useMutation({
+    mutationFn: async (task: Partial<SuperTask>) => {
+      const { data, error } = await supabase
+        .from("super_tasks")
+        .upsert({
+          ...task,
+          updated_at: new Date().toISOString(),
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["super_tasks"] });
+    },
+  });
+
+  const deleteTask = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("super_tasks").delete().eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["super_tasks"] });
+    },
+  });
+
+  const toggleTask = useMutation({
+    mutationFn: async ({ id, is_completed }: { id: string; is_completed: boolean }) => {
+      const { data, error } = await supabase
+        .from("super_tasks")
+        .update({
+          is_completed,
+          completed_at: is_completed ? new Date().toISOString() : null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", id)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["super_tasks"] });
+    },
+  });
+
+  return {
+    listTasks,
+    upsertTask,
+    deleteTask,
+    toggleTask,
+  };
+}
