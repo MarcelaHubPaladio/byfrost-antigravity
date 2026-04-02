@@ -545,7 +545,13 @@ export function AppShell({
   const [mobilePresenceOpen, setMobilePresenceOpen] = useState(false);
   const [mobileCoreOpen, setMobileCoreOpen] = useState(false);
   const [mobileCreateOpen, setMobileCreateOpen] = useState(false);
-  const [isSuperTasksOpen, setIsSuperTasksOpen] = useState(false);
+  const [isSuperTasksOpen, setIsSuperTasksOpen] = useState(() => {
+    try {
+      return localStorage.getItem("isSuperTasksOpen") === "true";
+    } catch {
+      return false;
+    }
+  });
   const [isMobile, setIsMobile] = useState(false);
 
   useEffect(() => {
@@ -554,6 +560,10 @@ export function AppShell({
     window.addEventListener("resize", check);
     return () => window.removeEventListener("resize", check);
   }, []);
+
+  useEffect(() => {
+    localStorage.setItem("isSuperTasksOpen", String(isSuperTasksOpen));
+  }, [isSuperTasksOpen]);
 
   const roleKey = String(activeTenant?.role ?? "");
   const financeEnabledForTenant = isFinanceEnabled(activeTenant?.modules_json);
