@@ -655,6 +655,45 @@ export function AppShell({
 
   const unreadCount = unreadCommQ.data || 0;
 
+  // Task due-date notification query (runs when tasks module is enabled)
+  const tasksEnabledForTenant = Boolean(activeTenant?.modules_json?.tasks_enabled);
+  const taskDueAlertsQ = useQuery({
+    queryKey: ["task_due_alerts", activeTenantId, user?.id],
+    enabled: Boolean(activeTenantId && user?.id && tasksEnabledForTenant),
+    refetchInterval: 30 * 60 * 1000, // 30 min
+    queryFn: async () => {
+      const today = new Date();
+      const todayStr = today.toISOString().slice(0, 10);
+      const tomorrow = new Date(today);
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      const tomorrowStr = tomorrow.toISOString().slice(0, 10);
+
+      const { data, error } = await supabase
+        .from("super_tasks")
+        .select("id, title, due_date")
+        .eq("tenant_id", activeTenantId!)
+        .eq("assigned_to", user!.id)
+        .eq("is_completed", false)
+        .in("due_date", [
+          `${todayStr}T12:00:00.000Z`,
+          `${tomorrowStr}T12:00:00.000Z`,
+        ])
+        .is("parent_id", null);
+
+      if (error) return { today: [], tomorrow: [] };
+
+      const todayTasks = (data ?? []).filter((t) => t.due_date?.slice(0, 10) === todayStr);
+      const tomorrowTasks = (data ?? []).filter((t) => t.due_date?.slice(0, 10) === tomorrowStr);
+      return { today: todayTasks, tomorrow: tomorrowTasks };
+    },
+  });
+
+  const taskAlertCount =
+    (taskDueAlertsQ.data?.today.length ?? 0) +
+    (taskDueAlertsQ.data?.tomorrow.length ?? 0);
+
+  const totalNotifCount = unreadCount + taskAlertCount;
+
   useEffect(() => {
     if (!activeTenantId || !user?.id || !communicationEnabledForTenant) return;
 
@@ -932,12 +971,12 @@ export function AppShell({
                       }
                     }}
                     className="group relative flex h-10 w-10 items-center justify-center rounded-2xl bg-white/15 text-white transition hover:bg-white/25 active:scale-95"
-                    title={`${unreadCount} novas mensagens`}
+                    title={totalNotifCount > 0 ? `${unreadCount > 0 ? `${unreadCount} msg` : ""}${unreadCount > 0 && taskAlertCount > 0 ? " · " : ""}${taskAlertCount > 0 ? `${taskDueAlertsQ.data?.today.length ? `${taskDueAlertsQ.data.today.length} tarefa(s) vencem hoje` : ""}${taskDueAlertsQ.data?.today.length && taskDueAlertsQ.data?.tomorrow.length ? " · " : ""}${taskDueAlertsQ.data?.tomorrow.length ? `${taskDueAlertsQ.data.tomorrow.length} tarefa(s) vencem amanhã` : ""}` : ""}` : "Notificações"}
                   >
-                    <Bell className={cn("h-5 w-5", unreadCount > 0 && "animate-pulse")} />
-                    {unreadCount > 0 && (
+                    <Bell className={cn("h-5 w-5", totalNotifCount > 0 && "animate-pulse")} />
+                    {totalNotifCount > 0 && (
                       <div className="absolute -right-1 -top-1 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-bold text-white shadow-sm ring-2 ring-[hsl(var(--byfrost-accent))]">
-                        {unreadCount > 99 ? "99+" : unreadCount}
+                        {totalNotifCount > 99 ? "99+" : totalNotifCount}
                       </div>
                     )}
                   </button>
