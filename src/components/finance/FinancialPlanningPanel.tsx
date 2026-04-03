@@ -13,7 +13,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { Badge } from "@/components/ui/badge";
 import { showError, showSuccess } from "@/utils/toast";
 import { Checkbox } from "@/components/ui/checkbox";
-import { addDays, addMonths, endOfMonth, format, startOfMonth } from "date-fns";
+import { addDays, addMonths, endOfMonth, format, startOfMonth, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { AsyncSelect } from "@/components/ui/async-select";
 import { Pencil, Trash2, ChevronLeft, ChevronRight, Calendar as CalendarIcon, Wallet, Link2Off, ExternalLink, TrendingUp } from "lucide-react";
@@ -447,26 +447,73 @@ export function FinancialPlanningPanel() {
       if (!activeTenantId || !editItem) throw new Error("Item inválido");
       const table = editType === "receivable" ? "financial_receivables" : "financial_payables";
       
-      const payload = {
+      const payload: any = {
         description: updatedData.description,
         amount: parseMoneyInput(updatedData.amount),
         due_date: updatedData.due_date,
         entity_id: updatedData.entity_id,
         account_id: updatedData.account_id,
         category_id: updatedData.category_id,
+        installments_total: updatedData.installments_total,
       };
 
       if (!Number.isFinite(payload.amount)) throw new Error("Valor inválido");
 
       if (editScope === "this-and-future" && editItem.recurrence_group_id) {
-        // Atualiza este e os próximos membros do grupo
-        const { error } = await supabase
+        // 1. Atualizar registros existentes (este e futuros) no grupo
+        const { error: updateErr } = await supabase
           .from(table)
           .update(payload)
           .eq("tenant_id", activeTenantId)
           .eq("recurrence_group_id", editItem.recurrence_group_id)
           .gte("installment_number", editItem.installment_number);
-        if (error) throw error;
+        
+        if (updateErr) throw updateErr;
+
+        // 2. Se o total aumentou, gera parcelas extras
+        const currentMaxTotal = editItem.installments_total || 0;
+        const newTotal = Number(updatedData.installments_total || currentMaxTotal);
+        
+        if (newTotal > currentMaxTotal) {
+          // Busca a última parcela existente no grupo para saber a data
+          const { data: lastItems, error: lastErr } = await supabase
+            .from(table)
+            .select("installment_number, due_date")
+            .eq("tenant_id", activeTenantId)
+            .eq("recurrence_group_id", editItem.recurrence_group_id)
+            .order("installment_number", { ascending: false })
+            .limit(1);
+
+          if (lastErr) throw lastErr;
+          
+          const lastNum = lastItems?.[0]?.installment_number || editItem.installment_number;
+          const lastDate = parseISO(lastItems?.[0]?.due_date || editItem.due_date);
+
+          if (newTotal > lastNum) {
+            const extraItems = [];
+            for (let i = lastNum + 1; i <= newTotal; i++) {
+              const monthsToAdd = i - lastNum;
+              const newDate = addMonths(lastDate, monthsToAdd);
+              extraItems.push({
+                tenant_id: activeTenantId,
+                description: payload.description,
+                amount: payload.amount,
+                due_date: format(newDate, "yyyy-MM-dd"),
+                status: "pending",
+                recurrence_group_id: editItem.recurrence_group_id,
+                installment_number: i,
+                installments_total: newTotal,
+                entity_id: payload.entity_id,
+                account_id: payload.account_id,
+                category_id: payload.category_id
+              });
+            }
+            if (extraItems.length > 0) {
+              const { error: insertErr } = await supabase.from(table).insert(extraItems);
+              if (insertErr) throw insertErr;
+            }
+          }
+        }
       } else {
         // Atualiza apenas este
         const { error } = await supabase
@@ -1430,6 +1477,8 @@ function EditItemDialog({ open, onOpenChange, item, type, scope, onScopeChange, 
   const [accountId, setAccountId] = useState<string | null>(null);
   const [categoryId, setCategoryId] = useState<string | null>(null);
   const [categoryLabel, setCategoryLabel] = useState<string | null>(null);
+  const [instNumber, setInstNumber] = useState<number | null>(null);
+  const [instTotal, setInstTotal] = useState<number | null>(null);
 
   // Sync state when item changes
   useMemo(() => {
@@ -1455,6 +1504,8 @@ function EditItemDialog({ open, onOpenChange, item, type, scope, onScopeChange, 
       
       setCategoryId(catId || null);
       setCategoryLabel(catLabel || null);
+      setInstNumber(item.installment_number || null);
+      setInstTotal(item.installments_total || null);
     }
   }, [item]);
 
@@ -1478,13 +1529,38 @@ function EditItemDialog({ open, onOpenChange, item, type, scope, onScopeChange, 
           <div className="grid grid-cols-2 gap-3">
             <div>
               <Label className="text-xs">Valor</Label>
-              <Input className="mt-1 rounded-2xl" value={amount} onChange={(e) => setAmount(e.target.value)} />
+              <Input className="mt-1 rounded-2xl font-bold text-[hsl(var(--byfrost-accent))]" value={amount} onChange={(e) => setAmount(e.target.value)} />
             </div>
             <div>
               <Label className="text-xs">Vencimento</Label>
               <Input type="date" className="mt-1 rounded-2xl" value={date} onChange={(e) => setDate(e.target.value)} />
             </div>
           </div>
+
+          {(instNumber || item.recurrence_group_id) && (
+            <div className="grid grid-cols-2 gap-3 p-3 rounded-2xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
+              <div>
+                <Label className="text-[10px] text-slate-500 uppercase font-bold">Parcela Atual</Label>
+                <div className="mt-1 h-9 flex items-center px-3 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-300">
+                  {instNumber ?? "?"} de {instTotal ?? "?"}
+                </div>
+              </div>
+              <div>
+                <Label className="text-[10px] text-slate-500 uppercase font-bold">Total da Série</Label>
+                <Input 
+                  type="number" 
+                  className="mt-1 h-9 rounded-xl bg-white dark:bg-slate-950 font-bold" 
+                  value={instTotal || ""} 
+                  onChange={(e) => setInstTotal(Number(e.target.value))}
+                  min={instNumber || 1}
+                />
+              </div>
+              <p className="col-span-2 text-[10px] text-slate-400 italic px-1">
+                Ao aumentar o total usando "Este e futuros", novas projeções serão criadas automaticamente.
+              </p>
+            </div>
+          )}
+
           <div className="grid grid-cols-2 gap-3">
             <div>
               <Label className="text-xs">Entidade</Label>
@@ -1541,37 +1617,49 @@ function EditItemDialog({ open, onOpenChange, item, type, scope, onScopeChange, 
             </Select>
           </div>
 
-          {item.recurrence_group_id && (
-            <div className="mt-2 p-3 rounded-2xl bg-amber-50 border border-amber-100 dark:bg-amber-900/20 dark:border-amber-900/40">
-              <Label className="text-xs font-semibold text-amber-800 dark:text-amber-200 block mb-2">Este lançamento faz parte de uma recorrência</Label>
-              <Select value={scope} onValueChange={onScopeChange}>
-                <SelectTrigger className="h-9 rounded-xl bg-white dark:bg-slate-950">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="only-this">Alterar somente esta parcela ({item.installment_number})</SelectItem>
-                  <SelectItem value="this-and-future">Alterar esta e todas as próximas</SelectItem>
-                </SelectContent>
-              </Select>
+
+          <div className="grid gap-2">
+            <Label className="text-xs">Escopo da alteração</Label>
+            <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-2xl">
+              <button
+                className={cn(
+                  "flex-1 py-2 text-[10px] font-bold uppercase tracking-wider rounded-xl transition-all",
+                  scope === "only-this" ? "bg-white dark:bg-slate-700 shadow-sm text-slate-900 dark:text-slate-100" : "text-slate-500"
+                )}
+                onClick={() => onScopeChange("only-this")}
+              >
+                Apenas este
+              </button>
+              <button
+                className={cn(
+                  "flex-1 py-2 text-[10px] font-bold uppercase tracking-wider rounded-xl transition-all",
+                  scope === "this-and-future" ? "bg-white dark:bg-slate-700 shadow-sm text-slate-900 dark:text-slate-100" : "text-slate-500"
+                )}
+                onClick={() => onScopeChange("this-and-future")}
+                disabled={!item.recurrence_group_id}
+              >
+                Este e futuros
+              </button>
             </div>
-          )}
+          </div>
         </div>
 
-        <DialogFooter>
-          <Button variant="ghost" onClick={() => onOpenChange(false)}>Cancelar</Button>
-          <Button 
-            disabled={isPending} 
-            onClick={() => onSave({ 
-              description: desc, 
-              amount, 
-              due_date: date, 
-              entity_id: entityId, 
+        <DialogFooter className="mt-4 gap-2">
+          <Button variant="ghost" className="rounded-2xl h-11" onClick={() => onOpenChange(false)}>Cancelar</Button>
+          <Button
+            className="rounded-2xl h-11 bg-slate-900 text-white hover:bg-slate-800 dark:bg-white dark:text-slate-900 font-bold"
+            onClick={() => onSave({
+              description: desc,
+              amount,
+              due_date: date,
+              entity_id: entityId,
               account_id: accountId,
-              category_id: categoryId 
+              category_id: categoryId,
+              installments_total: instTotal
             })}
-            className="rounded-2xl"
+            disabled={isPending}
           >
-            {isPending ? "Salvando..." : "Salvar Alterações"}
+            {isPending ? "Salvando…" : "Salvar alterações"}
           </Button>
         </DialogFooter>
       </DialogContent>
