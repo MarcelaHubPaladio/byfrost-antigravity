@@ -16,8 +16,9 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { addDays, addMonths, endOfMonth, format, startOfMonth } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { AsyncSelect } from "@/components/ui/async-select";
-import { Pencil, Trash2, ChevronLeft, ChevronRight, Calendar as CalendarIcon, Wallet, Link2Off, ExternalLink } from "lucide-react";
+import { Pencil, Trash2, ChevronLeft, ChevronRight, Calendar as CalendarIcon, Wallet, Link2Off, ExternalLink, TrendingUp } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Area, AreaChart } from "recharts";
 
 type CategoryRow = {
   id: string;
@@ -112,7 +113,15 @@ export function FinancialPlanningPanel() {
     queryFn: async () => {
       let query = supabase
         .from("financial_receivables")
-        .select("id,tenant_id,description,amount,due_date,status,entity_id,account_id,core_entities(display_name),financial_transactions!financial_transactions_receivable_fk(id,transaction_date,description,amount)")
+        .select(`
+          id,tenant_id,description,amount,due_date,status,entity_id,account_id,category_id,
+          core_entities(display_name),
+          financial_categories(name),
+          financial_transactions!financial_transactions_receivable_fk(
+            id,transaction_date,description,amount,category_id,
+            financial_categories(name)
+          )
+        `)
         .eq("tenant_id", activeTenantId!)
         .gte("due_date", monthStart)
         .lte("due_date", monthEnd)
@@ -134,7 +143,15 @@ export function FinancialPlanningPanel() {
     queryFn: async () => {
       let query = supabase
         .from("financial_payables")
-        .select("id,tenant_id,description,amount,due_date,status,entity_id,account_id,core_entities(display_name),financial_transactions!financial_transactions_payable_fk(id,transaction_date,description,amount)")
+        .select(`
+          id,tenant_id,description,amount,due_date,status,entity_id,account_id,category_id,
+          core_entities(display_name),
+          financial_categories(name),
+          financial_transactions!financial_transactions_payable_fk(
+            id,transaction_date,description,amount,category_id,
+            financial_categories(name)
+          )
+        `)
         .eq("tenant_id", activeTenantId!)
         .gte("due_date", monthStart)
         .lte("due_date", monthEnd)
@@ -147,6 +164,20 @@ export function FinancialPlanningPanel() {
       const { data, error } = await query.limit(400);
       if (error) throw error;
       return (data ?? []) as any[];
+    },
+  });
+
+  const startingBalanceQ = useQuery({
+    queryKey: ["financial_starting_balance", activeTenantId, monthStart, selectedAccountId],
+    enabled: Boolean(activeTenantId),
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("financial_get_balance_at_date", {
+        p_tenant_id: activeTenantId!,
+        p_date: monthStart,
+        p_account_id: selectedAccountId === "all" ? null : selectedAccountId
+      });
+      if (error) throw error;
+      return Number(data ?? 0);
     },
   });
 
@@ -477,6 +508,48 @@ export function FinancialPlanningPanel() {
 
   const projection = projectionQ.data;
 
+  const trendData = useMemo(() => {
+    if (!startingBalanceQ.isSuccess) return [];
+    
+    let currentBalance = startingBalanceQ.data;
+    const daysInMonth = endOfMonth(selectedDate).getDate();
+    const data = [];
+
+    // Map receivables and payables by day for faster lookups
+    const recvByDay = new Map<string, number>();
+    for (const r of receivablesQ.data ?? []) {
+      const d = r.due_date;
+      recvByDay.set(d, (recvByDay.get(d) ?? 0) + Number(r.amount || 0));
+    }
+    
+    const payByDay = new Map<string, number>();
+    for (const p of payablesQ.data ?? []) {
+      const d = p.due_date;
+      payByDay.set(d, (payByDay.get(d) ?? 0) + Number(p.amount || 0));
+    }
+
+    const monthPrefix = format(selectedDate, "yyyy-MM");
+
+    for (let day = 1; day <= daysInMonth; day++) {
+      const dateStr = `${monthPrefix}-${String(day).padStart(2, '0')}`;
+      const inflow = recvByDay.get(dateStr) ?? 0;
+      const outflow = payByDay.get(dateStr) ?? 0;
+      
+      currentBalance = currentBalance + inflow - outflow;
+      
+      data.push({
+        day,
+        balance: Number(currentBalance.toFixed(2)),
+        inflow,
+        outflow,
+        formattedDate: format(new Date(`${dateStr}T12:00:00`), "dd MMM", { locale: ptBR })
+      });
+    }
+
+    return data;
+  }, [startingBalanceQ.data, startingBalanceQ.isSuccess, receivablesQ.data, payablesQ.data, selectedDate]);
+
+
   return (
     <div className="grid gap-4">
       <Card className="rounded-[22px] border-slate-200 bg-white/70 p-4 shadow-sm backdrop-blur dark:border-slate-800 dark:bg-slate-950/40">
@@ -532,9 +605,10 @@ export function FinancialPlanningPanel() {
               variant="secondary"
               className="h-10 rounded-2xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800"
               onClick={() => {
-                projectionQ.refetch();
+              projectionQ.refetch();
                 receivablesQ.refetch();
                 payablesQ.refetch();
+                startingBalanceQ.refetch();
               }}
               disabled={!activeTenantId}
             >
@@ -567,6 +641,95 @@ export function FinancialPlanningPanel() {
             <div className="mt-1 text-sm font-semibold text-slate-900 dark:text-slate-100">
               {formatMoneyBRL(Number(projection?.projected_balance ?? 0))}
             </div>
+          </div>
+        </div>
+
+        {/* Trend Chart */}
+        <div className="mt-8 pt-6 border-t border-slate-100 dark:border-slate-800">
+          <div className="flex items-center justify-between mb-4 px-2">
+            <div className="flex items-center gap-2">
+              <div className="p-2 rounded-xl bg-[hsl(var(--byfrost-accent)/0.1)] text-[hsl(var(--byfrost-accent))]">
+                <TrendingUp className="h-4 w-4" />
+              </div>
+              <div>
+                <div className="text-xs font-bold text-slate-900 dark:text-slate-100">Fluxo de Caixa Diário</div>
+                <div className="text-[10px] text-slate-500 font-medium">Projeção de saldo acumulado no mês</div>
+              </div>
+            </div>
+            {startingBalanceQ.isSuccess && (
+              <div className="text-right">
+                <div className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Saldo Inicial</div>
+                <div className="text-xs font-bold text-slate-700 dark:text-slate-300">{formatMoneyBRL(startingBalanceQ.data)}</div>
+              </div>
+            )}
+          </div>
+          
+          <div className="h-[200px] w-full px-2">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={trendData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="colorBalance" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="hsl(var(--byfrost-accent))" stopOpacity={0.2}/>
+                    <stop offset="95%" stopColor="hsl(var(--byfrost-accent))" stopOpacity={0}/>
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(0,0,0,0.05)" />
+                <XAxis 
+                  dataKey="day" 
+                  axisLine={false} 
+                  tickLine={false} 
+                  tick={{ fontSize: 10, fill: '#94a3b8', fontWeight: 500 }}
+                  interval={Math.ceil(trendData.length / 10)}
+                  dy={10}
+                />
+                <YAxis 
+                  hide 
+                  domain={['dataMin - 1000', 'dataMax + 1000']}
+                />
+                <Tooltip 
+                  content={({ active, payload }) => {
+                    if (active && payload && payload.length) {
+                      const data = payload[0].payload;
+                      return (
+                        <div className="rounded-2xl border border-slate-200 bg-white/95 p-3 shadow-2xl backdrop-blur-md dark:border-slate-800 dark:bg-slate-950/95">
+                          <p className="text-[10px] font-bold text-slate-400 uppercase mb-2 tracking-wider">{data.formattedDate}</p>
+                          <div className="flex items-center justify-between gap-6 mb-2">
+                             <span className="text-[10px] font-medium text-slate-500">Saldo:</span>
+                             <span className="text-sm font-bold text-slate-900 dark:text-slate-100">{formatMoneyBRL(data.balance)}</span>
+                          </div>
+                          {(data.inflow > 0 || data.outflow > 0) && (
+                            <div className="mt-2 grid gap-1 border-t border-slate-100 dark:border-slate-800 pt-2">
+                              {data.inflow > 0 && (
+                                <div className="flex items-center justify-between gap-4">
+                                  <span className="text-[9px] font-medium text-emerald-600/70">Entradas</span>
+                                  <span className="text-[10px] text-emerald-600 font-bold whitespace-nowrap">+{formatMoneyBRL(data.inflow)}</span>
+                                </div>
+                              )}
+                              {data.outflow > 0 && (
+                                <div className="flex items-center justify-between gap-4">
+                                  <span className="text-[9px] font-medium text-rose-600/70">Saídas</span>
+                                  <span className="text-[10px] text-rose-600 font-bold whitespace-nowrap">-{formatMoneyBRL(data.outflow)}</span>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    }
+                    return null;
+                  }}
+                />
+                <Area 
+                  type="monotone" 
+                  dataKey="balance" 
+                  stroke="hsl(var(--byfrost-accent))" 
+                  strokeWidth={3}
+                  fillOpacity={1} 
+                  fill="url(#colorBalance)" 
+                  animationDuration={1500}
+                />
+              </AreaChart>
+            </ResponsiveContainer>
           </div>
         </div>
 
@@ -1277,8 +1440,21 @@ function EditItemDialog({ open, onOpenChange, item, type, scope, onScopeChange, 
       setEntityId(item.entity_id || null);
       setEntityLabel(item.core_entities?.display_name || null);
       setAccountId(item.account_id || null);
-      setCategoryId(item.category_id || null);
-      setCategoryLabel(item.financial_categories?.name || null);
+      
+      // Se não tiver categoria mas estiver conciliado, busca da transação
+      let catId = item.category_id;
+      let catLabel = item.financial_categories?.name;
+      
+      if (!catId && (item.financial_transactions?.length ?? 0) > 0) {
+        const linked = item.financial_transactions[0];
+        if (linked?.category_id) {
+          catId = linked.category_id;
+          catLabel = linked.financial_categories?.name;
+        }
+      }
+      
+      setCategoryId(catId || null);
+      setCategoryLabel(catLabel || null);
     }
   }, [item]);
 
