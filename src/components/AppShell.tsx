@@ -655,18 +655,15 @@ export function AppShell({
 
   const unreadCount = unreadCommQ.data || 0;
 
-  // Task due-date notification query (runs when tasks module is enabled)
+  // Task due-date notification query — checks tasks due in next 6 h
   const tasksEnabledForTenant = Boolean(activeTenant?.modules_json?.tasks_enabled);
   const taskDueAlertsQ = useQuery({
     queryKey: ["task_due_alerts", activeTenantId, user?.id],
     enabled: Boolean(activeTenantId && user?.id && tasksEnabledForTenant),
-    refetchInterval: 30 * 60 * 1000, // 30 min
+    refetchInterval: 5 * 60 * 1000, // check every 5 min
     queryFn: async () => {
-      const today = new Date();
-      const todayStr = today.toISOString().slice(0, 10);
-      const tomorrow = new Date(today);
-      tomorrow.setDate(tomorrow.getDate() + 1);
-      const tomorrowStr = tomorrow.toISOString().slice(0, 10);
+      const now = new Date();
+      const in6h = new Date(now.getTime() + 6 * 60 * 60 * 1000);
 
       const { data, error } = await supabase
         .from("super_tasks")
@@ -674,23 +671,24 @@ export function AppShell({
         .eq("tenant_id", activeTenantId!)
         .eq("assigned_to", user!.id)
         .eq("is_completed", false)
-        .in("due_date", [
-          `${todayStr}T12:00:00.000Z`,
-          `${tomorrowStr}T12:00:00.000Z`,
-        ])
+        .gte("due_date", now.toISOString())
+        .lte("due_date", in6h.toISOString())
         .is("parent_id", null);
 
-      if (error) return { today: [], tomorrow: [] };
+      if (error) return { in1h: [] as any[], in6h: [] as any[] };
 
-      const todayTasks = (data ?? []).filter((t) => t.due_date?.slice(0, 10) === todayStr);
-      const tomorrowTasks = (data ?? []).filter((t) => t.due_date?.slice(0, 10) === tomorrowStr);
-      return { today: todayTasks, tomorrow: tomorrowTasks };
+      const all = data ?? [];
+      const in1hCutoff = new Date(now.getTime() + 60 * 60 * 1000);
+      return {
+        in1h: all.filter((t) => new Date(t.due_date) <= in1hCutoff),
+        in6h: all.filter((t) => new Date(t.due_date) > in1hCutoff),
+      };
     },
   });
 
   const taskAlertCount =
-    (taskDueAlertsQ.data?.today.length ?? 0) +
-    (taskDueAlertsQ.data?.tomorrow.length ?? 0);
+    (taskDueAlertsQ.data?.in1h.length ?? 0) +
+    (taskDueAlertsQ.data?.in6h.length ?? 0);
 
   const totalNotifCount = unreadCount + taskAlertCount;
 
@@ -971,7 +969,7 @@ export function AppShell({
                       }
                     }}
                     className="group relative flex h-10 w-10 items-center justify-center rounded-2xl bg-white/15 text-white transition hover:bg-white/25 active:scale-95"
-                    title={totalNotifCount > 0 ? `${unreadCount > 0 ? `${unreadCount} msg` : ""}${unreadCount > 0 && taskAlertCount > 0 ? " · " : ""}${taskAlertCount > 0 ? `${taskDueAlertsQ.data?.today.length ? `${taskDueAlertsQ.data.today.length} tarefa(s) vencem hoje` : ""}${taskDueAlertsQ.data?.today.length && taskDueAlertsQ.data?.tomorrow.length ? " · " : ""}${taskDueAlertsQ.data?.tomorrow.length ? `${taskDueAlertsQ.data.tomorrow.length} tarefa(s) vencem amanhã` : ""}` : ""}` : "Notificações"}
+                    title={totalNotifCount > 0 ? `${unreadCount > 0 ? `${unreadCount} msg` : ""}${unreadCount > 0 && taskAlertCount > 0 ? " · " : ""}${taskAlertCount > 0 ? `${taskDueAlertsQ.data?.in1h.length ? `${taskDueAlertsQ.data.in1h.length} tarefa(s) vencem em 1h` : ""}${taskDueAlertsQ.data?.in1h.length && taskDueAlertsQ.data?.in6h.length ? " · " : ""}${taskDueAlertsQ.data?.in6h.length ? `${taskDueAlertsQ.data.in6h.length} tarefa(s) vencem em 6h` : ""}` : ""}` : "Notificações"}
                   >
                     <Bell className={cn("h-5 w-5", totalNotifCount > 0 && "animate-pulse")} />
                     {totalNotifCount > 0 && (

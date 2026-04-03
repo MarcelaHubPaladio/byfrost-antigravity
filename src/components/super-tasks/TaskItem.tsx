@@ -76,35 +76,46 @@ export function TaskItem({ task, isSubtask = false }: TaskItemProps) {
   };
 
   const handleDueDateChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const val = e.target.value; // "yyyy-MM-dd" or ""
-    await upsertTask.mutateAsync({
-      id: task.id,
-      due_date: val ? `${val}T12:00:00.000Z` : null,
-    });
+    const val = e.target.value; // "yyyy-MM-ddTHH:mm" in local time
+    if (!val) {
+      await upsertTask.mutateAsync({ id: task.id, due_date: null });
+      return;
+    }
+    // datetime-local gives local time — convert to UTC for storage
+    const utcIso = new Date(val).toISOString();
+    await upsertTask.mutateAsync({ id: task.id, due_date: utcIso });
   };
 
   useEffect(() => {
     if (isEditing && inputRef.current) inputRef.current.focus();
   }, [isEditing]);
 
-  // Date logic – compare against start of day to avoid timezone shifts
-  const deadlineDateStr = task.due_date
-    ? task.due_date.slice(0, 10) // "yyyy-MM-dd"
-    : null;
+  // Convert UTC stored value → local "yyyy-MM-ddTHH:mm" for the input
+  const inputDatetimeValue = (() => {
+    if (!task.due_date) return "";
+    const d = new Date(task.due_date);
+    const offsetMs = d.getTimezoneOffset() * 60000;
+    return new Date(d.getTime() - offsetMs).toISOString().slice(0, 16);
+  })();
 
-  const deadlineDate = deadlineDateStr ? parseISO(deadlineDateStr) : null;
+  // Parse deadline in UTC, compare with local day boundaries
+  const deadlineDate = task.due_date ? new Date(task.due_date) : null;
   const todayStart = startOfDay(new Date());
   const isOverdue =
-    deadlineDate &&
-    deadlineDate < todayStart &&
-    !task.is_completed;
+    deadlineDate && deadlineDate < new Date() && !task.is_completed;
   const isDeadlineToday =
-    deadlineDate &&
-    isToday(deadlineDate) &&
-    !task.is_completed;
+    deadlineDate && isToday(deadlineDate) && !task.is_completed;
 
+  // Label: show time only if it's not 12:00 UTC (i.e. user set a specific time)
   const deadlineLabel = deadlineDate
-    ? format(deadlineDate, "dd 'de' MMM", { locale: ptBR })
+    ? (() => {
+        const hasTime =
+          deadlineDate.getUTCHours() !== 12 ||
+          deadlineDate.getUTCMinutes() !== 0;
+        return hasTime
+          ? format(deadlineDate, "dd 'de' MMM 'às' HH:mm", { locale: ptBR })
+          : format(deadlineDate, "dd 'de' MMM", { locale: ptBR });
+      })()
     : null;
 
   return (
@@ -201,7 +212,7 @@ export function TaskItem({ task, isSubtask = false }: TaskItemProps) {
               size="icon"
               className={cn(
                 "h-7 w-7 rounded-lg hover:bg-white shadow-sm",
-                deadlineDateStr && !task.is_completed && "text-indigo-600 bg-indigo-50/50"
+                deadlineDate && !task.is_completed && "text-indigo-600 bg-indigo-50/50"
               )}
               onClick={() => dateInputRef.current?.showPicker?.() ?? dateInputRef.current?.click()}
               type="button"
@@ -211,9 +222,9 @@ export function TaskItem({ task, isSubtask = false }: TaskItemProps) {
             </Button>
             <input
               ref={dateInputRef}
-              type="date"
+              type="datetime-local"
               className="sr-only"
-              value={deadlineDateStr ?? ""}
+              value={inputDatetimeValue}
               onChange={handleDueDateChange}
             />
           </div>
