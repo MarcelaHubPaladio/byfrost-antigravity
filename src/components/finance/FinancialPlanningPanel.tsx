@@ -15,7 +15,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { addDays, addMonths, endOfMonth, format, startOfMonth } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { AsyncSelect } from "@/components/ui/async-select";
-import { Pencil, Trash2, ChevronLeft, ChevronRight, Calendar as CalendarIcon, Wallet } from "lucide-react";
+import { Pencil, Trash2, ChevronLeft, ChevronRight, Calendar as CalendarIcon, Wallet, Link2Off, ExternalLink } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type CategoryRow = {
@@ -406,6 +406,9 @@ export function FinancialPlanningPanel() {
   const [editType, setEditType] = useState<"receivable" | "payable">("receivable");
   const [editScope, setEditScope] = useState<"only-this" | "this-and-future">("only-this");
 
+  const [reconcileItem, setReconcileItem] = useState<any>(null);
+  const [reconcileDialogOpen, setReconcileDialogOpen] = useState(false);
+
   const updateItemM = useMutation({
     mutationFn: async (updatedData: any) => {
       if (!activeTenantId || !editItem) throw new Error("Item inválido");
@@ -448,6 +451,25 @@ export function FinancialPlanningPanel() {
       qc.invalidateQueries({ queryKey: ["financial_cash_projection", activeTenantId] });
     },
     onError: (e: any) => showError(e?.message ?? "Falha ao atualizar"),
+  });
+
+  const unreconcileM = useMutation({
+    mutationFn: async (transactionId: string) => {
+      const { data, error } = await supabase.rpc("financial_unreconcile_transaction", {
+        p_tenant_id: activeTenantId,
+        p_transaction_id: transactionId,
+      });
+      if (error) throw error;
+      if (data?.ok === false) throw new Error(data?.error || "Erro ao desvincular");
+    },
+    onSuccess: async () => {
+      showSuccess("Lançamento desvinculado com sucesso.");
+      await qc.invalidateQueries({ queryKey: ["financial_receivables", activeTenantId] });
+      await qc.invalidateQueries({ queryKey: ["financial_payables", activeTenantId] });
+      await qc.invalidateQueries({ queryKey: ["financial_cash_projection", activeTenantId] });
+      setReconcileDialogOpen(false);
+    },
+    onError: (e: any) => showError(e?.message ?? "Falha ao desvincular"),
   });
 
   const projection = projectionQ.data;
@@ -888,9 +910,24 @@ export function FinancialPlanningPanel() {
                       <TableCell className="text-xs text-slate-600">
                         {r.core_entities?.display_name ?? "—"}
                       </TableCell>
-                      <TableCell>{formatMoneyBRL(Number(r.amount ?? 0))}</TableCell>
-                      <TableCell className="text-xs font-semibold text-emerald-600">
-                        {formatMoneyBRL((r.financial_transactions ?? []).reduce((acc: number, t: any) => acc + (t.amount ?? 0), 0))}
+                      <TableCell>
+                        <button
+                          onClick={() => {
+                            const linked = r.financial_transactions ?? [];
+                            if (linked.length > 0) {
+                              setReconcileItem(r);
+                              setReconcileDialogOpen(true);
+                            }
+                          }}
+                          className={cn(
+                            "text-xs font-semibold transition-colors",
+                            (r.financial_transactions ?? []).length > 0 
+                              ? "text-emerald-600 hover:text-emerald-700 underline underline-offset-4 cursor-pointer" 
+                              : "text-slate-400"
+                          )}
+                        >
+                          {formatMoneyBRL((r.financial_transactions ?? []).reduce((acc: number, t: any) => acc + (t.amount ?? 0), 0))}
+                        </button>
                       </TableCell>
                       <TableCell>{r.due_date}</TableCell>
                       <TableCell>
@@ -1144,8 +1181,24 @@ export function FinancialPlanningPanel() {
                         {p.core_entities?.display_name ?? "—"}
                       </TableCell>
                       <TableCell>{formatMoneyBRL(Number(p.amount ?? 0))}</TableCell>
-                      <TableCell className="text-xs font-semibold text-emerald-600">
-                        {formatMoneyBRL((p.financial_transactions ?? []).reduce((acc: number, t: any) => acc + (t.amount ?? 0), 0))}
+                      <TableCell>
+                        <button
+                          onClick={() => {
+                            const linked = p.financial_transactions ?? [];
+                            if (linked.length > 0) {
+                              setReconcileItem(p);
+                              setReconcileDialogOpen(true);
+                            }
+                          }}
+                          className={cn(
+                            "text-xs font-semibold transition-colors",
+                            (p.financial_transactions ?? []).length > 0 
+                              ? "text-emerald-600 hover:text-emerald-700 underline underline-offset-4 cursor-pointer" 
+                              : "text-slate-400"
+                          )}
+                        >
+                          {formatMoneyBRL((p.financial_transactions ?? []).reduce((acc: number, t: any) => acc + (t.amount ?? 0), 0))}
+                        </button>
                       </TableCell>
                       <TableCell>{p.due_date}</TableCell>
                       <TableCell>
@@ -1202,6 +1255,14 @@ export function FinancialPlanningPanel() {
         isPending={updateItemM.isPending}
         activeTenantId={activeTenantId}
         bankAccounts={bankAccountsQ.data ?? []}
+      />
+
+      <LinkedTransactionsDialog
+        open={reconcileDialogOpen}
+        onOpenChange={setReconcileDialogOpen}
+        item={reconcileItem}
+        onUnreconcile={(id: string) => unreconcileM.mutate(id)}
+        isPending={unreconcileM.isPending}
       />
     </div>
   );
@@ -1313,6 +1374,70 @@ function EditItemDialog({ open, onOpenChange, item, type, scope, onScopeChange, 
           >
             {isPending ? "Salvando..." : "Salvar Alterações"}
           </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function LinkedTransactionsDialog({ open, onOpenChange, item, onUnreconcile, isPending }: any) {
+  if (!item) return null;
+  const transactions = item.financial_transactions ?? [];
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-[550px]">
+        <DialogHeader>
+          <DialogTitle>Transações Conciliadas</DialogTitle>
+          <DialogDescription>
+            Estas são as transações bancárias vinculadas a este lançamento.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="py-4">
+          <div className="overflow-hidden rounded-xl border border-slate-200 dark:border-slate-800">
+            <Table>
+              <TableHeader className="bg-slate-50 dark:bg-slate-900">
+                <TableRow>
+                  <TableHead className="text-[10px] uppercase">Data</TableHead>
+                  <TableHead className="text-[10px] uppercase">Descrição</TableHead>
+                  <TableHead className="text-[10px] uppercase">Valor</TableHead>
+                  <TableHead className="w-[80px]"></TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {transactions.map((t: any) => (
+                  <TableRow key={t.id}>
+                    <TableCell className="text-xs">{t.transaction_date || "—"}</TableCell>
+                    <TableCell className="text-xs font-medium">{t.description}</TableCell>
+                    <TableCell className="text-xs font-semibold">{formatMoneyBRL(t.amount)}</TableCell>
+                    <TableCell>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-red-500 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/30"
+                        onClick={() => onUnreconcile(t.id)}
+                        disabled={isPending}
+                        title="Desvincular"
+                      >
+                        <Link2Off className="h-4 w-4" />
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+          
+          <div className="mt-4 p-3 rounded-xl bg-blue-50 border border-blue-100 dark:bg-blue-950/20 dark:border-blue-900/30">
+            <p className="text-[11px] text-blue-700 dark:text-blue-300 leading-relaxed">
+              <span className="font-semibold">Nota:</span> Ao desvincular uma transação, o lançamento voltará para o status "Pendente" (caso este seja o único vínculo) e a transação bancária ficará disponível para novas reconciliações.
+            </p>
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)} className="rounded-2xl">Fechar</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
