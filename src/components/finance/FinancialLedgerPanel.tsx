@@ -36,7 +36,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { addDays, addMonths, subMonths, format, parseISO, startOfMonth, endOfMonth, startOfDay, endOfDay } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import {
-  Download, Landmark, Pencil, Plus, Upload, Link2, CheckCircle2, Search, Info, Trash2, X } from "lucide-react";
+  Download, Landmark, Pencil, Plus, Upload, Link2, CheckCircle2, Search, Info, Trash2, X, ChevronRight } from "lucide-react";
 import { AsyncSelect } from "@/components/ui/async-select";
 import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -2620,139 +2620,145 @@ export function FinancialLedgerPanel() {
               </div>
 
               <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <h4 className="text-sm font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-3">
-                    <Search className="h-4 w-4" />
-                    Sugestões de correspondência
-                  </h4>
-                  <Badge variant="outline" className="text-[10px] uppercase">
-                    Valor Idêntico
-                  </Badge>
+                <div className="flex items-center justify-between px-1">
+                  <div className="flex flex-col">
+                    <h4 className="text-sm font-bold text-slate-900 dark:text-slate-100 flex items-center gap-3">
+                      <Search className="h-4 w-4 text-[hsl(var(--byfrost-accent))]" />
+                      Sugestões de correspondência
+                    </h4>
+                    <p className="text-[10px] text-slate-500 font-medium">Buscamos lançamentos que batem com o valor e data</p>
+                  </div>
                 </div>
 
-                <div className="grid gap-2">
+                <div className="grid gap-3 p-1">
                   {reconcileSuggestionsQ.isLoading ? (
-                    <div className="py-8 text-center text-sm text-slate-500">Buscando correspondências...</div>
+                    <div className="flex flex-col items-center py-10 rounded-3xl border border-dashed border-slate-200 dark:border-slate-800 animate-pulse">
+                      <div className="w-8 h-8 rounded-full border-2 border-[hsl(var(--byfrost-accent))] border-t-transparent animate-spin mb-3" />
+                      <div className="text-xs text-slate-500 font-medium">Analisando registros...</div>
+                    </div>
+                  ) : reconcileSuggestionsQ.isError ? (
+                    <div className="py-4 px-4 text-center rounded-2xl border border-rose-100 bg-rose-50/50 text-rose-600 text-xs">
+                      Erro ao buscar sugestões. Tente a busca manual abaixo.
+                    </div>
                   ) : (reconcileSuggestionsQ.data?.matches?.length ?? 0) > 0 ? (
-                    reconcileSuggestionsQ.data.matches.map((match: any) => (
-                      <div
-                        key={match.id}
-                        className="group flex items-center justify-between p-3 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 hover:border-[hsl(var(--byfrost-accent)/0.5)] hover:bg-[hsl(var(--byfrost-accent)/0.02)] transition-all cursor-pointer"
-                        onClick={() => reconcileTxM.mutate({ linkedId: match.id, type: match.type })}
-                      >
-                        <div className="flex flex-col">
-                          <span className="text-sm font-medium text-slate-900 dark:text-slate-100">{match.description}</span>
-                          <span className="text-xs text-slate-500 flex items-center gap-2">
-                            Vencimento: {match.due_date} 
-                            <span className={cn(
-                              "text-[10px] px-1.5 py-0.5 rounded-full border",
-                              match.days_diff === 0 ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-slate-100 text-slate-600 border-slate-200"
-                            )}>
-                              {match.days_diff === 0 ? "Mesma data" : `${match.days_diff} dias de diferença`}
-                            </span>
-                            {selectedTx && Math.abs(selectedTx.amount) > match.amount && (
-                              <span className="text-[10px] px-1.5 py-0.5 rounded-full border bg-amber-50 text-amber-700 border-amber-200">
-                                Diferença: {formatMoneyBRL(Math.abs(selectedTx.amount) - match.amount)}
-                              </span>
-                            )}
-                          </span>
-                        </div>
-                        <div className="flex flex-col items-end gap-2">
-                          <span className="text-sm font-bold text-slate-900 dark:text-slate-100">{formatMoneyBRL(match.amount)}</span>
-                          <Button 
-                            size="sm" 
-                            variant="outline" 
-                            className="h-8 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              const diff = Math.abs(selectedTx?.amount || 0) - match.amount;
-                              if (diff > 0.01) {
-                                setReconcileDiff(diff);
-                                setReconcilePendingLink({ id: match.id, type: match.type });
-                                setReconcilePendingLabel(match.description);
-                                setReconcileAdjustmentCatId(null);
-                              } else {
-                                reconcileTxM.mutate({ linkedId: match.id, type: match.type });
-                              }
-                            }}
-                          >
-                            Vincular
-                          </Button>
-                        </div>
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-100 dark:border-emerald-800 text-[10px] font-bold text-emerald-600 uppercase tracking-tight w-fit animate-in fade-in zoom-in">
+                        <CheckCircle2 className="h-3 w-3" />
+                        {reconcileSuggestionsQ.data.matches.length} Correspondência{reconcileSuggestionsQ.data.matches.length > 1 ? 's' : ''} Encontrada{reconcileSuggestionsQ.data.matches.length > 1 ? 's' : ''}
                       </div>
-                    ))
-                  ) : (
-                    <div className="flex flex-col items-center py-6 px-4 text-center rounded-2xl border border-dashed border-slate-200 dark:border-slate-800 bg-slate-50/30">
-                      <div className="h-10 w-10 rounded-full bg-slate-50 dark:bg-slate-900 flex items-center justify-center mb-3">
-                        <Info className="h-5 w-5 text-slate-400" />
-                      </div>
-                      <p className="text-sm text-slate-600 dark:text-slate-400">Nenhuma conta pendente com valor de {formatMoneyBRL(selectedTx.amount)}.</p>
                       
-                      <div className="mt-5 w-full max-w-[320px] p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950">
-                        <div className="mb-4">
-                          <Label className="text-[10px] uppercase text-slate-500 block mb-1">Entidade (Cliente/Fornecedor)</Label>
-                          <AsyncSelect
-                            className="h-9 rounded-xl text-xs"
-                            value={reconcileEntityId}
-                            initialLabel={selectedTx?.core_entities?.display_name || null}
-                            onChange={setReconcileEntityId}
-                            onCreate={(val) => {
-                              setQuickEntityName(val);
-                              setQuickEntityTxId(reconcileTxId);
-                              setQuickEntityOpen(true);
-                            }}
-                            placeholder="Buscar entidade..."
-                            loadOptions={async (val) => {
-                              if (!activeTenantId || val.length < 2) return [];
-                              const { data } = await supabase
-                                .from("core_entities")
-                                .select("id, display_name")
-                                .eq("tenant_id", activeTenantId)
-                                .ilike("display_name", `%${val}%`)
-                                .is("deleted_at", null)
-                                .limit(10);
-                              return (data || []).map((d) => ({ value: d.id, label: d.display_name }));
-                            }}
-                          />
-                        </div>
-
-                        <div className="flex items-center gap-2 mb-3">
-                          <Checkbox 
-                            id="dlg-recurrent" 
-                            checked={reconcileIsRecurrent} 
-                            onCheckedChange={(v) => setReconcileIsRecurrent(!!v)} 
-                          />
-                          <Label htmlFor="dlg-recurrent" className="text-xs cursor-pointer">Lançamento Recorrente</Label>
-                        </div>
-                        
-                        {reconcileIsRecurrent && (
-                          <div className="flex items-center justify-between gap-3">
-                            <Label className="text-[10px] uppercase text-slate-500">Meses</Label>
-                            <Input 
-                              type="number" 
-                              className="h-8 w-16 text-xs rounded-lg" 
-                              value={reconcileInstallments} 
-                              onChange={(e) => setReconcileInstallments(e.target.value)} 
-                              min="2"
-                              max="60"
-                            />
-                          </div>
-                        )}
-                      </div>
-
-                      <div className="mt-4 flex flex-wrap gap-2 justify-center">
-                        <Button 
-                          variant="secondary" 
-                          size="sm" 
-                          className="h-9 rounded-xl text-xs px-4"
-                          onClick={() => selectedTx.type === 'debit' ? createLinkedPayableM.mutate(selectedTx) : createLinkedReceivableM.mutate(selectedTx)}
+                      {reconcileSuggestionsQ.data.matches.map((match: any) => (
+                        <div
+                          key={match.id}
+                          className="group relative flex items-center justify-between p-4 rounded-[24px] border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 hover:border-[hsl(var(--byfrost-accent)/0.5)] hover:bg-[hsl(var(--byfrost-accent)/0.02)] hover:shadow-lg hover:shadow-[hsl(var(--byfrost-accent)/0.05)] transition-all cursor-pointer overflow-hidden"
+                          onClick={() => reconcileTxM.mutate({ linkedId: match.id, type: match.type })}
                         >
-                          <Plus className="mr-2 h-4 w-4" />
-                          Criar e Vincular agora
-                        </Button>
+                          <div className={cn(
+                            "absolute left-0 top-0 bottom-0 w-1.5 transition-all",
+                            match.days_diff === 0 ? "bg-emerald-500" : "bg-slate-200 dark:bg-slate-800"
+                          )} />
+                          <div className="flex flex-col pl-2">
+                            <span className="text-sm font-bold text-slate-900 dark:text-slate-100">{match.description}</span>
+                            <span className="text-xs text-slate-500 flex items-center gap-2 mt-0.5">
+                              {match.due_date} 
+                              <Badge variant="outline" className={cn(
+                                "text-[9px] py-0 px-1.5 h-4 border-slate-200",
+                                match.days_diff === 0 ? "text-emerald-600 bg-emerald-50 border-emerald-100" : "text-slate-500"
+                              )}>
+                                {match.days_diff === 0 ? "Data exata" : `${match.days_diff}d de dif.`}
+                              </Badge>
+                            </span>
+                          </div>
+                          <div className="flex flex-col items-end">
+                            <span className="text-sm font-extrabold text-slate-900 dark:text-slate-100">{formatMoneyBRL(match.amount)}</span>
+                            <div className="flex items-center gap-1.5 text-[10px] font-bold text-emerald-600 opacity-0 group-hover:opacity-100 transition-all translate-x-2 group-hover:translate-x-0">
+                              Conciliar <ChevronRight className="h-3 w-3" />
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="flex flex-col items-center py-8 px-4 text-center rounded-3xl border border-dashed border-slate-200 dark:border-slate-800 bg-slate-50/20 dark:bg-slate-950/20">
+                      <div className="p-3 rounded-full bg-slate-50 dark:bg-slate-900 text-slate-400 mb-2">
+                        <Link2 className="h-5 w-5" />
                       </div>
+                      <p className="text-[11px] text-slate-500 font-medium">Nenhuma sugestão automática para este valor.<br/>Use a busca manual abaixo.</p>
                     </div>
                   )}
+
+                  <div className="relative pt-2">
+                    <div className="absolute inset-0 flex items-center" aria-hidden="true">
+                      <div className="w-full border-t border-slate-200 dark:border-slate-800"></div>
+                    </div>
+                    <div className="relative flex justify-center text-[10px] uppercase font-bold tracking-widest">
+                      <span className="bg-white px-2 text-slate-400 dark:bg-slate-950">Ou crie um novo registro</span>
+                    </div>
+                  </div>
+
+                  <div className="grid gap-4 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/30 dark:bg-slate-900/10">
+                    <div>
+                      <Label className="text-[10px] uppercase text-slate-500 font-bold block mb-1.5">Entidade (Cliente/Fornecedor)</Label>
+                      <AsyncSelect
+                        className="h-10 rounded-xl"
+                        value={reconcileEntityId}
+                        initialLabel={selectedTx?.core_entities?.display_name || null}
+                        onChange={setReconcileEntityId}
+                        onCreate={(val) => {
+                          setQuickEntityName(val);
+                          setQuickEntityTxId(reconcileTxId);
+                          setQuickEntityOpen(true);
+                        }}
+                        placeholder="Pesquisar..."
+                        loadOptions={async (val) => {
+                          if (!activeTenantId || val.length < 2) return [];
+                          const { data } = await supabase
+                            .from("core_entities")
+                            .select("id, display_name")
+                            .eq("tenant_id", activeTenantId)
+                            .ilike("display_name", `%${val}%`)
+                            .is("deleted_at", null)
+                            .limit(10);
+                          return (data || []).map((d) => ({ value: d.id, label: d.display_name }));
+                        }}
+                      />
+                    </div>
+
+                    <div className="flex items-center gap-6">
+                      <div className="flex items-center gap-2">
+                        <Checkbox 
+                          id="dlg-recurrent" 
+                          checked={reconcileIsRecurrent} 
+                          onCheckedChange={(v) => setReconcileIsRecurrent(!!v)} 
+                        />
+                        <Label htmlFor="dlg-recurrent" className="text-xs cursor-pointer">Recorrente</Label>
+                      </div>
+                      
+                      {reconcileIsRecurrent && (
+                        <div className="flex items-center gap-2">
+                          <Label className="text-[10px] uppercase text-slate-500 font-bold">Parcelas</Label>
+                          <Input 
+                            type="number" 
+                            className="h-8 w-14 text-xs rounded-lg" 
+                            value={reconcileInstallments} 
+                            onChange={(e) => setReconcileInstallments(e.target.value)} 
+                            min="2"
+                            max="60"
+                          />
+                        </div>
+                      )}
+                    </div>
+
+                    <Button 
+                      variant="secondary" 
+                      className="w-full h-10 rounded-xl text-xs font-bold bg-white hover:bg-slate-100 border-slate-200 dark:bg-slate-950 dark:hover:bg-slate-900 dark:border-slate-800"
+                      onClick={() => selectedTx.type === 'debit' ? createLinkedPayableM.mutate(selectedTx) : createLinkedReceivableM.mutate(selectedTx)}
+                      disabled={createLinkedPayableM.isPending || createLinkedReceivableM.isPending}
+                    >
+                      <Plus className="mr-2 h-4 w-4" />
+                      Criar Lançamento e Conciliar
+                    </Button>
+                  </div>
                 </div>
               </div>
 

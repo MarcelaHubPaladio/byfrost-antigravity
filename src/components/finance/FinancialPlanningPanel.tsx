@@ -10,6 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
+import { Badge } from "@/components/ui/badge";
 import { showError, showSuccess } from "@/utils/toast";
 import { Checkbox } from "@/components/ui/checkbox";
 import { addDays, addMonths, endOfMonth, format, startOfMonth } from "date-fns";
@@ -57,6 +58,7 @@ export function FinancialPlanningPanel() {
   // Filters state
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [selectedAccountId, setSelectedAccountId] = useState<string>("all");
+  const [activeTab, setActiveTab] = useState("receivables");
 
   const monthStart = format(startOfMonth(selectedDate), "yyyy-MM-dd");
   const monthEnd = format(endOfMonth(selectedDate), "yyyy-MM-dd");
@@ -420,6 +422,7 @@ export function FinancialPlanningPanel() {
         due_date: updatedData.due_date,
         entity_id: updatedData.entity_id,
         account_id: updatedData.account_id,
+        category_id: updatedData.category_id,
       };
 
       if (!Number.isFinite(payload.amount)) throw new Error("Valor inválido");
@@ -574,29 +577,49 @@ export function FinancialPlanningPanel() {
         ) : null}
       </Card>
 
-      <Tabs defaultValue="receivables" className="w-full">
-        <TabsList className="grid w-full grid-cols-3 rounded-2xl bg-slate-100/50 p-1 dark:bg-slate-800/20">
-          <TabsTrigger value="budgets" className="rounded-xl data-[state=active]:bg-white data-[state=active]:shadow-sm dark:data-[state=active]:bg-slate-900">
-            Orçamentos
-          </TabsTrigger>
-          <TabsTrigger value="receivables" className="rounded-xl data-[state=active]:bg-white data-[state=active]:shadow-sm dark:data-[state=active]:bg-slate-900">
-            Recebíveis
-          </TabsTrigger>
-          <TabsTrigger value="payables" className="rounded-xl data-[state=active]:bg-white data-[state=active]:shadow-sm dark:data-[state=active]:bg-slate-900">
-            Pagáveis
-          </TabsTrigger>
-        </TabsList>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        {[
+          { id: "budgets", label: "Orçamentos", icon: Wallet, color: "text-indigo-600 bg-indigo-50 dark:bg-indigo-900/20" },
+          { id: "receivables", label: "Recebíveis", icon: ChevronRight, color: "text-emerald-600 bg-emerald-50 dark:bg-emerald-900/20" },
+          { id: "payables", label: "Pagáveis", icon: ChevronLeft, color: "text-rose-600 bg-rose-50 dark:bg-rose-900/20" },
+        ].map((btn) => (
+          <button
+            key={btn.id}
+            onClick={() => setActiveTab(btn.id)}
+            className={cn(
+              "flex flex-col items-center justify-center p-6 rounded-[28px] border-2 transition-all duration-300 group",
+              activeTab === btn.id
+                ? "border-[hsl(var(--byfrost-accent))] bg-white dark:bg-slate-900 shadow-xl shadow-[hsl(var(--byfrost-accent)/0.1)] scale-[1.02]"
+                : "border-slate-100 bg-slate-50/50 hover:border-slate-300 dark:border-slate-800 dark:bg-slate-900/20"
+            )}
+          >
+            <div className={cn("p-4 rounded-3xl mb-4 transition-transform group-hover:scale-110", btn.color)}>
+              <btn.icon className="h-6 w-6" />
+            </div>
+            <span className="text-sm font-bold text-slate-900 dark:text-slate-100 uppercase tracking-widest">{btn.label}</span>
+            <div className="mt-2 text-xs text-slate-500 font-medium">
+              {btn.id === 'budgets' && budgetsQ.data ? `${budgetsQ.data.length} ativos` : ""}
+              {btn.id === 'receivables' && receivablesQ.data ? formatMoneyBRL(receivablesQ.data.reduce((acc: number, r: any) => acc + (r.amount || 0), 0)) : ""}
+              {btn.id === 'payables' && payablesQ.data ? formatMoneyBRL(payablesQ.data.reduce((acc: number, p: any) => acc + (p.amount || 0), 0)) : ""}
+            </div>
+          </button>
+        ))}
+      </div>
 
-        <TabsContent value="budgets" className="mt-4">
-          <Card className="rounded-[22px] border-slate-200 bg-white/70 p-4 shadow-sm backdrop-blur dark:border-slate-800 dark:bg-slate-950/40">
-            <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">Cadastro de orçamento</div>
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+        <TabsContent value="budgets" className="mt-2">
+          <Card className="rounded-[32px] border-slate-200 bg-white/70 p-6 shadow-sm backdrop-blur dark:border-slate-800 dark:bg-slate-950/40">
+            <div className="flex items-center justify-between mb-6">
+              <div className="text-lg font-bold text-slate-900 dark:text-slate-100">Configuração de Orçamentos</div>
+              <div className="px-3 py-1 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-full text-[10px] font-bold uppercase tracking-widest">Planejamento</div>
+            </div>
 
-            <div className="mt-4 grid gap-3 md:grid-cols-5">
+            <div className="grid gap-6 md:grid-cols-5">
               <div className="md:col-span-2">
-                <Label className="text-xs">Categoria</Label>
+                <Label className="text-[10px] font-bold uppercase text-slate-500 mb-1.5 block">Categoria do Orçamento</Label>
                 <Select value={budgetCategoryId} onValueChange={setBudgetCategoryId}>
-                  <SelectTrigger className="mt-1 rounded-2xl">
-                    <SelectValue placeholder={categoriesQ.isLoading ? "Carregando…" : "Selecione"} />
+                  <SelectTrigger className="h-11 rounded-2xl bg-white dark:bg-slate-950">
+                    <SelectValue placeholder={categoriesQ.isLoading ? "Carregando…" : "Escolha uma categoria"} />
                   </SelectTrigger>
                   <SelectContent>
                     {(categoriesQ.data ?? []).map((c) => (
@@ -707,18 +730,21 @@ export function FinancialPlanningPanel() {
         </TabsContent>
 
         <TabsContent value="receivables" className="mt-4">
-          <Card className="rounded-[22px] border-slate-200 bg-white/70 p-4 shadow-sm backdrop-blur dark:border-slate-800 dark:bg-slate-950/40">
-            <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">Contas a receber</div>
+          <Card className="rounded-[32px] border-slate-200 bg-white/70 p-6 shadow-sm backdrop-blur dark:border-slate-800 dark:bg-slate-950/40">
+            <div className="flex items-center justify-between mb-6">
+              <div className="text-lg font-bold text-slate-900 dark:text-slate-100">Contas a Receber</div>
+              <div className="px-3 py-1 bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 rounded-full text-[10px] font-bold uppercase tracking-widest">Entradas</div>
+            </div>
 
-            <div className="mt-4 grid gap-3 md:grid-cols-6">
+            <div className="grid gap-6 md:grid-cols-6">
               <div className="md:col-span-2">
-                <Label className="text-xs">Descrição</Label>
-                <Input className="mt-1 rounded-2xl" value={recvDesc} onChange={(e) => setRecvDesc(e.target.value)} />
+                <Label className="text-[10px] font-bold uppercase text-slate-500 mb-1.5 block">Descrição</Label>
+                <Input className="h-11 rounded-2xl bg-white dark:bg-slate-950" value={recvDesc} onChange={(e) => setRecvDesc(e.target.value)} />
               </div>
               <div className="md:col-span-2">
-                <Label className="text-xs">Entidade (Cliente/Inscritível)</Label>
+                <Label className="text-[10px] font-bold uppercase text-slate-500 mb-1.5 block">Cliente / Entidade</Label>
                 <AsyncSelect
-                  className="mt-1 h-10 rounded-2xl"
+                  className="h-11 rounded-2xl bg-white dark:bg-slate-950"
                   value={recvEntityId}
                   onChange={setRecvEntityId}
                   placeholder="Buscar..."
@@ -736,41 +762,28 @@ export function FinancialPlanningPanel() {
                 />
               </div>
               <div>
-                <Label className="text-xs">Valor</Label>
+                <Label className="text-[10px] font-bold uppercase text-slate-500 mb-1.5 block">Valor (R$)</Label>
                 <Input
-                  className="mt-1 rounded-2xl"
-                  placeholder="Ex: 250,00"
+                  className="h-11 rounded-2xl bg-white dark:bg-slate-950"
+                  placeholder="0,00"
                   value={recvAmount}
                   onChange={(e) => setRecvAmount(e.target.value)}
                 />
               </div>
               <div>
-                <Label className="text-xs">Vencimento</Label>
+                <Label className="text-[10px] font-bold uppercase text-slate-500 mb-1.5 block">Vencimento</Label>
                 <Input
-                  className="mt-1 rounded-2xl"
+                  className="h-11 rounded-2xl bg-white dark:bg-slate-950"
                   type="date"
                   value={recvDueDate}
                   onChange={(e) => setRecvDueDate(e.target.value)}
                 />
               </div>
-              <div>
-                <Label className="text-xs">Status</Label>
-                <Select value={recvStatus} onValueChange={setRecvStatus}>
-                  <SelectTrigger className="mt-1 rounded-2xl">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="pending">Pendente</SelectItem>
-                    <SelectItem value="paid">Pago</SelectItem>
-                    <SelectItem value="overdue">Atrasado</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
 
               <div className="md:col-span-2">
-                <Label className="text-xs">Conta</Label>
+                <Label className="text-[10px] font-bold uppercase text-slate-500 mb-1.5 block">Conta de Destino</Label>
                 <Select value={recvAccountId || ""} onValueChange={setRecvAccountId}>
-                  <SelectTrigger className="mt-1 rounded-2xl">
+                  <SelectTrigger className="h-11 rounded-2xl bg-white dark:bg-slate-950">
                     <SelectValue placeholder="Opcional" />
                   </SelectTrigger>
                   <SelectContent>
@@ -784,25 +797,27 @@ export function FinancialPlanningPanel() {
               </div>
 
               <div className="md:col-span-2">
-                <Label className="text-xs">Tipo</Label>
+                <Label className="text-[10px] font-bold uppercase text-slate-500 mb-1.5 block">Tipo de Lançamento</Label>
                 <Select value={recvType} onValueChange={(v: any) => setRecvType(v)}>
-                  <SelectTrigger className="mt-1 rounded-2xl">
+                  <SelectTrigger className="h-11 rounded-2xl bg-white dark:bg-slate-950">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="single">Único</SelectItem>
+                    <SelectItem value="single">Pagamento Único</SelectItem>
                     <SelectItem value="recurrent">Recorrente (Mensal)</SelectItem>
-                    <SelectItem value="installments">Parcelado (A cada 30 dias)</SelectItem>
+                    <SelectItem value="installments">Parcelado (30 dias)</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
 
               {recvType !== "single" && (
                 <div>
-                  <Label className="text-xs">{recvType === 'recurrent' ? 'Meses' : 'Parcelas'}</Label>
+                  <Label className="text-[10px] font-bold uppercase text-slate-500 mb-1.5 block">
+                    {recvType === 'recurrent' ? 'Meses' : 'Parcelas'}
+                  </Label>
                   <Input 
                     type="number" 
-                    className="mt-1 rounded-2xl" 
+                    className="h-11 rounded-2xl bg-white dark:bg-slate-950" 
                     value={recvInstallments} 
                     onChange={(e) => setRecvInstallments(e.target.value)} 
                     min="2"
@@ -811,103 +826,99 @@ export function FinancialPlanningPanel() {
                 </div>
               )}
 
-              <div className="md:col-span-full flex items-end">
+              <div className="md:col-span-full flex items-end pt-2">
                 <Button
                   onClick={generateRecvPreview}
                   disabled={!activeTenantId || createReceivableM.isPending}
-                  className="h-10 w-full rounded-2xl md:w-auto"
+                  className="h-12 px-8 rounded-2xl bg-[hsl(var(--byfrost-accent))] hover:bg-[hsl(var(--byfrost-accent)/0.9)] text-white font-bold"
                 >
-                  Continuar Cadastro
+                  {showRecvPreview ? "Atualizar Plano" : "Continuar Cadastro"}
                 </Button>
               </div>
 
               {showRecvPreview && (
-                <div className="md:col-span-full mt-4 p-4 rounded-2xl border border-slate-200 bg-slate-50 dark:border-slate-800 dark:bg-slate-900/50">
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="text-sm font-semibold">Confirmar Lançamentos</div>
-                    <Button variant="ghost" size="sm" onClick={() => setShowRecvPreview(false)}>Cancelar</Button>
+                <div className="md:col-span-full mt-8 animate-in fade-in slide-in-from-top-4 duration-300">
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 rounded-xl bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600">
+                        <CalendarIcon className="h-4 w-4" />
+                      </div>
+                      <div>
+                        <div className="text-sm font-bold text-slate-900 dark:text-slate-100">Confirmação de Recebíveis</div>
+                        <div className="text-[10px] text-slate-500 uppercase font-bold tracking-tight">Revise os lançamentos gerados</div>
+                      </div>
+                    </div>
+                    <Button variant="ghost" size="sm" className="rounded-xl text-slate-500" onClick={() => setShowRecvPreview(false)}>Cancelar</Button>
                   </div>
-                  <div className="max-h-[300px] overflow-auto rounded-xl border border-slate-200 dark:border-slate-800">
-                    <Table>
-                      <TableHeader className="bg-white dark:bg-slate-950">
-                        <TableRow>
-                          <TableHead className="text-[10px] uppercase">Descrição</TableHead>
-                          <TableHead className="text-[10px] uppercase">Vencimento</TableHead>
-                          <TableHead className="text-[10px] uppercase">Valor</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {recvPreviewItems.map((item, idx) => (
-                          <TableRow key={idx}>
-                            <TableCell className="py-2 text-xs">
-                              <Input 
-                                className="h-8 rounded-lg text-xs" 
-                                value={item.description} 
-                                onChange={(e) => {
-                                  const newItems = [...recvPreviewItems];
-                                  newItems[idx].description = e.target.value;
-                                  setRecvPreviewItems(newItems);
-                                }}
-                              />
-                            </TableCell>
-                            <TableCell className="py-2 text-xs">
-                              <Input 
-                                type="date"
-                                className="h-8 rounded-lg text-xs" 
-                                value={item.due_date} 
-                                onChange={(e) => {
-                                  const newItems = [...recvPreviewItems];
-                                  newItems[idx].due_date = e.target.value;
-                                  setRecvPreviewItems(newItems);
-                                }}
-                              />
-                            </TableCell>
-                            <TableCell className="py-2 text-xs font-semibold">
-                              {formatMoneyBRL(item.amount)}
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
+                  
+                  <div className="grid gap-3 max-h-[400px] overflow-auto pr-2 custom-scrollbar">
+                    {recvPreviewItems.map((item, idx) => (
+                      <div key={idx} className="flex flex-col sm:flex-row items-center gap-4 p-4 rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950/50 hover:border-[hsl(var(--byfrost-accent)/0.3)] transition-all group">
+                        <div className="h-8 w-8 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-[10px] font-bold text-slate-500">#{idx + 1}</div>
+                        <div className="flex-1 w-full">
+                          <Label className="text-[9px] uppercase font-bold text-slate-400 mb-1 block ml-1">Descrição</Label>
+                          <Input className="h-10 rounded-xl bg-slate-50/50" value={item.description} onChange={(e) => {
+                            const newItems = [...recvPreviewItems];
+                            newItems[idx].description = e.target.value;
+                            setRecvPreviewItems(newItems);
+                          }} />
+                        </div>
+                        <div className="w-full sm:w-40">
+                          <Label className="text-[9px] uppercase font-bold text-slate-400 mb-1 block ml-1">Vencimento</Label>
+                          <Input type="date" className="h-10 rounded-xl bg-slate-50/50" value={item.due_date} onChange={(e) => {
+                            const newItems = [...recvPreviewItems];
+                            newItems[idx].due_date = e.target.value;
+                            setRecvPreviewItems(newItems);
+                          }} />
+                        </div>
+                        <div className="w-full sm:w-32 text-right">
+                          <Label className="text-[9px] uppercase font-bold text-slate-400 mb-1 block mr-1">Valor</Label>
+                          <div className="h-10 flex items-center justify-end px-3 font-bold text-slate-900">{formatMoneyBRL(item.amount)}</div>
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                  <div className="mt-4 flex justify-end">
+
+                  <div className="mt-6 flex flex-col sm:flex-row items-center justify-between gap-4 p-6 rounded-[32px] bg-emerald-50/50 border border-emerald-100">
+                    <div className="text-sm font-medium text-slate-600">
+                      Total a receber: <span className="font-bold text-emerald-600">{formatMoneyBRL(recvPreviewItems.reduce((acc, i) => acc + i.amount, 0))}</span> em {recvPreviewItems.length} vezes.
+                    </div>
                     <Button
                       onClick={() => createReceivableM.mutate()}
                       disabled={createReceivableM.isPending}
-                      className="rounded-2xl"
+                      className="h-12 px-8 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold"
                     >
-                      {createReceivableM.isPending ? "Salvando…" : `Confirmar e Gerar ${recvPreviewItems.length} Lançamentos`}
+                      {createReceivableM.isPending ? "Processando..." : "Confirmar e Salvar"}
                     </Button>
                   </div>
                 </div>
               )}
             </div>
 
-            <div className="mt-5 overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-800">
+            <div className="mt-8 overflow-hidden rounded-3xl border border-slate-200 dark:border-slate-800">
               <Table>
-                <TableHeader>
+                <TableHeader className="bg-slate-50/50 dark:bg-slate-950">
                   <TableRow>
-                    <TableHead>Descrição</TableHead>
-                    <TableHead>Entidade</TableHead>
-                    <TableHead>Valor</TableHead>
-                    <TableHead>Conciliado</TableHead>
-                    <TableHead>Vencimento</TableHead>
-                    <TableHead>Status</TableHead>
+                    <TableHead className="text-[10px] uppercase font-bold">Descrição</TableHead>
+                    <TableHead className="text-[10px] uppercase font-bold">Entidade</TableHead>
+                    <TableHead className="text-[10px] uppercase font-bold">Conciliado</TableHead>
+                    <TableHead className="text-[10px] uppercase font-bold">Vencimento</TableHead>
+                    <TableHead className="text-[10px] uppercase font-bold">Status</TableHead>
                     <TableHead className="w-[50px]"></TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {(receivablesQ.data ?? []).map((r: any) => (
                     <TableRow key={r.id}>
-                      <TableCell className="font-medium">
+                      <TableCell className="font-bold text-slate-900 dark:text-slate-100">
                         {r.description}
                         {r.installments_total && (
-                          <span className="ml-2 text-[10px] text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded-full">
+                          <Badge variant="secondary" className="ml-2 h-5 text-[10px] font-bold">
                             {r.installment_number}/{r.installments_total}
-                          </span>
+                          </Badge>
                         )}
                       </TableCell>
-                      <TableCell className="text-xs text-slate-600">
+                      <TableCell className="text-xs font-medium text-slate-500">
                         {r.core_entities?.display_name ?? "—"}
                       </TableCell>
                       <TableCell>
@@ -920,22 +931,24 @@ export function FinancialPlanningPanel() {
                             }
                           }}
                           className={cn(
-                            "text-xs font-semibold transition-colors",
+                            "text-xs font-bold transition-all",
                             (r.financial_transactions ?? []).length > 0 
-                              ? "text-emerald-600 hover:text-emerald-700 underline underline-offset-4 cursor-pointer" 
-                              : "text-slate-400"
+                              ? "text-emerald-600 hover:scale-105" 
+                              : "text-slate-300"
                           )}
                         >
                           {formatMoneyBRL((r.financial_transactions ?? []).reduce((acc: number, t: any) => acc + (t.amount ?? 0), 0))}
                         </button>
                       </TableCell>
-                      <TableCell>{r.due_date}</TableCell>
+                      <TableCell className="text-xs font-medium">{r.due_date}</TableCell>
                       <TableCell>
-                        <Select
-                          value={r.status}
-                          onValueChange={(v) => updateReceivableStatusM.mutate({ id: r.id, status: v })}
-                        >
-                          <SelectTrigger className="h-9 w-[140px] rounded-2xl">
+                        <Select value={r.status} onValueChange={(v) => updateReceivableStatusM.mutate({ id: r.id, status: v })}>
+                          <SelectTrigger className={cn(
+                            "h-8 w-[110px] rounded-full text-[10px] font-bold uppercase tracking-wider transition-all",
+                            r.status === 'paid' ? "text-emerald-600 border-emerald-200 bg-emerald-50" :
+                            r.status === 'overdue' ? "text-rose-600 border-rose-200 bg-rose-50" :
+                            "text-amber-600 border-amber-200 bg-amber-50"
+                          )}>
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
@@ -947,9 +960,7 @@ export function FinancialPlanningPanel() {
                       </TableCell>
                       <TableCell>
                         <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8 rounded-full"
+                          variant="ghost" size="icon" className="h-8 w-8 rounded-full hover:bg-slate-100"
                           onClick={() => {
                             setEditType("receivable");
                             setEditItem(r);
@@ -957,19 +968,14 @@ export function FinancialPlanningPanel() {
                             setEditDialogOpen(true);
                           }}
                         >
-                          <Pencil className="h-4 w-4 text-slate-500" />
+                          <Pencil className="h-3.5 w-3.5 text-slate-400" />
                         </Button>
                       </TableCell>
                     </TableRow>
                   ))}
-
-                  {!receivablesQ.isLoading && !(receivablesQ.data ?? []).length ? (
-                    <TableRow>
-                      <TableCell colSpan={6} className="text-slate-600 dark:text-slate-400">
-                        Nenhum recebível ainda.
-                      </TableCell>
-                    </TableRow>
-                  ) : null}
+                  {!receivablesQ.isLoading && !(receivablesQ.data ?? []).length && (
+                    <TableRow><TableCell colSpan={6} className="text-center py-12 text-slate-400 text-sm italic">Nenhum registro encontrado para este período.</TableCell></TableRow>
+                  )}
                 </TableBody>
               </Table>
             </div>
@@ -977,18 +983,21 @@ export function FinancialPlanningPanel() {
         </TabsContent>
 
         <TabsContent value="payables" className="mt-4">
-          <Card className="rounded-[22px] border-slate-200 bg-white/70 p-4 shadow-sm backdrop-blur dark:border-slate-800 dark:bg-slate-950/40">
-            <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">Contas a pagar</div>
+          <Card className="rounded-[32px] border-slate-200 bg-white/70 p-6 shadow-sm backdrop-blur dark:border-slate-800 dark:bg-slate-950/40">
+            <div className="flex items-center justify-between mb-6">
+              <div className="text-lg font-bold text-slate-900 dark:text-slate-100">Contas a Pagar</div>
+              <div className="px-3 py-1 bg-rose-50 dark:bg-rose-900/30 text-rose-600 dark:text-rose-400 rounded-full text-[10px] font-bold uppercase tracking-widest">Saídas</div>
+            </div>
 
-            <div className="mt-4 grid gap-3 md:grid-cols-6">
+            <div className="grid gap-6 md:grid-cols-6">
               <div className="md:col-span-2">
-                <Label className="text-xs">Descrição</Label>
-                <Input className="mt-1 rounded-2xl" value={payDesc} onChange={(e) => setPayDesc(e.target.value)} />
+                <Label className="text-[10px] font-bold uppercase text-slate-500 mb-1.5 block">Descrição</Label>
+                <Input className="h-11 rounded-2xl bg-white dark:bg-slate-950" value={payDesc} onChange={(e) => setPayDesc(e.target.value)} />
               </div>
               <div className="md:col-span-2">
-                <Label className="text-xs">Entidade (Fornecedor/Destino)</Label>
+                <Label className="text-[10px] font-bold uppercase text-slate-500 mb-1.5 block">Fornecedor / Entidade</Label>
                 <AsyncSelect
-                  className="mt-1 h-10 rounded-2xl"
+                  className="h-11 rounded-2xl bg-white dark:bg-slate-950"
                   value={payEntityId}
                   onChange={setPayEntityId}
                   placeholder="Buscar..."
@@ -1006,41 +1015,28 @@ export function FinancialPlanningPanel() {
                 />
               </div>
               <div>
-                <Label className="text-xs">Valor</Label>
+                <Label className="text-[10px] font-bold uppercase text-slate-500 mb-1.5 block">Valor (R$)</Label>
                 <Input
-                  className="mt-1 rounded-2xl"
-                  placeholder="Ex: 320,00"
+                  className="h-11 rounded-2xl bg-white dark:bg-slate-950"
+                  placeholder="0,00"
                   value={payAmount}
                   onChange={(e) => setPayAmount(e.target.value)}
                 />
               </div>
               <div>
-                <Label className="text-xs">Vencimento</Label>
+                <Label className="text-[10px] font-bold uppercase text-slate-500 mb-1.5 block">Vencimento</Label>
                 <Input
-                  className="mt-1 rounded-2xl"
+                  className="h-11 rounded-2xl bg-white dark:bg-slate-950"
                   type="date"
                   value={payDueDate}
                   onChange={(e) => setPayDueDate(e.target.value)}
                 />
               </div>
-              <div>
-                <Label className="text-xs">Status</Label>
-                <Select value={payStatus} onValueChange={setPayStatus}>
-                  <SelectTrigger className="mt-1 rounded-2xl">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="pending">Pendente</SelectItem>
-                    <SelectItem value="paid">Pago</SelectItem>
-                    <SelectItem value="overdue">Atrasado</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
 
               <div className="md:col-span-2">
-                <Label className="text-xs">Conta</Label>
+                <Label className="text-[10px] font-bold uppercase text-slate-500 mb-1.5 block">Conta de Origem</Label>
                 <Select value={payAccountId || ""} onValueChange={setPayAccountId}>
-                  <SelectTrigger className="mt-1 rounded-2xl">
+                  <SelectTrigger className="h-11 rounded-2xl bg-white dark:bg-slate-950">
                     <SelectValue placeholder="Opcional" />
                   </SelectTrigger>
                   <SelectContent>
@@ -1054,25 +1050,27 @@ export function FinancialPlanningPanel() {
               </div>
 
               <div className="md:col-span-2">
-                <Label className="text-xs">Tipo</Label>
+                <Label className="text-[10px] font-bold uppercase text-slate-500 mb-1.5 block">Tipo de Lançamento</Label>
                 <Select value={payType} onValueChange={(v: any) => setPayType(v)}>
-                  <SelectTrigger className="mt-1 rounded-2xl">
+                  <SelectTrigger className="h-11 rounded-2xl bg-white dark:bg-slate-950">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="single">Único</SelectItem>
+                    <SelectItem value="single">Pagamento Único</SelectItem>
                     <SelectItem value="recurrent">Recorrente (Mensal)</SelectItem>
-                    <SelectItem value="installments">Parcelado (A cada 30 dias)</SelectItem>
+                    <SelectItem value="installments">Parcelado (30 dias)</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
 
               {payType !== "single" && (
                 <div>
-                  <Label className="text-xs">{payType === 'recurrent' ? 'Meses' : 'Parcelas'}</Label>
+                  <Label className="text-[10px] font-bold uppercase text-slate-500 mb-1.5 block">
+                    {payType === 'recurrent' ? 'Meses' : 'Parcelas'}
+                  </Label>
                   <Input 
                     type="number" 
-                    className="mt-1 rounded-2xl" 
+                    className="h-11 rounded-2xl bg-white dark:bg-slate-950" 
                     value={payInstallments} 
                     onChange={(e) => setPayInstallments(e.target.value)} 
                     min="2"
@@ -1081,106 +1079,101 @@ export function FinancialPlanningPanel() {
                 </div>
               )}
 
-              <div className="md:col-span-full flex items-end">
+              <div className="md:col-span-full flex items-end pt-2">
                 <Button
                   onClick={generatePayPreview}
                   disabled={!activeTenantId || createPayableM.isPending}
-                  className="h-10 w-full rounded-2xl md:w-auto"
+                  className="h-12 px-8 rounded-2xl bg-[hsl(var(--byfrost-accent))] hover:bg-[hsl(var(--byfrost-accent)/0.9)] text-white font-bold"
                 >
-                  Continuar Cadastro
+                  {showPayPreview ? "Atualizar Plano" : "Continuar Cadastro"}
                 </Button>
               </div>
 
               {showPayPreview && (
-                <div className="md:col-span-full mt-4 p-4 rounded-2xl border border-slate-200 bg-slate-50 dark:border-slate-800 dark:bg-slate-900/50">
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="text-sm font-semibold">Confirmar Lançamentos</div>
-                    <Button variant="ghost" size="sm" onClick={() => setShowPayPreview(false)}>Cancelar</Button>
+                <div className="md:col-span-full mt-8 animate-in fade-in slide-in-from-top-4 duration-300">
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 rounded-xl bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600">
+                        <CalendarIcon className="h-4 w-4" />
+                      </div>
+                      <div>
+                        <div className="text-sm font-bold text-slate-900 dark:text-slate-100">Cronograma de Parcelas</div>
+                        <div className="text-[10px] text-slate-500 uppercase font-bold tracking-tight">Revise as datas e descrições</div>
+                      </div>
+                    </div>
+                    <Button variant="ghost" size="sm" className="rounded-xl text-slate-500" onClick={() => setShowPayPreview(false)}>Cancelar</Button>
                   </div>
-                  <div className="max-h-[300px] overflow-auto rounded-xl border border-slate-200 dark:border-slate-800">
-                    <Table>
-                      <TableHeader className="bg-white dark:bg-slate-950">
-                        <TableRow>
-                          <TableHead className="text-[10px] uppercase">Descrição</TableHead>
-                          <TableHead className="text-[10px] uppercase">Vencimento</TableHead>
-                          <TableHead className="text-[10px] uppercase">Valor</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {payPreviewItems.map((item, idx) => (
-                          <TableRow key={idx}>
-                            <TableCell className="py-2 text-xs">
-                              <Input 
-                                className="h-8 rounded-lg text-xs" 
-                                value={item.description} 
-                                onChange={(e) => {
-                                  const newItems = [...payPreviewItems];
-                                  newItems[idx].description = e.target.value;
-                                  setPayPreviewItems(newItems);
-                                }}
-                              />
-                            </TableCell>
-                            <TableCell className="py-2 text-xs">
-                              <Input 
-                                type="date"
-                                className="h-8 rounded-lg text-xs" 
-                                value={item.due_date} 
-                                onChange={(e) => {
-                                  const newItems = [...payPreviewItems];
-                                  newItems[idx].due_date = e.target.value;
-                                  setPayPreviewItems(newItems);
-                                }}
-                              />
-                            </TableCell>
-                            <TableCell className="py-2 text-xs font-semibold">
-                              {formatMoneyBRL(item.amount)}
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
+                  
+                  <div className="grid gap-3 max-h-[400px] overflow-auto pr-2 custom-scrollbar">
+                    {payPreviewItems.map((item, idx) => (
+                      <div key={idx} className="flex flex-col sm:flex-row items-center gap-4 p-4 rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950/50 hover:border-[hsl(var(--byfrost-accent)/0.3)] transition-all group">
+                        <div className="h-8 w-8 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-[10px] font-bold text-slate-500">#{idx + 1}</div>
+                        <div className="flex-1 w-full">
+                          <Label className="text-[9px] uppercase font-bold text-slate-400 mb-1 block ml-1">Descrição</Label>
+                          <Input className="h-10 rounded-xl bg-slate-50/50" value={item.description} onChange={(e) => {
+                            const newItems = [...payPreviewItems];
+                            newItems[idx].description = e.target.value;
+                            setPayPreviewItems(newItems);
+                          }} />
+                        </div>
+                        <div className="w-full sm:w-40">
+                          <Label className="text-[9px] uppercase font-bold text-slate-400 mb-1 block ml-1">Vencimento</Label>
+                          <Input type="date" className="h-10 rounded-xl bg-slate-50/50" value={item.due_date} onChange={(e) => {
+                            const newItems = [...payPreviewItems];
+                            newItems[idx].due_date = e.target.value;
+                            setPayPreviewItems(newItems);
+                          }} />
+                        </div>
+                        <div className="w-full sm:w-32 text-right">
+                          <Label className="text-[9px] uppercase font-bold text-slate-400 mb-1 block mr-1">Valor</Label>
+                          <div className="h-10 flex items-center justify-end px-3 font-bold text-slate-900">{formatMoneyBRL(item.amount)}</div>
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                  <div className="mt-4 flex justify-end">
+
+                  <div className="mt-6 flex flex-col sm:flex-row items-center justify-between gap-4 p-6 rounded-[32px] bg-[hsl(var(--byfrost-accent)/0.03)] border border-[hsl(var(--byfrost-accent)/0.1)]">
+                    <div className="text-sm font-medium text-slate-600">
+                      Serão gerados <span className="font-bold">{payPreviewItems.length}</span> lançamentos totalizando <span className="font-bold text-rose-600">{formatMoneyBRL(payPreviewItems.reduce((acc, i) => acc + i.amount, 0))}</span>
+                    </div>
                     <Button
                       onClick={() => createPayableM.mutate()}
                       disabled={createPayableM.isPending}
-                      className="rounded-2xl"
+                      className="h-12 px-8 rounded-2xl bg-slate-900 hover:bg-slate-800 text-white dark:bg-white dark:text-slate-900 font-bold shadow-lg shadow-black/10"
                     >
-                      {createPayableM.isPending ? "Salvando…" : `Confirmar e Gerar ${payPreviewItems.length} Lançamentos`}
+                      {createPayableM.isPending ? "Processando..." : "Confirmar e Gerar Plano"}
                     </Button>
                   </div>
                 </div>
               )}
             </div>
 
-            <div className="mt-5 overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-800">
+            <div className="mt-8 overflow-hidden rounded-3xl border border-slate-200 dark:border-slate-800">
               <Table>
-                <TableHeader>
+                <TableHeader className="bg-slate-50/50 dark:bg-slate-950">
                   <TableRow>
-                    <TableHead>Descrição</TableHead>
-                    <TableHead>Entidade</TableHead>
-                    <TableHead>Valor</TableHead>
-                    <TableHead>Conciliado</TableHead>
-                    <TableHead>Vencimento</TableHead>
-                    <TableHead>Status</TableHead>
+                    <TableHead className="text-[10px] uppercase font-bold">Descrição</TableHead>
+                    <TableHead className="text-[10px] uppercase font-bold">Entidade</TableHead>
+                    <TableHead className="text-[10px] uppercase font-bold">Conciliado</TableHead>
+                    <TableHead className="text-[10px] uppercase font-bold">Vencimento</TableHead>
+                    <TableHead className="text-[10px] uppercase font-bold">Status</TableHead>
                     <TableHead className="w-[50px]"></TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {(payablesQ.data ?? []).map((p: any) => (
                     <TableRow key={p.id}>
-                      <TableCell className="font-medium">
+                      <TableCell className="font-bold text-slate-900 dark:text-slate-100">
                         {p.description}
                         {p.installments_total && (
-                          <span className="ml-2 text-[10px] text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded-full">
+                          <Badge variant="secondary" className="ml-2 h-5 text-[10px] font-bold">
                             {p.installment_number}/{p.installments_total}
-                          </span>
+                          </Badge>
                         )}
                       </TableCell>
-                      <TableCell className="text-xs text-slate-600">
+                      <TableCell className="text-xs font-medium text-slate-500">
                         {p.core_entities?.display_name ?? "—"}
                       </TableCell>
-                      <TableCell>{formatMoneyBRL(Number(p.amount ?? 0))}</TableCell>
                       <TableCell>
                         <button
                           onClick={() => {
@@ -1191,19 +1184,24 @@ export function FinancialPlanningPanel() {
                             }
                           }}
                           className={cn(
-                            "text-xs font-semibold transition-colors",
+                            "text-xs font-bold transition-all",
                             (p.financial_transactions ?? []).length > 0 
-                              ? "text-emerald-600 hover:text-emerald-700 underline underline-offset-4 cursor-pointer" 
-                              : "text-slate-400"
+                              ? "text-emerald-600 hover:scale-105" 
+                              : "text-slate-300"
                           )}
                         >
                           {formatMoneyBRL((p.financial_transactions ?? []).reduce((acc: number, t: any) => acc + (t.amount ?? 0), 0))}
                         </button>
                       </TableCell>
-                      <TableCell>{p.due_date}</TableCell>
+                      <TableCell className="text-xs font-medium">{p.due_date}</TableCell>
                       <TableCell>
                         <Select value={p.status} onValueChange={(v) => updatePayableStatusM.mutate({ id: p.id, status: v })}>
-                          <SelectTrigger className="h-9 w-[140px] rounded-2xl">
+                          <SelectTrigger className={cn(
+                            "h-8 w-[110px] rounded-full text-[10px] font-bold uppercase tracking-wider transition-all",
+                            p.status === 'paid' ? "text-emerald-600 border-emerald-200 bg-emerald-50" :
+                            p.status === 'overdue' ? "text-rose-600 border-rose-200 bg-rose-50" :
+                            "text-amber-600 border-amber-200 bg-amber-50"
+                          )}>
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
@@ -1215,9 +1213,7 @@ export function FinancialPlanningPanel() {
                       </TableCell>
                       <TableCell>
                         <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8 rounded-full"
+                          variant="ghost" size="icon" className="h-8 w-8 rounded-full hover:bg-slate-100"
                           onClick={() => {
                             setEditType("payable");
                             setEditItem(p);
@@ -1225,19 +1221,14 @@ export function FinancialPlanningPanel() {
                             setEditDialogOpen(true);
                           }}
                         >
-                          <Pencil className="h-4 w-4 text-slate-500" />
+                          <Pencil className="h-3.5 w-3.5 text-slate-400" />
                         </Button>
                       </TableCell>
                     </TableRow>
                   ))}
-
-                  {!payablesQ.isLoading && !(payablesQ.data ?? []).length ? (
-                    <TableRow>
-                      <TableCell colSpan={6} className="text-slate-600 dark:text-slate-400">
-                        Nenhum pagável ainda.
-                      </TableCell>
-                    </TableRow>
-                  ) : null}
+                  {!payablesQ.isLoading && !(payablesQ.data ?? []).length && (
+                    <TableRow><TableCell colSpan={6} className="text-center py-12 text-slate-400 text-sm italic">Nenhum registro encontrado para este período.</TableCell></TableRow>
+                  )}
                 </TableBody>
               </Table>
             </div>
@@ -1274,6 +1265,8 @@ function EditItemDialog({ open, onOpenChange, item, type, scope, onScopeChange, 
   const [entityId, setEntityId] = useState<string | null>(null);
   const [entityLabel, setEntityLabel] = useState<string | null>(null);
   const [accountId, setAccountId] = useState<string | null>(null);
+  const [categoryId, setCategoryId] = useState<string | null>(null);
+  const [categoryLabel, setCategoryLabel] = useState<string | null>(null);
 
   // Sync state when item changes
   useMemo(() => {
@@ -1284,6 +1277,8 @@ function EditItemDialog({ open, onOpenChange, item, type, scope, onScopeChange, 
       setEntityId(item.entity_id || null);
       setEntityLabel(item.core_entities?.display_name || null);
       setAccountId(item.account_id || null);
+      setCategoryId(item.category_id || null);
+      setCategoryLabel(item.financial_categories?.name || null);
     }
   }, [item]);
 
@@ -1314,24 +1309,45 @@ function EditItemDialog({ open, onOpenChange, item, type, scope, onScopeChange, 
               <Input type="date" className="mt-1 rounded-2xl" value={date} onChange={(e) => setDate(e.target.value)} />
             </div>
           </div>
-          <div>
-            <Label className="text-xs">Entidade</Label>
-            <AsyncSelect
-              className="mt-1 h-10 rounded-2xl"
-              value={entityId}
-              initialLabel={entityLabel}
-              onChange={(v) => setEntityId(v)}
-              loadOptions={async (val) => {
-                if (!activeTenantId || val.length < 2) return [];
-                const { data } = await supabase
-                  .from("core_entities")
-                  .select("id, display_name")
-                  .eq("tenant_id", activeTenantId)
-                  .ilike("display_name", `%${val}%`)
-                  .limit(10);
-                return (data || []).map((d) => ({ value: d.id, label: d.display_name }));
-              }}
-            />
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label className="text-xs">Entidade</Label>
+              <AsyncSelect
+                className="mt-1 h-10 rounded-2xl"
+                value={entityId}
+                initialLabel={entityLabel}
+                onChange={(v) => setEntityId(v)}
+                loadOptions={async (val) => {
+                  if (!activeTenantId || val.length < 2) return [];
+                  const { data } = await supabase
+                    .from("core_entities")
+                    .select("id, display_name")
+                    .eq("tenant_id", activeTenantId)
+                    .ilike("display_name", `%${val}%`)
+                    .limit(10);
+                  return (data || []).map((d) => ({ value: d.id, label: d.display_name }));
+                }}
+              />
+            </div>
+            <div>
+              <Label className="text-xs">Categoria</Label>
+              <AsyncSelect
+                className="mt-1 h-10 rounded-2xl"
+                value={categoryId}
+                initialLabel={categoryLabel}
+                onChange={(v) => setCategoryId(v)}
+                loadOptions={async (val) => {
+                  if (!activeTenantId || val.length < 2) return [];
+                  const { data } = await supabase
+                    .from("financial_categories")
+                    .select("id, name")
+                    .eq("tenant_id", activeTenantId)
+                    .ilike("name", `%${val}%`)
+                    .limit(10);
+                  return (data || []).map((d) => ({ value: d.id, label: d.name }));
+                }}
+              />
+            </div>
           </div>
           <div>
             <Label className="text-xs">Conta</Label>
@@ -1369,7 +1385,14 @@ function EditItemDialog({ open, onOpenChange, item, type, scope, onScopeChange, 
           <Button variant="ghost" onClick={() => onOpenChange(false)}>Cancelar</Button>
           <Button 
             disabled={isPending} 
-            onClick={() => onSave({ description: desc, amount, due_date: date, entity_id: entityId, account_id: accountId })}
+            onClick={() => onSave({ 
+              description: desc, 
+              amount, 
+              due_date: date, 
+              entity_id: entityId, 
+              account_id: accountId,
+              category_id: categoryId 
+            })}
             className="rounded-2xl"
           >
             {isPending ? "Salvando..." : "Salvar Alterações"}
