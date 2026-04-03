@@ -131,17 +131,29 @@ export function useSuperTasks(tenantId?: string | null) {
 
   const upsertTask = useMutation({
     mutationFn: async (task: Partial<SuperTask>) => {
-      const { data, error } = await supabase
-        .from("super_tasks")
-        .upsert({
-          ...task,
-          updated_at: new Date().toISOString(),
-        })
-        .select()
-        .single();
+      const payload = { ...task, updated_at: new Date().toISOString() };
 
-      if (error) throw error;
-      return data;
+      if (task.id) {
+        // Existing task: only UPDATE the provided fields (no full row needed)
+        const { id, ...fields } = payload;
+        const { data, error } = await supabase
+          .from("super_tasks")
+          .update(fields)
+          .eq("id", id!)
+          .select()
+          .single();
+        if (error) throw error;
+        return data;
+      } else {
+        // New task: INSERT via upsert (tenant_id and all required fields must be present)
+        const { data, error } = await supabase
+          .from("super_tasks")
+          .insert(payload)
+          .select()
+          .single();
+        if (error) throw error;
+        return data;
+      }
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["super_tasks"] });
