@@ -12,9 +12,10 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { showError, showSuccess } from "@/utils/toast";
 import { Checkbox } from "@/components/ui/checkbox";
-import { addMonths, format } from "date-fns";
+import { addDays, addMonths, endOfMonth, format, startOfMonth } from "date-fns";
+import { ptBR } from "date-fns/locale";
 import { AsyncSelect } from "@/components/ui/async-select";
-import { Pencil, Trash2 } from "lucide-react";
+import { Pencil, Trash2, ChevronLeft, ChevronRight, Calendar as CalendarIcon, Wallet } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type CategoryRow = {
@@ -53,6 +54,27 @@ export function FinancialPlanningPanel() {
   const { activeTenantId } = useTenant();
   const qc = useQueryClient();
 
+  // Filters state
+  const [selectedDate, setSelectedDate] = useState(new Date());
+  const [selectedAccountId, setSelectedAccountId] = useState<string>("all");
+
+  const monthStart = format(startOfMonth(selectedDate), "yyyy-MM-dd");
+  const monthEnd = format(endOfMonth(selectedDate), "yyyy-MM-dd");
+
+  const bankAccountsQ = useQuery({
+    queryKey: ["bank_accounts", activeTenantId],
+    enabled: Boolean(activeTenantId),
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("bank_accounts")
+        .select("id, bank_name, account_name")
+        .eq("tenant_id", activeTenantId!)
+        .order("bank_name", { ascending: true });
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+
   const categoriesQ = useQuery({
     queryKey: ["financial_categories", activeTenantId],
     enabled: Boolean(activeTenantId),
@@ -83,30 +105,44 @@ export function FinancialPlanningPanel() {
   });
 
   const receivablesQ = useQuery({
-    queryKey: ["financial_receivables", activeTenantId],
+    queryKey: ["financial_receivables", activeTenantId, monthStart, monthEnd, selectedAccountId],
     enabled: Boolean(activeTenantId),
     queryFn: async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from("financial_receivables")
-        .select("id,tenant_id,description,amount,due_date,status,entity_id,core_entities(display_name),financial_transactions!financial_transactions_receivable_fk(amount)")
+        .select("id,tenant_id,description,amount,due_date,status,entity_id,account_id,core_entities(display_name),financial_transactions!financial_transactions_receivable_fk(amount)")
         .eq("tenant_id", activeTenantId!)
-        .order("due_date", { ascending: true })
-        .limit(400);
+        .gte("due_date", monthStart)
+        .lte("due_date", monthEnd)
+        .order("due_date", { ascending: true });
+      
+      if (selectedAccountId !== "all") {
+        query = query.eq("account_id", selectedAccountId);
+      }
+
+      const { data, error } = await query.limit(400);
       if (error) throw error;
       return (data ?? []) as any[];
     },
   });
 
   const payablesQ = useQuery({
-    queryKey: ["financial_payables", activeTenantId],
+    queryKey: ["financial_payables", activeTenantId, monthStart, monthEnd, selectedAccountId],
     enabled: Boolean(activeTenantId),
     queryFn: async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from("financial_payables")
-        .select("id,tenant_id,description,amount,due_date,status,entity_id,core_entities(display_name),financial_transactions!financial_transactions_payable_fk(amount)")
+        .select("id,tenant_id,description,amount,due_date,status,entity_id,account_id,core_entities(display_name),financial_transactions!financial_transactions_payable_fk(amount)")
         .eq("tenant_id", activeTenantId!)
-        .order("due_date", { ascending: true })
-        .limit(400);
+        .gte("due_date", monthStart)
+        .lte("due_date", monthEnd)
+        .order("due_date", { ascending: true });
+
+      if (selectedAccountId !== "all") {
+        query = query.eq("account_id", selectedAccountId);
+      }
+
+      const { data, error } = await query.limit(400);
       if (error) throw error;
       return (data ?? []) as any[];
     },
@@ -178,9 +214,45 @@ export function FinancialPlanningPanel() {
   const [recvAmount, setRecvAmount] = useState<string>("");
   const [recvDueDate, setRecvDueDate] = useState<string>("");
   const [recvStatus, setRecvStatus] = useState<string>("pending");
-  const [recvIsRecurrent, setRecvIsRecurrent] = useState(false);
+  const [recvType, setRecvType] = useState<"single" | "recurrent" | "installments">("single");
   const [recvInstallments, setRecvInstallments] = useState("12");
+  const [recvAccountId, setRecvAccountId] = useState<string | null>(null);
   const [recvEntityId, setRecvEntityId] = useState<string | null>(null);
+
+  const [recvPreviewItems, setRecvPreviewItems] = useState<any[]>([]);
+  const [showRecvPreview, setShowRecvPreview] = useState(false);
+
+  const generateRecvPreview = () => {
+    const amt = parseMoneyInput(recvAmount);
+    if (!recvDesc.trim()) return showError("Descrição obrigatória");
+    if (!Number.isFinite(amt)) return showError("Valor inválido");
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(recvDueDate)) return showError("Data inválida");
+
+    const count = recvType === "single" ? 1 : parseInt(recvInstallments) || 1;
+    const baseDate = new Date(`${recvDueDate}T12:00:00`);
+    const items = [];
+
+    for (let i = 0; i < count; i++) {
+      let itemDate;
+      if (recvType === "recurrent") {
+        itemDate = addMonths(baseDate, i);
+      } else if (recvType === "installments") {
+        itemDate = addDays(baseDate, i * 30);
+      } else {
+        itemDate = baseDate;
+      }
+
+      items.push({
+        description: count > 1 ? `${recvDesc.trim()} (${i + 1}/${count})` : recvDesc.trim(),
+        amount: Number(amt.toFixed(2)),
+        due_date: format(itemDate, "yyyy-MM-dd"),
+        installment_number: i + 1,
+        installments_total: count > 1 ? count : null,
+      });
+    }
+    setRecvPreviewItems(items);
+    setShowRecvPreview(true);
+  };
 
   const createReceivableM = useMutation({
     mutationFn: async () => {
@@ -190,26 +262,20 @@ export function FinancialPlanningPanel() {
       if (!Number.isFinite(amt)) throw new Error("Valor inválido");
       if (!/^\d{4}-\d{2}-\d{2}$/.test(recvDueDate)) throw new Error("Data inválida");
 
-      const count = recvIsRecurrent ? parseInt(recvInstallments) || 1 : 1;
-      const groupId = recvIsRecurrent ? crypto.randomUUID() : null;
+      const groupId = recvType !== "single" ? crypto.randomUUID() : null;
       
-      const items = [];
-      const baseDate = new Date(`${recvDueDate}T12:00:00`);
-
-      for (let i = 0; i < count; i++) {
-        const itemDate = addMonths(baseDate, i);
-        items.push({
-          tenant_id: activeTenantId,
-          description: count > 1 ? `${recvDesc.trim()} (${i+1}/${count})` : recvDesc.trim(),
-          amount: Number(amt.toFixed(2)),
-          due_date: format(itemDate, "yyyy-MM-dd"),
-          status: recvStatus,
-          recurrence_group_id: groupId,
-          installment_number: i + 1,
-          installments_total: count > 1 ? count : null,
-          entity_id: recvEntityId
-        });
-      }
+      const items = recvPreviewItems.map(item => ({
+        tenant_id: activeTenantId,
+        description: item.description,
+        amount: item.amount,
+        due_date: item.due_date,
+        status: recvStatus,
+        recurrence_group_id: groupId,
+        installment_number: item.installment_number,
+        installments_total: item.installments_total,
+        entity_id: recvEntityId,
+        account_id: recvAccountId
+      }));
 
       const { error } = await supabase.from("financial_receivables").insert(items);
       if (error) throw error;
@@ -219,6 +285,8 @@ export function FinancialPlanningPanel() {
       setRecvDesc("");
       setRecvAmount("");
       setRecvDueDate("");
+      setRecvPreviewItems([]);
+      setShowRecvPreview(false);
       await qc.invalidateQueries({ queryKey: ["financial_receivables", activeTenantId] });
       await qc.invalidateQueries({ queryKey: ["financial_cash_projection", activeTenantId] });
     },
@@ -229,9 +297,45 @@ export function FinancialPlanningPanel() {
   const [payAmount, setPayAmount] = useState<string>("");
   const [payDueDate, setPayDueDate] = useState<string>("");
   const [payStatus, setPayStatus] = useState<string>("pending");
-  const [payIsRecurrent, setPayIsRecurrent] = useState(false);
+  const [payType, setPayType] = useState<"single" | "recurrent" | "installments">("single");
   const [payInstallments, setPayInstallments] = useState("12");
+  const [payAccountId, setPayAccountId] = useState<string | null>(null);
   const [payEntityId, setPayEntityId] = useState<string | null>(null);
+
+  const [payPreviewItems, setPayPreviewItems] = useState<any[]>([]);
+  const [showPayPreview, setShowPayPreview] = useState(false);
+
+  const generatePayPreview = () => {
+    const amt = parseMoneyInput(payAmount);
+    if (!payDesc.trim()) return showError("Descrição obrigatória");
+    if (!Number.isFinite(amt)) return showError("Valor inválido");
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(payDueDate)) return showError("Data inválida");
+
+    const count = payType === "single" ? 1 : parseInt(payInstallments) || 1;
+    const baseDate = new Date(`${payDueDate}T12:00:00`);
+    const items = [];
+
+    for (let i = 0; i < count; i++) {
+      let itemDate;
+      if (payType === "recurrent") {
+        itemDate = addMonths(baseDate, i);
+      } else if (payType === "installments") {
+        itemDate = addDays(baseDate, i * 30);
+      } else {
+        itemDate = baseDate;
+      }
+
+      items.push({
+        description: count > 1 ? `${payDesc.trim()} (${i + 1}/${count})` : payDesc.trim(),
+        amount: Number(amt.toFixed(2)),
+        due_date: format(itemDate, "yyyy-MM-dd"),
+        installment_number: i + 1,
+        installments_total: count > 1 ? count : null,
+      });
+    }
+    setPayPreviewItems(items);
+    setShowPayPreview(true);
+  };
 
   const createPayableM = useMutation({
     mutationFn: async () => {
@@ -241,26 +345,20 @@ export function FinancialPlanningPanel() {
       if (!Number.isFinite(amt)) throw new Error("Valor inválido");
       if (!/^\d{4}-\d{2}-\d{2}$/.test(payDueDate)) throw new Error("Data inválida");
 
-      const count = payIsRecurrent ? parseInt(payInstallments) || 1 : 1;
-      const groupId = payIsRecurrent ? crypto.randomUUID() : null;
+      const groupId = payType !== "single" ? crypto.randomUUID() : null;
 
-      const items = [];
-      const baseDate = new Date(`${payDueDate}T12:00:00`);
-
-      for (let i = 0; i < count; i++) {
-        const itemDate = addMonths(baseDate, i);
-        items.push({
-          tenant_id: activeTenantId,
-          description: count > 1 ? `${payDesc.trim()} (${i+1}/${count})` : payDesc.trim(),
-          amount: Number(amt.toFixed(2)),
-          due_date: format(itemDate, "yyyy-MM-dd"),
-          status: payStatus,
-          recurrence_group_id: groupId,
-          installment_number: i + 1,
-          installments_total: count > 1 ? count : null,
-          entity_id: payEntityId
-        });
-      }
+      const items = payPreviewItems.map(item => ({
+        tenant_id: activeTenantId,
+        description: item.description,
+        amount: item.amount,
+        due_date: item.due_date,
+        status: payStatus,
+        recurrence_group_id: groupId,
+        installment_number: item.installment_number,
+        installments_total: item.installments_total,
+        entity_id: payEntityId,
+        account_id: payAccountId
+      }));
 
       const { error } = await supabase.from("financial_payables").insert(items);
       if (error) throw error;
@@ -270,6 +368,8 @@ export function FinancialPlanningPanel() {
       setPayDesc("");
       setPayAmount("");
       setPayDueDate("");
+      setPayPreviewItems([]);
+      setShowPayPreview(false);
       await qc.invalidateQueries({ queryKey: ["financial_payables", activeTenantId] });
       await qc.invalidateQueries({ queryKey: ["financial_cash_projection", activeTenantId] });
     },
@@ -316,6 +416,7 @@ export function FinancialPlanningPanel() {
         amount: parseMoneyInput(updatedData.amount),
         due_date: updatedData.due_date,
         entity_id: updatedData.entity_id,
+        account_id: updatedData.account_id,
       };
 
       if (!Number.isFinite(payload.amount)) throw new Error("Valor inválido");
@@ -354,19 +455,67 @@ export function FinancialPlanningPanel() {
   return (
     <div className="grid gap-4">
       <Card className="rounded-[22px] border-slate-200 bg-white/70 p-4 shadow-sm backdrop-blur dark:border-slate-800 dark:bg-slate-950/40">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">Projeção básica de caixa</div>
-            <div className="mt-1 text-xs text-slate-600 dark:text-slate-400">saldo atual + recebíveis - pagáveis</div>
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-1 rounded-2xl border border-slate-200 bg-white/50 p-1 dark:border-slate-800 dark:bg-slate-950/20">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 rounded-xl"
+                onClick={() => setSelectedDate(prev => addMonths(prev, -1))}
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <div className="flex min-w-[120px] items-center justify-center gap-2 px-2 text-sm font-medium text-slate-900 dark:text-slate-100 uppercase tracking-wider">
+                <CalendarIcon className="h-3.5 w-3.5 text-slate-400" />
+                {format(selectedDate, "MMMM yyyy", { locale: ptBR })}
+              </div>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 rounded-xl"
+                onClick={() => setSelectedDate(prev => addMonths(prev, 1))}
+              >
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
+
+            <Select value={selectedAccountId} onValueChange={setSelectedAccountId}>
+              <SelectTrigger className="h-10 w-[200px] rounded-2xl bg-white/50 dark:bg-slate-950/20">
+                <div className="flex items-center gap-2">
+                  <Wallet className="h-3.5 w-3.5 text-slate-400" />
+                  <SelectValue placeholder="Todas as contas" />
+                </div>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todas as contas</SelectItem>
+                {(bankAccountsQ.data ?? []).map((ba: any) => (
+                  <SelectItem key={ba.id} value={ba.id}>
+                    {ba.bank_name} - {ba.account_name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
-          <Button
-            variant="secondary"
-            className="h-9 rounded-2xl"
-            onClick={() => projectionQ.refetch()}
-            disabled={!activeTenantId}
-          >
-            Atualizar
-          </Button>
+          
+          <div className="flex items-center gap-3">
+            <div className="hidden sm:block">
+              <div className="text-[11px] font-semibold text-slate-400 uppercase text-right">Projeção básica de caixa</div>
+              <div className="text-[10px] text-slate-500 text-right">saldo atual + pendências</div>
+            </div>
+            <Button
+              variant="secondary"
+              className="h-10 rounded-2xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800"
+              onClick={() => {
+                projectionQ.refetch();
+                receivablesQ.refetch();
+                payablesQ.refetch();
+              }}
+              disabled={!activeTenantId}
+            >
+              Atualizar
+            </Button>
+          </div>
         </div>
 
         <div className="mt-4 grid gap-2 sm:grid-cols-4">
@@ -403,15 +552,15 @@ export function FinancialPlanningPanel() {
         ) : null}
       </Card>
 
-      <Tabs defaultValue="budgets" className="w-full">
-        <TabsList className="grid w-full grid-cols-3 rounded-2xl">
-          <TabsTrigger value="budgets" className="rounded-2xl">
+      <Tabs defaultValue="receivables" className="w-full">
+        <TabsList className="grid w-full grid-cols-3 rounded-2xl bg-slate-100/50 p-1 dark:bg-slate-800/20">
+          <TabsTrigger value="budgets" className="rounded-xl data-[state=active]:bg-white data-[state=active]:shadow-sm dark:data-[state=active]:bg-slate-900">
             Orçamentos
           </TabsTrigger>
-          <TabsTrigger value="receivables" className="rounded-2xl">
+          <TabsTrigger value="receivables" className="rounded-xl data-[state=active]:bg-white data-[state=active]:shadow-sm dark:data-[state=active]:bg-slate-900">
             Recebíveis
           </TabsTrigger>
-          <TabsTrigger value="payables" className="rounded-2xl">
+          <TabsTrigger value="payables" className="rounded-xl data-[state=active]:bg-white data-[state=active]:shadow-sm dark:data-[state=active]:bg-slate-900">
             Pagáveis
           </TabsTrigger>
         </TabsList>
@@ -589,25 +738,46 @@ export function FinancialPlanningPanel() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="pending">pending</SelectItem>
-                    <SelectItem value="paid">paid</SelectItem>
-                    <SelectItem value="overdue">overdue</SelectItem>
+                    <SelectItem value="pending">Pendente</SelectItem>
+                    <SelectItem value="paid">Pago</SelectItem>
+                    <SelectItem value="overdue">Atrasado</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
 
-              <div className="flex items-center gap-2 pt-6">
-                <Checkbox 
-                  id="recv-recurrent" 
-                  checked={recvIsRecurrent} 
-                  onCheckedChange={(v) => setRecvIsRecurrent(!!v)} 
-                />
-                <Label htmlFor="recv-recurrent" className="text-xs cursor-pointer">Recorrente</Label>
+              <div className="md:col-span-2">
+                <Label className="text-xs">Conta</Label>
+                <Select value={recvAccountId || ""} onValueChange={setRecvAccountId}>
+                  <SelectTrigger className="mt-1 rounded-2xl">
+                    <SelectValue placeholder="Opcional" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(bankAccountsQ.data ?? []).map((ba: any) => (
+                      <SelectItem key={ba.id} value={ba.id}>
+                        {ba.bank_name} - {ba.account_name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
 
-              {recvIsRecurrent && (
+              <div className="md:col-span-2">
+                <Label className="text-xs">Tipo</Label>
+                <Select value={recvType} onValueChange={(v: any) => setRecvType(v)}>
+                  <SelectTrigger className="mt-1 rounded-2xl">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="single">Único</SelectItem>
+                    <SelectItem value="recurrent">Recorrente (Mensal)</SelectItem>
+                    <SelectItem value="installments">Parcelado (A cada 30 dias)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {recvType !== "single" && (
                 <div>
-                  <Label className="text-xs">Meses</Label>
+                  <Label className="text-xs">{recvType === 'recurrent' ? 'Meses' : 'Parcelas'}</Label>
                   <Input 
                     type="number" 
                     className="mt-1 rounded-2xl" 
@@ -619,15 +789,76 @@ export function FinancialPlanningPanel() {
                 </div>
               )}
 
-              <div className="md:col-span-5 flex items-end">
+              <div className="md:col-span-full flex items-end">
                 <Button
-                  onClick={() => createReceivableM.mutate()}
+                  onClick={generateRecvPreview}
                   disabled={!activeTenantId || createReceivableM.isPending}
                   className="h-10 w-full rounded-2xl md:w-auto"
                 >
-                  {createReceivableM.isPending ? "Salvando…" : "Cadastrar recebível"}
+                  Continuar Cadastro
                 </Button>
               </div>
+
+              {showRecvPreview && (
+                <div className="md:col-span-full mt-4 p-4 rounded-2xl border border-slate-200 bg-slate-50 dark:border-slate-800 dark:bg-slate-900/50">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="text-sm font-semibold">Confirmar Lançamentos</div>
+                    <Button variant="ghost" size="sm" onClick={() => setShowRecvPreview(false)}>Cancelar</Button>
+                  </div>
+                  <div className="max-h-[300px] overflow-auto rounded-xl border border-slate-200 dark:border-slate-800">
+                    <Table>
+                      <TableHeader className="bg-white dark:bg-slate-950">
+                        <TableRow>
+                          <TableHead className="text-[10px] uppercase">Descrição</TableHead>
+                          <TableHead className="text-[10px] uppercase">Vencimento</TableHead>
+                          <TableHead className="text-[10px] uppercase">Valor</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {recvPreviewItems.map((item, idx) => (
+                          <TableRow key={idx}>
+                            <TableCell className="py-2 text-xs">
+                              <Input 
+                                className="h-8 rounded-lg text-xs" 
+                                value={item.description} 
+                                onChange={(e) => {
+                                  const newItems = [...recvPreviewItems];
+                                  newItems[idx].description = e.target.value;
+                                  setRecvPreviewItems(newItems);
+                                }}
+                              />
+                            </TableCell>
+                            <TableCell className="py-2 text-xs">
+                              <Input 
+                                type="date"
+                                className="h-8 rounded-lg text-xs" 
+                                value={item.due_date} 
+                                onChange={(e) => {
+                                  const newItems = [...recvPreviewItems];
+                                  newItems[idx].due_date = e.target.value;
+                                  setRecvPreviewItems(newItems);
+                                }}
+                              />
+                            </TableCell>
+                            <TableCell className="py-2 text-xs font-semibold">
+                              {formatMoneyBRL(item.amount)}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                  <div className="mt-4 flex justify-end">
+                    <Button
+                      onClick={() => createReceivableM.mutate()}
+                      disabled={createReceivableM.isPending}
+                      className="rounded-2xl"
+                    >
+                      {createReceivableM.isPending ? "Salvando…" : `Confirmar e Gerar ${recvPreviewItems.length} Lançamentos`}
+                    </Button>
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="mt-5 overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-800">
@@ -671,9 +902,9 @@ export function FinancialPlanningPanel() {
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="pending">pending</SelectItem>
-                            <SelectItem value="paid">paid</SelectItem>
-                            <SelectItem value="overdue">overdue</SelectItem>
+                            <SelectItem value="pending">Pendente</SelectItem>
+                            <SelectItem value="paid">Pago</SelectItem>
+                            <SelectItem value="overdue">Atrasado</SelectItem>
                           </SelectContent>
                         </Select>
                       </TableCell>
@@ -762,25 +993,46 @@ export function FinancialPlanningPanel() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="pending">pending</SelectItem>
-                    <SelectItem value="paid">paid</SelectItem>
-                    <SelectItem value="overdue">overdue</SelectItem>
+                    <SelectItem value="pending">Pendente</SelectItem>
+                    <SelectItem value="paid">Pago</SelectItem>
+                    <SelectItem value="overdue">Atrasado</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
 
-              <div className="flex items-center gap-2 pt-6">
-                <Checkbox 
-                  id="pay-recurrent" 
-                  checked={payIsRecurrent} 
-                  onCheckedChange={(v) => setPayIsRecurrent(!!v)} 
-                />
-                <Label htmlFor="pay-recurrent" className="text-xs cursor-pointer">Recorrente</Label>
+              <div className="md:col-span-2">
+                <Label className="text-xs">Conta</Label>
+                <Select value={payAccountId || ""} onValueChange={setPayAccountId}>
+                  <SelectTrigger className="mt-1 rounded-2xl">
+                    <SelectValue placeholder="Opcional" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(bankAccountsQ.data ?? []).map((ba: any) => (
+                      <SelectItem key={ba.id} value={ba.id}>
+                        {ba.bank_name} - {ba.account_name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
 
-              {payIsRecurrent && (
+              <div className="md:col-span-2">
+                <Label className="text-xs">Tipo</Label>
+                <Select value={payType} onValueChange={(v: any) => setPayType(v)}>
+                  <SelectTrigger className="mt-1 rounded-2xl">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="single">Único</SelectItem>
+                    <SelectItem value="recurrent">Recorrente (Mensal)</SelectItem>
+                    <SelectItem value="installments">Parcelado (A cada 30 dias)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {payType !== "single" && (
                 <div>
-                  <Label className="text-xs">Meses</Label>
+                  <Label className="text-xs">{payType === 'recurrent' ? 'Meses' : 'Parcelas'}</Label>
                   <Input 
                     type="number" 
                     className="mt-1 rounded-2xl" 
@@ -792,15 +1044,76 @@ export function FinancialPlanningPanel() {
                 </div>
               )}
 
-              <div className="md:col-span-5 flex items-end">
+              <div className="md:col-span-full flex items-end">
                 <Button
-                  onClick={() => createPayableM.mutate()}
+                  onClick={generatePayPreview}
                   disabled={!activeTenantId || createPayableM.isPending}
                   className="h-10 w-full rounded-2xl md:w-auto"
                 >
-                  {createPayableM.isPending ? "Salvando…" : "Cadastrar pagável"}
+                  Continuar Cadastro
                 </Button>
               </div>
+
+              {showPayPreview && (
+                <div className="md:col-span-full mt-4 p-4 rounded-2xl border border-slate-200 bg-slate-50 dark:border-slate-800 dark:bg-slate-900/50">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="text-sm font-semibold">Confirmar Lançamentos</div>
+                    <Button variant="ghost" size="sm" onClick={() => setShowPayPreview(false)}>Cancelar</Button>
+                  </div>
+                  <div className="max-h-[300px] overflow-auto rounded-xl border border-slate-200 dark:border-slate-800">
+                    <Table>
+                      <TableHeader className="bg-white dark:bg-slate-950">
+                        <TableRow>
+                          <TableHead className="text-[10px] uppercase">Descrição</TableHead>
+                          <TableHead className="text-[10px] uppercase">Vencimento</TableHead>
+                          <TableHead className="text-[10px] uppercase">Valor</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {payPreviewItems.map((item, idx) => (
+                          <TableRow key={idx}>
+                            <TableCell className="py-2 text-xs">
+                              <Input 
+                                className="h-8 rounded-lg text-xs" 
+                                value={item.description} 
+                                onChange={(e) => {
+                                  const newItems = [...payPreviewItems];
+                                  newItems[idx].description = e.target.value;
+                                  setPayPreviewItems(newItems);
+                                }}
+                              />
+                            </TableCell>
+                            <TableCell className="py-2 text-xs">
+                              <Input 
+                                type="date"
+                                className="h-8 rounded-lg text-xs" 
+                                value={item.due_date} 
+                                onChange={(e) => {
+                                  const newItems = [...payPreviewItems];
+                                  newItems[idx].due_date = e.target.value;
+                                  setPayPreviewItems(newItems);
+                                }}
+                              />
+                            </TableCell>
+                            <TableCell className="py-2 text-xs font-semibold">
+                              {formatMoneyBRL(item.amount)}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                  <div className="mt-4 flex justify-end">
+                    <Button
+                      onClick={() => createPayableM.mutate()}
+                      disabled={createPayableM.isPending}
+                      className="rounded-2xl"
+                    >
+                      {createPayableM.isPending ? "Salvando…" : `Confirmar e Gerar ${payPreviewItems.length} Lançamentos`}
+                    </Button>
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="mt-5 overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-800">
@@ -841,9 +1154,9 @@ export function FinancialPlanningPanel() {
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="pending">pending</SelectItem>
-                            <SelectItem value="paid">paid</SelectItem>
-                            <SelectItem value="overdue">overdue</SelectItem>
+                            <SelectItem value="pending">Pendente</SelectItem>
+                            <SelectItem value="paid">Pago</SelectItem>
+                            <SelectItem value="overdue">Atrasado</SelectItem>
                           </SelectContent>
                         </Select>
                       </TableCell>
@@ -888,16 +1201,18 @@ export function FinancialPlanningPanel() {
         onSave={(data: any) => updateItemM.mutate(data)}
         isPending={updateItemM.isPending}
         activeTenantId={activeTenantId}
+        bankAccounts={bankAccountsQ.data ?? []}
       />
     </div>
   );
 }
-function EditItemDialog({ open, onOpenChange, item, type, scope, onScopeChange, onSave, isPending, activeTenantId }: any) {
+function EditItemDialog({ open, onOpenChange, item, type, scope, onScopeChange, onSave, isPending, activeTenantId, bankAccounts }: any) {
   const [desc, setDesc] = useState("");
   const [amount, setAmount] = useState("");
   const [date, setDate] = useState("");
   const [entityId, setEntityId] = useState<string | null>(null);
   const [entityLabel, setEntityLabel] = useState<string | null>(null);
+  const [accountId, setAccountId] = useState<string | null>(null);
 
   // Sync state when item changes
   useMemo(() => {
@@ -907,6 +1222,7 @@ function EditItemDialog({ open, onOpenChange, item, type, scope, onScopeChange, 
       setDate(item.due_date || "");
       setEntityId(item.entity_id || null);
       setEntityLabel(item.core_entities?.display_name || null);
+      setAccountId(item.account_id || null);
     }
   }, [item]);
 
@@ -956,6 +1272,21 @@ function EditItemDialog({ open, onOpenChange, item, type, scope, onScopeChange, 
               }}
             />
           </div>
+          <div>
+            <Label className="text-xs">Conta</Label>
+            <Select value={accountId || ""} onValueChange={setAccountId}>
+              <SelectTrigger className="mt-1 rounded-2xl">
+                <SelectValue placeholder="Opcional" />
+              </SelectTrigger>
+              <SelectContent>
+                {(bankAccounts || []).map((ba: any) => (
+                  <SelectItem key={ba.id} value={ba.id}>
+                    {ba.bank_name} - {ba.account_name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
 
           {item.recurrence_group_id && (
             <div className="mt-2 p-3 rounded-2xl bg-amber-50 border border-amber-100 dark:bg-amber-900/20 dark:border-amber-900/40">
@@ -977,7 +1308,7 @@ function EditItemDialog({ open, onOpenChange, item, type, scope, onScopeChange, 
           <Button variant="ghost" onClick={() => onOpenChange(false)}>Cancelar</Button>
           <Button 
             disabled={isPending} 
-            onClick={() => onSave({ description: desc, amount, due_date: date, entity_id: entityId })}
+            onClick={() => onSave({ description: desc, amount, due_date: date, entity_id: entityId, account_id: accountId })}
             className="rounded-2xl"
           >
             {isPending ? "Salvando..." : "Salvar Alterações"}
