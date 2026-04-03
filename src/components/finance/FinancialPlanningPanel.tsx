@@ -43,6 +43,15 @@ function parseMoneyInput(v: string) {
   return Number.isFinite(n) ? n : NaN;
 }
 
+function formatDescriptionWithInstallment(desc: string, current: number | null, total: number | null) {
+  if (!total || !current) return desc;
+  const suffix = `(${current}/${total})`;
+  if (desc.includes(suffix)) return desc;
+  // Remove existing (X/Y) if any, then append
+  const cleanDesc = desc.replace(/\s*\(\d+\/\d+\)\s*$/, "").trim();
+  return `${cleanDesc} (${current}/${total})`;
+}
+
 function formatMoneyBRL(n: number | null | undefined) {
   const x = Number(n ?? 0);
   try {
@@ -115,6 +124,7 @@ export function FinancialPlanningPanel() {
         .from("financial_receivables")
         .select(`
           id,tenant_id,description,amount,due_date,status,entity_id,account_id,category_id,
+          recurrence_group_id,installment_number,installments_total,
           core_entities(display_name),
           financial_categories(name),
           financial_transactions!financial_transactions_receivable_fk(
@@ -145,6 +155,7 @@ export function FinancialPlanningPanel() {
         .from("financial_payables")
         .select(`
           id,tenant_id,description,amount,due_date,status,entity_id,account_id,category_id,
+          recurrence_group_id,installment_number,installments_total,
           core_entities(display_name),
           financial_categories(name),
           financial_transactions!financial_transactions_payable_fk(
@@ -274,13 +285,16 @@ export function FinancialPlanningPanel() {
       } else {
         itemDate = baseDate;
       }
-
+      
+      const installmentNum = recvType !== "single" ? i + 1 : null;
+      const totalNum = recvType !== "single" ? count : null;
+      
       items.push({
-        description: count > 1 ? `${recvDesc.trim()} (${i + 1}/${count})` : recvDesc.trim(),
+        description: formatDescriptionWithInstallment(recvDesc, installmentNum, totalNum),
         amount: Number(amt.toFixed(2)),
         due_date: format(itemDate, "yyyy-MM-dd"),
-        installment_number: i + 1,
-        installments_total: count > 1 ? count : null,
+        installment_number: installmentNum,
+        installments_total: totalNum
       });
     }
     setRecvPreviewItems(items);
@@ -357,13 +371,16 @@ export function FinancialPlanningPanel() {
       } else {
         itemDate = baseDate;
       }
+      
+      const installmentNum = payType !== "single" ? i + 1 : null;
+      const totalNum = payType !== "single" ? count : null;
 
       items.push({
-        description: count > 1 ? `${payDesc.trim()} (${i + 1}/${count})` : payDesc.trim(),
+        description: formatDescriptionWithInstallment(payDesc, installmentNum, totalNum),
         amount: Number(amt.toFixed(2)),
         due_date: format(itemDate, "yyyy-MM-dd"),
-        installment_number: i + 1,
-        installments_total: count > 1 ? count : null,
+        installment_number: installmentNum,
+        installments_total: totalNum
       });
     }
     setPayPreviewItems(items);
@@ -382,7 +399,7 @@ export function FinancialPlanningPanel() {
 
       const items = payPreviewItems.map(item => ({
         tenant_id: activeTenantId,
-        description: item.description,
+        description: formatDescriptionWithInstallment(item.description, item.installment_number, item.installments_total),
         amount: item.amount,
         due_date: item.due_date,
         status: payStatus,
@@ -448,7 +465,7 @@ export function FinancialPlanningPanel() {
       const table = editType === "receivable" ? "financial_receivables" : "financial_payables";
       
       const payload: any = {
-        description: updatedData.description,
+        description: formatDescriptionWithInstallment(updatedData.description, editItem.installment_number, updatedData.installments_total || editItem.installments_total),
         amount: parseMoneyInput(updatedData.amount),
         due_date: updatedData.due_date,
         entity_id: updatedData.entity_id,
@@ -1121,12 +1138,14 @@ export function FinancialPlanningPanel() {
                   {(receivablesQ.data ?? []).map((r: any) => (
                     <TableRow key={r.id}>
                       <TableCell className="font-bold text-slate-900 dark:text-slate-100">
-                        {r.description}
-                        {r.installments_total && (
-                          <Badge variant="secondary" className="ml-2 h-5 text-[10px] font-bold">
-                            {r.installment_number}/{r.installments_total}
-                          </Badge>
-                        )}
+                        <div className="flex items-center gap-2">
+                          <span>{r.description}</span>
+                          {r.installments_total && (
+                            <Badge variant="secondary" className="h-5 text-[10px] font-bold border-[hsl(var(--byfrost-accent)/0.1)] text-[hsl(var(--byfrost-accent))] bg-[hsl(var(--byfrost-accent)/0.05)]">
+                              {r.installment_number}/{r.installments_total}
+                            </Badge>
+                          )}
+                        </div>
                       </TableCell>
                       <TableCell className="text-xs font-medium text-slate-500">
                         {r.core_entities?.display_name ?? "—"}
@@ -1374,12 +1393,14 @@ export function FinancialPlanningPanel() {
                   {(payablesQ.data ?? []).map((p: any) => (
                     <TableRow key={p.id}>
                       <TableCell className="font-bold text-slate-900 dark:text-slate-100">
-                        {p.description}
-                        {p.installments_total && (
-                          <Badge variant="secondary" className="ml-2 h-5 text-[10px] font-bold">
-                            {p.installment_number}/{p.installments_total}
-                          </Badge>
-                        )}
+                        <div className="flex items-center gap-2">
+                          <span>{p.description}</span>
+                          {p.installments_total && (
+                            <Badge variant="secondary" className="h-5 text-[10px] font-bold border-[hsl(var(--byfrost-accent)/0.1)] text-[hsl(var(--byfrost-accent))] bg-[hsl(var(--byfrost-accent)/0.05)]">
+                              {p.installment_number}/{p.installments_total}
+                            </Badge>
+                          )}
+                        </div>
                       </TableCell>
                       <TableCell className="text-xs font-medium text-slate-500">
                         {p.core_entities?.display_name ?? "—"}
@@ -1523,7 +1544,14 @@ function EditItemDialog({ open, onOpenChange, item, type, scope, onScopeChange, 
 
         <div className="grid gap-3 py-4">
           <div>
-            <Label className="text-xs">Descrição</Label>
+            <div className="flex items-center justify-between">
+              <Label className="text-xs">Descrição</Label>
+              {instNumber && (
+                <Badge variant="outline" className="h-5 text-[10px] font-bold border-[hsl(var(--byfrost-accent)/0.2)] text-[hsl(var(--byfrost-accent))] bg-[hsl(var(--byfrost-accent)/0.05)]">
+                  {instNumber} de {instTotal || "?"}
+                </Badge>
+              )}
+            </div>
             <Input className="mt-1 rounded-2xl" value={desc} onChange={(e) => setDesc(e.target.value)} />
           </div>
           <div className="grid grid-cols-2 gap-3">
@@ -1537,30 +1565,29 @@ function EditItemDialog({ open, onOpenChange, item, type, scope, onScopeChange, 
             </div>
           </div>
 
-          {(instNumber || item.recurrence_group_id) && (
-            <div className="grid grid-cols-2 gap-3 p-3 rounded-2xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
-              <div>
-                <Label className="text-[10px] text-slate-500 uppercase font-bold">Parcela Atual</Label>
-                <div className="mt-1 h-9 flex items-center px-3 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-300">
-                  {instNumber ?? "?"} de {instTotal ?? "?"}
+          {item.recurrence_group_id && (
+            <div className="p-4 rounded-2xl bg-[hsl(var(--byfrost-accent)/0.03)] border border-[hsl(var(--byfrost-accent)/0.1)]">
+              <div className="flex items-center justify-between mb-3">
+                <div className="text-[10px] font-bold text-[hsl(var(--byfrost-accent))] uppercase tracking-widest">Ajuste de Recorrência</div>
+                <Badge variant="outline" className="h-4 text-[9px] px-1.5 opacity-60">Série Ativa</Badge>
+              </div>
+              <div className="grid gap-3">
+                <div className="flex items-center justify-between">
+                  <Label className="text-xs text-slate-600">Total de parcelas projetadas:</Label>
+                  <Input 
+                    type="number" 
+                    className="h-9 w-20 text-center rounded-xl bg-white dark:bg-slate-950 font-bold" 
+                    value={instTotal || ""} 
+                    onChange={(e) => setInstTotal(Number(e.target.value))}
+                    min={instNumber || 1}
+                  />
                 </div>
+                <p className="text-[9px] text-slate-400 italic">
+                  Ao aumentar o total usando "Este e futuros", novas projeções serão criadas automaticamente.
+                </p>
               </div>
-              <div>
-                <Label className="text-[10px] text-slate-500 uppercase font-bold">Total da Série</Label>
-                <Input 
-                  type="number" 
-                  className="mt-1 h-9 rounded-xl bg-white dark:bg-slate-950 font-bold" 
-                  value={instTotal || ""} 
-                  onChange={(e) => setInstTotal(Number(e.target.value))}
-                  min={instNumber || 1}
-                />
-              </div>
-              <p className="col-span-2 text-[10px] text-slate-400 italic px-1">
-                Ao aumentar o total usando "Este e futuros", novas projeções serão criadas automaticamente.
-              </p>
             </div>
           )}
-
           <div className="grid grid-cols-2 gap-3">
             <div>
               <Label className="text-xs">Entidade</Label>
