@@ -32,6 +32,20 @@ export default function TvPlayer() {
     const timeoutRef = useRef<NodeJS.Timeout | null>(null);
     const fallbackTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
+    // Registra o Service Worker de cache de mídia da TV.
+    // A partir da 1ª reprodução, vídeos e frames são armazenados em disco pelo browser.
+    // Reproduções subsequentes são servidas 100% do cache local — zero egress no Supabase.
+    useEffect(() => {
+        if (!('serviceWorker' in navigator)) {
+            console.warn('[TvPlayer] Service Workers não suportados neste browser.');
+            return;
+        }
+        navigator.serviceWorker
+            .register('/tv-sw.js', { scope: '/' })
+            .then(reg => console.log('[TvPlayer] Cache SW registrado:', reg.scope))
+            .catch(err => console.warn('[TvPlayer] Falha ao registrar Cache SW:', err));
+    }, []);
+
     const pointQ = useQuery({
         queryKey: ["tv_point_player", pointId],
         enabled: Boolean(pointId),
