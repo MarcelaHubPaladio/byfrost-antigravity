@@ -110,7 +110,7 @@ export function FinancialPlanningPanel() {
     queryFn: async () => {
       let query = supabase
         .from("financial_receivables")
-        .select("id,tenant_id,description,amount,due_date,status,entity_id,account_id,core_entities(display_name),financial_transactions!financial_transactions_receivable_fk(amount)")
+        .select("id,tenant_id,description,amount,due_date,status,entity_id,account_id,core_entities(display_name),financial_transactions!financial_transactions_receivable_fk(id,transaction_date,description,amount)")
         .eq("tenant_id", activeTenantId!)
         .gte("due_date", monthStart)
         .lte("due_date", monthEnd)
@@ -132,7 +132,7 @@ export function FinancialPlanningPanel() {
     queryFn: async () => {
       let query = supabase
         .from("financial_payables")
-        .select("id,tenant_id,description,amount,due_date,status,entity_id,account_id,core_entities(display_name),financial_transactions!financial_transactions_payable_fk(amount)")
+        .select("id,tenant_id,description,amount,due_date,status,entity_id,account_id,core_entities(display_name),financial_transactions!financial_transactions_payable_fk(id,transaction_date,description,amount)")
         .eq("tenant_id", activeTenantId!)
         .gte("due_date", monthStart)
         .lte("due_date", monthEnd)
