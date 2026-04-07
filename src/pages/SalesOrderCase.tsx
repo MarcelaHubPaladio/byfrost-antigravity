@@ -128,7 +128,6 @@ export default function SalesOrderCase() {
       const { data, error } = await supabase
         .from("case_fields")
         .select("*")
-        .eq("tenant_id", tenantId!)
         .eq("case_id", caseId);
       if (error) throw error;
       return data;

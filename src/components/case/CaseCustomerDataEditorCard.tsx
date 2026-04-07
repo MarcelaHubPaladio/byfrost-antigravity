@@ -160,8 +160,7 @@ export function CaseCustomerDataEditorCard(props: {
           value_text: r.value_text,
           confidence: 1,
           source: "admin",
-          last_updated_by: "panel",
-          tenant_id: activeTenantId
+          last_updated_by: "panel"
         }))
         // Don't write totally empty fields (keeps DB cleaner)
         .filter((r) => r.value_text !== null);
@@ -218,8 +217,7 @@ export function CaseCustomerDataEditorCard(props: {
           value_text: null,
           confidence: 1,
           source: "admin",
-          last_updated_by: "panel",
-          tenant_id: activeTenantId
+          last_updated_by: "panel"
         }));
 
       const payload = [...rows, ...cleared];
