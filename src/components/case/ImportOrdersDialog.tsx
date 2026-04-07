@@ -362,11 +362,14 @@ export function ImportOrdersDialog({
         }
 
         // 2. Create Case
+        const tId = String(tenantId).trim();
+        if (!tId || tId.length < 32) throw new Error("ID de tenant inválido");
+
         const ownerUserId = usersMap.get(o.ownerEmail.toLowerCase().trim()) || null;
         const { data: caseRow, error: caseErr } = await supabase
           .from("cases")
           .insert({
-            tenant_id: tenantId,
+            tenant_id: tId,
             journey_id: journey.id,
             customer_id: customerId,
             assigned_user_id: ownerUserId,
@@ -412,7 +415,7 @@ export function ImportOrdersDialog({
         }));
 
         if (fields.length) {
-          await supabase.from("case_fields").insert(fields);
+          await supabase.from("case_fields").upsert(fields, { onConflict: "case_id,key" });
         }
 
         // 4. Insert Items

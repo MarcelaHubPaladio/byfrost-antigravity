@@ -57,7 +57,7 @@ export default function SalesOrderCase() {
     queryKey: ["case_timeline", caseId],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from("case_log_events")
+        .from("timeline_events")
         .select("*")
         .eq("case_id", caseId)
         .order("occurred_at", { ascending: false });
@@ -131,21 +131,21 @@ export default function SalesOrderCase() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col">
-      {/* Header Estilo MKT Técha */}
-      <div className="bg-white border-b border-slate-200/60 sticky top-0 z-30">
-        <div className="max-w-[1600px] mx-auto px-6 h-20 flex items-center justify-between">
-          <div className="flex items-center gap-5">
-            <Button 
-              variant="ghost" 
-              size="icon" 
+    <div className="flex flex-col h-screen bg-[#F8FAFC]">
+      {/* Premium Header with Glassmorphism */}
+      <div className="sticky top-0 z-50 w-full bg-white/80 backdrop-blur-xl border-b border-slate-200/60 transition-all duration-300">
+        <div className="w-full px-12 h-20 flex items-center justify-between">
+          <div className="flex items-center gap-6">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-10 w-10 rounded-2xl hover:bg-slate-100/80 transition-all"
               onClick={() => navigate("/app/orders")}
-              className="h-10 w-10 rounded-xl hover:bg-slate-100"
             >
-              <ChevronLeft className="h-5 w-5 text-slate-500" />
+              <ChevronLeft className="h-5 w-5 text-slate-600" />
             </Button>
-            <div className="h-10 w-[1px] bg-slate-100" />
-            <div className="space-y-0.5">
+            <div className="h-8 w-px bg-slate-200/60" />
+            <div className="space-y-1">
               <div className="flex items-center gap-2">
                 <h1 className="text-lg font-black text-slate-900 tracking-tight">
                   {customerName.toUpperCase()}
@@ -177,11 +177,11 @@ export default function SalesOrderCase() {
       </div>
 
       {/* Main Content Area */}
-      <main className="flex-grow overflow-auto">
-        <div className="max-w-[1600px] mx-auto p-8 grid grid-cols-12 gap-8">
+      <main className="flex-grow overflow-auto scrollbar-hide">
+        <div className="w-full px-12 py-10 grid grid-cols-12 gap-10">
           
-          {/* Central Section (7 columns) */}
-          <div className="col-span-12 lg:col-span-8 space-y-8">
+          {/* Central Section (9 columns) */}
+          <div className="col-span-12 lg:col-span-9 space-y-8">
             
             {/* Step Progress Visualizer */}
             <div className="bg-white rounded-[32px] p-8 border border-slate-200/60 shadow-sm flex items-center justify-between relative overflow-hidden group">
@@ -296,8 +296,8 @@ export default function SalesOrderCase() {
             </Accordion>
           </div>
 
-          {/* Right Sidebar (4 columns) */}
-          <div className="col-span-12 lg:col-span-4 space-y-8">
+          {/* Right Sidebar (3 columns) */}
+          <div className="col-span-12 lg:col-span-3 space-y-8">
             
             {/* Status Card */}
             <Card className="rounded-[32px] p-8 border-none bg-slate-900 text-white shadow-xl shadow-slate-900/10 overflow-hidden relative">
