@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useRef } from "react";
 import {
   AccordionContent,
   AccordionItem,
@@ -46,6 +46,7 @@ export function UserTaskGroup({
 }: UserTaskGroupProps) {
   const { upsertTask } = useSuperTasks();
   const [newTaskTitle, setNewTaskTitle] = useState("");
+  const addTaskInputRef = useRef<HTMLTextAreaElement>(null);
   const [orderedIds, setOrderedIds] = useState<string[] | null>(null);
 
   const filteredTasks = useMemo(
@@ -111,6 +112,7 @@ export function UserTaskGroup({
       order_index: tasks.length,
     });
     setNewTaskTitle("");
+    if (addTaskInputRef.current) addTaskInputRef.current.style.height = "auto";
     setOrderedIds(null); // Reset local order so server order takes effect
   };
 
@@ -181,12 +183,24 @@ export function UserTaskGroup({
           onSubmit={handleAddTask}
           className="flex items-center gap-2 mt-2 group px-2 py-1.5 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors"
         >
-          <Plus className="h-4 w-4 text-slate-400 group-hover:text-indigo-500" />
-          <input
+          <Plus className="h-4 w-4 text-slate-400 group-hover:text-indigo-500 mt-0.5" />
+          <textarea
+            ref={addTaskInputRef}
             placeholder={`Adicionar tarefa para ${userName}...`}
-            className="flex-1 bg-transparent border-none outline-none text-sm text-slate-600 placeholder:text-slate-400"
+            className="flex-1 bg-transparent border-none outline-none text-sm text-slate-600 placeholder:text-slate-400 resize-none py-0.5 block leading-relaxed"
             value={newTaskTitle}
-            onChange={(e) => setNewTaskTitle(e.target.value)}
+            onChange={(e) => {
+              setNewTaskTitle(e.target.value);
+              e.target.style.height = "auto";
+              e.target.style.height = `${e.target.scrollHeight}px`;
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                handleAddTask();
+              }
+            }}
+            rows={1}
           />
         </form>
 

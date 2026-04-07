@@ -21,7 +21,7 @@ export function TaskItem({ task, isSubtask = false }: TaskItemProps) {
   const [newSubtaskTitle, setNewSubtaskTitle] = useState("");
   const [isEditing, setIsEditing] = useState(false);
   const [editTitle, setEditTitle] = useState(task.title);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
   const dateInputRef = useRef<HTMLInputElement>(null);
 
   const {
@@ -87,7 +87,12 @@ export function TaskItem({ task, isSubtask = false }: TaskItemProps) {
   };
 
   useEffect(() => {
-    if (isEditing && inputRef.current) inputRef.current.focus();
+    if (isEditing && inputRef.current) {
+      inputRef.current.focus();
+      // Reset height to auto-resize
+      inputRef.current.style.height = "auto";
+      inputRef.current.style.height = `${inputRef.current.scrollHeight}px`;
+    }
   }, [isEditing]);
 
   // Convert UTC stored value → local "yyyy-MM-ddTHH:mm" for the input
@@ -156,20 +161,30 @@ export function TaskItem({ task, isSubtask = false }: TaskItemProps) {
 
         <div className="flex-1 min-w-0">
           {isEditing ? (
-            <input
+            <textarea
               ref={inputRef}
               value={editTitle}
-              onChange={(e) => setEditTitle(e.target.value)}
+              onChange={(e) => {
+                setEditTitle(e.target.value);
+                e.target.style.height = "auto";
+                e.target.style.height = `${e.target.scrollHeight}px`;
+              }}
               onBlur={handleUpdateTitle}
-              onKeyDown={(e) => e.key === "Enter" && handleUpdateTitle()}
-              className="w-full bg-transparent border-none outline-none text-sm font-medium text-slate-800 dark:text-slate-100"
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  handleUpdateTitle();
+                }
+              }}
+              rows={1}
+              className="w-full bg-transparent border-none outline-none text-sm font-medium text-slate-800 dark:text-slate-100 resize-none py-0 block leading-relaxed"
             />
           ) : (
             <div className="space-y-0.5">
               <div
                 onClick={() => setIsEditing(true)}
                 className={cn(
-                  "text-sm font-medium cursor-text truncate",
+                  "text-sm font-medium cursor-text break-words whitespace-pre-wrap leading-relaxed",
                   task.is_completed
                     ? "line-through text-slate-400 decoration-slate-400"
                     : isOverdue
