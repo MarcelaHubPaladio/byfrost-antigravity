@@ -373,46 +373,42 @@ export function SalesOrderItemsEditorCard(props: { caseId: string; className?: s
                   <div>
                     <Label className="text-[11px] text-slate-600">Produto / Serviço</Label>
                     <Popover
-                      open={openOfferingPerLine[row.line_no] || false}
+                      open={(openOfferingPerLine[row.line_no] || false) && offeringsQ.data && offeringsQ.data.length > 0}
                       onOpenChange={(open) => {
                         setOpenOfferingPerLine((prev) => ({ ...prev, [row.line_no]: open }));
-                        if (!open) {
-                          setSearchOffering("");
-                        }
                       }}
                     >
                       <PopoverTrigger asChild>
-                        <Button
-                          variant="outline"
-                          role="combobox"
-                          className={cn(
-                            "mt-1 w-full justify-between h-auto min-h-10 text-left rounded-2xl whitespace-normal break-words",
-                            !row.description && "text-slate-500"
-                          )}
-                        >
-                          <span className="line-clamp-2">
-                            {row.description || "Selecione ou digite..."}
-                          </span>
-                          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                        </Button>
+                        <Input
+                          value={row.description}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setDraft((prev) =>
+                              prev.map((x) =>
+                                x.line_no === row.line_no
+                                  ? { ...x, description: val, offering_entity_id: null }
+                                  : x
+                              )
+                            );
+                            setSearchOffering(val);
+                            setOpenOfferingPerLine((prev) => ({ ...prev, [row.line_no]: true }));
+                          }}
+                          onFocus={() => {
+                            setSearchOffering(row.description);
+                            setOpenOfferingPerLine((prev) => ({ ...prev, [row.line_no]: true }));
+                          }}
+                          className="mt-1 h-10 rounded-2xl"
+                          placeholder="Digite o nome do produto ou selecione..."
+                        />
                       </PopoverTrigger>
-                      <PopoverContent className="w-[300px] p-0 rounded-2xl" side="bottom" align="start">
+                      <PopoverContent 
+                        className="w-[300px] p-0 rounded-2xl" 
+                        side="bottom" 
+                        align="start"
+                        onOpenAutoFocus={(e) => e.preventDefault()}
+                      >
                         <div className="flex flex-col">
-                          <div className="px-3 py-2 border-b border-slate-100 flex items-center gap-2">
-                            <Input
-                              placeholder="Buscar ou digitar item..."
-                              value={searchOffering}
-                              onChange={(e) => setSearchOffering(e.target.value)}
-                              className="h-8 rounded-xl bg-slate-50 border-transparent shadow-none"
-                            />
-                            {offeringsQ.isFetching && <Loader2 className="h-4 w-4 animate-spin text-slate-400" />}
-                          </div>
                           <div className="max-h-[220px] overflow-y-auto">
-                            {!offeringsQ.isFetching && searchOffering.length > 0 && offeringsQ.data?.length === 0 && (
-                              <div className="px-3 py-4 text-center text-sm text-slate-500">
-                                Nenhum produto encontrado.
-                              </div>
-                            )}
                             {offeringsQ.data?.map((off: any) => (
                               <Button
                                 key={off.id}
@@ -427,6 +423,9 @@ export function SalesOrderItemsEditorCard(props: { caseId: string; className?: s
                                             code: off.metadata?.short_name || off.metadata?.code || x.code,
                                             description: off.display_name,
                                             offering_entity_id: off.id,
+                                            price: off.metadata?.price != null 
+                                              ? String(off.metadata.price).replace(/\./g, ",") 
+                                              : x.price
                                           }
                                         : x
                                     )
@@ -451,27 +450,6 @@ export function SalesOrderItemsEditorCard(props: { caseId: string; className?: s
                               </Button>
                             ))}
                           </div>
-                          {searchOffering.trim().length > 0 && (
-                            <div className="p-2 border-t border-slate-100 bg-slate-50/50">
-                              <Button
-                                variant="ghost"
-                                className="w-full justify-start text-[13px] h-9 rounded-xl text-indigo-700 bg-indigo-50/50 hover:bg-indigo-100/50"
-                                onClick={() => {
-                                  setDraft((prev) =>
-                                    prev.map((x) =>
-                                      x.line_no === row.line_no
-                                        ? { ...x, description: searchOffering.trim(), offering_entity_id: null }
-                                        : x
-                                    )
-                                  );
-                                  setOpenOfferingPerLine((prev) => ({ ...prev, [row.line_no]: false }));
-                                  setSearchOffering("");
-                                }}
-                              >
-                                Usar o texto "{searchOffering}"
-                              </Button>
-                            </div>
-                          )}
                         </div>
                       </PopoverContent>
                     </Popover>
@@ -576,46 +554,42 @@ export function SalesOrderItemsEditorCard(props: { caseId: string; className?: s
                   <div>
                     <Label className="text-[11px] text-slate-600">Produto / Serviço</Label>
                     <Popover
-                      open={openOfferingPerLine[row.line_no] || false}
+                      open={(openOfferingPerLine[row.line_no] || false) && offeringsQ.data && offeringsQ.data.length > 0}
                       onOpenChange={(open) => {
                         setOpenOfferingPerLine((prev) => ({ ...prev, [row.line_no]: open }));
-                        if (!open) {
-                          setSearchOffering("");
-                        }
                       }}
                     >
                       <PopoverTrigger asChild>
-                        <Button
-                          variant="outline"
-                          role="combobox"
-                          className={cn(
-                            "mt-1 w-full justify-between h-auto min-h-10 text-left rounded-2xl whitespace-normal break-words",
-                            !row.description && "text-slate-500"
-                          )}
-                        >
-                          <span className="line-clamp-2">
-                            {row.description || "Selecione ou digite..."}
-                          </span>
-                          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                        </Button>
+                        <Input
+                          value={row.description}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setDraft((prev) =>
+                              prev.map((x) =>
+                                x.line_no === row.line_no
+                                  ? { ...x, description: val, offering_entity_id: null }
+                                  : x
+                              )
+                            );
+                            setSearchOffering(val);
+                            setOpenOfferingPerLine((prev) => ({ ...prev, [row.line_no]: true }));
+                          }}
+                          onFocus={() => {
+                            setSearchOffering(row.description);
+                            setOpenOfferingPerLine((prev) => ({ ...prev, [row.line_no]: true }));
+                          }}
+                          className="mt-1 h-10 rounded-2xl"
+                          placeholder="Digite o nome do produto ou selecione..."
+                        />
                       </PopoverTrigger>
-                      <PopoverContent className="w-[400px] p-0 rounded-2xl" side="bottom" align="start">
+                      <PopoverContent 
+                        className="w-[400px] p-0 rounded-2xl" 
+                        side="bottom" 
+                        align="start"
+                        onOpenAutoFocus={(e) => e.preventDefault()}
+                      >
                         <div className="flex flex-col">
-                          <div className="px-3 py-2 border-b border-slate-100 flex items-center gap-2">
-                            <Input
-                              placeholder="Buscar ou digitar item..."
-                              value={searchOffering}
-                              onChange={(e) => setSearchOffering(e.target.value)}
-                              className="h-8 rounded-xl bg-slate-50 border-transparent shadow-none"
-                            />
-                            {offeringsQ.isFetching && <Loader2 className="h-4 w-4 animate-spin text-slate-400" />}
-                          </div>
                           <div className="max-h-[260px] overflow-y-auto">
-                            {!offeringsQ.isFetching && searchOffering.length > 0 && offeringsQ.data?.length === 0 && (
-                              <div className="px-3 py-4 text-center text-sm text-slate-500">
-                                Nenhum produto encontrado.
-                              </div>
-                            )}
                             {offeringsQ.data?.map((off: any) => (
                               <Button
                                 key={off.id}
@@ -630,6 +604,9 @@ export function SalesOrderItemsEditorCard(props: { caseId: string; className?: s
                                             code: off.metadata?.short_name || off.metadata?.code || x.code,
                                             description: off.display_name,
                                             offering_entity_id: off.id,
+                                            price: off.metadata?.price != null 
+                                              ? String(off.metadata.price).replace(/\./g, ",") 
+                                              : x.price
                                           }
                                         : x
                                     )
@@ -654,27 +631,6 @@ export function SalesOrderItemsEditorCard(props: { caseId: string; className?: s
                               </Button>
                             ))}
                           </div>
-                          {searchOffering.trim().length > 0 && (
-                            <div className="p-2 border-t border-slate-100 bg-slate-50/50">
-                              <Button
-                                variant="ghost"
-                                className="w-full justify-start text-[13px] h-9 rounded-xl text-indigo-700 bg-indigo-50/50 hover:bg-indigo-100/50"
-                                onClick={() => {
-                                  setDraft((prev) =>
-                                    prev.map((x) =>
-                                      x.line_no === row.line_no
-                                        ? { ...x, description: searchOffering.trim(), offering_entity_id: null }
-                                        : x
-                                    )
-                                  );
-                                  setOpenOfferingPerLine((prev) => ({ ...prev, [row.line_no]: false }));
-                                  setSearchOffering("");
-                                }}
-                              >
-                                Usar o texto "{searchOffering}"
-                              </Button>
-                            </div>
-                          )}
                         </div>
                       </PopoverContent>
                     </Popover>
