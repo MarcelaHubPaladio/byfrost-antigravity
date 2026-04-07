@@ -11,6 +11,13 @@ import { cn } from "@/lib/utils";
 import { Banknote, ExternalLink, IdCard, MapPin, Save } from "lucide-react";
 import { useTenant } from "@/providers/TenantProvider";
 import { useSession } from "@/providers/SessionProvider";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 type FieldRow = {
   key: string;
@@ -449,12 +456,19 @@ export function CaseCustomerDataEditorCard(props: {
           </div>
           <div>
             <Label className="text-xs">Status de faturamento</Label>
-            <Input
-              value={draft.billing_status}
-              onChange={(e) => setDraft((p) => ({ ...p, billing_status: e.target.value }))}
-              className="mt-1 h-10 rounded-2xl"
-              placeholder="Ex: Pendente / Faturado"
-            />
+            <Select
+              value={draft.billing_status || "Pendente"}
+              onValueChange={(val) => setDraft((p) => ({ ...p, billing_status: val }))}
+            >
+              <SelectTrigger className="mt-1 h-10 rounded-2xl">
+                <SelectValue placeholder="Selecione o status" />
+              </SelectTrigger>
+              <SelectContent className="rounded-2xl">
+                <SelectItem value="Pago">Pago</SelectItem>
+                <SelectItem value="Pendente">Pendente</SelectItem>
+                <SelectItem value="Cancelado">Cancelado</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
         </div>
 

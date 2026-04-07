@@ -116,6 +116,13 @@ function parsePtBrNumber(input: string) {
   return Number.isFinite(n) ? n : 0;
 }
 
+function normalizeBillingStatus(raw: string): string {
+  const s = String(raw ?? "").trim().toLowerCase();
+  if (s.includes("pago") || s.includes("faturado")) return "Pago";
+  if (s.includes("canc")) return "Cancelado";
+  return "Pendente";
+}
+
 function detectDelimiter(headerLine: string): "," | ";" {
   const s = headerLine ?? "";
   let inQ = false;
@@ -263,7 +270,7 @@ export function ImportOrdersDialog({
             saleDate: idxSaleDate >= 0 ? String(row[idxSaleDate] ?? "").trim() : "",
             customerCity: idxCity >= 0 ? String(row[idxCity] ?? "").trim() : "",
             paymentMethod: idxPayMethod >= 0 ? String(row[idxPayMethod] ?? "").trim() : "",
-            billingStatus: idxBillStatus >= 0 ? String(row[idxBillStatus] ?? "").trim() : "",
+            billingStatus: idxBillStatus >= 0 ? normalizeBillingStatus(row[idxBillStatus]) : "Pendente",
             obs: idxObs >= 0 ? String(row[idxObs] ?? "").trim() : "",
             items: []
           };

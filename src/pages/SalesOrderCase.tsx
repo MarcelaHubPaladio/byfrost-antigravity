@@ -3,25 +3,8 @@ import { useParams, useNavigate, Link } from "react-router-dom";
 import { supabase } from "@/lib/supabase";
 import { useSession } from "@/providers/SessionProvider";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { 
-  ChevronLeft, 
-  Package, 
-  User, 
-  CreditCard, 
-  ClipboardList, 
-  Calendar, 
-  Clock, 
-  FileText, 
-  DollarSign, 
-  MapPin, 
-  History, 
-  Truck,
-  Trash2,
-  Users,
-  CheckCircle2,
-  Smartphone,
-  MoreVertical
-} from "lucide-react";
+import { AlertCircle, Banknote, Calendar, Check, CheckCircle2, ChevronLeft, ClipboardList, Clock, CreditCard, DollarSign, FileText, History, MapPin, MoreVertical, Package, Plus, Save, Smartphone, Trash2, Truck, User, Users } from "lucide-react";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
@@ -137,7 +120,7 @@ export default function SalesOrderCase() {
 
   const { data: tenantUsers } = useQuery({
     queryKey: ["tenant_users", tenantId],
-    enabled: !!tenantId,
+    enabled: !!tenantId && !!caseId,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("users_profile")
@@ -147,7 +130,20 @@ export default function SalesOrderCase() {
         .order("display_name");
       if (error) throw error;
       return data;
-    }
+    },
+  });
+  
+  const { data: pendenciesData, isLoading: isLoadingPendencies } = useQuery({
+    queryKey: ["case_pendencies", caseId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("pendencies")
+        .select("*")
+        .eq("case_id", caseId);
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!caseId,
   });
 
   const getField = (key: string) => fieldsData?.find(f => f.key === key)?.value_text;
@@ -200,7 +196,8 @@ export default function SalesOrderCase() {
         caseId, 
         caseData?.state || "", 
         nextState, 
-        journey?.default_state_machine_json
+        journey?.default_state_machine_json,
+        { fields: fieldsData, pendencies: pendenciesData }
       );
       if (reasons.length > 0) {
         setTransitionBlock({ open: true, nextStateName: nextState, reasons });
@@ -294,10 +291,60 @@ export default function SalesOrderCase() {
     }
   };
 
+  const currentPendencies = useMemo(() => {
+    if (!caseData?.state || !stateMachine || !tenantId || !caseId) return [];
+    
+    // Find possible next states from current state
+    const statesConfig = stateMachine.status_configs || {};
+    const currentStateConfig = statesConfig[caseData.state] || {};
+    const nextStates = Array.isArray(currentStateConfig.next_states) ? currentStateConfig.next_states : [];
+    
+    if (nextStates.length === 0) return [];
+    
+    // We check for the first possible next state to show as "Immediate requirements"
+    // This is a simplification but covers the user request of "what's missing"
+    const nextState = nextStates[0];
+    
+    const reasons: TransitionBlockReason[] = [];
+    
+    // Check required fields
+    const configForNext = statesConfig[nextState] || {};
+    const requiredFields = Array.isArray(configForNext.required_case_fields) ? configForNext.required_case_fields : [];
+    const missingFields = requiredFields.filter((reqKey: string) => {
+      const field = (fieldsData || []).find((f: any) => f.key === reqKey);
+      const val = typeof field?.value_text === "string" ? field.value_text.trim() : "";
+      return !val;
+    });
+    
+    if (missingFields.length > 0) {
+      reasons.push({ type: "missing_fields", fields: missingFields });
+    }
+    
+    // Check mandatory tasks for CURRENT state
+    const mandatoryTasks = Array.isArray(currentStateConfig.mandatory_tasks) ? currentStateConfig.mandatory_tasks : [];
+    const openTasks = (pendenciesData || []).filter((p: any) => {
+      const isMandatory = mandatoryTasks.some((mt: any) => mt.type === p.type || mt.description === p.question_text);
+      return isMandatory && p.required && p.status === "open";
+    });
+    
+    if (openTasks.length > 0) {
+      reasons.push({ type: "open_pendencies", missingTypes: openTasks.map((p: any) => p.question_text || p.type) });
+    }
+    
+    return reasons;
+  }, [caseData?.state, stateMachine, fieldsData, pendenciesData]);
+
   const formattedDate = useMemo(() => {
     if (!saleDate) return "Data não inf.";
     try {
-      const d = new Date(saleDate);
+      let d: Date;
+      if (typeof saleDate === 'string' && saleDate.includes('/')) {
+        const [day, month, year] = saleDate.split('/').map(Number);
+        d = new Date(year, month - 1, day);
+      } else {
+        d = new Date(saleDate);
+      }
+      if (isNaN(d.getTime())) throw new Error();
       return dateFnsFormat(d, "dd 'de' MMM, yyyy", { locale: ptBR });
     } catch {
       return "Data inválida";
@@ -441,42 +488,85 @@ export default function SalesOrderCase() {
           </div>
 
           <main className="flex-grow overflow-auto scrollbar-hide">
-            <div className="w-full px-8 py-8 grid grid-cols-12 gap-8">
-              {/* Central Section */}
-              <div className="col-span-12 lg:col-span-9 space-y-8">
-                {/* Steps Visualizer */}
-                <div className="bg-white rounded-[32px] p-8 border border-slate-200/60 shadow-sm flex items-center justify-between relative overflow-hidden">
-                  <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-500 to-indigo-600 opacity-20" />
-                  {steps.map((step, idx) => (
-                    <div key={step.id} className="flex flex-col items-center gap-3 relative z-10 flex-1">
-                      <div className={cn(
-                        "h-14 w-14 rounded-2xl flex items-center justify-center transition-all duration-500",
-                        step.status === "complete" ? "bg-emerald-500 text-white shadow-lg shadow-emerald-500/20" :
-                        step.status === "current" ? "bg-white border-4 border-blue-600 text-blue-600 animate-pulse" :
-                        "bg-slate-50 border border-slate-100 text-slate-300"
-                      )}>
-                        {step.status === "complete" ? <CheckCircle2 className="h-6 w-6" /> : <step.icon className="h-6 w-6" />}
-                      </div>
-                      <div className="text-center">
-                        <p className={cn("text-[9px] font-black uppercase tracking-widest mb-0.5", step.status === "upcoming" ? "text-slate-300" : "text-blue-600")}>
-                          Etapa {idx + 1}
-                        </p>
-                        <p className={cn("text-[11px] font-bold tracking-tight", step.status === "upcoming" ? "text-slate-400" : "text-slate-800")}>
-                          {step.title}
-                        </p>
-                      </div>
-                      {/* Connector Line between icons */}
-                      {idx < steps.length - 1 && (
-                        <div className="absolute top-[28px] left-[calc(50%+40px)] w-[calc(100%-80px)] h-[2px] bg-slate-100 -z-0">
-                          <div className={cn(
-                            "h-full bg-emerald-500 transition-all duration-1000",
-                            step.status === "complete" ? "w-full" : "w-0"
-                          )} />
-                        </div>
-                      )}
+            <div className="w-full px-8 py-8 flex flex-col gap-8">
+              
+              {/* Stepper - Journey Progress */}
+              <div className="bg-white rounded-[32px] p-8 border border-slate-200/60 shadow-sm flex items-center justify-between relative overflow-hidden">
+                <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-500 to-indigo-600 opacity-20" />
+                {steps.map((step, idx) => (
+                  <div key={step.id} className="flex flex-col items-center gap-3 relative z-10 flex-1">
+                    <div className={cn(
+                      "h-14 w-14 rounded-2xl flex items-center justify-center transition-all duration-500",
+                      step.status === "complete" ? "bg-emerald-500 text-white shadow-lg shadow-emerald-500/20" :
+                      step.status === "current" ? "bg-white border-4 border-blue-600 text-blue-600 animate-pulse" :
+                      "bg-slate-50 border border-slate-100 text-slate-300"
+                    )}>
+                      {step.status === "complete" ? <CheckCircle2 className="h-6 w-6" /> : <step.icon className="h-6 w-6" />}
                     </div>
-                  ))}
-                </div>
+                    <div className="text-center">
+                      <p className={cn("text-[9px] font-black uppercase tracking-widest mb-0.5", step.status === "upcoming" ? "text-slate-300" : "text-blue-600")}>
+                        Etapa {idx + 1}
+                      </p>
+                      <p className={cn("text-[11px] font-bold tracking-tight", step.status === "upcoming" ? "text-slate-400" : "text-slate-800")}>
+                        {step.title}
+                      </p>
+                    </div>
+                    {/* Connector Line between icons */}
+                    {idx < steps.length - 1 && (
+                      <div className="absolute top-[28px] left-[calc(50%+40px)] w-[calc(100%-80px)] h-[2px] bg-slate-100 -z-0">
+                        <div className={cn(
+                          "h-full bg-emerald-500 transition-all duration-1000",
+                          step.status === "complete" ? "w-full" : "w-0"
+                        )} />
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+
+              {/* Journey Pendencies / Diagnostic */}
+              {currentPendencies.length > 0 && (
+                <Alert className="bg-amber-50/80 backdrop-blur-sm border-amber-200/60 rounded-[32px] p-6 shadow-sm">
+                  <div className="flex gap-4">
+                    <div className="h-12 w-12 rounded-2xl bg-amber-100 text-amber-600 flex items-center justify-center shrink-0">
+                      <AlertCircle className="h-6 w-6" />
+                    </div>
+                    <div className="space-y-2">
+                      <AlertTitle className="text-amber-900 font-black text-sm uppercase tracking-wider mb-1">
+                        Ações recomendadas para avançar
+                      </AlertTitle>
+                      <AlertDescription className="text-amber-800 space-y-3">
+                        <p className="text-[13px] font-medium leading-relaxed opacity-80">Detectamos itens obrigatórios que precisam de atenção para que este pedido possa prosseguir para a próxima etapa:</p>
+                        <div className="grid sm:grid-cols-2 gap-x-8 gap-y-2">
+                          {currentPendencies.map((p, i) => {
+                            if (p.type === "missing_fields") {
+                              return p.fields.map((f: string) => (
+                                <div key={f} className="flex items-center gap-3 text-[12px] font-bold">
+                                  <div className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                                  <span className="opacity-60 uppercase tracking-tight">Campo faltante:</span>
+                                  <span className="text-amber-900 underline decoration-amber-300 underline-offset-4">{f}</span>
+                                </div>
+                              ));
+                            }
+                            if (p.type === "open_pendencies") {
+                              return p.missingTypes.map((t: string) => (
+                                <div key={t} className="flex items-center gap-3 text-[12px] font-bold">
+                                  <div className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                                  <span className="opacity-60 uppercase tracking-tight">Tarefa obrigatória:</span>
+                                  <span className="text-amber-900 italic font-medium">{t}</span>
+                                </div>
+                              ));
+                            }
+                            return null;
+                          })}
+                        </div>
+                      </AlertDescription>
+                    </div>
+                  </div>
+                </Alert>
+              )}
+
+              <div className="grid grid-cols-12 gap-8">
 
                 <Accordion type="single" collapsible defaultValue="itens" className="space-y-6">
                   {/* Items Card */}

@@ -373,9 +373,9 @@ export function SalesOrderItemsEditorCard(props: { caseId: string; className?: s
                   <div>
                     <Label className="text-[11px] text-slate-600">Produto / Serviço</Label>
                     <Popover
-                      open={(openOfferingPerLine[row.line_no] || false) && offeringsQ.data && offeringsQ.data.length > 0}
+                      open={(openOfferingPerLine[`mob-${row.line_no}`] || false) && offeringsQ.data && offeringsQ.data.length > 0}
                       onOpenChange={(open) => {
-                        setOpenOfferingPerLine((prev) => ({ ...prev, [row.line_no]: open }));
+                        setOpenOfferingPerLine((prev) => ({ ...prev, [`mob-${row.line_no}`]: open }));
                       }}
                     >
                       <PopoverTrigger asChild>
@@ -391,11 +391,11 @@ export function SalesOrderItemsEditorCard(props: { caseId: string; className?: s
                               )
                             );
                             setSearchOffering(val);
-                            setOpenOfferingPerLine((prev) => ({ ...prev, [row.line_no]: true }));
+                            setOpenOfferingPerLine((prev) => ({ ...prev, [`mob-${row.line_no}`]: true }));
                           }}
                           onFocus={() => {
                             setSearchOffering(row.description);
-                            setOpenOfferingPerLine((prev) => ({ ...prev, [row.line_no]: true }));
+                            setOpenOfferingPerLine((prev) => ({ ...prev, [`mob-${row.line_no}`]: true }));
                           }}
                           className="mt-1 h-10 rounded-2xl"
                           placeholder="Digite o nome do produto ou selecione..."
@@ -430,7 +430,7 @@ export function SalesOrderItemsEditorCard(props: { caseId: string; className?: s
                                         : x
                                     )
                                   );
-                                  setOpenOfferingPerLine((prev) => ({ ...prev, [row.line_no]: false }));
+                                  setOpenOfferingPerLine((prev) => ({ ...prev, [`mob-${row.line_no}`]: false }));
                                   setSearchOffering("");
                                 }}
                               >
@@ -554,9 +554,9 @@ export function SalesOrderItemsEditorCard(props: { caseId: string; className?: s
                   <div>
                     <Label className="text-[11px] text-slate-600">Produto / Serviço</Label>
                     <Popover
-                      open={(openOfferingPerLine[row.line_no] || false) && offeringsQ.data && offeringsQ.data.length > 0}
+                      open={(openOfferingPerLine[`desk-${row.line_no}`] || false) && offeringsQ.data && offeringsQ.data.length > 0}
                       onOpenChange={(open) => {
-                        setOpenOfferingPerLine((prev) => ({ ...prev, [row.line_no]: open }));
+                        setOpenOfferingPerLine((prev) => ({ ...prev, [`desk-${row.line_no}`]: open }));
                       }}
                     >
                       <PopoverTrigger asChild>
@@ -572,11 +572,11 @@ export function SalesOrderItemsEditorCard(props: { caseId: string; className?: s
                               )
                             );
                             setSearchOffering(val);
-                            setOpenOfferingPerLine((prev) => ({ ...prev, [row.line_no]: true }));
+                            setOpenOfferingPerLine((prev) => ({ ...prev, [`desk-${row.line_no}`]: true }));
                           }}
                           onFocus={() => {
                             setSearchOffering(row.description);
-                            setOpenOfferingPerLine((prev) => ({ ...prev, [row.line_no]: true }));
+                            setOpenOfferingPerLine((prev) => ({ ...prev, [`desk-${row.line_no}`]: true }));
                           }}
                           className="mt-1 h-10 rounded-2xl"
                           placeholder="Digite o nome do produto ou selecione..."
@@ -611,7 +611,7 @@ export function SalesOrderItemsEditorCard(props: { caseId: string; className?: s
                                         : x
                                     )
                                   );
-                                  setOpenOfferingPerLine((prev) => ({ ...prev, [row.line_no]: false }));
+                                  setOpenOfferingPerLine((prev) => ({ ...prev, [`desk-${row.line_no}`]: false }));
                                   setSearchOffering("");
                                 }}
                               >
