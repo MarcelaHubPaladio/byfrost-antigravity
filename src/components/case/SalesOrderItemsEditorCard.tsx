@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { showError, showSuccess } from "@/utils/toast";
 import { cn } from "@/lib/utils";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Plus, ReceiptText, Save, Trash2, Check, ChevronsUpDown, Loader2 } from "lucide-react";
+import { Plus, ReceiptText, Save, Trash2, Check, ChevronsUpDown, Loader2, DollarSign } from "lucide-react";
 import { useTenant } from "@/providers/TenantProvider";
 import { useSession } from "@/providers/SessionProvider";
 
@@ -21,6 +21,8 @@ type CaseItemRow = {
   qty: number | null;
   price: number | null;
   total: number | null;
+  discount_percent: number | null;
+  discount_value: number | null;
   offering_entity_id: string | null;
   updated_at: string;
 };
@@ -32,6 +34,7 @@ type DraftRow = {
   description: string;
   qty: string;
   price: string;
+  discount_percent: string;
   offering_entity_id: string | null;
 };
 
@@ -51,11 +54,14 @@ function moneyPtBr(v: number) {
   }
 }
 
-function computeRowTotal(qty: number | null, price: number | null) {
+function computeRowTotal(qty: number | null, price: number | null, discountPct: number | null = 0) {
   const q = Number(qty ?? 0);
   const p = Number(price ?? 0);
+  const d = Number(discountPct ?? 0);
   if (!Number.isFinite(q) || !Number.isFinite(p)) return 0;
-  return q * p;
+  const subtotal = q * p;
+  const discount = subtotal * (d / 100);
+  return subtotal - discount;
 }
 
 export function SalesOrderItemsEditorCard(props: { caseId: string; className?: string }) {
@@ -77,7 +83,7 @@ export function SalesOrderItemsEditorCard(props: { caseId: string; className?: s
     queryFn: async () => {
       const { data, error } = await supabase
         .from("case_items")
-        .select("id,case_id,line_no,code,description,qty,price,total,offering_entity_id,updated_at")
+        .select("id,case_id,line_no,code,description,qty,price,total,discount_percent,discount_value,offering_entity_id,updated_at")
         .eq("case_id", caseId)
         .order("line_no", { ascending: true })
         .limit(200);
@@ -126,6 +132,7 @@ export function SalesOrderItemsEditorCard(props: { caseId: string; className?: s
       description: r.description ?? "",
       qty: r.qty == null ? "" : String(r.qty).replace(/\./g, ","),
       price: r.price == null ? "" : String(r.price).replace(/\./g, ","),
+      discount_percent: r.discount_percent == null ? "0" : String(r.discount_percent).replace(/\./g, ","),
       offering_entity_id: r.offering_entity_id,
     }));
   }, [itemsQ.data]);
@@ -136,18 +143,77 @@ export function SalesOrderItemsEditorCard(props: { caseId: string; className?: s
     setDraft(initialDraft);
   }, [initialDraft]);
 
+    const { data: caseWithUser } = useQuery({
+        queryKey: ["case_with_user", caseId],
+        enabled: !!caseId,
+        queryFn: async () => {
+            const { data, error } = await supabase
+                .from("cases")
+                .select("assigned_user_id, users_profile:users_profile!fk_cases_users_profile(meta_json)")
+                .eq("id", caseId)
+                .single();
+            if (error) throw error;
+            return data;
+        }
+    });
+
   const nextLineNo = useMemo(() => {
     const max = Math.max(0, ...draft.map((d) => Number(d.line_no) || 0));
     return max + 1;
   }, [draft]);
 
+  const commissionRules = (Array.isArray(caseWithUser?.users_profile) 
+    ? caseWithUser?.users_profile[0]?.meta_json?.commission_rules 
+    : (caseWithUser?.users_profile as any)?.meta_json?.commission_rules);
+
+  function calculateRowCommission(rowTotal: number, discountPct: number) {
+    if (!commissionRules) return 0;
+    const base = commissionRules.base_percent || 0;
+    const tiers = commissionRules.discount_tiers || [];
+    
+    // Find the applicable tier (first tier where max_discount_pct >= discountPct)
+    const applicableTier = tiers.find((t: any) => t.max_discount_pct >= discountPct);
+    const pct = applicableTier ? applicableTier.commission_pct : base;
+    
+    return rowTotal * (pct / 100);
+  }
+
   const grandTotal = useMemo(() => {
     return draft.reduce((acc, r) => {
       const qty = parsePtBrNumber(r.qty) ?? 0;
       const price = parsePtBrNumber(r.price) ?? 0;
-      return acc + computeRowTotal(qty, price);
+      const discount = parsePtBrNumber(r.discount_percent) ?? 0;
+      return acc + computeRowTotal(qty, price, discount);
     }, 0);
   }, [draft]);
+
+  const totalCommission = useMemo(() => {
+    return draft.reduce((acc, r) => {
+      const qty = parsePtBrNumber(r.qty) ?? 0;
+      const price = parsePtBrNumber(r.price) ?? 0;
+      const discountPct = parsePtBrNumber(r.discount_percent) ?? 0;
+      const total = computeRowTotal(qty, price, discountPct);
+      return acc + calculateRowCommission(total, discountPct);
+    }, 0);
+  }, [draft, commissionRules]);
+
+  const applyGlobalDiscount = () => {
+    const val = prompt("Informe a porcentagem de desconto para aplicar em TODOS os itens (0-100):", "0");
+    if (val === null) return;
+    const pct = parsePtBrNumber(val);
+    if (pct === null || pct < 0 || pct > 100) {
+      showError("Desconto inválido. Use um número entre 0 e 100.");
+      return;
+    }
+    
+    setDraft((prev) =>
+      prev.map((x) => ({
+        ...x,
+        discount_percent: String(pct).replace(/\./g, ","),
+      }))
+    );
+    showSuccess(`Desconto de ${pct}% aplicado a todos os itens.`);
+  };
 
   const addRow = () => {
     setDraft((prev) => [
@@ -157,7 +223,8 @@ export function SalesOrderItemsEditorCard(props: { caseId: string; className?: s
         code: "",
         description: "",
         qty: "1",
-        price: "",
+        price: "0",
+        discount_percent: "0",
         offering_entity_id: null,
       },
     ]);
@@ -225,7 +292,12 @@ export function SalesOrderItemsEditorCard(props: { caseId: string; className?: s
       for (const r of draft) {
         const qty = parsePtBrNumber(r.qty) ?? 0;
         const price = parsePtBrNumber(r.price) ?? 0;
-        const total = computeRowTotal(qty, price);
+        const discountPct = parsePtBrNumber(r.discount_percent) ?? 0;
+        const rowTotalBruto = qty * price;
+        const discountValue = rowTotalBruto * (discountPct / 100);
+        const total = rowTotalBruto - discountValue;
+        
+        const commissionValue = calculateRowCommission(total, discountPct);
 
         const payload = {
           case_id: caseId,
@@ -235,6 +307,9 @@ export function SalesOrderItemsEditorCard(props: { caseId: string; className?: s
           qty,
           price,
           total,
+          discount_percent: discountPct,
+          discount_value: discountValue,
+          commission_value: commissionValue,
           offering_entity_id: r.offering_entity_id || null,
           confidence_json: {},
         };
@@ -303,15 +378,25 @@ export function SalesOrderItemsEditorCard(props: { caseId: string; className?: s
             {moneyPtBr(grandTotal)}
           </div>
         </div>
-        <Button
-          onClick={saveAll}
-          disabled={saving || draft.length === 0}
-          size="sm"
-          className="h-9 rounded-xl bg-[hsl(var(--byfrost-accent))] text-white shadow-sm hover:bg-[hsl(var(--byfrost-accent)/0.92)] font-bold px-4 shrink-0 mt-1"
-        >
-          {saving ? "Salvando…" : "Salvar"}
-          <Save className="ml-2 h-3.5 w-3.5" />
-        </Button>
+        <div className="flex flex-col items-end gap-2">
+            <Button
+                onClick={applyGlobalDiscount}
+                variant="outline"
+                size="sm"
+                className="h-8 rounded-xl border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100 font-bold px-3 transition-all"
+            >
+                Desconto Geral %
+            </Button>
+            <Button
+                onClick={saveAll}
+                disabled={saving || draft.length === 0}
+                size="sm"
+                className="h-9 rounded-xl bg-[hsl(var(--byfrost-accent))] text-white shadow-sm hover:bg-[hsl(var(--byfrost-accent)/0.92)] font-bold px-4 shrink-0 mt-1"
+            >
+                {saving ? "Salvando…" : "Salvar"}
+                <Save className="ml-2 h-3.5 w-3.5" />
+            </Button>
+        </div>
       </div>
 
       {itemsQ.isError && (
@@ -322,11 +407,13 @@ export function SalesOrderItemsEditorCard(props: { caseId: string; className?: s
 
       <div className="mt-4 overflow-hidden rounded-2xl border border-slate-200">
         {/* Header (desktop) */}
-        <div className="hidden grid-cols-[120px_92px_140px_140px_110px] gap-2 bg-slate-50 px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-600 sm:grid">
+        <div className="hidden grid-cols-[100px_1fr_80px_100px_90px_110px_48px] gap-2 bg-slate-50 px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-600 sm:grid">
           <div>ID</div>
+          <div>Descrição</div>
           <div className="text-right">Quant</div>
-          <div className="text-right">Valor Unit.</div>
-          <div className="text-right">Total</div>
+          <div className="text-right">Unitário</div>
+          <div className="text-right">Desc. %</div>
+          <div className="text-right">Total Líq.</div>
           <div className="text-right">Ações</div>
         </div>
 
@@ -334,7 +421,8 @@ export function SalesOrderItemsEditorCard(props: { caseId: string; className?: s
           {draft.map((row) => {
             const parsedQty = parsePtBrNumber(row.qty) ?? 0;
             const parsedPrice = parsePtBrNumber(row.price) ?? 0;
-            const total = computeRowTotal(parsedQty, parsedPrice);
+            const parsedDiscount = parsePtBrNumber(row.discount_percent) ?? 0;
+            const total = computeRowTotal(parsedQty, parsedPrice, parsedDiscount);
 
             return (
               <div key={`${row.id ?? "new"}:${row.line_no}`} className="px-3 py-3">
@@ -355,17 +443,31 @@ export function SalesOrderItemsEditorCard(props: { caseId: string; className?: s
                       />
                     </div>
                     <div>
-                      <Label className="text-[11px] text-slate-600">Quant</Label>
+                      <Label className="text-[11px] text-slate-600 font-bold uppercase tracking-tighter">Unitário</Label>
                       <Input
-                        value={row.qty}
+                        value={row.price}
                         onChange={(e) =>
                           setDraft((prev) =>
-                            prev.map((x) => (x.line_no === row.line_no ? { ...x, qty: e.target.value } : x))
+                            prev.map((x) => (x.line_no === row.line_no ? { ...x, price: e.target.value } : x))
                           )
                         }
                         className="mt-1 h-10 rounded-2xl text-right tabular-nums"
                         inputMode="decimal"
-                        placeholder="1"
+                        placeholder="0,00"
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-[11px] text-amber-600 font-bold uppercase tracking-tighter">Desconto %</Label>
+                      <Input
+                        value={row.discount_percent}
+                        onChange={(e) =>
+                          setDraft((prev) =>
+                            prev.map((x) => (x.line_no === row.line_no ? { ...x, discount_percent: e.target.value } : x))
+                          )
+                        }
+                        className="mt-1 h-10 rounded-2xl text-right tabular-nums bg-amber-50 border-amber-200"
+                        inputMode="decimal"
+                        placeholder="0"
                       />
                     </div>
                   </div>
@@ -491,9 +593,9 @@ export function SalesOrderItemsEditorCard(props: { caseId: string; className?: s
                   </div>
                 </div>
 
-                {/* Desktop/table layout */}
+                 {/* Desktop/table layout */}
                 <div className="hidden gap-2 sm:grid">
-                  <div className="grid grid-cols-[120px_92px_140px_140px_110px] items-start gap-2">
+                  <div className="grid grid-cols-[100px_80px_120px_100px_120px_48px] items-start gap-2">
                     <div>
                       <Input
                         value={row.code}
@@ -503,7 +605,7 @@ export function SalesOrderItemsEditorCard(props: { caseId: string; className?: s
                           )
                         }
                         className="h-10 rounded-2xl"
-                        placeholder="12345"
+                        placeholder="Cód."
                       />
                     </div>
                     <div>
@@ -532,21 +634,35 @@ export function SalesOrderItemsEditorCard(props: { caseId: string; className?: s
                         placeholder="0,00"
                       />
                     </div>
+                    <div>
+                      <Input
+                        value={row.discount_percent}
+                        onChange={(e) =>
+                          setDraft((prev) =>
+                            prev.map((x) => (x.line_no === row.line_no ? { ...x, discount_percent: e.target.value } : x))
+                          )
+                        }
+                        className="h-10 rounded-2xl text-right tabular-nums bg-amber-50 border-amber-200"
+                        inputMode="decimal"
+                        placeholder="Desc. %"
+                        title="Desconto em Porcentagem"
+                      />
+                    </div>
                     <div className="flex items-center justify-end">
-                      <div className="text-right text-sm font-semibold tabular-nums text-slate-900 whitespace-nowrap">
+                      <div className="text-right text-sm font-bold tabular-nums text-blue-700 whitespace-nowrap">
                         {moneyPtBr(total)}
                       </div>
                     </div>
                     <div className="flex items-center justify-end">
                       <Button
                         type="button"
-                        variant="secondary"
-                        className="h-10 rounded-2xl border border-rose-200 bg-rose-50 px-3 text-rose-800 hover:bg-rose-100"
+                        variant="ghost"
+                        size="icon"
+                        className="h-10 w-10 rounded-full text-slate-300 hover:text-rose-600 hover:bg-rose-50"
                         onClick={() => removeRow(row)}
                         title="Remover item"
                       >
-                        <Trash2 className="mr-2 h-4 w-4" />
-                        Remover
+                        <Trash2 className="h-4 w-4" />
                       </Button>
                     </div>
                   </div>
@@ -650,7 +766,27 @@ export function SalesOrderItemsEditorCard(props: { caseId: string; className?: s
         </div>
       </div>
 
-      <div className="sticky bottom-0 bg-white pt-3 border-t border-slate-100 z-10 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between mt-4">
+      {commissionRules && (
+        <div className="mt-4 flex items-center justify-between rounded-3xl bg-blue-50/40 p-5 border border-blue-100/50 backdrop-blur-sm">
+          <div className="flex items-center gap-4">
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-600 text-white shadow-lg shadow-blue-200">
+              <DollarSign className="h-6 w-6" />
+            </div>
+            <div>
+              <div className="text-[10px] font-black uppercase tracking-[0.15em] text-blue-400 mb-0.5">Performance Projeta</div>
+              <div className="text-base font-black text-blue-900 tracking-tight">Comissão Estimada</div>
+            </div>
+          </div>
+          <div className="text-right">
+            <div className="text-[10px] font-bold text-blue-400 uppercase tracking-wider mb-1 opacity-60">Ganhos do Vendedor</div>
+            <div className="text-2xl font-black text-blue-700 tabular-nums tracking-tighter">
+              {moneyPtBr(totalCommission)}
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="sticky bottom-0 bg-white pt-5 border-t border-slate-100 z-10 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mt-6">
         <Button type="button" variant="secondary" className="h-11 rounded-2xl" onClick={addRow}>
           <Plus className="mr-2 h-4 w-4" /> Adicionar item
         </Button>

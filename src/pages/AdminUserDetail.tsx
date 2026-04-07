@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { showError, showSuccess } from "@/utils/toast";
-import { ArrowLeft, UserSquare2, Target, KeyRound, Copy, Save, Plus, Library, Trash2, FileSignature, CheckCircle, AlertCircle, Pencil, Send, MessageSquare, Loader2 } from "lucide-react";
+import { ArrowLeft, UserSquare2, Target, KeyRound, Copy, Save, Plus, Library, Trash2, FileSignature, CheckCircle, AlertCircle, Pencil, Send, MessageSquare, Loader2, DollarSign, Percent, History, Info } from "lucide-react";
 import {
     Dialog,
     DialogContent,
@@ -67,6 +67,10 @@ export default function AdminUserDetail() {
                                 <Target className="w-4 h-4" />
                                 Central de Metas
                             </TabsTrigger>
+                            <TabsTrigger value="commissions" className="flex items-center gap-2">
+                                <DollarSign className="w-4 h-4" />
+                                Comissões
+                            </TabsTrigger>
                         </TabsList>
 
                         <TabsContent value="data">
@@ -75,6 +79,10 @@ export default function AdminUserDetail() {
 
                         <TabsContent value="goals">
                             <UserGoalsTab userData={userQuery.data} />
+                        </TabsContent>
+
+                        <TabsContent value="commissions">
+                            <UserCommissionsTab userData={userQuery.data} />
                         </TabsContent>
                     </Tabs>
                 </div>
@@ -333,6 +341,181 @@ function UserDataTab({ userData }: { userData: any }) {
                     )}
                 </DialogContent>
             </Dialog>
+        </div>
+    );
+}
+
+function UserCommissionsTab({ userData }: { userData: any }) {
+    const { activeTenantId } = useTenant();
+    const queryClient = useQueryClient();
+    
+    // Default rules structure
+    const initialRules = userData.meta_json?.commission_rules || {
+        base_percent: 5,
+        discount_tiers: [
+            { max_discount_pct: 10, commission_pct: 3 },
+            { max_discount_pct: 20, commission_pct: 1 }
+        ]
+    };
+
+    const [basePercent, setBasePercent] = useState<string>(String(initialRules.base_percent));
+    const [tiers, setTiers] = useState<any[]>(initialRules.discount_tiers || []);
+    const [isSaving, setIsSaving] = useState(false);
+
+    const save = async () => {
+        setIsSaving(true);
+        try {
+            const rules = {
+                base_percent: Number(basePercent),
+                discount_tiers: tiers.map(t => ({
+                    max_discount_pct: Number(t.max_discount_pct),
+                    commission_pct: Number(t.commission_pct)
+                })).sort((a, b) => a.max_discount_pct - b.max_discount_pct)
+            };
+
+            const { error } = await supabase
+                .from("users_profile")
+                .update({
+                    meta_json: {
+                        ...userData.meta_json,
+                        commission_rules: rules
+                    }
+                })
+                .eq("tenant_id", activeTenantId)
+                .eq("user_id", userData.user_id);
+
+            if (error) throw error;
+            showSuccess("Regras de comissão salvas!");
+            queryClient.invalidateQueries({ queryKey: ["tenant_user", activeTenantId, userData.user_id] });
+        } catch (e: any) {
+            showError(e.message);
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    const addTier = () => {
+        setTiers([...tiers, { max_discount_pct: 30, commission_pct: 0.5 }]);
+    };
+
+    const removeTier = (idx: number) => {
+        setTiers(tiers.filter((_, i) => i !== idx));
+    };
+
+    return (
+        <div className="bg-white p-8 rounded-[32px] border border-slate-200 shadow-sm space-y-8">
+            <div className="flex items-center justify-between">
+                <div>
+                    <h2 className="text-xl font-black text-slate-900 tracking-tight">Regras de Comissão</h2>
+                    <p className="text-sm text-slate-500 font-medium">Configure como este vendedor será remunerado.</p>
+                </div>
+                <div className="h-12 w-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
+                    <DollarSign className="h-6 w-6" />
+                </div>
+            </div>
+
+            <div className="grid gap-6">
+                <div className="space-y-3">
+                    <div className="flex items-center gap-2">
+                        <Percent className="w-4 h-4 text-blue-600" />
+                        <label className="text-xs font-black uppercase tracking-widest text-slate-400">Comissão Base (%)</label>
+                    </div>
+                    <div className="relative max-w-[200px]">
+                        <Input 
+                            type="number" 
+                            step="0.1"
+                            value={basePercent} 
+                            onChange={(e) => setBasePercent(e.target.value)}
+                            className="h-12 rounded-2xl pl-10 text-lg font-bold"
+                        />
+                        <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold">%</span>
+                    </div>
+                    <p className="text-[11px] text-slate-500 italic">Esta porcentagem será aplicada se não houver descontos no pedido.</p>
+                </div>
+
+                <div className="pt-6 border-t border-slate-100 space-y-6">
+                    <div className="flex items-center justify-between">
+                        <div className="space-y-1">
+                            <h3 className="text-sm font-black text-slate-800 uppercase tracking-tight">Redução por Desconto</h3>
+                            <p className="text-[11px] text-slate-500">Ajuste a comissão conforme o desconto dado ao cliente.</p>
+                        </div>
+                        <Button 
+                            variant="outline" 
+                            size="sm" 
+                            onClick={addTier}
+                            className="h-9 rounded-xl border-blue-200 text-blue-700 bg-blue-50 hover:bg-blue-100"
+                        >
+                            <Plus className="w-4 h-4 mr-1" /> Nova Faixa
+                        </Button>
+                    </div>
+
+                    <div className="space-y-3">
+                        {tiers.length === 0 ? (
+                            <div className="text-center py-8 rounded-3xl bg-slate-50 border border-dashed border-slate-200">
+                                <Info className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+                                <p className="text-xs text-slate-500 font-medium italic">Nenhuma regra de desconto configurada.</p>
+                            </div>
+                        ) : (
+                            tiers.map((tier, idx) => (
+                                <div key={idx} className="flex items-center gap-4 bg-slate-50 p-4 rounded-3xl border border-slate-100 group">
+                                    <div className="flex-1 space-y-1">
+                                        <label className="text-[9px] font-black uppercase text-slate-400">Se desconto até</label>
+                                        <div className="flex items-center gap-2">
+                                            <Input 
+                                                type="number"
+                                                className="h-10 rounded-xl bg-white"
+                                                value={tier.max_discount_pct}
+                                                onChange={(e) => {
+                                                    const newTiers = [...tiers];
+                                                    newTiers[idx].max_discount_pct = e.target.value;
+                                                    setTiers(newTiers);
+                                                }}
+                                            />
+                                            <span className="text-sm font-bold text-slate-600">%</span>
+                                        </div>
+                                    </div>
+                                    <div className="flex-1 space-y-1">
+                                        <label className="text-[9px] font-black uppercase text-slate-400">Pagar Comissão de</label>
+                                        <div className="flex items-center gap-2">
+                                            <Input 
+                                                type="number"
+                                                step="0.1"
+                                                className="h-10 rounded-xl bg-white"
+                                                value={tier.commission_pct}
+                                                onChange={(e) => {
+                                                    const newTiers = [...tiers];
+                                                    newTiers[idx].commission_pct = e.target.value;
+                                                    setTiers(newTiers);
+                                                }}
+                                            />
+                                            <span className="text-sm font-bold text-slate-600">%</span>
+                                        </div>
+                                    </div>
+                                    <Button 
+                                        variant="ghost" 
+                                        size="icon" 
+                                        onClick={() => removeTier(idx)}
+                                        className="mt-5 rounded-full hover:bg-rose-50 text-slate-300 hover:text-rose-600 transition-colors"
+                                    >
+                                        <Trash2 className="w-4 h-4" />
+                                    </Button>
+                                </div>
+                            ))
+                        )}
+                    </div>
+                </div>
+            </div>
+
+            <div className="flex justify-end items-center pt-8 border-t border-slate-100">
+                <Button 
+                    onClick={save} 
+                    disabled={isSaving}
+                    className="h-12 px-10 rounded-2xl bg-slate-900 hover:bg-slate-800 text-white font-bold shadow-lg transition-transform active:scale-95"
+                >
+                    {isSaving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Save className="w-4 h-4 mr-2" />}
+                    Salvar Regras de Comissão
+                </Button>
+            </div>
         </div>
     );
 }

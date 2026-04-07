@@ -33,6 +33,7 @@ type UserProfileLite = {
   user_id: string;
   email: string | null;
   display_name?: string | null;
+  meta_json?: any;
 };
 
 type ParsedRow = {
@@ -63,6 +64,7 @@ type OrderItem = {
   description: string;
   qty: number;
   price: number;
+  discountPct: number;
   matchedOfferingId?: string | null;
 };
 
@@ -239,6 +241,7 @@ export function ImportOrdersDialog({
       const idxItemDesc = pickHeaderIndex(headers, ["item_descricao", "descricao", "description"]);
       const idxItemQty = pickHeaderIndex(headers, ["item_qtd", "quantidade", "qty"]);
       const idxItemPrice = pickHeaderIndex(headers, ["item_valor_unit", "valor", "price"]);
+      const idxItemDiscount = pickHeaderIndex(headers, ["item_desconto_pct", "desconto", "discount"]);
       const idxObs = pickHeaderIndex(headers, ["obs", "notes"]);
 
       const ordersMap = new Map<string, GroupedOrder>();
@@ -284,7 +287,8 @@ export function ImportOrdersDialog({
             code: itemCode,
             description: itemDesc,
             qty: idxItemQty >= 0 ? parsePtBrNumber(row[idxItemQty]) : 1,
-            price: idxItemPrice >= 0 ? parsePtBrNumber(row[idxItemPrice]) : 0
+            price: idxItemPrice >= 0 ? parsePtBrNumber(row[idxItemPrice]) : 0,
+            discountPct: idxItemDiscount >= 0 ? parsePtBrNumber(row[idxItemDiscount]) : 0
           });
         }
       }
@@ -316,9 +320,9 @@ export function ImportOrdersDialog({
     try {
       // Load users for owner mapping
       const { data: usersData } = await supabase.rpc("list_tenant_users_profiles", { p_tenant_id: tenantId });
-      const usersMap = new Map<string, string>();
+      const usersMap = new Map<string, UserProfileLite>();
       ((usersData ?? []) as UserProfileLite[]).forEach((u) => {
-        if (u.email) usersMap.set(u.email.toLowerCase().trim(), u.user_id);
+        if (u.email) usersMap.set(u.email.toLowerCase().trim(), u);
       });
 
       // Load offerings (products) for matching
@@ -372,7 +376,10 @@ export function ImportOrdersDialog({
         const tId = String(tenantId).trim();
         if (!tId || tId.length < 32) throw new Error("ID de tenant inválido");
 
-        const ownerUserId = usersMap.get(o.ownerEmail.toLowerCase().trim()) || null;
+        const ownerProfile = usersMap.get(o.ownerEmail.toLowerCase().trim());
+        const ownerUserId = ownerProfile?.user_id || null;
+        const ownerCommissionRules = ownerProfile?.meta_json?.commission_rules;
+
         const { data: caseRow, error: caseErr } = await supabase
           .from("cases")
           .insert({
@@ -446,6 +453,20 @@ export function ImportOrdersDialog({
               }
             }
 
+            // Calculate Commission based on owner rules
+            let commissionValue = 0;
+            const subtotal = it.qty * it.price;
+            const discValue = subtotal * (it.discountPct / 100);
+            const total = subtotal - discValue;
+
+            if (ownerCommissionRules) {
+                const base = ownerCommissionRules.base_percent || 0;
+                const tiers = ownerCommissionRules.discount_tiers || [];
+                const tier = tiers.find((t: any) => t.max_discount_pct >= it.discountPct);
+                const pct = tier ? tier.commission_pct : base;
+                commissionValue = total * (pct / 100);
+            }
+
             return {
               tenant_id: tenantId,
               case_id: caseId,
@@ -454,7 +475,10 @@ export function ImportOrdersDialog({
               description: it.description || null,
               qty: it.qty,
               price: it.price,
-              total: it.qty * it.price,
+              discount_percent: it.discountPct,
+              discount_value: discValue,
+              total,
+              commission_value: commissionValue,
               offering_entity_id: offeringId,
               confidence_json: { source: "bulk_import" }
             };
