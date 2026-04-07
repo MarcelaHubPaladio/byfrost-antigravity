@@ -131,7 +131,7 @@ export function TaskItem({ task, isSubtask = false }: TaskItemProps) {
     >
       <div
         className={cn(
-          "group flex items-center gap-2 px-2 py-2 rounded-xl transition-all",
+          "group flex items-center gap-2 px-1.5 py-1 rounded-xl transition-all",
           "hover:bg-slate-100/80 dark:hover:bg-slate-800/60",
           task.is_completed && "opacity-60",
           isOverdue && !task.is_completed && "bg-rose-50/60 dark:bg-rose-950/20 ring-1 ring-rose-200 dark:ring-rose-900/50"
@@ -146,7 +146,7 @@ export function TaskItem({ task, isSubtask = false }: TaskItemProps) {
             className="flex-shrink-0 cursor-grab active:cursor-grabbing touch-none opacity-0 group-hover:opacity-100 transition-opacity text-slate-300 hover:text-slate-500"
             tabIndex={-1}
           >
-            <GripVertical className="h-4 w-4" />
+            <GripVertical className="h-3.5 w-3.5" />
           </button>
         )}
 
@@ -219,21 +219,21 @@ export function TaskItem({ task, isSubtask = false }: TaskItemProps) {
         </div>
 
         {/* Action buttons */}
-        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
+        <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
           {/* Due date – proper native input, visible and clickable */}
           <div className="relative">
             <Button
               variant="ghost"
               size="icon"
               className={cn(
-                "h-7 w-7 rounded-lg hover:bg-white shadow-sm",
+                "h-6 w-6 rounded-lg hover:bg-white shadow-sm",
                 deadlineDate && !task.is_completed && "text-indigo-600 bg-indigo-50/50"
               )}
               onClick={() => dateInputRef.current?.showPicker?.() ?? dateInputRef.current?.click()}
               type="button"
               title="Definir prazo"
             >
-              <CalendarIcon className="h-3.5 w-3.5" />
+              <CalendarIcon className="h-3 w-3" />
             </Button>
             <input
               ref={dateInputRef}
@@ -248,21 +248,21 @@ export function TaskItem({ task, isSubtask = false }: TaskItemProps) {
             <Button
               variant="ghost"
               size="icon"
-              className="h-7 w-7 rounded-lg hover:bg-white hover:text-indigo-600 shadow-sm"
+              className="h-6 w-6 rounded-lg hover:bg-white hover:text-indigo-600 shadow-sm"
               onClick={() => setShowSubtasks(!showSubtasks)}
               title="Subtarefas"
             >
-              {showSubtasks ? <ChevronDown className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
+              {showSubtasks ? <ChevronDown className="h-3.5 w-3.5" /> : <Plus className="h-3.5 w-3.5" />}
             </Button>
           )}
           <Button
             variant="ghost"
             size="icon"
-            className="h-7 w-7 rounded-lg hover:bg-rose-50 hover:text-rose-600"
+            className="h-6 w-6 rounded-lg hover:bg-rose-50 hover:text-rose-600"
             onClick={handleDelete}
             title="Excluir"
           >
-            <Trash2 className="h-3.5 w-3.5" />
+            <Trash2 className="h-3 w-3" />
           </Button>
         </div>
       </div>

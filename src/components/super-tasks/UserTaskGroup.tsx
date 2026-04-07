@@ -123,7 +123,7 @@ export function UserTaskGroup({
       value={userId}
       className="border-none rounded-3xl bg-white shadow-sm ring-1 ring-slate-200 overflow-hidden dark:bg-slate-900 dark:ring-slate-800"
     >
-      <AccordionTrigger className="px-6 py-4 hover:no-underline hover:bg-slate-50 transition dark:hover:bg-slate-800/50">
+      <AccordionTrigger className="px-4 py-2.5 hover:no-underline hover:bg-slate-50 transition dark:hover:bg-slate-800/50">
         <div className="flex items-center gap-3 text-left">
           <Avatar className="h-10 w-10 shrink-0 rounded-2xl">
             <AvatarFallback className="rounded-2xl bg-[hsl(var(--byfrost-accent)/0.12)] text-[hsl(var(--byfrost-accent))]">
@@ -158,7 +158,7 @@ export function UserTaskGroup({
         </div>
       </AccordionTrigger>
 
-      <AccordionContent className="px-6 pb-6 pt-2 space-y-4">
+      <AccordionContent className="px-4 pb-3 pt-2 space-y-4">
         {/* Main tasks with drag-and-drop */}
         <DndContext
           sensors={sensors}
