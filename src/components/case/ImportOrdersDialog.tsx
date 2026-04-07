@@ -109,10 +109,10 @@ function normalizeWhatsappOrNull(raw: string) {
 }
 
 function parsePtBrNumber(input: string) {
-  const raw = (input ?? "").trim();
+  const raw = (input ?? "").trim().replace(/[^\d.,-]/g, ""); // Remove R$, espaços, etc
   if (!raw) return 0;
   const normalized = raw.replace(/\./g, "").replace(/,/g, ".");
-  const n = Number(normalized);
+  const n = parseFloat(normalized);
   return Number.isFinite(n) ? n : 0;
 }
 
@@ -354,7 +354,10 @@ export function ImportOrdersDialog({
               })
               .select("id")
               .single();
-            if (!custErr && newCust) customerId = newCust.id;
+            if (custErr) {
+              console.error("Erro ao criar cliente:", custErr.message);
+            }
+            if (newCust) customerId = newCust.id;
           }
         }
 
@@ -384,10 +387,9 @@ export function ImportOrdersDialog({
         if (caseErr || !caseRow) throw caseErr || new Error("Falha ao criar pedido");
         const caseId = caseRow.id;
 
-        // 3. Insert Fields
+        // 3. Insert Fields (Removido phone por redundância, vinculado via customer_id)
         const fields = [
           { key: "name", value_text: o.customerName },
-          { key: "phone", value_text: o.whatsapp },
           { key: "email", value_text: o.email },
           { key: "cpf", value_text: o.cpfCnpj },
           { key: "address", value_text: o.address },

@@ -63,6 +63,8 @@ export function CaseCustomerDataEditorCard(props: {
       cep: getField(fields, "cep"),
       state: getField(fields, "state"),
       uf: getField(fields, "uf"),
+      billing_status: getField(fields, "billing_status"),
+      payment_method: getField(fields, "payment_method"),
 
       // Financeiro (nomes alinhados com a extração)
       payment_terms: getFieldAny(fields, ["payment_terms", "payment_conditions"]),
@@ -145,6 +147,8 @@ export function CaseCustomerDataEditorCard(props: {
           key: "delivery_forecast_text",
           value_text: cleanOrNull(draft.delivery_forecast_text),
         },
+        { key: "billing_status", value_text: cleanOrNull(draft.billing_status) },
+        { key: "payment_method", value_text: cleanOrNull(draft.payment_method) },
         { key: "local", value_text: cleanOrNull(draft.local) },
         { key: "latitude", value_text: cleanOrNull(draft.latitude) },
         { key: "longitude", value_text: cleanOrNull(draft.longitude) },
@@ -186,6 +190,8 @@ export function CaseCustomerDataEditorCard(props: {
         "payment_due_date_text",
         "proposal_validity_date_text",
         "delivery_forecast_text",
+        "billing_status",
+        "payment_method",
         "local",
         "latitude",
         "longitude",
@@ -419,6 +425,27 @@ export function CaseCustomerDataEditorCard(props: {
             className="mt-1 h-10 rounded-2xl"
             placeholder="Ex: Promomp / À vista / 30 dias / 2x..."
           />
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div>
+            <Label className="text-xs">Forma de pagamento</Label>
+            <Input
+              value={draft.payment_method}
+              onChange={(e) => setDraft((p) => ({ ...p, payment_method: e.target.value }))}
+              className="mt-1 h-10 rounded-2xl"
+              placeholder="Ex: Boleto / PIX / Cartão"
+            />
+          </div>
+          <div>
+            <Label className="text-xs">Status de faturamento</Label>
+            <Input
+              value={draft.billing_status}
+              onChange={(e) => setDraft((p) => ({ ...p, billing_status: e.target.value }))}
+              className="mt-1 h-10 rounded-2xl"
+              placeholder="Ex: Pendente / Faturado"
+            />
+          </div>
         </div>
 
         <div className="grid gap-3 sm:grid-cols-2">

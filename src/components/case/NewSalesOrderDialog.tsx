@@ -238,7 +238,7 @@ export function NewSalesOrderDialog(props: {
       showSuccess("Pedido aberto.");
 
       onOpenChange(false);
-      nav(`/app/cases/${draftCaseId}`);
+      nav(`/app/orders/${draftCaseId}`);
     } catch (e: any) {
       showError(`Falha ao abrir pedido: ${e?.message ?? "erro"}`);
     } finally {
@@ -326,7 +326,7 @@ export function NewSalesOrderDialog(props: {
       ]);
 
       onOpenChange(false);
-      nav(`/app/cases/${caseId}`);
+      nav(`/app/orders/${caseId}`);
     } catch (e: any) {
       showError(`Falha ao ler imagem: ${e?.message ?? "erro"}`);
     } finally {

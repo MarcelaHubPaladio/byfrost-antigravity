@@ -44,6 +44,7 @@ const AdminUserDetail = lazyWithRetry(() => import("@/pages/AdminUserDetail"));
 const Crm = lazyWithRetry(() => import("@/pages/Crm"));
 const CrmCaseDetail = lazyWithRetry(() => import("@/pages/CrmCaseDetail"));
 const Orders = lazyWithRetry(() => import("@/pages/Orders"));
+const SalesOrderCase = lazyWithRetry(() => import("@/pages/SalesOrderCase"));
 const OperacaoM30 = lazyWithRetry(() => import("@/pages/OperacaoM30"));
 const MktTecha = lazyWithRetry(() => import("@/pages/MktTecha"));
 const MktTechaCase = lazyWithRetry(() => import("@/pages/MktTechaCase"));
@@ -643,6 +644,15 @@ const App = () => (
                     element={
                       <RequireRouteAccess routeKey="app.dashboard">
                         <MktTechaCase />
+                      </RequireRouteAccess>
+                    }
+                  />
+
+                  <Route
+                    path="/app/orders/:id"
+                    element={
+                      <RequireRouteAccess routeKey="app.dashboard">
+                        <SalesOrderCase />
                       </RequireRouteAccess>
                     }
                   />

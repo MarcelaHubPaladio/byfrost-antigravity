@@ -455,7 +455,7 @@ export default function Orders() {
                         return (
                           <Link
                             key={c.id}
-                            to={`/cases/${c.id}`}
+                            to={`/app/orders/${c.id}`}
                             draggable
                             onDragStart={(e) => e.dataTransfer.setData("text/caseId", c.id)}
                             className="mb-3 block rounded-2xl border border-slate-200 bg-white p-4 shadow-sm hover:shadow-md transition"
@@ -495,7 +495,7 @@ export default function Orders() {
                     {filteredRows.map((c) => (
                       <TableRow key={c.id}>
                         <TableCell>
-                          <Link to={`/cases/${c.id}`} className="font-semibold hover:underline">
+                          <Link to={`/app/orders/${c.id}`} className="font-semibold hover:underline">
                             {customersQ.data?.get(c.customer_id!)?.name || c.title || "Pedido"}
                           </Link>
                           <div className="text-[10px] text-slate-400">{c.id.slice(0, 8)}</div>
