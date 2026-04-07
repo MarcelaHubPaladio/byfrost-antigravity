@@ -271,6 +271,15 @@ export function CaseCustomerDataEditorCard(props: {
             Campos editáveis. Ao salvar, gravamos em <span className="font-mono">case_fields</span>.
           </div>
         </div>
+        <Button
+          onClick={save}
+          disabled={saving}
+          size="sm"
+          className="h-9 rounded-xl bg-[hsl(var(--byfrost-accent))] text-white shadow-sm hover:bg-[hsl(var(--byfrost-accent)/0.92)] font-bold px-4 shrink-0"
+        >
+          {saving ? "Salvando…" : "Salvar"}
+          <Save className="ml-2 h-3.5 w-3.5" />
+        </Button>
       </div>
 
       <div className="mt-4 grid gap-3">

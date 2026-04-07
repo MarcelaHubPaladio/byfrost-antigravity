@@ -303,6 +303,15 @@ export function SalesOrderItemsEditorCard(props: { caseId: string; className?: s
             {moneyPtBr(grandTotal)}
           </div>
         </div>
+        <Button
+          onClick={saveAll}
+          disabled={saving || draft.length === 0}
+          size="sm"
+          className="h-9 rounded-xl bg-[hsl(var(--byfrost-accent))] text-white shadow-sm hover:bg-[hsl(var(--byfrost-accent)/0.92)] font-bold px-4 shrink-0 mt-1"
+        >
+          {saving ? "Salvando…" : "Salvar"}
+          <Save className="ml-2 h-3.5 w-3.5" />
+        </Button>
       </div>
 
       {itemsQ.isError && (
