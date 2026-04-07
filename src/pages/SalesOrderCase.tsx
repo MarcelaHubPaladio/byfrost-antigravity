@@ -567,73 +567,74 @@ export default function SalesOrderCase() {
               )}
 
               <div className="grid grid-cols-12 gap-8">
+                {/* Central Section */}
+                <div className="col-span-12 lg:col-span-9 space-y-8">
+                  <Accordion type="single" collapsible defaultValue="itens" className="space-y-6">
+                    {/* Items Card */}
+                    <AccordionItem value="itens" className="border-none">
+                      <Card className="rounded-[40px] overflow-hidden border-none bg-white shadow-sm transition-all hover:shadow-md">
+                        <AccordionTrigger className="px-8 py-6 hover:no-underline hover:bg-slate-50 [&[data-state=open]]:bg-slate-50">
+                          <div className="flex items-center gap-4 text-left">
+                            <div className="h-12 w-12 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center">
+                              <Package className="h-6 w-6" />
+                            </div>
+                            <div>
+                              <h3 className="text-base font-black text-slate-900 tracking-tight">Itens do Pedido</h3>
+                              <p className="text-[11px] text-slate-500 font-medium">Configure produtos, quantidades e descontos.</p>
+                            </div>
+                          </div>
+                        </AccordionTrigger>
+                        <AccordionContent className="p-8 border-t border-slate-100 pt-8">
+                          <SalesOrderItemsEditorCard caseId={caseId!} />
+                        </AccordionContent>
+                      </Card>
+                    </AccordionItem>
 
-                <Accordion type="single" collapsible defaultValue="itens" className="space-y-6">
-                  {/* Items Card */}
-                  <AccordionItem value="itens" className="border-none">
-                    <Card className="rounded-[40px] overflow-hidden border-none bg-white shadow-sm transition-all hover:shadow-md">
-                      <AccordionTrigger className="px-8 py-6 hover:no-underline hover:bg-slate-50 [&[data-state=open]]:bg-slate-50">
-                        <div className="flex items-center gap-4 text-left">
-                          <div className="h-12 w-12 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center">
-                            <Package className="h-6 w-6" />
+                    {/* Financial/Customer Card */}
+                    <AccordionItem value="faturamento" className="border-none">
+                      <Card className="rounded-[40px] overflow-hidden border-none bg-white shadow-sm transition-all hover:shadow-md">
+                        <AccordionTrigger className="px-8 py-6 hover:no-underline hover:bg-slate-50 [&[data-state=open]]:bg-slate-50">
+                          <div className="flex items-center gap-4 text-left">
+                            <div className="h-12 w-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
+                              <DollarSign className="h-6 w-6" />
+                            </div>
+                            <div>
+                              <h3 className="text-base font-black text-slate-900 tracking-tight">Faturamento e Cadastro</h3>
+                              <p className="text-[11px] text-slate-500 font-medium">Dados do cliente, endereço e condições de pagamento.</p>
+                            </div>
                           </div>
-                          <div>
-                            <h3 className="text-base font-black text-slate-900 tracking-tight">Itens do Pedido</h3>
-                            <p className="text-[11px] text-slate-500 font-medium">Configure produtos, quantidades e descontos.</p>
-                          </div>
-                        </div>
-                      </AccordionTrigger>
-                      <AccordionContent className="p-8 border-t border-slate-100 pt-8">
-                        <SalesOrderItemsEditorCard caseId={caseId!} />
-                      </AccordionContent>
-                    </Card>
-                  </AccordionItem>
+                        </AccordionTrigger>
+                        <AccordionContent className="p-8 border-t border-slate-100 pt-8">
+                          <CaseCustomerDataEditorCard caseId={caseId!} fields={fieldsData} />
+                        </AccordionContent>
+                      </Card>
+                    </AccordionItem>
 
-                  {/* Financial/Customer Card */}
-                  <AccordionItem value="faturamento" className="border-none">
-                    <Card className="rounded-[40px] overflow-hidden border-none bg-white shadow-sm transition-all hover:shadow-md">
-                      <AccordionTrigger className="px-8 py-6 hover:no-underline hover:bg-slate-50 [&[data-state=open]]:bg-slate-50">
-                        <div className="flex items-center gap-4 text-left">
-                          <div className="h-12 w-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
-                            <DollarSign className="h-6 w-6" />
+                    {/* Observations */}
+                    <AccordionItem value="obs" className="border-none">
+                      <Card className="rounded-[40px] overflow-hidden border-none bg-white shadow-sm transition-all hover:shadow-md">
+                        <AccordionTrigger className="px-8 py-6 hover:no-underline hover:bg-slate-50 [&[data-state=open]]:bg-slate-50">
+                          <div className="flex items-center gap-4 text-left">
+                            <div className="h-12 w-12 rounded-2xl bg-orange-50 text-orange-600 flex items-center justify-center">
+                              <FileText className="h-6 w-6" />
+                            </div>
+                            <div>
+                              <h3 className="text-base font-black text-slate-900 tracking-tight">Observações</h3>
+                              <p className="text-[11px] text-slate-500 font-medium">Notas internas e avisos para logística.</p>
+                            </div>
                           </div>
-                          <div>
-                            <h3 className="text-base font-black text-slate-900 tracking-tight">Faturamento e Cadastro</h3>
-                            <p className="text-[11px] text-slate-500 font-medium">Dados do cliente, endereço e condições de pagamento.</p>
-                          </div>
-                        </div>
-                      </AccordionTrigger>
-                      <AccordionContent className="p-8 border-t border-slate-100 pt-8">
-                        <CaseCustomerDataEditorCard caseId={caseId!} fields={fieldsData} />
-                      </AccordionContent>
-                    </Card>
-                  </AccordionItem>
-
-                  {/* Observations */}
-                  <AccordionItem value="obs" className="border-none">
-                    <Card className="rounded-[40px] overflow-hidden border-none bg-white shadow-sm transition-all hover:shadow-md">
-                      <AccordionTrigger className="px-8 py-6 hover:no-underline hover:bg-slate-50 [&[data-state=open]]:bg-slate-50">
-                        <div className="flex items-center gap-4 text-left">
-                          <div className="h-12 w-12 rounded-2xl bg-orange-50 text-orange-600 flex items-center justify-center">
-                            <FileText className="h-6 w-6" />
-                          </div>
-                          <div>
-                            <h3 className="text-base font-black text-slate-900 tracking-tight">Observações</h3>
-                            <p className="text-[11px] text-slate-500 font-medium">Notas internas e avisos para logística.</p>
-                          </div>
-                        </div>
-                      </AccordionTrigger>
-                      <AccordionContent className="p-8 border-t border-slate-100 pt-8">
-                         <div className="rounded-3xl border border-slate-100 p-6 bg-slate-50/50 min-h-[100px]">
+                        </AccordionTrigger>
+                        <AccordionContent className="p-8 border-t border-slate-100 pt-8">
+                          <div className="rounded-3xl border border-slate-100 p-6 bg-slate-50/50 min-h-[100px]">
                             <p className="text-sm text-slate-600 italic leading-relaxed">
                               {getField("obs") || getField("observacoes") || "Nenhuma observação informada."}
                             </p>
-                         </div>
-                      </AccordionContent>
-                    </Card>
-                  </AccordionItem>
-                </Accordion>
-              </div>
+                          </div>
+                        </AccordionContent>
+                      </Card>
+                    </AccordionItem>
+                  </Accordion>
+                </div>
 
               {/* Sidebar */}
               <div className="col-span-12 lg:col-span-3 space-y-8">
@@ -681,8 +682,9 @@ export default function SalesOrderCase() {
                 </Card>
               </div>
             </div>
-          </main>
-        </div>
+          </div>
+        </main>
+      </div>
 
         <TransitionBlockDialog
           open={transitionBlock.open}
