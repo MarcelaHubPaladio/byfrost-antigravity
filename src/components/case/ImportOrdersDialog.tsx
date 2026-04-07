@@ -400,11 +400,13 @@ export function ImportOrdersDialog({
           { key: "billing_status", value_text: o.billingStatus },
           { key: "obs", value_text: o.obs },
         ].filter(f => f.value_text).map(f => ({
+          tenant_id: tenantId,
           case_id: caseId,
           key: f.key,
           value_text: f.value_text,
           confidence: 1,
-          source: "import"
+          source: "admin",
+          last_updated_by: "panel"
         }));
 
         if (fields.length) {
@@ -434,6 +436,7 @@ export function ImportOrdersDialog({
             }
 
             return {
+              tenant_id: tenantId,
               case_id: caseId,
               line_no: idx + 1,
               code: it.code || null,
@@ -441,7 +444,8 @@ export function ImportOrdersDialog({
               qty: it.qty,
               price: it.price,
               total: it.qty * it.price,
-              offering_entity_id: offeringId
+              offering_entity_id: offeringId,
+              confidence_json: { source: "bulk_import" }
             };
           });
           await supabase.from("case_items").insert(itemsPayload);
@@ -455,11 +459,13 @@ export function ImportOrdersDialog({
           await supabase
             .from("case_fields")
             .upsert({
+              tenant_id: tenantId,
               case_id: caseId,
               key: "obs",
               value_text: finalObs,
               confidence: 1,
-              source: "import"
+              source: "admin",
+              last_updated_by: "panel"
             }, { onConflict: "case_id,key" });
         }
 
