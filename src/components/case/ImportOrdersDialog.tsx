@@ -47,6 +47,7 @@ type ParsedRow = {
   paymentTerms: string;
   signal: string;
   dueDate: string;
+  saleDate: string;
   itemCode: string;
   itemDescription: string;
   itemQty: string;
@@ -59,6 +60,7 @@ type OrderItem = {
   description: string;
   qty: number;
   price: number;
+  matchedOfferingId?: string | null;
 };
 
 type GroupedOrder = {
@@ -73,6 +75,7 @@ type GroupedOrder = {
   paymentTerms: string;
   signal: string;
   dueDate: string;
+  saleDate: string;
   obs: string;
   items: OrderItem[];
 };
@@ -215,6 +218,7 @@ export function ImportOrdersDialog({
       const idxPay = pickHeaderIndex(headers, ["pagamento_condicoes", "condicoes", "payment_terms"]);
       const idxSignal = pickHeaderIndex(headers, ["valor_sinal", "sinal", "signal"]);
       const idxDue = pickHeaderIndex(headers, ["vencimento", "due_date"]);
+      const idxSaleDate = pickHeaderIndex(headers, ["data_venda", "data", "date", "sale_date"]);
       const idxItemCode = pickHeaderIndex(headers, ["item_codigo", "codigo", "code"]);
       const idxItemDesc = pickHeaderIndex(headers, ["item_descricao", "descricao", "description"]);
       const idxItemQty = pickHeaderIndex(headers, ["item_qtd", "quantidade", "qty"]);
@@ -247,6 +251,7 @@ export function ImportOrdersDialog({
             paymentTerms: pay,
             signal: idxSignal >= 0 ? String(row[idxSignal] ?? "").trim() : "",
             dueDate: idxDue >= 0 ? String(row[idxDue] ?? "").trim() : "",
+            saleDate: idxSaleDate >= 0 ? String(row[idxSaleDate] ?? "").trim() : "",
             obs: idxObs >= 0 ? String(row[idxObs] ?? "").trim() : "",
             items: []
           };
@@ -296,6 +301,16 @@ export function ImportOrdersDialog({
       ((usersData ?? []) as UserProfileLite[]).forEach((u) => {
         if (u.email) usersMap.set(u.email.toLowerCase().trim(), u.user_id);
       });
+
+      // Load offerings (products) for matching
+      const { data: offeringsData } = await supabase
+        .from("core_entities")
+        .select("id,display_name,metadata")
+        .eq("tenant_id", tenantId)
+        .eq("entity_type", "offering")
+        .is("deleted_at", null);
+      
+      const offerings = (offeringsData ?? []) as any[];
 
       const firstState = (journey.default_state_machine_json?.states ?? [])[0] || "new";
 
@@ -367,6 +382,7 @@ export function ImportOrdersDialog({
           { key: "payment_terms", value_text: o.paymentTerms },
           { key: "payment_signal_value_raw", value_text: o.signal },
           { key: "payment_due_date_text", value_text: o.dueDate },
+          { key: "sale_date_text", value_text: o.saleDate },
           { key: "obs", value_text: o.obs },
         ].filter(f => f.value_text).map(f => ({
           case_id: caseId,
@@ -382,15 +398,32 @@ export function ImportOrdersDialog({
 
         // 4. Insert Items
         if (o.items.length) {
-          const itemsPayload = o.items.map((it, idx) => ({
-            case_id: caseId,
-            line_no: idx + 1,
-            code: it.code || null,
-            description: it.description || null,
-            qty: it.qty,
-            price: it.price,
-            total: it.qty * it.price
-          }));
+          const itemsPayload = o.items.map((it, idx) => {
+            // Attempt to match offering if not already matched
+            let offeringId = it.matchedOfferingId || null;
+            if (!offeringId) {
+              const codeClean = it.code.trim().toLowerCase();
+              const descClean = it.description.trim().toLowerCase();
+              
+              const match = offerings.find(off => {
+                const offCode = String(off.metadata?.code || off.metadata?.short_name || "").toLowerCase();
+                const offName = String(off.display_name || "").toLowerCase();
+                return (codeClean && offCode === codeClean) || (descClean && offName === descClean);
+              });
+              if (match) offeringId = match.id;
+            }
+
+            return {
+              case_id: caseId,
+              line_no: idx + 1,
+              code: it.code || null,
+              description: it.description || null,
+              qty: it.qty,
+              price: it.price,
+              total: it.qty * it.price,
+              offering_entity_id: offeringId
+            };
+          });
           await supabase.from("case_items").insert(itemsPayload);
         }
 
@@ -410,10 +443,10 @@ export function ImportOrdersDialog({
 
   const downloadTemplate = () => {
     const csv = [
-      "id_externo,cliente_nome,cliente_whatsapp,cliente_email,cliente_cpf_cnpj,cliente_endereco,vendedor_email,pagamento_condicoes,valor_sinal,vencimento,item_codigo,item_descricao,item_qtd,item_valor_unit,obs",
-      '1001,João Silva,42988887777,joao@email.com,123.456.789-00,Rua A 123,vendedor@agroforte.com,30 dias,"R$ 500,00",15/05/2026,PROD01,Semente de Milho,10,"R$ 150,00",Entrega urgente',
-      '1001,João Silva,42988887777,joao@email.com,123.456.789-00,Rua A 123,vendedor@agroforte.com,30 dias,"R$ 500,00",15/05/2026,PROD02,Fertilizante NPK,5,"R$ 80,00",',
-      '1002,Maria Oliveira,41999998888,maria@email.com,00.111.222/0001-99,Av Central 456,vendedor2@agroforte.com,À vista,,20/04/2026,SERV01,Assessoria Técnica,1,"R$ 300,00",Pagamento via PIX'
+      "id_externo,data_venda,cliente_nome,cliente_whatsapp,cliente_email,cliente_cpf_cnpj,cliente_endereco,vendedor_email,pagamento_condicoes,valor_sinal,vencimento,item_codigo,item_descricao,item_qtd,item_valor_unit,obs",
+      '1001,10/05/2026,João Silva,42988887777,joao@email.com,123.456.789-00,Rua A 123,vendedor@agroforte.com,30 dias,"R$ 500,00",15/05/2026,PROD01,Semente de Milho,10,"R$ 150,00",Entrega urgente',
+      '1001,10/05/2026,João Silva,42988887777,joao@email.com,123.456.789-00,Rua A 123,vendedor@agroforte.com,30 dias,"R$ 500,00",15/05/2026,PROD02,Fertilizante NPK,5,"R$ 80,00",',
+      '1002,12/04/2026,Maria Oliveira,41999998888,maria@email.com,00.111.222/0001-99,Av Central 456,vendedor2@agroforte.com,À vista,,20/04/2026,SERV01,Assessoria Técnica,1,"R$ 300,00",Pagamento via PIX'
     ].join("\n");
     
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
