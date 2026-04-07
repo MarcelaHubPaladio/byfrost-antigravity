@@ -17,12 +17,10 @@ import {
   History, 
   Truck,
   Trash2,
-  Share2,
   Users,
   CheckCircle2,
   Smartphone,
-  MoreVertical,
-  ExternalLink
+  MoreVertical
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -72,6 +70,7 @@ import { checkTransitionBlocks, TransitionBlockReason } from "@/lib/journeys/val
 import { getStateLabel } from "@/lib/journeyLabels";
 import { AppShell } from "@/components/AppShell";
 import { RequireAuth } from "@/components/RequireAuth";
+import { useTenant } from "@/providers/TenantProvider";
 import { showError, showSuccess } from "@/utils/toast";
 
 export default function SalesOrderCase() {
@@ -87,7 +86,8 @@ export default function SalesOrderCase() {
     reasons: TransitionBlockReason[];
   }>({ open: false, nextStateName: "", reasons: [] });
 
-  const tenantId = sessionUser?.app_metadata?.tenant_id;
+  const { activeTenantId } = useTenant();
+  const tenantId = activeTenantId;
 
   const { data: caseData, isLoading: isLoadingCase } = useQuery({
     queryKey: ["case", caseId],
@@ -211,6 +211,19 @@ export default function SalesOrderCase() {
         .update({ state: nextState, updated_at: new Date().toISOString() })
         .eq("id", caseId);
       if (error) throw error;
+      
+      // Audit trail: timeline event
+      await supabase.from("timeline_events").insert({
+        tenant_id: tenantId,
+        case_id: caseId,
+        event_type: "case_state_changed",
+        actor_type: "admin",
+        actor_id: sessionUser?.id ?? null,
+        message: `Status do pedido alterado para "${getStateLabel(journey, nextState)}".`,
+        meta_json: { from: caseData?.state, to: nextState },
+        occurred_at: new Date().toISOString(),
+      });
+
       showSuccess(`Status atualizado para ${getStateLabel(journey, nextState)}`);
       qc.invalidateQueries({ queryKey: ["case", caseId] });
       qc.invalidateQueries({ queryKey: ["case_timeline", caseId] });
@@ -229,8 +242,23 @@ export default function SalesOrderCase() {
         .update({ assigned_user_id: userId === "unassigned" ? null : userId })
         .eq("id", caseId);
       if (error) throw error;
+      
+      // Audit trail: timeline event
+      const userLabel = tenantUsers?.find(u => u.user_id === userId)?.display_name || userId;
+      await supabase.from("timeline_events").insert({
+        tenant_id: tenantId,
+        case_id: caseId!,
+        event_type: "case_assigned",
+        actor_type: "admin",
+        actor_id: sessionUser?.id ?? null,
+        message: `Responsável alterado para "${userLabel}".`,
+        meta_json: { assigned_user_id: userId },
+        occurred_at: new Date().toISOString(),
+      });
+
       showSuccess("Responsável atualizado");
       qc.invalidateQueries({ queryKey: ["case", caseId] });
+      qc.invalidateQueries({ queryKey: ["case_timeline", caseId] });
     } catch (err: any) {
       showError(err.message);
     }
@@ -385,13 +413,6 @@ export default function SalesOrderCase() {
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="rounded-2xl border-slate-200 w-48 p-2">
-                    <DropdownMenuItem onClick={generateShareLink} className="rounded-xl font-bold text-xs h-10 gap-3 cursor-pointer">
-                      <Share2 className="w-4 h-4" /> Compartilhar Link
-                    </DropdownMenuItem>
-                    <DropdownMenuItem className="rounded-xl font-bold text-xs h-10 gap-3 cursor-pointer">
-                      <ExternalLink className="w-4 h-4" /> Visualização Externa
-                    </DropdownMenuItem>
-                    <Separator className="my-1 opacity-50" />
                     <AlertDialog>
                       <AlertDialogTrigger asChild>
                         <DropdownMenuItem onSelect={(e) => e.preventDefault()} className="rounded-xl font-bold text-xs h-10 gap-3 cursor-pointer text-red-600 hover:text-red-700 !bg-red-50/0 hover:!bg-red-50 transition-colors">

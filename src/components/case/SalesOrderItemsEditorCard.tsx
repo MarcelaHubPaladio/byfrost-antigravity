@@ -103,7 +103,7 @@ export function SalesOrderItemsEditorCard(props: { caseId: string; className?: s
         .from("core_entities")
         .select("id,display_name,metadata,status")
         .eq("tenant_id", activeTenantId!)
-        .eq("entity_type", "offering")
+        .in("entity_type", ["offering", "product"])
         .is("deleted_at", null)
         .order("display_name", { ascending: true })
         .limit(30);
@@ -685,7 +685,7 @@ export function SalesOrderItemsEditorCard(props: { caseId: string; className?: s
         </div>
       </div>
 
-      <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+      <div className="sticky bottom-0 bg-white pt-3 border-t border-slate-100 z-10 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between mt-4">
         <Button type="button" variant="secondary" className="h-11 rounded-2xl" onClick={addRow}>
           <Plus className="mr-2 h-4 w-4" /> Adicionar item
         </Button>
@@ -694,7 +694,7 @@ export function SalesOrderItemsEditorCard(props: { caseId: string; className?: s
           type="button"
           onClick={saveAll}
           disabled={saving || draft.length === 0}
-          className="h-11 rounded-2xl bg-[hsl(var(--byfrost-accent))] px-5 text-white shadow-sm hover:bg-[hsl(var(--byfrost-accent)/0.92)]"
+          className="h-11 rounded-2xl bg-[hsl(var(--byfrost-accent))] px-8 text-white shadow-sm hover:bg-[hsl(var(--byfrost-accent)/0.92)] font-bold"
         >
           {saving ? "Salvando…" : "Salvar itens"}
           <Save className="ml-2 h-4 w-4" />

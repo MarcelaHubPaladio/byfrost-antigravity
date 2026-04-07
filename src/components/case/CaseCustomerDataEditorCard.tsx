@@ -534,14 +534,16 @@ export function CaseCustomerDataEditorCard(props: {
           />
         </div>
 
-        <Button
-          onClick={save}
-          disabled={saving}
-          className="h-11 rounded-2xl bg-[hsl(var(--byfrost-accent))] text-white shadow-sm hover:bg-[hsl(var(--byfrost-accent)/0.92)]"
-        >
-          {saving ? "Salvando…" : "Salvar dados"}
-          <Save className="ml-2 h-4 w-4" />
-        </Button>
+        <div className="sticky bottom-0 bg-white pt-3 border-t border-slate-100 z-10">
+          <Button
+            onClick={save}
+            disabled={saving}
+            className="w-full h-11 rounded-2xl bg-[hsl(var(--byfrost-accent))] text-white shadow-sm hover:bg-[hsl(var(--byfrost-accent)/0.92)]"
+          >
+            {saving ? "Salvando…" : "Salvar dados"}
+            <Save className="ml-2 h-4 w-4" />
+          </Button>
+        </div>
       </div>
     </div>
   );

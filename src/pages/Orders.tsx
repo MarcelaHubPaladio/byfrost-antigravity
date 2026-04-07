@@ -248,7 +248,8 @@ export default function Orders() {
       const cust = customersQ.data?.get(r.customer_id!);
       const metaPhone = getMetaPhone(r.meta_json);
       const fieldPhone = casePhoneQ.data?.get(r.id);
-      const text = `${r.title} ${r.users_profile?.display_name} ${cust?.name} ${cust?.phone_e164} ${metaPhone} ${fieldPhone}`.toLowerCase();
+      const extId = r.meta_json?.external_id || "";
+      const text = `${r.title} ${r.users_profile?.display_name} ${cust?.name} ${cust?.phone_e164} ${metaPhone} ${fieldPhone} ${extId}`.toLowerCase();
       return text.includes(qq);
     });
   }, [journeyRows, q, customersQ.data, casePhoneQ.data]);
@@ -460,7 +461,12 @@ export default function Orders() {
                             onDragStart={(e) => e.dataTransfer.setData("text/caseId", c.id)}
                             className="mb-3 block rounded-2xl border border-slate-200 bg-white p-4 shadow-sm hover:shadow-md transition"
                           >
-                            <div className="font-semibold text-slate-900 truncate">{title}</div>
+                            <div className="flex items-center justify-between gap-2">
+                              <div className="font-semibold text-slate-900 truncate flex-1">{title}</div>
+                              <Badge variant="outline" className="text-[9px] h-4 px-1 font-bold text-blue-600 border-blue-100 flex-shrink-0">
+                                #{c.meta_json?.external_id || c.id.slice(0, 8)}
+                              </Badge>
+                            </div>
                             <div className="mt-1 text-xs text-slate-500">{c.users_profile?.display_name || "Sem dono"}</div>
                             <div className="mt-3 flex items-center justify-between">
                               <div className="flex items-center gap-1 text-[10px] text-slate-400">
@@ -495,9 +501,14 @@ export default function Orders() {
                     {filteredRows.map((c) => (
                       <TableRow key={c.id}>
                         <TableCell>
-                          <Link to={`/app/orders/${c.id}`} className="font-semibold hover:underline">
-                            {customersQ.data?.get(c.customer_id!)?.name || c.title || "Pedido"}
-                          </Link>
+                          <div className="flex items-center gap-2">
+                            <Link to={`/app/orders/${c.id}`} className="font-semibold hover:underline">
+                              {customersQ.data?.get(c.customer_id!)?.name || c.title || "Pedido"}
+                            </Link>
+                            <Badge variant="outline" className="text-[9px] h-4 px-1 font-bold text-blue-600 border-blue-100">
+                                #{c.meta_json?.external_id || c.id.slice(0, 8)}
+                            </Badge>
+                          </div>
                           <div className="text-[10px] text-slate-400">{c.id.slice(0, 8)}</div>
                         </TableCell>
                         <TableCell className="text-sm">{c.users_profile?.display_name || "—"}</TableCell>
