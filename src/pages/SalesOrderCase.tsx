@@ -26,6 +26,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Accordion,
@@ -97,7 +98,7 @@ export default function SalesOrderCase() {
           *,
           journey:journeys(*),
           customer:customer_accounts(*),
-          assigned_user:users_profile!cases_assigned_user_id_fkey(display_name, email)
+          assigned_user:users_profile(display_name, email)
         `)
         .eq("id", caseId)
         .single();
