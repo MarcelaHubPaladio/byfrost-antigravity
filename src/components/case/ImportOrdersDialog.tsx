@@ -48,6 +48,9 @@ type ParsedRow = {
   signal: string;
   dueDate: string;
   saleDate: string;
+  customerCity: string;
+  paymentMethod: string;
+  billingStatus: string;
   itemCode: string;
   itemDescription: string;
   itemQty: string;
@@ -76,6 +79,9 @@ type GroupedOrder = {
   signal: string;
   dueDate: string;
   saleDate: string;
+  customerCity: string;
+  paymentMethod: string;
+  billingStatus: string;
   obs: string;
   items: OrderItem[];
 };
@@ -219,6 +225,9 @@ export function ImportOrdersDialog({
       const idxSignal = pickHeaderIndex(headers, ["valor_sinal", "sinal", "signal"]);
       const idxDue = pickHeaderIndex(headers, ["vencimento", "due_date"]);
       const idxSaleDate = pickHeaderIndex(headers, ["data_venda", "data", "date", "sale_date"]);
+      const idxCity = pickHeaderIndex(headers, ["cidade_cliente", "cliente_cidade", "cidade", "city"]);
+      const idxPayMethod = pickHeaderIndex(headers, ["forma_pagamento", "pagamento_forma", "payment_method"]);
+      const idxBillStatus = pickHeaderIndex(headers, ["status_faturamento", "faturamento_status", "billing_status"]);
       const idxItemCode = pickHeaderIndex(headers, ["item_codigo", "codigo", "code"]);
       const idxItemDesc = pickHeaderIndex(headers, ["item_descricao", "descricao", "description"]);
       const idxItemQty = pickHeaderIndex(headers, ["item_qtd", "quantidade", "qty"]);
@@ -252,6 +261,9 @@ export function ImportOrdersDialog({
             signal: idxSignal >= 0 ? String(row[idxSignal] ?? "").trim() : "",
             dueDate: idxDue >= 0 ? String(row[idxDue] ?? "").trim() : "",
             saleDate: idxSaleDate >= 0 ? String(row[idxSaleDate] ?? "").trim() : "",
+            customerCity: idxCity >= 0 ? String(row[idxCity] ?? "").trim() : "",
+            paymentMethod: idxPayMethod >= 0 ? String(row[idxPayMethod] ?? "").trim() : "",
+            billingStatus: idxBillStatus >= 0 ? String(row[idxBillStatus] ?? "").trim() : "",
             obs: idxObs >= 0 ? String(row[idxObs] ?? "").trim() : "",
             items: []
           };
@@ -383,6 +395,9 @@ export function ImportOrdersDialog({
           { key: "payment_signal_value_raw", value_text: o.signal },
           { key: "payment_due_date_text", value_text: o.dueDate },
           { key: "sale_date_text", value_text: o.saleDate },
+          { key: "city", value_text: o.customerCity },
+          { key: "payment_method", value_text: o.paymentMethod },
+          { key: "billing_status", value_text: o.billingStatus },
           { key: "obs", value_text: o.obs },
         ].filter(f => f.value_text).map(f => ({
           case_id: caseId,
@@ -464,10 +479,10 @@ export function ImportOrdersDialog({
 
   const downloadTemplate = () => {
     const csv = [
-      "id_externo,data_venda,cliente_nome,cliente_whatsapp,cliente_email,cliente_cpf_cnpj,cliente_endereco,vendedor_email,pagamento_condicoes,valor_sinal,vencimento,item_codigo,item_descricao,item_qtd,item_valor_unit,obs",
-      '1001,10/05/2026,João Silva,42988887777,joao@email.com,123.456.789-00,Rua A 123,vendedor@agroforte.com,30 dias,"R$ 500,00",15/05/2026,PROD01,Semente de Milho,10,"R$ 150,00",Entrega urgente',
-      '1001,10/05/2026,João Silva,42988887777,joao@email.com,123.456.789-00,Rua A 123,vendedor@agroforte.com,30 dias,"R$ 500,00",15/05/2026,PROD02,Fertilizante NPK,5,"R$ 80,00",',
-      '1002,12/04/2026,Maria Oliveira,41999998888,maria@email.com,00.111.222/0001-99,Av Central 456,vendedor2@agroforte.com,À vista,,20/04/2026,SERV01,Assessoria Técnica,1,"R$ 300,00",Pagamento via PIX'
+      "id_externo,data_venda,cliente_nome,cliente_whatsapp,cliente_email,cliente_cpf_cnpj,cliente_endereco,cliente_cidade,vendedor_email,pagamento_condicoes,forma_pagamento,valor_sinal,vencimento,status_faturamento,item_codigo,item_descricao,item_qtd,item_valor_unit,obs",
+      '1001,10/05/2026,João Silva,42988887777,joao@email.com,123.456.789-00,Rua A 123,Guarapuava,vendedor@agroforte.com,30 dias,Boleto,"R$ 500,00",15/05/2026,Faturado,PROD01,Semente de Milho,10,"R$ 150,00",Entrega urgente',
+      '1001,10/05/2026,João Silva,42988887777,joao@email.com,123.456.789-00,Rua A 123,Guarapuava,vendedor@agroforte.com,30 dias,Boleto,"R$ 500,00",15/05/2026,Faturado,PROD02,Fertilizante NPK,5,"R$ 80,00",',
+      '1002,12/04/2026,Maria Oliveira,41999998888,maria@email.com,00.111.222/0001-99,Av Central 456,Curitiba,vendedor2@agroforte.com,À vista,PIX,,20/04/2026,Pendente,SERV01,Assessoria Técnica,1,"R$ 300,00",Pagamento via PIX'
     ].join("\n");
     
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
