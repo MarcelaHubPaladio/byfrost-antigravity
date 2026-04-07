@@ -161,6 +161,7 @@ export function CaseCustomerDataEditorCard(props: {
           confidence: 1,
           source: "admin",
           last_updated_by: "panel",
+          tenant_id: activeTenantId
         }))
         // Don't write totally empty fields (keeps DB cleaner)
         .filter((r) => r.value_text !== null);
@@ -218,6 +219,7 @@ export function CaseCustomerDataEditorCard(props: {
           confidence: 1,
           source: "admin",
           last_updated_by: "panel",
+          tenant_id: activeTenantId
         }));
 
       const payload = [...rows, ...cleared];
@@ -249,7 +251,8 @@ export function CaseCustomerDataEditorCard(props: {
       }
 
       showSuccess("Dados salvos.");
-      await qc.invalidateQueries({ queryKey: ["case_fields"] });
+      await qc.invalidateQueries({ queryKey: ["case", caseId] });
+      await qc.invalidateQueries({ queryKey: ["case_fields", caseId] });
     } catch (e: any) {
       showError(`Falha ao salvar: ${e?.message ?? "erro"}`);
     } finally {

@@ -61,7 +61,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
-import { format } from "date-fns";
+import { format as dateFnsFormat } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
 import { CaseTimeline } from "@/components/case/CaseTimeline";
@@ -194,7 +194,14 @@ export default function SalesOrderCase() {
     if (!caseId || !tenantId) return;
     try {
       setUpdatingState(true);
-      const reasons = await checkTransitionBlocks(supabase, tenantId, caseId, nextState);
+      const reasons = await checkTransitionBlocks(
+        supabase, 
+        tenantId, 
+        caseId, 
+        caseData?.state || "", 
+        nextState, 
+        journey?.default_state_machine_json
+      );
       if (reasons.length > 0) {
         setTransitionBlock({ open: true, nextStateName: nextState, reasons });
         return;
@@ -263,7 +270,7 @@ export default function SalesOrderCase() {
     if (!saleDate) return "Data não inf.";
     try {
       const d = new Date(saleDate);
-      return format(d, "dd 'de' MMM, yyyy", { locale: ptBR });
+      return dateFnsFormat(d, "dd 'de' MMM, yyyy", { locale: ptBR });
     } catch {
       return "Data inválida";
     }
@@ -324,6 +331,14 @@ export default function SalesOrderCase() {
                     <span className="flex items-center gap-1.5">
                       <Calendar className="h-3 w-3" /> {formattedDate}
                     </span>
+                    {caseData?.assigned_user && (
+                      <>
+                        <span className="w-1 h-1 rounded-full bg-slate-300" />
+                        <span className="flex items-center gap-1.5 text-blue-500 font-black">
+                          <User className="h-3 w-3" /> {caseData.assigned_user.display_name || caseData.assigned_user.email}
+                        </span>
+                      </>
+                    )}
                   </div>
                 </div>
               </div>
