@@ -48,7 +48,7 @@ import { IncentivesPanel } from "@/components/admin/IncentivesPanel";
 import { TenantModulesPanel } from "@/components/admin/TenantModulesPanel";
 import { PlansPanel } from "@/components/admin/PlansPanel";
 import { UsageIndicator } from "@/components/admin/UsageIndicator";
-import { LayoutGrid, Users, Zap, MessageSquare, History, Database, Share2, Search, Smartphone, Shield, Plus, MoreVertical, Edit2, Trash2, PauseCircle, PlayCircle, ChevronLeft, ChevronRight, UsersRound, Copy, Settings2, UserCog, CreditCard, BarChart3, Package, Layers } from "lucide-react";
+import { LayoutGrid, Users, Zap, MessageSquare, History, Database, Share2, Search, Smartphone, Shield, Plus, MoreVertical, Edit2, Trash2, PauseCircle, PlayCircle, ChevronLeft, ChevronRight, UsersRound, Copy, Settings2, UserCog, CreditCard, BarChart3, Package, Layers, UserPlus } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { useNavigate } from "react-router-dom";
 
@@ -465,6 +465,10 @@ export default function Admin() {
     list.sort((a, b) => a.label.localeCompare(b.label));
     return list;
   }, [usersQ.data]);
+
+  const isAlreadyMember = useMemo(() => {
+    return (usersQ.data ?? []).some((u) => u.user_id === user?.id);
+  }, [usersQ.data, user]);
 
   const tenantRolesQ = useQuery({
     queryKey: ["admin_tenant_roles", activeTenantId],
@@ -1580,7 +1584,20 @@ export default function Admin() {
                     <div className="rounded-[22px] border border-slate-200 bg-white p-4">
                       <div className="flex items-center justify-between">
                         <div className="text-sm font-semibold text-slate-900">Usuários do tenant</div>
-                        <div className="text-xs text-slate-500">{usersQ.data?.length ?? 0}</div>
+                        <div className="flex items-center gap-2">
+                          {!isAlreadyMember && (
+                            <Button
+                              variant="outline"
+                              className="h-8 rounded-xl bg-indigo-50 text-[11px] text-indigo-700 hover:bg-indigo-100 border-indigo-200"
+                              onClick={addSelfToTenant}
+                              disabled={addingSelf}
+                            >
+                              <UserPlus className="mr-1 h-3 w-3" />
+                              {addingSelf ? "Vinculando..." : "Vincular-me a este tenant"}
+                            </Button>
+                          )}
+                          <div className="text-xs text-slate-500">{usersQ.data?.length ?? 0}</div>
+                        </div>
                       </div>
 
                       <div className="mt-3 grid gap-2">
