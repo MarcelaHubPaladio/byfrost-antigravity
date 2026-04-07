@@ -39,6 +39,7 @@ import { checkTransitionBlocks } from "@/lib/journeys/validation";
 import { TransitionBlockDialog } from "@/components/case/TransitionBlockDialog";
 import { cn } from "@/lib/utils";
 import { showError, showSuccess } from "@/utils/toast";
+import { ImportOrdersDialog } from "@/components/case/ImportOrdersDialog";
 
 const ORDERS_VIEW_MODE_KEY = "orders_view_mode_v1";
 const SALES_ORDER_KEY = "sales_order";
@@ -405,6 +406,12 @@ export default function Orders() {
               <Button variant="secondary" className="h-10 rounded-2xl" onClick={exportConversationsCsv} disabled={exportingCsv}>
                 <Download className="mr-2 h-4 w-4" /> Exportar
               </Button>
+
+              <ImportOrdersDialog
+                tenantId={activeTenantId!}
+                journey={selectedJourney!}
+                actorUserId={user?.id || null}
+              />
 
               <Button variant="secondary" className="h-10 rounded-2xl" onClick={() => casesQ.refetch()}>
                 <RefreshCw className="mr-2 h-4 w-4" />
