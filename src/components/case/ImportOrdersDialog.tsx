@@ -397,6 +397,7 @@ export function ImportOrdersDialog({
         }
 
         // 4. Insert Items
+        const unmatchedNames: string[] = [];
         if (o.items.length) {
           const itemsPayload = o.items.map((it, idx) => {
             // Attempt to match offering if not already matched
@@ -410,7 +411,11 @@ export function ImportOrdersDialog({
                 const offName = String(off.display_name || "").toLowerCase();
                 return (codeClean && offCode === codeClean) || (descClean && offName === descClean);
               });
-              if (match) offeringId = match.id;
+              if (match) {
+                offeringId = match.id;
+              } else {
+                unmatchedNames.push(it.description || it.code || "Item sem nome");
+              }
             }
 
             return {
@@ -425,6 +430,22 @@ export function ImportOrdersDialog({
             };
           });
           await supabase.from("case_items").insert(itemsPayload);
+        }
+
+        // 5. Update Observations if items were unmatched
+        if (unmatchedNames.length > 0) {
+          const warning = `⚠️ Atenção: Os itens [${unmatchedNames.join(", ")}] não foram vinculados automaticamente ao catálogo de produtos.`;
+          const finalObs = o.obs ? `${o.obs}\n\n${warning}` : warning;
+          
+          await supabase
+            .from("case_fields")
+            .upsert({
+              case_id: caseId,
+              key: "obs",
+              value_text: finalObs,
+              confidence: 1,
+              source: "import"
+            }, { onConflict: "case_id,key" });
         }
 
         setProgress(p => p ? { ...p, done: i + 1 } : null);
