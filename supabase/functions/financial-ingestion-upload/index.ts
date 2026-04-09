@@ -69,20 +69,86 @@ function normalizeDescription(s: string) {
 function parseDateLoose(s: string): string | null {
   const v = String(s ?? "").trim();
   if (!v) return null;
-  // dd/mm/yyyy
-  const m = v.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
-  if (m) return `${m[3]}-${m[2]}-${m[1]}`;
-  // yyyy-mm-dd
-  const m2 = v.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  if (m2) return `${m2[1]}-${m2[2]}-${m2[3]}`;
+
+  // YYYY-MM-DD
+  if (/^\d{4}-\d{2}-\d{2}$/.test(v)) return v;
+
+  // dd/mm/yyyy or dd/mm/yy
+  const m = v.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
+  if (m) {
+    const dd = String(m[1]).padStart(2, "0");
+    const mm = String(m[2]).padStart(2, "0");
+    let yyyy = m[3];
+    if (yyyy.length === 2) yyyy = `20${yyyy}`;
+    return `${yyyy}-${mm}-${dd}`;
+  }
+
+  // fallback: try Date
+  const d = new Date(v);
+  if (!Number.isNaN(d.getTime())) {
+    const y = d.getUTCFullYear();
+    const mo = String(d.getUTCMonth() + 1).padStart(2, "0");
+    const da = String(d.getUTCDate()).padStart(2, "0");
+    return `${y}-${mo}-${da}`;
+  }
+
   return null;
+}
+
+function parseOfxDateLoose(s: string): string | null {
+  // OFX usually: YYYYMMDD or YYYYMMDDHHMMSS[...]
+  const v = String(s ?? "").trim();
+  const m = v.match(/^(\d{4})(\d{2})(\d{2})/);
+  if (!m) return parseDateLoose(v);
+  return `${m[1]}-${m[2]}-${m[3]}`;
+}
+
+function extractOfxTag(block: string, tag: string) {
+  const re = new RegExp(`<${tag}>([^<\r\n]*)`, "i");
+  const m = String(block ?? "").match(re);
+  return (m?.[1] ?? "").trim();
+}
+
+function parseOfx(text: string) {
+  const raw = String(text ?? "");
+  const blocks = raw.match(/<STMTTRN>[\s\S]*?<\/STMTTRN>/gi) ?? [];
+
+  const rows: Record<string, string>[] = [];
+
+  for (const b of blocks) {
+    const dt = extractOfxTag(b, "DTPOSTED");
+    const txDate = parseOfxDateLoose(dt);
+    if (!txDate) continue;
+
+    const amt = extractOfxTag(b, "TRNAMT");
+    const memo = extractOfxTag(b, "MEMO") || extractOfxTag(b, "NAME");
+
+    // Keep OFX identifiers in raw_payload for traceability
+    const fitid = extractOfxTag(b, "FITID");
+    const refnum = extractOfxTag(b, "REFNUM");
+    const checknum = extractOfxTag(b, "CHECKNUM");
+
+    rows.push({
+      transaction_date: txDate,
+      description: memo,
+      amount: amt,
+      fitid,
+      refnum,
+      checknum,
+    });
+  }
+
+  return { headers: [] as string[], rows };
 }
 
 function parseAmountLoose(s: string): number | null {
   const v = String(s ?? "").trim();
   if (!v) return null;
+
+  // Remove currency and spaces
   let t = v.replace(/[^0-9,\.-]/g, "").trim();
 
+  // If it has both "." and ",", decide decimal by last separator
   const lastDot = t.lastIndexOf(".");
   const lastComma = t.lastIndexOf(",");
   if (lastDot >= 0 && lastComma >= 0) {
@@ -91,6 +157,7 @@ function parseAmountLoose(s: string): number | null {
     t = t.split(thouSep).join("");
     if (decSep === ",") t = t.replace(",", ".");
   } else if (lastComma >= 0 && lastDot < 0) {
+    // Assume comma is decimal
     t = t.replace(/\./g, "").replace(",", ".");
   }
 
@@ -192,7 +259,7 @@ function pickField(row: Record<string, string>, keys: string[]) {
   return "";
 }
 
-async function processCsvIntoLedger(opts: {
+async function processFinancialIngestion(opts: {
   supabase: any;
   tenantId: string;
   ingestionJobId: string;
@@ -212,7 +279,13 @@ async function processCsvIntoLedger(opts: {
   const bytes = new Uint8Array(await dl.arrayBuffer());
   const text = new TextDecoder().decode(bytes);
 
-  const parsed = parseCsvWithPreamble(text);
+  const isOfx =
+    /\n\s*OFXHEADER\s*:/i.test(text) ||
+    /<OFX[>\s]/i.test(text) ||
+    /<STMTTRN>/i.test(text) ||
+    path.toLowerCase().endsWith(".ofx");
+
+  const parsed = isOfx ? parseOfx(text) : parseCsvWithPreamble(text);
 
   // Determine bank account to attach transactions.
   let accountId: string | null = String(opts.accountId ?? "").trim() || null;
@@ -245,16 +318,16 @@ async function processCsvIntoLedger(opts: {
     accountId = created.id;
   }
 
-  const dateKeys = ["data", "date", "transaction_date", "dt", "data_mov", "data_lancamento", "data_lancamento"];
-  const descKeys = ["descricao", "description", "historico", "memo", "narrativa", "desc"];
-  const amountKeys = ["valor", "amount", "montante", "value", "vlr"];
+  const dateKeys = ["transaction_date", "data", "date", "dt", "data_mov", "data_lancamento"];
+  const descKeys = ["description", "descricao", "historico", "memo", "narrativa", "desc"];
+  const amountKeys = ["amount", "valor", "montante", "value", "vlr"];
 
   const inserts: any[] = [];
   const errors: string[] = [];
 
   for (const row of parsed.rows) {
     const dateRaw = pickField(row, dateKeys);
-    const txDate = parseDateLoose(dateRaw);
+    const txDate = isOfx ? parseOfxDateLoose(dateRaw) : parseDateLoose(dateRaw);
     if (!txDate) {
       errors.push(`invalid_date:${dateRaw}`);
       continue;
@@ -295,7 +368,7 @@ async function processCsvIntoLedger(opts: {
       status: "posted",
       fingerprint,
       source: "import",
-      raw_payload: { format: "csv", bankSource, extractType, ...row },
+      raw_payload: { format: isOfx ? "ofx" : "csv", bankSource, extractType, ...row },
     });
   }
 
@@ -421,7 +494,7 @@ serve(async (req) => {
     // IMPORTANT (dashboard-only deployments): process immediately.
     // The original architecture enqueued job_queue for an async worker (jobs-processor),
     // but that worker may not be deployed when using the Supabase Dashboard only.
-    const out = await processCsvIntoLedger({
+    const out = await processFinancialIngestion({
       supabase,
       tenantId,
       ingestionJobId: job.id,
