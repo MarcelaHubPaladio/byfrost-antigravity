@@ -513,7 +513,7 @@ export function FinancialLedgerPanel() {
       const { data, error } = await supabase
         .from("financial_transactions")
         .select(
-          "id,tenant_id,account_id,amount,type,description,transaction_date,status,source,fingerprint,category_id,created_at,entity_id,linked_payable_id,linked_receivable_id,core_entities(display_name),financial_categories(name)"
+          "id,tenant_id,account_id,amount,type,description,transaction_date,status,source,fingerprint,category_id,created_at,entity_id,linked_payable_id,linked_receivable_id,invoice_number,core_entities(display_name),financial_categories(name)"
         )
         .eq("tenant_id", activeTenantId!)
         .gte("transaction_date", txStartDate)
@@ -973,6 +973,7 @@ export function FinancialLedgerPanel() {
   const [amount, setAmount] = useState<string>("");
   const [description, setDescription] = useState<string>("");
   const [txEntityId, setTxEntityId] = useState<string | null>(null);
+  const [txInvoiceNumber, setTxInvoiceNumber] = useState("");
 
   const descNorm = useMemo(() => normalizeDescription(description), [description]);
   const [categoryId, setCategoryId] = useState<string>("");
@@ -1069,6 +1070,7 @@ export function FinancialLedgerPanel() {
         raw_payload: { origin: "manual" },
         category_id: categoryId || null,
         entity_id: txEntityId || null,
+        invoice_number: txInvoiceNumber || null,
       });
       if (insErr) throw insErr;
 
@@ -1116,6 +1118,7 @@ export function FinancialLedgerPanel() {
       setCategoryTouched(false);
       setTxEntityId(null);
       setEntityTouched(false);
+      setTxInvoiceNumber("");
       setTxDialogOpen(false);
       await qc.invalidateQueries({ queryKey: ["financial_transactions", activeTenantId] });
     },
@@ -1176,6 +1179,24 @@ export function FinancialLedgerPanel() {
       showSuccess("Entidade atrelada e regra de aprendizado criada.");
     },
     onError: (e: any) => showError(e?.message ?? "Falha ao atualizar entidade"),
+  });
+
+  const updateTxInvoiceM = useMutation({
+    mutationFn: async ({ id, invoiceNumber }: { id: string; invoiceNumber: string }) => {
+      if (!activeTenantId) throw new Error("Tenant inválido");
+
+      const { error } = await supabase
+        .from("financial_transactions")
+        .update({ invoice_number: invoiceNumber || null })
+        .eq("tenant_id", activeTenantId)
+        .eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ["financial_transactions", activeTenantId] });
+      showSuccess("NFE atualizada.");
+    },
+    onError: (e: any) => showError(e?.message ?? "Falha ao atualizar NFE"),
   });
 
   // --------------------------
@@ -1517,9 +1538,19 @@ export function FinancialLedgerPanel() {
                       ) : null}
                     </div>
 
-                    <div className="md:col-span-4">
+                    <div className="md:col-span-3">
                       <Label className="text-xs">Descrição</Label>
                       <Input className="mt-1 rounded-2xl" value={description} onChange={(e) => setDescription(e.target.value)} />
+                    </div>
+
+                    <div className="md:col-span-1">
+                      <Label className="text-xs">NFE</Label>
+                      <Input 
+                        className="mt-1 rounded-2xl" 
+                        placeholder="Ex: 1234" 
+                        value={txInvoiceNumber} 
+                        onChange={(e) => setTxInvoiceNumber(e.target.value)} 
+                      />
                     </div>
                   </div>
                 </ScrollArea>
@@ -1622,6 +1653,7 @@ export function FinancialLedgerPanel() {
                       )}
                     </div>
                   </TableHead>
+                  <TableHead className="w-[100px]">NFE</TableHead>
                   <TableHead className="w-[120px]">Conciliação</TableHead>
                 </TableRow>
               </TableHeader>
@@ -1738,6 +1770,19 @@ export function FinancialLedgerPanel() {
                               </Button>
                             )}
                           </div>
+                        </TableCell>
+                        <TableCell className="w-[100px]">
+                          <Input
+                            className="h-8 rounded-xl text-[11px]"
+                            placeholder="NFE..."
+                            defaultValue={t.invoice_number ?? ""}
+                            onBlur={(e) => {
+                              const val = e.target.value.trim();
+                              if (val !== (t.invoice_number ?? "")) {
+                                updateTxInvoiceM.mutate({ id: t.id, invoiceNumber: val });
+                              }
+                            }}
+                          />
                         </TableCell>
                         <TableCell className="w-[120px]">
                           {t.linked_payable_id || t.linked_receivable_id ? (
