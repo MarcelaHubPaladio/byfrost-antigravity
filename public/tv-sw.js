@@ -42,6 +42,9 @@ self.addEventListener('activate', event => {
 // ─── Interceptação de Fetch ─────────────────────────────────────────────────
 
 self.addEventListener('fetch', event => {
+    // Apenas intercepta GET (leitura). Uploads (POST) devem passar direto.
+    if (event.request.method !== 'GET') return;
+
     if (!shouldCache(event.request.url)) return; // Ignora requests que não são mídia TV
     event.respondWith(serveCached(event.request));
 });
