@@ -893,6 +893,7 @@ export function FinancialLedgerPanel() {
   // --------------------------
   const [editTypesOpen, setEditTypesOpen] = useState(false);
   const [editTypesFilter, setEditTypesFilter] = useState("");
+  const [catFilter, setCatFilter] = useState("");
 
   const filteredCategories = useMemo(() => {
     const q = editTypesFilter.trim().toLowerCase();
@@ -900,6 +901,13 @@ export function FinancialLedgerPanel() {
     if (!q) return rows;
     return rows.filter((c) => c.name.toLowerCase().includes(q));
   }, [categoriesQ.data, editTypesFilter]);
+
+  const mainFilteredCategories = useMemo(() => {
+    const q = catFilter.trim().toLowerCase();
+    const rows = categoriesQ.data ?? [];
+    if (!q) return rows;
+    return rows.filter((c) => c.name.toLowerCase().includes(q));
+  }, [categoriesQ.data, catFilter]);
 
   const updateCategoryTypeM = useMutation({
     mutationFn: async ({ id, type }: { id: string; type: CategoryType }) => {
@@ -1887,7 +1895,7 @@ export function FinancialLedgerPanel() {
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {(filteredCategories ?? []).slice(0, 200).map((c) => (
+                          {(filteredCategories ?? []).slice(0, 1000).map((c) => (
                             <TableRow key={c.id}>
                               <TableCell className="font-medium text-slate-900 dark:text-slate-100">{c.name}</TableCell>
                               <TableCell>
@@ -1923,9 +1931,9 @@ export function FinancialLedgerPanel() {
                       </Table>
                     </ScrollArea>
 
-                    {(filteredCategories ?? []).length > 200 ? (
+                    {(filteredCategories ?? []).length > 1000 ? (
                       <div className="text-xs text-slate-500 dark:text-slate-400">
-                        Mostrando 200 de {(filteredCategories ?? []).length}. Use a busca para refinar.
+                        Mostrando 1000 de {(filteredCategories ?? []).length}. Use a busca para refinar.
                       </div>
                     ) : null}
                   </div>
@@ -2097,8 +2105,19 @@ export function FinancialLedgerPanel() {
             </div>
           </div>
 
-          <div className="mt-3 flex flex-wrap gap-2">
-            {(categoriesQ.data ?? []).slice(0, 80).map((c) => (
+          <div className="mt-3 grid gap-3">
+            <div className="relative max-w-xs">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <Input
+                className="pl-9 rounded-2xl h-9"
+                placeholder="Buscar categorias..."
+                value={catFilter}
+                onChange={(e) => setCatFilter(e.target.value)}
+              />
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              {(mainFilteredCategories ?? []).map((c) => (
               <div
                 key={c.id}
                 className="group flex items-center gap-2 rounded-full border border-slate-200 bg-white pl-3 pr-1.5 py-1 text-xs text-slate-700 dark:border-slate-800 dark:bg-slate-950/30 dark:text-slate-200 hover:border-indigo-200 hover:shadow-sm transition-all"
@@ -2121,6 +2140,7 @@ export function FinancialLedgerPanel() {
               <div className="text-xs text-slate-500 dark:text-slate-400">Nenhuma categoria ainda.</div>
             ) : null}
           </div>
+        </div>
         </Card>
       </TabsContent>
 
