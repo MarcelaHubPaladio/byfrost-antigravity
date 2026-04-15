@@ -713,6 +713,7 @@ async function processFinancialIngestionJob(opts: {
     accountId = created.id;
   }
 
+  const occurrenceMap = new Map<string, number>();
   const inserts: any[] = [];
   const errors: string[] = [];
 
@@ -764,6 +765,14 @@ async function processFinancialIngestionJob(opts: {
       amt = Math.abs(amt);
     }
 
+    const baseKey = JSON.stringify({
+      transaction_date: txDate,
+      amount: Number(amt.toFixed(2)),
+      description: descNorm,
+    });
+    const occurrence = (occurrenceMap.get(baseKey) ?? 0) + 1;
+    occurrenceMap.set(baseKey, occurrence);
+
     const fingerprint = await sha256Hex(
       JSON.stringify({
         tenant_id: tenantId,
@@ -771,6 +780,8 @@ async function processFinancialIngestionJob(opts: {
         transaction_date: txDate,
         amount: Number(amt.toFixed(2)),
         description: descNorm,
+        occurrence,
+        fitid: row.fitid || undefined,
       })
     );
 
