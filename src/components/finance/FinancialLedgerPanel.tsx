@@ -621,6 +621,19 @@ export function FinancialLedgerPanel() {
     document.body.removeChild(link);
   };
 
+  const handleEdit = (t: any) => {
+    setEditingTxId(t.id);
+    setAccountId(t.account_id);
+    setTxDate(t.transaction_date || "");
+    setTxType(t.type || "debit");
+    setAmount(String(t.amount || ""));
+    setDescription(t.description || "");
+    setTxEntityId(t.entity_id || null);
+    setCategoryId(t.category_id || "");
+    setTxInvoiceNumber(t.invoice_number || "");
+    setTxDialogOpen(true);
+  };
+
   const categoryById = useMemo(() => {
     const m = new Map<string, CategoryRow>();
     for (const c of categoriesQ.data ?? []) m.set(c.id, c);
@@ -1025,6 +1038,7 @@ export function FinancialLedgerPanel() {
   const [description, setDescription] = useState<string>("");
   const [txEntityId, setTxEntityId] = useState<string | null>(null);
   const [txInvoiceNumber, setTxInvoiceNumber] = useState("");
+  const [editingTxId, setEditingTxId] = useState<string | null>(null);
 
   const descNorm = useMemo(() => normalizeDescription(description), [description]);
   const [categoryId, setCategoryId] = useState<string>("");
@@ -1107,23 +1121,43 @@ export function FinancialLedgerPanel() {
         })
       );
 
-      const { error: insErr } = await supabase.from("financial_transactions").insert({
-        tenant_id: activeTenantId,
-        account_id: accountId,
-        amount: Number(n.toFixed(2)),
-        type: txType,
-        description: description.trim(),
-        transaction_date: txDate,
-        competence_date: txDate,
-        status: "posted",
-        fingerprint,
-        source: "manual",
-        raw_payload: { origin: "manual" },
-        category_id: categoryId || null,
-        entity_id: txEntityId || null,
-        invoice_number: txInvoiceNumber || null,
-      });
-      if (insErr) throw insErr;
+      if (editingTxId) {
+        const { error: updErr } = await supabase
+          .from("financial_transactions")
+          .update({
+            account_id: accountId,
+            amount: Number(n.toFixed(2)),
+            type: txType,
+            description: description.trim(),
+            transaction_date: txDate,
+            competence_date: txDate,
+            category_id: categoryId || null,
+            entity_id: txEntityId || null,
+            invoice_number: txInvoiceNumber || null,
+            fingerprint,
+          })
+          .eq("id", editingTxId)
+          .eq("tenant_id", activeTenantId);
+        if (updErr) throw updErr;
+      } else {
+        const { error: insErr } = await supabase.from("financial_transactions").insert({
+          tenant_id: activeTenantId,
+          account_id: accountId,
+          amount: Number(n.toFixed(2)),
+          type: txType,
+          description: description.trim(),
+          transaction_date: txDate,
+          competence_date: txDate,
+          status: "posted",
+          fingerprint,
+          source: "manual",
+          raw_payload: { origin: "manual" },
+          category_id: categoryId || null,
+          entity_id: txEntityId || null,
+          invoice_number: txInvoiceNumber || null,
+        });
+        if (insErr) throw insErr;
+      }
 
       // Learning for Categories
       if (categoryId) {
@@ -1162,7 +1196,7 @@ export function FinancialLedgerPanel() {
       }
     },
     onSuccess: async () => {
-      showSuccess("Transação lançada.");
+      showSuccess(editingTxId ? "Lançamento atualizado." : "Lançamento criado.");
       setAmount("");
       setDescription("");
       setCategoryId("");
@@ -1170,10 +1204,30 @@ export function FinancialLedgerPanel() {
       setTxEntityId(null);
       setEntityTouched(false);
       setTxInvoiceNumber("");
+      setEditingTxId(null);
       setTxDialogOpen(false);
       await qc.invalidateQueries({ queryKey: ["financial_transactions", activeTenantId] });
+      await qc.invalidateQueries({ queryKey: ["financial_cash_projection", activeTenantId] });
     },
-    onError: (e: any) => showError(e?.message ?? "Falha ao lançar transação"),
+    onError: (e: any) => showError(e?.message ?? "Falha ao salvar transação"),
+  });
+
+  const deleteTxM = useMutation({
+    mutationFn: async (id: string) => {
+      if (!activeTenantId) throw new Error("Tenant inválido");
+      const { error } = await supabase
+        .from("financial_transactions")
+        .delete()
+        .eq("tenant_id", activeTenantId)
+        .eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: async () => {
+      showSuccess("Lançamento excluído.");
+      await qc.invalidateQueries({ queryKey: ["financial_transactions", activeTenantId] });
+      await qc.invalidateQueries({ queryKey: ["financial_cash_projection", activeTenantId] });
+    },
+    onError: (e: any) => showError(e?.message ?? "Falha ao excluir lançamento"),
   });
 
   const updateTxCategoryM = useMutation({
@@ -1453,16 +1507,38 @@ export function FinancialLedgerPanel() {
               </div>
             </div>
 
-            <Dialog open={txDialogOpen} onOpenChange={setTxDialogOpen}>
+            <Dialog 
+              open={txDialogOpen} 
+              onOpenChange={(open) => {
+                setTxDialogOpen(open);
+                if (!open) {
+                  setEditingTxId(null);
+                  setAmount("");
+                  setDescription("");
+                  setTxInvoiceNumber("");
+                  setTxEntityId(null);
+                  setCategoryId("");
+                  setCategoryTouched(false);
+                  setEntityTouched(false);
+                }
+              }}
+            >
               <DialogTrigger asChild>
-                <Button className="h-9 rounded-2xl" disabled={!activeTenantId}>
+                <Button 
+                  className="h-9 rounded-2xl" 
+                  disabled={!activeTenantId}
+                  onClick={() => {
+                    setEditingTxId(null);
+                    setTxDate(new Date().toISOString().slice(0, 10));
+                  }}
+                >
                   <Plus className="mr-2 h-4 w-4" />
                   Novo lançamento
                 </Button>
               </DialogTrigger>
               <DialogContent className="sm:max-w-[720px] max-h-[85vh] overflow-hidden">
                 <DialogHeader>
-                  <DialogTitle>Novo lançamento</DialogTitle>
+                  <DialogTitle>{editingTxId ? "Editar lançamento" : "Novo lançamento"}</DialogTitle>
                   <DialogDescription>
                     Se uma regra bater com a descrição, sugerimos automaticamente uma categoria. Ao corrigir, o sistema aprende.
                   </DialogDescription>
@@ -1714,6 +1790,7 @@ export function FinancialLedgerPanel() {
                   </TableHead>
                   <TableHead className="w-[100px]">NFE</TableHead>
                   <TableHead className="w-[120px]">Conciliação</TableHead>
+                  <TableHead className="w-[100px] text-right">Ações</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -1873,6 +1950,47 @@ export function FinancialLedgerPanel() {
                               <span className="text-[11px]">Conciliar</span>
                             </Button>
                           )}
+                        </TableCell>
+                        <TableCell className="w-[100px]">
+                          <div className="flex justify-end gap-1">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 rounded-lg text-slate-400 hover:text-indigo-600"
+                              onClick={() => handleEdit(t)}
+                            >
+                              <Pencil className="h-3.5 w-3.5" />
+                            </Button>
+
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-7 w-7 rounded-lg text-slate-400 hover:text-rose-600"
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent className="rounded-2xl">
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>Excluir lançamento?</AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    Você tem certeza? Esta ação não pode ser desfeita.
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel className="rounded-xl">Cancelar</AlertDialogCancel>
+                                  <AlertDialogAction
+                                    className="rounded-xl bg-rose-600 hover:bg-rose-700"
+                                    onClick={() => deleteTxM.mutate(t.id)}
+                                  >
+                                    Excluir
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
+                          </div>
                         </TableCell>
                       </TableRow>
                     );
