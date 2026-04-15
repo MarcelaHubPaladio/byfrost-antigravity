@@ -578,6 +578,49 @@ export function FinancialLedgerPanel() {
     }
   };
 
+  const handleDownloadCsv = () => {
+    if (!sortedTransactions.length) {
+      showError("Nenhuma transação para exportar.");
+      return;
+    }
+
+    const headers = ["Data", "Descrição", "Entidade", "Conta", "Tipo", "Valor", "Categoria", "NFE"];
+    const rows = sortedTransactions.map((t) => {
+      const acc = accountById.get(t.account_id);
+      return [
+        t.transaction_date,
+        t.description,
+        t.core_entities?.display_name || "",
+        acc?.account_name || "",
+        t.type,
+        t.amount.toFixed(2).replace(".", ","),
+        t.financial_categories?.name || "",
+        t.invoice_number || "",
+      ];
+    });
+
+    const csvContent = [
+      headers.join(";"),
+      ...rows.map((row) =>
+        row
+          .map((cell) => {
+            const val = String(cell ?? "");
+            return `"${val.replace(/"/g, '""')}"`;
+          })
+          .join(";")
+      ),
+    ].join("\n");
+
+    const blob = new Blob(["\uFEFF" + csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", `lancamentos_${format(new Date(), "yyyy-MM-dd_HHmm")}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   const categoryById = useMemo(() => {
     const m = new Map<string, CategoryRow>();
     for (const c of categoriesQ.data ?? []) m.set(c.id, c);
@@ -1626,6 +1669,14 @@ export function FinancialLedgerPanel() {
               </Button>
               <Button variant="secondary" className="h-9 rounded-2xl" onClick={() => transactionsQ.refetch()}>
                 Atualizar
+              </Button>
+              <Button
+                variant="outline"
+                className="h-9 rounded-2xl border-emerald-600/20 text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800 dark:border-emerald-500/20 dark:text-emerald-400 dark:hover:bg-emerald-950/30"
+                onClick={handleDownloadCsv}
+              >
+                <Download className="mr-2 h-4 w-4" />
+                Baixar CSV
               </Button>
             </div>
           </div>
