@@ -297,6 +297,7 @@ export function PartyProposalCard({
       setSelected(prev => ({ ...prev, [commitmentId]: true }));
 
       await qc.invalidateQueries({ queryKey: ["party_commitments_with_items", tenantId, partyId] });
+      await qc.invalidateQueries({ queryKey: ["proposal_scope_lines_preview", tenantId] });
     } catch (e: any) {
       showError(e?.message ?? "Erro ao adicionar item");
     } finally {
@@ -321,6 +322,7 @@ export function PartyProposalCard({
         return next;
       });
       await qc.invalidateQueries({ queryKey: ["party_commitments_with_items", tenantId, partyId] });
+      await qc.invalidateQueries({ queryKey: ["proposal_scope_lines_preview", tenantId] });
     } catch (e: any) {
       showError(e?.message ?? "Erro ao remover item");
     }
@@ -337,6 +339,7 @@ export function PartyProposalCard({
         .eq("commitment_id", commitmentId);
       if (error) throw error;
       await qc.invalidateQueries({ queryKey: ["party_commitments_with_items", tenantId, partyId] });
+      await qc.invalidateQueries({ queryKey: ["proposal_scope_lines_preview", tenantId] });
     } catch (e: any) {
       showError(e?.message ?? "Erro ao atualizar quantidade");
     }
@@ -352,6 +355,7 @@ export function PartyProposalCard({
         .eq("id", itemId);
       if (error) throw error;
       await qc.invalidateQueries({ queryKey: ["party_commitments_with_items", tenantId, partyId] });
+      await qc.invalidateQueries({ queryKey: ["proposal_scope_lines_preview", tenantId] });
     } catch (e: any) {
       showError(e?.message ?? "Erro ao atualizar metadados");
     }
