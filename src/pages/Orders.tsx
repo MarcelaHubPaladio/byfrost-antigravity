@@ -251,6 +251,26 @@ export default function Orders() {
     }
   });
 
+  const parseSafeDate = (input: string | null | undefined, fallback: string | Date): Date => {
+    if (!input) return new Date(fallback);
+    const s = String(input).trim();
+    if (!s) return new Date(fallback);
+
+    // Try dd/MM/yyyy
+    try {
+      const d = parse(s, "dd/MM/yyyy", new Date());
+      if (!isNaN(d.getTime())) return d;
+    } catch {}
+
+    // Try yyyy-MM-dd
+    try {
+      const d = new Date(s);
+      if (!isNaN(d.getTime())) return d;
+    } catch {}
+
+    return new Date(fallback);
+  };
+
   const caseIdsForLookup = useMemo(() => journeyRows.map((r) => r.id), [journeyRows]);
 
   const caseDataQ = useQuery({
@@ -260,6 +280,7 @@ export default function Orders() {
       const { data: fields, error: fErr } = await supabase
         .from("case_fields")
         .select("case_id,key,value_text")
+        .eq("tenant_id", activeTenantId!)
         .in("case_id", caseIdsForLookup)
         .in("key", ["whatsapp", "phone", "customer_phone", "sale_date_text", "billing_status", "total_value_raw"])
         .limit(4000);
@@ -268,6 +289,7 @@ export default function Orders() {
       const { data: items, error: iErr } = await supabase
         .from("case_items")
         .select("case_id,total")
+        .eq("tenant_id", activeTenantId!)
         .in("case_id", caseIdsForLookup)
         .is("deleted_at", null);
       if (iErr) throw iErr;
@@ -302,16 +324,8 @@ export default function Orders() {
     rows = rows.filter(r => {
       const f = caseDataQ.data?.fields.get(r.id);
       const saleDateText = f?.sale_date_text;
-      if (!saleDateText) {
-        // Fallback to created_at if no sale_date_text
-        return isSameMonth(new Date(r.created_at), selectedMonth);
-      }
-      try {
-        const d = parse(saleDateText, "dd/MM/yyyy", new Date());
-        return isSameMonth(d, selectedMonth);
-      } catch {
-        return isSameMonth(new Date(r.created_at), selectedMonth);
-      }
+      const d = parseSafeDate(saleDateText, r.created_at);
+      return isSameMonth(d, selectedMonth);
     });
 
     const qq = q.trim().toLowerCase();
@@ -364,16 +378,7 @@ export default function Orders() {
       filteredRows.forEach(r => {
         const f = caseDataQ.data?.fields.get(r.id);
         const saleDateText = f?.sale_date_text;
-        let saleDate: Date;
-        if (saleDateText) {
-          try {
-            saleDate = parse(saleDateText, "dd/MM/yyyy", new Date());
-          } catch {
-            saleDate = new Date(r.created_at);
-          }
-        } else {
-          saleDate = new Date(r.created_at);
-        }
+        const saleDate = parseSafeDate(saleDateText, r.created_at);
 
         if (isSameDay(saleDate, d)) {
           dailyTotal += caseDataQ.data?.totals.get(r.id) ?? 0;
@@ -621,7 +626,11 @@ export default function Orders() {
                 <span className="text-[10px] font-black uppercase tracking-widest">Total Pedidos</span>
               </div>
               <div className="text-xl font-black text-slate-900">
-                {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(stats.totalValue)}
+                {caseDataQ.isLoading ? (
+                  <div className="h-7 w-24 bg-slate-200 animate-pulse rounded-lg" />
+                ) : (
+                  new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(stats.totalValue)
+                )}
               </div>
               <div className="mt-1 text-[10px] text-slate-400 font-bold uppercase tracking-tight">Referente ao mês selecionado</div>
             </div>
@@ -633,8 +642,12 @@ export default function Orders() {
                 </div>
                 <span className="text-[10px] font-black uppercase tracking-widest">Pendente</span>
               </div>
-              <div className="text-xl font-black text-slate-900 text-amber-600">
-                {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(stats.pendingValue)}
+              <div className="text-xl font-black text-amber-600">
+                {caseDataQ.isLoading ? (
+                  <div className="h-7 w-24 bg-amber-100/50 animate-pulse rounded-lg" />
+                ) : (
+                  new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(stats.pendingValue)
+                )}
               </div>
               <div className="mt-1 text-[10px] text-slate-400 font-bold uppercase tracking-tight">Pagamento não confirmado</div>
             </div>
@@ -646,8 +659,12 @@ export default function Orders() {
                 </div>
                 <span className="text-[10px] font-black uppercase tracking-widest">Faturado</span>
               </div>
-              <div className="text-xl font-black text-slate-900 text-emerald-600">
-                {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(stats.invoicedValue)}
+              <div className="text-xl font-black text-emerald-600">
+                {caseDataQ.isLoading ? (
+                  <div className="h-7 w-24 bg-emerald-100/50 animate-pulse rounded-lg" />
+                ) : (
+                  new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(stats.invoicedValue)
+                )}
               </div>
               <div className="mt-1 text-[10px] text-slate-400 font-bold uppercase tracking-tight">Valor efetivamente recebido</div>
             </div>
@@ -660,7 +677,11 @@ export default function Orders() {
                 <span className="text-[10px] font-black uppercase tracking-widest">Ticket Médio</span>
               </div>
               <div className="text-xl font-black text-slate-900">
-                {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(stats.avgTicket)}
+                {caseDataQ.isLoading ? (
+                  <div className="h-7 w-24 bg-indigo-100/50 animate-pulse rounded-lg" />
+                ) : (
+                  new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(stats.avgTicket)
+                )}
               </div>
               <div className="mt-1 text-[10px] text-slate-400 font-bold uppercase tracking-tight">Valor por venda faturada</div>
             </div>

@@ -118,6 +118,28 @@ function parsePtBrNumber(input: string) {
   return Number.isFinite(n) ? n : 0;
 }
 
+function normalizeDate(input: string): string {
+  const s = String(input ?? "").trim();
+  if (!s) return "";
+  
+  // 1. Try DD/MM/YYYY or DD/MM/YY
+  const slashMatch = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})$/);
+  if (slashMatch) {
+    let [_, d, m, y] = slashMatch;
+    if (y.length === 2) y = (Number(y) > 50 ? "19" : "20") + y;
+    return `${d.padStart(2, "0")}/${m.padStart(2, "0")}/${y}`;
+  }
+
+  // 2. Try YYYY-MM-DD
+  const isoMatch = s.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})$/);
+  if (isoMatch) {
+    const [_, y, m, d] = isoMatch;
+    return `${d.padStart(2, "0")}/${m.padStart(2, "0")}/${y}`;
+  }
+
+  return s; // Fallback to raw
+}
+
 function normalizeBillingStatus(raw: string): string {
   const s = String(raw ?? "").trim().toLowerCase();
   if (s.includes("pago") || s.includes("faturado")) return "Pago";
@@ -269,8 +291,8 @@ export function ImportOrdersDialog({
             ownerEmail: idxOwner >= 0 ? String(row[idxOwner] ?? "").trim() : "",
             paymentTerms: pay,
             signal: idxSignal >= 0 ? String(row[idxSignal] ?? "").trim() : "",
-            dueDate: idxDue >= 0 ? String(row[idxDue] ?? "").trim() : "",
-            saleDate: idxSaleDate >= 0 ? String(row[idxSaleDate] ?? "").trim() : "",
+            dueDate: idxDue >= 0 ? normalizeDate(String(row[idxDue] ?? "")) : "",
+            saleDate: idxSaleDate >= 0 ? normalizeDate(String(row[idxSaleDate] ?? "")) : "",
             customerCity: idxCity >= 0 ? String(row[idxCity] ?? "").trim() : "",
             paymentMethod: idxPayMethod >= 0 ? String(row[idxPayMethod] ?? "").trim() : "",
             billingStatus: idxBillStatus >= 0 ? normalizeBillingStatus(row[idxBillStatus]) : "Pendente",
