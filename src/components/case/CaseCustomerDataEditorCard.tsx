@@ -162,7 +162,6 @@ export function CaseCustomerDataEditorCard(props: {
         { key: "obs", value_text: cleanOrNull(draft.obs) },
       ]
         .map((r) => ({
-          tenant_id: activeTenantId,
           case_id: caseId,
           key: r.key,
           value_text: r.value_text,

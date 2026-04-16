@@ -445,7 +445,6 @@ export function ImportOrdersDialog({
           { key: "billing_status", value_text: o.billingStatus },
           { key: "obs", value_text: o.obs },
         ].filter(f => f.value_text).map(f => ({
-          tenant_id: tId,
           case_id: caseId,
           key: f.key,
           value_text: f.value_text,
@@ -521,7 +520,6 @@ export function ImportOrdersDialog({
           await supabase
             .from("case_fields")
             .upsert({
-              tenant_id: tenantId,
               case_id: caseId,
               key: "obs",
               value_text: finalObs,
