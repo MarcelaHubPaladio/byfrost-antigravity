@@ -290,7 +290,10 @@ export default function Orders() {
     return new Date(fallback);
   };
 
-  const caseIdsForLookup = useMemo(() => journeyRows.map((r) => r.id), [journeyRows]);
+  const caseIdsForLookup = useMemo(() => {
+    const ids = journeyRows.map((r) => r.id).filter(id => typeof id === "string" && id.length > 30);
+    return Array.from(new Set(ids));
+  }, [journeyRows]);
 
   const caseDataQ = useQuery({
     queryKey: ["orders_case_fields_extended", activeTenantId, journeyRows.length, journeyRows[0]?.id, selectedMonth.getTime()],
@@ -434,7 +437,7 @@ export default function Orders() {
     queryKey: ["orders_pendencies", activeTenantId, filteredRows.length, filteredRows[0]?.id, selectedMonth.getTime()],
     enabled: Boolean(activeTenantId && filteredRows.length),
     queryFn: async () => {
-      const ids = filteredRows.map((c) => c.id);
+      const ids = Array.from(new Set(filteredRows.map((c) => c.id).filter(id => typeof id === "string" && id.length > 30)));
       const CHUNK_SIZE = 20;
       const chunks: string[][] = [];
       for (let i = 0; i < ids.length; i += CHUNK_SIZE) {

@@ -111,7 +111,8 @@ function normalizeWhatsappOrNull(raw: string) {
 }
 
 function parsePtBrNumber(input: string) {
-  const raw = (input ?? "").trim().replace(/[^\d.,-]/g, ""); // Remove R$, espaços, etc
+  // Remove R$, espaços, e qualquer caractere invisível como non-breaking space
+  const raw = (input ?? "").trim().replace(/[^\d.,-]/g, ""); 
   if (!raw) return 0;
   const normalized = raw.replace(/\./g, "").replace(/,/g, ".");
   const n = parseFloat(normalized);
@@ -147,11 +148,12 @@ function normalizeBillingStatus(raw: string): string {
   return "Pendente";
 }
 
-function detectDelimiter(headerLine: string): "," | ";" {
+function detectDelimiter(headerLine: string): "," | ";" | "\t" {
   const s = headerLine ?? "";
   let inQ = false;
   let commas = 0;
   let semis = 0;
+  let tabs = 0;
   for (let i = 0; i < s.length; i++) {
     const ch = s[i];
     if (ch === '"') {
@@ -162,11 +164,13 @@ function detectDelimiter(headerLine: string): "," | ";" {
     if (inQ) continue;
     if (ch === ",") commas++;
     if (ch === ";") semis++;
+    if (ch === "\t") tabs++;
   }
-  return semis > commas ? ";" : ",";
+  if (tabs > commas && tabs > semis) return "\t";
+  return semis >= commas ? ";" : ",";
 }
 
-function parseCsv(text: string, delimiter: "," | ";"): string[][] {
+function parseCsv(text: string, delimiter: "," | ";" | "\t"): string[][] {
   const rows: string[][] = [];
   const s = stripBom(text);
   let row: string[] = [];
