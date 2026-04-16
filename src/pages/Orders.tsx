@@ -48,7 +48,7 @@ import {
   Tooltip as RechartsTooltip,
   ResponsiveContainer,
 } from "recharts";
-import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, parse, isSameDay } from "date-fns";
+import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, parse, isSameDay, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { NewSalesOrderDialog } from "@/components/case/NewSalesOrderDialog";
 import { getStateLabel } from "@/lib/journeyLabels";
@@ -266,6 +266,12 @@ export default function Orders() {
     const s = String(input).trim();
     if (!s) return new Date(fallback);
 
+    // 0. Try YYYY-MM-DD (ISO) - Most reliable for modern imports
+    if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
+      const d = parseISO(s);
+      if (!isNaN(d.getTime())) return d;
+    }
+
     // 1. Try DD/MM/YYYY or DD/MM/YY
     const slashMatch = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})$/);
     if (slashMatch) {
@@ -281,7 +287,7 @@ export default function Orders() {
       if (!isNaN(d.getTime())) return d;
     } catch {}
 
-    // 3. Fallback to native Date constructor (handles ISO yyyy-MM-dd)
+    // 3. Fallback to native Date constructor
     try {
       const d = new Date(s);
       if (!isNaN(d.getTime())) return d;
@@ -299,7 +305,7 @@ export default function Orders() {
     queryKey: ["orders_case_fields_extended", activeTenantId, journeyRows.length, journeyRows[0]?.id, selectedMonth.getTime()],
     enabled: Boolean(activeTenantId && caseIdsForLookup.length),
     queryFn: async () => {
-      const CHUNK_SIZE = 20;
+      const CHUNK_SIZE = 10;
       const chunks: string[][] = [];
       for (let i = 0; i < caseIdsForLookup.length; i += CHUNK_SIZE) {
         chunks.push(caseIdsForLookup.slice(i, i + CHUNK_SIZE));
@@ -438,7 +444,7 @@ export default function Orders() {
     enabled: Boolean(activeTenantId && filteredRows.length),
     queryFn: async () => {
       const ids = Array.from(new Set(filteredRows.map((c) => c.id).filter(id => typeof id === "string" && id.length > 30)));
-      const CHUNK_SIZE = 20;
+      const CHUNK_SIZE = 10;
       const chunks: string[][] = [];
       for (let i = 0; i < ids.length; i += CHUNK_SIZE) {
         chunks.push(ids.slice(i, i + CHUNK_SIZE));

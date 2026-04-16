@@ -128,17 +128,17 @@ function normalizeDate(input: string): string {
   if (slashMatch) {
     let [_, d, m, y] = slashMatch;
     if (y.length === 2) y = (Number(y) > 50 ? "19" : "20") + y;
-    return `${d.padStart(2, "0")}/${m.padStart(2, "0")}/${y}`;
+    return `${y}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`;
   }
 
   // 2. Try YYYY-MM-DD
   const isoMatch = s.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})$/);
   if (isoMatch) {
     const [_, y, m, d] = isoMatch;
-    return `${d.padStart(2, "0")}/${m.padStart(2, "0")}/${y}`;
+    return `${y}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`;
   }
 
-  return s; // Fallback to raw
+  return s; 
 }
 
 function normalizeBillingStatus(raw: string): string {
@@ -438,8 +438,8 @@ export function ImportOrdersDialog({
           { key: "address", value_text: o.address },
           { key: "payment_terms", value_text: o.paymentTerms },
           { key: "payment_signal_value_raw", value_text: o.signal },
-          { key: "payment_due_date_text", value_text: o.dueDate },
-          { key: "sale_date_text", value_text: o.saleDate },
+          { key: "payment_due_date_text", value_text: normalizeDate(o.dueDate) },
+          { key: "sale_date_text", value_text: normalizeDate(o.saleDate) },
           { key: "city", value_text: o.customerCity },
           { key: "payment_method", value_text: o.paymentMethod },
           { key: "billing_status", value_text: o.billingStatus },
