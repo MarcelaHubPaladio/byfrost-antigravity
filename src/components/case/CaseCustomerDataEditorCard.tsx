@@ -162,6 +162,7 @@ export function CaseCustomerDataEditorCard(props: {
         { key: "obs", value_text: cleanOrNull(draft.obs) },
       ]
         .map((r) => ({
+          tenant_id: activeTenantId,
           case_id: caseId,
           key: r.key,
           value_text: r.value_text,
@@ -219,6 +220,7 @@ export function CaseCustomerDataEditorCard(props: {
       const cleared = clearable
         .filter((k) => existingKeys.has(k) && cleanOrNull((draft as any)[k]) === null)
         .map((k) => ({
+          tenant_id: activeTenantId,
           case_id: caseId,
           key: k,
           value_text: null,

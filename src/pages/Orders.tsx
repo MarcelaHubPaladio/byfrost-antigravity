@@ -29,7 +29,27 @@ import {
   Columns2,
   Download,
   Package,
+  ChevronLeft as ChevronLeftIcon,
+  ChevronRight,
+  TrendingUp,
+  CreditCard,
+  DollarSign,
+  Briefcase,
+  Users2,
+  Calendar as CalendarIcon,
+  Check
 } from "lucide-react";
+import {
+  AreaChart,
+  Area,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip as RechartsTooltip,
+  ResponsiveContainer,
+} from "recharts";
+import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, parse, isSameDay } from "date-fns";
+import { ptBR } from "date-fns/locale";
 import { NewSalesOrderDialog } from "@/components/case/NewSalesOrderDialog";
 import { getStateLabel } from "@/lib/journeyLabels";
 import { useJourneyTransition } from "@/hooks/useJourneyTransition";
@@ -112,6 +132,8 @@ export default function Orders() {
   const { prefs } = useTheme();
 
   const [q, setQ] = useState("");
+  const [selectedMonth, setSelectedMonth] = useState(new Date());
+  const [selectedSellerId, setSelectedSellerId] = useState<string>("all");
   const [movingCaseId, setMovingCaseId] = useState<string | null>(null);
   const [transitionBlock, setTransitionBlock] = useState<{
     open: boolean;
@@ -213,46 +235,157 @@ export default function Orders() {
       return m;
     },
   });
+  
+  const usersQ = useQuery({
+    queryKey: ["tenant_users_profiles", activeTenantId],
+    enabled: Boolean(activeTenantId),
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("users_profile")
+        .select("user_id, display_name, email")
+        .eq("tenant_id", activeTenantId!)
+        .is("deleted_at", null)
+        .order("display_name", { ascending: true });
+      if (error) throw error;
+      return data ?? [];
+    }
+  });
 
   const caseIdsForLookup = useMemo(() => journeyRows.map((r) => r.id), [journeyRows]);
 
-  const casePhoneQ = useQuery({
-    queryKey: ["orders_case_phone_fallback", activeTenantId, caseIdsForLookup.join(",")],
+  const caseDataQ = useQuery({
+    queryKey: ["orders_case_fields_extended", activeTenantId, caseIdsForLookup.join(",")],
     enabled: Boolean(activeTenantId && caseIdsForLookup.length),
     queryFn: async () => {
-      const { data, error } = await supabase
+      const { data: fields, error: fErr } = await supabase
         .from("case_fields")
         .select("case_id,key,value_text")
         .in("case_id", caseIdsForLookup)
-        .in("key", ["whatsapp", "phone", "customer_phone"])
-        .limit(2000);
-      if (error) throw error;
+        .in("key", ["whatsapp", "phone", "customer_phone", "sale_date_text", "billing_status", "total_value_raw"])
+        .limit(4000);
+      if (fErr) throw fErr;
 
-      const priority = new Map<string, number>([["whatsapp", 1], ["customer_phone", 2], ["phone", 3]]);
-      const best = new Map<string, { p: number; v: string }>();
-      for (const r of data ?? []) {
-        const cid = (r as any).case_id;
-        const p = priority.get((r as any).key) ?? 999;
-        const v = String((r as any).value_text ?? "").trim();
-        if (!v) continue;
-        if (!best.has(cid) || p < best.get(cid)!.p) best.set(cid, { p, v });
+      const { data: items, error: iErr } = await supabase
+        .from("case_items")
+        .select("case_id,total")
+        .in("case_id", caseIdsForLookup)
+        .is("deleted_at", null);
+      if (iErr) throw iErr;
+
+      const fieldMap = new Map<string, any>();
+      for (const r of fields ?? []) {
+        const cid = r.case_id;
+        if (!fieldMap.has(cid)) fieldMap.set(cid, {});
+        fieldMap.get(cid)[r.key] = r.value_text;
       }
-      return new Map(Array.from(best.entries()).map(([cid, b]) => [cid, b.v]));
+
+      const totalsMap = new Map<string, number>();
+      for (const itm of items ?? []) {
+        const cid = itm.case_id;
+        const val = Number(itm.total ?? 0);
+        totalsMap.set(cid, (totalsMap.get(cid) ?? 0) + val);
+      }
+
+      return { fields: fieldMap, totals: totalsMap };
     },
   });
 
   const filteredRows = useMemo(() => {
-    const qq = q.trim().toLowerCase();
-    if (!qq) return journeyRows;
-    return journeyRows.filter((r) => {
-      const cust = customersQ.data?.get(r.customer_id!);
-      const metaPhone = getMetaPhone(r.meta_json);
-      const fieldPhone = casePhoneQ.data?.get(r.id);
-      const extId = r.meta_json?.external_id || "";
-      const text = `${r.title} ${r.users_profile?.display_name} ${cust?.name} ${cust?.phone_e164} ${metaPhone} ${fieldPhone} ${extId}`.toLowerCase();
-      return text.includes(qq);
+    let rows = journeyRows;
+
+    // Filter by seller
+    if (selectedSellerId !== "all") {
+      rows = rows.filter(r => r.assigned_user_id === selectedSellerId);
+    }
+
+    // Filter by Month
+    rows = rows.filter(r => {
+      const f = caseDataQ.data?.fields.get(r.id);
+      const saleDateText = f?.sale_date_text;
+      if (!saleDateText) {
+        // Fallback to created_at if no sale_date_text
+        return isSameMonth(new Date(r.created_at), selectedMonth);
+      }
+      try {
+        const d = parse(saleDateText, "dd/MM/yyyy", new Date());
+        return isSameMonth(d, selectedMonth);
+      } catch {
+        return isSameMonth(new Date(r.created_at), selectedMonth);
+      }
     });
-  }, [journeyRows, q, customersQ.data, casePhoneQ.data]);
+
+    const qq = q.trim().toLowerCase();
+    if (qq) {
+      rows = rows.filter((r) => {
+        const cust = customersQ.data?.get(r.customer_id!);
+        const extId = r.meta_json?.external_id || "";
+        const f = caseDataQ.data?.fields.get(r.id);
+        const phones = `${f?.whatsapp ?? ""} ${f?.phone ?? ""} ${f?.customer_phone ?? ""}`;
+        const text = `${r.title} ${r.users_profile?.display_name} ${cust?.name} ${cust?.phone_e164} ${phones} ${extId}`.toLowerCase();
+        return text.includes(qq);
+      });
+    }
+
+    return rows;
+  }, [journeyRows, q, selectedMonth, selectedSellerId, customersQ.data, caseDataQ.data]);
+
+  const stats = useMemo(() => {
+    let totalValue = 0;
+    let pendingValue = 0;
+    let invoicedValue = 0;
+    let invoicedCount = 0;
+
+    filteredRows.forEach(r => {
+      const val = caseDataQ.data?.totals.get(r.id) ?? 0;
+      const f = caseDataQ.data?.fields.get(r.id);
+      const billingStatus = (f?.billing_status ?? "Pendente").toLowerCase();
+
+      totalValue += val;
+      if (billingStatus.includes("pago") || billingStatus.includes("faturado")) {
+        invoicedValue += val;
+        invoicedCount++;
+      } else if (!billingStatus.includes("canc")) {
+        pendingValue += val;
+      }
+    });
+
+    const avgTicket = invoicedCount > 0 ? invoicedValue / invoicedCount : 0;
+
+    return { totalValue, pendingValue, invoicedValue, avgTicket };
+  }, [filteredRows, caseDataQ.data]);
+
+  const chartData = useMemo(() => {
+    const start = startOfMonth(selectedMonth);
+    const end = endOfMonth(selectedMonth);
+    const days = eachDayOfInterval({ start, end });
+
+    return days.map(d => {
+      let dailyTotal = 0;
+      filteredRows.forEach(r => {
+        const f = caseDataQ.data?.fields.get(r.id);
+        const saleDateText = f?.sale_date_text;
+        let saleDate: Date;
+        if (saleDateText) {
+          try {
+            saleDate = parse(saleDateText, "dd/MM/yyyy", new Date());
+          } catch {
+            saleDate = new Date(r.created_at);
+          }
+        } else {
+          saleDate = new Date(r.created_at);
+        }
+
+        if (isSameDay(saleDate, d)) {
+          dailyTotal += caseDataQ.data?.totals.get(r.id) ?? 0;
+        }
+      });
+
+      return {
+        day: format(d, "dd"),
+        total: dailyTotal,
+      };
+    });
+  }, [filteredRows, selectedMonth, caseDataQ.data]);
 
   const pendQ = useQuery({
     queryKey: ["orders_pendencies", activeTenantId, filteredRows.map(c => c.id).join(",")],
@@ -368,59 +501,223 @@ export default function Orders() {
     <RequireAuth>
       <AppShell>
         <div className="rounded-[28px] border border-slate-200 bg-white/65 p-4 shadow-sm backdrop-blur md:p-5">
-          <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+          <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
             <div className="flex items-center gap-3">
               <div className="grid h-10 w-10 place-items-center rounded-2xl bg-blue-100 text-blue-600">
                 <Package className="h-6 w-6" />
               </div>
               <div>
                 <h2 className="text-lg font-semibold tracking-tight text-slate-900">Pedidos</h2>
-                <p className="text-sm text-slate-600">Gestão dedicada de pedidos e processos internos.</p>
+                <div className="flex items-center gap-2 mt-0.5">
+                  <p className="text-sm text-slate-600">Gestão dedicada de pedidos e processos internos.</p>
+                </div>
               </div>
             </div>
 
-            <div className="flex flex-wrap gap-2">
-              <Button
-                className="h-10 rounded-2xl bg-blue-600 text-white hover:bg-blue-700"
-                onClick={() => setNewSalesOrderOpen(true)}
-              >
-                <Plus className="mr-2 h-4 w-4" /> Novo pedido
-              </Button>
+            <div className="flex flex-wrap items-center gap-3">
+              {/* Vendedor Filter */}
+              <div className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-white/70 p-1.5 h-10 min-w-[180px]">
+                <Users2 className="ml-2 h-4 w-4 text-slate-400" />
+                <select
+                  className="bg-transparent text-xs font-bold text-slate-700 focus:outline-none flex-1 pr-2"
+                  value={selectedSellerId}
+                  onChange={(e) => setSelectedSellerId(e.target.value)}
+                >
+                  <option value="all">Vendedor: Todos</option>
+                  {(usersQ.data ?? []).map((u) => (
+                    <option key={u.user_id} value={u.user_id}>
+                      {u.display_name || u.email}
+                    </option>
+                  ))}
+                </select>
+              </div>
 
-              <div className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-white/70 p-1">
+              {/* Month Selector */}
+              <div className="flex items-center gap-1 rounded-2xl border border-slate-200 bg-white/70 p-1 h-10">
                 <Button
-                  variant={viewMode === "list" ? "default" : "secondary"}
-                  className="h-8 rounded-xl px-3"
-                  onClick={() => setAndPersistViewMode("list")}
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 rounded-xl hover:bg-slate-100"
+                  onClick={() => setSelectedMonth(prev => {
+                    const d = new Date(prev);
+                    d.setMonth(d.getMonth() - 1);
+                    return d;
+                  })}
                 >
-                  <LayoutList className="h-4 w-4" />
+                  <ChevronLeftIcon className="h-4 w-4 text-slate-600" />
                 </Button>
+                
+                <div className="flex items-center gap-2 px-2 min-w-[120px] justify-center">
+                  <CalendarIcon className="h-3.5 w-3.5 text-blue-500" />
+                  <span className="text-[11px] font-black uppercase tracking-widest text-slate-700">
+                    {format(selectedMonth, "MMMM yyyy", { locale: ptBR })}
+                  </span>
+                </div>
+
                 <Button
-                  variant={viewMode === "kanban" ? "default" : "secondary"}
-                  className="h-8 rounded-xl px-3"
-                  onClick={() => setAndPersistViewMode("kanban")}
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 rounded-xl hover:bg-slate-100"
+                  onClick={() => setSelectedMonth(prev => {
+                    const d = new Date(prev);
+                    d.setMonth(d.getMonth() + 1);
+                    return d;
+                  })}
                 >
-                  <Columns2 className="h-4 w-4" />
+                  <ChevronRight className="h-4 w-4 text-slate-600" />
                 </Button>
               </div>
 
-              <Button variant="secondary" className="h-10 rounded-2xl" onClick={exportConversationsCsv} disabled={exportingCsv}>
-                <Download className="mr-2 h-4 w-4" /> Exportar
-              </Button>
+              <div className="h-8 w-px bg-slate-200 mx-1 hidden lg:block" />
 
-              <ImportOrdersDialog
-                tenantId={activeTenantId!}
-                journey={selectedJourney!}
-                actorUserId={user?.id || null}
-              />
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  className="h-10 rounded-2xl bg-blue-600 text-white hover:bg-blue-700"
+                  onClick={() => setNewSalesOrderOpen(true)}
+                >
+                  <Plus className="mr-2 h-4 w-4" /> Novo pedido
+                </Button>
 
-              <Button variant="secondary" className="h-10 rounded-2xl" onClick={() => casesQ.refetch()}>
-                <RefreshCw className="mr-2 h-4 w-4" />
-              </Button>
+                <div className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-white/70 p-1">
+                  <Button
+                    variant={viewMode === "list" ? "default" : "secondary"}
+                    className="h-8 rounded-xl px-3"
+                    onClick={() => setAndPersistViewMode("list")}
+                  >
+                    <LayoutList className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant={viewMode === "kanban" ? "default" : "secondary"}
+                    className="h-8 rounded-xl px-3"
+                    onClick={() => setAndPersistViewMode("kanban")}
+                  >
+                    <Columns2 className="h-4 w-4" />
+                  </Button>
+                </div>
+
+                <Button variant="secondary" className="h-10 rounded-2xl" onClick={exportConversationsCsv} disabled={exportingCsv}>
+                  <Download className="mr-2 h-4 w-4" /> Exportar
+                </Button>
+
+                <ImportOrdersDialog
+                  tenantId={activeTenantId!}
+                  journey={selectedJourney!}
+                  actorUserId={user?.id || null}
+                />
+
+                <Button variant="secondary" className="h-10 rounded-2xl" onClick={() => casesQ.refetch()}>
+                  <RefreshCw className="mr-2 h-4 w-4" />
+                </Button>
+              </div>
             </div>
           </div>
 
-          <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-end">
+          <div className="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="rounded-[22px] border border-slate-100 bg-slate-50/50 p-5 shadow-sm transition-all hover:shadow-md">
+              <div className="flex items-center gap-3 text-slate-500 mb-3">
+                <div className="p-2 rounded-xl bg-blue-100 text-blue-600">
+                  <Package className="h-4 w-4" />
+                </div>
+                <span className="text-[10px] font-black uppercase tracking-widest">Total Pedidos</span>
+              </div>
+              <div className="text-xl font-black text-slate-900">
+                {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(stats.totalValue)}
+              </div>
+              <div className="mt-1 text-[10px] text-slate-400 font-bold uppercase tracking-tight">Referente ao mês selecionado</div>
+            </div>
+
+            <div className="rounded-[22px] border border-slate-100 bg-slate-50/50 p-5 shadow-sm transition-all hover:shadow-md">
+              <div className="flex items-center gap-3 text-slate-500 mb-3">
+                <div className="p-2 rounded-xl bg-amber-100 text-amber-600">
+                  <Clock className="h-4 w-4" />
+                </div>
+                <span className="text-[10px] font-black uppercase tracking-widest">Pendente</span>
+              </div>
+              <div className="text-xl font-black text-slate-900 text-amber-600">
+                {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(stats.pendingValue)}
+              </div>
+              <div className="mt-1 text-[10px] text-slate-400 font-bold uppercase tracking-tight">Pagamento não confirmado</div>
+            </div>
+
+            <div className="rounded-[22px] border border-slate-100 bg-slate-50/50 p-5 shadow-sm transition-all hover:shadow-md">
+              <div className="flex items-center gap-3 text-slate-500 mb-3">
+                <div className="p-2 rounded-xl bg-emerald-100 text-emerald-600">
+                  <Check className="h-4 w-4" />
+                </div>
+                <span className="text-[10px] font-black uppercase tracking-widest">Faturado</span>
+              </div>
+              <div className="text-xl font-black text-slate-900 text-emerald-600">
+                {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(stats.invoicedValue)}
+              </div>
+              <div className="mt-1 text-[10px] text-slate-400 font-bold uppercase tracking-tight">Valor efetivamente recebido</div>
+            </div>
+
+            <div className="rounded-[22px] border border-slate-100 bg-slate-50/50 p-5 shadow-sm transition-all hover:shadow-md">
+              <div className="flex items-center gap-3 text-slate-500 mb-3">
+                <div className="p-2 rounded-xl bg-indigo-100 text-indigo-600">
+                  <TrendingUp className="h-4 w-4" />
+                </div>
+                <span className="text-[10px] font-black uppercase tracking-widest">Ticket Médio</span>
+              </div>
+              <div className="text-xl font-black text-slate-900">
+                {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(stats.avgTicket)}
+              </div>
+              <div className="mt-1 text-[10px] text-slate-400 font-bold uppercase tracking-tight">Valor por venda faturada</div>
+            </div>
+          </div>
+
+          <div className="mt-6 rounded-[28px] border border-slate-100 bg-white/40 p-6 shadow-sm">
+            <div className="mb-6 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="h-8 w-8 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center">
+                  <TrendingUp className="h-4 w-4" />
+                </div>
+                <div>
+                  <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-400">Desempenho Diário</h4>
+                  <h3 className="text-sm font-bold text-slate-800">Vendas no Mês</h3>
+                </div>
+              </div>
+              <div className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                Total Faturado: <span className="text-emerald-600 ml-1">{new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(stats.invoicedValue)}</span>
+              </div>
+            </div>
+            
+            <div className="h-[200px] w-full mt-4">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="colorTotal" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.1}/>
+                      <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                  <XAxis 
+                    dataKey="day" 
+                    axisLine={false} 
+                    tickLine={false} 
+                    tick={{ fontSize: 10, fill: "#94a3b8", fontWeight: 700 }}
+                    interval="preserveStartEnd"
+                  />
+                  <YAxis hide />
+                  <RechartsTooltip 
+                    contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', padding: '12px' }}
+                    labelStyle={{ display: 'none' }}
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="total"
+                    stroke="#3b82f6"
+                    strokeWidth={3}
+                    fillOpacity={1}
+                    fill="url(#colorTotal)"
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+          <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">
             <div className="relative flex-1">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
               <Input
