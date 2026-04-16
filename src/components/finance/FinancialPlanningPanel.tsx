@@ -10,6 +10,16 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { showError, showSuccess } from "@/utils/toast";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -461,7 +471,7 @@ export function FinancialPlanningPanel() {
   // ----------------------
   const [editItem, setEditItem] = useState<any>(null);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
-  const [editType, setEditType] = useState<"receivable" | "payable">("receivable");
+  const [editType, setEditType] = useState<"receivable" | "payable" | "budget">("receivable");
   const [editScope, setEditScope] = useState<"only-this" | "this-and-future">("only-this");
 
   const [reconcileItem, setReconcileItem] = useState<any>(null);
@@ -470,6 +480,24 @@ export function FinancialPlanningPanel() {
   const updateItemM = useMutation({
     mutationFn: async (updatedData: any) => {
       if (!activeTenantId || !editItem) throw new Error("Item inválido");
+      
+      if (editType === "budget") {
+        const payload = {
+          category_id: updatedData.category_id,
+          expected_amount: parseMoneyInput(updatedData.expected_amount),
+          recurrence: updatedData.recurrence,
+          due_day: parseInt(updatedData.due_day),
+          scenario: updatedData.scenario
+        };
+        const { error } = await supabase
+          .from("financial_budgets")
+          .update(payload)
+          .eq("id", editItem.id)
+          .eq("tenant_id", activeTenantId);
+        if (error) throw error;
+        return;
+      }
+
       const table = editType === "receivable" ? "financial_receivables" : "financial_payables";
       
       const payload: any = {
@@ -553,11 +581,50 @@ export function FinancialPlanningPanel() {
       showSuccess("Item atualizado com sucesso.");
       setEditDialogOpen(false);
       setEditItem(null);
-      qc.invalidateQueries({ queryKey: [editType === "receivable" ? "financial_receivables" : "financial_payables", activeTenantId] });
+      const queryKey = editType === "receivable" ? "financial_receivables" : editType === "payable" ? "financial_payables" : "financial_budgets";
+      qc.invalidateQueries({ queryKey: [queryKey, activeTenantId] });
       qc.invalidateQueries({ queryKey: ["financial_cash_projection", activeTenantId] });
     },
     onError: (e: any) => showError(e?.message ?? "Falha ao atualizar"),
   });
+
+  const deleteItemM = useMutation({
+    mutationFn: async ({ id, type, scope, recurrenceGroupId, installmentNumber }: { id: string, type: "receivable" | "payable" | "budget", scope: "only-this" | "this-and-future", recurrenceGroupId?: string, installmentNumber?: number }) => {
+      if (!activeTenantId) throw new Error("Tenant inválido");
+      const table = type === "receivable" ? "financial_receivables" : type === "payable" ? "financial_payables" : "financial_budgets";
+      
+      if (scope === "this-and-future" && recurrenceGroupId && type !== "budget") {
+        const { error } = await supabase
+          .from(table)
+          .delete()
+          .eq("tenant_id", activeTenantId)
+          .eq("recurrence_group_id", recurrenceGroupId)
+          .gte("installment_number", installmentNumber || 0);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase
+          .from(table)
+          .delete()
+          .eq("id", id)
+          .eq("tenant_id", activeTenantId);
+        if (error) throw error;
+      }
+    },
+    onSuccess: async (_, vars) => {
+      showSuccess("Item removido com sucesso.");
+      const queryKey = vars.type === "receivable" ? "financial_receivables" : vars.type === "payable" ? "financial_payables" : "financial_budgets";
+      await qc.invalidateQueries({ queryKey: [queryKey, activeTenantId] });
+      await qc.invalidateQueries({ queryKey: ["financial_cash_projection", activeTenantId] });
+      setDeleteDialogOpen(false);
+      setDeleteItem(null);
+    },
+    onError: (e: any) => showError(e?.message ?? "Falha ao remover item"),
+  });
+
+  const [deleteItem, setDeleteItem] = useState<any>(null);
+  const [deleteType, setDeleteType] = useState<"receivable" | "payable" | "budget">("receivable");
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [deleteScope, setDeleteScope] = useState<"only-this" | "this-and-future">("only-this");
 
   const unreconcileM = useMutation({
     mutationFn: async (transactionId: string) => {
@@ -934,6 +1001,7 @@ export function FinancialPlanningPanel() {
                       <TableHead>Recorrência</TableHead>
                       <TableHead>Dia</TableHead>
                       <TableHead>Cenário</TableHead>
+                      <TableHead className="w-[80px]">Ações</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -946,6 +1014,31 @@ export function FinancialPlanningPanel() {
                           <TableCell>{b.recurrence}</TableCell>
                           <TableCell>{b.due_day ?? "—"}</TableCell>
                           <TableCell>{b.scenario}</TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-1">
+                              <Button
+                                variant="ghost" size="icon" className="h-7 w-7 rounded-full"
+                                onClick={() => {
+                                  setEditType("budget" as any);
+                                  setEditItem(b);
+                                  setEditDialogOpen(true);
+                                }}
+                              >
+                                <Pencil className="h-3 w-3 text-slate-400" />
+                              </Button>
+                              <Button
+                                variant="ghost" size="icon" className="h-7 w-7 rounded-full hover:text-rose-600"
+                                onClick={() => {
+                                  setDeleteType("budget");
+                                  setDeleteItem(b);
+                                  setDeleteScope("only-this");
+                                  setDeleteDialogOpen(true);
+                                }}
+                              >
+                                <Trash2 className="h-3 w-3 text-slate-400" />
+                              </Button>
+                            </div>
+                          </TableCell>
                         </TableRow>
                       );
                     })}
@@ -1212,17 +1305,30 @@ export function FinancialPlanningPanel() {
                         </Select>
                       </TableCell>
                       <TableCell>
-                        <Button
-                          variant="ghost" size="icon" className="h-8 w-8 rounded-full hover:bg-slate-100"
-                          onClick={() => {
-                            setEditType("receivable");
-                            setEditItem(r);
-                            setEditScope("only-this");
-                            setEditDialogOpen(true);
-                          }}
-                        >
-                          <Pencil className="h-3.5 w-3.5 text-slate-400" />
-                        </Button>
+                        <div className="flex items-center gap-1">
+                          <Button
+                            variant="ghost" size="icon" className="h-8 w-8 rounded-full hover:bg-slate-100"
+                            onClick={() => {
+                              setEditType("receivable");
+                              setEditItem(r);
+                              setEditScope("only-this");
+                              setEditDialogOpen(true);
+                            }}
+                          >
+                            <Pencil className="h-3.5 w-3.5 text-slate-400" />
+                          </Button>
+                          <Button
+                            variant="ghost" size="icon" className="h-8 w-8 rounded-full hover:bg-rose-50 hover:text-rose-600"
+                            onClick={() => {
+                              setDeleteType("receivable");
+                              setDeleteItem(r);
+                              setDeleteScope("only-this");
+                              setDeleteDialogOpen(true);
+                            }}
+                          >
+                            <Trash2 className="h-3.5 w-3.5 text-slate-400" />
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -1481,17 +1587,30 @@ export function FinancialPlanningPanel() {
                         </Select>
                       </TableCell>
                       <TableCell>
-                        <Button
-                          variant="ghost" size="icon" className="h-8 w-8 rounded-full hover:bg-slate-100"
-                          onClick={() => {
-                            setEditType("payable");
-                            setEditItem(p);
-                            setEditScope("only-this");
-                            setEditDialogOpen(true);
-                          }}
-                        >
-                          <Pencil className="h-3.5 w-3.5 text-slate-400" />
-                        </Button>
+                        <div className="flex items-center gap-1">
+                          <Button
+                            variant="ghost" size="icon" className="h-8 w-8 rounded-full hover:bg-slate-100"
+                            onClick={() => {
+                              setEditType("payable");
+                              setEditItem(p);
+                              setEditScope("only-this");
+                              setEditDialogOpen(true);
+                            }}
+                          >
+                            <Pencil className="h-3.5 w-3.5 text-slate-400" />
+                          </Button>
+                          <Button
+                            variant="ghost" size="icon" className="h-8 w-8 rounded-full hover:bg-rose-50 hover:text-rose-600"
+                            onClick={() => {
+                              setDeleteType("payable");
+                              setDeleteItem(p);
+                              setDeleteScope("only-this");
+                              setDeleteDialogOpen(true);
+                            }}
+                          >
+                            <Trash2 className="h-3.5 w-3.5 text-slate-400" />
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -1524,6 +1643,56 @@ export function FinancialPlanningPanel() {
         onUnreconcile={(id: string) => unreconcileM.mutate(id)}
         isPending={unreconcileM.isPending}
       />
+
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent className="rounded-3xl">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirmar Exclusão</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem certeza que deseja remover este item? Esta ação não pode ser desfeita.
+              {deleteItem?.recurrence_group_id && (
+                <div className="mt-4 p-3 rounded-2xl bg-amber-50 dark:bg-amber-900/20 border border-amber-100 dark:border-amber-800">
+                  <Label className="text-[10px] font-bold uppercase text-amber-600 mb-2 block">Item Recorrente</Label>
+                  <div className="flex flex-col gap-2">
+                    <div className="flex items-center gap-2">
+                      <Checkbox 
+                        id="del-scope-only" 
+                        checked={deleteScope === "only-this"} 
+                        onCheckedChange={() => setDeleteScope("only-this")} 
+                      />
+                      <Label htmlFor="del-scope-only" className="text-xs cursor-pointer">Apenas esta parcela</Label>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Checkbox 
+                        id="del-scope-future" 
+                        checked={deleteScope === "this-and-future"} 
+                        onCheckedChange={() => setDeleteScope("this-and-future")} 
+                      />
+                      <Label htmlFor="del-scope-future" className="text-xs cursor-pointer">Esta e todas as futuras</Label>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="rounded-xl border-slate-200">Cancelar</AlertDialogCancel>
+            <AlertDialogAction 
+              className="rounded-xl bg-rose-600 hover:bg-rose-700 text-white border-none"
+              onClick={() => deleteItemM.mutate({ 
+                id: deleteItem.id, 
+                type: deleteType, 
+                scope: deleteScope,
+                recurrenceGroupId: deleteItem?.recurrence_group_id,
+                installmentNumber: deleteItem?.installment_number
+              })}
+              disabled={deleteItemM.isPending}
+            >
+              {deleteItemM.isPending ? "Excluindo..." : "Confirmar Exclusão"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
@@ -1539,181 +1708,246 @@ function EditItemDialog({ open, onOpenChange, item, type, scope, onScopeChange, 
   const [instNumber, setInstNumber] = useState<number | null>(null);
   const [instTotal, setInstTotal] = useState<number | null>(null);
 
+  // Budget specific fields
+  const [budRecurrence, setBudRecurrence] = useState("monthly");
+  const [budDueDay, setBudDueDay] = useState("");
+  const [budScenario, setBudScenario] = useState("base");
+
   // Sync state when item changes
   useMemo(() => {
     if (item) {
-      setDesc(item.description || "");
-      setAmount(String(item.amount || ""));
-      setDate(item.due_date || "");
-      setEntityId(item.entity_id || null);
-      setEntityLabel(item.core_entities?.display_name || null);
-      setAccountId(item.account_id || null);
-      
-      // Se não tiver categoria mas estiver conciliado, busca da transação
-      let catId = item.category_id;
-      let catLabel = item.financial_categories?.name;
-      
-      if (!catId && (item.financial_transactions?.length ?? 0) > 0) {
-        const linked = item.financial_transactions[0];
-        if (linked?.category_id) {
-          catId = linked.category_id;
-          catLabel = linked.financial_categories?.name;
+      if (type === "budget") {
+        setCategoryId(item.category_id);
+        const catName = item.financial_categories?.name || item.category_id;
+        setCategoryLabel(catName);
+        setAmount(String(item.expected_amount || ""));
+        setBudRecurrence(item.recurrence || "monthly");
+        setBudDueDay(String(item.due_day || ""));
+        setBudScenario(item.scenario || "base");
+        setDesc(`Orçamento: ${catName}`);
+      } else {
+        setDesc(item.description || "");
+        setAmount(String(item.amount || ""));
+        setDate(item.due_date || "");
+        setEntityId(item.entity_id || null);
+        setEntityLabel(item.core_entities?.display_name || null);
+        setAccountId(item.account_id || null);
+        
+        // Se não tiver categoria mas estiver conciliado, busca da transação
+        let catId = item.category_id;
+        let catLabel = item.financial_categories?.name;
+        
+        if (!catId && (item.financial_transactions?.length ?? 0) > 0) {
+          const linked = item.financial_transactions[0];
+          if (linked?.category_id) {
+            catId = linked.category_id;
+            catLabel = linked.financial_categories?.name;
+          }
         }
+        
+        setCategoryId(catId || null);
+        setCategoryLabel(catLabel || null);
+        setInstNumber(item.installment_number || null);
+        setInstTotal(item.installments_total || null);
       }
-      
-      setCategoryId(catId || null);
-      setCategoryLabel(catLabel || null);
-      setInstNumber(item.installment_number || null);
-      setInstTotal(item.installments_total || null);
     }
-  }, [item]);
+  }, [item, type]);
 
   if (!item) return null;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[480px]">
+      <DialogContent className="sm:max-w-[480px] rounded-3xl">
         <DialogHeader>
-          <DialogTitle>Editar {type === 'receivable' ? 'Recebível' : 'Pagável'}</DialogTitle>
+          <DialogTitle>Editar {type === 'receivable' ? 'Recebível' : type === 'payable' ? 'Pagável' : 'Orçamento'}</DialogTitle>
           <DialogDescription>
-            Ajuste os detalhes do lançamento planejado.
+            Ajuste os detalhes do {type === 'budget' ? 'orçamento planejado' : 'lançamento planejado'}.
           </DialogDescription>
         </DialogHeader>
 
-        <div className="grid gap-3 py-4">
-          <div>
-            <div className="flex items-center justify-between">
-              <Label className="text-xs">Descrição</Label>
-              {instNumber && (
-                <Badge variant="outline" className="h-5 text-[10px] font-bold border-[hsl(var(--byfrost-accent)/0.2)] text-[hsl(var(--byfrost-accent))] bg-[hsl(var(--byfrost-accent)/0.05)]">
-                  {instNumber} de {instTotal || "?"}
-                </Badge>
-              )}
-            </div>
-            <Input className="mt-1 rounded-2xl" value={desc} onChange={(e) => setDesc(e.target.value)} />
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <Label className="text-xs">Valor</Label>
-              <Input className="mt-1 rounded-2xl font-bold text-[hsl(var(--byfrost-accent))]" value={amount} onChange={(e) => setAmount(e.target.value)} />
-            </div>
-            <div>
-              <Label className="text-xs">Vencimento</Label>
-              <Input type="date" className="mt-1 rounded-2xl" value={date} onChange={(e) => setDate(e.target.value)} />
-            </div>
-          </div>
-
-          {item.recurrence_group_id && (
-            <div className="p-4 rounded-2xl bg-[hsl(var(--byfrost-accent)/0.03)] border border-[hsl(var(--byfrost-accent)/0.1)]">
-              <div className="flex items-center justify-between mb-3">
-                <div className="text-[10px] font-bold text-[hsl(var(--byfrost-accent))] uppercase tracking-widest">Ajuste de Recorrência</div>
-                <Badge variant="outline" className="h-4 text-[9px] px-1.5 opacity-60">Série Ativa</Badge>
+        <div className="grid gap-4 py-4">
+          {type === 'budget' ? (
+            <div className="grid gap-4">
+              <div>
+                <Label className="text-[10px] font-bold uppercase text-slate-500 mb-1.5 block">Categoria</Label>
+                <div className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-sm font-semibold">
+                  {categoryLabel}
+                </div>
               </div>
-              <div className="grid gap-3">
-                <div className="flex items-center justify-between">
-                  <Label className="text-xs text-slate-600">Total de parcelas projetadas:</Label>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label className="text-[10px] font-bold uppercase text-slate-500 mb-1.5 block">Valor Esperado</Label>
                   <Input 
-                    type="number" 
-                    className="h-9 w-20 text-center rounded-xl bg-white dark:bg-slate-950 font-bold" 
-                    value={instTotal || ""} 
-                    onChange={(e) => setInstTotal(Number(e.target.value))}
-                    min={instNumber || 1}
+                    className="h-11 rounded-2xl font-bold text-[hsl(var(--byfrost-accent))]" 
+                    value={amount} 
+                    onChange={(e) => setAmount(e.target.value)} 
                   />
                 </div>
-                <p className="text-[9px] text-slate-400 italic">
-                  Ao aumentar o total usando "Este e futuros", novas projeções serão criadas automaticamente.
-                </p>
+                <div>
+                  <Label className="text-[10px] font-bold uppercase text-slate-500 mb-1.5 block">Dia Vencimento (1-31)</Label>
+                  <Input 
+                    className="h-11 rounded-2xl" 
+                    value={budDueDay} 
+                    onChange={(e) => setBudDueDay(e.target.value)} 
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label className="text-[10px] font-bold uppercase text-slate-500 mb-1.5 block">Recorrência</Label>
+                  <Select value={budRecurrence} onValueChange={setBudRecurrence}>
+                    <SelectTrigger className="h-11 rounded-2xl">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="monthly">Mensal</SelectItem>
+                      <SelectItem value="weekly">Semanal</SelectItem>
+                      <SelectItem value="yearly">Anual</SelectItem>
+                      <SelectItem value="once">Único</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label className="text-[10px] font-bold uppercase text-slate-500 mb-1.5 block">Cenário</Label>
+                  <Input 
+                    className="h-11 rounded-2xl" 
+                    value={budScenario} 
+                    onChange={(e) => setBudScenario(e.target.value)} 
+                  />
+                </div>
               </div>
             </div>
+          ) : (
+            <>
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <Label className="text-[10px] font-bold uppercase text-slate-500 block">Descrição</Label>
+                  {instNumber && (
+                    <Badge variant="outline" className="h-5 text-[10px] font-bold border-indigo-100 text-indigo-600 bg-indigo-50">
+                      {instNumber} de {instTotal || "?"}
+                    </Badge>
+                  )}
+                </div>
+                <Input className="h-11 rounded-2xl" value={desc} onChange={(e) => setDesc(e.target.value)} />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label className="text-[10px] font-bold uppercase text-slate-500 mb-1.5 block">Valor</Label>
+                  <Input className="h-11 rounded-2xl font-bold text-emerald-600" value={amount} onChange={(e) => setAmount(e.target.value)} />
+                </div>
+                <div>
+                  <Label className="text-[10px] font-bold uppercase text-slate-500 mb-1.5 block">Vencimento</Label>
+                  <Input type="date" className="h-11 rounded-2xl" value={date} onChange={(e) => setDate(e.target.value)} />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label className="text-[10px] font-bold uppercase text-slate-500 mb-1.5 block">Entidade</Label>
+                  <AsyncSelect
+                    className="h-11 rounded-2xl"
+                    value={entityId}
+                    initialLabel={entityLabel}
+                    onChange={(v) => setEntityId(v)}
+                    loadOptions={async (val) => {
+                      if (!activeTenantId || val.length < 2) return [];
+                      const { data } = await supabase
+                        .from("core_entities")
+                        .select("id, display_name")
+                        .eq("tenant_id", activeTenantId)
+                        .ilike("display_name", `%${val}%`)
+                        .limit(10);
+                      return (data || []).map((d) => ({ value: d.id, label: d.display_name }));
+                    }}
+                  />
+                </div>
+                <div>
+                  <Label className="text-[10px] font-bold uppercase text-slate-500 mb-1.5 block">Categoria</Label>
+                  <AsyncSelect
+                    className="h-11 rounded-2xl"
+                    value={categoryId}
+                    initialLabel={categoryLabel}
+                    onChange={(v) => setCategoryId(v)}
+                    loadOptions={async (val) => {
+                      if (!activeTenantId || val.length < 2) return [];
+                      const { data } = await supabase
+                        .from("financial_categories")
+                        .select("id, name")
+                        .eq("tenant_id", activeTenantId)
+                        .ilike("name", `%${val}%`)
+                        .limit(10);
+                      return (data || []).map((d) => ({ value: d.id, label: d.name }));
+                    }}
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="col-span-1">
+                  <Label className="text-[10px] font-bold uppercase text-slate-500 mb-1.5 block">Conta</Label>
+                  <Select value={accountId || "none"} onValueChange={(v) => setAccountId(v === "none" ? null : v)}>
+                    <SelectTrigger className="h-11 rounded-2xl">
+                      <SelectValue placeholder="Selecione..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Nenhuma</SelectItem>
+                      {bankAccounts.map((ba: any) => (
+                        <SelectItem key={ba.id} value={ba.id}>{ba.bank_name} - {ba.account_name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                {item.recurrence_group_id && (
+                  <div className="col-span-1">
+                    <Label className="text-[10px] font-bold uppercase text-slate-500 mb-1.5 block">Escopo da Alteração</Label>
+                    <Select value={scope} onValueChange={onScopeChange}>
+                      <SelectTrigger className="h-11 rounded-2xl border-indigo-100 bg-indigo-50/30">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="only-this">Apenas esta parcela</SelectItem>
+                        <SelectItem value="this-and-future">Esta e todas as futuras</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+              </div>
+
+              {item.recurrence_group_id && (
+                <div className="p-4 rounded-2xl bg-indigo-50/50 border border-indigo-100">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="text-[10px] font-bold text-indigo-600 uppercase tracking-widest">Ajuste de Recorrência</div>
+                    <Badge variant="outline" className="h-4 text-[9px] px-1.5 opacity-60">Série Ativa</Badge>
+                  </div>
+                  <div className="grid gap-3">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-xs text-slate-600">Total de parcelas projetadas:</Label>
+                      <Input 
+                        type="number" 
+                        className="h-9 w-20 text-center rounded-xl bg-white dark:bg-slate-950 font-bold" 
+                        value={instTotal || ""} 
+                        onChange={(e) => setInstTotal(Number(e.target.value))}
+                        min={instNumber || 1}
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+            </>
           )}
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <Label className="text-xs">Entidade</Label>
-              <AsyncSelect
-                className="mt-1 h-10 rounded-2xl"
-                value={entityId}
-                initialLabel={entityLabel}
-                onChange={(v) => setEntityId(v)}
-                loadOptions={async (val) => {
-                  if (!activeTenantId || val.length < 2) return [];
-                  const { data } = await supabase
-                    .from("core_entities")
-                    .select("id, display_name")
-                    .eq("tenant_id", activeTenantId)
-                    .ilike("display_name", `%${val}%`)
-                    .limit(10);
-                  return (data || []).map((d) => ({ value: d.id, label: d.display_name }));
-                }}
-              />
-            </div>
-            <div>
-              <Label className="text-xs">Categoria</Label>
-              <AsyncSelect
-                className="mt-1 h-10 rounded-2xl"
-                value={categoryId}
-                initialLabel={categoryLabel}
-                onChange={(v) => setCategoryId(v)}
-                loadOptions={async (val) => {
-                  if (!activeTenantId || val.length < 2) return [];
-                  const { data } = await supabase
-                    .from("financial_categories")
-                    .select("id, name")
-                    .eq("tenant_id", activeTenantId)
-                    .ilike("name", `%${val}%`)
-                    .limit(10);
-                  return (data || []).map((d) => ({ value: d.id, label: d.name }));
-                }}
-              />
-            </div>
-          </div>
-          <div>
-            <Label className="text-xs">Conta</Label>
-            <Select value={accountId || ""} onValueChange={setAccountId}>
-              <SelectTrigger className="mt-1 rounded-2xl">
-                <SelectValue placeholder="Opcional" />
-              </SelectTrigger>
-              <SelectContent>
-                {(bankAccounts || []).map((ba: any) => (
-                  <SelectItem key={ba.id} value={ba.id}>
-                    {ba.bank_name} - {ba.account_name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-
-          <div className="grid gap-2">
-            <Label className="text-xs">Escopo da alteração</Label>
-            <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-2xl">
-              <button
-                className={cn(
-                  "flex-1 py-2 text-[10px] font-bold uppercase tracking-wider rounded-xl transition-all",
-                  scope === "only-this" ? "bg-white dark:bg-slate-700 shadow-sm text-slate-900 dark:text-slate-100" : "text-slate-500"
-                )}
-                onClick={() => onScopeChange("only-this")}
-              >
-                Apenas este
-              </button>
-              <button
-                className={cn(
-                  "flex-1 py-2 text-[10px] font-bold uppercase tracking-wider rounded-xl transition-all",
-                  scope === "this-and-future" ? "bg-white dark:bg-slate-700 shadow-sm text-slate-900 dark:text-slate-100" : "text-slate-500"
-                )}
-                onClick={() => onScopeChange("this-and-future")}
-                disabled={!item.recurrence_group_id}
-              >
-                Este e futuros
-              </button>
-            </div>
-          </div>
         </div>
 
         <DialogFooter className="mt-4 gap-2">
           <Button variant="ghost" className="rounded-2xl h-11" onClick={() => onOpenChange(false)}>Cancelar</Button>
-          <Button
-            className="rounded-2xl h-11 bg-slate-900 text-white hover:bg-slate-800 dark:bg-white dark:text-slate-900 font-bold"
-            onClick={() => onSave({
+          <Button 
+            className="rounded-2xl h-11 bg-slate-900 text-white hover:bg-slate-800 dark:bg-white dark:text-slate-900 font-bold px-8" 
+            onClick={() => onSave(type === 'budget' ? {
+              expected_amount: amount,
+              category_id: categoryId,
+              recurrence: budRecurrence,
+              due_day: budDueDay,
+              scenario: budScenario
+            } : {
               description: desc,
               amount,
               due_date: date,
@@ -1724,7 +1958,7 @@ function EditItemDialog({ open, onOpenChange, item, type, scope, onScopeChange, 
             })}
             disabled={isPending}
           >
-            {isPending ? "Salvando…" : "Salvar alterações"}
+            {isPending ? "Salvando…" : "Salvar Alterações"}
           </Button>
         </DialogFooter>
       </DialogContent>
