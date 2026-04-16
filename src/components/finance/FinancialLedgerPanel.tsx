@@ -1351,7 +1351,7 @@ export function FinancialLedgerPanel() {
 
       if (adjustment && adjustment.amount !== 0) {
         const table = type === 'payable' ? 'financial_payables' : 'financial_receivables';
-        const { error: adjErr } = await supabase.from(table).insert({
+        const { data: adjData, error: adjErr } = await supabase.from(table).insert({
           tenant_id: activeTenantId,
           description: `Ajuste/Juros de conciliação (${reconcileTxId?.slice(0,8)})`,
           amount: Math.abs(adjustment.amount),
@@ -1359,8 +1359,22 @@ export function FinancialLedgerPanel() {
           status: 'paid',
           category_id: adjustment.categoryId,
           entity_id: reconcileEntityId
-        });
-        if (adjErr) console.error("Falha ao criar ajuste:", adjErr);
+        }).select('id').single();
+
+        if (adjErr) {
+          console.error("Falha ao criar ajuste:", adjErr);
+        } else if (adjData) {
+          // Link the adjustment to the transaction too
+          const linkPayload: any = {
+            tenant_id: activeTenantId,
+            transaction_id: reconcileTxId,
+            amount: Math.abs(adjustment.amount)
+          };
+          if (type === 'payable') linkPayload.payable_id = adjData.id;
+          else linkPayload.receivable_id = adjData.id;
+
+          await supabase.from("financial_reconciliation_links").insert(linkPayload);
+        }
       }
     },
     onSuccess: async () => {

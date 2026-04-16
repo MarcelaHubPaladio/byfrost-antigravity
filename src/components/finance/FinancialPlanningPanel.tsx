@@ -130,6 +130,10 @@ export function FinancialPlanningPanel() {
           financial_transactions!financial_transactions_receivable_fk(
             id,transaction_date,description,amount,category_id,
             financial_categories(name)
+          ),
+          financial_reconciliation_links(
+            id, amount,
+            financial_transactions(id, transaction_date, description, amount)
           )
         `)
         .eq("tenant_id", activeTenantId!)
@@ -161,6 +165,10 @@ export function FinancialPlanningPanel() {
           financial_transactions!financial_transactions_payable_fk(
             id,transaction_date,description,amount,category_id,
             financial_categories(name)
+          ),
+          financial_reconciliation_links(
+            id, amount,
+            financial_transactions(id, transaction_date, description, amount)
           )
         `)
         .eq("tenant_id", activeTenantId!)
@@ -1153,20 +1161,36 @@ export function FinancialPlanningPanel() {
                       <TableCell>
                         <button
                           onClick={() => {
-                            const linked = r.financial_transactions ?? [];
-                            if (linked.length > 0) {
+                            const oldLinks = r.financial_transactions ? [r.financial_transactions] : [];
+                            const newLinks = r.financial_reconciliation_links?.map((l: any) => l.financial_transactions).filter(Boolean) || [];
+                            const allUnique = Array.from(new Set([...oldLinks, ...newLinks].map(t => t.id)))
+                              .map(id => [...oldLinks, ...newLinks].find(t => t.id === id));
+
+                            if (allUnique.length > 0) {
+                              // If multiple, maybe we show a specific dialog or just the standard one
+                              // For now, the dialog shows the first linked item or we can extend it
                               setReconcileItem(r);
                               setReconcileDialogOpen(true);
                             }
                           }}
                           className={cn(
                             "text-xs font-bold transition-all",
-                            (r.financial_transactions ?? []).length > 0 
-                              ? "text-emerald-600 hover:scale-105" 
-                              : "text-slate-300"
+                            (() => {
+                               const oldL = r.financial_transactions ? 1 : 0;
+                               const newL = r.financial_reconciliation_links?.length || 0;
+                               return (oldL + newL) > 0 ? "text-emerald-600 hover:scale-105" : "text-slate-300";
+                            })()
                           )}
                         >
-                          {formatMoneyBRL((r.financial_transactions ?? []).reduce((acc: number, t: any) => acc + (t.amount ?? 0), 0))}
+                          {(() => {
+                            const oldLinks = r.financial_transactions ? [r.financial_transactions] : [];
+                            const newLinks = r.financial_reconciliation_links?.map((l: any) => l.financial_transactions).filter(Boolean) || [];
+                            const allUnique = Array.from(new Set([...oldLinks, ...newLinks].map(t => t.id)))
+                              .map(id => [...oldLinks, ...newLinks].find(t => t.id === id));
+                            
+                            const totalReconciled = allUnique.reduce((acc, t) => acc + (t.amount || 0), 0);
+                            return formatMoneyBRL(totalReconciled);
+                          })()}
                         </button>
                       </TableCell>
                       <TableCell className="text-xs font-medium">{r.due_date}</TableCell>
@@ -1408,20 +1432,34 @@ export function FinancialPlanningPanel() {
                       <TableCell>
                         <button
                           onClick={() => {
-                            const linked = p.financial_transactions ?? [];
-                            if (linked.length > 0) {
+                            const oldLinks = p.financial_transactions ? [p.financial_transactions] : [];
+                            const newLinks = p.financial_reconciliation_links?.map((l: any) => l.financial_transactions).filter(Boolean) || [];
+                            const allUnique = Array.from(new Set([...oldLinks, ...newLinks].map(t => t.id)))
+                              .map(id => [...oldLinks, ...newLinks].find(t => t.id === id));
+
+                            if (allUnique.length > 0) {
                               setReconcileItem(p);
                               setReconcileDialogOpen(true);
                             }
                           }}
                           className={cn(
                             "text-xs font-bold transition-all",
-                            (p.financial_transactions ?? []).length > 0 
-                              ? "text-emerald-600 hover:scale-105" 
-                              : "text-slate-300"
+                            (() => {
+                               const oldL = p.financial_transactions ? 1 : 0;
+                               const newL = p.financial_reconciliation_links?.length || 0;
+                               return (oldL + newL) > 0 ? "text-emerald-600 hover:scale-105" : "text-slate-300";
+                            })()
                           )}
                         >
-                          {formatMoneyBRL((p.financial_transactions ?? []).reduce((acc: number, t: any) => acc + (t.amount ?? 0), 0))}
+                          {(() => {
+                            const oldLinks = p.financial_transactions ? [p.financial_transactions] : [];
+                            const newLinks = p.financial_reconciliation_links?.map((l: any) => l.financial_transactions).filter(Boolean) || [];
+                            const allUnique = Array.from(new Set([...oldLinks, ...newLinks].map(t => t.id)))
+                              .map(id => [...oldLinks, ...newLinks].find(t => t.id === id));
+                            
+                            const totalReconciled = allUnique.reduce((acc, t) => acc + (t.amount || 0), 0);
+                            return formatMoneyBRL(totalReconciled);
+                          })()}
                         </button>
                       </TableCell>
                       <TableCell className="text-xs font-medium">{p.due_date}</TableCell>
