@@ -578,12 +578,17 @@ export function FinancialPlanningPanel() {
       }
     },
     onSuccess: async () => {
+      const queryKey = editType === "receivable" ? "financial_receivables" : editType === "payable" ? "financial_payables" : "financial_budgets";
+      
+      // Invalida de forma abrangente (prefixo)
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: [queryKey], exact: false }),
+        qc.invalidateQueries({ queryKey: ["financial_cash_projection"], exact: false })
+      ]);
+
       showSuccess("Item atualizado com sucesso.");
       setEditDialogOpen(false);
       setEditItem(null);
-      const queryKey = editType === "receivable" ? "financial_receivables" : editType === "payable" ? "financial_payables" : "financial_budgets";
-      qc.invalidateQueries({ queryKey: [queryKey, activeTenantId] });
-      qc.invalidateQueries({ queryKey: ["financial_cash_projection", activeTenantId] });
     },
     onError: (e: any) => showError(e?.message ?? "Falha ao atualizar"),
   });
@@ -611,10 +616,15 @@ export function FinancialPlanningPanel() {
       }
     },
     onSuccess: async (_, vars) => {
-      showSuccess("Item removido com sucesso.");
       const queryKey = vars.type === "receivable" ? "financial_receivables" : vars.type === "payable" ? "financial_payables" : "financial_budgets";
-      await qc.invalidateQueries({ queryKey: [queryKey, activeTenantId] });
-      await qc.invalidateQueries({ queryKey: ["financial_cash_projection", activeTenantId] });
+      
+      // Invalida de forma abrangente com prefixo
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: [queryKey], exact: false }),
+        qc.invalidateQueries({ queryKey: ["financial_cash_projection"], exact: false })
+      ]);
+
+      showSuccess("Item removido com sucesso.");
       setDeleteDialogOpen(false);
       setDeleteItem(null);
     },
@@ -1251,7 +1261,12 @@ export function FinancialPlanningPanel() {
                       <TableCell className="text-xs font-medium text-slate-500">
                         {r.core_entities?.display_name ?? "—"}
                       </TableCell>
-                      <TableCell>
+                      <TableCell className={cn(
+                        "text-xs font-bold transition-all",
+                        r.status === 'paid' ? "text-emerald-600" :
+                        r.status === 'overdue' ? "text-rose-600" :
+                        "text-amber-600"
+                      )}>
                         <button
                           onClick={() => {
                             const oldLinks = r.financial_transactions ? [r.financial_transactions] : [];
@@ -1535,7 +1550,12 @@ export function FinancialPlanningPanel() {
                       <TableCell className="text-xs font-medium text-slate-500">
                         {p.core_entities?.display_name ?? "—"}
                       </TableCell>
-                      <TableCell>
+                      <TableCell className={cn(
+                        "text-xs font-bold transition-all",
+                        p.status === 'paid' ? "text-emerald-600" :
+                        p.status === 'overdue' ? "text-rose-600" :
+                        "text-amber-600"
+                      )}>
                         <button
                           onClick={() => {
                             const oldLinks = p.financial_transactions ? [p.financial_transactions] : [];
@@ -1678,14 +1698,17 @@ export function FinancialPlanningPanel() {
           <AlertDialogFooter>
             <AlertDialogCancel className="rounded-xl border-slate-200">Cancelar</AlertDialogCancel>
             <AlertDialogAction 
-              className="rounded-xl bg-rose-600 hover:bg-rose-700 text-white border-none"
-              onClick={() => deleteItemM.mutate({ 
-                id: deleteItem.id, 
-                type: deleteType, 
-                scope: deleteScope,
-                recurrenceGroupId: deleteItem?.recurrence_group_id,
-                installmentNumber: deleteItem?.installment_number
-              })}
+              className="rounded-xl bg-rose-600 hover:bg-rose-700 text-white border-none min-w-[140px]"
+              onClick={(e) => {
+                e.preventDefault(); // Evita fechar antes da mutação sucess
+                deleteItemM.mutate({ 
+                  id: deleteItem.id, 
+                  type: deleteType, 
+                  scope: deleteScope,
+                  recurrenceGroupId: deleteItem?.recurrence_group_id,
+                  installmentNumber: deleteItem?.installment_number
+                });
+              }}
               disabled={deleteItemM.isPending}
             >
               {deleteItemM.isPending ? "Excluindo..." : "Confirmar Exclusão"}
