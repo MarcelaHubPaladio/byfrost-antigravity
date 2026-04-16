@@ -104,8 +104,11 @@ function downloadTextFile(filename: string, content: string, mime = "text/plain;
   document.body.appendChild(a);
   a.click();
   a.remove();
-  URL.revokeObjectURL(url);
 }
+
+const formatMoneyBRL = (v: number) => {
+  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
+};
 
 function minutesAgo(iso: string) {
   const diff = Date.now() - new Date(iso).getTime();
@@ -343,15 +346,38 @@ export default function Orders() {
       }
 
       const totalsMap = new Map<string, number>();
+      const itemCountsMap = new Map<string, number>();
       for (const itm of allItems) {
         const cid = itm.case_id;
         const val = Number(itm.total ?? 0);
         totalsMap.set(cid, (totalsMap.get(cid) ?? 0) + val);
+        itemCountsMap.set(cid, (itemCountsMap.get(cid) ?? 0) + 1);
       }
 
-      return { fields: fieldMap, totals: totalsMap };
+      return { fields: fieldMap, totals: totalsMap, itemCounts: itemCountsMap };
     },
   });
+
+  const updateBillingStatus = async (caseId: string, status: string) => {
+    try {
+      const { error } = await supabase
+        .from("case_fields")
+        .upsert({
+          case_id: caseId,
+          key: "billing_status",
+          value_text: status,
+          confidence: 1,
+          source: "admin",
+          last_updated_by: "panel"
+        }, { onConflict: "case_id,key" });
+
+      if (error) throw error;
+      showSuccess(`Status de pagamento: ${status}`);
+      caseDataQ.refetch();
+    } catch (e: any) {
+      showError(`Falha ao atualizar status: ${e.message}`);
+    }
+  };
 
   const filteredRows = useMemo(() => {
     let rows = journeyRows;
@@ -865,8 +891,11 @@ export default function Orders() {
                   <TableHeader>
                     <TableRow>
                       <TableHead>Pedido</TableHead>
+                      <TableHead>Valor</TableHead>
+                      <TableHead>Itens</TableHead>
                       <TableHead>Vendedor</TableHead>
                       <TableHead>Etapa</TableHead>
+                      <TableHead>Pagamento</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead>Atualizado</TableHead>
                     </TableRow>
@@ -885,18 +914,49 @@ export default function Orders() {
                           </div>
                           <div className="text-[10px] text-slate-400">{c.id.slice(0, 8)}</div>
                         </TableCell>
-                        <TableCell className="text-sm">{c.users_profile?.display_name || "—"}</TableCell>
+                        <TableCell className="font-bold whitespace-nowrap">
+                          {formatMoneyBRL(caseDataQ.data?.totals.get(c.id) || 0)}
+                        </TableCell>
+                        <TableCell className="text-center font-medium">
+                          <Badge variant="secondary" className="rounded-lg h-5 min-w-[20px] justify-center">
+                            {caseDataQ.data?.itemCounts.get(c.id) || 0}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-sm truncate max-w-[120px]" title={c.users_profile?.display_name || ""}>
+                          {c.users_profile?.display_name || "—"}
+                        </TableCell>
                         <TableCell>
                           <select
                             value={c.state}
                             onChange={(e) => updateCaseState(c.id, e.target.value)}
-                            className="text-xs border rounded-lg p-1"
+                            className="text-[11px] font-bold border rounded-xl p-1.5 bg-slate-50 border-slate-200 outline-none focus:ring-2 focus:ring-blue-500/20"
                           >
                             {states.map(s => <option key={s} value={s}>{getStateLabel(selectedJourney as any, s)}</option>)}
                           </select>
                         </TableCell>
+                        <TableCell>
+                          <select
+                            value={caseDataQ.data?.fields.get(c.id)?.billing_status || "Pendente"}
+                            onChange={(e) => updateBillingStatus(c.id, e.target.value)}
+                            className={cn(
+                              "text-[10px] font-black uppercase tracking-tighter border rounded-xl p-1.5 outline-none focus:ring-2 transition-all",
+                              (() => {
+                                const s = (caseDataQ.data?.fields.get(c.id)?.billing_status || "Pendente").toLowerCase();
+                                if (s.includes("pago") || s.includes("fat")) return "bg-emerald-50 text-emerald-700 border-emerald-200 focus:ring-emerald-500/20";
+                                if (s.includes("can")) return "bg-rose-50 text-rose-700 border-rose-200 focus:ring-rose-500/20";
+                                return "bg-amber-50 text-amber-700 border-amber-200 focus:ring-amber-500/20";
+                              })()
+                            )}
+                          >
+                            <option value="Pendente">Pendente</option>
+                            <option value="Aguardando Banco">Aguardando Banco</option>
+                            <option value="Pago">Pago</option>
+                            <option value="Faturado">Faturado</option>
+                            <option value="Cancelado">Cancelado</option>
+                          </select>
+                        </TableCell>
                         <TableCell><Badge variant="outline" className="text-[10px] font-normal uppercase">{c.status}</Badge></TableCell>
-                        <TableCell className="text-xs text-slate-500">{minutesAgo(c.updated_at)} min atrás</TableCell>
+                        <TableCell className="text-[10px] text-slate-500 whitespace-nowrap">{minutesAgo(c.updated_at)} min atrás</TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
