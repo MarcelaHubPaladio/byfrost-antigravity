@@ -222,16 +222,26 @@ export default function Orders() {
     queryKey: ["customers_orders", activeTenantId, customerIds.join(",")],
     enabled: Boolean(activeTenantId && customerIds.length),
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("customer_accounts")
-        .select("id,phone_e164,name,email")
-        .eq("tenant_id", activeTenantId!)
-        .in("id", customerIds)
-        .is("deleted_at", null)
-        .limit(500);
-      if (error) throw error;
+      const CHUNK_SIZE = 50;
+      const chunks: string[][] = [];
+      for (let i = 0; i < customerIds.length; i += CHUNK_SIZE) {
+        chunks.push(customerIds.slice(i, i + CHUNK_SIZE));
+      }
+
+      const allCustomers: any[] = [];
+      await Promise.all(chunks.map(async (chunk) => {
+        const { data, error } = await supabase
+          .from("customer_accounts")
+          .select("id,phone_e164,name,email")
+          .eq("tenant_id", activeTenantId!)
+          .in("id", chunk)
+          .is("deleted_at", null);
+        if (error) throw error;
+        if (data) allCustomers.push(...data);
+      }));
+
       const m = new Map<string, any>();
-      for (const c of data ?? []) m.set((c as any).id, c);
+      for (const c of allCustomers) m.set((c as any).id, c);
       return m;
     },
   });
@@ -277,32 +287,48 @@ export default function Orders() {
     queryKey: ["orders_case_fields_extended", activeTenantId, caseIdsForLookup.join(",")],
     enabled: Boolean(activeTenantId && caseIdsForLookup.length),
     queryFn: async () => {
-      const { data: fields, error: fErr } = await supabase
-        .from("case_fields")
-        .select("case_id,key,value_text")
-        .eq("tenant_id", activeTenantId!)
-        .in("case_id", caseIdsForLookup)
-        .in("key", ["whatsapp", "phone", "customer_phone", "sale_date_text", "billing_status", "total_value_raw"])
-        .limit(4000);
-      if (fErr) throw fErr;
+      const CHUNK_SIZE = 50;
+      const chunks: string[][] = [];
+      for (let i = 0; i < caseIdsForLookup.length; i += CHUNK_SIZE) {
+        chunks.push(caseIdsForLookup.slice(i, i + CHUNK_SIZE));
+      }
 
-      const { data: items, error: iErr } = await supabase
-        .from("case_items")
-        .select("case_id,total")
-        .eq("tenant_id", activeTenantId!)
-        .in("case_id", caseIdsForLookup)
-        .is("deleted_at", null);
-      if (iErr) throw iErr;
+      const allFields: any[] = [];
+      const allItems: any[] = [];
+
+      await Promise.all(chunks.map(async (chunk) => {
+        const [fRes, iRes] = await Promise.all([
+          supabase
+            .from("case_fields")
+            .select("case_id,key,value_text")
+            .eq("tenant_id", activeTenantId!)
+            .in("case_id", chunk)
+            .in("key", ["whatsapp", "phone", "customer_phone", "sale_date_text", "billing_status", "total_value_raw"])
+            .limit(1000),
+          supabase
+            .from("case_items")
+            .select("case_id,total")
+            .eq("tenant_id", activeTenantId!)
+            .in("case_id", chunk)
+            .is("deleted_at", null)
+        ]);
+
+        if (fRes.error) throw fRes.error;
+        if (iRes.error) throw iRes.error;
+
+        if (fRes.data) allFields.push(...fRes.data);
+        if (iRes.data) allItems.push(...iRes.data);
+      }));
 
       const fieldMap = new Map<string, any>();
-      for (const r of fields ?? []) {
+      for (const r of allFields) {
         const cid = r.case_id;
         if (!fieldMap.has(cid)) fieldMap.set(cid, {});
         fieldMap.get(cid)[r.key] = r.value_text;
       }
 
       const totalsMap = new Map<string, number>();
-      for (const itm of items ?? []) {
+      for (const itm of allItems) {
         const cid = itm.case_id;
         const val = Number(itm.total ?? 0);
         totalsMap.set(cid, (totalsMap.get(cid) ?? 0) + val);
@@ -397,15 +423,25 @@ export default function Orders() {
     enabled: Boolean(activeTenantId && filteredRows.length),
     queryFn: async () => {
       const ids = filteredRows.map((c) => c.id);
-      const { data, error } = await supabase
-        .from("pendencies")
-        .select("case_id,type,status")
-        .in("case_id", ids)
-        .eq("status", "open");
-      if (error) throw error;
+      const CHUNK_SIZE = 50;
+      const chunks: string[][] = [];
+      for (let i = 0; i < ids.length; i += CHUNK_SIZE) {
+        chunks.push(ids.slice(i, i + CHUNK_SIZE));
+      }
+
+      const allPendencies: any[] = [];
+      await Promise.all(chunks.map(async (chunk) => {
+        const { data, error } = await supabase
+          .from("pendencies")
+          .select("case_id,type,status")
+          .in("case_id", chunk)
+          .eq("status", "open");
+        if (error) throw error;
+        if (data) allPendencies.push(...data);
+      }));
 
       const byCase = new Map<string, { open: number; need_location: boolean }>();
-      for (const p of data ?? []) {
+      for (const p of allPendencies) {
         const cid = (p as any).case_id;
         const cur = byCase.get(cid) ?? { open: 0, need_location: false };
         cur.open++;
