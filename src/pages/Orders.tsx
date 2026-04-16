@@ -222,7 +222,7 @@ export default function Orders() {
     queryKey: ["customers_orders", activeTenantId, customerIds.join(",")],
     enabled: Boolean(activeTenantId && customerIds.length),
     queryFn: async () => {
-      const CHUNK_SIZE = 50;
+      const CHUNK_SIZE = 20;
       const chunks: string[][] = [];
       for (let i = 0; i < customerIds.length; i += CHUNK_SIZE) {
         chunks.push(customerIds.slice(i, i + CHUNK_SIZE));
@@ -266,13 +266,22 @@ export default function Orders() {
     const s = String(input).trim();
     if (!s) return new Date(fallback);
 
-    // Try dd/MM/yyyy
+    // 1. Try DD/MM/YYYY or DD/MM/YY
+    const slashMatch = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})$/);
+    if (slashMatch) {
+      let [_, d, m, y] = slashMatch;
+      if (y.length === 2) y = (Number(y) > 50 ? "19" : "20") + y;
+      const parsed = new Date(Number(y), Number(m) - 1, Number(d));
+      if (!isNaN(parsed.getTime())) return parsed;
+    }
+
+    // 2. Try parse with date-fns for standard formats
     try {
       const d = parse(s, "dd/MM/yyyy", new Date());
       if (!isNaN(d.getTime())) return d;
     } catch {}
 
-    // Try yyyy-MM-dd
+    // 3. Fallback to native Date constructor (handles ISO yyyy-MM-dd)
     try {
       const d = new Date(s);
       if (!isNaN(d.getTime())) return d;
@@ -284,10 +293,10 @@ export default function Orders() {
   const caseIdsForLookup = useMemo(() => journeyRows.map((r) => r.id), [journeyRows]);
 
   const caseDataQ = useQuery({
-    queryKey: ["orders_case_fields_extended", activeTenantId, caseIdsForLookup.join(",")],
+    queryKey: ["orders_case_fields_extended", activeTenantId, journeyRows.length, journeyRows[0]?.id],
     enabled: Boolean(activeTenantId && caseIdsForLookup.length),
     queryFn: async () => {
-      const CHUNK_SIZE = 50;
+      const CHUNK_SIZE = 10;
       const chunks: string[][] = [];
       for (let i = 0; i < caseIdsForLookup.length; i += CHUNK_SIZE) {
         chunks.push(caseIdsForLookup.slice(i, i + CHUNK_SIZE));
@@ -350,6 +359,11 @@ export default function Orders() {
     rows = rows.filter(r => {
       const f = caseDataQ.data?.fields.get(r.id);
       const saleDateText = f?.sale_date_text;
+      
+      // If we are still loading, don't show items in the "wrong" month effectively
+      // or if we have the data, classify it.
+      if (!f && caseDataQ.isLoading) return false;
+
       const d = parseSafeDate(saleDateText, r.created_at);
       return isSameMonth(d, selectedMonth);
     });
@@ -423,7 +437,7 @@ export default function Orders() {
     enabled: Boolean(activeTenantId && filteredRows.length),
     queryFn: async () => {
       const ids = filteredRows.map((c) => c.id);
-      const CHUNK_SIZE = 50;
+      const CHUNK_SIZE = 20;
       const chunks: string[][] = [];
       for (let i = 0; i < ids.length; i += CHUNK_SIZE) {
         chunks.push(ids.slice(i, i + CHUNK_SIZE));
