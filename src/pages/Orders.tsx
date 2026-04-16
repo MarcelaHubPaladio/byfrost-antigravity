@@ -326,7 +326,6 @@ export default function Orders() {
             .from("case_items")
             .select("case_id,total")
             .in("case_id", chunk)
-            .is("deleted_at", null)
         ]);
 
         if (fRes.error) throw fRes.error;
