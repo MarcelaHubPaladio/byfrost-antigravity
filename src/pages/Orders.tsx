@@ -219,7 +219,7 @@ export default function Orders() {
   }, [journeyRows]);
 
   const customersQ = useQuery({
-    queryKey: ["customers_orders", activeTenantId, customerIds.join(",")],
+    queryKey: ["customers_orders", activeTenantId, customerIds.length, customerIds[0], selectedMonth.getTime()],
     enabled: Boolean(activeTenantId && customerIds.length),
     queryFn: async () => {
       const CHUNK_SIZE = 20;
@@ -293,10 +293,10 @@ export default function Orders() {
   const caseIdsForLookup = useMemo(() => journeyRows.map((r) => r.id), [journeyRows]);
 
   const caseDataQ = useQuery({
-    queryKey: ["orders_case_fields_extended", activeTenantId, journeyRows.length, journeyRows[0]?.id],
+    queryKey: ["orders_case_fields_extended", activeTenantId, journeyRows.length, journeyRows[0]?.id, selectedMonth.getTime()],
     enabled: Boolean(activeTenantId && caseIdsForLookup.length),
     queryFn: async () => {
-      const CHUNK_SIZE = 10;
+      const CHUNK_SIZE = 20;
       const chunks: string[][] = [];
       for (let i = 0; i < caseIdsForLookup.length; i += CHUNK_SIZE) {
         chunks.push(caseIdsForLookup.slice(i, i + CHUNK_SIZE));
@@ -310,14 +310,12 @@ export default function Orders() {
           supabase
             .from("case_fields")
             .select("case_id,key,value_text")
-            .eq("tenant_id", activeTenantId!)
             .in("case_id", chunk)
             .in("key", ["whatsapp", "phone", "customer_phone", "sale_date_text", "billing_status", "total_value_raw"])
             .limit(1000),
           supabase
             .from("case_items")
             .select("case_id,total")
-            .eq("tenant_id", activeTenantId!)
             .in("case_id", chunk)
             .is("deleted_at", null)
         ]);
@@ -433,7 +431,7 @@ export default function Orders() {
   }, [filteredRows, selectedMonth, caseDataQ.data]);
 
   const pendQ = useQuery({
-    queryKey: ["orders_pendencies", activeTenantId, filteredRows.map(c => c.id).join(",")],
+    queryKey: ["orders_pendencies", activeTenantId, filteredRows.length, filteredRows[0]?.id, selectedMonth.getTime()],
     enabled: Boolean(activeTenantId && filteredRows.length),
     queryFn: async () => {
       const ids = filteredRows.map((c) => c.id);
