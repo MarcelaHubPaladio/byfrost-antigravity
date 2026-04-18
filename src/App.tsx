@@ -95,6 +95,7 @@ const MktTechaPublicSummary = lazyWithRetry(() => import("@/pages/MktTechaPublic
 const MktTechaPublicReport = lazyWithRetry(() => import("@/pages/MktTechaPublicReport"));
 const SuperTasks = lazyWithRetry(() => import("@/pages/SuperTasks"));
 const Processes = lazyWithRetry(() => import("@/pages/Processes"));
+const ProcessEditor = lazyWithRetry(() => import("@/pages/ProcessEditor"));
 
 
 
@@ -589,6 +590,26 @@ const App = () => (
                       <RequireProcessesEnabled>
                         <RequireRouteAccess routeKey="app.processes">
                           <Processes />
+                        </RequireRouteAccess>
+                      </RequireProcessesEnabled>
+                    }
+                  />
+                  <Route
+                    path="/app/processes/new"
+                    element={
+                      <RequireProcessesEnabled>
+                        <RequireRouteAccess routeKey="app.processes">
+                          <ProcessEditor />
+                        </RequireRouteAccess>
+                      </RequireProcessesEnabled>
+                    }
+                  />
+                  <Route
+                    path="/app/processes/:id"
+                    element={
+                      <RequireProcessesEnabled>
+                        <RequireRouteAccess routeKey="app.processes">
+                          <ProcessEditor />
                         </RequireRouteAccess>
                       </RequireProcessesEnabled>
                     }

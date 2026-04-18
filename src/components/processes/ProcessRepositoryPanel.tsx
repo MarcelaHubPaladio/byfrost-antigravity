@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { useTenant } from "@/providers/TenantProvider";
@@ -21,17 +22,9 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { showError, showSuccess } from "@/utils/toast";
 import { cn } from "@/lib/utils";
-import { 
-  Dialog, 
-  DialogContent, 
-  DialogHeader, 
-  DialogTitle, 
-  DialogTrigger 
-} from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { ProcessAccordionItem } from "@/components/processes/ProcessAccordionItem";
 import { ProcessVisitDashboard } from "@/components/processes/ProcessVisitDashboard";
-import { UpsertProcessDialog } from "@/components/processes/UpsertProcessDialog";
 import { FlowchartViewer } from "@/components/processes/FlowchartViewer";
 
 type ProcessRow = {
@@ -49,6 +42,7 @@ type ProcessRow = {
 
 export function ProcessRepositoryPanel() {
   const qc = useQueryClient();
+  const navigate = useNavigate();
   const { activeTenantId, activeTenant, isSuperAdmin } = useTenant();
   const roleKey = activeTenant?.role ?? "";
   const isAdmin = roleKey === "admin";
@@ -70,6 +64,23 @@ export function ProcessRepositoryPanel() {
     },
   });
 
+  const tenantRolesQ = useQuery({
+    queryKey: ["tenant_roles_common", activeTenantId],
+    enabled: !!activeTenantId,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("tenant_roles")
+        .select("role_id, roles(key, name)")
+        .eq("tenant_id", activeTenantId!)
+        .eq("enabled", true);
+      if (error) throw error;
+      return (data ?? []).map((r: any) => ({
+        key: String(r.roles?.key ?? ""),
+        name: String(r.roles?.name ?? ""),
+      }));
+    },
+  });
+
   const filteredProcesses = useMemo(() => {
     let list = processesQ.data ?? [];
     if (search.trim()) {
@@ -79,15 +90,18 @@ export function ProcessRepositoryPanel() {
         (p.description && p.description.toLowerCase().includes(s))
       );
     }
-    return list.filter(p => !p.is_home_flowchart);
+    return list;
   }, [processesQ.data, search]);
+
+  const roleNamesMap = useMemo(() => {
+    const m = new Map<string, string>();
+    (tenantRolesQ.data ?? []).forEach(r => m.set(r.key, r.name));
+    return m;
+  }, [tenantRolesQ.data]);
 
   const homeFlowchart = useMemo(() => {
     return (processesQ.data ?? []).find(p => p.is_home_flowchart);
   }, [processesQ.data]);
-
-  const [upsertOpen, setUpsertOpen] = useState(false);
-  const [editingProcess, setEditingProcess] = useState<ProcessRow | null>(null);
 
   const canManage = isAdmin || isSuperAdmin;
 
@@ -114,10 +128,7 @@ export function ProcessRepositoryPanel() {
 
           {canManage && (
             <Button 
-                onClick={() => {
-                    setEditingProcess(null);
-                    setUpsertOpen(true);
-                }}
+                onClick={() => navigate("/app/processes/new")}
                 className="h-10 rounded-2xl bg-[hsl(var(--byfrost-accent))] px-4 text-white hover:bg-[hsl(var(--byfrost-accent)/0.9)]"
             >
               <Plus className="mr-2 h-4 w-4" /> Novo Processo
@@ -168,7 +179,7 @@ export function ProcessRepositoryPanel() {
               <div className="relative flex-1">
                 <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                 <Input 
-                  placeholder="Buscar por título ou descrição..." 
+                   placeholder="Buscar por título ou descrição..." 
                   className="h-11 rounded-2xl pl-10 border-slate-200 bg-white shadow-sm focus-visible:ring-slate-200"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
@@ -186,10 +197,8 @@ export function ProcessRepositoryPanel() {
                     key={p.id} 
                     process={p} 
                     canManage={canManage}
-                    onEdit={() => {
-                        setEditingProcess(p);
-                        setUpsertOpen(true);
-                    }}
+                    roleName={p.target_role ? roleNamesMap.get(p.target_role) : undefined}
+                    onEdit={() => navigate(`/app/processes/${p.id}`)}
                   />
                 ))
               ) : (
@@ -207,12 +216,6 @@ export function ProcessRepositoryPanel() {
           <ProcessVisitDashboard />
         </TabsContent>
       </Tabs>
-
-      <UpsertProcessDialog 
-        open={upsertOpen} 
-        onOpenChange={setUpsertOpen} 
-        process={editingProcess} 
-      />
     </div>
   );
 }

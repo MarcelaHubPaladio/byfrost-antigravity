@@ -35,10 +35,11 @@ type ProcessRow = {
 interface ProcessAccordionItemProps {
   process: ProcessRow;
   canManage?: boolean;
+  roleName?: string;
   onEdit?: () => void;
 }
 
-export function ProcessAccordionItem({ process, canManage, onEdit }: ProcessAccordionItemProps) {
+export function ProcessAccordionItem({ process, canManage, roleName, onEdit }: ProcessAccordionItemProps) {
   const { user } = useSession();
   const { activeTenantId } = useTenant();
   const [isOpen, setIsOpen] = useState(false);
@@ -76,8 +77,11 @@ export function ProcessAccordionItem({ process, canManage, onEdit }: ProcessAcco
           <div className="min-w-0">
             <h3 className="truncate text-base font-semibold text-slate-900">{process.title}</h3>
             <div className="mt-1 flex items-center gap-3">
-              <Badge variant="outline" className="rounded-full border-slate-200 bg-slate-50 text-[10px] h-5 px-2">
-                {process.target_role || "Todos"}
+              <Badge variant="outline" className={cn(
+                "rounded-full border-slate-200 bg-slate-50 text-[10px] h-5 px-2",
+                process.is_home_flowchart && "border-amber-200 bg-amber-50 text-amber-700 font-bold"
+              )}>
+                {process.is_home_flowchart ? "MAPA GERAL" : (roleName || "Todos")}
               </Badge>
               <div className="flex items-center gap-1.5 text-[11px] text-slate-400">
                 <Clock className="h-3 w-3" />
