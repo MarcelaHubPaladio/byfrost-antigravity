@@ -190,6 +190,7 @@ function getPageName(pathname: string) {
   if (pathname.startsWith("/app/me")) return "Meu usuário";
   if (pathname.startsWith("/app/admin")) return "Admin";
   if (pathname.startsWith("/app/simulator")) return "Simulador";
+  if (pathname.startsWith("/app/processes")) return "Processos";
   if (pathname.startsWith("/login")) return "Login";
   if (pathname.startsWith("/tenants")) return "Tenants";
   return "Byfrost";
@@ -398,6 +399,10 @@ function isCommunicationEnabled(modulesJson: any) {
   return Boolean(modulesJson?.communication_enabled === true);
 }
 
+function isProcessesEnabled(modulesJson: any) {
+  return Boolean(modulesJson?.processes_enabled === true);
+}
+
 type FinanceNavChild = {
   to: string;
   label: string;
@@ -574,6 +579,7 @@ export function AppShell({
   const portalEnabledForTenant = isPortalEnabled(activeTenant?.modules_json);
   const mediaKitEnabledForTenant = isMediaKitEnabled(activeTenant?.modules_json);
   const communicationEnabledForTenant = isCommunicationEnabled(activeTenant?.modules_json);
+  const processesEnabledForTenant = isProcessesEnabled(activeTenant?.modules_json);
 
   const navAccessQ = useQuery({
     queryKey: ["nav_access", activeTenantId, roleKey],
@@ -616,6 +622,7 @@ export function AppShell({
         "app.portal",
         "app.media_kit",
         "app.communication",
+        "app.processes",
       ];
 
       try {
@@ -1110,6 +1117,15 @@ export function AppShell({
                     disabled={!can("app.tv_corporativa")}
                   />
                 )}
+                
+                {processesEnabledForTenant && (
+                  <NavTile
+                    to="/app/processes"
+                    icon={ClipboardCheck}
+                    label="Processos"
+                    disabled={!can("app.processes")}
+                  />
+                )}
 
                 {(activeTenant?.modules_json?.tasks_enabled) && (
                   <NavTile 
@@ -1487,6 +1503,16 @@ export function AppShell({
                                 icon={Tv}
                                 label="TV Corporativa"
                                 disabled={!can("app.tv_corporativa")}
+                                onNavigate={() => setMobileNavOpen(false)}
+                              />
+                            )}
+
+                            {processesEnabledForTenant && (
+                              <MobileNavItem
+                                to="/app/processes"
+                                icon={ClipboardCheck}
+                                label="Processos"
+                                disabled={!can("app.processes")}
                                 onNavigate={() => setMobileNavOpen(false)}
                               />
                             )}

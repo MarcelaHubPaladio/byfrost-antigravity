@@ -11,6 +11,7 @@ import { ThemeProvider } from "@/providers/ThemeProvider";
 import { RequireTenantRole } from "@/components/RequireTenantRole";
 import { RequireRouteAccess } from "./components/RequireRouteAccess";
 import { RequireGoalsEnabled } from "./components/RequireGoalsEnabled";
+import { RequireProcessesEnabled } from "@/components/RequireProcessesEnabled";
 import {
   RequireTvCorporativaEnabled,
 } from "@/components/RequireTvCorporativaEnabled";
@@ -93,6 +94,7 @@ const MktTechaPublicApproval = lazyWithRetry(() => import("@/pages/MktTechaPubli
 const MktTechaPublicSummary = lazyWithRetry(() => import("@/pages/MktTechaPublicSummary"));
 const MktTechaPublicReport = lazyWithRetry(() => import("@/pages/MktTechaPublicReport"));
 const SuperTasks = lazyWithRetry(() => import("@/pages/SuperTasks"));
+const Processes = lazyWithRetry(() => import("@/pages/Processes"));
 
 
 
@@ -578,6 +580,17 @@ const App = () => (
                       <RequireRouteAccess routeKey="app.me">
                         <Me />
                       </RequireRouteAccess>
+                    }
+                  />
+
+                  <Route
+                    path="/app/processes"
+                    element={
+                      <RequireProcessesEnabled>
+                        <RequireRouteAccess routeKey="app.processes">
+                          <Processes />
+                        </RequireRouteAccess>
+                      </RequireProcessesEnabled>
                     }
                   />
 
