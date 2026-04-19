@@ -599,7 +599,9 @@ const App = () => (
                     element={
                       <RequireProcessesEnabled>
                         <RequireRouteAccess routeKey="app.processes">
-                          <ProcessEditor />
+                          <RequireTenantRole roles={["admin"]}>
+                            <ProcessEditor />
+                          </RequireTenantRole>
                         </RequireRouteAccess>
                       </RequireProcessesEnabled>
                     }
@@ -609,7 +611,9 @@ const App = () => (
                     element={
                       <RequireProcessesEnabled>
                         <RequireRouteAccess routeKey="app.processes">
-                          <ProcessEditor />
+                          <RequireTenantRole roles={["admin"]}>
+                            <ProcessEditor />
+                          </RequireTenantRole>
                         </RequireRouteAccess>
                       </RequireProcessesEnabled>
                     }
