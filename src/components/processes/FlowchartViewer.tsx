@@ -59,8 +59,15 @@ interface FlowchartViewerProps {
 export function FlowchartViewer({ data, className, onNodeClick }: FlowchartViewerProps) {
   const navigate = useNavigate();
   
-  const nodes = useMemo(() => data?.nodes || [], [data]);
-  const edges = useMemo(() => data?.edges || [], [data]);
+  const nodes = useMemo(() => {
+    if (!data || !Array.isArray(data.nodes)) return [];
+    return data.nodes;
+  }, [data]);
+
+  const edges = useMemo(() => {
+    if (!data || !Array.isArray(data.edges)) return [];
+    return data.edges;
+  }, [data]);
 
   const handleNodeClick = (_: any, node: any) => {
     if (onNodeClick) {

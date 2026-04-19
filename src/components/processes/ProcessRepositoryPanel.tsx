@@ -129,11 +129,21 @@ export function ProcessRepositoryPanel() {
   }, [processesQ.data]);
 
   const activeHomeFlowchart = useMemo(() => {
+    if (homeFlowcharts.length === 0) return null;
+    
     if (selectedHomeFlowId) {
-        return homeFlowcharts.find(p => p.id === selectedHomeFlowId) || homeFlowcharts[0];
+        const found = homeFlowcharts.find(p => p.id === selectedHomeFlowId);
+        if (found) return found;
     }
-    // Default to the first one that has actual nodes
-    return homeFlowcharts.find(p => (p.flowchart_json?.nodes || []).length > 0) || homeFlowcharts[0];
+    
+    // Auto-select the first roadmap that has actual content
+    const withContent = homeFlowcharts.find(p => {
+        const flow = p.flowchart_json || {};
+        const nodes = Array.isArray(flow.nodes) ? flow.nodes : [];
+        return nodes.length > 0;
+    });
+
+    return withContent || homeFlowcharts[0];
   }, [homeFlowcharts, selectedHomeFlowId]);
 
   const canManage = isAdmin || isSuperAdmin;
@@ -190,6 +200,7 @@ export function ProcessRepositoryPanel() {
             <div className="flex-1 min-h-[500px] border border-slate-200 rounded-[22px] overflow-hidden bg-white">
               {activeHomeFlowchart ? (
                 <FlowchartViewer 
+                   key={activeHomeFlowchart.id}
                    data={activeHomeFlowchart.flowchart_json || { nodes: [], edges: [] }} 
                    className="h-full border-0 rounded-none bg-white p-12"
                    onNodeClick={(data) => {
