@@ -48,6 +48,7 @@ export function ProcessRepositoryPanel() {
   const isAdmin = roleKey === "admin";
   const [activeTab, setActiveTab] = useState("home");
   const [search, setSearch] = useState("");
+  const [selectedHomeFlowId, setSelectedHomeFlowId] = useState<string | null>(null);
 
   const processesQ = useQuery({
     queryKey: ["processes", activeTenantId],
@@ -99,9 +100,17 @@ export function ProcessRepositoryPanel() {
     return m;
   }, [tenantRolesQ.data]);
 
-  const homeFlowchart = useMemo(() => {
-    return (processesQ.data ?? []).find(p => p.is_home_flowchart);
+  const homeFlowcharts = useMemo(() => {
+    return (processesQ.data ?? []).filter(p => p.is_home_flowchart);
   }, [processesQ.data]);
+
+  const activeHomeFlowchart = useMemo(() => {
+    if (selectedHomeFlowId) {
+        return homeFlowcharts.find(p => p.id === selectedHomeFlowId) || homeFlowcharts[0];
+    }
+    // Default to the first one that has actual nodes, or just the first one
+    return homeFlowcharts.find(p => (p.flowchart_json?.nodes || []).length > 0) || homeFlowcharts[0];
+  }, [homeFlowcharts, selectedHomeFlowId]);
 
   const canManage = isAdmin || isSuperAdmin;
 
@@ -138,20 +147,26 @@ export function ProcessRepositoryPanel() {
 
         <TabsContent value="home" className="mt-4 outline-none">
           <Card className="min-h-[60vh] rounded-[28px] border-slate-200 bg-white p-6 shadow-sm overflow-hidden flex flex-col">
-            <div className="mb-6 flex items-center justify-between">
-              <div>
-                <h2 className="text-xl font-bold text-slate-900 tracking-tight">Mapa de Operações</h2>
-                <p className="text-sm text-slate-500">Navegue pelos processos clicando nas etapas do fluxo.</p>
+            {homeFlowcharts.length > 1 && (
+              <div className="mb-6 flex flex-wrap gap-2">
+                {homeFlowcharts.map(p => (
+                  <Button 
+                    key={p.id}
+                    variant={activeHomeFlowchart?.id === p.id ? "default" : "outline"}
+                    size="sm"
+                    className="rounded-full h-8 text-[11px] font-bold"
+                    onClick={() => setSelectedHomeFlowId(p.id)}
+                  >
+                    {p.title}
+                  </Button>
+                ))}
               </div>
-              <Badge variant="outline" className="rounded-full bg-slate-50 border-slate-200 text-slate-400 font-bold text-[10px] py-1 px-3">
-                INTERATIVO
-              </Badge>
-            </div>
+            )}
             
             <div className="flex-1 min-h-[500px] border border-slate-200 rounded-[22px] overflow-hidden bg-white">
-              {homeFlowchart ? (
+              {activeHomeFlowchart ? (
                 <FlowchartViewer 
-                   data={homeFlowchart.flowchart_json || { nodes: [], edges: [] }} 
+                   data={activeHomeFlowchart.flowchart_json || { nodes: [], edges: [] }} 
                    className="h-full border-0 rounded-none bg-white p-12"
                    onNodeClick={(data) => {
                        if (data.linkedProcessId) {

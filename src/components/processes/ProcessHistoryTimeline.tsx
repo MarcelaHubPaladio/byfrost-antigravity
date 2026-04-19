@@ -39,14 +39,17 @@ export function ProcessHistoryTimeline({ processId }: ProcessHistoryTimelineProp
         .from("process_versions")
         .select(`
           *,
-          users_profile:users_profile!process_versions_created_by_fkey (
+          users_profile!created_by (
             display_name
           )
         `)
         .eq("process_id", processId)
         .order("version_number", { ascending: false });
       
-      if (error) throw error;
+      if (error) {
+        console.error("[ProcessHistoryTimeline] Query Error:", error);
+        throw error;
+      }
       return (data || []) as any[];
     },
   });
