@@ -39,7 +39,7 @@ export function ProcessHistoryTimeline({ processId }: ProcessHistoryTimelineProp
         .from("process_versions")
         .select(`
           *,
-          users_profile!created_by (
+          users_profile:users_profile!process_versions_created_by_fkey (
             display_name
           )
         `)
