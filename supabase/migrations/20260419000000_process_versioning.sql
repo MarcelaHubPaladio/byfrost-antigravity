@@ -21,6 +21,23 @@ create table if not exists public.process_versions (
     created_by uuid not null references public.users_profile(user_id) on delete cascade
 );
 
+-- Ensure the foreign key points to users_profile even if the table was created in a previous run with auth.users
+do $$
+begin
+  if exists (
+    select 1 from information_schema.table_constraints 
+    where table_name = 'process_versions' and constraint_name = 'process_versions_created_by_fkey'
+  ) then
+    alter table public.process_versions drop constraint process_versions_created_by_fkey;
+  end if;
+  
+  alter table public.process_versions 
+  add constraint process_versions_created_by_fkey 
+  foreign key (created_by) references public.users_profile(user_id) on delete cascade;
+exception when others then
+  null;
+end $$;
+
 -- 3. Enable RLS
 alter table public.process_versions enable row level security;
 
