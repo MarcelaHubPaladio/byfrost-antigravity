@@ -18,22 +18,23 @@ create table if not exists public.process_versions (
     flowchart_json jsonb not null default '{}'::jsonb,
     change_summary text, -- The "history log" message
     created_at timestamptz not null default now(),
-    created_by uuid not null references public.users_profile(user_id) on delete cascade
+    created_by uuid not null,
+    constraint process_versions_user_profile_fkey foreign key (created_by, tenant_id) references public.users_profile(user_id, tenant_id) on delete cascade
 );
 
--- Ensure the foreign key points to users_profile even if the table was created in a previous run with auth.users
+-- Helper to ensure constraint is correct on existing tables
 do $$
 begin
-  if exists (
-    select 1 from information_schema.table_constraints 
-    where table_name = 'process_versions' and constraint_name = 'process_versions_created_by_fkey'
-  ) then
-    alter table public.process_versions drop constraint process_versions_created_by_fkey;
-  end if;
+  -- Remove any old variants
+  alter table public.process_versions drop constraint if exists process_versions_created_by_fkey;
+  alter table public.process_versions drop constraint if exists process_versions_user_profile_fkey;
   
+  -- Add the COMPOSITE foreign key for PostgREST
   alter table public.process_versions 
-  add constraint process_versions_created_by_fkey 
-  foreign key (created_by) references public.users_profile(user_id) on delete cascade;
+  add constraint process_versions_user_profile_fkey 
+  foreign key (created_by, tenant_id) 
+  references public.users_profile(user_id, tenant_id) 
+  on delete cascade;
 exception when others then
   null;
 end $$;
