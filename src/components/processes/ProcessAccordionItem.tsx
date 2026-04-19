@@ -41,9 +41,10 @@ interface ProcessAccordionItemProps {
   canManage?: boolean;
   roleName?: string;
   onEdit?: () => void;
+  onDelete?: () => void;
 }
 
-export function ProcessAccordionItem({ process, canManage, roleName, onEdit }: ProcessAccordionItemProps) {
+export function ProcessAccordionItem({ process, canManage, roleName, onEdit, onDelete }: ProcessAccordionItemProps) {
   const { user } = useSession();
   const { activeTenantId } = useTenant();
   const [isOpen, setIsOpen] = useState(false);
@@ -107,6 +108,20 @@ export function ProcessAccordionItem({ process, canManage, roleName, onEdit }: P
                 }}
             >
               <Pencil className="h-4 w-4" />
+            </Button>
+          )}
+
+          {canManage && (
+            <Button 
+                variant="ghost" 
+                size="icon" 
+                className="h-9 w-9 rounded-xl text-slate-400 hover:text-rose-600 hover:bg-rose-50"
+                onClick={(e) => {
+                    e.stopPropagation();
+                    onDelete?.();
+                }}
+            >
+              <Trash2 className="h-4 w-4" />
             </Button>
           )}
           {isOpen ? <ChevronUp className="h-5 w-5 text-slate-400" /> : <ChevronDown className="h-5 w-5 text-slate-400" />}

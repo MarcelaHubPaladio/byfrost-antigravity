@@ -95,6 +95,21 @@ export function ProcessRepositoryPanel() {
     return list;
   }, [processesQ.data, search]);
 
+  const deleteProcessM = useMutation({
+    mutationFn: async (id: string) => {
+        const { error } = await supabase
+            .from("processes")
+            .update({ deleted_at: new Date().toISOString() })
+            .eq("id", id);
+        if (error) throw error;
+    },
+    onSuccess: () => {
+        showSuccess("Processo excluído com sucesso");
+        processesQ.refetch();
+    },
+    onError: (err: any) => showError(err.message)
+  });
+
   const roleNamesMap = useMemo(() => {
     const m = new Map<string, string>();
     (tenantRolesQ.data ?? []).forEach(r => m.set(r.key, r.name));
@@ -231,6 +246,11 @@ export function ProcessRepositoryPanel() {
                                 canManage={canManage}
                                 roleName={p.target_role ? roleNamesMap.get(p.target_role) : undefined}
                                 onEdit={() => navigate(`/app/processes/${p.id}`)}
+                                onDelete={() => {
+                                    if (window.confirm("Deseja realmente excluir este processo?")) {
+                                        deleteProcessM.mutate(p.id);
+                                    }
+                                }}
                             />
                         ))}
                     </div>
@@ -248,6 +268,11 @@ export function ProcessRepositoryPanel() {
                             canManage={canManage}
                             roleName={p.target_role ? roleNamesMap.get(p.target_role) : undefined}
                             onEdit={() => navigate(`/app/processes/${p.id}`)}
+                            onDelete={() => {
+                                if (window.confirm("Deseja realmente excluir este processo?")) {
+                                    deleteProcessM.mutate(p.id);
+                                }
+                            }}
                           />
                         ))
                       ) : (
