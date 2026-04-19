@@ -72,6 +72,16 @@ export function FlowchartViewer({ data, className, onNodeClick }: FlowchartViewe
     }
   };
 
+  if (!nodes || nodes.length === 0) {
+    return (
+        <div className={cn("w-full h-full bg-slate-50/50 flex flex-col items-center justify-center p-12 text-center", className)}>
+            <Workflow className="h-12 w-12 text-slate-200 mb-4" />
+            <h3 className="text-sm font-bold text-slate-400 uppercase tracking-widest">Fluxograma Vazio</h3>
+            <p className="text-xs text-slate-400 mt-1">Este processo não possui etapas desenhadas no momento.</p>
+        </div>
+    );
+  }
+
   return (
     <div className={cn("w-full h-full bg-slate-50 relative", className)}>
       <ReactFlow
@@ -92,3 +102,5 @@ export function FlowchartViewer({ data, className, onNodeClick }: FlowchartViewe
     </div>
   );
 }
+
+import { Workflow } from 'lucide-react';

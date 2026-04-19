@@ -138,22 +138,27 @@ export function ProcessRepositoryPanel() {
 
         <TabsContent value="home" className="mt-4 outline-none">
           <Card className="min-h-[60vh] rounded-[28px] border-slate-200 bg-white p-6 shadow-sm overflow-hidden flex flex-col">
-            <div className="mb-4">
-              <h2 className="text-lg font-semibold text-slate-900">Mapa de Processos</h2>
-              <p className="text-sm text-slate-500">Navegue pelos processos clicando nas áreas do fluxograma.</p>
+            <div className="mb-6 flex items-center justify-between">
+              <div>
+                <h2 className="text-xl font-bold text-slate-900 tracking-tight">Mapa de Operações</h2>
+                <p className="text-sm text-slate-500">Navegue pelos processos clicando nas etapas do fluxo.</p>
+              </div>
+              <Badge variant="outline" className="rounded-full bg-slate-50 border-slate-200 text-slate-400 font-bold text-[10px] py-1 px-3">
+                INTERATIVO
+              </Badge>
             </div>
             
-            <div className="flex-1 overflow-auto rounded-[22px] border border-slate-200">
+            <div className="flex-1 min-h-[500px] border border-slate-200 rounded-[22px] overflow-hidden bg-white">
               {homeFlowchart ? (
                 <FlowchartViewer 
                    data={homeFlowchart.flowchart_json || { nodes: [], edges: [] }} 
                    className="h-full border-0 rounded-none bg-white p-12"
-                   onNodeClick={(node) => {
-                       if (node.linkedProcessId) {
-                           // Navigate or open linked process?
-                           // For now, let's search for it or switch to list
+                   onNodeClick={(data) => {
+                       if (data.linkedProcessId) {
+                           // Find the process title to make search accurate
+                           const linkedProcess = processesQ.data?.find(p => p.id === data.linkedProcessId);
+                           setSearch(linkedProcess?.title || data.label);
                            setActiveTab("list");
-                           setSearch(node.label);
                        }
                    }}
                 />

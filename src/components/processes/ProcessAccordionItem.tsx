@@ -19,6 +19,7 @@ import { cn } from "@/lib/utils";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ProcessFileGallery } from "@/components/processes/ProcessFileGallery";
 import { ProcessHistoryTimeline } from "@/components/processes/ProcessHistoryTimeline";
+import { FlowchartViewer } from "@/components/processes/FlowchartViewer";
 import { History } from "lucide-react";
 
 type ProcessRow = {
@@ -195,12 +196,16 @@ export function ProcessAccordionItem({ process, canManage, roleName, onEdit }: P
             )}
 
             {activeSubTab === "flow" && (
-              <div className="h-80 w-full bg-slate-900/5 rounded-2xl flex items-center justify-center border border-slate-200">
-                <div className="text-center">
-                   <Workflow className="mx-auto h-8 w-8 text-slate-300 mb-2" />
-                   <p className="text-xs text-slate-500 font-medium">Fluxograma Operacional</p>
-                   <p className="text-[10px] text-slate-400 mt-1">Implementação do Visualizador em progresso...</p>
-                </div>
+              <div className="h-[400px] w-full rounded-2xl overflow-hidden border border-slate-200 shadow-inner">
+                <FlowchartViewer 
+                    data={process.flowchart_json || { nodes: [], edges: [] }} 
+                    onNodeClick={(data) => {
+                        if (data.linkedProcessId) {
+                            // In context of accordion, maybe we don't navigate away, 
+                            // but we could at least show it's linked
+                        }
+                    }}
+                />
               </div>
             )}
 
