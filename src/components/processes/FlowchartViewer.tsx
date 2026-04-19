@@ -1,103 +1,94 @@
-import { useState } from "react";
-import { Workflow, MousePointer2 } from "lucide-react";
-import { cn } from "@/lib/utils";
+import React, { useMemo } from 'react';
+import {
+  ReactFlow,
+  Background,
+  useNodesState,
+  useEdgesState,
+  Position,
+  Handle,
+  BackgroundVariant,
+} from '@xyflow/react';
+import '@xyflow/react/dist/style.css';
+import { Link2 } from "lucide-react";
+import { cn } from '@/lib/utils';
+import { useNavigate } from 'react-router-dom';
 
-type Node = {
-  id: string;
-  label: string;
-  x: number;
-  y: number;
-  type?: "start" | "end" | "process" | "decision";
-  linkedProcessId?: string;
+// --- Custom Nodes (Read-only version) ---
+
+const ProcessNode = ({ data }: any) => {
+  return (
+    <div className={cn(
+      "px-4 py-3 min-w-[150px] rounded-2xl border-2 bg-white shadow-md transition-all",
+      data.linkedProcessId ? "border-slate-200 hover:border-blue-300 hover:shadow-blue-100 cursor-pointer" : "border-slate-100"
+    )}>
+      <Handle type="target" position={Position.Top} className="opacity-0" />
+      <div className="flex flex-col gap-1">
+        <div className="flex items-center justify-between gap-2">
+            <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">{data.typeLabel || "Etapa"}</span>
+            {data.linkedProcessId && <Link2 className="h-3 w-3 text-blue-500 animate-pulse" />}
+        </div>
+        <p className="text-sm font-bold text-slate-900 leading-tight">{data.label}</p>
+      </div>
+      <Handle type="source" position={Position.Bottom} className="opacity-0" />
+    </div>
+  );
 };
 
-type Edge = {
-  from: string;
-  to: string;
-  label?: string;
+const DecisionNode = ({ data }: any) => {
+  return (
+    <div className="w-[100px] h-[100px] flex items-center justify-center relative">
+      <Handle type="target" position={Position.Top} className="opacity-0" />
+      <div className="absolute inset-0 rotate-45 border-2 border-amber-100 bg-amber-50/30 rounded-xl shadow-sm" />
+      <p className="relative z-10 text-[10px] font-bold text-slate-900 text-center px-4 leading-tight">{data.label}</p>
+      <Handle type="source" position={Position.Bottom} className="opacity-0" />
+    </div>
+  );
 };
 
-type FlowchartData = {
-  nodes: Node[];
-  edges: Edge[];
+const nodeTypes = {
+  process: ProcessNode,
+  decision: DecisionNode,
 };
 
 interface FlowchartViewerProps {
-  data: FlowchartData;
-  onNodeClick?: (node: Node) => void;
+  data: any;
   className?: string;
+  onNodeClick?: (node: any) => void;
 }
 
-export function FlowchartViewer({ data, onNodeClick, className }: FlowchartViewerProps) {
-  const nodes = data?.nodes || [];
-  const edges = data?.edges || [];
+export function FlowchartViewer({ data, className, onNodeClick }: FlowchartViewerProps) {
+  const navigate = useNavigate();
+  
+  const nodes = useMemo(() => data?.nodes || [], [data]);
+  const edges = useMemo(() => data?.edges || [], [data]);
 
-  const getNodePos = (id: string) => {
-    const node = nodes.find(n => n.id === id);
-    return node ? { x: node.x, y: node.y } : { x: 0, y: 0 };
+  const handleNodeClick = (_: any, node: any) => {
+    if (onNodeClick) {
+        onNodeClick(node.data);
+    } else if (node.data.linkedProcessId) {
+        // Default behavior: search/filter will be handled in the parent, 
+        // but we can also navigate if it's a direct ID
+        // For now, let the parent handle it via the callback
+    }
   };
 
   return (
-    <div className={cn("relative w-full overflow-auto bg-slate-50/50 rounded-2xl border border-slate-200 p-8 min-h-[400px]", className)}>
-      <svg className="absolute inset-0 h-full w-full pointer-events-none">
-        <defs>
-          <marker
-            id="arrowhead"
-            markerWidth="10"
-            markerHeight="7"
-            refX="9"
-            refY="3.5"
-            orient="auto"
-          >
-            <polygon points="0 0, 10 3.5, 0 7" fill="#cbd5e1" />
-          </marker>
-        </defs>
-        {edges.map((edge, i) => {
-          const from = getNodePos(edge.from);
-          const to = getNodePos(edge.to);
-          return (
-            <line
-              key={i}
-              x1={from.x + 80}
-              y1={from.y + 30}
-              x2={to.x + 80}
-              y2={to.y + 30}
-              stroke="#cbd5e1"
-              strokeWidth="2"
-              markerEnd="url(#arrowhead)"
-            />
-          );
-        })}
-      </svg>
-
-      <div className="relative">
-        {nodes.map(node => (
-          <button
-            key={node.id}
-            onClick={() => onNodeClick?.(node)}
-            style={{ left: node.x, top: node.y }}
-            className={cn(
-              "absolute flex h-[60px] w-[160px] items-center justify-center border-2 px-3 text-center transition-all bg-white shadow-sm ring-offset-2 hover:scale-105 active:scale-95 z-10",
-              node.type === "start" ? "rounded-full border-emerald-200 bg-emerald-50 text-emerald-700 font-bold" :
-              node.type === "end" ? "rounded-full border-rose-200 bg-rose-50 text-rose-700 font-bold" :
-              node.type === "decision" ? "rotate-45 border-amber-200 bg-amber-50 text-amber-700" :
-              "rounded-xl border-slate-100 bg-white text-slate-700 font-medium hover:border-[hsl(var(--byfrost-accent))]"
-            )}
-          >
-            <div className={cn(node.type === "decision" ? "-rotate-45" : "", "flex items-center gap-1.5")}>
-              <span className="text-[11px] leading-tight line-clamp-2">{node.label}</span>
-              {node.linkedProcessId && <MousePointer2 className="h-3 w-3 text-blue-500" />}
-            </div>
-          </button>
-        ))}
-      </div>
-
-      {nodes.length === 0 && (
-        <div className="flex h-[300px] flex-col items-center justify-center text-slate-400">
-          <Workflow className="h-10 w-10 mb-2 opacity-20" />
-          <p className="text-xs font-medium italic">Nenhum dado de fluxograma disponível.</p>
-        </div>
-      )}
+    <div className={cn("w-full h-full bg-slate-50 relative", className)}>
+      <ReactFlow
+        nodes={nodes}
+        edges={edges}
+        nodeTypes={nodeTypes}
+        onNodeClick={handleNodeClick}
+        fitView
+        nodesDraggable={false}
+        nodesConnectable={false}
+        elementsSelectable={true}
+        panOnDrag={true}
+        zoomOnScroll={true}
+        attributionPosition="bottom-right"
+      >
+        <Background variant={BackgroundVariant.Dots} gap={20} size={1} color="#e5e7eb" />
+      </ReactFlow>
     </div>
   );
 }

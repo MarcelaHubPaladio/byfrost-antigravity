@@ -26,11 +26,13 @@ import {
   Settings2,
   Loader2,
   FileIcon,
-  MessageSquare
+  MessageSquare,
+  FileText
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { showError, showSuccess } from "@/utils/toast";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { 
   Select, 
   SelectContent, 
@@ -40,6 +42,7 @@ import {
 } from "@/components/ui/select";
 import { Card } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
+import { FlowchartEditor } from "@/components/processes/FlowchartEditor";
 
 type ProcessRow = {
   id: string;
@@ -68,6 +71,7 @@ export default function ProcessEditor() {
   const [checklists, setChecklists] = useState<string[]>([]);
   const [newCheckItem, setNewCheckItem] = useState("");
   const [changeSummary, setChangeSummary] = useState("");
+  const [flowchartJson, setFlowchartJson] = useState<any>({ nodes: [], edges: [] });
 
   const processQ = useQuery({
     queryKey: ["process_detail", id],
@@ -112,6 +116,7 @@ export default function ProcessEditor() {
       setTargetRole(p.target_role);
       setIsHomeFlowchart(p.is_home_flowchart);
       setChecklists(Array.isArray(p.checklists) ? p.checklists : []);
+      setFlowchartJson(p.flowchart_json || { nodes: [], edges: [] });
     }
   }, [processQ.data]);
 
@@ -128,6 +133,7 @@ export default function ProcessEditor() {
         target_role: targetRole === "all" ? null : targetRole,
         is_home_flowchart: isHomeFlowchart,
         checklists: checklists,
+        flowchart_json: flowchartJson,
         updated_at: new Date().toISOString(),
       };
 
@@ -147,7 +153,7 @@ export default function ProcessEditor() {
             title: title.trim(),
             description: description || null,
             checklists: checklists,
-            flowchart_json: processQ.data?.flowchart_json || {},
+            flowchart_json: flowchartJson,
             change_summary: changeSummary.trim(),
             created_by: user.id
           });
@@ -186,7 +192,7 @@ export default function ProcessEditor() {
             title: title.trim(),
             description: description || null,
             checklists: checklists,
-            flowchart_json: {},
+            flowchart_json: flowchartJson || {},
             change_summary: "Versão Inicial",
             created_by: user.id
           });
@@ -336,50 +342,59 @@ export default function ProcessEditor() {
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             {/* Main Content */}
             <div className="lg:col-span-2 space-y-6">
-              <Card className="p-6 rounded-[28px] border-slate-200 shadow-sm space-y-6">
-                <div className="space-y-2">
-                  <Label htmlFor="title" className="text-sm font-semibold text-slate-700 flex items-center gap-2">
-                    <Hash className="h-4 w-4 text-slate-400" /> Título do Processo
-                    {!isNew && processQ.data && (
-                        <Badge variant="secondary" className="rounded-full bg-slate-100 text-[10px] font-bold text-slate-500">
-                            VERSÃO {processQ.data.version_number}
-                        </Badge>
-                    )}
-                  </Label>
-                  <Input 
-                    id="title" 
-                    placeholder="Ex: Abertura de Loja, Recebimento de Mercadoria..." 
-                    value={title}
-                    onChange={(e) => setTitle(e.target.value)}
-                    className="h-12 rounded-xl border-slate-200 text-lg font-medium focus-visible:ring-slate-200"
-                  />
+              <Tabs defaultValue="content" className="w-full">
+                <div className="flex items-center justify-between gap-4 mb-4 overflow-x-auto pb-1">
+                   <TabsList className="h-11 rounded-2xl bg-slate-100 p-1">
+                     <TabsTrigger value="content" className="rounded-xl px-4 text-xs font-medium data-[state=active]:bg-white data-[state=active]:shadow-sm">
+                        <FileText className="mr-2 h-4 w-4" /> Instruções
+                     </TabsTrigger>
+                     <TabsTrigger value="flowchart" className="rounded-xl px-4 text-xs font-medium data-[state=active]:bg-white data-[state=active]:shadow-sm">
+                        <Workflow className="mr-2 h-4 w-4" /> Fluxograma
+                     </TabsTrigger>
+                   </TabsList>
                 </div>
 
-                <div className="space-y-2">
-                  <Label className="text-sm font-semibold text-slate-700 flex items-center gap-2">
-                    <Layout className="h-4 w-4 text-slate-400" /> Descrição / Instruções Detalhadas
-                  </Label>
-                  <RichTextEditor 
-                    value={description} 
-                    onChange={setDescription} 
-                    className="border-slate-200 rounded-2xl overflow-hidden"
-                    minHeightClassName="min-h-[400px]"
-                  />
-                </div>
-
-                <div className="rounded-2xl border border-amber-100 bg-amber-50/30 p-4">
-                  <div className="flex gap-3 text-amber-800">
-                    <Workflow className="h-5 w-5 shrink-0" />
-                    <div>
-                      <h4 className="text-sm font-bold">Fluxograma Visual</h4>
-                      <p className="text-xs mt-1 text-amber-700/80">
-                        O editor visual de nós (estilo Miro/Lucidchart) está sendo finalizado. 
-                        Por enquanto, use a descrição para detalhar as etapas e os arquivos para subir imagens do fluxo.
-                      </p>
+                <TabsContent value="content" className="mt-0 outline-none space-y-6">
+                  <Card className="p-6 rounded-[28px] border-slate-200 shadow-sm space-y-6">
+                    <div className="space-y-2">
+                      <Label htmlFor="title" className="text-sm font-semibold text-slate-700 flex items-center gap-2">
+                        <Hash className="h-4 w-4 text-slate-400" /> Título do Processo
+                        {!isNew && processQ.data && (
+                            <Badge variant="secondary" className="rounded-full bg-slate-100 text-[10px] font-bold text-slate-500">
+                                VERSÃO {processQ.data.version_number}
+                            </Badge>
+                        )}
+                      </Label>
+                      <Input 
+                        id="title" 
+                        placeholder="Ex: Abertura de Loja, Recebimento de Mercadoria..." 
+                        value={title}
+                        onChange={(e) => setTitle(e.target.value)}
+                        className="h-12 rounded-xl border-slate-200 text-lg font-medium focus-visible:ring-slate-200"
+                      />
                     </div>
-                  </div>
-                </div>
-              </Card>
+
+                    <div className="space-y-2">
+                      <Label className="text-sm font-semibold text-slate-700 flex items-center gap-2">
+                        <Layout className="h-4 w-4 text-slate-400" /> Descrição / Instruções Detalhadas
+                      </Label>
+                      <RichTextEditor 
+                        value={description} 
+                        onChange={setDescription} 
+                        className="border-slate-200 rounded-2xl overflow-hidden"
+                        minHeightClassName="min-h-[400px]"
+                      />
+                    </div>
+                  </Card>
+                </TabsContent>
+
+                <TabsContent value="flowchart" className="mt-0 outline-none h-[calc(100vh-280px)]">
+                  <FlowchartEditor 
+                    value={flowchartJson} 
+                    onChange={setFlowchartJson} 
+                  />
+                </TabsContent>
+              </Tabs>
             </div>
 
             {/* Sidebar Config */}
