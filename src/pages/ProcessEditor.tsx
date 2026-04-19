@@ -30,6 +30,7 @@ import {
   FileText
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
 import { showError, showSuccess } from "@/utils/toast";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -53,6 +54,7 @@ type ProcessRow = {
   flowchart_json: any;
   target_role: string | null;
   is_home_flowchart: boolean;
+  process_type: 'roadmap' | 'checkpoint';
   version_number: number;
 };
 
@@ -72,6 +74,7 @@ export default function ProcessEditor() {
   const [newCheckItem, setNewCheckItem] = useState("");
   const [changeSummary, setChangeSummary] = useState("");
   const [flowchartJson, setFlowchartJson] = useState<any>({ nodes: [], edges: [] });
+  const [processType, setProcessType] = useState<'roadmap' | 'checkpoint'>('checkpoint');
 
   const processQ = useQuery({
     queryKey: ["process_detail", id],
@@ -117,6 +120,7 @@ export default function ProcessEditor() {
       setIsHomeFlowchart(p.is_home_flowchart);
       setChecklists(Array.isArray(p.checklists) ? p.checklists : []);
       setFlowchartJson(p.flowchart_json || { nodes: [], edges: [] });
+      setProcessType(p.process_type || 'checkpoint');
     }
   }, [processQ.data]);
 
@@ -131,7 +135,8 @@ export default function ProcessEditor() {
         title: title.trim(),
         description: description || null,
         target_role: targetRole === "all" ? null : targetRole,
-        is_home_flowchart: isHomeFlowchart,
+        is_home_flowchart: isHomeFlowchart || processType === 'roadmap',
+        process_type: processType,
         checklists: checklists,
         flowchart_json: flowchartJson,
         updated_at: new Date().toISOString(),
@@ -443,16 +448,43 @@ export default function ProcessEditor() {
                     </div>
                   )}
 
-                  <div className="flex items-center gap-3 p-3 rounded-xl bg-slate-50 border border-slate-100 group transition-colors hover:border-slate-200 cursor-pointer">
-                    <Checkbox 
-                      id="is_home" 
-                      checked={isHomeFlowchart} 
-                      onCheckedChange={(v) => setIsHomeFlowchart(!!v)}
-                      className="rounded-lg h-5 w-5 data-[state=checked]:bg-slate-900 data-[state=checked]:border-slate-900" 
-                    />
-                    <Label htmlFor="is_home" className="text-sm font-medium text-slate-700 cursor-pointer flex-1">
-                      Mapa Geral (Home)
-                    </Label>
+                  <div className="space-y-3 pt-2">
+                    <Label className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.15em]">Tipo de Processo</Label>
+                    <div className="grid grid-cols-2 gap-2">
+                        <Button 
+                            type="button"
+                            variant={processType === 'checkpoint' ? "default" : "outline"}
+                            className={cn(
+                                "h-14 flex-col gap-0.5 rounded-2xl border-slate-200",
+                                processType === 'checkpoint' ? "bg-slate-900 border-slate-900" : "hover:border-slate-300"
+                            )}
+                            onClick={() => setProcessType('checkpoint')}
+                        >
+                            <ListTodo className="h-4 w-4" />
+                            <span className="text-[10px] uppercase font-bold tracking-widest">Checkpoint</span>
+                        </Button>
+                        <Button 
+                            type="button"
+                            variant={processType === 'roadmap' ? "default" : "outline"}
+                            className={cn(
+                                "h-14 flex-col gap-0.5 rounded-2xl border-slate-200",
+                                processType === 'roadmap' ? "bg-rose-600 border-rose-600 hover:bg-rose-700" : "hover:border-rose-300"
+                            )}
+                            onClick={() => {
+                                setProcessType('roadmap');
+                                setIsHomeFlowchart(true);
+                            }}
+                        >
+                            <Workflow className="h-4 w-4" />
+                            <span className="text-[10px] uppercase font-bold tracking-widest">Roadmap</span>
+                        </Button>
+                    </div>
+                    <p className="text-[10px] text-slate-400 px-1 leading-tight">
+                        {processType === 'roadmap' 
+                            ? "Macro-processo organizacional. Aparece no Mapa Global (Início)." 
+                            : "Procedimento operacional padrão com checklists detallhados."
+                        }
+                    </p>
                   </div>
                 </div>
               </Card>

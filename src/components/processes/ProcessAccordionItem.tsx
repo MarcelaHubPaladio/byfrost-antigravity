@@ -31,6 +31,7 @@ type ProcessRow = {
   flowchart_json: any;
   target_role: string | null;
   is_home_flowchart: boolean;
+  process_type: 'roadmap' | 'checkpoint';
   created_at: string;
   updated_at: string;
 };
@@ -82,9 +83,9 @@ export function ProcessAccordionItem({ process, canManage, roleName, onEdit }: P
             <div className="mt-1 flex items-center gap-3">
               <Badge variant="outline" className={cn(
                 "rounded-full border-slate-200 bg-slate-50 text-[10px] h-5 px-2",
-                process.is_home_flowchart && "border-amber-200 bg-amber-50 text-amber-700 font-bold"
+                process.process_type === 'roadmap' && "border-rose-200 bg-rose-50 text-rose-700 font-bold"
               )}>
-                {process.is_home_flowchart ? "MAPA GERAL" : (roleName || "Todos")}
+                {process.process_type === 'roadmap' ? "ROADMAP" : (roleName || "Todos")}
               </Badge>
               <div className="flex items-center gap-1.5 text-[11px] text-slate-400">
                 <Clock className="h-3 w-3" />

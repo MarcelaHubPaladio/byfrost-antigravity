@@ -36,6 +36,7 @@ type ProcessRow = {
   flowchart_json: any;
   target_role: string | null;
   is_home_flowchart: boolean;
+  process_type: 'roadmap' | 'checkpoint';
   created_at: string;
   updated_at: string;
 };
@@ -100,15 +101,23 @@ export function ProcessRepositoryPanel() {
     return m;
   }, [tenantRolesQ.data]);
 
+  const roadmaps = useMemo(() => {
+    return filteredProcesses.filter(p => p.process_type === 'roadmap');
+  }, [filteredProcesses]);
+
+  const standardProcesses = useMemo(() => {
+    return filteredProcesses.filter(p => p.process_type !== 'roadmap');
+  }, [filteredProcesses]);
+
   const homeFlowcharts = useMemo(() => {
-    return (processesQ.data ?? []).filter(p => p.is_home_flowchart);
+    return (processesQ.data ?? []).filter(p => p.process_type === 'roadmap' || p.is_home_flowchart);
   }, [processesQ.data]);
 
   const activeHomeFlowchart = useMemo(() => {
     if (selectedHomeFlowId) {
         return homeFlowcharts.find(p => p.id === selectedHomeFlowId) || homeFlowcharts[0];
     }
-    // Default to the first one that has actual nodes, or just the first one
+    // Default to the first one that has actual nodes
     return homeFlowcharts.find(p => (p.flowchart_json?.nodes || []).length > 0) || homeFlowcharts[0];
   }, [homeFlowcharts, selectedHomeFlowId]);
 
@@ -210,24 +219,48 @@ export function ProcessRepositoryPanel() {
               </Button>
             </div>
 
-            <div className="grid gap-4">
-              {filteredProcesses.length > 0 ? (
-                filteredProcesses.map(p => (
-                  <ProcessAccordionItem 
-                    key={p.id} 
-                    process={p} 
-                    canManage={canManage}
-                    roleName={p.target_role ? roleNamesMap.get(p.target_role) : undefined}
-                    onEdit={() => navigate(`/app/processes/${p.id}`)}
-                  />
-                ))
-              ) : (
-                <div className="py-20 text-center">
-                  <ClipboardCheck className="mx-auto h-12 w-12 text-slate-200" />
-                  <h3 className="mt-4 text-base font-semibold text-slate-900">Nenhum processo encontrado</h3>
-                  <p className="mt-1 text-sm text-slate-500">Tente ajustar sua busca ou crie um novo processo.</p>
+            <div className="grid gap-8">
+              {roadmaps.length > 0 && (
+                <div className="space-y-4">
+                    <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest px-1">Roadmaps (Macros)</h3>
+                    <div className="grid gap-4">
+                        {roadmaps.map(p => (
+                            <ProcessAccordionItem 
+                                key={p.id} 
+                                process={p} 
+                                canManage={canManage}
+                                roleName={p.target_role ? roleNamesMap.get(p.target_role) : undefined}
+                                onEdit={() => navigate(`/app/processes/${p.id}`)}
+                            />
+                        ))}
+                    </div>
                 </div>
               )}
+
+              <div className="space-y-4">
+                  {roadmaps.length > 0 && <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest px-1">Procedimentos (Micros)</h3>}
+                  <div className="grid gap-4">
+                      {standardProcesses.length > 0 ? (
+                        standardProcesses.map(p => (
+                          <ProcessAccordionItem 
+                            key={p.id} 
+                            process={p} 
+                            canManage={canManage}
+                            roleName={p.target_role ? roleNamesMap.get(p.target_role) : undefined}
+                            onEdit={() => navigate(`/app/processes/${p.id}`)}
+                          />
+                        ))
+                      ) : (
+                        !roadmaps.length && (
+                            <div className="py-20 text-center">
+                              <ClipboardCheck className="mx-auto h-12 w-12 text-slate-200" />
+                              <h3 className="mt-4 text-base font-semibold text-slate-900">Nenhum processo encontrado</h3>
+                              <p className="mt-1 text-sm text-slate-500">Tente ajustar sua busca ou crie um novo processo.</p>
+                            </div>
+                        )
+                      )}
+                  </div>
+              </div>
             </div>
           </div>
         </TabsContent>

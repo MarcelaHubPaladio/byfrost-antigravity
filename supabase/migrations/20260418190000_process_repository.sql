@@ -12,6 +12,7 @@ create table if not exists public.processes (
     flowchart_json jsonb not null default '{}'::jsonb, -- Node-edge data for the process flowchart
     target_role text, -- The role (cargo) this process belongs to. NULL = general/public to tenant.
     is_home_flowchart boolean not null default false, -- If true, this is the process map for the home screen
+    process_type text not null default 'checkpoint', -- 'roadmap' (Macro) or 'checkpoint' (Micro)
     created_at timestamptz not null default now(),
     updated_at timestamptz not null default now(),
     deleted_at timestamptz
