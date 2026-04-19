@@ -202,7 +202,7 @@ export function ProcessRepositoryPanel() {
                 <FlowchartViewer 
                    key={activeHomeFlowchart.id}
                    data={activeHomeFlowchart.flowchart_json || { nodes: [], edges: [] }} 
-                   className="h-full border-0 rounded-none bg-white p-12"
+                   className="h-full border-0 rounded-none bg-white font-sans"
                    onNodeClick={(data) => {
                        if (data.linkedProcessId) {
                            // Find the process title to make search accurate

@@ -12,6 +12,7 @@ import '@xyflow/react/dist/style.css';
 import { Link2 } from "lucide-react";
 import { cn } from '@/lib/utils';
 import { useNavigate } from 'react-router-dom';
+import { ReactFlowProvider, useReactFlow } from '@xyflow/react';
 
 // --- Custom Nodes (Read-only version) ---
 
@@ -56,8 +57,16 @@ interface FlowchartViewerProps {
   onNodeClick?: (node: any) => void;
 }
 
-export function FlowchartViewer({ data, className, onNodeClick }: FlowchartViewerProps) {
-  const navigate = useNavigate();
+export function FlowchartViewer(props: FlowchartViewerProps) {
+  return (
+    <ReactFlowProvider>
+      <FlowchartContent {...props} />
+    </ReactFlowProvider>
+  );
+}
+
+function FlowchartContent({ data, className, onNodeClick }: FlowchartViewerProps) {
+  const { fitView } = useReactFlow();
   
   const nodes = useMemo(() => {
     if (!data || !Array.isArray(data.nodes)) return [];
@@ -72,16 +81,22 @@ export function FlowchartViewer({ data, className, onNodeClick }: FlowchartViewe
   const handleNodeClick = (_: any, node: any) => {
     if (onNodeClick) {
         onNodeClick(node.data);
-    } else if (node.data.linkedProcessId) {
-        // Default behavior: search/filter will be handled in the parent, 
-        // but we can also navigate if it's a direct ID
-        // For now, let the parent handle it via the callback
     }
   };
 
+  // Re-fit view when nodes change OR after a short delay (important for Tabs)
+  React.useEffect(() => {
+    if (nodes.length > 0) {
+        const timer = setTimeout(() => {
+            fitView({ duration: 400, padding: 0.2 });
+        }, 100);
+        return () => clearTimeout(timer);
+    }
+  }, [nodes, fitView]);
+
   if (!nodes || nodes.length === 0) {
     return (
-        <div className={cn("w-full h-full bg-slate-50/50 flex flex-col items-center justify-center p-12 text-center", className)}>
+        <div className={cn("w-full h-full min-h-[400px] bg-slate-50/50 flex flex-col items-center justify-center p-12 text-center", className)}>
             <Workflow className="h-12 w-12 text-slate-200 mb-4" />
             <h3 className="text-sm font-bold text-slate-400 uppercase tracking-widest">Fluxograma Vazio</h3>
             <p className="text-xs text-slate-400 mt-1">Este processo não possui etapas desenhadas no momento.</p>
@@ -90,7 +105,7 @@ export function FlowchartViewer({ data, className, onNodeClick }: FlowchartViewe
   }
 
   return (
-    <div className={cn("w-full h-full bg-slate-50 relative", className)}>
+    <div className={cn("w-full h-full min-h-[400px] bg-slate-50 relative", className)}>
       <ReactFlow
         nodes={nodes}
         edges={edges}
