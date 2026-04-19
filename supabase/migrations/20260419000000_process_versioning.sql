@@ -25,6 +25,7 @@ create table if not exists public.process_versions (
 alter table public.process_versions enable row level security;
 
 -- 4. RLS Policies for process_versions (mirrors processes select visibility)
+drop policy if exists process_versions_select on public.process_versions;
 create policy process_versions_select on public.process_versions for select to authenticated
 using (
     public.is_super_admin()
@@ -49,6 +50,7 @@ using (
 );
 
 -- CRUD for versions is only handled via insert during process update
+drop policy if exists process_versions_insert on public.process_versions;
 create policy process_versions_insert on public.process_versions for insert to authenticated
 with check (
     public.is_super_admin()
