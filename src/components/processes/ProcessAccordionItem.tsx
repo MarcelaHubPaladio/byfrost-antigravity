@@ -18,6 +18,8 @@ import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ProcessFileGallery } from "@/components/processes/ProcessFileGallery";
+import { ProcessHistoryTimeline } from "@/components/processes/ProcessHistoryTimeline";
+import { History } from "lucide-react";
 
 type ProcessRow = {
   id: string;
@@ -43,7 +45,7 @@ export function ProcessAccordionItem({ process, canManage, roleName, onEdit }: P
   const { user } = useSession();
   const { activeTenantId } = useTenant();
   const [isOpen, setIsOpen] = useState(false);
-  const [activeSubTab, setActiveSubTab] = useState<"desc" | "check" | "flow" | "files">("desc");
+  const [activeSubTab, setActiveSubTab] = useState<"desc" | "check" | "flow" | "files" | "history">("desc");
 
   useEffect(() => {
     if (isOpen && activeTenantId && process.id && user?.id) {
@@ -148,6 +150,15 @@ export function ProcessAccordionItem({ process, canManage, roleName, onEdit }: P
             >
               <Paperclip className="h-4 w-4" /> Arquivos
             </button>
+            <button 
+              onClick={() => setActiveSubTab("history")}
+              className={cn(
+                "flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold transition-all",
+                activeSubTab === "history" ? "bg-slate-900 text-white shadow-sm" : "bg-slate-50 text-slate-600 hover:bg-slate-100"
+              )}
+            >
+              <History className="h-4 w-4" /> Histórico
+            </button>
           </div>
 
           <div className="min-h-[200px]">
@@ -195,6 +206,10 @@ export function ProcessAccordionItem({ process, canManage, roleName, onEdit }: P
 
             {activeSubTab === "files" && (
               <ProcessFileGallery processId={process.id} />
+            )}
+
+            {activeSubTab === "history" && (
+              <ProcessHistoryTimeline processId={process.id} />
             )}
           </div>
         </div>

@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
+import { useSession } from "@/providers/SessionProvider";
 import { useTenant } from "@/providers/TenantProvider";
 import { AppShell } from "@/components/AppShell";
 import { RequireAuth } from "@/components/RequireAuth";
@@ -24,7 +25,8 @@ import {
   Workflow,
   Settings2,
   Loader2,
-  FileIcon
+  FileIcon,
+  MessageSquare
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { showError, showSuccess } from "@/utils/toast";
@@ -48,6 +50,7 @@ type ProcessRow = {
   flowchart_json: any;
   target_role: string | null;
   is_home_flowchart: boolean;
+  version_number: number;
 };
 
 export default function ProcessEditor() {
@@ -56,6 +59,7 @@ export default function ProcessEditor() {
   const navigate = useNavigate();
   const qc = useQueryClient();
   const { activeTenantId } = useTenant();
+  const { user } = useSession();
 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -63,6 +67,7 @@ export default function ProcessEditor() {
   const [isHomeFlowchart, setIsHomeFlowchart] = useState(false);
   const [checklists, setChecklists] = useState<string[]>([]);
   const [newCheckItem, setNewCheckItem] = useState("");
+  const [changeSummary, setChangeSummary] = useState("");
 
   const processQ = useQuery({
     queryKey: ["process_detail", id],
@@ -114,6 +119,7 @@ export default function ProcessEditor() {
     mutationFn: async () => {
       if (!activeTenantId) throw new Error("Tenant não selecionado");
       if (!title.trim()) throw new Error("Título é obrigatório");
+      if (!user?.id) throw new Error("Sessão inválida");
 
       const payload = {
         tenant_id: activeTenantId,
@@ -126,24 +132,74 @@ export default function ProcessEditor() {
       };
 
       if (!isNew && id) {
+        if (!changeSummary.trim()) throw new Error("Descreva o que foi alterado nesta versão");
+
+        const currentVersion = processQ.data?.version_number || 1;
+        const nextVersion = currentVersion + 1;
+
+        // 1. Snapshot the current state into versions table
+        const { error: historyError } = await supabase
+          .from("process_versions")
+          .insert({
+            tenant_id: activeTenantId,
+            process_id: id,
+            version_number: nextVersion,
+            title: title.trim(),
+            description: description || null,
+            checklists: checklists,
+            flowchart_json: processQ.data?.flowchart_json || {},
+            change_summary: changeSummary.trim(),
+            created_by: user.id
+          });
+        
+        if (historyError) throw historyError;
+
+        // 2. Update process to new head
         const { error } = await supabase
           .from("processes")
-          .update(payload)
+          .update({
+            ...payload,
+            version_number: nextVersion
+          })
           .eq("id", id);
         if (error) throw error;
       } else {
+        // New process: version 1
         const { data, error } = await supabase
           .from("processes")
-          .insert([payload])
+          .insert([{ 
+            ...payload,
+            version_number: 1
+          }])
           .select()
           .single();
+        
         if (error) throw error;
+
+        // Also create the first history entry
+        await supabase
+          .from("process_versions")
+          .insert({
+            tenant_id: activeTenantId,
+            process_id: data.id,
+            version_number: 1,
+            title: title.trim(),
+            description: description || null,
+            checklists: checklists,
+            flowchart_json: {},
+            change_summary: "Versão Inicial",
+            created_by: user.id
+          });
+
         if (data?.id) return data.id;
       }
     },
     onSuccess: (newId) => {
       showSuccess(isNew ? "Processo criado" : "Processo atualizado");
+      setChangeSummary("");
       qc.invalidateQueries({ queryKey: ["processes", activeTenantId] });
+      qc.invalidateQueries({ queryKey: ["process_detail", id] });
+      qc.invalidateQueries({ queryKey: ["process_history", id] });
       if (isNew && newId) {
         navigate(`/app/processes/${newId}`, { replace: true });
       }
@@ -284,6 +340,11 @@ export default function ProcessEditor() {
                 <div className="space-y-2">
                   <Label htmlFor="title" className="text-sm font-semibold text-slate-700 flex items-center gap-2">
                     <Hash className="h-4 w-4 text-slate-400" /> Título do Processo
+                    {!isNew && processQ.data && (
+                        <Badge variant="secondary" className="rounded-full bg-slate-100 text-[10px] font-bold text-slate-500">
+                            VERSÃO {processQ.data.version_number}
+                        </Badge>
+                    )}
                   </Label>
                   <Input 
                     id="title" 
@@ -349,6 +410,23 @@ export default function ProcessEditor() {
                       Define quem pode visualizar este processo na árvore hierárquica.
                     </p>
                   </div>
+
+                  {!isNew && (
+                    <div className="space-y-2 pt-2 border-t border-slate-100 animate-in fade-in duration-300">
+                      <Label className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+                        <MessageSquare className="h-3 w-3 text-slate-400" /> Log de Alterações
+                      </Label>
+                      <textarea
+                        placeholder="Descreva o que mudou nesta versão..."
+                        className="w-full min-h-[100px] rounded-xl border border-slate-200 p-3 text-xs focus:ring-1 focus:ring-slate-900 outline-none transition-all resize-none bg-slate-50/50"
+                        value={changeSummary}
+                        onChange={(e) => setChangeSummary(e.target.value)}
+                      />
+                      <p className="text-[10px] text-rose-500 font-bold px-1 flex items-center gap-1">
+                        <AlertCircle className="h-3 w-3" /> Obrigatório para salvar esta versão
+                      </p>
+                    </div>
+                  )}
 
                   <div className="flex items-center gap-3 p-3 rounded-xl bg-slate-50 border border-slate-100 group transition-colors hover:border-slate-200 cursor-pointer">
                     <Checkbox 
