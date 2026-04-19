@@ -25,8 +25,8 @@ type ProcessVersion = {
   created_at: string;
   title: string;
   created_by: string;
-  profiles: {
-    full_name: string | null;
+  users_profile: {
+    display_name: string | null;
   } | null;
 };
 
@@ -39,8 +39,8 @@ export function ProcessHistoryTimeline({ processId }: ProcessHistoryTimelineProp
         .from("process_versions")
         .select(`
           *,
-          profiles:created_by (
-            full_name
+          users_profile:created_by (
+            display_name
           )
         `)
         .eq("process_id", processId)
@@ -121,7 +121,7 @@ export function ProcessHistoryTimeline({ processId }: ProcessHistoryTimelineProp
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-xs font-bold text-slate-900 truncate">
-                    {v.profiles?.full_name || "Usuário do Sistema"}
+                    {v.users_profile?.display_name || "Usuário do Sistema"}
                   </p>
                   <div className="mt-2 flex gap-2">
                     <MessageSquare className="h-3.5 w-3.5 text-slate-300 shrink-0 mt-0.5" />

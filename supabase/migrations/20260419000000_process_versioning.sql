@@ -18,7 +18,7 @@ create table if not exists public.process_versions (
     flowchart_json jsonb not null default '{}'::jsonb,
     change_summary text, -- The "history log" message
     created_at timestamptz not null default now(),
-    created_by uuid not null references auth.users(id) on delete cascade
+    created_by uuid not null references public.users_profile(user_id) on delete cascade
 );
 
 -- 3. Enable RLS
