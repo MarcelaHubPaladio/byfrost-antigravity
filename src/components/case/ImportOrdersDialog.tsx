@@ -288,6 +288,7 @@ export function ImportOrdersDialog({
       const idxItemQty = pickHeaderIndex(headers, ["item_qtd", "quantidade", "qty"]);
       const idxItemPrice = pickHeaderIndex(headers, ["item_valor_unit", "valor", "price"]);
       const idxItemDiscount = pickHeaderIndex(headers, ["item_desconto_pct", "desconto", "discount"]);
+      const idxTotalValue = pickHeaderIndex(headers, ["valor_total", "total_valor", "total_ped"]);
       const idxObs = pickHeaderIndex(headers, ["obs", "notes"]);
 
       const ordersMap = new Map<string, GroupedOrder>();
@@ -328,7 +329,12 @@ export function ImportOrdersDialog({
             customerCity: idxCity >= 0 ? String(row[idxCity] ?? "").trim() : "",
             paymentMethod: idxPayMethod >= 0 ? String(row[idxPayMethod] ?? "").trim() : "",
             billingStatus: idxBillStatus >= 0 ? normalizeBillingStatus(row[idxBillStatus]) : "Pendente",
-            obs: idxObs >= 0 ? String(row[idxObs] ?? "").trim() : "",
+            obs: (() => {
+              const baseObs = idxObs >= 0 ? String(row[idxObs] ?? "").trim() : "";
+              const totalVal = idxTotalValue >= 0 ? String(row[idxTotalValue] ?? "").trim() : "";
+              if (!totalVal) return baseObs;
+              return baseObs ? `${baseObs} | Valor Total: ${totalVal}` : `Valor Total: ${totalVal}`;
+            })(),
             items: []
           };
           ordersMap.set(groupKey, order);
