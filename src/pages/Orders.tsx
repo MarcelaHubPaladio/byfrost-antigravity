@@ -56,6 +56,13 @@ import { ptBR } from "date-fns/locale";
 import { NewSalesOrderDialog } from "@/components/case/NewSalesOrderDialog";
 import { getStateLabel } from "@/lib/journeyLabels";
 import { useJourneyTransition } from "@/hooks/useJourneyTransition";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { StateMachine } from "@/lib/journeys/types"
 import { GlobalJourneyLogsDialog } from "@/components/case/GlobalJourneyLogsDialog";
 import { checkTransitionBlocks } from "@/lib/journeys/validation";
@@ -143,6 +150,7 @@ export default function Orders() {
     to: endOfMonth(new Date()) 
   });
   const [selectedSellerId, setSelectedSellerId] = useState<string>("all");
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<string>("all");
   const [movingCaseId, setMovingCaseId] = useState<string | null>(null);
   const [transitionBlock, setTransitionBlock] = useState<{
     open: boolean;
@@ -348,7 +356,7 @@ export default function Orders() {
             .from("case_fields")
             .select("case_id,key,value_text")
             .in("case_id", chunk)
-            .in("key", ["whatsapp", "phone", "customer_phone", "sale_date_text", "billing_status", "total_value_raw"])
+            .in("key", ["whatsapp", "phone", "customer_phone", "sale_date_text", "billing_status", "total_value_raw", "obs", "payment_method"])
             .limit(1000),
           supabase
             .from("case_items")
@@ -426,6 +434,13 @@ export default function Orders() {
       return isWithinInterval(d, { start, end });
     });
 
+    if (selectedPaymentMethod !== "all") {
+      rows = rows.filter(r => {
+        const f = caseDataQ.data?.fields.get(r.id);
+        return f?.payment_method === selectedPaymentMethod;
+      });
+    }
+
     const qq = q.trim().toLowerCase();
     if (qq) {
       rows = rows.filter((r) => {
@@ -439,7 +454,15 @@ export default function Orders() {
     }
 
     return rows;
-  }, [journeyRows, q, dateRange, selectedSellerId, customersQ.data, caseDataQ.data]);
+  }, [journeyRows, q, dateRange, selectedSellerId, selectedPaymentMethod, customersQ.data, caseDataQ.data]);
+
+  const paymentOptions = useMemo(() => {
+    const opts = new Set<string>();
+    caseDataQ.data?.fields.forEach(f => {
+      if (f.payment_method) opts.add(String(f.payment_method).trim());
+    });
+    return Array.from(opts).filter(Boolean).sort();
+  }, [caseDataQ.data]);
 
   const stats = useMemo(() => {
     let totalValue = 0;
@@ -700,6 +723,23 @@ export default function Orders() {
                   {(usersQ.data ?? []).map((u) => (
                     <option key={u.user_id} value={u.user_id}>
                       {u.display_name || u.email}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              
+              {/* Forma de Pagamento Filter */}
+              <div className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-white/70 p-1.5 h-10 min-w-[200px]">
+                <CreditCard className="ml-2 h-4 w-4 text-slate-400" />
+                <select
+                  className="bg-transparent text-xs font-bold text-slate-700 focus:outline-none flex-1 pr-2"
+                  value={selectedPaymentMethod}
+                  onChange={(e) => setSelectedPaymentMethod(e.target.value)}
+                >
+                  <option value="all">Pagamento: Todos</option>
+                  {paymentOptions.map((opt) => (
+                    <option key={opt} value={opt}>
+                      {opt}
                     </option>
                   ))}
                 </select>
@@ -1073,7 +1113,9 @@ export default function Orders() {
                                 #{c.meta_json?.external_id || c.id.slice(0, 8)}
                             </Badge>
                           </div>
-                          <div className="text-[10px] text-slate-400">{c.id.slice(0, 8)}</div>
+                          <div className="text-[10px] text-slate-400 truncate max-w-[200px]" title={caseDataQ.data?.fields.get(c.id)?.obs}>
+                            {caseDataQ.data?.fields.get(c.id)?.obs || c.id.slice(0, 8)}
+                          </div>
                         </TableCell>
                         <TableCell className="font-bold whitespace-nowrap">
                           {formatMoneyBRL(caseDataQ.data?.totals.get(c.id) || 0)}
