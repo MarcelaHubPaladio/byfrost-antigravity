@@ -215,7 +215,13 @@ export function FinancingSimulationWizard({ initialSim, onSaved, onCancel }: Pro
       setPropertyValue(String(p.property_value ?? ""));
       setFgtsAmount(String(p.fgts_amount ?? ""));
       setTermMonths(String(p.term_months ?? 360));
-      setSelectedBankIds(p.selected_bank_ids ?? []);
+      // Backward compat: support both new (selected_bank_ids[]) and old (bank_rule_id)
+      const bankIds = p.selected_bank_ids?.length
+        ? p.selected_bank_ids
+        : p.bank_rule_id
+        ? [p.bank_rule_id]
+        : [];
+      setSelectedBankIds(bankIds);
       setNotes(initialSim.notes ?? "");
       return;
     }
@@ -332,11 +338,14 @@ export function FinancingSimulationWizard({ initialSim, onSaved, onCancel }: Pro
     );
   };
 
-  // ─ Compute comparison on entering step 3 ──────────────────────────────────
+  // ─ Compute comparison proactively whenever inputs change ─────────────────
+  // (not gated on step===3 so results are always fresh when user reaches step 3)
   useEffect(() => {
-    if (step !== 3) return;
     const selectedBanks = banks.filter((b) => selectedBankIds.includes(b.id));
-    if (selectedBanks.length === 0) return;
+    if (selectedBanks.length === 0 || !propertyValue) {
+      setBankResults([]);
+      return;
+    }
 
     const age = calcAge(clientBirthDate);
     const results = runMultiBankSimulation(selectedBanks, {
@@ -352,7 +361,7 @@ export function FinancingSimulationWizard({ initialSim, onSaved, onCancel }: Pro
       hasMinorChildren: clientMinorChildren,
     });
     setBankResults(results);
-  }, [step, selectedBankIds, banks, propertyValue, fgtsAmount, termMonths, clientIncome,
+  }, [selectedBankIds, banks, propertyValue, fgtsAmount, termMonths, clientIncome,
       clientCommitment, clientPublicServant, clientFgtsYears, clientBirthDate, clientMinorChildren]);
 
   // ─ Client snapshot ─────────────────────────────────────────────────────────
