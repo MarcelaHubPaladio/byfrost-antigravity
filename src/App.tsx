@@ -17,6 +17,7 @@ import {
 } from "@/components/RequireTvCorporativaEnabled";
 import { RequireChatInstanceAccess } from "@/components/RequireChatInstanceAccess";
 import { RequireFinanceEnabled } from "@/components/RequireFinanceEnabled";
+import { RequireFinancingSimulatorEnabled } from "@/components/RequireFinancingSimulatorEnabled";
 import { RequireSimulatorEnabled } from "@/components/RequireSimulatorEnabled";
 import { RequireLinkManagerEnabled } from "@/components/RequireLinkManagerEnabled";
 import { RequirePortalEnabled } from "@/components/RequirePortalEnabled";
@@ -37,6 +38,7 @@ const TrelloCase = lazyWithRetry(() => import("@/pages/TrelloCase"));
 const OperacaoM30Case = lazyWithRetry(() => import("@/pages/OperacaoM30Case"));
 const CaseDetail = lazyWithRetry(() => import("@/pages/CaseDetail"));
 const Simulator = lazyWithRetry(() => import("@/pages/Simulator"));
+const FinancingSimulator = lazyWithRetry(() => import("@/pages/FinancingSimulator"));
 const Settings = lazyWithRetry(() => import("@/pages/Settings"));
 const Me = lazyWithRetry(() => import("@/pages/Me"));
 const Admin = lazyWithRetry(() => import("@/pages/Admin"));
@@ -488,6 +490,27 @@ const App = () => (
                           <Simulator />
                         </RequireRouteAccess>
                       </RequireSimulatorEnabled>
+                    }
+                  />
+
+                  <Route
+                    path="/app/financing-simulator"
+                    element={
+                      <RequireFinancingSimulatorEnabled>
+                        <RequireRouteAccess routeKey="app.financing_simulator">
+                          <FinancingSimulator />
+                        </RequireRouteAccess>
+                      </RequireFinancingSimulatorEnabled>
+                    }
+                  />
+                  <Route
+                    path="/app/financing-simulator/:id"
+                    element={
+                      <RequireFinancingSimulatorEnabled>
+                        <RequireRouteAccess routeKey="app.financing_simulator">
+                          <FinancingSimulator />
+                        </RequireRouteAccess>
+                      </RequireFinancingSimulatorEnabled>
                     }
                   />
 

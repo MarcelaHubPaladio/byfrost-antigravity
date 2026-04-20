@@ -51,6 +51,7 @@ import {
   Globe,
   Palette,
   Bell,
+  Calculator,
 } from "lucide-react";
 import { SuperTasksPanel } from "@/components/super-tasks/SuperTasksPanel";
 import { UsageIndicator } from "@/components/admin/UsageIndicator";
@@ -190,6 +191,7 @@ function getPageName(pathname: string) {
   if (pathname.startsWith("/app/me")) return "Meu usuário";
   if (pathname.startsWith("/app/admin")) return "Admin";
   if (pathname.startsWith("/app/simulator")) return "Simulador";
+  if (pathname.startsWith("/app/financing-simulator")) return "Financiamento";
   if (pathname.startsWith("/app/processes")) return "Processos";
   if (pathname.startsWith("/login")) return "Login";
   if (pathname.startsWith("/tenants")) return "Tenants";
@@ -383,6 +385,10 @@ function isSimulatorEnabled(modulesJson: any) {
   return Boolean(modulesJson?.simulator_enabled === true);
 }
 
+function isFinancingSimulatorEnabled(modulesJson: any) {
+  return Boolean(modulesJson?.financing_simulator_enabled === true);
+}
+
 function isGoalsEnabled(modulesJson: any) {
   return Boolean(modulesJson?.goals_enabled === true);
 }
@@ -574,6 +580,7 @@ export function AppShell({
   const financeEnabledForTenant = isFinanceEnabled(activeTenant?.modules_json);
   const linkManagerEnabledForTenant = isLinkManagerEnabled(activeTenant?.modules_json);
   const simulatorEnabledForTenant = isSimulatorEnabled(activeTenant?.modules_json);
+  const financingSimulatorEnabledForTenant = isFinancingSimulatorEnabled(activeTenant?.modules_json);
   const goalsEnabledForTenant = isGoalsEnabled(activeTenant?.modules_json);
   const tvCorporativaEnabledForTenant = isTvCorporativaEnabled(activeTenant?.modules_json);
   const portalEnabledForTenant = isPortalEnabled(activeTenant?.modules_json);
@@ -623,6 +630,7 @@ export function AppShell({
         "app.media_kit",
         "app.communication",
         "app.processes",
+        "app.financing_simulator",
       ];
 
       try {
@@ -1101,6 +1109,10 @@ export function AppShell({
                   <NavTile to="/app/simulator" icon={FlaskConical} label="Simulador" disabled={!can("app.simulator")} />
                 )}
 
+                {financingSimulatorEnabledForTenant && (
+                  <NavTile to="/app/financing-simulator" icon={Calculator} label="Créd. IMO" disabled={!can("app.financing_simulator")} />
+                )}
+
                 {goalsEnabledForTenant && can("app.goals") && (
                   <NavTile
                     to="/app/goals"
@@ -1484,6 +1496,16 @@ export function AppShell({
                                 icon={FlaskConical}
                                 label="Simulador"
                                 disabled={!can("app.simulator")}
+                                onNavigate={() => setMobileNavOpen(false)}
+                              />
+                            )}
+
+                            {financingSimulatorEnabledForTenant && (
+                              <MobileNavItem
+                                to="/app/financing-simulator"
+                                icon={Calculator}
+                                label="Simulador de Financiamento"
+                                disabled={!can("app.financing_simulator")}
                                 onNavigate={() => setMobileNavOpen(false)}
                               />
                             )}
