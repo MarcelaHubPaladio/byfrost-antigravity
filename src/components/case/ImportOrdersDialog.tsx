@@ -122,19 +122,36 @@ function parsePtBrNumber(input: string) {
 }
 
 function normalizeDate(input: string): string {
-  const s = String(input ?? "").trim();
+  let s = String(input ?? "").trim().replace(/\s/g, "");
   if (!s) return "";
   
-  // 1. Try DD/MM/YYYY or DD/MM/YY
-  const slashMatch = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})$/);
+  // Handle double slashes
+  s = s.replace(/\/\/+/g, "/");
+
+  // 1. Try DD/MM/YYYY or DD/MM/YY (standard or with separators like . -)
+  const slashMatch = s.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{2,4})$/);
   if (slashMatch) {
     let [_, d, m, y] = slashMatch;
     if (y.length === 2) y = (Number(y) > 50 ? "19" : "20") + y;
     return `${y}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`;
   }
 
-  // 2. Try YYYY-MM-DD
-  const isoMatch = s.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})$/);
+  // 2. Try typo DD/MMYYYY (like 31/032026)
+  const typoMatch1 = s.match(/^(\d{1,2})[\/\-\.](\d{1,2})(\d{4})$/);
+  if (typoMatch1) {
+    const [_, d, m, y] = typoMatch1;
+    return `${y}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`;
+  }
+
+  // 3. Try typo DDMMYYYY (like 31032026)
+  const typoMatch2 = s.match(/^(\d{2})(\d{2})(\d{4})$/);
+  if (typoMatch2) {
+    const [_, d, m, y] = typoMatch2;
+    return `${y}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`;
+  }
+
+  // 4. Try YYYY-MM-DD
+  const isoMatch = s.match(/^(\d{4})[\/\-\.](\d{1,2})[\/\-\.](\d{1,2})$/);
   if (isoMatch) {
     const [_, y, m, d] = isoMatch;
     return `${y}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`;
@@ -281,10 +298,16 @@ export function ImportOrdersDialog({
         const extId = idxExt >= 0 ? String(row[idxExt] ?? "").trim() : "";
         const wa = idxWa >= 0 ? String(row[idxWa] ?? "").trim() : "";
         const pay = idxPay >= 0 ? String(row[idxPay] ?? "").trim() : "";
+        const rawSaleDate = idxSaleDate >= 0 ? String(row[idxSaleDate] ?? "") : "";
+        const normSaleDate = normalizeDate(rawSaleDate);
         
-        // Grouping key: externalId or (whatsapp + paymentTerms)
-        const groupKey = extId || `${wa}|${pay}`;
-        if (!groupKey || groupKey === "|") continue;
+        // Grouping key: externalId + saleDate OR (whatsapp + paymentTerms)
+        // Reused IDs on different dates/customers should be treated as separate orders
+        const groupKey = extId 
+          ? `${extId}|${normSaleDate}` 
+          : `${wa}|${pay}`;
+        
+        if (!groupKey || groupKey === "|" || groupKey.startsWith("|")) continue;
 
         let order = ordersMap.get(groupKey);
         if (!order) {
@@ -301,7 +324,7 @@ export function ImportOrdersDialog({
             paymentTerms: pay,
             signal: idxSignal >= 0 ? String(row[idxSignal] ?? "").trim() : "",
             dueDate: idxDue >= 0 ? normalizeDate(String(row[idxDue] ?? "")) : "",
-            saleDate: idxSaleDate >= 0 ? normalizeDate(String(row[idxSaleDate] ?? "")) : "",
+            saleDate: normSaleDate,
             customerCity: idxCity >= 0 ? String(row[idxCity] ?? "").trim() : "",
             paymentMethod: idxPayMethod >= 0 ? String(row[idxPayMethod] ?? "").trim() : "",
             billingStatus: idxBillStatus >= 0 ? normalizeBillingStatus(row[idxBillStatus]) : "Pendente",

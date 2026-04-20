@@ -272,20 +272,39 @@ export default function Orders() {
 
   const parseSafeDate = (input: string | null | undefined, fallback: string | Date): Date => {
     if (!input) return new Date(fallback);
-    const s = String(input).trim();
-    if (!s) return new Date(fallback);
+    let s = String(input ?? "").trim().replace(/\s/g, "");
+    if (!s || s === "undefined" || s === "null") return new Date(fallback);
 
-    // 0. Try YYYY-MM-DD (ISO) - Most reliable for modern imports
-    if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
+    // 0. Try YYYY-MM-DD (ISO)
+    if (/^\d{4}-\d{2}-\d{2}/.test(s)) {
       const d = parseISO(s);
       if (!isNaN(d.getTime())) return d;
     }
 
-    // 1. Try DD/MM/YYYY or DD/MM/YY
-    const slashMatch = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})$/);
+    // Handle double slashes
+    s = s.replace(/\/\/+/g, "/");
+
+    // 1. Try DD/MM/YYYY or DD/MM/YY (standard or with separators like . -)
+    const slashMatch = s.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{2,4})$/);
     if (slashMatch) {
       let [_, d, m, y] = slashMatch;
       if (y.length === 2) y = (Number(y) > 50 ? "19" : "20") + y;
+      const parsed = new Date(Number(y), Number(m) - 1, Number(d));
+      if (!isNaN(parsed.getTime())) return parsed;
+    }
+
+    // 2. Try typo DD/MMYYYY (like 31/032026)
+    const typoMatch1 = s.match(/^(\d{1,2})[\/\-\.](\d{1,2})(\d{4})$/);
+    if (typoMatch1) {
+      const [_, d, m, y] = typoMatch1;
+      const parsed = new Date(Number(y), Number(m) - 1, Number(d));
+      if (!isNaN(parsed.getTime())) return parsed;
+    }
+
+    // 3. Try typo DDMMYYYY (like 31032026)
+    const typoMatch2 = s.match(/^(\d{2})(\d{2})(\d{4})$/);
+    if (typoMatch2) {
+      const [_, d, m, y] = typoMatch2;
       const parsed = new Date(Number(y), Number(m) - 1, Number(d));
       if (!isNaN(parsed.getTime())) return parsed;
     }
