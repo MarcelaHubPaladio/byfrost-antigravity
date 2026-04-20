@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { useTenant } from "@/providers/TenantProvider";
@@ -27,6 +27,8 @@ import {
   AlertTriangle,
   CheckCircle2,
   Info,
+  Loader2,
+  UserX,
 } from "lucide-react";
 
 type BankRule = {
@@ -75,6 +77,20 @@ const MARITAL_OPTIONS = [
   { value: "uniao_estavel", label: "União Estável" },
 ];
 
+/** Strips CPF formatting, returns only digits */
+function cpfDigits(cpf: string) {
+  return cpf.replace(/\D/g, "");
+}
+
+/** Formats CPF as 000.000.000-00 as user types */
+function formatCpf(raw: string) {
+  const d = cpfDigits(raw).slice(0, 11);
+  if (d.length <= 3) return d;
+  if (d.length <= 6) return `${d.slice(0, 3)}.${d.slice(3)}`;
+  if (d.length <= 9) return `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6)}`;
+  return `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6, 9)}-${d.slice(9)}`;
+}
+
 export function FinancingSimulationWizard({ initialSim, onSaved, onCancel }: Props) {
   const { activeTenantId } = useTenant();
   const { user } = useSession();
@@ -82,11 +98,10 @@ export function FinancingSimulationWizard({ initialSim, onSaved, onCancel }: Pro
   const [step, setStep] = useState(1);
   const [saving, setSaving] = useState(false);
 
-  // Step 1 — Cliente
-  const [entitySearch, setEntitySearch] = useState("");
+  // ── Step 1 — Cliente ──────────────────────────────────────────────────────
   const [selectedEntity, setSelectedEntity] = useState<Entity | null>(null);
   const [clientName, setClientName] = useState("");
-  const [clientCpf, setClientCpf] = useState("");
+  const [clientCpf, setClientCpf] = useState("");           // formatted display
   const [clientBirthDate, setClientBirthDate] = useState("");
   const [clientIncome, setClientIncome] = useState("");
   const [clientMarital, setClientMarital] = useState("");
@@ -95,7 +110,17 @@ export function FinancingSimulationWizard({ initialSim, onSaved, onCancel }: Pro
   const [clientPublicServant, setClientPublicServant] = useState(false);
   const [clientCommitment, setClientCommitment] = useState("");
 
-  // Step 2 — Imóvel / Condições
+  // CPF auto-lookup state
+  const [cpfSearching, setCpfSearching] = useState(false);
+  const [cpfNotFound, setCpfNotFound] = useState(false);
+
+  // Name search (secondary / fallback)
+  const [showNameSearch, setShowNameSearch] = useState(false);
+  const [entitySearch, setEntitySearch] = useState("");
+  const [entityResults, setEntityResults] = useState<Entity[]>([]);
+  const [nameSearching, setNameSearching] = useState(false);
+
+  // ── Step 2 — Imóvel / Condições ───────────────────────────────────────────
   const [propertyValue, setPropertyValue] = useState("");
   const [downPayment, setDownPayment] = useState("");
   const [fgtsAmount, setFgtsAmount] = useState("");
@@ -107,10 +132,6 @@ export function FinancingSimulationWizard({ initialSim, onSaved, onCancel }: Pro
   const [simResult, setSimResult] = useState<SimulationResult | null>(null);
   const [selectedBank, setSelectedBank] = useState<BankRule | null>(null);
   const [effectiveRate, setEffectiveRate] = useState(0);
-
-  // Entity search results
-  const [entityResults, setEntityResults] = useState<Entity[]>([]);
-  const [searching, setSearching] = useState(false);
 
   const banksQ = useQuery({
     queryKey: ["financing_bank_rules", activeTenantId],
@@ -136,7 +157,7 @@ export function FinancingSimulationWizard({ initialSim, onSaved, onCancel }: Pro
     const c = initialSim.client_snapshot_json ?? {};
     const p = initialSim.simulation_params_json ?? {};
     setClientName(c.name ?? "");
-    setClientCpf(c.cpf ?? "");
+    setClientCpf(formatCpf(c.cpf ?? ""));
     setClientBirthDate(c.birth_date ?? "");
     setClientIncome(String(c.gross_income ?? ""));
     setClientMarital(c.marital_status ?? "");
@@ -152,31 +173,11 @@ export function FinancingSimulationWizard({ initialSim, onSaved, onCancel }: Pro
     setNotes(initialSim.notes ?? "");
   }, [initialSim]);
 
-  const searchEntities = async () => {
-    if (!activeTenantId || entitySearch.trim().length < 2) return;
-    setSearching(true);
-    try {
-      const { data, error } = await supabase
-        .from("core_entities")
-        .select("id,display_name,cpf,birth_date,gross_income,marital_status,has_minor_children,fgts_years,is_public_servant,income_commitment_pct,metadata")
-        .eq("tenant_id", activeTenantId)
-        .eq("entity_type", "party")
-        .is("deleted_at", null)
-        .or(`display_name.ilike.%${entitySearch}%,cpf.ilike.%${entitySearch}%`)
-        .limit(10);
-      if (error) throw error;
-      setEntityResults((data ?? []) as Entity[]);
-    } catch {
-      // ignore
-    } finally {
-      setSearching(false);
-    }
-  };
-
-  const fillFromEntity = (e: Entity) => {
+  /** Fill form fields from an entity */
+  const fillFromEntity = useCallback((e: Entity) => {
     setSelectedEntity(e);
     setClientName(e.display_name);
-    if (e.cpf) setClientCpf(e.cpf);
+    if (e.cpf) setClientCpf(formatCpf(e.cpf));
     if (e.birth_date) setClientBirthDate(e.birth_date);
     if (e.gross_income) setClientIncome(String(e.gross_income));
     if (e.marital_status) setClientMarital(e.marital_status);
@@ -186,6 +187,75 @@ export function FinancingSimulationWizard({ initialSim, onSaved, onCancel }: Pro
     if (e.income_commitment_pct) setClientCommitment(String(e.income_commitment_pct));
     setEntityResults([]);
     setEntitySearch("");
+    setShowNameSearch(false);
+    setCpfNotFound(false);
+  }, []);
+
+  /** Auto-lookup by CPF when 11 digits are entered */
+  const lookupByCpf = useCallback(async (digits: string) => {
+    if (!activeTenantId || digits.length !== 11) return;
+    setCpfSearching(true);
+    setCpfNotFound(false);
+    try {
+      const { data, error } = await supabase
+        .from("core_entities")
+        .select("id,display_name,cpf,birth_date,gross_income,marital_status,has_minor_children,fgts_years,is_public_servant,income_commitment_pct,metadata")
+        .eq("tenant_id", activeTenantId)
+        .eq("entity_type", "party")
+        .is("deleted_at", null)
+        .ilike("cpf", `%${digits}%`)
+        .limit(1)
+        .maybeSingle();
+      if (error) throw error;
+      if (data) {
+        fillFromEntity(data as Entity);
+      } else {
+        setCpfNotFound(true);
+        setSelectedEntity(null);
+      }
+    } catch {
+      // silent
+    } finally {
+      setCpfSearching(false);
+    }
+  }, [activeTenantId, fillFromEntity]);
+
+  /** Handle CPF input: format + trigger lookup */
+  const handleCpfChange = (raw: string) => {
+    const formatted = formatCpf(raw);
+    setClientCpf(formatted);
+    const digits = cpfDigits(formatted);
+    if (digits.length < 11) {
+      setCpfNotFound(false);
+      if (selectedEntity && cpfDigits(selectedEntity.cpf ?? "") !== digits) {
+        // User edited CPF away from the entity match — keep name but clear link
+        setSelectedEntity(null);
+      }
+    } else {
+      lookupByCpf(digits);
+    }
+  };
+
+  /** Name search (secondary) */
+  const searchByName = async () => {
+    if (!activeTenantId || entitySearch.trim().length < 2) return;
+    setNameSearching(true);
+    try {
+      const { data, error } = await supabase
+        .from("core_entities")
+        .select("id,display_name,cpf,birth_date,gross_income,marital_status,has_minor_children,fgts_years,is_public_servant,income_commitment_pct,metadata")
+        .eq("tenant_id", activeTenantId)
+        .eq("entity_type", "party")
+        .is("deleted_at", null)
+        .ilike("display_name", `%${entitySearch}%`)
+        .limit(10);
+      if (error) throw error;
+      setEntityResults((data ?? []) as Entity[]);
+    } catch {
+      // ignore
+    } finally {
+      setNameSearching(false);
+    }
   };
 
   // Compute simulation on step 3
@@ -219,7 +289,7 @@ export function FinancingSimulationWizard({ initialSim, onSaved, onCancel }: Pro
 
   const clientSnapshot = useMemo(() => ({
     name: clientName,
-    cpf: clientCpf,
+    cpf: cpfDigits(clientCpf) || null,
     birth_date: clientBirthDate || null,
     gross_income: parseFloat(clientIncome) || null,
     marital_status: clientMarital || null,
@@ -267,16 +337,16 @@ export function FinancingSimulationWizard({ initialSim, onSaved, onCancel }: Pro
     if (!activeTenantId || !user?.id) return;
     setSaving(true);
     try {
-      // Update entity if selected and fields changed
       if (selectedEntity) {
         const patch: Record<string, any> = {};
-        if (!selectedEntity.cpf && clientCpf) patch.cpf = clientCpf;
+        const digits = cpfDigits(clientCpf);
+        if (!selectedEntity.cpf && digits) patch.cpf = digits;
         if (!selectedEntity.birth_date && clientBirthDate) patch.birth_date = clientBirthDate;
         if (!selectedEntity.gross_income && clientIncome) patch.gross_income = parseFloat(clientIncome);
         if (!selectedEntity.marital_status && clientMarital) patch.marital_status = clientMarital;
-        if (selectedEntity.has_minor_children == null && clientMinorChildren != null) patch.has_minor_children = clientMinorChildren;
+        if (selectedEntity.has_minor_children == null) patch.has_minor_children = clientMinorChildren;
         if (!selectedEntity.fgts_years && clientFgtsYears) patch.fgts_years = parseFloat(clientFgtsYears);
-        if (selectedEntity.is_public_servant == null && clientPublicServant != null) patch.is_public_servant = clientPublicServant;
+        if (selectedEntity.is_public_servant == null) patch.is_public_servant = clientPublicServant;
         if (!selectedEntity.income_commitment_pct && clientCommitment) patch.income_commitment_pct = parseFloat(clientCommitment);
         if (Object.keys(patch).length > 0) {
           await supabase.from("core_entities").update(patch).eq("id", selectedEntity.id);
@@ -315,6 +385,7 @@ export function FinancingSimulationWizard({ initialSim, onSaved, onCancel }: Pro
 
   const canStep2 = clientName.trim().length > 0;
   const canStep3 = Boolean(selectedBankId) && Boolean(propertyValue) && Boolean(downPayment) && Boolean(termMonths);
+  const cpfComplete = cpfDigits(clientCpf).length === 11;
 
   return (
     <div className="space-y-6">
@@ -347,60 +418,118 @@ export function FinancingSimulationWizard({ initialSim, onSaved, onCancel }: Pro
         })}
       </div>
 
-      {/* Step 1 — Cliente */}
+      {/* ─── Step 1 — Cliente ─────────────────────────────────────────────── */}
       {step === 1 && (
         <div className="space-y-4">
-          <div className="rounded-2xl border border-slate-200 bg-slate-50/60 p-4">
-            <Label className="text-xs font-semibold text-slate-700">Buscar cliente existente</Label>
-            <div className="mt-1.5 flex gap-2">
+
+          {/* CPF — campo principal */}
+          <div>
+            <Label className="text-xs font-semibold text-slate-700">CPF</Label>
+            <div className="relative mt-1.5">
               <Input
-                value={entitySearch}
-                onChange={(e) => setEntitySearch(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && searchEntities()}
-                placeholder="Nome ou CPF do cliente…"
-                className="rounded-2xl"
+                value={clientCpf}
+                onChange={(e) => handleCpfChange(e.target.value)}
+                placeholder="000.000.000-00"
+                maxLength={14}
+                className={cn(
+                  "rounded-2xl pr-10 font-mono tracking-wide transition",
+                  cpfComplete && selectedEntity && "border-emerald-400 bg-emerald-50/40",
+                  cpfComplete && cpfNotFound && "border-amber-400 bg-amber-50/40",
+                )}
+                autoFocus
               />
-              <Button
-                variant="outline"
-                onClick={searchEntities}
-                disabled={searching || entitySearch.length < 2}
-                className="rounded-2xl"
-              >
-                <Search className="h-4 w-4" />
-              </Button>
+              <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                {cpfSearching && <Loader2 className="h-4 w-4 animate-spin text-slate-400" />}
+                {!cpfSearching && cpfComplete && selectedEntity && (
+                  <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                )}
+                {!cpfSearching && cpfComplete && cpfNotFound && (
+                  <UserX className="h-4 w-4 text-amber-500" />
+                )}
+              </div>
             </div>
-            {entityResults.length > 0 && (
-              <div className="mt-2 space-y-1">
-                {entityResults.map((e) => (
-                  <button
-                    key={e.id}
-                    type="button"
-                    onClick={() => fillFromEntity(e)}
-                    className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-left text-sm hover:border-[hsl(var(--byfrost-accent)/0.4)] hover:bg-[hsl(var(--byfrost-accent)/0.05)] transition"
-                  >
-                    <span className="font-semibold text-slate-900">{e.display_name}</span>
-                    {e.cpf && <span className="ml-2 text-xs text-slate-500">CPF: {e.cpf}</span>}
-                  </button>
-                ))}
+
+            {/* Status da busca por CPF */}
+            {cpfComplete && selectedEntity && (
+              <div className="mt-1.5 flex items-center justify-between rounded-xl bg-emerald-50 border border-emerald-200 px-3 py-1.5">
+                <div className="flex items-center gap-1.5 text-xs text-emerald-700">
+                  <CheckCircle2 className="h-3.5 w-3.5" />
+                  <span>Encontrado: <span className="font-semibold">{selectedEntity.display_name}</span></span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => { setSelectedEntity(null); setCpfNotFound(false); setClientName(""); }}
+                  className="text-[11px] text-emerald-600 underline hover:text-emerald-800"
+                >
+                  desvincular
+                </button>
               </div>
             )}
-            {selectedEntity && (
-              <div className="mt-2 flex items-center gap-2 text-xs text-emerald-700">
-                <CheckCircle2 className="h-3.5 w-3.5" />
-                Vinculado a: <span className="font-semibold">{selectedEntity.display_name}</span>
-                <button className="text-slate-400 hover:text-slate-600 underline" onClick={() => setSelectedEntity(null)}>remover</button>
+            {cpfComplete && cpfNotFound && (
+              <div className="mt-1.5 flex items-center gap-1.5 rounded-xl bg-amber-50 border border-amber-200 px-3 py-1.5 text-xs text-amber-700">
+                <UserX className="h-3.5 w-3.5 flex-shrink-0" />
+                CPF não encontrado no cadastro. Preencha o nome abaixo para criar nova proposta.
               </div>
             )}
           </div>
 
+          {/* Busca por nome (fallback) */}
+          <div>
+            <button
+              type="button"
+              onClick={() => setShowNameSearch((v) => !v)}
+              className="text-[11px] font-semibold text-[hsl(var(--byfrost-accent))] hover:underline"
+            >
+              {showNameSearch ? "▲ Ocultar busca por nome" : "▼ Buscar cliente por nome"}
+            </button>
+            {showNameSearch && (
+              <div className="mt-1.5 space-y-2">
+                <div className="flex gap-2">
+                  <Input
+                    value={entitySearch}
+                    onChange={(e) => setEntitySearch(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && searchByName()}
+                    placeholder="Nome do cliente…"
+                    className="rounded-2xl"
+                  />
+                  <Button
+                    variant="outline"
+                    onClick={searchByName}
+                    disabled={nameSearching || entitySearch.length < 2}
+                    className="rounded-2xl"
+                  >
+                    {nameSearching ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+                  </Button>
+                </div>
+                {entityResults.length > 0 && (
+                  <div className="space-y-1">
+                    {entityResults.map((e) => (
+                      <button
+                        key={e.id}
+                        type="button"
+                        onClick={() => fillFromEntity(e)}
+                        className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-left text-sm hover:border-[hsl(var(--byfrost-accent)/0.4)] hover:bg-[hsl(var(--byfrost-accent)/0.05)] transition"
+                      >
+                        <span className="font-semibold text-slate-900">{e.display_name}</span>
+                        {e.cpf && <span className="ml-2 text-xs text-slate-500">CPF: {formatCpf(e.cpf)}</span>}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Demais campos */}
           <div className="grid gap-3 sm:grid-cols-2">
-            <div>
+            <div className="sm:col-span-2">
               <Label className="text-xs">Nome completo *</Label>
-              <Input value={clientName} onChange={(e) => setClientName(e.target.value)} className="mt-1 rounded-2xl" placeholder="Maria da Silva" />
-            </div>
-            <div>
-              <Label className="text-xs">CPF</Label>
-              <Input value={clientCpf} onChange={(e) => setClientCpf(e.target.value)} className="mt-1 rounded-2xl" placeholder="000.000.000-00" />
+              <Input
+                value={clientName}
+                onChange={(e) => setClientName(e.target.value)}
+                className="mt-1 rounded-2xl"
+                placeholder="Maria da Silva"
+              />
             </div>
             <div>
               <Label className="text-xs">Data de nascimento</Label>
@@ -429,6 +558,7 @@ export function FinancingSimulationWizard({ initialSim, onSaved, onCancel }: Pro
               <Input type="number" value={clientCommitment} onChange={(e) => setClientCommitment(e.target.value)} className="mt-1 rounded-2xl" placeholder="0" step="1" max="100" />
             </div>
           </div>
+
           <div className="flex flex-wrap gap-4">
             <label className="flex cursor-pointer items-center gap-2 text-sm">
               <input type="checkbox" checked={clientMinorChildren} onChange={(e) => setClientMinorChildren(e.target.checked)} className="rounded" />
@@ -453,7 +583,7 @@ export function FinancingSimulationWizard({ initialSim, onSaved, onCancel }: Pro
         </div>
       )}
 
-      {/* Step 2 — Imóvel */}
+      {/* ─── Step 2 — Imóvel ──────────────────────────────────────────────── */}
       {step === 2 && (
         <div className="space-y-4">
           <div className="grid gap-3 sm:grid-cols-2">
@@ -568,7 +698,7 @@ export function FinancingSimulationWizard({ initialSim, onSaved, onCancel }: Pro
         </div>
       )}
 
-      {/* Step 3 — Resultado */}
+      {/* ─── Step 3 — Resultado ───────────────────────────────────────────── */}
       {step === 3 && simResult && (
         <div className="space-y-4">
           {/* Loan summary */}
