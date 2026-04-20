@@ -209,7 +209,7 @@ export default function Orders() {
         .is("deleted_at", null)
         .eq("is_chat", false)
         .order("updated_at", { ascending: false })
-        .limit(300);
+        .limit(5000);
 
       if (error) throw error;
       return (data ?? []) as any as CaseRow[];

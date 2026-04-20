@@ -453,6 +453,7 @@ export function ImportOrdersDialog({
             .eq("tenant_id", tId)
             .eq("journey_id", journey.id)
             .filter("meta_json->>external_id", "eq", o.externalId)
+            .filter("meta_json->>sale_date", "eq", o.saleDate)
             .maybeSingle();
           if (existing) caseId = existing.id;
         }
@@ -468,6 +469,7 @@ export function ImportOrdersDialog({
               updated_at: new Date().toISOString(),
               meta_json: { 
                 external_id: o.externalId, 
+                sale_date: o.saleDate,
                 import_source: "bulk_update", 
                 import_file: fileName,
                 last_import_at: new Date().toISOString()
@@ -491,6 +493,7 @@ export function ImportOrdersDialog({
               created_by_channel: "panel",
               meta_json: { 
                 external_id: o.externalId, 
+                sale_date: o.saleDate,
                 import_source: "bulk", 
                 import_file: fileName 
               }
