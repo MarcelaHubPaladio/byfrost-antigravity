@@ -143,7 +143,7 @@ CREATE TRIGGER trg_financing_simulations_reference
 -- -----------------------------------------------------------------------------
 -- 6) RBAC — registrar rotas na route_registry
 -- -----------------------------------------------------------------------------
-INSERT INTO public.route_registry(key, label, description)
+INSERT INTO public.route_registry(key, name, description)
 VALUES
   ('app.financing_simulator',          'Simulador de Financiamento',       'Acesso às simulações de financiamento imobiliário'),
   ('app.financing_simulator.settings', 'Config. Bancos (Financiamento)',    'Configurar regras de bancos do simulador de financiamento')
