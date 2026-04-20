@@ -443,28 +443,61 @@ export function FinancingBankRulesPanel() {
                 </button>
               </div>
               <div className="space-y-2">
-                {fRules.map((r, i) => (
-                  <div key={i} className="flex gap-2">
-                    <select
-                      value={r.condition}
-                      onChange={(e) => setFRules((prev) => prev.map((x, idx) => idx === i ? { ...x, condition: e.target.value } : x))}
-                      className="h-10 flex-1 rounded-2xl border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none"
-                    >
-                      {Object.entries(CONDITION_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-                    </select>
-                    <Input
-                      value={r.rate_bonus_pct}
-                      onChange={(e) => setFRules((prev) => prev.map((x, idx) => idx === i ? { ...x, rate_bonus_pct: e.target.value } : x))}
-                      className="w-24 rounded-2xl"
-                      placeholder="-0.3"
-                      type="number"
-                      step="0.05"
-                    />
-                    <button type="button" onClick={() => removeRule(i)} className="rounded-xl p-2 text-rose-400 hover:bg-rose-50">
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  </div>
-                ))}
+                {fRules.map((r, i) => {
+                  const numVal = parseFloat(r.rate_bonus_pct) || 0;
+                  const isNegative = numVal <= 0 && r.rate_bonus_pct !== "";
+                  // Toggle sign: if currently negative, flip to positive and vice versa
+                  const toggleSign = () => {
+                    const abs = Math.abs(parseFloat(r.rate_bonus_pct) || 0.3);
+                    const newVal = isNegative ? String(abs) : String(-abs);
+                    setFRules((prev) => prev.map((x, idx) => idx === i ? { ...x, rate_bonus_pct: newVal } : x));
+                  };
+                  return (
+                    <div key={i} className="flex gap-2 items-center">
+                      <select
+                        value={r.condition}
+                        onChange={(e) => setFRules((prev) => prev.map((x, idx) => idx === i ? { ...x, condition: e.target.value } : x))}
+                        className="h-10 flex-1 rounded-2xl border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none"
+                      >
+                        {Object.entries(CONDITION_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                      </select>
+                      {/* Sign toggle */}
+                      <button
+                        type="button"
+                        onClick={toggleSign}
+                        title={isNegative ? "Desconto (clique para virar acréscimo)" : "Acréscimo (clique para virar desconto)"}
+                        className={cn(
+                          "h-10 w-10 flex-shrink-0 rounded-2xl text-xs font-bold border transition-colors",
+                          isNegative
+                            ? "bg-emerald-50 border-emerald-300 text-emerald-700 hover:bg-emerald-100"
+                            : "bg-rose-50 border-rose-300 text-rose-700 hover:bg-rose-100"
+                        )}
+                      >
+                        {isNegative ? "−" : "+"}
+                      </button>
+                      {/* Absolute value */}
+                      <div className="relative w-24">
+                        <Input
+                          value={Math.abs(parseFloat(r.rate_bonus_pct) || 0) || ""}
+                          onChange={(e) => {
+                            const abs = Math.abs(parseFloat(e.target.value) || 0);
+                            const signed = isNegative ? -abs : abs;
+                            setFRules((prev) => prev.map((x, idx) => idx === i ? { ...x, rate_bonus_pct: String(signed) } : x));
+                          }}
+                          className="rounded-2xl pr-7"
+                          placeholder="0.3"
+                          type="number"
+                          step="0.05"
+                          min="0"
+                        />
+                        <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] text-slate-400">%</span>
+                      </div>
+                      <button type="button" onClick={() => removeRule(i)} className="rounded-xl p-2 text-rose-400 hover:bg-rose-50">
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
+                  );
+                })}
                 {fRules.length === 0 && (
                   <p className="text-xs text-slate-400">Nenhuma regra. Clique em "+ Adicionar regra" para inserir condições de desconto.</p>
                 )}
