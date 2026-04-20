@@ -50,7 +50,7 @@ import {
 } from "recharts";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
-import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, parse, isSameDay, parseISO, isWithinInterval, startOfDay, endOfDay } from "date-fns";
+import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, parse, isSameDay, parseISO, isWithinInterval, startOfDay, endOfDay, subDays, subMonths } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { NewSalesOrderDialog } from "@/components/case/NewSalesOrderDialog";
 import { getStateLabel } from "@/lib/journeyLabels";
@@ -684,35 +684,65 @@ export default function Orders() {
                   <Button
                     variant="outline"
                     className={cn(
-                      "h-10 justify-start text-left font-normal rounded-2xl border-slate-200 bg-white/70 min-w-[240px]",
+                      "h-10 justify-start text-left font-normal rounded-2xl border-slate-200 bg-white/70 min-w-[240px] hover:bg-white hover:border-blue-400 transition-all shadow-sm",
                       !dateRange && "text-muted-foreground"
                     )}
                   >
                     <CalendarIcon className="mr-2 h-4 w-4 text-blue-500" />
                     {dateRange?.from ? (
                       dateRange.to ? (
-                        <>
-                          {format(dateRange.from, "dd/MM/yyyy")} -{" "}
-                          {format(dateRange.to, "dd/MM/yyyy")}
-                        </>
+                        <span className="text-[12px] font-bold text-slate-700">
+                          {format(dateRange.from, "dd/MM/yyyy")} - {format(dateRange.to, "dd/MM/yyyy")}
+                        </span>
                       ) : (
-                        format(dateRange.from, "dd/MM/yyyy")
+                        <span className="text-[12px] font-bold text-slate-700">{format(dateRange.from, "dd/MM/yyyy")}</span>
                       )
                     ) : (
-                      <span>Selecionar período</span>
+                      <span className="text-[12px]">Selecionar período</span>
                     )}
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent className="w-auto p-0 rounded-2xl shadow-xl border-slate-200" align="start">
-                  <Calendar
-                    initialFocus
-                    mode="range"
-                    defaultMonth={dateRange?.from}
-                    selected={dateRange}
-                    onSelect={(range: any) => setDateRange(range)}
-                    numberOfMonths={2}
-                    locale={ptBR}
-                  />
+                <PopoverContent className="w-auto p-0 rounded-[28px] shadow-2xl border-slate-200 overflow-hidden flex flex-col md:flex-row" align="start">
+                  {/* Presets Side Bar */}
+                  <div className="w-full md:w-[180px] border-b md:border-b-0 md:border-r border-slate-100 bg-slate-50/50 p-3 space-y-1">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 px-2 mb-2">Períodos</p>
+                    {[
+                      { label: "Hoje", range: { from: startOfDay(new Date()), to: endOfDay(new Date()) } },
+                      { label: "Ontem", range: { from: startOfDay(subDays(new Date(), 1)), to: endOfDay(subDays(new Date(), 1)) } },
+                      { label: "Últimos 7 dias", range: { from: startOfDay(subDays(new Date(), 6)), to: endOfDay(new Date()) } },
+                      { label: "Este Mês", range: { from: startOfMonth(new Date()), to: endOfMonth(new Date()) } },
+                      { label: "Mês Passado", range: { from: startOfMonth(subMonths(new Date(), 1)), to: endOfMonth(subMonths(new Date(), 1)) } },
+                      { label: "Últimos 3 meses", range: { from: startOfMonth(subMonths(new Date(), 2)), to: endOfMonth(new Date()) } },
+                    ].map((p) => (
+                      <button
+                        key={p.label}
+                        onClick={() => setDateRange(p.range)}
+                        className={cn(
+                          "w-full text-left px-3 py-2 rounded-xl text-xs font-semibold transition-all hover:bg-white hover:shadow-sm",
+                          dateRange?.from?.getTime() === p.range.from.getTime() && dateRange?.to?.getTime() === p.range.to.getTime()
+                            ? "bg-blue-600 text-white shadow-md hover:bg-blue-600"
+                            : "text-slate-600 hover:text-blue-600"
+                        )}
+                      >
+                        {p.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="p-2">
+                    <Calendar
+                      initialFocus
+                      mode="range"
+                      defaultMonth={dateRange?.from}
+                      selected={dateRange}
+                      onSelect={(range: any) => setDateRange(range)}
+                      numberOfMonths={2}
+                      locale={ptBR}
+                      captionLayout="dropdown"
+                      fromYear={2020}
+                      toYear={2030}
+                    />
+                  </div>
                 </PopoverContent>
               </Popover>
 
@@ -743,8 +773,8 @@ export default function Orders() {
                   </Button>
                 </div>
 
-                <Button variant="secondary" className="h-10 rounded-2xl" onClick={exportOrdersCsv} disabled={exportingCsv}>
-                  <Download className="mr-2 h-4 w-4" /> Exportar
+                <Button variant="secondary" className="h-10 rounded-2xl bg-slate-900 text-white hover:bg-slate-800 border-none shadow-sm" onClick={exportOrdersCsv} disabled={exportingCsv}>
+                  <Download className="mr-2 h-4 w-4" /> Exportar ({filteredRows.length})
                 </Button>
 
                 <ImportOrdersDialog
