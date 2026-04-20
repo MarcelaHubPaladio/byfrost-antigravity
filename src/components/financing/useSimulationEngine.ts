@@ -1,7 +1,7 @@
 /**
  * useSimulationEngine — cálculos de financiamento imobiliário
  * Suporta SAC (Sistema de Amortização Constante) e Price (parcelas fixas).
- * Inclui cálculo de seguro MIP+DFI estimado, TAC, CET estimado e FGTS.
+ * Inclui cálculo de seguro MIP+DFI estimado, TAC, CET estimado, FGTS e comparação multi-banco.
  */
 
 export interface SimulationInput {
@@ -11,7 +11,6 @@ export interface SimulationInput {
   termMonths: number;         // prazo em meses
   annualRatePct: number;      // taxa anual % (ex: 10.39)
   tacValue: number;           // Tarifa de Avaliação de Crédito (R$)
-  // Perfil do cliente para cálculos de renda mínima
   grossIncome?: number;
   incomeCommitmentPct?: number;
 }
@@ -40,16 +39,41 @@ export interface SimulationResult {
   sac: SACResult;
   price: PriceResult;
   tac: number;
-  cetEstimatePct: number;        // CET estimado anual
-  minIncomeRequired: number;     // Renda mínima para a parcela da Price (30% regra)
-  availableForFinancing: number; // Quanto da renda pode comprometer
+  cetEstimatePct: number;
+  minIncomeRequired: number;
+  availableForFinancing: number;
   incomeIsEnough: boolean;
 }
 
-const INSURANCE_RATE_PER_MIL = 0.28; // MIP+DFI estimado: 0.28‰ ao mês do saldo devedor
+/** Result for one bank in a multi-bank comparison */
+export interface BankSimResult {
+  bankId: string;
+  bankName: string;
+  bankCode: string;
+  effectiveRatePct: number;
+  sac: Pick<SACResult, "firstPayment" | "lastPayment" | "totalPaid" | "totalInterest" | "monthlyAmortization" | "monthlyInsurance">;
+  price: Pick<PriceResult, "monthlyPayment" | "totalPaid" | "totalInterest" | "monthlyInsurance">;
+  tac: number;
+  cetEstimatePct: number;
+  minIncomeRequired: number;
+  incomeIsEnough: boolean;
+  loanValue: number;
+  downPayment: number;
+  minDownPct: number;         // cota mínima de entrada deste banco
+  maxFinancingPct: number;    // 100 - minDownPct
+}
+
+export interface MultiBankInput {
+  propertyValue: number;
+  fgtsAmount: number;
+  termMonths: number;
+  grossIncome?: number;
+  incomeCommitmentPct?: number;
+}
+
+const INSURANCE_RATE_PER_MIL = 0.28;
 
 export function calcMonthlyRate(annualRatePct: number): number {
-  // Converter taxa anual nominal p/ mensal (juros compostos)
   return Math.pow(1 + annualRatePct / 100, 1 / 12) - 1;
 }
 
@@ -78,7 +102,6 @@ export function calcSAC(loanValue: number, monthlyRate: number, termMonths: numb
 }
 
 export function calcPrice(loanValue: number, monthlyRate: number, termMonths: number): PriceResult {
-  // Parcela fixa pela tabela Price: PMT = PV * i / (1-(1+i)^-n)
   const pmt = (loanValue * monthlyRate) / (1 - Math.pow(1 + monthlyRate, -termMonths));
   let balance = loanValue;
   let totalInterest = 0;
@@ -97,7 +120,6 @@ export function calcPrice(loanValue: number, monthlyRate: number, termMonths: nu
   }
 
   const monthlyInsurance = schedule[0]?.insurance ?? 0;
-
   return { monthlyPayment: pmt, totalPaid, totalInterest, monthlyInsurance, schedule };
 }
 
@@ -108,13 +130,10 @@ export function runSimulation(input: SimulationInput): SimulationResult {
   const sac = calcSAC(loanValue, monthlyRate, input.termMonths);
   const price = calcPrice(loanValue, monthlyRate, input.termMonths);
 
-  // CET estimado: usar Price como referência + TAC diluída
-  const tacMonthlyEquiv = input.tacValue / input.termMonths;
   const totalWithTac = price.totalPaid + input.tacValue;
-  const cetMonthly = Math.pow(totalWithTac / loanValue, 1 / input.termMonths) - 1;
+  const cetMonthly = loanValue > 0 ? Math.pow(totalWithTac / loanValue, 1 / input.termMonths) - 1 : 0;
   const cetEstimatePct = (Math.pow(1 + cetMonthly, 12) - 1) * 100;
 
-  // Renda mínima (regra: parcela <= 30% da renda)
   const minIncomeRequired = price.monthlyPayment / 0.30;
   const alreadyCommitted = ((input.incomeCommitmentPct ?? 0) / 100) * (input.grossIncome ?? 0);
   const availableForFinancing = (input.grossIncome ?? 0) * 0.30 - alreadyCommitted;
@@ -133,35 +152,86 @@ export function runSimulation(input: SimulationInput): SimulationResult {
   };
 }
 
+/** Run simulation for multiple banks and return comparison array */
+export function runMultiBankSimulation(
+  banks: Array<{
+    id: string;
+    bank_name: string;
+    bank_code: string;
+    base_rate_pct: number;
+    rate_rules_json: any[];
+    tac_json: Record<string, any>;
+    max_term_months: number | null;
+  }>,
+  input: MultiBankInput,
+  clientProfile: { isPublicServant?: boolean; fgtsYears?: number; age?: number; hasMinorChildren?: boolean }
+): BankSimResult[] {
+  return banks.map((bank) => {
+    const rate = getEffectiveRate(bank.base_rate_pct, bank.rate_rules_json ?? [], clientProfile);
+    const tac = bank.tac_json?.fixed ?? 0;
+    const minDownPct: number = bank.tac_json?.min_down_pct ?? 20;
+    const maxFinancingPct = 100 - minDownPct;
+    const downPayment = (input.propertyValue * minDownPct) / 100;
+    const loanValue = Math.max(0, input.propertyValue - downPayment - (input.fgtsAmount || 0));
+    const term = Math.min(input.termMonths, bank.max_term_months ?? input.termMonths);
+
+    const monthlyRate = calcMonthlyRate(rate);
+    const sac = calcSAC(loanValue, monthlyRate, term);
+    const price = calcPrice(loanValue, monthlyRate, term);
+
+    const totalWithTac = price.totalPaid + tac;
+    const cetMonthly = loanValue > 0 ? Math.pow(totalWithTac / loanValue, 1 / term) - 1 : 0;
+    const cetEstimatePct = (Math.pow(1 + cetMonthly, 12) - 1) * 100;
+    const minIncomeRequired = price.monthlyPayment / 0.30;
+    const alreadyCommitted = ((input.incomeCommitmentPct ?? 0) / 100) * (input.grossIncome ?? 0);
+    const availableForFinancing = (input.grossIncome ?? 0) * 0.30 - alreadyCommitted;
+    const incomeIsEnough = availableForFinancing >= price.monthlyPayment;
+
+    return {
+      bankId: bank.id,
+      bankName: bank.bank_name,
+      bankCode: bank.bank_code,
+      effectiveRatePct: rate,
+      sac: {
+        firstPayment: sac.firstPayment,
+        lastPayment: sac.lastPayment,
+        totalPaid: sac.totalPaid,
+        totalInterest: sac.totalInterest,
+        monthlyAmortization: sac.monthlyAmortization,
+        monthlyInsurance: sac.monthlyInsurance,
+      },
+      price: {
+        monthlyPayment: price.monthlyPayment,
+        totalPaid: price.totalPaid,
+        totalInterest: price.totalInterest,
+        monthlyInsurance: price.monthlyInsurance,
+      },
+      tac,
+      cetEstimatePct,
+      minIncomeRequired,
+      incomeIsEnough,
+      loanValue,
+      downPayment,
+      minDownPct,
+      maxFinancingPct,
+    };
+  });
+}
+
 export function getEffectiveRate(
   baseRatePct: number,
   rateRules: Array<{ condition: string; rate_bonus_pct: number }>,
-  clientProfile: {
-    isPublicServant?: boolean;
-    fgtsYears?: number;
-    age?: number;
-    hasMinorChildren?: boolean;
-  }
+  clientProfile: { isPublicServant?: boolean; fgtsYears?: number; age?: number; hasMinorChildren?: boolean }
 ): number {
   let rate = baseRatePct;
   for (const rule of rateRules) {
-    if (rule.condition === "is_public_servant" && clientProfile.isPublicServant) {
-      rate += rule.rate_bonus_pct;
-    }
-    if (rule.condition === "fgts_years_gt_3" && (clientProfile.fgtsYears ?? 0) > 3) {
-      rate += rule.rate_bonus_pct;
-    }
-    if (rule.condition === "age_lt_30" && (clientProfile.age ?? 99) < 30) {
-      rate += rule.rate_bonus_pct;
-    }
-    if (rule.condition === "age_gte_51" && (clientProfile.age ?? 0) >= 51) {
-      rate += rule.rate_bonus_pct;
-    }
-    if (rule.condition === "has_minor_children" && clientProfile.hasMinorChildren) {
-      rate += rule.rate_bonus_pct;
-    }
+    if (rule.condition === "is_public_servant" && clientProfile.isPublicServant) rate += rule.rate_bonus_pct;
+    if (rule.condition === "fgts_years_gt_3" && (clientProfile.fgtsYears ?? 0) > 3) rate += rule.rate_bonus_pct;
+    if (rule.condition === "age_lt_30" && (clientProfile.age ?? 99) < 30) rate += rule.rate_bonus_pct;
+    if (rule.condition === "age_gte_51" && (clientProfile.age ?? 0) >= 51) rate += rule.rate_bonus_pct;
+    if (rule.condition === "has_minor_children" && clientProfile.hasMinorChildren) rate += rule.rate_bonus_pct;
   }
-  return Math.max(0.1, rate); // mínimo de 0.1% ao ano
+  return Math.max(0.1, rate);
 }
 
 export function calcAge(birthDate: string | null | undefined): number | undefined {

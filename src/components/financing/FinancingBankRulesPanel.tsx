@@ -52,7 +52,7 @@ const DEFAULT_BANK_RULES = [
       { label: "FGTS > 3 anos",    condition: "fgts_years_gt_3",  rate_bonus_pct: -0.25 },
       { label: "Idade > 50",       condition: "age_gte_51",       rate_bonus_pct: 0.3 },
     ],
-    tac_json: { fixed: 3500 },
+    tac_json: { fixed: 3500, min_down_pct: 20 },
     max_term_months: 420,
   },
   {
@@ -63,7 +63,7 @@ const DEFAULT_BANK_RULES = [
       { label: "Servidor Público", condition: "is_public_servant", rate_bonus_pct: -0.3 },
       { label: "FGTS > 3 anos",    condition: "fgts_years_gt_3",  rate_bonus_pct: -0.2 },
     ],
-    tac_json: { fixed: 3800 },
+    tac_json: { fixed: 3800, min_down_pct: 20 },
     max_term_months: 360,
   },
   {
@@ -74,7 +74,7 @@ const DEFAULT_BANK_RULES = [
       { label: "Servidor Público", condition: "is_public_servant", rate_bonus_pct: -0.4 },
       { label: "Idade < 30",       condition: "age_lt_30",        rate_bonus_pct: -0.1 },
     ],
-    tac_json: { fixed: 3600 },
+    tac_json: { fixed: 3600, min_down_pct: 20 },
     max_term_months: 360,
   },
   {
@@ -85,7 +85,7 @@ const DEFAULT_BANK_RULES = [
       { label: "FGTS > 3 anos",    condition: "fgts_years_gt_3",  rate_bonus_pct: -0.3 },
       { label: "Servidor Público", condition: "is_public_servant", rate_bonus_pct: -0.35 },
     ],
-    tac_json: { fixed: 4200 },
+    tac_json: { fixed: 4200, min_down_pct: 20 },
     max_term_months: 360,
   },
 ];
@@ -113,6 +113,7 @@ export function FinancingBankRulesPanel() {
   const [fBankCode, setFBankCode] = useState("");
   const [fBaseRate, setFBaseRate] = useState("");
   const [fTac, setFTac] = useState("");
+  const [fMinDownPct, setFMinDownPct] = useState("20");
   const [fMaxTerm, setFMaxTerm] = useState("360");
   const [fMinLoan, setFMinLoan] = useState("");
   const [fMaxLoan, setFMaxLoan] = useState("");
@@ -136,7 +137,7 @@ export function FinancingBankRulesPanel() {
   const openCreate = () => {
     setEditingBank(null);
     setFBankName(""); setFBankCode(""); setFBaseRate(""); setFTac("3500");
-    setFMaxTerm("360"); setFMinLoan(""); setFMaxLoan(""); setFRules([]);
+    setFMinDownPct("20"); setFMaxTerm("360"); setFMinLoan(""); setFMaxLoan(""); setFRules([]);
     setDialogOpen(true);
   };
 
@@ -146,6 +147,7 @@ export function FinancingBankRulesPanel() {
     setFBankCode(b.bank_code);
     setFBaseRate(String(b.base_rate_pct));
     setFTac(String(b.tac_json?.fixed ?? ""));
+    setFMinDownPct(String(b.tac_json?.min_down_pct ?? 20));
     setFMaxTerm(String(b.max_term_months ?? 360));
     setFMinLoan(String(b.min_loan_value ?? ""));
     setFMaxLoan(String(b.max_loan_value ?? ""));
@@ -166,12 +168,13 @@ export function FinancingBankRulesPanel() {
     if (!activeTenantId || !fBankName.trim() || !fBankCode.trim() || !fBaseRate) return;
     setSaving(true);
     try {
+      const minDownPct = parseFloat(fMinDownPct) || 20;
       const payload = {
         tenant_id: activeTenantId,
         bank_name: fBankName.trim(),
         bank_code: fBankCode.trim().toUpperCase(),
         base_rate_pct: parseFloat(fBaseRate),
-        tac_json: { fixed: parseFloat(fTac) || 0 },
+        tac_json: { fixed: parseFloat(fTac) || 0, min_down_pct: minDownPct },
         max_term_months: parseInt(fMaxTerm) || 360,
         min_loan_value: fMinLoan ? parseFloat(fMinLoan) : null,
         max_loan_value: fMaxLoan ? parseFloat(fMaxLoan) : null,
@@ -320,6 +323,7 @@ export function FinancingBankRulesPanel() {
                       {" · "}TAC: <span className="font-semibold text-slate-700">
                         {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(b.tac_json?.fixed ?? 0)}
                       </span>
+                      {" · "}Entrada mín.:{" "}<span className="font-semibold text-slate-700">{b.tac_json?.min_down_pct ?? 20}%</span>
                     </div>
                   </div>
                 </div>
@@ -397,11 +401,20 @@ export function FinancingBankRulesPanel() {
                 <Input value={fBankCode} onChange={(e) => setFBankCode(e.target.value)} className="mt-1 rounded-2xl uppercase" placeholder="CEF" maxLength={6} />
               </div>
             </div>
-            <div className="grid gap-3 sm:grid-cols-3">
+            <div className="grid gap-3 sm:grid-cols-2">
               <div>
                 <Label className="text-xs">Taxa base (% a.a.)</Label>
                 <Input value={fBaseRate} onChange={(e) => setFBaseRate(e.target.value)} type="number" step="0.01" className="mt-1 rounded-2xl" placeholder="10.99" />
               </div>
+              <div>
+                <Label className="text-xs">Entrada mínima (%)</Label>
+                <div className="relative">
+                  <Input value={fMinDownPct} onChange={(e) => setFMinDownPct(e.target.value)} type="number" step="1" min="0" max="100" className="mt-1 rounded-2xl" placeholder="20" />
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400 mt-0.5">% do imóvel</span>
+                </div>
+              </div>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
               <div>
                 <Label className="text-xs">TAC (R$)</Label>
                 <Input value={fTac} onChange={(e) => setFTac(e.target.value)} type="number" step="0.01" className="mt-1 rounded-2xl" placeholder="3500" />
