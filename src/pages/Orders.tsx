@@ -48,7 +48,9 @@ import {
   Tooltip as RechartsTooltip,
   ResponsiveContainer,
 } from "recharts";
-import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, parse, isSameDay, parseISO } from "date-fns";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
+import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, parse, isSameDay, parseISO, isWithinInterval, startOfDay, endOfDay } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { NewSalesOrderDialog } from "@/components/case/NewSalesOrderDialog";
 import { getStateLabel } from "@/lib/journeyLabels";
@@ -135,7 +137,10 @@ export default function Orders() {
   const { prefs } = useTheme();
 
   const [q, setQ] = useState("");
-  const [selectedMonth, setSelectedMonth] = useState(new Date());
+  const [dateRange, setDateRange] = useState<{ from: Date; to: Date | undefined }>({ 
+    from: startOfMonth(new Date()), 
+    to: endOfMonth(new Date()) 
+  });
   const [selectedSellerId, setSelectedSellerId] = useState<string>("all");
   const [movingCaseId, setMovingCaseId] = useState<string | null>(null);
   const [transitionBlock, setTransitionBlock] = useState<{
@@ -222,7 +227,7 @@ export default function Orders() {
   }, [journeyRows]);
 
   const customersQ = useQuery({
-    queryKey: ["customers_orders", activeTenantId, customerIds.length, customerIds[0], selectedMonth.getTime()],
+    queryKey: ["customers_orders", activeTenantId, customerIds.length, customerIds[0], dateRange.from.getTime(), dateRange.to?.getTime()],
     enabled: Boolean(activeTenantId && customerIds.length),
     queryFn: async () => {
       const CHUNK_SIZE = 20;
@@ -305,7 +310,7 @@ export default function Orders() {
   }, [journeyRows]);
 
   const caseDataQ = useQuery({
-    queryKey: ["orders_case_fields_extended", activeTenantId, journeyRows.length, journeyRows[0]?.id, selectedMonth.getTime()],
+    queryKey: ["orders_case_fields_extended", activeTenantId, journeyRows.length, journeyRows[0]?.id, dateRange.from.getTime(), dateRange.to?.getTime()],
     enabled: Boolean(activeTenantId && caseIdsForLookup.length),
     queryFn: async () => {
       const CHUNK_SIZE = 10;
@@ -387,17 +392,18 @@ export default function Orders() {
       rows = rows.filter(r => r.assigned_user_id === selectedSellerId);
     }
 
-    // Filter by Month
+    // Filter by Date Range
     rows = rows.filter(r => {
       const f = caseDataQ.data?.fields.get(r.id);
       const saleDateText = f?.sale_date_text;
       
-      // If we are still loading, don't show items in the "wrong" month effectively
-      // or if we have the data, classify it.
-      if (!f && caseDataQ.isLoading) return false;
-
       const d = parseSafeDate(saleDateText, r.created_at);
-      return isSameMonth(d, selectedMonth);
+      
+      if (!dateRange.from) return true;
+      const start = startOfDay(dateRange.from);
+      const end = endOfDay(dateRange.to || dateRange.from);
+      
+      return isWithinInterval(d, { start, end });
     });
 
     const qq = q.trim().toLowerCase();
@@ -413,7 +419,7 @@ export default function Orders() {
     }
 
     return rows;
-  }, [journeyRows, q, selectedMonth, selectedSellerId, customersQ.data, caseDataQ.data]);
+  }, [journeyRows, q, dateRange, selectedSellerId, customersQ.data, caseDataQ.data]);
 
   const stats = useMemo(() => {
     let totalValue = 0;
@@ -441,8 +447,8 @@ export default function Orders() {
   }, [filteredRows, caseDataQ.data]);
 
   const chartData = useMemo(() => {
-    const start = startOfMonth(selectedMonth);
-    const end = endOfMonth(selectedMonth);
+    const start = startOfDay(dateRange.from || new Date());
+    const end = endOfDay(dateRange.to || dateRange.from || new Date());
     const days = eachDayOfInterval({ start, end });
 
     return days.map(d => {
@@ -462,10 +468,10 @@ export default function Orders() {
         total: dailyTotal,
       };
     });
-  }, [filteredRows, selectedMonth, caseDataQ.data]);
+  }, [filteredRows, dateRange, caseDataQ.data]);
 
   const pendQ = useQuery({
-    queryKey: ["orders_pendencies", activeTenantId, filteredRows.length, filteredRows[0]?.id, selectedMonth.getTime()],
+    queryKey: ["orders_pendencies", activeTenantId, filteredRows.length, filteredRows[0]?.id, dateRange.from.getTime(), dateRange.to?.getTime()],
     enabled: Boolean(activeTenantId && filteredRows.length),
     queryFn: async () => {
       const ids = Array.from(new Set(filteredRows.map((c) => c.id).filter(id => typeof id === "string" && id.length > 30)));
@@ -541,25 +547,78 @@ export default function Orders() {
     }
   };
 
-  const exportConversationsCsv = async () => {
-    if (!activeTenantId || exportingCsv || journeyRows.length === 0) return;
+  const exportOrdersCsv = async () => {
+    if (!activeTenantId || exportingCsv || filteredRows.length === 0) return;
     setExportingCsv(true);
     try {
-      const caseIds = journeyRows.map(r => r.id);
-      const { data: msgs, error } = await supabase
-        .from("wa_messages")
-        .select("case_id,occurred_at,direction,body_text")
-        .eq("tenant_id", activeTenantId)
-        .in("case_id", caseIds.slice(0, 50)) // simple limit for now
-        .order("occurred_at", { ascending: true });
-      if (error) throw error;
-
-      const csv = ["case_id,timestamp,direction,message"];
-      (msgs ?? []).forEach(m => {
-        csv.push(`${m.case_id},${m.occurred_at},${m.direction},${csvCell(m.body_text)}`);
+      const headers = [
+        "id", "id_externo", "data_venda", "cliente_nome", "cliente_whatsapp", 
+        "cliente_email", "cliente_cpf_cnpj", "cliente_endereco", "cliente_cidade", 
+        "vendedor_email", "pagamento_condicoes", "forma_pagamento", "valor_sinal", 
+        "vencimento", "status_faturamento", "item_codigo", "item_descricao", 
+        "item_qtd", "item_valor_unit", "item_desconto_pct", "obs"
+      ];
+      
+      const csvRows = [headers.map(csvCell).join(",")];
+      
+      // We need item-level data, which we have in caseDataQ.data
+      // But we need the detailed items for each case.
+      // Since caseDataQ only gets totals, we might need a more detailed fetch for items if we want per-item export.
+      // However, the import supports multiple items per case by repeating rows.
+      // Let's fetch all items for the filtered cases.
+      
+      const filteredCaseIds = filteredRows.map(r => r.id);
+      const { data: allItems, error: itemsErr } = await supabase
+        .from("case_items")
+        .select("*")
+        .in("case_id", filteredCaseIds);
+      
+      if (itemsErr) throw itemsErr;
+      
+      const itemsByCase = new Map<string, any[]>();
+      (allItems ?? []).forEach(it => {
+        const arr = itemsByCase.get(it.case_id) ?? [];
+        arr.push(it);
+        itemsByCase.set(it.case_id, arr);
       });
-      downloadTextFile(`pedidos_${new Date().toISOString().slice(0,10)}.csv`, csv.join("\n"), "text/csv");
-      showSuccess("CSV exportado.");
+
+      filteredRows.forEach(r => {
+        const f = caseDataQ.data?.fields.get(r.id);
+        const cust = customersQ.data?.get(r.customer_id!);
+        const items = itemsByCase.get(r.id) ?? [{}]; // At least one row even if no items
+        
+        items.forEach(it => {
+          const row = [
+            r.id,
+            r.meta_json?.external_id ?? "",
+            f?.sale_date_text ?? format(new Date(r.created_at), "yyyy-MM-dd"),
+            cust?.name ?? r.title ?? "",
+            cust?.phone_e164 ?? f?.whatsapp ?? f?.phone ?? "",
+            cust?.email ?? f?.email ?? "",
+            f?.cpf ?? "",
+            f?.address ?? "",
+            f?.city ?? "",
+            r.users_profile?.email ?? "",
+            f?.payment_terms ?? "",
+            f?.payment_method ?? "",
+            f?.payment_signal_value_raw ?? "",
+            f?.payment_due_date_text ?? "",
+            f?.billing_status ?? "Pendente",
+            it.code ?? "",
+            it.description ?? "",
+            it.qty ?? "",
+            it.price ?? "",
+            it.discount_percent ?? "",
+            f?.obs ?? ""
+          ];
+          csvRows.push(row.map(csvCell).join(","));
+        });
+      });
+      
+      downloadTextFile(`pedidos_export_${format(new Date(), "yyyy-MM-dd")}.csv`, csvRows.join("\n"), "text/csv");
+      showSuccess(`${filteredRows.length} pedidos exportados.`);
+    } catch (e: any) {
+      showError(`Falha na exportação: ${e.message}`);
     } finally {
       setExportingCsv(false);
     }
@@ -619,41 +678,43 @@ export default function Orders() {
                 </select>
               </div>
 
-              {/* Month Selector */}
-              <div className="flex items-center gap-1 rounded-2xl border border-slate-200 bg-white/70 p-1 h-10">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8 rounded-xl hover:bg-slate-100"
-                  onClick={() => setSelectedMonth(prev => {
-                    const d = new Date(prev);
-                    d.setMonth(d.getMonth() - 1);
-                    return d;
-                  })}
-                >
-                  <ChevronLeftIcon className="h-4 w-4 text-slate-600" />
-                </Button>
-                
-                <div className="flex items-center gap-2 px-2 min-w-[120px] justify-center">
-                  <CalendarIcon className="h-3.5 w-3.5 text-blue-500" />
-                  <span className="text-[11px] font-black uppercase tracking-widest text-slate-700">
-                    {format(selectedMonth, "MMMM yyyy", { locale: ptBR })}
-                  </span>
-                </div>
-
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8 rounded-xl hover:bg-slate-100"
-                  onClick={() => setSelectedMonth(prev => {
-                    const d = new Date(prev);
-                    d.setMonth(d.getMonth() + 1);
-                    return d;
-                  })}
-                >
-                  <ChevronRight className="h-4 w-4 text-slate-600" />
-                </Button>
-              </div>
+              {/* Date Range Picker */}
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className={cn(
+                      "h-10 justify-start text-left font-normal rounded-2xl border-slate-200 bg-white/70 min-w-[240px]",
+                      !dateRange && "text-muted-foreground"
+                    )}
+                  >
+                    <CalendarIcon className="mr-2 h-4 w-4 text-blue-500" />
+                    {dateRange?.from ? (
+                      dateRange.to ? (
+                        <>
+                          {format(dateRange.from, "dd/MM/yyyy")} -{" "}
+                          {format(dateRange.to, "dd/MM/yyyy")}
+                        </>
+                      ) : (
+                        format(dateRange.from, "dd/MM/yyyy")
+                      )
+                    ) : (
+                      <span>Selecionar período</span>
+                    )}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0 rounded-2xl shadow-xl border-slate-200" align="start">
+                  <Calendar
+                    initialFocus
+                    mode="range"
+                    defaultMonth={dateRange?.from}
+                    selected={dateRange}
+                    onSelect={(range: any) => setDateRange(range)}
+                    numberOfMonths={2}
+                    locale={ptBR}
+                  />
+                </PopoverContent>
+              </Popover>
 
               <div className="h-8 w-px bg-slate-200 mx-1 hidden lg:block" />
 
@@ -682,7 +743,7 @@ export default function Orders() {
                   </Button>
                 </div>
 
-                <Button variant="secondary" className="h-10 rounded-2xl" onClick={exportConversationsCsv} disabled={exportingCsv}>
+                <Button variant="secondary" className="h-10 rounded-2xl" onClick={exportOrdersCsv} disabled={exportingCsv}>
                   <Download className="mr-2 h-4 w-4" /> Exportar
                 </Button>
 

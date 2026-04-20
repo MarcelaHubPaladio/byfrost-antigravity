@@ -38,6 +38,7 @@ type UserProfileLite = {
 
 type ParsedRow = {
   rowNo: number;
+  id?: string;
   externalId: string;
   customerName: string;
   whatsapp: string;
@@ -70,6 +71,7 @@ type OrderItem = {
 
 type GroupedOrder = {
   id: string; // Grouping key
+  dbId?: string; // Actual case_id from database if updating
   externalId: string;
   customerName: string;
   whatsapp: string;
@@ -249,6 +251,7 @@ export function ImportOrdersDialog({
       if (!table.length) return [];
 
       const headers = table[0].map((x) => String(x ?? "").trim());
+      const idxId = pickHeaderIndex(headers, ["id", "case_id", "id_pedido"]);
       const idxExt = pickHeaderIndex(headers, ["id_externo", "external_id", "numero_pedido"]);
       const idxName = pickHeaderIndex(headers, ["cliente_nome", "nome", "name"]);
       const idxWa = pickHeaderIndex(headers, ["cliente_whatsapp", "whatsapp", "telefone", "phone"]);
@@ -274,6 +277,7 @@ export function ImportOrdersDialog({
 
       for (let i = 1; i < table.length; i++) {
         const row = table[i];
+        const dbId = idxId >= 0 ? String(row[idxId] ?? "").trim() : "";
         const extId = idxExt >= 0 ? String(row[idxExt] ?? "").trim() : "";
         const wa = idxWa >= 0 ? String(row[idxWa] ?? "").trim() : "";
         const pay = idxPay >= 0 ? String(row[idxPay] ?? "").trim() : "";
@@ -286,6 +290,7 @@ export function ImportOrdersDialog({
         if (!order) {
           order = {
             id: groupKey,
+            dbId: dbId,
             externalId: extId,
             customerName: idxName >= 0 ? String(row[idxName] ?? "").trim() : "",
             whatsapp: wa,
@@ -398,7 +403,8 @@ export function ImportOrdersDialog({
           }
         }
 
-        // 2. Create Case
+        // 2. Resolve Case (Update or Create)
+        let caseId: string | null = null;
         const tId = String(tenantId).trim();
         if (!tId || tId.length < 32) throw new Error("ID de tenant inválido");
 
@@ -406,31 +412,74 @@ export function ImportOrdersDialog({
         const ownerUserId = ownerProfile?.user_id || null;
         const ownerCommissionRules = ownerProfile?.meta_json?.commission_rules;
 
-        const { data: caseRow, error: caseErr } = await supabase
-          .from("cases")
-          .insert({
-            tenant_id: tId,
-            journey_id: journey.id,
-            customer_id: customerId,
-            assigned_user_id: ownerUserId,
-            title: o.customerName || "Pedido Importado",
-            case_type: "sales_order",
-            status: "open",
-            state: firstState,
-            created_by_channel: "panel",
-            meta_json: { 
-              external_id: o.externalId, 
-              import_source: "bulk", 
-              import_file: fileName 
-            }
-          })
-          .select("id")
-          .single();
+        // Try to find existing case by provided dbId or externalId
+        if (o.dbId) {
+          const { data: existing } = await supabase
+            .from("cases")
+            .select("id")
+            .eq("tenant_id", tId)
+            .eq("id", o.dbId)
+            .maybeSingle();
+          if (existing) caseId = existing.id;
+        }
 
-        if (caseErr || !caseRow) throw caseErr || new Error("Falha ao criar pedido");
-        const caseId = caseRow.id;
+        if (!caseId && o.externalId) {
+          const { data: existing } = await supabase
+            .from("cases")
+            .select("id")
+            .eq("tenant_id", tId)
+            .eq("journey_id", journey.id)
+            .filter("meta_json->>external_id", "eq", o.externalId)
+            .maybeSingle();
+          if (existing) caseId = existing.id;
+        }
 
-        // 3. Insert Fields (Removido phone por redundância, vinculado via customer_id)
+        if (caseId) {
+          // Update existing case
+          const { error: caseErr } = await supabase
+            .from("cases")
+            .update({
+              customer_id: customerId || undefined,
+              assigned_user_id: ownerUserId || undefined,
+              title: o.customerName || undefined,
+              updated_at: new Date().toISOString(),
+              meta_json: { 
+                external_id: o.externalId, 
+                import_source: "bulk_update", 
+                import_file: fileName,
+                last_import_at: new Date().toISOString()
+              }
+            })
+            .eq("id", caseId);
+          if (caseErr) throw caseErr;
+        } else {
+          // Create New Case
+          const { data: caseRow, error: caseErr } = await supabase
+            .from("cases")
+            .insert({
+              tenant_id: tId,
+              journey_id: journey.id,
+              customer_id: customerId,
+              assigned_user_id: ownerUserId,
+              title: o.customerName || "Pedido Importado",
+              case_type: "sales_order",
+              status: "open",
+              state: firstState,
+              created_by_channel: "panel",
+              meta_json: { 
+                external_id: o.externalId, 
+                import_source: "bulk", 
+                import_file: fileName 
+              }
+            })
+            .select("id")
+            .single();
+
+          if (caseErr || !caseRow) throw caseErr || new Error("Falha ao criar pedido");
+          caseId = caseRow.id;
+        }
+
+        // 3. Upsert Fields
         const fields = [
           { key: "name", value_text: o.customerName },
           { key: "email", value_text: o.email },
@@ -457,9 +506,12 @@ export function ImportOrdersDialog({
           await supabase.from("case_fields").upsert(fields, { onConflict: "case_id,key" });
         }
 
-        // 4. Insert Items
+        // 4. Update Items (Replace methodology to ensure sync)
         const unmatchedNames: string[] = [];
         if (o.items.length) {
+          // If updating, clear existing items first
+          await supabase.from("case_items").delete().eq("case_id", caseId);
+
           const itemsPayload = o.items.map((it, idx) => {
             // Attempt to match offering if not already matched
             let offeringId = it.matchedOfferingId || null;
