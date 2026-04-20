@@ -37,7 +37,8 @@ import {
   Briefcase,
   Users2,
   Calendar as CalendarIcon,
-  Check
+  Check,
+  XCircle
 } from "lucide-react";
 import {
   AreaChart,
@@ -425,6 +426,7 @@ export default function Orders() {
     let totalValue = 0;
     let pendingValue = 0;
     let invoicedValue = 0;
+    let canceledValue = 0;
     let invoicedCount = 0;
 
     filteredRows.forEach(r => {
@@ -436,14 +438,16 @@ export default function Orders() {
       if (billingStatus.includes("pago") || billingStatus.includes("faturado")) {
         invoicedValue += val;
         invoicedCount++;
-      } else if (!billingStatus.includes("canc")) {
+      } else if (billingStatus.includes("canc")) {
+        canceledValue += val;
+      } else {
         pendingValue += val;
       }
     });
 
     const avgTicket = invoicedCount > 0 ? invoicedValue / invoicedCount : 0;
 
-    return { totalValue, pendingValue, invoicedValue, avgTicket };
+    return { totalValue, pendingValue, invoicedValue, canceledValue, avgTicket };
   }, [filteredRows, caseDataQ.data]);
 
   const chartData = useMemo(() => {
@@ -790,7 +794,7 @@ export default function Orders() {
             </div>
           </div>
 
-          <div className="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
             <div className="rounded-[22px] border border-slate-100 bg-slate-50/50 p-5 shadow-sm transition-all hover:shadow-md">
               <div className="flex items-center gap-3 text-slate-500 mb-3">
                 <div className="p-2 rounded-xl bg-blue-100 text-blue-600">
@@ -840,6 +844,23 @@ export default function Orders() {
                 )}
               </div>
               <div className="mt-1 text-[10px] text-slate-400 font-bold uppercase tracking-tight">Valor efetivamente recebido</div>
+            </div>
+
+            <div className="rounded-[22px] border border-slate-100 bg-slate-50/50 p-5 shadow-sm transition-all hover:shadow-md">
+              <div className="flex items-center gap-3 text-slate-500 mb-3">
+                <div className="p-2 rounded-xl bg-rose-100 text-rose-600">
+                  <XCircle className="h-4 w-4" />
+                </div>
+                <span className="text-[10px] font-black uppercase tracking-widest">Total Cancelado</span>
+              </div>
+              <div className="text-xl font-black text-rose-600">
+                {caseDataQ.isLoading ? (
+                  <div className="h-7 w-24 bg-rose-100/50 animate-pulse rounded-lg" />
+                ) : (
+                  new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(stats.canceledValue)
+                )}
+              </div>
+              <div className="mt-1 text-[10px] text-slate-400 font-bold uppercase tracking-tight">Pedidos com status cancelado</div>
             </div>
 
             <div className="rounded-[22px] border border-slate-100 bg-slate-50/50 p-5 shadow-sm transition-all hover:shadow-md">
