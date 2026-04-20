@@ -186,15 +186,27 @@ export function FinancingSimulationPdfButton({
             </View>
             <TableRow label="1ª Parcela" getter={(r) => r.sac.firstPayment} format={fmtBRL} />
             <TableRow label="Última Parcela" getter={(r) => r.sac.lastPayment} format={fmtBRL} isAlt />
-            <TableRow label="Total pago (SAC)" getter={(r) => r.sac.totalPaid} format={fmtBRL} />
 
             {/* Price */}
             <View style={{ ...styles.sectionBand, backgroundColor: "#f0fdf4", marginTop: 4 }}>
               <Text style={{ ...styles.sectionBandLabel, color: "#166534" }}>PRICE — PARCELAS FIXAS</Text>
             </View>
             <TableRow label="Parcela fixa" getter={(r) => r.price.monthlyPayment} format={fmtBRL} />
-            <TableRow label="Total pago (Price)" getter={(r) => r.price.totalPaid} format={fmtBRL} isAlt />
-            <TableRow label="Renda mín. necessária" getter={(r) => r.minIncomeRequired} format={fmtBRL} />
+            {/* Renda mínima — exibe apenas classificação, sem valor */}
+            <View style={styles.tableRow}>
+              <Text style={styles.tableLabel}>Renda mín. necessária</Text>
+              {bankResults.map((r) => (
+                <Text
+                  key={r.bankId}
+                  style={[
+                    styles.tableCell,
+                    { color: r.incomeIsEnough ? "#15803d" : "#b45309", fontFamily: "Helvetica-Bold" },
+                  ]}
+                >
+                  {r.incomeIsEnough ? "✓ Renda suficiente" : "✗ Renda insuficiente"}
+                </Text>
+              ))}
+            </View>
 
             {/* Footer */}
             <View style={styles.footer}>

@@ -878,12 +878,7 @@ export function FinancingSimulationWizard({ initialSim, onSaved, onCancel }: Pro
                     <td key={r.bankId} className="py-2.5 px-3 text-right text-slate-600">{fmtBRL(r.sac.monthlyInsurance)}</td>
                   ))}
                 </tr>
-                <tr className="border-b border-blue-100 bg-blue-50/50">
-                  <td className="py-2.5 px-4 font-semibold text-slate-700">Total pago (SAC)</td>
-                  {bankResults.map((r) => (
-                    <td key={r.bankId} className={cn(cellClass(r.bankId, (x) => x.sac.totalPaid), "font-bold")}>{fmtBRL(r.sac.totalPaid)}</td>
-                  ))}
-                </tr>
+
 
                 {/* Price */}
                 <tr className="bg-emerald-50 border-b border-slate-200">
@@ -905,26 +900,23 @@ export function FinancingSimulationWizard({ initialSim, onSaved, onCancel }: Pro
                     </td>
                   ))}
                 </tr>
-                <tr className="border-b border-emerald-100 bg-emerald-50/50">
-                  <td className="py-2.5 px-4 font-semibold text-slate-700">Total pago (Price)</td>
-                  {bankResults.map((r) => (
-                    <td key={r.bankId} className={cn(cellClass(r.bankId, (x) => x.price.totalPaid), "font-bold")}>{fmtBRL(r.price.totalPaid)}</td>
-                  ))}
-                </tr>
 
-                {/* Renda mínima */}
+
                 <tr className="border-b border-slate-100">
                   <td className="py-2.5 px-4 text-slate-600">Renda mín. necessária</td>
                   {bankResults.map((r) => (
-                    <td key={r.bankId} className={cn(
-                      "py-2.5 px-3 text-right text-xs",
-                      r.incomeIsEnough ? "text-emerald-700 font-semibold" : "text-amber-600 font-semibold"
-                    )}>
-                      {fmtBRL(r.minIncomeRequired)}
-                      {clientIncome && (
-                        <div className="text-[10px] font-normal">
-                          {r.incomeIsEnough ? "✓ suficiente" : "✗ insuficiente"}
-                        </div>
+                    <td key={r.bankId} className="py-2.5 px-3 text-right">
+                      {clientIncome ? (
+                        <span className={cn(
+                          "inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-semibold",
+                          r.incomeIsEnough
+                            ? "bg-emerald-100 text-emerald-700"
+                            : "bg-amber-100 text-amber-700"
+                        )}>
+                          {r.incomeIsEnough ? "✓ Renda suficiente" : "✗ Renda insuficiente"}
+                        </span>
+                      ) : (
+                        <span className="text-xs text-slate-400">Informe a renda</span>
                       )}
                     </td>
                   ))}
