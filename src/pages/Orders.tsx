@@ -150,7 +150,8 @@ export default function Orders() {
     to: endOfMonth(new Date()) 
   });
   const [selectedSellerId, setSelectedSellerId] = useState<string>("all");
-  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<string>("all");
+  const [selectedPaymentMethods, setSelectedPaymentMethods] = useState<Set<string>>(new Set());
+  const [selectedCities, setSelectedCities] = useState<Set<string>>(new Set());
   const [movingCaseId, setMovingCaseId] = useState<string | null>(null);
   const [transitionBlock, setTransitionBlock] = useState<{
     open: boolean;
@@ -356,7 +357,7 @@ export default function Orders() {
             .from("case_fields")
             .select("case_id,key,value_text")
             .in("case_id", chunk)
-            .in("key", ["whatsapp", "phone", "customer_phone", "sale_date_text", "billing_status", "total_value_raw", "obs", "payment_method"])
+            .in("key", ["whatsapp", "phone", "customer_phone", "sale_date_text", "billing_status", "total_value_raw", "obs", "payment_method", "city"])
             .limit(1000),
           supabase
             .from("case_items")
@@ -434,10 +435,17 @@ export default function Orders() {
       return isWithinInterval(d, { start, end });
     });
 
-    if (selectedPaymentMethod !== "all") {
+    if (selectedPaymentMethods.size > 0) {
       rows = rows.filter(r => {
         const f = caseDataQ.data?.fields.get(r.id);
-        return f?.payment_method === selectedPaymentMethod;
+        return selectedPaymentMethods.has(String(f?.payment_method ?? "").trim());
+      });
+    }
+
+    if (selectedCities.size > 0) {
+      rows = rows.filter(r => {
+        const f = caseDataQ.data?.fields.get(r.id);
+        return selectedCities.has(String(f?.city ?? "").trim());
       });
     }
 
@@ -454,12 +462,20 @@ export default function Orders() {
     }
 
     return rows;
-  }, [journeyRows, q, dateRange, selectedSellerId, selectedPaymentMethod, customersQ.data, caseDataQ.data]);
+  }, [journeyRows, q, dateRange, selectedSellerId, selectedPaymentMethods, selectedCities, customersQ.data, caseDataQ.data]);
 
   const paymentOptions = useMemo(() => {
     const opts = new Set<string>();
     caseDataQ.data?.fields.forEach(f => {
       if (f.payment_method) opts.add(String(f.payment_method).trim());
+    });
+    return Array.from(opts).filter(Boolean).sort();
+  }, [caseDataQ.data]);
+
+  const cityOptions = useMemo(() => {
+    const opts = new Set<string>();
+    caseDataQ.data?.fields.forEach(f => {
+      if (f.city) opts.add(String(f.city).trim());
     });
     return Array.from(opts).filter(Boolean).sort();
   }, [caseDataQ.data]);
@@ -728,22 +744,101 @@ export default function Orders() {
                 </select>
               </div>
               
-              {/* Forma de Pagamento Filter */}
-              <div className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-white/70 p-1.5 h-10 min-w-[200px]">
-                <CreditCard className="ml-2 h-4 w-4 text-slate-400" />
-                <select
-                  className="bg-transparent text-xs font-bold text-slate-700 focus:outline-none flex-1 pr-2"
-                  value={selectedPaymentMethod}
-                  onChange={(e) => setSelectedPaymentMethod(e.target.value)}
-                >
-                  <option value="all">Pagamento: Todos</option>
-                  {paymentOptions.map((opt) => (
-                    <option key={opt} value={opt}>
-                      {opt}
-                    </option>
-                  ))}
-                </select>
-              </div>
+              {/* Forma de Pagamento Multi-Select */}
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className={cn(
+                      "h-10 rounded-2xl border-slate-200 bg-white/70 text-xs font-bold text-slate-700 min-w-[180px] justify-start hover:bg-white hover:border-blue-400 transition-all shadow-sm gap-2",
+                      selectedPaymentMethods.size > 0 && "border-blue-400 bg-blue-50 text-blue-700"
+                    )}
+                  >
+                    <CreditCard className="h-4 w-4 text-slate-400 flex-shrink-0" />
+                    {selectedPaymentMethods.size === 0
+                      ? "Pagamento: Todos"
+                      : selectedPaymentMethods.size === 1
+                      ? Array.from(selectedPaymentMethods)[0]
+                      : `${selectedPaymentMethods.size} formas selecionadas`}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[240px] rounded-2xl shadow-xl border-slate-200 p-2" align="start">
+                  <div className="flex items-center justify-between px-2 py-1 mb-1">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Forma de Pagamento</p>
+                    {selectedPaymentMethods.size > 0 && (
+                      <button onClick={() => setSelectedPaymentMethods(new Set())} className="text-[10px] text-blue-600 font-bold hover:underline">Limpar</button>
+                    )}
+                  </div>
+                  <div className="max-h-[240px] overflow-y-auto space-y-0.5">
+                    {paymentOptions.map((opt) => (
+                      <label key={opt} className="flex items-center gap-2.5 px-2 py-1.5 rounded-xl cursor-pointer hover:bg-slate-50 transition-colors">
+                        <input
+                          type="checkbox"
+                          className="accent-blue-600 h-3.5 w-3.5"
+                          checked={selectedPaymentMethods.has(opt)}
+                          onChange={() => {
+                            const next = new Set(selectedPaymentMethods);
+                            next.has(opt) ? next.delete(opt) : next.add(opt);
+                            setSelectedPaymentMethods(next);
+                          }}
+                        />
+                        <span className="text-xs font-semibold text-slate-700 truncate">{opt}</span>
+                      </label>
+                    ))}
+                    {paymentOptions.length === 0 && (
+                      <p className="text-xs text-slate-400 px-2 py-2">Nenhuma opção encontrada</p>
+                    )}
+                  </div>
+                </PopoverContent>
+              </Popover>
+
+              {/* Cidade Multi-Select */}
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className={cn(
+                      "h-10 rounded-2xl border-slate-200 bg-white/70 text-xs font-bold text-slate-700 min-w-[160px] justify-start hover:bg-white hover:border-blue-400 transition-all shadow-sm gap-2",
+                      selectedCities.size > 0 && "border-blue-400 bg-blue-50 text-blue-700"
+                    )}
+                  >
+                    <MapPin className="h-4 w-4 text-slate-400 flex-shrink-0" />
+                    {selectedCities.size === 0
+                      ? "Cidade: Todas"
+                      : selectedCities.size === 1
+                      ? Array.from(selectedCities)[0]
+                      : `${selectedCities.size} cidades`}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[220px] rounded-2xl shadow-xl border-slate-200 p-2" align="start">
+                  <div className="flex items-center justify-between px-2 py-1 mb-1">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Cidade</p>
+                    {selectedCities.size > 0 && (
+                      <button onClick={() => setSelectedCities(new Set())} className="text-[10px] text-blue-600 font-bold hover:underline">Limpar</button>
+                    )}
+                  </div>
+                  <div className="max-h-[240px] overflow-y-auto space-y-0.5">
+                    {cityOptions.map((opt) => (
+                      <label key={opt} className="flex items-center gap-2.5 px-2 py-1.5 rounded-xl cursor-pointer hover:bg-slate-50 transition-colors">
+                        <input
+                          type="checkbox"
+                          className="accent-blue-600 h-3.5 w-3.5"
+                          checked={selectedCities.has(opt)}
+                          onChange={() => {
+                            const next = new Set(selectedCities);
+                            next.has(opt) ? next.delete(opt) : next.add(opt);
+                            setSelectedCities(next);
+                          }}
+                        />
+                        <span className="text-xs font-semibold text-slate-700 truncate">{opt}</span>
+                      </label>
+                    ))}
+                    {cityOptions.length === 0 && (
+                      <p className="text-xs text-slate-400 px-2 py-2">Nenhuma opção encontrada</p>
+                    )}
+                  </div>
+                </PopoverContent>
+              </Popover>
 
               {/* Date Range Picker */}
               <Popover>
