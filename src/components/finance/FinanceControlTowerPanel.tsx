@@ -146,6 +146,35 @@ export function FinanceControlTowerPanel() {
     },
   });
 
+  const pendingQ = useQuery({
+    queryKey: ["financial_pending_control_tower", activeTenantId, rangeStart, rangeEnd],
+    enabled: Boolean(activeTenantId),
+    queryFn: async () => {
+      const [resP, resR] = await Promise.all([
+        supabase
+          .from("financial_payables")
+          .select("amount, category_id, due_date")
+          .eq("tenant_id", activeTenantId!)
+          .eq("status", "pending")
+          .gte("due_date", rangeStart)
+          .lte("due_date", rangeEnd),
+        supabase
+          .from("financial_receivables")
+          .select("amount, category_id, due_date")
+          .eq("tenant_id", activeTenantId!)
+          .eq("status", "pending")
+          .gte("due_date", rangeStart)
+          .lte("due_date", rangeEnd),
+      ]);
+      if (resP.error) throw resP.error;
+      if (resR.error) throw resR.error;
+      return {
+        payables: resP.data ?? [],
+        receivables: resR.data ?? [],
+      };
+    },
+  });
+
   const categoryTypeById = useMemo(() => {
     const m = new Map<string, CategoryRow["type"]>();
     for (const c of categoriesQ.data ?? []) m.set(c.id, c.type);
@@ -163,6 +192,7 @@ export function FinanceControlTowerPanel() {
     let rev = 0;
     let cost = 0;
 
+    // 1. Transactions (Actual Cash Flow)
     for (const t of txQ.data ?? []) {
       const d = String(t.transaction_date ?? "");
       if (!d || d < rangeStart || d > rangeEnd) continue;
@@ -173,8 +203,27 @@ export function FinanceControlTowerPanel() {
       const amt = Number(t.amount ?? 0);
       const typ = String(t.type ?? "");
 
-      if (ctype === "revenue" && typ === "credit") rev += amt;
-      if (ctype !== "revenue" && ctype !== "other" && typ === "debit") cost += amt;
+      // Revenue: Credit adds, Debit subtracts. Costs: Debit adds, Credit subtracts.
+      if (ctype === "revenue") {
+        rev += (typ === "credit" ? amt : -amt);
+      } else if (ctype !== "other") {
+        cost += (typ === "debit" ? amt : -amt);
+      }
+    }
+
+    // 2. Pending Items (Forward Projection) - To match DRE "Realized" column
+    const pending = pendingQ.data || { payables: [], receivables: [] };
+    for (const p of pending.payables) {
+      const ctype = categoryTypeById.get(p.category_id) ?? "other";
+      const amt = Number(p.amount);
+      if (ctype === "revenue") rev -= amt;
+      else if (ctype !== "other") cost += amt;
+    }
+    for (const r of pending.receivables) {
+      const ctype = categoryTypeById.get(r.category_id) ?? "other";
+      const amt = Number(r.amount);
+      if (ctype === "revenue") rev += amt;
+      else if (ctype !== "other") cost -= amt;
     }
 
     const m = rev > 0 ? (rev - cost) / rev : NaN;
@@ -205,7 +254,7 @@ export function FinanceControlTowerPanel() {
       budgetCostsMonth: bCost,
       budgetDelta: realizedNet - budgetNet,
     };
-  }, [txQ.data, rangeStart, rangeEnd, categoryTypeById, budgetsQ.data]);
+  }, [txQ.data, pendingQ.data, rangeStart, rangeEnd, categoryTypeById, budgetsQ.data]);
 
   const cashFlowDaily = useMemo(() => {
     const byDay = new Map<string, number>();

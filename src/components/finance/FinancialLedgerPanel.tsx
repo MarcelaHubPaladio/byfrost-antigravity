@@ -514,7 +514,14 @@ export function FinancialLedgerPanel() {
       if (!t.category_id || !rows[t.category_id]) return;
       const pKey = dreGranularity === "monthly" ? t.transaction_date.slice(0, 7) : t.transaction_date;
       if (rows[t.category_id].periods[pKey]) {
-        rows[t.category_id].periods[pKey].realized += Number(t.amount);
+        const catType = rows[t.category_id].category.type;
+        const amt = Number(t.amount);
+        // Balance by type: Revenue = Credit - Debit, Expenses = Debit - Credit
+        if (catType === "revenue") {
+          rows[t.category_id].periods[pKey].realized += (t.type === "credit" ? amt : -amt);
+        } else {
+          rows[t.category_id].periods[pKey].realized += (t.type === "debit" ? amt : -amt);
+        }
       }
     });
 
@@ -523,14 +530,28 @@ export function FinancialLedgerPanel() {
       if (!p.category_id || !rows[p.category_id]) return;
       const pKey = dreGranularity === "monthly" ? p.due_date.slice(0, 7) : p.due_date;
       if (rows[p.category_id].periods[pKey]) {
-        rows[p.category_id].periods[pKey].realized += Number(p.amount);
+        const catType = rows[p.category_id].category.type;
+        const amt = Number(p.amount);
+        // Payables are always debits
+        if (catType === "revenue") {
+          rows[p.category_id].periods[pKey].realized -= amt;
+        } else {
+          rows[p.category_id].periods[pKey].realized += amt;
+        }
       }
     });
     pending.receivables.forEach(r => {
       if (!r.category_id || !rows[r.category_id]) return;
       const pKey = dreGranularity === "monthly" ? r.due_date.slice(0, 7) : r.due_date;
       if (rows[r.category_id].periods[pKey]) {
-        rows[r.category_id].periods[pKey].realized += Number(r.amount);
+        const catType = rows[r.category_id].category.type;
+        const amt = Number(r.amount);
+        // Receivables are always credits
+        if (catType === "revenue") {
+          rows[r.category_id].periods[pKey].realized += amt;
+        } else {
+          rows[r.category_id].periods[pKey].realized -= amt;
+        }
       }
     });
 
