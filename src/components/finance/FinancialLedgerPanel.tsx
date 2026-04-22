@@ -532,7 +532,7 @@ export function FinancialLedgerPanel() {
       if (!p.category_id || !rows[p.category_id]) return;
       const pKey = dreGranularity === "monthly" ? p.due_date.slice(0, 7) : p.due_date;
       if (rows[p.category_id].periods[pKey]) {
-        const catType = rows[p.category_id].category.type;
+        const catType = (rows[p.category_id].category.type || "").toLowerCase().trim();
         const amt = Number(p.amount);
         // Payables are always debits
         if (catType === "revenue") {
@@ -546,7 +546,7 @@ export function FinancialLedgerPanel() {
       if (!r.category_id || !rows[r.category_id]) return;
       const pKey = dreGranularity === "monthly" ? r.due_date.slice(0, 7) : r.due_date;
       if (rows[r.category_id].periods[pKey]) {
-        const catType = rows[r.category_id].category.type;
+        const catType = (rows[r.category_id].category.type || "").toLowerCase().trim();
         const amt = Number(r.amount);
         // Receivables are always credits
         if (catType === "revenue") {
@@ -561,7 +561,9 @@ export function FinancialLedgerPanel() {
     const filteredRows = Object.values(rows).filter(row => {
       const matchesSearch = !dreSearch || row.category.name.toLowerCase().includes(dreSearch.toLowerCase());
       if (!matchesSearch) return false;
-      return Object.values(row.periods).some(p => p.budget > 0 || p.realized > 0);
+      
+      // Include row if it has budget, positive realized OR negative realized (refunds)
+      return Object.values(row.periods).some(p => p.budget > 0 || Math.abs(p.realized) > 0.001);
     });
 
     return filteredRows.sort((a, b) => {
