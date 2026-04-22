@@ -66,6 +66,7 @@ const FinanceLedger = lazyWithRetry(() => import("@/pages/FinanceLedger"));
 const FinanceTensions = lazyWithRetry(() => import("@/pages/FinanceTensions"));
 const FinanceDecisions = lazyWithRetry(() => import("@/pages/FinanceDecisions"));
 const FinanceControlTower = lazyWithRetry(() => import("@/pages/FinanceControlTower"));
+const FinanceCategoryDetail = lazyWithRetry(() => import("@/pages/FinanceCategoryDetail"));
 const FinanceDecisionBoard = lazyWithRetry(() => import("@/pages/FinanceDecisionBoard"));
 const Contracts = lazyWithRetry(() => import("@/pages/Contracts"));
 const Commitments = lazyWithRetry(() => import("@/pages/Commitments"));
@@ -213,6 +214,16 @@ const App = () => (
                       <RequireFinanceEnabled>
                         <RequireRouteAccess routeKey="app.finance.ledger">
                           <FinanceLedger />
+                        </RequireRouteAccess>
+                      </RequireFinanceEnabled>
+                    }
+                  />
+                  <Route
+                    path="/app/finance/ledger/category/:id"
+                    element={
+                      <RequireFinanceEnabled>
+                        <RequireRouteAccess routeKey="app.finance.ledger">
+                          <FinanceCategoryDetail />
                         </RequireRouteAccess>
                       </RequireFinanceEnabled>
                     }

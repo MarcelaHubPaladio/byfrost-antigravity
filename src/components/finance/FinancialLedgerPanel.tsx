@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { cn } from "@/lib/utils";
+import { cn, formatMoneyBRL } from "@/lib/utils";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { useTenant } from "@/providers/TenantProvider";
@@ -40,6 +40,7 @@ import {
 import { AsyncSelect } from "@/components/ui/async-select";
 import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Link } from "react-router-dom";
 
 type BankAccountRow = {
   id: string;
@@ -232,14 +233,6 @@ async function sha256Hex(input: string) {
     .join("");
 }
 
-function formatMoneyBRL(n: number | null | undefined) {
-  const x = Number(n ?? 0);
-  try {
-    return x.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
-  } catch {
-    return `R$ ${x.toFixed(2)}`;
-  }
-}
 
 function parseMoneyInput(v: string) {
   const t = String(v ?? "").trim().replace(/\./g, "").replace(",", ".");
@@ -267,6 +260,60 @@ function currentMonthRangeIso() {
 }
 
 export function FinancialLedgerPanel() {
+  const handleExportCSV = () => {
+    const headers = ["Categoria", ...drePeriods.flatMap(p => [`${p.label} - Orçado`, `${p.label} - Realizado`, `${p.label} - %`])];
+    const rows = dreData.map(r => [
+      r.category.name,
+      ...drePeriods.flatMap(p => {
+        const val = r.periods[p.key];
+        const pct = val.budget > 0 ? (val.realized / val.budget) * 100 : 0;
+        return [val.budget, val.realized, `${pct.toFixed(0)}%`];
+      })
+    ]);
+
+    const csvContent = [headers, ...rows].map(row => row.join(";")).join("\n");
+    const blob = new Blob(["\ufeff" + csvContent], { type: "text/csv;charset=utf-8;" });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.setAttribute("download", `dre_caixa_${dreStartDate}_${dreEndDate}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const handleExportExcel = () => {
+    // Generate a simple HTML table that Excel can open
+    let tableHtml = `<table border="1"><thead><tr><th>Categoria</th>`;
+    drePeriods.forEach(p => {
+      tableHtml += `<th colspan="3">${p.label}</th>`;
+    });
+    tableHtml += `</tr><tr><th></th>`;
+    drePeriods.forEach(() => {
+      tableHtml += `<th>Orçado</th><th>Realizado</th><th>%</th>`;
+    });
+    tableHtml += `</tr></thead><tbody>`;
+    
+    dreData.forEach(r => {
+      tableHtml += `<tr><td>${r.category.name}</td>`;
+      drePeriods.forEach(p => {
+        const val = r.periods[p.key];
+        const pct = val.budget > 0 ? (val.realized / val.budget) * 100 : 0;
+        tableHtml += `<td>${val.budget}</td><td>${val.realized}</td><td>${pct.toFixed(0)}%</td>`;
+      });
+      tableHtml += `</tr>`;
+    });
+    
+    tableHtml += `</tbody></table>`;
+    
+    const blob = new Blob([tableHtml], { type: "application/vnd.ms-excel" });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.setAttribute("download", `dre_caixa_${dreStartDate}_${dreEndDate}.xls`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   const [activeTab, setActiveTab] = useState("transactions");
 
   // Handle ?tab=dre in URL
@@ -2551,6 +2598,17 @@ export function FinancialLedgerPanel() {
               >
                 Atualizar
               </Button>
+
+              <div className="flex items-center gap-2 border-l pl-3 ml-1">
+                <Button variant="ghost" size="sm" className="h-9 rounded-2xl text-[11px] gap-2" onClick={handleExportCSV}>
+                  <Download className="h-3.5 w-3.5" />
+                  CSV
+                </Button>
+                <Button variant="ghost" size="sm" className="h-9 rounded-2xl text-[11px] gap-2" onClick={handleExportExcel}>
+                  <Download className="h-3.5 w-3.5 text-emerald-600" />
+                  Excel
+                </Button>
+              </div>
             </div>
           </div>
 
@@ -2609,7 +2667,14 @@ export function FinancialLedgerPanel() {
                     </TableRow>
                     {dreData.filter(r => r.category.type === "revenue").map(row => (
                       <TableRow key={row.category.id} className="group hover:bg-slate-50 dark:hover:bg-slate-900/40">
-                        <TableCell className="pl-6 text-sm font-medium text-slate-700 dark:text-slate-300 sticky left-0 bg-white dark:bg-slate-950 group-hover:bg-slate-50 dark:group-hover:bg-slate-900/40 z-20 border-r-2 border-slate-100 dark:border-slate-800 shadow-[4px_0_8px_rgba(0,0,0,0.05)] overflow-hidden text-ellipsis whitespace-nowrap">{row.category.name}</TableCell>
+                        <TableCell className="pl-6 text-sm font-medium text-slate-700 dark:text-slate-300 sticky left-0 bg-white dark:bg-slate-950 group-hover:bg-slate-50 dark:group-hover:bg-slate-900/40 z-20 border-r-2 border-slate-100 dark:border-slate-800 shadow-[4px_0_8px_rgba(0,0,0,0.05)] overflow-hidden text-ellipsis whitespace-nowrap">
+                          <Link 
+                            to={`/app/finance/ledger/category/${row.category.id}?startDate=${dreStartDate}&endDate=${dreEndDate}&name=${encodeURIComponent(row.category.name)}`}
+                            className="hover:text-blue-600 hover:underline transition-colors"
+                          >
+                            {row.category.name}
+                          </Link>
+                        </TableCell>
                         {drePeriods.map(p => {
                           const val = row.periods[p.key];
                           const pct = val.budget > 0 ? (val.realized / val.budget) : 0;
@@ -2685,7 +2750,13 @@ export function FinancialLedgerPanel() {
                     {dreData.filter(r => r.category.type !== "revenue" && r.category.type !== "other").map(row => (
                       <TableRow key={row.category.id} className="group hover:bg-slate-50 dark:hover:bg-slate-900/40">
                         <TableCell className="pl-6 text-sm font-medium text-slate-700 dark:text-slate-300 sticky left-0 bg-white dark:bg-slate-950 group-hover:bg-slate-50 dark:group-hover:bg-slate-900/40 z-20 border-r-2 border-slate-100 dark:border-slate-800 shadow-[4px_0_8px_rgba(0,0,0,0.05)] overflow-hidden text-ellipsis whitespace-nowrap">
-                          {row.category.name} <span className="text-[10px] opacity-40 uppercase">({CATEGORY_LABELS[row.category.type]})</span>
+                          <Link 
+                            to={`/app/finance/ledger/category/${row.category.id}?startDate=${dreStartDate}&endDate=${dreEndDate}&name=${encodeURIComponent(row.category.name)}`}
+                            className="hover:text-blue-600 hover:underline transition-colors"
+                          >
+                            {row.category.name}
+                          </Link>
+                          <span className="text-[10px] opacity-40 uppercase ml-1">({CATEGORY_LABELS[row.category.type]})</span>
                         </TableCell>
                         {drePeriods.map(p => {
                           const val = row.periods[p.key];
@@ -2792,7 +2863,12 @@ export function FinancialLedgerPanel() {
                     {dreData.filter(r => r.category.type === "other").map(row => (
                       <TableRow key={row.category.id} className="group hover:bg-slate-50 dark:hover:bg-slate-900/40">
                         <TableCell className="pl-6 text-sm font-medium text-slate-500 sticky left-0 bg-white dark:bg-slate-950 group-hover:bg-slate-50 dark:group-hover:bg-slate-900/40 z-20 border-r-2 border-slate-100 dark:border-slate-800 shadow-[4px_0_8px_rgba(0,0,0,0.05)] overflow-hidden text-ellipsis whitespace-nowrap">
-                          {row.category.name}
+                          <Link 
+                            to={`/app/finance/ledger/category/${row.category.id}?startDate=${dreStartDate}&endDate=${dreEndDate}&name=${encodeURIComponent(row.category.name)}`}
+                            className="hover:text-blue-600 hover:underline transition-colors"
+                          >
+                            {row.category.name}
+                          </Link>
                         </TableCell>
                         {drePeriods.map(p => {
                           const val = row.periods[p.key];
