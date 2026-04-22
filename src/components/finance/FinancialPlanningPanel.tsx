@@ -1297,6 +1297,9 @@ export function FinancialPlanningPanel() {
                               .map(id => [...oldLinks, ...newLinks].find(t => t.id === id));
                             
                             const totalReconciled = allUnique.reduce((acc, t) => acc + (t.amount || 0), 0);
+                            if (totalReconciled > 0 && totalReconciled < r.amount) {
+                              return `${formatMoneyBRL(totalReconciled)} / ${formatMoneyBRL(r.amount)}`;
+                            }
                             return formatMoneyBRL(totalReconciled);
                           })()}
                         </button>
@@ -1584,6 +1587,9 @@ export function FinancialPlanningPanel() {
                               .map(id => [...oldLinks, ...newLinks].find(t => t.id === id));
                             
                             const totalReconciled = allUnique.reduce((acc, t) => acc + (t.amount || 0), 0);
+                            if (totalReconciled > 0 && totalReconciled < p.amount) {
+                              return `${formatMoneyBRL(totalReconciled)} / ${formatMoneyBRL(p.amount)}`;
+                            }
                             return formatMoneyBRL(totalReconciled);
                           })()}
                         </button>
