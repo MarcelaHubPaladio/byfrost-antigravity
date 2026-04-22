@@ -36,7 +36,8 @@ export function FinancialCategoryDetailPanel({ categoryId, startDate, endDate, c
         .from("financial_transactions")
         .select(`
           *,
-          core_entities (display_name)
+          core_entities (display_name),
+          bank_accounts (bank_name, account_name)
         `)
         .eq("tenant_id", activeTenantId!)
         .eq("category_id", categoryId)
@@ -101,6 +102,7 @@ export function FinancialCategoryDetailPanel({ categoryId, startDate, endDate, c
             <TableRow className="bg-slate-50/50 dark:bg-slate-900/50">
               <TableHead className="w-[120px]">Data</TableHead>
               <TableHead>Descrição</TableHead>
+              <TableHead>Banco</TableHead>
               <TableHead>Entidade</TableHead>
               <TableHead>NFE</TableHead>
               <TableHead>Status</TableHead>
@@ -135,6 +137,12 @@ export function FinancialCategoryDetailPanel({ categoryId, startDate, endDate, c
                       <span className="text-sm text-slate-700 dark:text-slate-300">
                         {t.description || "Sem descrição"}
                       </span>
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <div className="text-xs text-slate-600 dark:text-slate-400">
+                      <div className="font-medium">{t.bank_accounts?.bank_name || "—"}</div>
+                      <div className="text-[10px] text-slate-400">{t.bank_accounts?.account_name}</div>
                     </div>
                   </TableCell>
                   <TableCell>
