@@ -36,7 +36,7 @@ export function FinancialCategoryDetailPanel({ categoryId, startDate, endDate, c
         .from("financial_transactions")
         .select(`
           *,
-          entities (name)
+          core_entities (display_name)
         `)
         .eq("tenant_id", activeTenantId!)
         .eq("category_id", categoryId)
@@ -141,7 +141,7 @@ export function FinancialCategoryDetailPanel({ categoryId, startDate, endDate, c
                     <div className="flex items-center gap-2">
                       <User className="h-3.5 w-3.5 text-slate-400" />
                       <span className="text-xs text-slate-600 dark:text-slate-400">
-                        {t.entities?.name || "Não informado"}
+                        {t.core_entities?.display_name || "Não informado"}
                       </span>
                     </div>
                   </TableCell>

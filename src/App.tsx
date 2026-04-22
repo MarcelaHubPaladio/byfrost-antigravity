@@ -222,7 +222,7 @@ const App = () => (
                     path="/app/finance/ledger/category/:id"
                     element={
                       <RequireFinanceEnabled>
-                        <RequireRouteAccess routeKey="app.finance.ledger">
+                        <RequireRouteAccess routeKey="app.finance.ledger.category.detail">
                           <FinanceCategoryDetail />
                         </RequireRouteAccess>
                       </RequireFinanceEnabled>
