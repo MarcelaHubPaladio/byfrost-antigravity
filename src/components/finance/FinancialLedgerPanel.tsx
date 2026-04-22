@@ -514,13 +514,15 @@ export function FinancialLedgerPanel() {
       if (!t.category_id || !rows[t.category_id]) return;
       const pKey = dreGranularity === "monthly" ? t.transaction_date.slice(0, 7) : t.transaction_date;
       if (rows[t.category_id].periods[pKey]) {
-        const catType = rows[t.category_id].category.type;
+        const catType = rows[t.category_id].category.type.toLowerCase();
         const amt = Number(t.amount);
+        const typ = (t.type || "").toLowerCase().trim();
+        
         // Balance by type: Revenue = Credit - Debit, Expenses = Debit - Credit
         if (catType === "revenue") {
-          rows[t.category_id].periods[pKey].realized += (t.type === "credit" ? amt : -amt);
+          rows[t.category_id].periods[pKey].realized += (typ === "credit" ? amt : -amt);
         } else {
-          rows[t.category_id].periods[pKey].realized += (t.type === "debit" ? amt : -amt);
+          rows[t.category_id].periods[pKey].realized += (typ === "debit" ? amt : -amt);
         }
       }
     });

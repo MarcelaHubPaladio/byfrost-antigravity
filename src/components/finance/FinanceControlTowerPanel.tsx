@@ -199,9 +199,9 @@ export function FinanceControlTowerPanel() {
       const catId = t.category_id as string | null;
       if (!catId) continue;
 
-      const ctype = categoryTypeById.get(catId) ?? "other";
-      const amt = Number(t.amount ?? 0);
-      const typ = String(t.type ?? "");
+      const ctype = (categoryTypeById.get(catId) || "other").toLowerCase().trim();
+      const amt = Number(t.amount || 0);
+      const typ = String(t.type || "").toLowerCase().trim();
 
       // Revenue: Credit adds, Debit subtracts. Costs: Debit adds, Credit subtracts.
       if (ctype === "revenue") {
@@ -214,14 +214,14 @@ export function FinanceControlTowerPanel() {
     // 2. Pending Items (Forward Projection) - To match DRE "Realized" column
     const pending = pendingQ.data || { payables: [], receivables: [] };
     for (const p of pending.payables) {
-      const ctype = categoryTypeById.get(p.category_id) ?? "other";
-      const amt = Number(p.amount);
+      const ctype = (categoryTypeById.get(p.category_id) || "other").toLowerCase().trim();
+      const amt = Number(p.amount || 0);
       if (ctype === "revenue") rev -= amt;
       else if (ctype !== "other") cost += amt;
     }
     for (const r of pending.receivables) {
-      const ctype = categoryTypeById.get(r.category_id) ?? "other";
-      const amt = Number(r.amount);
+      const ctype = (categoryTypeById.get(r.category_id) || "other").toLowerCase().trim();
+      const amt = Number(r.amount || 0);
       if (ctype === "revenue") rev += amt;
       else if (ctype !== "other") cost -= amt;
     }
