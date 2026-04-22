@@ -375,6 +375,7 @@ export function FinancialLedgerPanel() {
   const [dreStartDate, setDreStartDate] = useState<string>(() => format(subMonths(new Date(), 2), "yyyy-MM-01"));
   const [dreEndDate, setDreEndDate] = useState<string>(() => format(addMonths(new Date(), 3), "yyyy-MM-dd"));
   const [dreGranularity, setDreGranularity] = useState<"monthly" | "daily">("monthly");
+  const [dreSearch, setDreSearch] = useState("");
 
   const drePeriods = useMemo(() => {
     const periods = [];
@@ -533,8 +534,10 @@ export function FinancialLedgerPanel() {
       }
     });
 
-    // Filter out categories with no data in the range
+    // Filter out rows by search first, then by "no data"
     const filteredRows = Object.values(rows).filter(row => {
+      const matchesSearch = !dreSearch || row.category.name.toLowerCase().includes(dreSearch.toLowerCase());
+      if (!matchesSearch) return false;
       return Object.values(row.periods).some(p => p.budget > 0 || p.realized > 0);
     });
 
@@ -547,7 +550,7 @@ export function FinancialLedgerPanel() {
       }
       return a.category.name.localeCompare(b.category.name);
     });
-  }, [categoriesQ.data, dreTransactionsQ.data, dreBudgetsQ.data, drePendingQ.data, drePeriods, dreGranularity]);
+  }, [categoriesQ.data, dreTransactionsQ.data, dreBudgetsQ.data, drePendingQ.data, drePeriods, dreGranularity, dreSearch]);
 
   const transactionsQ = useQuery({
     queryKey: ["financial_transactions", activeTenantId, txStartDate, txEndDate],
@@ -2568,6 +2571,16 @@ export function FinancialLedgerPanel() {
                 >
                   Diário
                 </Button>
+              </div>
+              
+              <div className="relative">
+                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-slate-400" />
+                <Input
+                  className="h-9 w-[200px] rounded-2xl pl-9 text-xs"
+                  placeholder="Buscar categoria..."
+                  value={dreSearch}
+                  onChange={(e) => setDreSearch(e.target.value)}
+                />
               </div>
 
               <div className="flex items-center gap-2">
