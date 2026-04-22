@@ -2682,7 +2682,7 @@ export function FinancialLedgerPanel() {
                         );
                       })}
                     </TableRow>
-                    {dreData.filter(r => r.category.type !== "revenue").map(row => (
+                    {dreData.filter(r => r.category.type !== "revenue" && r.category.type !== "other").map(row => (
                       <TableRow key={row.category.id} className="group hover:bg-slate-50 dark:hover:bg-slate-900/40">
                         <TableCell className="pl-6 text-sm font-medium text-slate-700 dark:text-slate-300 sticky left-0 bg-white dark:bg-slate-950 group-hover:bg-slate-50 dark:group-hover:bg-slate-900/40 z-20 border-r-2 border-slate-100 dark:border-slate-800 shadow-[4px_0_8px_rgba(0,0,0,0.05)] overflow-hidden text-ellipsis whitespace-nowrap">
                           {row.category.name} <span className="text-[10px] opacity-40 uppercase">({CATEGORY_LABELS[row.category.type]})</span>
