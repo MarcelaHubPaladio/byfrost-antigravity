@@ -174,7 +174,7 @@ export function FinanceControlTowerPanel() {
       const typ = String(t.type ?? "");
 
       if (ctype === "revenue" && typ === "credit") rev += amt;
-      if (ctype !== "revenue" && typ === "debit") cost += amt;
+      if (ctype !== "revenue" && ctype !== "other" && typ === "debit") cost += amt;
     }
 
     const m = rev > 0 ? (rev - cost) / rev : NaN;
@@ -191,7 +191,7 @@ export function FinanceControlTowerPanel() {
       if (expected <= 0) continue;
 
       if (ctype === "revenue") bRev += expected;
-      else bCost += expected;
+      else if (ctype !== "other") bCost += expected;
     }
 
     const realizedNet = rev - cost;
