@@ -15,6 +15,7 @@ import {
   useReactFlow,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
+import { toPng } from 'html-to-image';
 import { 
   Plus, 
   Save, 
@@ -27,7 +28,8 @@ import {
   Trash2,
   ChevronRight,
   Info,
-  Target
+  Target,
+  Printer
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -67,7 +69,7 @@ const nodeTypes = {
 export function ProcessOrgChartPanel({ onViewCargo }: ProcessOrgChartPanelProps) {
   const { activeTenantId } = useTenant();
   const qc = useQueryClient();
-  const { getNodes, getEdges } = useReactFlow();
+  const { getNodes, getEdges, fitView } = useReactFlow();
 
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
@@ -238,6 +240,61 @@ export function ProcessOrgChartPanel({ onViewCargo }: ProcessOrgChartPanelProps)
   const allUsers = useMemo(() => {
     return usersQ.data || [];
   }, [usersQ.data]);
+
+  const handlePrint = async () => {
+    try {
+      showSuccess("Gerando visualização para impressão...");
+      
+      // Fit view to include everything
+      await fitView({ padding: 0.1 });
+      
+      // Wait a bit for fitView to complete and layout to settle
+      await new Promise(res => setTimeout(res, 300));
+
+      const element = document.querySelector('.react-flow__viewport') as HTMLElement;
+      if (!element) return;
+
+      const dataUrl = await toPng(element, { 
+        backgroundColor: '#fff',
+        quality: 1,
+        pixelRatio: 2 // High resolution
+      });
+
+      // Create a print-friendly window
+      const printWindow = window.open('', '_blank');
+      if (!printWindow) return;
+
+      printWindow.document.write(`
+        <html>
+          <head>
+            <title>Organograma - Byfrost</title>
+            <style>
+              body { margin: 0; display: flex; justify-content: center; align-items: flex-start; bg: white; }
+              img { max-width: 100%; height: auto; }
+              @media print {
+                @page { size: landscape; margin: 0; }
+                body { margin: 0; }
+              }
+            </style>
+          </head>
+          <body>
+            <img src="${dataUrl}" />
+            <script>
+              window.onload = () => {
+                setTimeout(() => {
+                  window.print();
+                  // window.close();
+                }, 500);
+              }
+            </script>
+          </body>
+        </html>
+      `);
+      printWindow.document.close();
+    } catch (err: any) {
+      showError("Erro ao gerar impressão: " + err.message);
+    }
+  };
 
   // Transform to React Flow
   useEffect(() => {
@@ -458,6 +515,14 @@ export function ProcessOrgChartPanel({ onViewCargo }: ProcessOrgChartPanelProps)
             </div>
             
             <div className="flex items-center gap-2">
+            <Button 
+                variant="outline" 
+                size="sm" 
+                className="rounded-xl h-9 border-slate-200" 
+                onClick={handlePrint}
+            >
+                <Printer className="mr-2 h-3.5 w-3.5" /> PDF / Imprimir
+            </Button>
             <Button variant="outline" size="sm" className="rounded-xl h-9" onClick={() => qc.invalidateQueries()}>
                 <RefreshCw className="mr-2 h-3.5 w-3.5" /> Atualizar
             </Button>
