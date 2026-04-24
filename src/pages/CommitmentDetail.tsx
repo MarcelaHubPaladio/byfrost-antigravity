@@ -25,6 +25,8 @@ import {
   AlertCircle,
   RefreshCw,
   Rocket,
+  FileText,
+  Package,
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import {
@@ -332,6 +334,26 @@ export default function CommitmentDetail() {
     staleTime: 30_000,
   });
 
+  const contractQ = useQuery({
+    queryKey: ["customer_contract", activeTenantId, commitmentQ.data?.customer_entity_id],
+    enabled: Boolean(activeTenantId && commitmentQ.data?.customer_entity_id && commitmentQ.data?.commitment_type !== 'contract'),
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("commercial_commitments")
+        .select("id")
+        .eq("tenant_id", activeTenantId!)
+        .eq("customer_entity_id", commitmentQ.data!.customer_entity_id)
+        .eq("commitment_type", "contract")
+        .is("deleted_at", null)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (error) throw error;
+      return data;
+    },
+    staleTime: 30_000,
+  });
+
   const groupedDeliverables = useMemo(() => {
     const deliverables = deliverablesQ.data ?? [];
     // We use allTenantCasesQ instead of casesQ for broader visibility
@@ -457,7 +479,8 @@ export default function CommitmentDetail() {
   const title = useMemo(() => {
     const c = commitmentQ.data;
     if (!c) return "Compromisso";
-    return `${c.commitment_type} • ${c.id.slice(0, 8)}`;
+    const type = c.commitment_type === 'contract' ? 'Contrato' : 'Pedido';
+    return `${type} • ${c.id.slice(0, 8)}`;
   }, [commitmentQ.data]);
 
   const customerName = commitmentQ.data?.customer?.display_name ?? "Cliente s/ nome";
@@ -470,7 +493,15 @@ export default function CommitmentDetail() {
           <div className="space-y-4">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
               <div>
-                <div className="text-xl font-bold text-slate-900">{title}</div>
+                <div className="flex items-center gap-2">
+                  <div className={cn(
+                    "p-1.5 rounded-lg",
+                    commitmentQ.data?.commitment_type === 'contract' ? "bg-blue-50 text-blue-600" : "bg-slate-100 text-slate-600"
+                  )}>
+                    {commitmentQ.data?.commitment_type === 'contract' ? <FileText className="h-5 w-5" /> : <Package className="h-5 w-5" />}
+                  </div>
+                  <div className="text-xl font-bold text-slate-900">{title}</div>
+                </div>
                 <div className="mt-1 flex flex-wrap items-center gap-3">
                   <div className="text-sm font-medium text-slate-700">
                     Cliente:{" "}
@@ -504,6 +535,26 @@ export default function CommitmentDetail() {
                 </div>
               </div>
               <div className="flex items-center gap-2">
+                {commitmentQ.data?.commitment_type !== 'contract' && contractQ.data && (
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    className="rounded-xl border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100"
+                    onClick={() => window.location.href = `/app/commitments/${contractQ.data!.id}`}
+                  >
+                    <FileText className="h-4 w-4 mr-2" /> Ver Contrato Principal
+                  </Button>
+                )}
+                {commitmentQ.data?.commitment_type === 'contract' && (
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    className="rounded-xl border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100"
+                    onClick={() => window.location.href = `/app/entities/${commitmentQ.data?.customer_entity_id}?tab=proposal`}
+                  >
+                    <Rocket className="h-4 w-4 mr-2" /> Ver Proposta Comercial
+                  </Button>
+                )}
                 <Button 
                   variant="outline" 
                   size="sm" 
