@@ -235,55 +235,6 @@ export default function CommitmentDetail() {
     staleTime: 3_000,
   });
 
-  const fixLink = async (caseId: string, deliverableId: string) => {
-    // Check if slot is already occupied
-    const existing = (allTenantCasesQ.data || []).find(c => c.deliverable_id === deliverableId && c.id !== caseId);
-    if (existing && !window.confirm(`Este entregável já possui a tarefa "${existing.title}". Deseja vincular assim mesmo e ter DUAS tarefas no mesmo slot?`)) {
-      return;
-    }
-
-    setSaving(true);
-    const curr = (allTenantCasesQ.data || []).find(x => x.id === caseId);
-    const newMeta = { ...(curr?.meta_json || {}), commitment_id: commitmentId };
-
-    const { error } = await supabase
-      .from("cases")
-      .update({ 
-        deliverable_id: deliverableId,
-        meta_json: newMeta
-      })
-      .eq("id", caseId);
-    if (error) {
-      showError("Erro ao corrigir: " + error.message);
-    } else {
-      showSuccess("Vínculo corrigido!");
-      qc.invalidateQueries({ queryKey: ["commitment_cases"] });
-      allTenantCasesQ.refetch();
-    }
-    setSaving(false);
-  };
-  const claimAllOrphans = async () => {
-    if (orphanCases.length === 0) return;
-    if (!window.confirm(`Deseja REIVINDICAR os ${orphanCases.length} cards órfãos e trazê-los para este contrato? Isso afetará os metadados de todos eles.`)) return;
-
-    setSaving(true);
-    let successCount = 0;
-    for (const c of orphanCases) {
-      const newMeta = { ...(c.meta_json || {}), commitment_id: commitmentId };
-      const { error } = await supabase
-        .from("cases")
-        .update({ meta_json: newMeta })
-        .eq("id", c.id);
-      if (!error) successCount++;
-    }
-
-    if (successCount > 0) {
-      showSuccess(`${successCount} cards resgatados com sucesso!`);
-      qc.invalidateQueries({ queryKey: ["commitment_cases"] });
-      allTenantCasesQ.refetch();
-    }
-    setSaving(false);
-  };
 
   const eventsQ = useQuery({
     queryKey: ["commitment_events", activeTenantId, commitmentId],
@@ -358,11 +309,6 @@ export default function CommitmentDetail() {
     return res;
   }, [deliverablesQ.data, allTenantCasesQ.data]);
 
-  const orphanCases = useMemo(() => {
-    if (!allTenantCasesQ.data || !deliverablesQ.data) return [];
-    const currentDelIds = new Set(deliverablesQ.data.map(d => d.id));
-    return allTenantCasesQ.data.filter(c => !currentDelIds.has(c.deliverable_id));
-  }, [allTenantCasesQ.data, deliverablesQ.data]);
 
   const updateStatus = async (newStatus: string) => {
     if (!activeTenantId || !commitmentId) return;
@@ -471,7 +417,14 @@ export default function CommitmentDetail() {
                 <div className="text-xl font-bold text-slate-900">{title}</div>
                 <div className="mt-1 flex flex-wrap items-center gap-3">
                   <div className="text-sm font-medium text-slate-700">
-                    Cliente: <span className="font-bold">{customerName}</span>
+                    Cliente:{" "}
+                    <Link
+                      to={`/app/entities/${commitmentQ.data?.customer_entity_id}`}
+                      className="font-bold text-blue-600 hover:underline inline-flex items-center gap-1"
+                    >
+                      {customerName}
+                      <ExternalLink className="h-3 w-3" />
+                    </Link>
                   </div>
                   <div className="flex items-center gap-2">
                     <Badge variant="outline" className="text-[9px] font-mono opacity-50">T:{activeTenantId?.slice(0,8)}</Badge>
@@ -845,88 +798,6 @@ export default function CommitmentDetail() {
               </DialogContent>
             </Dialog>
 
-            {/* Diagnostic Panel - Orphan Cases */}
-            <Card className="mt-8 rounded-2xl border-amber-200 bg-amber-50/30 p-6">
-              <div className="mb-4 flex items-center justify-between">
-                <div className="flex items-center gap-2 text-sm font-bold text-amber-900">
-                  <AlertCircle className="h-5 w-5 text-amber-600" />
-                  Modo Diagnóstico: Tarefas Órfãs (Toda a Empresa)
-                </div>
-                <div className="flex items-center gap-2">
-                  <Badge variant="outline" className="border-amber-200 text-amber-700 bg-white">
-                    {orphanCases.length} detectadas
-                  </Badge>
-                  {orphanCases.length > 0 && (
-                    <Button 
-                      size="sm" 
-                      variant="outline" 
-                      onClick={claimAllOrphans}
-                      disabled={saving}
-                      className="h-7 rounded-xl text-[10px] font-bold border-amber-300 text-amber-700 bg-amber-50 hover:bg-amber-100 shadow-sm"
-                    >
-                      <RefreshCw className={cn("h-3 w-3 mr-1", saving && "animate-spin")} />
-                      Reivindicar Todos
-                    </Button>
-                  )}
-                </div>
-              </div>
-              
-              <p className="mb-4 text-xs text-amber-700 leading-relaxed italic">
-                Abaixo estão listadas TODAS as tarefas que possuem um entregável vinculado, mas que **não pertencem a este contrato**. 
-                Se você criou um card e ele não apareceu acima, use o seletor para corrigi-lo.
-              </p>
-
-              <div className="space-y-3">
-                {orphanCases.map(c => (
-                  <div key={c.id} className="flex items-center justify-between rounded-xl border border-amber-100 bg-white p-3 shadow-sm">
-                    <div className="min-w-0">
-                      <div className="truncate text-sm font-bold text-slate-900">{c.title || "Sem título"}</div>
-                      <div className="mt-1 flex items-center gap-3">
-                        <Badge variant="outline" className="text-[10px] uppercase h-4 px-1">{c.state}</Badge>
-                        <span className="text-[9px] font-mono text-slate-400">UUID: {c.deliverable_id?.substring(0, 8)}</span>
-                      </div>
-                    </div>
-                    
-                    <div className="flex items-center gap-2">
-                      <Select disabled={saving} onValueChange={(delId) => fixLink(c.id, delId)}>
-                        <SelectTrigger className="h-8 w-[200px] rounded-xl text-[10px] bg-amber-50/50 border-amber-100">
-                          <SelectValue placeholder="Vincular a este contrato..." />
-                        </SelectTrigger>
-                        <SelectContent className="rounded-xl">
-                          {groupedDeliverables.map(([groupName, items]) => (
-                            <React.Fragment key={groupName}>
-                              <div className="px-2 py-1 bg-slate-100/50 text-[9px] font-black text-slate-500 uppercase tracking-tighter">
-                                {groupName}
-                              </div>
-                              {items.map(d => (
-                                <SelectItem key={d.id} value={d.id} className="text-[10px] pl-4">
-                                  Item #{items.indexOf(d) + 1} ({d.id.substring(0, 4)})
-                                </SelectItem>
-                              ))}
-                            </React.Fragment>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <Button 
-                        variant="ghost" 
-                        size="sm" 
-                        asChild
-                        className="h-8 w-8 rounded-xl p-0 hover:bg-amber-100 text-amber-600"
-                      >
-                        <Link to={`/app/operacao-m30/${c.id}`} target="_blank">
-                          <ExternalLink className="h-3 w-3" />
-                        </Link>
-                      </Button>
-                    </div>
-                  </div>
-                ))}
-                {orphanCases.length === 0 && (
-                  <div className="rounded-xl border border-dashed border-amber-200 py-6 text-center text-[10px] text-amber-600 italic">
-                    Nenhuma tarefa órfã detectada.
-                  </div>
-                )}
-              </div>
-            </Card>
           </div>
         </AppShell>
       </RequireRouteAccess>
