@@ -731,7 +731,6 @@ export default function OperacaoM30Case() {
         enabled: Boolean(activeTenantId && ((caseQ.data?.meta_json as any)?.commitment_id || deliverableQ.data?.commitment_id)),
         queryFn: async () => {
             const cid = (caseQ.data?.meta_json as any)?.commitment_id || deliverableQ.data?.commitment_id;
-            console.log(`[M30] LOCKED CID FOR DELIVERABLES: ${cid}`);
             if (!cid) return [];
 
             const { data, error } = await supabase
@@ -765,13 +764,6 @@ export default function OperacaoM30Case() {
                 .not("deliverable_id", "is", null);
             
             if (error) throw error;
-            if (data.length > 0) {
-                console.table(data.map(c => ({ 
-                    Card: c.title, 
-                    Status: c.status, 
-                    Deliverable: c.deliverable_id.slice(0,8) 
-                })));
-            }
             return data.map(c => c.deliverable_id);
         }
     });
@@ -782,7 +774,7 @@ export default function OperacaoM30Case() {
         
         const usedIdsArray = Array.from(usedIds);
         if (all.length > 0) {
-            console.log(`[M30] CRM Availability Sync: ${all.length} deliverables total, ${usedIds.size} used. IDs:`, usedIdsArray);
+            // Updated availability sync
         }
         
         const groups: Record<string, any[]> = {};
@@ -793,9 +785,6 @@ export default function OperacaoM30Case() {
 
         return Object.entries(groups).map(([name, items]) => {
             const available = items.filter(d => !usedIds.has(d.id));
-            if (usedIds.size > 0 && name.includes("Vídeo")) {
-                console.log(`[M30 DEBUG] Group ${name}: ${available.length} available out of ${items.length}. Used count: ${usedIds.size}`);
-            }
             return {
                 name,
                 nextId: available[0]?.id,

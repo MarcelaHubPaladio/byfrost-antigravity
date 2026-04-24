@@ -324,7 +324,7 @@ const App = () => (
                   <Route
                     path="/app/operacao-m30"
                     element={
-                      <RequireRouteAccess routeKey="app.dashboard">
+                      <RequireRouteAccess routeKey="app.operacao_m30">
                         <OperacaoM30 />
                       </RequireRouteAccess>
                     }
@@ -705,7 +705,7 @@ const App = () => (
                   <Route
                     path="/app/operacao-m30/:id"
                     element={
-                      <RequireRouteAccess routeKey="app.dashboard">
+                      <RequireRouteAccess routeKey="app.operacao_m30">
                         <OperacaoM30Case />
                       </RequireRouteAccess>
                     }

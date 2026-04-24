@@ -18,6 +18,7 @@ export const CANDIDATE_ROUTES: CandidateRoute[] = [
   { key: "app.me", path: "/app/me", label: "Meu usuário" },
   { key: "app.communication", path: "/app/communication", label: "Comunicação" },
   { key: "app.settings", path: "/app/settings", label: "Config" },
+  { key: "app.operacao_m30", path: "/app/operacao-m30", label: "Clientes M30" },
 ];
 
 export async function checkRouteAccess(params: {

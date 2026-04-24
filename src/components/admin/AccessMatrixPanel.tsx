@@ -143,6 +143,13 @@ const DEFAULT_ROUTES: RouteRow[] = [
     path_pattern: "/app/communication",
     description: "Módulo de chat interno e canais",
   },
+  {
+    key: "app.operacao_m30",
+    name: "Clientes M30",
+    category: "App",
+    path_pattern: "/app/operacao-m30",
+    description: "Visão de contratos e operacional M30",
+  },
 ];
 
 const DEFAULT_ROLES = [

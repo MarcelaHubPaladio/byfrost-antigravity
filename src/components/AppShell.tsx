@@ -600,6 +600,7 @@ export function AppShell({
         "app.crm",
         "app.trello",
         "app.content",
+        "app.operacao_m30",
         // Core
         "app.entities",
         "app.inventory",
@@ -1001,7 +1002,7 @@ export function AppShell({
               <div className="grid justify-items-center gap-2">
                 <NavTile to={prefs.startRoute || "/app"} icon={LayoutGrid} label="Dashboard" disabled={!can("app.dashboard")} />
                 {hasTrello && <NavTile to="/app/trello" icon={KanbanSquare} label="Tarefas" disabled={!can("app.trello")} />}
-                {hasOperacaoM30 && <NavTile to="/app/operacao-m30" icon={Users} label="Clientes M30" disabled={!can("app.dashboard")} />}
+                {hasOperacaoM30 && <NavTile to="/app/operacao-m30" icon={Users} label="Clientes M30" disabled={!can("app.operacao_m30")} />}
                 {hasMktTecha && <NavTile to="/app/mkt-techa" icon={Star} label="MKT Técha" disabled={!can("app.dashboard")} />}
                 {hasOrders && <NavTile to="/app/orders" icon={Package} label="Pedidos" disabled={!can("app.dashboard")} />}
                 {hasCrm && <NavTile to="/app/crm" icon={LayoutDashboard} label="CRM" disabled={!can("app.crm")} />}
@@ -1257,7 +1258,7 @@ export function AppShell({
                                 to="/app/operacao-m30"
                                 icon={Users}
                                 label="Clientes M30"
-                                disabled={!can("app.dashboard")}
+                                disabled={!can("app.operacao_m30")}
                                 onNavigate={() => setMobileNavOpen(false)}
                               />
                             )}
