@@ -270,17 +270,29 @@ export default function CommitmentDetail() {
   });
 
   const m30CasesQ = useQuery({
-    queryKey: ["m30_cases_for_commitment_entity", activeTenantId, commitmentQ.data?.customer_entity_id, m30JourneyQ.data?.id],
-    enabled: Boolean(activeTenantId && commitmentQ.data?.customer_entity_id && m30JourneyQ.data?.id),
+    queryKey: ["m30_cases_for_commitment_comprehensive", activeTenantId, commitmentId, commitmentQ.data?.customer_entity_id, m30JourneyQ.data?.id, deliverablesQ.data?.length],
+    enabled: Boolean(activeTenantId && m30JourneyQ.data?.id && commitmentQ.data),
     queryFn: async () => {
-      const { data, error } = await supabase
+      const delIds = deliverablesQ.data?.map(d => d.id) || [];
+      const entityId = commitmentQ.data!.customer_entity_id;
+      
+      let query = supabase
         .from("cases")
-        .select("id, title, state, status, created_at, updated_at, meta_json")
+        .select("id, title, state, status, created_at, updated_at, meta_json, deliverable_id")
         .eq("tenant_id", activeTenantId!)
         .eq("journey_id", m30JourneyQ.data!.id)
-        .eq("customer_entity_id", commitmentQ.data!.customer_entity_id)
-        .is("deleted_at", null)
+        .is("deleted_at", null);
+
+      // Build OR filter
+      const filters = [];
+      if (delIds.length > 0) filters.push(`deliverable_id.in.(${delIds.join(",")})`);
+      if (entityId) filters.push(`customer_entity_id.eq.${entityId}`);
+      filters.push(`meta_json->>commitment_id.eq.${commitmentId}`);
+      
+      const { data, error } = await query
+        .or(filters.join(","))
         .order("state", { ascending: true });
+
       if (error) throw error;
       return (data ?? []) as any[];
     },
