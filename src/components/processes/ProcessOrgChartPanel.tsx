@@ -13,6 +13,8 @@ import {
   Panel,
   BackgroundVariant,
   useReactFlow,
+  getNodesBounds,
+  getViewportForBounds,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { toPng } from 'html-to-image';
@@ -243,24 +245,33 @@ export function ProcessOrgChartPanel({ onViewCargo }: ProcessOrgChartPanelProps)
 
   const handlePrint = async () => {
     try {
-      showSuccess("Gerando visualização para impressão...");
+      showSuccess("Gerando visualização de alta fidelidade...");
       
-      // Fit view to include everything
-      await fitView({ padding: 0.1 });
-      
-      // Wait a bit for fitView to complete and layout to settle
-      await new Promise(res => setTimeout(res, 300));
+      const nodes = getNodes();
+      if (nodes.length === 0) return;
+
+      // 1. Calculate bounds of all nodes
+      const bounds = getNodesBounds(nodes);
+      const padding = 100; // Add some breathing room
 
       const element = document.querySelector('.react-flow__viewport') as HTMLElement;
       if (!element) return;
 
+      // 2. Generate PNG with manual bounds to ensure nothing is cut
       const dataUrl = await toPng(element, { 
         backgroundColor: '#fff',
-        quality: 1,
-        pixelRatio: 2 // High resolution
+        width: bounds.width + padding * 2,
+        height: bounds.height + padding * 2,
+        style: {
+          width: `${bounds.width + padding * 2}px`,
+          height: `${bounds.height + padding * 2}px`,
+          // This transform ensures we capture from the top-left of the structure
+          transform: `translate(${-bounds.x + padding}px, ${-bounds.y + padding}px) scale(1)`,
+        },
+        pixelRatio: 2
       });
 
-      // Create a print-friendly window
+      // 3. Create a print-friendly window
       const printWindow = window.open('', '_blank');
       if (!printWindow) return;
 
@@ -269,22 +280,52 @@ export function ProcessOrgChartPanel({ onViewCargo }: ProcessOrgChartPanelProps)
           <head>
             <title>Organograma - Byfrost</title>
             <style>
-              body { margin: 0; display: flex; justify-content: center; align-items: flex-start; bg: white; }
-              img { max-width: 100%; height: auto; }
+              body { 
+                margin: 0; 
+                padding: 40px;
+                display: flex; 
+                flex-direction: column;
+                align-items: center; 
+                background: #f8fafc; 
+                font-family: sans-serif;
+              }
+              img { 
+                max-width: 100%; 
+                height: auto; 
+                box-shadow: 0 20px 50px rgba(0,0,0,0.1);
+                border-radius: 20px;
+                background: white;
+              }
+              .header {
+                width: 100%;
+                max-width: 1200px;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                margin-bottom: 30px;
+              }
+              .title { font-weight: 900; font-size: 24px; color: #0f172a; }
+              .date { font-weight: 500; font-size: 14px; color: #64748b; }
+              
               @media print {
                 @page { size: landscape; margin: 0; }
-                body { margin: 0; }
+                body { padding: 0; background: white; }
+                img { box-shadow: none; border-radius: 0; }
+                .header { display: none; }
               }
             </style>
           </head>
           <body>
+            <div class="header">
+                <span class="title">ORGANOGRAMA CORPORATIVO</span>
+                <span class="date">${new Date().toLocaleDateString('pt-BR')}</span>
+            </div>
             <img src="${dataUrl}" />
             <script>
               window.onload = () => {
                 setTimeout(() => {
                   window.print();
-                  // window.close();
-                }, 500);
+                }, 800);
               }
             </script>
           </body>
@@ -292,6 +333,7 @@ export function ProcessOrgChartPanel({ onViewCargo }: ProcessOrgChartPanelProps)
       `);
       printWindow.document.close();
     } catch (err: any) {
+      console.error(err);
       showError("Erro ao gerar impressão: " + err.message);
     }
   };
