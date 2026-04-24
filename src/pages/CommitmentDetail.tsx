@@ -24,6 +24,7 @@ import {
   PackageCheck,
   AlertCircle,
   RefreshCw,
+  Rocket,
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import {
@@ -252,6 +253,49 @@ export default function CommitmentDetail() {
     },
     staleTime: 5_000,
   });
+
+  const m30JourneyQ = useQuery({
+    queryKey: ["m30_journey_meta", activeTenantId],
+    enabled: Boolean(activeTenantId),
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("journeys")
+        .select("id, name, default_state_machine_json")
+        .eq("key", "operacao_m30")
+        .maybeSingle();
+      if (error) throw error;
+      return data;
+    },
+    staleTime: 60_000,
+  });
+
+  const m30CasesQ = useQuery({
+    queryKey: ["m30_cases_for_commitment_entity", activeTenantId, commitmentQ.data?.customer_entity_id, m30JourneyQ.data?.id],
+    enabled: Boolean(activeTenantId && commitmentQ.data?.customer_entity_id && m30JourneyQ.data?.id),
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("cases")
+        .select("id, title, state, status, created_at, updated_at, meta_json")
+        .eq("tenant_id", activeTenantId!)
+        .eq("journey_id", m30JourneyQ.data!.id)
+        .eq("customer_entity_id", commitmentQ.data!.customer_entity_id)
+        .is("deleted_at", null)
+        .order("state", { ascending: true });
+      if (error) throw error;
+      return (data ?? []) as any[];
+    },
+    staleTime: 10_000,
+  });
+
+  const m30KanbanData = useMemo(() => {
+    const states = (m30JourneyQ.data?.default_state_machine_json?.states ?? []) as string[];
+    const cases = m30CasesQ.data ?? [];
+    
+    return states.map(s => ({
+      state: s,
+      items: cases.filter(c => c.state === s)
+    }));
+  }, [m30JourneyQ.data, m30CasesQ.data]);
 
   const journeysQ = useQuery({
     queryKey: ["active_journeys", activeTenantId],
@@ -714,6 +758,79 @@ export default function CommitmentDetail() {
                 ) : null}
               </div>
             </Card>
+
+            {/* M30 Journey Kanban Section */}
+            {m30JourneyQ.data && (
+              <Card className="rounded-[32px] border-none bg-slate-50/50 p-6 shadow-inner">
+                <div className="mb-6 flex items-center justify-between">
+                  <div className="space-y-1">
+                    <h3 className="text-lg font-black text-slate-900 flex items-center gap-2">
+                      <KanbanSquare className="h-5 w-5 text-indigo-600" />
+                      Jornada Operação M30
+                    </h3>
+                    <p className="text-xs text-slate-500 font-medium">Acompanhamento operacional das pautas deste cliente.</p>
+                  </div>
+                  <Badge variant="outline" className="bg-white border-indigo-100 text-indigo-600 font-bold">
+                    {m30CasesQ.data?.length ?? 0} Cards Ativos
+                  </Badge>
+                </div>
+
+                <div className="flex gap-4 overflow-x-auto pb-4 no-scrollbar">
+                  {m30KanbanData.map((col) => (
+                    <div key={col.state} className="min-w-[280px] flex-1">
+                      <div className="flex items-center justify-between mb-3 px-2">
+                        <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                          {col.state}
+                        </span>
+                        <Badge variant="secondary" className="h-4 px-1.5 text-[9px] bg-slate-200/50 text-slate-500">
+                          {col.items.length}
+                        </Badge>
+                      </div>
+                      <div className={cn(
+                        "space-y-3 rounded-2xl p-2 min-h-[100px]",
+                        col.items.length > 0 ? "bg-white/40 border border-slate-200/50" : "bg-slate-100/30 border border-dashed border-slate-200"
+                      )}>
+                        {col.items.map((c) => (
+                          <Link
+                            key={c.id}
+                            to={`/app/operacao-m30/${c.id}`}
+                            className={cn(
+                              "block rounded-xl border bg-white p-3 shadow-sm transition-all hover:shadow-md hover:border-indigo-300 group",
+                              (c.meta_json as any)?.commitment_id === commitmentId ? "ring-2 ring-indigo-500/10 border-indigo-200" : "border-slate-200"
+                            )}
+                          >
+                            <div className="flex items-start justify-between gap-2">
+                              <p className="text-xs font-bold text-slate-900 line-clamp-2 leading-tight group-hover:text-indigo-600 transition-colors">
+                                {c.title || "Sem título"}
+                              </p>
+                              {(c.meta_json as any)?.priority && (
+                                <AlertCircle className="h-3 w-3 text-rose-500 shrink-0" />
+                              )}
+                            </div>
+                            <div className="mt-2 flex items-center justify-between text-[9px] font-medium text-slate-400">
+                              <span className="truncate">{new Date(c.updated_at).toLocaleDateString()}</span>
+                              {(c.meta_json as any)?.commitment_id === commitmentId && (
+                                <Badge variant="outline" className="h-3.5 px-1 py-0 text-[8px] border-indigo-200 text-indigo-500 bg-indigo-50">ESTE CONTRATO</Badge>
+                              )}
+                            </div>
+                          </Link>
+                        ))}
+                        {col.items.length === 0 && (
+                          <div className="text-[9px] text-slate-400 text-center py-4 italic">Sem cards nesta etapa</div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                
+                {m30CasesQ.data?.length === 0 && (
+                  <div className="flex flex-col items-center justify-center py-12 text-center bg-white rounded-2xl border-2 border-dashed border-slate-200">
+                    <Rocket className="h-10 w-10 text-slate-200 mb-2" />
+                    <p className="text-sm text-slate-400 font-medium">Nenhum card operacional para este cliente ainda.</p>
+                  </div>
+                )}
+              </Card>
+            )}
 
             <Dialog open={journeyOpen} onOpenChange={setJourneyOpen}>
               <DialogContent className="max-w-md">

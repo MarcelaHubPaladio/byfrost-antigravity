@@ -31,6 +31,9 @@ import {
   LayoutList,
   Columns2,
   Download,
+  FileText,
+  User,
+  ExternalLink,
 } from "lucide-react";
 import { NewSalesOrderDialog } from "@/components/case/NewSalesOrderDialog";
 import { getStateLabel } from "@/lib/journeyLabels";
@@ -228,23 +231,27 @@ function M30CalendarView({ cases, date, onChangeDate }: { cases: CaseRow[], date
                 )}
               </div>
               <div className="flex flex-col gap-1.5 mt-1 max-h-[140px] overflow-y-auto no-scrollbar scroll-smooth">
-                {dayCases.map(c => (
-                  <Link
-                    key={c.id}
-                    to={`/app/operacao-m30/${c.id}`}
-                    className="block p-2 rounded-[16px] border border-slate-100 bg-white hover:bg-slate-50 hover:border-slate-200 transition-colors cursor-pointer shadow-sm"
-                    title={c.title ?? "Caso sem título"}
-                  >
-                    <div className="text-[11px] font-semibold text-slate-800 line-clamp-2 leading-tight">
-                      {c.title || "Caso sem título"}
-                    </div>
-                    {Boolean(c.users_profile?.display_name || c.users_profile?.email) && (
-                      <div className="text-[10px] text-slate-500 truncate mt-1 font-medium">
-                        {c.users_profile?.display_name || c.users_profile?.email}
+                {dayCases.map(c => {
+                  const commitmentId = (c.meta_json as any)?.commitment_id;
+                  const linkTo = commitmentId ? `/app/commitments/${commitmentId}` : `/app/operacao-m30/${c.id}`;
+                  return (
+                    <Link
+                      key={c.id}
+                      to={linkTo}
+                      className="block p-2 rounded-[16px] border border-slate-100 bg-white hover:bg-slate-50 hover:border-slate-200 transition-colors cursor-pointer shadow-sm"
+                      title={commitmentId ? `Ir para Contrato ${commitmentId.slice(0,8)}` : (c.title ?? "Caso sem título")}
+                    >
+                      <div className="text-[11px] font-semibold text-slate-800 line-clamp-2 leading-tight">
+                        {c.title || "Caso sem título"}
                       </div>
-                    )}
-                  </Link>
-                ))}
+                      {Boolean(c.users_profile?.display_name || c.users_profile?.email) && (
+                        <div className="text-[10px] text-slate-500 truncate mt-1 font-medium">
+                          {c.users_profile?.display_name || c.users_profile?.email}
+                        </div>
+                      )}
+                    </Link>
+                  );
+                })}
               </div>
             </div>
           );
@@ -272,7 +279,7 @@ export default function OperacaoM30() {
   }>({ open: false, nextStateName: "", reasons: [] });
   const [newSalesOrderOpen, setNewSalesOrderOpen] = useState(false);
   // Tab e visualização
-  const [tab, setTab] = useState<"kanban" | "calendar">("kanban");
+  const [tab, setTab] = useState<"kanban" | "calendar" | "contracts">("kanban");
   const [calendarDate, setCalendarDate] = useState(new Date());
 
   // Filtros jornada Auditoria e Responsável
@@ -381,6 +388,40 @@ export default function OperacaoM30() {
       return data as WaInstanceRow | null;
     },
   });
+
+  const contractsQ = useQuery({
+    queryKey: ["m30_active_contracts", activeTenantId],
+    enabled: Boolean(activeTenantId),
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("commercial_commitments")
+        .select(`
+          id,
+          status,
+          created_at,
+          customer_entity_id,
+          customer:core_entities!commercial_commitments_customer_fk(id, display_name, metadata)
+        `)
+        .eq("tenant_id", activeTenantId!)
+        .eq("commitment_type", "contract")
+        .is("deleted_at", null)
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      return (data ?? []) as any[];
+    },
+    staleTime: 60_000,
+  });
+
+  const groupedM30Contracts = useMemo(() => {
+    const list = contractsQ.data || [];
+    const groups: Record<string, any[]> = {};
+    for (const c of list) {
+      const eid = c.customer_entity_id;
+      if (!groups[eid]) groups[eid] = [];
+      groups[eid].push(c);
+    }
+    return groups;
+  }, [contractsQ.data]);
 
   // Back-compat: /app?journey=<uuid> -> /app/j/<journeys.key>
   const legacyJourneyId = useMemo(() => {
@@ -1046,6 +1087,15 @@ export default function OperacaoM30() {
                 >
                   Calendário
                 </button>
+                <button
+                  onClick={() => setTab("contracts")}
+                  className={cn(
+                    "px-4 py-1.5 text-sm font-medium rounded-xl transition-all",
+                    tab === "contracts" ? "bg-white text-slate-900 shadow-sm" : "text-slate-600 hover:text-slate-800"
+                  )}
+                >
+                  Contratos
+                </button>
               </div>
             </div>
 
@@ -1356,6 +1406,69 @@ export default function OperacaoM30() {
                 </div>
               ) : tab === "calendar" ? (
                 <M30CalendarView cases={filteredRows} date={calendarDate} onChangeDate={setCalendarDate} />
+              ) : tab === "contracts" ? (
+                <div className="space-y-8 animate-in fade-in duration-500 pb-10">
+                  {Object.entries(groupedM30Contracts).map(([entityId, contracts]) => (
+                    <div key={entityId} className="space-y-4">
+                      <div className="flex items-center gap-2 px-1">
+                        <User className="h-5 w-5 text-slate-400" />
+                        <h3 className="text-lg font-bold text-slate-900 dark:text-white">
+                          {contracts[0].customer?.display_name || "Cliente sem Nome"}
+                          {contracts[0].customer?.metadata?.internal_label && (
+                            <span className="ml-2 text-blue-500 font-medium text-sm">
+                              ({contracts[0].customer.metadata.internal_label})
+                            </span>
+                          )}
+                          <span className="ml-3 rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-500 dark:bg-slate-800 dark:text-slate-400">
+                            {contracts.length}
+                          </span>
+                        </h3>
+                      </div>
+                      <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
+                        {contracts.map(c => (
+                          <Link
+                            key={c.id}
+                            to={`/app/commitments/${c.id}`}
+                            className="group relative flex flex-col overflow-hidden rounded-[32px] border border-slate-200 bg-white p-6 shadow-sm transition-all hover:scale-[1.02] hover:border-blue-200 hover:shadow-xl dark:border-slate-800 dark:bg-slate-900"
+                          >
+                            <div className="mb-4 flex items-start justify-between">
+                              <Badge className={cn(
+                                "rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-widest",
+                                c.status === "active" ? "bg-emerald-100 text-emerald-700" : 
+                                c.status === "draft" ? "bg-amber-100 text-amber-700" :
+                                c.status === "completed" ? "bg-blue-100 text-blue-700" : "bg-slate-100 text-slate-700"
+                              )}>
+                                {c.status || "draft"}
+                              </Badge>
+                              <div className="rounded-full bg-slate-50 p-2 text-slate-400 transition-colors group-hover:bg-blue-50 group-hover:text-blue-500">
+                                <ExternalLink className="h-4 w-4" />
+                              </div>
+                            </div>
+                            <div className="mb-4">
+                              <h4 className="font-bold text-slate-900 dark:text-white">
+                                Contrato #{c.id.slice(0, 8)}
+                              </h4>
+                              <p className="text-xs text-slate-500">
+                                Criado em {new Date(c.created_at).toLocaleDateString("pt-BR")}
+                              </p>
+                            </div>
+                            <div className="mt-auto flex items-center justify-between border-t border-slate-100 pt-4 dark:border-slate-800">
+                              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Ver detalhes</span>
+                              <div className="h-2 w-2 rounded-full bg-blue-500 opacity-0 transition-opacity group-hover:opacity-100" />
+                            </div>
+                          </Link>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                  {Object.keys(groupedM30Contracts).length === 0 && (
+                    <div className="flex flex-col items-center justify-center rounded-[40px] border-2 border-dashed border-slate-100 bg-slate-50/50 py-20 text-center">
+                      <FileText className="mb-4 h-12 w-12 text-slate-200" />
+                      <h3 className="text-lg font-bold text-slate-400">Nenhum contrato ativo encontrado</h3>
+                      <p className="max-w-xs text-sm text-slate-400">Os contratos aparecerão aqui assim que forem registrados no sistema.</p>
+                    </div>
+                  )}
+                </div>
               ) : null}
             </div>
           )}
