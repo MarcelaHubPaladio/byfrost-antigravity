@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { ReactFlowProvider } from "@xyflow/react";
 import { Link, useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
@@ -314,12 +315,14 @@ export function ProcessRepositoryPanel() {
 
         {isAdmin && (
           <TabsContent value="organograma" className="mt-4 outline-none">
-            <ProcessOrgChartPanel 
-              onViewCargo={(roleName) => {
-                setSearch(roleName);
-                setActiveTab("list");
-              }}
-            />
+            <ReactFlowProvider>
+              <ProcessOrgChartPanel 
+                onViewCargo={(roleName) => {
+                  setSearch(roleName);
+                  setActiveTab("list");
+                }}
+              />
+            </ReactFlowProvider>
           </TabsContent>
         )}
       </Tabs>

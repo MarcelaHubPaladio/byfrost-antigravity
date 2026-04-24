@@ -12,6 +12,7 @@ import {
   Node,
   Panel,
   BackgroundVariant,
+  useReactFlow,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { 
@@ -50,6 +51,7 @@ const nodeTypes = {
 export function ProcessOrgChartPanel({ onViewCargo }: ProcessOrgChartPanelProps) {
   const { activeTenantId } = useTenant();
   const qc = useQueryClient();
+  const { getNodes, getEdges } = useReactFlow();
 
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
@@ -137,11 +139,13 @@ export function ProcessOrgChartPanel({ onViewCargo }: ProcessOrgChartPanelProps)
     const label = window.prompt("Nome da Atividade Chave:");
     if (!label) return;
 
-    // Subordinate selection logic (simplified with prompt for now, can be improved to a real select)
+    const currentNodes = getNodes();
+    const currentEdges = getEdges();
+
     // Find targets of this node
-    const subordinates = edges
+    const subordinates = currentEdges
       .filter(e => e.source === nodeId)
-      .map(e => nodes.find(n => n.id === e.target))
+      .map(e => currentNodes.find(n => n.id === e.target))
       .filter(Boolean);
     
     let subId: string | undefined = undefined;
@@ -149,7 +153,7 @@ export function ProcessOrgChartPanel({ onViewCargo }: ProcessOrgChartPanelProps)
       const subNames = subordinates.map(s => s?.data.userName).join(", ");
       const subChoice = window.prompt(`Esta atividade é relacionada a algum subordinado? (${subNames}). Digite o nome exato ou deixe em branco.`);
       if (subChoice) {
-        const found = subordinates.find(s => s?.data.userName.toLowerCase() === subChoice.toLowerCase());
+        const found = subordinates.find(s => (s?.data.userName as string)?.toLowerCase() === subChoice.toLowerCase());
         if (found) subId = found.id;
       }
     }
@@ -161,7 +165,7 @@ export function ProcessOrgChartPanel({ onViewCargo }: ProcessOrgChartPanelProps)
       }
       return n;
     }));
-  }, [edges, nodes, setNodes]);
+  }, [getEdges, getNodes, setNodes]);
 
   const handleDeleteActivity = useCallback((nodeId: string, activityId: string) => {
     setNodes((nds) => nds.map((n) => {
@@ -174,15 +178,14 @@ export function ProcessOrgChartPanel({ onViewCargo }: ProcessOrgChartPanelProps)
   }, [setNodes]);
 
   const handleEditActivity = useCallback((nodeId: string, activityId: string) => {
-    const node = nodes.find(n => n.id === nodeId);
-    const activity = node?.data.activities?.find((a: any) => a.id === activityId);
-    if (!activity) return;
-
-    const newLabel = window.prompt("Novo nome da Atividade Chave:", activity.label);
-    if (newLabel === null) return;
-
     setNodes((nds) => nds.map((n) => {
       if (n.id === nodeId) {
+        const activity = n.data.activities?.find((a: any) => a.id === activityId);
+        if (!activity) return n;
+
+        const newLabel = window.prompt("Novo nome da Atividade Chave:", activity.label);
+        if (newLabel === null) return n;
+
         const activities = (n.data.activities || []).map((a: any) => 
           a.id === activityId ? { ...a, label: newLabel } : a
         );
@@ -190,7 +193,7 @@ export function ProcessOrgChartPanel({ onViewCargo }: ProcessOrgChartPanelProps)
       }
       return n;
     }));
-  }, [nodes, setNodes]);
+  }, [setNodes]);
 
   // Transform to React Flow
   useEffect(() => {
@@ -239,7 +242,7 @@ export function ProcessOrgChartPanel({ onViewCargo }: ProcessOrgChartPanelProps)
       setNodes(newNodes);
       setEdges(newEdges);
     }
-  }, [orgNodesQ.data, usersQ.data, rolesQ.data, processesQ.data, layoutQ.data, handleAddActivity, handleEditActivity, handleDeleteActivity]);
+  }, [orgNodesQ.data, usersQ.data, rolesQ.data, processesQ.data, layoutQ.data]);
 
   const onConnect = useCallback(
     (params: Connection) => setEdges((eds) => addEdge({ ...params, animated: true, style: { stroke: '#64748b', strokeWidth: 2 } }, eds)),
