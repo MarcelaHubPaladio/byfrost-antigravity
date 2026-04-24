@@ -17,7 +17,8 @@ import {
   Filter,
   BarChart3,
   FileText,
-  Workflow
+  Workflow,
+  GitFork
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { showError, showSuccess } from "@/utils/toast";
@@ -26,6 +27,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { ProcessAccordionItem } from "@/components/processes/ProcessAccordionItem";
 import { ProcessVisitDashboard } from "@/components/processes/ProcessVisitDashboard";
 import { FlowchartViewer } from "@/components/processes/FlowchartViewer";
+import { ProcessOrgChartPanel } from "@/components/processes/ProcessOrgChartPanel";
 
 type ProcessRow = {
   id: string;
@@ -167,6 +169,11 @@ export function ProcessRepositoryPanel() {
             <TabsTrigger value="dashboard" className="rounded-xl px-4 text-xs font-medium data-[state=active]:bg-white data-[state=active]:shadow-sm">
               <LayoutDashboard className="mr-2 h-4 w-4" /> Dashboard
             </TabsTrigger>
+            {isAdmin && (
+              <TabsTrigger value="organograma" className="rounded-xl px-4 text-xs font-medium data-[state=active]:bg-white data-[state=active]:shadow-sm">
+                <GitFork className="mr-2 h-4 w-4" /> Organograma
+              </TabsTrigger>
+            )}
           </TabsList>
 
           {canManage && (
@@ -304,6 +311,12 @@ export function ProcessRepositoryPanel() {
         <TabsContent value="dashboard" className="mt-4 outline-none">
           <ProcessVisitDashboard />
         </TabsContent>
+
+        {isAdmin && (
+          <TabsContent value="organograma" className="mt-4 outline-none">
+            <ProcessOrgChartPanel />
+          </TabsContent>
+        )}
       </Tabs>
     </div>
   );
