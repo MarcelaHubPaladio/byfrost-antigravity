@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { AppShell } from "@/components/AppShell";
 import { RequireAuth } from "@/components/RequireAuth";
@@ -87,6 +87,8 @@ function formatTs(ts: string) {
 
 export default function CommitmentDetail() {
   const { id } = useParams();
+  const nav = useNavigate();
+  const [searchParams] = useSearchParams();
   const commitmentId = String(id ?? "");
   const { activeTenantId, activeTenant, isSuperAdmin } = useTenant();
 
@@ -418,7 +420,7 @@ export default function CommitmentDetail() {
         .eq("id", commitmentId);
       if (error) throw error;
       showSuccess("Compromisso excluído.");
-      window.location.href = "/app/commitments";
+      nav("/app/commitments");
     } catch (err: any) {
       showError(err.message ?? "Erro ao excluir");
       setSaving(false);
@@ -540,7 +542,7 @@ export default function CommitmentDetail() {
                     variant="outline" 
                     size="sm" 
                     className="rounded-xl border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100"
-                    onClick={() => window.location.href = `/app/commitments/${contractQ.data!.id}`}
+                    onClick={() => nav(`/app/commitments/${contractQ.data!.id}`)}
                   >
                     <FileText className="h-4 w-4 mr-2" /> Ver Contrato Principal
                   </Button>
@@ -550,7 +552,7 @@ export default function CommitmentDetail() {
                     variant="outline" 
                     size="sm" 
                     className="rounded-xl border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100"
-                    onClick={() => window.location.href = `/app/entities/${commitmentQ.data?.customer_entity_id}?tab=proposal`}
+                    onClick={() => nav(`/app/entities/${commitmentQ.data?.customer_entity_id}?tab=proposal`)}
                   >
                     <Rocket className="h-4 w-4 mr-2" /> Ver Proposta Comercial
                   </Button>

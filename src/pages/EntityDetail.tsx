@@ -1,5 +1,5 @@
-import { useMemo, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { AppShell } from "@/components/AppShell";
 import { RequireAuth } from "@/components/RequireAuth";
@@ -59,7 +59,14 @@ export default function EntityDetail() {
   const entityId = String(id ?? "");
   const { activeTenantId, activeTenant } = useTenant();
 
+  const [searchParams] = useSearchParams();
   const [activeTab, setActiveTab] = useState("overview");
+
+  // Sync tab from URL if present
+  useEffect(() => {
+    const t = searchParams.get("tab");
+    if (t) setActiveTab(t);
+  }, [searchParams]);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
