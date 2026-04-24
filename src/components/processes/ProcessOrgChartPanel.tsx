@@ -38,11 +38,15 @@ import { OrgUserNode } from './OrgUserNode';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 
+interface ProcessOrgChartPanelProps {
+  onViewCargo?: (roleName: string) => void;
+}
+
 const nodeTypes = {
   userNode: OrgUserNode,
 };
 
-export function ProcessOrgChartPanel() {
+export function ProcessOrgChartPanel({ onViewCargo }: ProcessOrgChartPanelProps) {
   const { activeTenantId } = useTenant();
   const qc = useQueryClient();
 
@@ -152,6 +156,7 @@ export function ProcessOrgChartPanel() {
             roleKey: user?.role,
             roleName: role?.name || user?.role,
             processes: roleProcesses,
+            onViewCargo: () => onViewCargo?.(role?.name || user?.role || ''),
           },
         };
       });

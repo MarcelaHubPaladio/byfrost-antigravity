@@ -314,7 +314,12 @@ export function ProcessRepositoryPanel() {
 
         {isAdmin && (
           <TabsContent value="organograma" className="mt-4 outline-none">
-            <ProcessOrgChartPanel />
+            <ProcessOrgChartPanel 
+              onViewCargo={(roleName) => {
+                setSearch(roleName);
+                setActiveTab("list");
+              }}
+            />
           </TabsContent>
         )}
       </Tabs>

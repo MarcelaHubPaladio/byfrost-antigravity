@@ -11,6 +11,7 @@ interface OrgUserNodeProps {
     roleName: string;
     roleKey: string;
     processes: any[];
+    onViewCargo?: () => void;
     isRoot?: boolean;
   };
   selected?: boolean;
@@ -80,7 +81,13 @@ export const OrgUserNode = ({ data, selected }: OrgUserNodeProps) => {
           </div>
         )}
 
-        <div className="flex items-center gap-1 mt-2 text-[9px] font-bold text-[hsl(var(--byfrost-accent))] group-hover:translate-x-1 transition-transform cursor-pointer">
+        <div 
+          className="flex items-center gap-1 mt-2 text-[9px] font-bold text-[hsl(var(--byfrost-accent))] group-hover:translate-x-1 transition-transform cursor-pointer"
+          onClick={(e) => {
+            e.stopPropagation();
+            data.onViewCargo?.();
+          }}
+        >
           VER DETALHES DO CARGO <ChevronRight className="h-3 w-3" />
         </div>
       </div>
