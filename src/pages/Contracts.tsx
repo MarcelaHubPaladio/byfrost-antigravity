@@ -58,7 +58,7 @@ type ContractWithProgress = {
   id: string;
   status: string | null;
   created_at: string;
-  customer: { id: string; display_name: string } | null;
+  customer: { id: string; display_name: string; metadata?: any } | null;
   items: { quantity: number | null }[];
   deliverables: { id: string; status: string | null; deleted_at: string | null }[];
 };
@@ -95,7 +95,7 @@ export default function Contracts() {
           status,
           commitment_type,
           created_at,
-          customer:core_entities!commercial_commitments_customer_fk(id, display_name),
+          customer:core_entities!commercial_commitments_customer_fk(id, display_name, metadata),
           items:commitment_items(quantity),
           deliverables(id, status, deleted_at)
         `)
@@ -358,6 +358,11 @@ export default function Contracts() {
                             <User className="w-5 h-5 text-slate-400" />
                             <h3 className="text-lg font-bold text-slate-900 dark:text-white">
                               {contracts[0].customer?.display_name || "Cliente sem Nome"}
+                              {contracts[0].customer?.metadata?.internal_label && (
+                                <span className="ml-2 text-blue-500 font-medium text-sm">
+                                  ({contracts[0].customer.metadata.internal_label})
+                                </span>
+                              )}
                               <span className="ml-3 rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-500 dark:bg-slate-800 dark:text-slate-400">
                                 {contracts.length}
                               </span>
@@ -395,6 +400,11 @@ export default function Contracts() {
                               <User className="w-4 h-4 text-slate-400" />
                               <h3 className="font-bold text-slate-900 dark:text-white">
                                 {contracts[0].customer?.display_name || "Cliente sem Nome"}
+                                {contracts[0].customer?.metadata?.internal_label && (
+                                  <span className="ml-2 text-blue-500 font-medium text-sm">
+                                    ({contracts[0].customer.metadata.internal_label})
+                                  </span>
+                                )}
                               </h3>
                             </div>
                             <span className="text-xs font-semibold text-slate-500">
@@ -457,6 +467,11 @@ function ContractCard({ c, handleOrchestrate, isOrchestrating }: { c: any, handl
               <div>
                 <h4 className="font-bold text-slate-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
                   {c.customer?.display_name || "Cliente sem Nome"}
+                  {c.customer?.metadata?.internal_label && (
+                    <span className="ml-2 text-blue-500 font-medium text-xs">
+                      ({c.customer.metadata.internal_label})
+                    </span>
+                  )}
                 </h4>
                 <div className="flex items-center gap-2 text-xs font-mono text-slate-500 uppercase">
                   <span>#{c.id.slice(0, 8)}</span>
@@ -558,6 +573,11 @@ function ContractListItem({ c }: { c: any }) {
           <div className="min-w-0">
             <h4 className="font-semibold text-slate-900 dark:text-white truncate">
               {c.customer?.display_name || "Cliente sem Nome"}
+              {c.customer?.metadata?.internal_label && (
+                <span className="ml-2 text-blue-500 font-medium text-xs">
+                  ({c.customer.metadata.internal_label})
+                </span>
+              )}
             </h4>
             <p className="text-[10px] font-mono text-slate-500 uppercase flex items-center gap-2">
               <span>#{c.id.slice(0, 8)}</span>
@@ -745,6 +765,11 @@ function ContractKanbanCard({ c, handleOrchestrate, isOrchestrating, isOverlay }
             <div className="flex-1 min-w-0">
               <h4 className="font-bold text-sm text-slate-900 dark:text-white truncate pr-6">
                 {c.customer?.display_name || "Cliente sem Nome"}
+                {c.customer?.metadata?.internal_label && (
+                  <div className="text-[10px] text-blue-500 font-bold truncate">
+                    ({c.customer.metadata.internal_label})
+                  </div>
+                )}
               </h4>
               <p className="text-[10px] font-mono text-slate-500">#{c.id.slice(0, 8)}</p>
             </div>
