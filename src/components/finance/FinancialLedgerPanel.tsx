@@ -261,13 +261,13 @@ function currentMonthRangeIso() {
 
 export function FinancialLedgerPanel() {
   const handleExportCSV = () => {
-    const headers = ["Categoria", ...drePeriods.flatMap(p => [`${p.label} - Orçado`, `${p.label} - Realizado`, `${p.label} - %`])];
+    const headers = ["Categoria", ...drePeriods.flatMap(p => [`${p.label} - Orçado`, `${p.label} - Projetado`, `${p.label} - Realizado`, `${p.label} - %`])];
     const rows = dreData.map(r => [
       r.category.name,
       ...drePeriods.flatMap(p => {
         const val = r.periods[p.key];
         const pct = val.budget > 0 ? (val.realized / val.budget) * 100 : 0;
-        return [val.budget, val.realized, `${pct.toFixed(0)}%`];
+        return [val.budget, val.projected, val.realized, `${pct.toFixed(0)}%`];
       })
     ]);
 
@@ -285,11 +285,11 @@ export function FinancialLedgerPanel() {
     // Generate a simple HTML table that Excel can open
     let tableHtml = `<table border="1"><thead><tr><th>Categoria</th>`;
     drePeriods.forEach(p => {
-      tableHtml += `<th colspan="3">${p.label}</th>`;
+      tableHtml += `<th colspan="4">${p.label}</th>`;
     });
     tableHtml += `</tr><tr><th></th>`;
     drePeriods.forEach(() => {
-      tableHtml += `<th>Orçado</th><th>Realizado</th><th>%</th>`;
+      tableHtml += `<th>Orçado</th><th>Projetado</th><th>Realizado</th><th>%</th>`;
     });
     tableHtml += `</tr></thead><tbody>`;
     
@@ -298,7 +298,7 @@ export function FinancialLedgerPanel() {
       drePeriods.forEach(p => {
         const val = r.periods[p.key];
         const pct = val.budget > 0 ? (val.realized / val.budget) * 100 : 0;
-        tableHtml += `<td>${val.budget}</td><td>${val.realized}</td><td>${pct.toFixed(0)}%</td>`;
+        tableHtml += `<td>${val.budget}</td><td>${val.projected}</td><td>${val.realized}</td><td>${pct.toFixed(0)}%</td>`;
       });
       tableHtml += `</tr>`;
     });
@@ -479,14 +479,14 @@ export function FinancialLedgerPanel() {
 
     const rows: Record<string, { 
       category: CategoryRow; 
-      periods: Record<string, { budget: number; realized: number }> 
+      periods: Record<string, { budget: number; realized: number; projected: number }> 
     }> = {};
 
     // Initialize periods for all categories
     categories.forEach(cat => {
       rows[cat.id] = { category: cat, periods: {} };
       drePeriods.forEach(p => {
-        rows[cat.id].periods[p.key] = { budget: 0, realized: 0 };
+        rows[cat.id].periods[p.key] = { budget: 0, realized: 0, projected: 0 };
       });
     });
 
@@ -509,9 +509,9 @@ export function FinancialLedgerPanel() {
       }
     });
 
-    // 2. Realized (Transactions)
+    // 2. Realized (Transactions) - MUST have category AND entity
     transactions.forEach(t => {
-      if (!t.category_id || !rows[t.category_id]) return;
+      if (!t.category_id || !t.entity_id || !rows[t.category_id]) return;
       const pKey = dreGranularity === "monthly" ? t.transaction_date.slice(0, 7) : t.transaction_date;
       if (rows[t.category_id].periods[pKey]) {
         const catType = rows[t.category_id].category.type.toLowerCase();
@@ -536,9 +536,9 @@ export function FinancialLedgerPanel() {
         const amt = Number(p.amount);
         // Payables are always debits
         if (catType === "revenue") {
-          rows[p.category_id].periods[pKey].realized -= amt;
+          rows[p.category_id].periods[pKey].projected -= amt;
         } else {
-          rows[p.category_id].periods[pKey].realized += amt;
+          rows[p.category_id].periods[pKey].projected += amt;
         }
       }
     });
@@ -550,9 +550,9 @@ export function FinancialLedgerPanel() {
         const amt = Number(r.amount);
         // Receivables are always credits
         if (catType === "revenue") {
-          rows[r.category_id].periods[pKey].realized += amt;
+          rows[r.category_id].periods[pKey].projected += amt;
         } else {
-          rows[r.category_id].periods[pKey].realized -= amt;
+          rows[r.category_id].periods[pKey].projected -= amt;
         }
       }
     });
@@ -562,8 +562,8 @@ export function FinancialLedgerPanel() {
       const matchesSearch = !dreSearch || row.category.name.toLowerCase().includes(dreSearch.toLowerCase());
       if (!matchesSearch) return false;
       
-      // Include row if it has budget, positive realized OR negative realized (refunds)
-      return Object.values(row.periods).some(p => p.budget > 0 || Math.abs(p.realized) > 0.001);
+      // Include row if it has budget, positive realized OR negative realized (refunds) OR projected
+      return Object.values(row.periods).some(p => p.budget > 0 || Math.abs(p.realized) > 0.001 || Math.abs(p.projected) > 0.001);
     });
 
     return filteredRows.sort((a, b) => {
@@ -2658,10 +2658,11 @@ export function FinancialLedgerPanel() {
                     Categoria
                   </TableHead>
                   {drePeriods.map((p) => (
-                    <TableHead key={p.key} colSpan={3} className="text-center border-l bg-slate-100/40 dark:bg-slate-800/20 w-[180px] min-w-[180px]">
+                    <TableHead key={p.key} colSpan={4} className="text-center border-l bg-slate-100/40 dark:bg-slate-800/20 w-[240px] min-w-[240px]">
                       <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">{p.label}</div>
-                      <div className="grid grid-cols-3 text-[9px] text-slate-400 border-t pt-1 divide-x divide-slate-200 dark:divide-slate-800">
+                      <div className="grid grid-cols-4 text-[9px] text-slate-400 border-t pt-1 divide-x divide-slate-200 dark:divide-slate-800">
                         <span className="text-left pl-1">ORÇ.</span>
+                        <span className="text-center">PROJ.</span>
                         <span className="text-center">REAL.</span>
                         <span className="text-right pr-1">%</span>
                       </div>
@@ -2672,13 +2673,13 @@ export function FinancialLedgerPanel() {
               <TableBody>
                 {(dreTransactionsQ.isLoading || dreBudgetsQ.isLoading || drePendingQ.isLoading) ? (
                   <TableRow>
-                    <TableCell colSpan={drePeriods.length * 3 + 1} className="py-12 text-center text-slate-500">
+                    <TableCell colSpan={drePeriods.length * 4 + 1} className="py-12 text-center text-slate-500">
                       Carregando dados financeiros...
                     </TableCell>
                   </TableRow>
                 ) : dreData.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={drePeriods.length * 3 + 1} className="py-12 text-center text-slate-500">
+                    <TableCell colSpan={drePeriods.length * 4 + 1} className="py-12 text-center text-slate-500">
                       Nenhum lançamento ou orçamento encontrado para este período.
                     </TableCell>
                   </TableRow>
@@ -2690,11 +2691,13 @@ export function FinancialLedgerPanel() {
                       {drePeriods.map(p => {
                         const subRows = dreData.filter(r => r.category.type === "revenue");
                         const totalB = subRows.reduce((acc, curr) => acc + curr.periods[p.key].budget, 0);
+                        const totalP = subRows.reduce((acc, curr) => acc + curr.periods[p.key].projected, 0);
                         const totalR = subRows.reduce((acc, curr) => acc + curr.periods[p.key].realized, 0);
                         const pct = totalB > 0 ? (totalR / totalB) : 0;
                         return (
                           <React.Fragment key={p.key}>
                             <TableCell className="text-right text-[11px] font-semibold border-l w-[60px]">{formatMoneyBRL(totalB)}</TableCell>
+                            <TableCell className="text-right text-[11px] font-medium text-slate-500 w-[60px]">{formatMoneyBRL(totalP)}</TableCell>
                             <TableCell className="text-right text-[11px] font-bold text-blue-700 dark:text-blue-300 w-[60px]">{formatMoneyBRL(totalR)}</TableCell>
                             <TableCell className={cn("text-right text-[10px] w-[60px]", pct >= 1 ? "text-emerald-600" : "text-amber-600")}>
                                {pct > 0 ? `${(pct * 100).toFixed(0)}%` : "—"}
@@ -2755,6 +2758,7 @@ export function FinancialLedgerPanel() {
                                   </div>
                                 )}
                               </TableCell>
+                              <TableCell className="text-right text-[11px] text-slate-400 w-[60px]">{formatMoneyBRL(val.projected)}</TableCell>
                               <TableCell className="text-right text-[11px] font-medium w-[60px]">{formatMoneyBRL(val.realized)}</TableCell>
                               <TableCell className={cn("text-right text-[10px] w-[60px]", pct >= 1 ? "text-emerald-600 font-medium" : pct > 0 ? "text-amber-600" : "text-slate-300")}>
                                 {pct > 0 ? `${(pct * 100).toFixed(0)}%` : "—"}
@@ -2765,18 +2769,20 @@ export function FinancialLedgerPanel() {
                       </TableRow>
                     ))}
 
-                    <TableRow className="h-4 hover:bg-transparent"><TableCell colSpan={drePeriods.length * 3 + 1}></TableCell></TableRow>
+                    <TableRow className="h-4 hover:bg-transparent"><TableCell colSpan={drePeriods.length * 4 + 1}></TableCell></TableRow>
 
                     <TableRow className="bg-rose-50/20 dark:bg-rose-900/10 hover:bg-transparent">
                       <TableCell className="font-bold text-rose-600 dark:text-rose-400 sticky left-0 bg-white dark:bg-slate-950 z-20 border-r-2 border-slate-200 dark:border-slate-800 shadow-[4px_0_8px_rgba(0,0,0,0.05)] pl-6">(-) DESPESAS</TableCell>
                       {drePeriods.map(p => {
                         const subRows = dreData.filter(r => r.category.type !== "revenue" && r.category.type !== "other");
                         const totalB = subRows.reduce((acc, curr) => acc + curr.periods[p.key].budget, 0);
+                        const totalP = subRows.reduce((acc, curr) => acc + curr.periods[p.key].projected, 0);
                         const totalR = subRows.reduce((acc, curr) => acc + curr.periods[p.key].realized, 0);
                         const pct = totalB > 0 ? (totalR / totalB) : 0;
                         return (
                           <React.Fragment key={p.key}>
                             <TableCell className="text-right text-[11px] font-semibold border-l w-[60px]">{formatMoneyBRL(totalB)}</TableCell>
+                            <TableCell className="text-right text-[11px] font-medium text-slate-500 w-[60px]">{formatMoneyBRL(totalP)}</TableCell>
                             <TableCell className="text-right text-[11px] font-bold text-rose-700 dark:text-rose-300 w-[60px]">{formatMoneyBRL(totalR)}</TableCell>
                             <TableCell className={cn("text-right text-[10px] w-[60px]", pct > 1 ? "text-rose-600" : pct > 0 ? "text-emerald-600" : "text-slate-300")}>
                                {pct > 0 ? `${(pct * 100).toFixed(0)}%` : "—"}
@@ -2838,6 +2844,7 @@ export function FinancialLedgerPanel() {
                                   </div>
                                 )}
                               </TableCell>
+                              <TableCell className="text-right text-[11px] text-slate-400 w-[60px]">{formatMoneyBRL(val.projected)}</TableCell>
                               <TableCell className="text-right text-[11px] font-medium w-[60px]">{formatMoneyBRL(val.realized)}</TableCell>
                               <TableCell className={cn("text-right text-[10px] w-[60px]", pct > 1 ? "text-rose-600 font-medium" : pct > 0 ? "text-emerald-600" : "text-slate-300")}>
                                 {pct > 0 ? `${(pct * 100).toFixed(0)}%` : "—"}
@@ -2855,17 +2862,23 @@ export function FinancialLedgerPanel() {
                         const expRows = dreData.filter(r => r.category.type !== "revenue" && r.category.type !== "other");
                         
                         const revB = revRows.reduce((acc, curr) => acc + curr.periods[p.key].budget, 0);
+                        const revP = revRows.reduce((acc, curr) => acc + curr.periods[p.key].projected, 0);
                         const revR = revRows.reduce((acc, curr) => acc + curr.periods[p.key].realized, 0);
                         
                         const expB = expRows.reduce((acc, curr) => acc + curr.periods[p.key].budget, 0);
+                        const expP = expRows.reduce((acc, curr) => acc + curr.periods[p.key].projected, 0);
                         const expR = expRows.reduce((acc, curr) => acc + curr.periods[p.key].realized, 0);
                         
                         const netB = revB - expB;
+                        const netP = revP - expP;
                         const netR = revR - expR;
                         
                         return (
                           <React.Fragment key={p.key}>
                             <TableCell className="text-right text-[11px] border-l w-[60px]">{formatMoneyBRL(netB)}</TableCell>
+                            <TableCell className={cn("text-right text-[11px] w-[60px]", netP >= 0 ? "text-emerald-600/70" : "text-rose-600/70")}>
+                               {formatMoneyBRL(netP)}
+                            </TableCell>
                             <TableCell className={cn("text-right text-[11px] font-bold w-[60px]", netR >= 0 ? "text-emerald-600" : "text-rose-600")}>
                               {formatMoneyBRL(netR)}
                             </TableCell>
@@ -2877,7 +2890,7 @@ export function FinancialLedgerPanel() {
                       })}
                     </TableRow>
 
-                    <TableRow className="h-4 hover:bg-transparent"><TableCell colSpan={drePeriods.length * 3 + 1}></TableCell></TableRow>
+                    <TableRow className="h-4 hover:bg-transparent"><TableCell colSpan={drePeriods.length * 4 + 1}></TableCell></TableRow>
 
                     {/* Other Section */}
                     <TableRow className="bg-slate-50/50 dark:bg-slate-800/10 hover:bg-transparent">
@@ -2885,11 +2898,13 @@ export function FinancialLedgerPanel() {
                       {drePeriods.map(p => {
                         const subRows = dreData.filter(r => r.category.type === "other");
                         const totalB = subRows.reduce((acc, curr) => acc + curr.periods[p.key].budget, 0);
+                        const totalP = subRows.reduce((acc, curr) => acc + curr.periods[p.key].projected, 0);
                         const totalR = subRows.reduce((acc, curr) => acc + curr.periods[p.key].realized, 0);
                         const pct = totalB > 0 ? (totalR / totalB) : 0;
                         return (
                           <React.Fragment key={p.key}>
                             <TableCell className="text-right text-[11px] font-semibold border-l w-[60px]">{formatMoneyBRL(totalB)}</TableCell>
+                            <TableCell className="text-right text-[11px] font-medium text-slate-500 w-[60px]">{formatMoneyBRL(totalP)}</TableCell>
                             <TableCell className="text-right text-[11px] font-bold text-slate-600 dark:text-slate-400 w-[60px]">{formatMoneyBRL(totalR)}</TableCell>
                             <TableCell className={cn("text-right text-[10px] w-[60px]", pct > 1 ? "text-rose-600" : pct > 0 ? "text-emerald-600" : "text-slate-300")}>
                                {pct > 0 ? `${(pct * 100).toFixed(0)}%` : "—"}
@@ -2950,6 +2965,7 @@ export function FinancialLedgerPanel() {
                                   </div>
                                 )}
                               </TableCell>
+                              <TableCell className="text-right text-[11px] text-slate-400/70 w-[60px]">{formatMoneyBRL(val.projected)}</TableCell>
                               <TableCell className="text-right text-[11px] font-medium text-slate-400 w-[60px]">{formatMoneyBRL(val.realized)}</TableCell>
                               <TableCell className={cn("text-right text-[10px] w-[60px]", pct > 1 ? "text-rose-600 font-medium" : pct > 0 ? "text-emerald-600" : "text-slate-300")}>
                                 {pct > 0 ? `${(pct * 100).toFixed(0)}%` : "—"}
@@ -2960,7 +2976,7 @@ export function FinancialLedgerPanel() {
                       </TableRow>
                     ))}
 
-                    <TableRow className="h-4 hover:bg-transparent"><TableCell colSpan={drePeriods.length * 3 + 1}></TableCell></TableRow>
+                    <TableRow className="h-4 hover:bg-transparent"><TableCell colSpan={drePeriods.length * 4 + 1}></TableCell></TableRow>
 
                     <TableRow className="bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900 font-bold border-t-2 border-slate-900 dark:border-slate-100 hover:bg-slate-900 dark:hover:bg-slate-100">
                       <TableCell className="sticky left-0 bg-slate-900 dark:bg-slate-100 z-30 border-r-2 border-slate-800 dark:border-slate-200 shadow-[4px_0_8px_rgba(0,0,0,0.05)] overflow-hidden text-ellipsis whitespace-nowrap pl-6 rounded-l-xl">RESULTADO FINAL</TableCell>
@@ -2968,14 +2984,20 @@ export function FinancialLedgerPanel() {
                         const revRows = dreData.filter(r => r.category.type === "revenue");
                         const restRows = dreData.filter(r => r.category.type !== "revenue");
                         
+                        const revP = revRows.reduce((acc, curr) => acc + curr.periods[p.key].projected, 0);
                         const revR = revRows.reduce((acc, curr) => acc + curr.periods[p.key].realized, 0);
+                        const restP = restRows.reduce((acc, curr) => acc + curr.periods[p.key].projected, 0);
                         const restR = restRows.reduce((acc, curr) => acc + curr.periods[p.key].realized, 0);
                         
+                        const finalP = revP - restP;
                         const finalR = revR - restR;
                         
                         return (
                           <React.Fragment key={p.key}>
                             <TableCell className="text-right text-[11px] border-l w-[60px] opacity-0">—</TableCell>
+                            <TableCell className={cn("text-right text-[11px] w-[60px] font-medium", finalP >= 0 ? "text-emerald-300" : "text-rose-300")}>
+                               {formatMoneyBRL(finalP)}
+                            </TableCell>
                             <TableCell className={cn("text-right text-[11px] font-bold w-[120px] px-2")}>
                               {formatMoneyBRL(finalR)}
                             </TableCell>
@@ -2990,7 +3012,7 @@ export function FinancialLedgerPanel() {
             </Table>
           </div>
           <div className="mt-4 text-[10px] text-slate-400">
-            * Realizado inclui pagamentos confirmados e lançamentos projetados (contas a pagar/receber pendentes).
+            * Realizado inclui apenas transações conciliadas (com categoria e entidade). Projetado inclui lançamentos pendentes (contas a pagar/receber).
           </div>
         </Card>
       </TabsContent>
