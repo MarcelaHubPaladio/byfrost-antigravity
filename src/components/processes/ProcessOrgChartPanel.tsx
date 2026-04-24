@@ -25,7 +25,8 @@ import {
   UserPlus,
   Trash2,
   ChevronRight,
-  Info
+  Info,
+  Target
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -35,6 +36,7 @@ import { supabase } from '@/lib/supabase';
 import { useTenant } from '@/providers/TenantProvider';
 import { showError, showSuccess } from "@/utils/toast";
 import { OrgUserNode } from './OrgUserNode';
+import { OrgActivityNode } from './OrgActivityNode';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 
@@ -44,6 +46,7 @@ interface ProcessOrgChartPanelProps {
 
 const nodeTypes = {
   userNode: OrgUserNode,
+  activityNode: OrgActivityNode,
 };
 
 export function ProcessOrgChartPanel({ onViewCargo }: ProcessOrgChartPanelProps) {
@@ -69,7 +72,7 @@ export function ProcessOrgChartPanel({ onViewCargo }: ProcessOrgChartPanelProps)
     },
   });
 
-  // 2. Fetch Roles (to get display names)
+  // 2. Fetch Roles
   const rolesQ = useQuery({
     queryKey: ["org_chart_roles_ref", activeTenantId],
     enabled: !!activeTenantId,
@@ -116,7 +119,7 @@ export function ProcessOrgChartPanel({ onViewCargo }: ProcessOrgChartPanelProps)
     },
   });
 
-  // 5. Fetch Visual Layout (Positions) from a special process
+  // 5. Fetch Visual Layout (Positions + Activities)
   const layoutQ = useQuery({
     queryKey: ["org_chart_layout_storage", activeTenantId],
     enabled: !!activeTenantId,
@@ -128,7 +131,7 @@ export function ProcessOrgChartPanel({ onViewCargo }: ProcessOrgChartPanelProps)
         .eq("title", "__SYSTEM_ORG_CHART_LAYOUT__")
         .maybeSingle();
       if (error) throw error;
-      return data?.flowchart_json || { positions: {} };
+      return data?.flowchart_json || { positions: {}, activityNodes: [], activityEdges: [] };
     },
   });
 
@@ -141,7 +144,8 @@ export function ProcessOrgChartPanel({ onViewCargo }: ProcessOrgChartPanelProps)
       const processes = processesQ.data;
       const layout = layoutQ.data;
 
-      const newNodes: Node[] = dbNodes.map((dbNode) => {
+      // User Nodes
+      const userNodes: Node[] = dbNodes.map((dbNode) => {
         const user = users.find(u => u.user_id === dbNode.user_id);
         const role = roles.find(r => r.key === user?.role);
         const roleProcesses = processes.filter(p => p.target_role === user?.role);
@@ -161,7 +165,14 @@ export function ProcessOrgChartPanel({ onViewCargo }: ProcessOrgChartPanelProps)
         };
       });
 
-      const newEdges: Edge[] = dbNodes
+      // Activity Nodes
+      const actNodes: Node[] = (layout.activityNodes || []).map((an: any) => ({
+        ...an,
+        type: 'activityNode',
+      }));
+
+      // Edges: User to User from DB
+      const dbEdges: Edge[] = dbNodes
         .filter(n => n.parent_user_id)
         .map(n => ({
           id: `e-${n.parent_user_id}-${n.user_id}`,
@@ -171,8 +182,23 @@ export function ProcessOrgChartPanel({ onViewCargo }: ProcessOrgChartPanelProps)
           style: { stroke: '#64748b', strokeWidth: 2 },
         }));
 
-      setNodes(newNodes);
-      setEdges(newEdges);
+      // Edges involving activities from Layout
+      const actEdges: Edge[] = (layout.activityEdges || []).map((ae: any) => ({
+        ...ae,
+        animated: true,
+        style: { stroke: '#64748b', strokeWidth: 2 },
+      }));
+
+      // Merge and filter redundant edges (if user-user exists in both actEdges and dbEdges)
+      // We prioritize actEdges for layout if they exist between the same nodes
+      const allNodes = [...userNodes, ...actNodes];
+      
+      // Filter out dbEdges that are represented in actEdges (traversing activities)
+      // Actually, it's better to just show ALL edges from actEdges + any dbEdges not covered.
+      // But wait, the user defines edges in the UI. We should save ALL of them.
+      
+      setNodes(allNodes);
+      setEdges([...dbEdges, ...actEdges].filter((v, i, a) => a.findIndex(t => t.id === v.id) === i));
     }
   }, [orgNodesQ.data, usersQ.data, rolesQ.data, processesQ.data, layoutQ.data]);
 
@@ -185,15 +211,32 @@ export function ProcessOrgChartPanel({ onViewCargo }: ProcessOrgChartPanelProps)
     mutationFn: async () => {
       if (!activeTenantId) return;
 
-      // 1. Update org_nodes table with parent IDs
-      const updates = nodes.map(node => {
-        const parentEdge = edges.find(e => e.target === node.id);
-        const parentId = parentEdge ? parentEdge.source : null;
+      // Logic to resolve hierarchy for org_nodes
+      // We need to find the parent USER for each USER, even if there are activities in between
+      const findParentUser = (targetId: string): string | null => {
+        const edge = edges.find(e => e.target === targetId);
+        if (!edge) return null;
+        
+        const sourceNode = nodes.find(n => n.id === edge.source);
+        if (!sourceNode) return null;
+
+        if (sourceNode.type === 'userNode') return sourceNode.id;
+        
+        // Recursive search if source is an activity
+        return findParentUser(sourceNode.id);
+      };
+
+      const userNodes = nodes.filter(n => n.type === 'userNode');
+      const activityNodes = nodes.filter(n => n.type === 'activityNode');
+
+      // 1. Update org_nodes table
+      const updates = userNodes.map(node => {
+        const parentUserId = findParentUser(node.id);
         
         return supabase
           .from("org_nodes")
           .update({
-            parent_user_id: parentId,
+            parent_user_id: parentUserId,
             updated_at: new Date().toISOString()
           })
           .eq("tenant_id", activeTenantId)
@@ -202,9 +245,31 @@ export function ProcessOrgChartPanel({ onViewCargo }: ProcessOrgChartPanelProps)
 
       // 2. Update Layout Storage
       const positions: Record<string, { x: number, y: number }> = {};
-      nodes.forEach(n => {
-        positions[n.id] = n.position;
+      userNodes.forEach(n => {
+          positions[n.id] = n.position;
       });
+
+      // Activity nodes and edges are saved in layout
+      const activityEdges = edges.filter(e => {
+        const sourceNode = nodes.find(n => n.id === e.source);
+        const targetNode = nodes.find(n => n.id === e.target);
+        return sourceNode?.type === 'activityNode' || targetNode?.type === 'activityNode';
+      });
+
+      const flowchart_json = {
+        positions,
+        activityNodes: activityNodes.map(n => ({
+          id: n.id,
+          position: n.position,
+          data: n.data,
+          type: n.type
+        })),
+        activityEdges: activityEdges.map(e => ({
+          id: e.id,
+          source: e.source,
+          target: e.target
+        }))
+      };
 
       // Check if layout process exists
       const { data: existing } = await supabase
@@ -215,13 +280,13 @@ export function ProcessOrgChartPanel({ onViewCargo }: ProcessOrgChartPanelProps)
         .maybeSingle();
 
       const layoutUpdate = existing 
-        ? supabase.from("processes").update({ flowchart_json: { positions } }).eq("id", existing.id)
+        ? supabase.from("processes").update({ flowchart_json }).eq("id", existing.id)
         : supabase.from("processes").insert({
             tenant_id: activeTenantId,
             title: "__SYSTEM_ORG_CHART_LAYOUT__",
             process_type: 'roadmap',
-            flowchart_json: { positions },
-            deleted_at: new Date().toISOString() // Hide from list
+            flowchart_json,
+            deleted_at: new Date().toISOString()
           });
 
       const results = await Promise.all([...updates, layoutUpdate]);
@@ -229,7 +294,7 @@ export function ProcessOrgChartPanel({ onViewCargo }: ProcessOrgChartPanelProps)
       if (firstError) throw firstError;
     },
     onSuccess: () => {
-      showSuccess("Organograma salvo com sucesso!");
+      showSuccess("Organograma e Atividades salvos!");
       orgNodesQ.refetch();
       layoutQ.refetch();
     },
@@ -254,21 +319,40 @@ export function ProcessOrgChartPanel({ onViewCargo }: ProcessOrgChartPanelProps)
     onError: (err: any) => showError(err.message),
   });
 
-  const removeUserFromOrgM = useMutation({
-    mutationFn: async (userId: string) => {
-      const { error } = await supabase
-        .from("org_nodes")
-        .delete()
-        .eq("tenant_id", activeTenantId)
-        .eq("user_id", userId);
-      if (error) throw error;
+  const removeNodeM = useMutation({
+    mutationFn: async (node: Node) => {
+      if (node.type === 'userNode') {
+        const { error } = await supabase
+          .from("org_nodes")
+          .delete()
+          .eq("tenant_id", activeTenantId)
+          .eq("user_id", node.id);
+        if (error) throw error;
+      }
+      // Activities are removed from the local state and won't be saved on next Save
+      return true;
     },
-    onSuccess: () => {
-      orgNodesQ.refetch();
-      showSuccess("Usuário removido do canvas.");
+    onSuccess: (_, node) => {
+      if (node.type === 'userNode') orgNodesQ.refetch();
+      setNodes(nds => nds.filter(n => n.id !== node.id));
+      setEdges(eds => eds.filter(e => e.source !== node.id && e.target !== node.id));
+      showSuccess("Nó removido.");
     },
     onError: (err: any) => showError(err.message),
   });
+
+  const addActivity = () => {
+    const label = window.prompt("Nome da Atividade Chave:");
+    if (!label) return;
+
+    const newNode: Node = {
+      id: `act-${crypto.randomUUID()}`,
+      type: 'activityNode',
+      position: { x: 100, y: 100 },
+      data: { label },
+    };
+    setNodes(nds => [...nds, newNode]);
+  };
 
   const availableUsers = useMemo(() => {
     const list = usersQ.data || [];
@@ -282,7 +366,6 @@ export function ProcessOrgChartPanel({ onViewCargo }: ProcessOrgChartPanelProps)
 
   return (
     <div className="flex gap-6 h-[calc(100vh-200px)] animate-in fade-in duration-500">
-      {/* Sidebar: Available Users */}
       <div className="w-80 flex flex-col gap-4 bg-white rounded-[32px] border border-slate-200 shadow-sm p-6 overflow-hidden">
         <div className="flex items-center gap-2 mb-2">
             <Users className="h-5 w-5 text-[hsl(var(--byfrost-accent))]" />
@@ -318,23 +401,23 @@ export function ProcessOrgChartPanel({ onViewCargo }: ProcessOrgChartPanelProps)
                         </Button>
                     </div>
                 ))}
-                {availableUsers.length === 0 && (
-                    <div className="py-12 text-center">
-                        <Info className="h-8 w-8 text-slate-200 mx-auto mb-2" />
-                        <p className="text-[11px] text-slate-400 font-medium">Nenhum usuário para adicionar.</p>
-                    </div>
-                )}
             </div>
         </ScrollArea>
 
-        <div className="pt-4 border-t border-slate-100">
+        <div className="pt-4 border-t border-slate-100 space-y-3">
+            <Button 
+                onClick={addActivity}
+                className="w-full rounded-2xl bg-white border border-slate-200 text-slate-900 hover:bg-slate-50 shadow-sm font-bold text-xs py-5"
+            >
+                <Target className="mr-2 h-4 w-4 text-[hsl(var(--byfrost-accent))]" />
+                Adicionar Atividade Chave
+            </Button>
             <p className="text-[10px] text-slate-400 leading-relaxed italic">
-                Dica: Clique no usuário para adicioná-lo ao canvas e começar a montar sua hierarquia.
+                Crie atividades para detalhar as funções entre gestores e subordinados.
             </p>
         </div>
       </div>
 
-      {/* Canvas */}
       <div className="flex-1 flex flex-col gap-4 overflow-hidden">
         <div className="flex items-center justify-between px-2">
             <div className="flex items-center gap-3">
@@ -342,23 +425,13 @@ export function ProcessOrgChartPanel({ onViewCargo }: ProcessOrgChartPanelProps)
                 <GitFork className="h-5 w-5" />
             </div>
             <div>
-                <h2 className="text-sm font-bold text-slate-900">Visualização por Usuário</h2>
-                <p className="text-[11px] text-slate-500">Cada caixa representa um indivíduo real da sua equipe.</p>
+                <h2 className="text-sm font-bold text-slate-900">Organograma Estratégico</h2>
+                <p className="text-[11px] text-slate-500">Mapeie usuários e atividades chaves da corporação.</p>
             </div>
             </div>
             
             <div className="flex items-center gap-2">
-            <Button 
-                variant="outline" 
-                size="sm" 
-                className="rounded-xl h-9"
-                onClick={() => {
-                    orgNodesQ.refetch();
-                    usersQ.refetch();
-                    processesQ.refetch();
-                    layoutQ.refetch();
-                }}
-            >
+            <Button variant="outline" size="sm" className="rounded-xl h-9" onClick={() => qc.invalidateQueries()}>
                 <RefreshCw className="mr-2 h-3.5 w-3.5" /> Atualizar
             </Button>
             <Button 
@@ -388,21 +461,19 @@ export function ProcessOrgChartPanel({ onViewCargo }: ProcessOrgChartPanelProps)
                 <Controls className="bg-white border-slate-200 shadow-sm rounded-xl overflow-hidden mb-4 ml-4" />
                 
                 <Panel position="top-right" className="m-4">
-                    <div className="group relative">
-                        <Button 
-                            variant="destructive" 
-                            size="sm" 
-                            className="rounded-xl h-9 shadow-lg opacity-40 hover:opacity-100 transition-opacity"
-                            onClick={() => {
-                                const selected = nodes.filter(n => n.selected);
-                                if (selected.length > 0 && window.confirm(`Remover ${selected.length} usuários do organograma?`)) {
-                                    selected.forEach(n => removeUserFromOrgM.mutate(n.id));
-                                }
-                            }}
-                        >
-                            <Trash2 className="mr-2 h-3.5 w-3.5" /> Remover Selecionados
-                        </Button>
-                    </div>
+                    <Button 
+                        variant="destructive" 
+                        size="sm" 
+                        className="rounded-xl h-9 shadow-lg"
+                        onClick={() => {
+                            const selected = nodes.find(n => n.selected);
+                            if (selected && window.confirm(`Remover nó do organograma?`)) {
+                                removeNodeM.mutate(selected);
+                            }
+                        }}
+                    >
+                        <Trash2 className="mr-2 h-3.5 w-3.5" /> Remover Selecionado
+                    </Button>
                 </Panel>
             </ReactFlow>
         </div>
