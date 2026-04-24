@@ -120,7 +120,7 @@ export function FinanceControlTowerPanel() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("financial_transactions")
-        .select("id,amount,type,transaction_date,category_id")
+        .select("id,amount,type,transaction_date,category_id,entity_id")
         .eq("tenant_id", activeTenantId!)
         .gte("transaction_date", rangeStart)
         .lte("transaction_date", rangeEnd)
@@ -182,22 +182,27 @@ export function FinanceControlTowerPanel() {
   }, [categoriesQ.data]);
 
   const {
-    revenueMonth,
-    costsMonth,
+    revenueRealMonth,
+    costsRealMonth,
+    revenueProjMonth,
+    costsProjMonth,
     margin,
     budgetRevenueMonth,
     budgetCostsMonth,
     budgetDelta,
   } = useMemo(() => {
-    let rev = 0;
-    let cost = 0;
+    let revReal = 0;
+    let costReal = 0;
+    let revProj = 0;
+    let costProj = 0;
 
-    // 1. Transactions (Actual Cash Flow)
+    // 1. Transactions (Actual Cash Flow) - MUST have category AND entity
     for (const t of txQ.data ?? []) {
       const d = String(t.transaction_date ?? "");
       if (!d || d < rangeStart || d > rangeEnd) continue;
       const catId = t.category_id as string | null;
-      if (!catId) continue;
+      const entId = t.entity_id as string | null;
+      if (!catId || !entId) continue;
 
       const ctype = (categoryTypeById.get(catId) || "other").toLowerCase().trim();
       const amt = Number(t.amount || 0);
@@ -205,28 +210,30 @@ export function FinanceControlTowerPanel() {
 
       // Revenue: Credit adds, Debit subtracts. Costs: Debit adds, Credit subtracts.
       if (ctype === "revenue") {
-        rev += (typ === "credit" ? amt : -amt);
+        revReal += (typ === "credit" ? amt : -amt);
       } else if (ctype !== "other") {
-        cost += (typ === "debit" ? amt : -amt);
+        costReal += (typ === "debit" ? amt : -amt);
       }
     }
 
-    // 2. Pending Items (Forward Projection) - To match DRE "Realized" column
+    // 2. Pending Items (Forward Projection)
     const pending = pendingQ.data || { payables: [], receivables: [] };
     for (const p of pending.payables) {
       const ctype = (categoryTypeById.get(p.category_id) || "other").toLowerCase().trim();
       const amt = Number(p.amount || 0);
-      if (ctype === "revenue") rev -= amt;
-      else if (ctype !== "other") cost += amt;
+      if (ctype === "revenue") revProj -= amt;
+      else if (ctype !== "other") costProj += amt;
     }
     for (const r of pending.receivables) {
       const ctype = (categoryTypeById.get(r.category_id) || "other").toLowerCase().trim();
       const amt = Number(r.amount || 0);
-      if (ctype === "revenue") rev += amt;
-      else if (ctype !== "other") cost -= amt;
+      if (ctype === "revenue") revProj += amt;
+      else if (ctype !== "other") costProj -= amt;
     }
 
-    const m = rev > 0 ? (rev - cost) / rev : NaN;
+    const totalRev = revReal + revProj;
+    const totalCost = costReal + costProj;
+    const m = totalRev > 0 ? (totalRev - totalCost) / totalRev : NaN;
 
     let bRev = 0;
     let bCost = 0;
@@ -243,16 +250,18 @@ export function FinanceControlTowerPanel() {
       else if (ctype !== "other") bCost += expected;
     }
 
-    const realizedNet = rev - cost;
+    const outlookNet = totalRev - totalCost;
     const budgetNet = bRev - bCost;
 
     return {
-      revenueMonth: rev,
-      costsMonth: cost,
+      revenueRealMonth: revReal,
+      costsRealMonth: costReal,
+      revenueProjMonth: revProj,
+      costsProjMonth: costProj,
       margin: m,
       budgetRevenueMonth: bRev,
       budgetCostsMonth: bCost,
-      budgetDelta: realizedNet - budgetNet,
+      budgetDelta: outlookNet - budgetNet,
     };
   }, [txQ.data, pendingQ.data, rangeStart, rangeEnd, categoryTypeById, budgetsQ.data]);
 
@@ -301,20 +310,23 @@ export function FinanceControlTowerPanel() {
       projected,
       runway,
       margin,
-      revenueMonth,
-      costsMonth,
+      revenueRealMonth,
+      costsRealMonth,
+      revenueProjMonth,
+      costsProjMonth,
     };
-  }, [projectionQ.data, runwayDays, margin, revenueMonth, costsMonth]);
+  }, [projectionQ.data, runwayDays, margin, revenueRealMonth, costsRealMonth, revenueProjMonth, costsProjMonth]);
 
   const budgetChartData = useMemo(() => {
-    const realizedNet = revenueMonth - costsMonth;
+    const outlookNet = kpi.revenueRealMonth + kpi.revenueProjMonth - (kpi.costsRealMonth + kpi.costsProjMonth);
     const budgetNet = budgetRevenueMonth - budgetCostsMonth;
 
     return [
       { name: "Orçado", value: Number(budgetNet.toFixed(2)) },
-      { name: "Realizado", value: Number(realizedNet.toFixed(2)) },
+      { name: "Realizado", value: Number((kpi.revenueRealMonth - kpi.costsRealMonth).toFixed(2)) },
+      { name: "Outlook", value: Number(outlookNet.toFixed(2)) },
     ];
-  }, [revenueMonth, costsMonth, budgetRevenueMonth, budgetCostsMonth]);
+  }, [kpi, budgetRevenueMonth, budgetCostsMonth]);
 
   const budgetChartConfig = {
     value: { label: "Valor", color: "hsl(var(--byfrost-accent))" },
@@ -440,12 +452,13 @@ export function FinanceControlTowerPanel() {
           </Card>
 
           <Card className="rounded-[22px] border-slate-200 bg-white/70 p-4 shadow-sm backdrop-blur dark:border-slate-800 dark:bg-slate-950/40">
-            <div className="text-[11px] font-semibold text-slate-600 dark:text-slate-400">Margem (período)</div>
+            <div className="text-[11px] font-semibold text-slate-600 dark:text-slate-400">Margem (Outlook)</div>
             <div className="mt-1 text-lg font-semibold tracking-tight text-slate-900 dark:text-slate-100">
               {formatPct(kpi.margin)}
             </div>
-            <div className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
-              Receita {formatMoneyBRL(kpi.revenueMonth)} • Custos {formatMoneyBRL(kpi.costsMonth)}
+            <div className="mt-1 text-[11px] text-slate-500 dark:text-slate-400 leading-tight">
+              Realizado: {formatMoneyBRL(kpi.revenueRealMonth - kpi.costsRealMonth)}<br />
+              Projetado: {formatMoneyBRL(kpi.revenueProjMonth - kpi.costsProjMonth)}
             </div>
           </Card>
         </div>
@@ -457,7 +470,7 @@ export function FinanceControlTowerPanel() {
               <div>
                 <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">Orçado vs Realizado</div>
                 <div className="mt-1 text-xs text-slate-600 dark:text-slate-400">
-                  Neto (receita - custos). Orçado usa budgets mensais do cenário base.
+                  Neto (receita - custos). Outlook = Realizado + Projetado.
                 </div>
               </div>
               <div className="text-right">
