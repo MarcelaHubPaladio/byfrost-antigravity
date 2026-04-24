@@ -265,6 +265,7 @@ export function ProcessOrgChartPanel({ onViewCargo }: ProcessOrgChartPanelProps)
             roleName: role?.name || user?.role,
             processes: roleProcesses,
             activities: activities,
+            allUsers: allUsers,
             onViewCargo: () => onViewCargo?.(role?.name || user?.role || ''),
             onAddActivity: () => handleAddActivity(dbNode.user_id),
             onEditActivity: (id: string) => handleEditActivity(dbNode.user_id, id),
