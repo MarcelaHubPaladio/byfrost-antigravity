@@ -253,6 +253,7 @@ export function PartyCustomerEditorCard({
   const [address, setAddress] = useState<string>(initialAddress);
   const [city, setCity] = useState<string>(initialCity);
   const [uf, setUf] = useState<string>(initialUf);
+  const [internalLabel, setInternalLabel] = useState<string>(String(md?.internal_label ?? ""));
 
   const [portalPaletteDraft, setPortalPaletteDraft] = useState<Record<PaletteKey, string>>({
     primary: "#7c3aed",
@@ -290,6 +291,7 @@ export function PartyCustomerEditorCard({
     setAddress(initialAddress);
     setCity(initialCity);
     setUf(initialUf);
+    setInternalLabel(String(md?.internal_label ?? ""));
   }, [
     initialDisplayName,
     initialDocDigits,
@@ -322,6 +324,7 @@ export function PartyCustomerEditorCard({
       nextMetadata.city = city.trim() || null;
       // Use UF (2 letters) field; also keep legacy `state` untouched.
       nextMetadata.uf = uf.trim().slice(0, 2).toUpperCase() || null;
+      nextMetadata.internal_label = internalLabel.trim() || null;
 
       const { error } = await supabase
         .from("core_entities")
@@ -581,9 +584,20 @@ export function PartyCustomerEditorCard({
       </div>
 
       <div className="mt-4 grid gap-4">
-        <div className="grid gap-2">
-          <Label>Nome</Label>
-          <Input value={displayName} onChange={(e) => setDisplayName(e.target.value)} className="rounded-xl" />
+        <div className="grid gap-4 md:grid-cols-2">
+          <div className="grid gap-2">
+            <Label>Nome</Label>
+            <Input value={displayName} onChange={(e) => setDisplayName(e.target.value)} className="rounded-xl" />
+          </div>
+          <div className="grid gap-2">
+            <Label>Label (Nome Interno)</Label>
+            <Input 
+              value={internalLabel} 
+              onChange={(e) => setInternalLabel(e.target.value)} 
+              className="rounded-xl"
+              placeholder="Identificação interna"
+            />
+          </div>
         </div>
 
         <div className="grid gap-4 md:grid-cols-2">
