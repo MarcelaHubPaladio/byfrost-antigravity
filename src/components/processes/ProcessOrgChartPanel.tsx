@@ -268,7 +268,11 @@ export function ProcessOrgChartPanel({ onViewCargo }: ProcessOrgChartPanelProps)
           // This transform ensures we capture from the top-left of the structure
           transform: `translate(${-bounds.x + padding}px, ${-bounds.y + padding}px) scale(1)`,
         },
-        pixelRatio: 2
+        pixelRatio: 2,
+        filter: (node: any) => {
+          if (node?.classList?.contains('exclude-from-print')) return false;
+          return true;
+        }
       });
 
       // 3. Create a print-friendly window

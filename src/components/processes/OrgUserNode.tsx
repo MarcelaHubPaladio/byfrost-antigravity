@@ -122,7 +122,7 @@ export const OrgUserNode = ({ data, selected }: OrgUserNodeProps) => {
       </div>
 
       {/* Column 3: Processes */}
-      <div className="flex-[1.2] flex flex-col p-6 bg-slate-50/30 min-w-[200px]">
+      <div className="flex-[1.2] flex flex-col p-6 bg-slate-50/30 min-w-[200px] exclude-from-print">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-1.5 text-[9px] font-black text-slate-400 uppercase tracking-widest">
             <FileText className="h-3.5 w-3.5 text-slate-300" /> Processos
