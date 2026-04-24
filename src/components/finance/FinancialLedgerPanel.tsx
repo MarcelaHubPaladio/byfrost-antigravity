@@ -419,7 +419,7 @@ export function FinancialLedgerPanel() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("financial_transactions")
-        .select("amount, type, category_id, transaction_date")
+        .select("amount, type, category_id, transaction_date, entity_id")
         .eq("tenant_id", activeTenantId!)
         .gte("transaction_date", dreStartDate)
         .lte("transaction_date", dreEndDate);
