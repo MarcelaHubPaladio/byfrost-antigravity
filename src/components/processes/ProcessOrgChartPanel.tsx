@@ -235,13 +235,9 @@ export function ProcessOrgChartPanel({ onViewCargo }: ProcessOrgChartPanelProps)
     }));
   }, [setNodes]);
 
-  const currentSubordinates = useMemo(() => {
-    if (!activityModal.isOpen || !activityModal.nodeId) return [];
-    return edges
-      .filter(e => e.source === activityModal.nodeId)
-      .map(e => nodes.find(n => n.id === e.target))
-      .filter(Boolean);
-  }, [activityModal.isOpen, activityModal.nodeId, edges, nodes]);
+  const allUsers = useMemo(() => {
+    return usersQ.data || [];
+  }, [usersQ.data]);
 
   // Transform to React Flow
   useEffect(() => {
@@ -520,7 +516,7 @@ export function ProcessOrgChartPanel({ onViewCargo }: ProcessOrgChartPanelProps)
                     {activityModal.activityId ? "Editar Atividade" : "Nova Atividade Chave"}
                 </DialogTitle>
                 <DialogDescription className="text-slate-500 font-medium mt-2">
-                    Defina o nome da atividade e vincule a um subordinado se necessário.
+                    Defina o nome da atividade e vincule a um membro da equipe se necessário.
                 </DialogDescription>
             </DialogHeader>
 
@@ -539,7 +535,7 @@ export function ProcessOrgChartPanel({ onViewCargo }: ProcessOrgChartPanelProps)
 
                 <div className="space-y-2">
                     <Label className="text-[11px] font-black uppercase tracking-widest text-slate-400">
-                        SUBORDINADO RELACIONADO
+                        MEMBRO RELACIONADO
                     </Label>
                     <Select 
                         value={activityModal.subordinateId} 
@@ -548,17 +544,17 @@ export function ProcessOrgChartPanel({ onViewCargo }: ProcessOrgChartPanelProps)
                         <SelectTrigger className="h-12 rounded-xl bg-slate-50 border-slate-100 font-bold text-slate-700">
                             <SelectValue placeholder="Nenhum (Geral)" />
                         </SelectTrigger>
-                        <SelectContent className="rounded-xl border-slate-100 shadow-xl p-1">
+                        <SelectContent className="rounded-xl border-slate-100 shadow-xl p-1 max-h-[200px]">
                             <SelectItem value="none" className="rounded-lg font-bold text-slate-400">Nenhum (Geral)</SelectItem>
-                            {currentSubordinates.map(sub => (
-                                <SelectItem key={sub.id} value={sub.id} className="rounded-lg font-bold text-slate-900">
-                                    {sub.data.userName}
+                            {allUsers.map(u => (
+                                <SelectItem key={u.user_id} value={u.user_id} className="rounded-lg font-bold text-slate-900">
+                                    {u.display_name || u.email}
                                 </SelectItem>
                             ))}
                         </SelectContent>
                     </Select>
                     <p className="text-[10px] text-slate-400 font-medium italic mt-1 leading-relaxed px-1">
-                        Selecione um subordinado para indicar que esta atividade é executada sob sua supervisão ou em conjunto.
+                        Selecione qualquer pessoa da equipe para indicar que esta atividade é executada em conjunto ou sob sua responsabilidade.
                     </p>
                 </div>
             </div>
