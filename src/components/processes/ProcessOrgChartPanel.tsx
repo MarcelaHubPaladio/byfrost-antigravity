@@ -39,6 +39,22 @@ import { showError, showSuccess } from "@/utils/toast";
 import { OrgUserNode } from './OrgUserNode';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
+import { 
+  Dialog, 
+  DialogContent, 
+  DialogHeader, 
+  DialogTitle, 
+  DialogFooter,
+  DialogDescription
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Label } from "@/components/ui/label";
 
 interface ProcessOrgChartPanelProps {
   onViewCargo?: (roleName: string) => void;
@@ -56,6 +72,19 @@ export function ProcessOrgChartPanel({ onViewCargo }: ProcessOrgChartPanelProps)
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
   const [search, setSearch] = useState("");
+  
+  const [activityModal, setActivityModal] = useState<{
+    isOpen: boolean;
+    nodeId: string;
+    activityId?: string;
+    label: string;
+    subordinateId: string;
+  }>({
+    isOpen: false,
+    nodeId: "",
+    label: "",
+    subordinateId: "none"
+  });
 
   // 1. Fetch Users
   const usersQ = useQuery({
@@ -136,36 +165,65 @@ export function ProcessOrgChartPanel({ onViewCargo }: ProcessOrgChartPanelProps)
   });
 
   const handleAddActivity = useCallback((nodeId: string) => {
-    const label = window.prompt("Nome da Atividade Chave:");
-    if (!label) return;
+    setActivityModal({
+        isOpen: true,
+        nodeId,
+        label: "",
+        subordinateId: "none"
+    });
+  }, []);
 
-    const currentNodes = getNodes();
-    const currentEdges = getEdges();
+  const handleEditActivity = useCallback((nodeId: string, activityId: string) => {
+    setNodes((nds) => {
+        const node = nds.find(n => n.id === nodeId);
+        const activity = node?.data.activities?.find((a: any) => a.id === activityId);
+        
+        if (activity) {
+            setActivityModal({
+                isOpen: true,
+                nodeId,
+                activityId,
+                label: activity.label,
+                subordinateId: activity.subordinateId || "none"
+            });
+        }
+        return nds;
+    });
+  }, [setNodes]);
 
-    // Find targets of this node
-    const subordinates = currentEdges
-      .filter(e => e.source === nodeId)
-      .map(e => currentNodes.find(n => n.id === e.target))
-      .filter(Boolean);
-    
-    let subId: string | undefined = undefined;
-    if (subordinates.length > 0) {
-      const subNames = subordinates.map(s => s?.data.userName).join(", ");
-      const subChoice = window.prompt(`Esta atividade é relacionada a algum subordinado? (${subNames}). Digite o nome exato ou deixe em branco.`);
-      if (subChoice) {
-        const found = subordinates.find(s => (s?.data.userName as string)?.toLowerCase() === subChoice.toLowerCase());
-        if (found) subId = found.id;
-      }
+  const handleSaveActivity = () => {
+    if (!activityModal.label.trim()) {
+        showError("O nome da atividade é obrigatório.");
+        return;
     }
 
     setNodes((nds) => nds.map((n) => {
-      if (n.id === nodeId) {
-        const activities = [...(n.data.activities || []), { id: crypto.randomUUID(), label, subordinateId: subId }];
-        return { ...n, data: { ...n.data, activities } };
-      }
-      return n;
+        if (n.id === activityModal.nodeId) {
+            let activities = [...(n.data.activities || [])];
+            const subId = activityModal.subordinateId === "none" ? undefined : activityModal.subordinateId;
+
+            if (activityModal.activityId) {
+                // Edit
+                activities = activities.map(a => a.id === activityModal.activityId 
+                    ? { ...a, label: activityModal.label, subordinateId: subId } 
+                    : a
+                );
+            } else {
+                // Add
+                activities.push({
+                    id: crypto.randomUUID(),
+                    label: activityModal.label,
+                    subordinateId: subId
+                });
+            }
+            return { ...n, data: { ...n.data, activities } };
+        }
+        return n;
     }));
-  }, [getEdges, getNodes, setNodes]);
+
+    setActivityModal(prev => ({ ...prev, isOpen: false }));
+    showSuccess(activityModal.activityId ? "Atividade atualizada." : "Atividade adicionada.");
+  };
 
   const handleDeleteActivity = useCallback((nodeId: string, activityId: string) => {
     setNodes((nds) => nds.map((n) => {
@@ -177,23 +235,13 @@ export function ProcessOrgChartPanel({ onViewCargo }: ProcessOrgChartPanelProps)
     }));
   }, [setNodes]);
 
-  const handleEditActivity = useCallback((nodeId: string, activityId: string) => {
-    setNodes((nds) => nds.map((n) => {
-      if (n.id === nodeId) {
-        const activity = n.data.activities?.find((a: any) => a.id === activityId);
-        if (!activity) return n;
-
-        const newLabel = window.prompt("Novo nome da Atividade Chave:", activity.label);
-        if (newLabel === null) return n;
-
-        const activities = (n.data.activities || []).map((a: any) => 
-          a.id === activityId ? { ...a, label: newLabel } : a
-        );
-        return { ...n, data: { ...n.data, activities } };
-      }
-      return n;
-    }));
-  }, [setNodes]);
+  const currentSubordinates = useMemo(() => {
+    if (!activityModal.isOpen || !activityModal.nodeId) return [];
+    return edges
+      .filter(e => e.source === activityModal.nodeId)
+      .map(e => nodes.find(n => n.id === e.target))
+      .filter(Boolean);
+  }, [activityModal.isOpen, activityModal.nodeId, edges, nodes]);
 
   // Transform to React Flow
   useEffect(() => {
@@ -460,6 +508,78 @@ export function ProcessOrgChartPanel({ onViewCargo }: ProcessOrgChartPanelProps)
             </ReactFlow>
         </div>
       </div>
+
+      {/* Activity CRUD Modal */}
+      <Dialog open={activityModal.isOpen} onOpenChange={(open) => setActivityModal(prev => ({ ...prev, isOpen: open }))}>
+        <DialogContent className="sm:max-w-[425px] rounded-[32px] border-none shadow-2xl p-8">
+            <DialogHeader className="mb-6">
+                <div className="bg-[hsl(var(--byfrost-accent)/0.12)] w-fit p-3 rounded-2xl mb-4">
+                    <Target className="h-6 w-6 text-[hsl(var(--byfrost-accent))]" />
+                </div>
+                <DialogTitle className="text-2xl font-black text-slate-900 leading-tight">
+                    {activityModal.activityId ? "Editar Atividade" : "Nova Atividade Chave"}
+                </DialogTitle>
+                <DialogDescription className="text-slate-500 font-medium mt-2">
+                    Defina o nome da atividade e vincule a um subordinado se necessário.
+                </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-6 py-2">
+                <div className="space-y-2">
+                    <Label className="text-[11px] font-black uppercase tracking-widest text-slate-400">
+                        NOME DA ATIVIDADE
+                    </Label>
+                    <Input 
+                        placeholder="Ex: Revisão de Contratos" 
+                        value={activityModal.label}
+                        onChange={e => setActivityModal(prev => ({ ...prev, label: e.target.value }))}
+                        className="h-12 rounded-xl bg-slate-50 border-slate-100 focus:bg-white transition-all font-bold text-slate-900"
+                    />
+                </div>
+
+                <div className="space-y-2">
+                    <Label className="text-[11px] font-black uppercase tracking-widest text-slate-400">
+                        SUBORDINADO RELACIONADO
+                    </Label>
+                    <Select 
+                        value={activityModal.subordinateId} 
+                        onValueChange={val => setActivityModal(prev => ({ ...prev, subordinateId: val }))}
+                    >
+                        <SelectTrigger className="h-12 rounded-xl bg-slate-50 border-slate-100 font-bold text-slate-700">
+                            <SelectValue placeholder="Nenhum (Geral)" />
+                        </SelectTrigger>
+                        <SelectContent className="rounded-xl border-slate-100 shadow-xl p-1">
+                            <SelectItem value="none" className="rounded-lg font-bold text-slate-400">Nenhum (Geral)</SelectItem>
+                            {currentSubordinates.map(sub => (
+                                <SelectItem key={sub.id} value={sub.id} className="rounded-lg font-bold text-slate-900">
+                                    {sub.data.userName}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                    <p className="text-[10px] text-slate-400 font-medium italic mt-1 leading-relaxed px-1">
+                        Selecione um subordinado para indicar que esta atividade é executada sob sua supervisão ou em conjunto.
+                    </p>
+                </div>
+            </div>
+
+            <DialogFooter className="mt-10 sm:justify-start gap-2">
+                <Button 
+                    className="flex-1 rounded-[20px] h-12 bg-slate-900 text-white hover:bg-slate-800 shadow-lg shadow-slate-200 font-black tracking-wide"
+                    onClick={handleSaveActivity}
+                >
+                    SALVAR ATIVIDADE
+                </Button>
+                <Button 
+                    variant="ghost" 
+                    className="rounded-[20px] h-12 font-bold text-slate-400 hover:text-slate-600"
+                    onClick={() => setActivityModal(prev => ({ ...prev, isOpen: false }))}
+                >
+                    CANCELAR
+                </Button>
+            </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
