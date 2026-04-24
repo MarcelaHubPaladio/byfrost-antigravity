@@ -36,7 +36,6 @@ import { supabase } from '@/lib/supabase';
 import { useTenant } from '@/providers/TenantProvider';
 import { showError, showSuccess } from "@/utils/toast";
 import { OrgUserNode } from './OrgUserNode';
-import { OrgActivityNode } from './OrgActivityNode';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 
@@ -46,7 +45,6 @@ interface ProcessOrgChartPanelProps {
 
 const nodeTypes = {
   userNode: OrgUserNode,
-  activityNode: OrgActivityNode,
 };
 
 export function ProcessOrgChartPanel({ onViewCargo }: ProcessOrgChartPanelProps) {
@@ -119,7 +117,7 @@ export function ProcessOrgChartPanel({ onViewCargo }: ProcessOrgChartPanelProps)
     },
   });
 
-  // 5. Fetch Visual Layout (Positions + Activities)
+  // 5. Fetch Visual Layout
   const layoutQ = useQuery({
     queryKey: ["org_chart_layout_storage", activeTenantId],
     enabled: !!activeTenantId,
@@ -131,9 +129,68 @@ export function ProcessOrgChartPanel({ onViewCargo }: ProcessOrgChartPanelProps)
         .eq("title", "__SYSTEM_ORG_CHART_LAYOUT__")
         .maybeSingle();
       if (error) throw error;
-      return data?.flowchart_json || { positions: {}, activityNodes: [], activityEdges: [] };
+      return data?.flowchart_json || { positions: {}, activities: {} };
     },
   });
+
+  const handleAddActivity = useCallback((nodeId: string) => {
+    const label = window.prompt("Nome da Atividade Chave:");
+    if (!label) return;
+
+    // Subordinate selection logic (simplified with prompt for now, can be improved to a real select)
+    // Find targets of this node
+    const subordinates = edges
+      .filter(e => e.source === nodeId)
+      .map(e => nodes.find(n => n.id === e.target))
+      .filter(Boolean);
+    
+    let subId: string | undefined = undefined;
+    if (subordinates.length > 0) {
+      const subNames = subordinates.map(s => s?.data.userName).join(", ");
+      const subChoice = window.prompt(`Esta atividade é relacionada a algum subordinado? (${subNames}). Digite o nome exato ou deixe em branco.`);
+      if (subChoice) {
+        const found = subordinates.find(s => s?.data.userName.toLowerCase() === subChoice.toLowerCase());
+        if (found) subId = found.id;
+      }
+    }
+
+    setNodes((nds) => nds.map((n) => {
+      if (n.id === nodeId) {
+        const activities = [...(n.data.activities || []), { id: crypto.randomUUID(), label, subordinateId: subId }];
+        return { ...n, data: { ...n.data, activities } };
+      }
+      return n;
+    }));
+  }, [edges, nodes, setNodes]);
+
+  const handleDeleteActivity = useCallback((nodeId: string, activityId: string) => {
+    setNodes((nds) => nds.map((n) => {
+      if (n.id === nodeId) {
+        const activities = (n.data.activities || []).filter((a: any) => a.id !== activityId);
+        return { ...n, data: { ...n.data, activities } };
+      }
+      return n;
+    }));
+  }, [setNodes]);
+
+  const handleEditActivity = useCallback((nodeId: string, activityId: string) => {
+    const node = nodes.find(n => n.id === nodeId);
+    const activity = node?.data.activities?.find((a: any) => a.id === activityId);
+    if (!activity) return;
+
+    const newLabel = window.prompt("Novo nome da Atividade Chave:", activity.label);
+    if (newLabel === null) return;
+
+    setNodes((nds) => nds.map((n) => {
+      if (n.id === nodeId) {
+        const activities = (n.data.activities || []).map((a: any) => 
+          a.id === activityId ? { ...a, label: newLabel } : a
+        );
+        return { ...n, data: { ...n.data, activities } };
+      }
+      return n;
+    }));
+  }, [nodes, setNodes]);
 
   // Transform to React Flow
   useEffect(() => {
@@ -144,12 +201,12 @@ export function ProcessOrgChartPanel({ onViewCargo }: ProcessOrgChartPanelProps)
       const processes = processesQ.data;
       const layout = layoutQ.data;
 
-      // User Nodes
-      const userNodes: Node[] = dbNodes.map((dbNode) => {
+      const newNodes: Node[] = dbNodes.map((dbNode) => {
         const user = users.find(u => u.user_id === dbNode.user_id);
         const role = roles.find(r => r.key === user?.role);
         const roleProcesses = processes.filter(p => p.target_role === user?.role);
         const pos = layout.positions?.[dbNode.user_id] || { x: Math.random() * 400, y: Math.random() * 400 };
+        const activities = layout.activities?.[dbNode.user_id] || [];
 
         return {
           id: dbNode.user_id,
@@ -160,19 +217,16 @@ export function ProcessOrgChartPanel({ onViewCargo }: ProcessOrgChartPanelProps)
             roleKey: user?.role,
             roleName: role?.name || user?.role,
             processes: roleProcesses,
+            activities: activities,
             onViewCargo: () => onViewCargo?.(role?.name || user?.role || ''),
+            onAddActivity: () => handleAddActivity(dbNode.user_id),
+            onEditActivity: (id: string) => handleEditActivity(dbNode.user_id, id),
+            onDeleteActivity: (id: string) => handleDeleteActivity(dbNode.user_id, id),
           },
         };
       });
 
-      // Activity Nodes
-      const actNodes: Node[] = (layout.activityNodes || []).map((an: any) => ({
-        ...an,
-        type: 'activityNode',
-      }));
-
-      // Edges: User to User from DB
-      const dbEdges: Edge[] = dbNodes
+      const newEdges: Edge[] = dbNodes
         .filter(n => n.parent_user_id)
         .map(n => ({
           id: `e-${n.parent_user_id}-${n.user_id}`,
@@ -182,25 +236,10 @@ export function ProcessOrgChartPanel({ onViewCargo }: ProcessOrgChartPanelProps)
           style: { stroke: '#64748b', strokeWidth: 2 },
         }));
 
-      // Edges involving activities from Layout
-      const actEdges: Edge[] = (layout.activityEdges || []).map((ae: any) => ({
-        ...ae,
-        animated: true,
-        style: { stroke: '#64748b', strokeWidth: 2 },
-      }));
-
-      // Merge and filter redundant edges (if user-user exists in both actEdges and dbEdges)
-      // We prioritize actEdges for layout if they exist between the same nodes
-      const allNodes = [...userNodes, ...actNodes];
-      
-      // Filter out dbEdges that are represented in actEdges (traversing activities)
-      // Actually, it's better to just show ALL edges from actEdges + any dbEdges not covered.
-      // But wait, the user defines edges in the UI. We should save ALL of them.
-      
-      setNodes(allNodes);
-      setEdges([...dbEdges, ...actEdges].filter((v, i, a) => a.findIndex(t => t.id === v.id) === i));
+      setNodes(newNodes);
+      setEdges(newEdges);
     }
-  }, [orgNodesQ.data, usersQ.data, rolesQ.data, processesQ.data, layoutQ.data]);
+  }, [orgNodesQ.data, usersQ.data, rolesQ.data, processesQ.data, layoutQ.data, handleAddActivity, handleEditActivity, handleDeleteActivity]);
 
   const onConnect = useCallback(
     (params: Connection) => setEdges((eds) => addEdge({ ...params, animated: true, style: { stroke: '#64748b', strokeWidth: 2 } }, eds)),
@@ -211,32 +250,15 @@ export function ProcessOrgChartPanel({ onViewCargo }: ProcessOrgChartPanelProps)
     mutationFn: async () => {
       if (!activeTenantId) return;
 
-      // Logic to resolve hierarchy for org_nodes
-      // We need to find the parent USER for each USER, even if there are activities in between
-      const findParentUser = (targetId: string): string | null => {
-        const edge = edges.find(e => e.target === targetId);
-        if (!edge) return null;
-        
-        const sourceNode = nodes.find(n => n.id === edge.source);
-        if (!sourceNode) return null;
-
-        if (sourceNode.type === 'userNode') return sourceNode.id;
-        
-        // Recursive search if source is an activity
-        return findParentUser(sourceNode.id);
-      };
-
-      const userNodes = nodes.filter(n => n.type === 'userNode');
-      const activityNodes = nodes.filter(n => n.type === 'activityNode');
-
       // 1. Update org_nodes table
-      const updates = userNodes.map(node => {
-        const parentUserId = findParentUser(node.id);
+      const updates = nodes.map(node => {
+        const parentEdge = edges.find(e => e.target === node.id);
+        const parentId = parentEdge ? parentEdge.source : null;
         
         return supabase
           .from("org_nodes")
           .update({
-            parent_user_id: parentUserId,
+            parent_user_id: parentId,
             updated_at: new Date().toISOString()
           })
           .eq("tenant_id", activeTenantId)
@@ -245,33 +267,18 @@ export function ProcessOrgChartPanel({ onViewCargo }: ProcessOrgChartPanelProps)
 
       // 2. Update Layout Storage
       const positions: Record<string, { x: number, y: number }> = {};
-      userNodes.forEach(n => {
-          positions[n.id] = n.position;
-      });
-
-      // Activity nodes and edges are saved in layout
-      const activityEdges = edges.filter(e => {
-        const sourceNode = nodes.find(n => n.id === e.source);
-        const targetNode = nodes.find(n => n.id === e.target);
-        return sourceNode?.type === 'activityNode' || targetNode?.type === 'activityNode';
+      const activities: Record<string, any[]> = {};
+      
+      nodes.forEach(n => {
+        positions[n.id] = n.position;
+        activities[n.id] = n.data.activities || [];
       });
 
       const flowchart_json = {
         positions,
-        activityNodes: activityNodes.map(n => ({
-          id: n.id,
-          position: n.position,
-          data: n.data,
-          type: n.type
-        })),
-        activityEdges: activityEdges.map(e => ({
-          id: e.id,
-          source: e.source,
-          target: e.target
-        }))
+        activities
       };
 
-      // Check if layout process exists
       const { data: existing } = await supabase
         .from("processes")
         .select("id")
@@ -294,7 +301,7 @@ export function ProcessOrgChartPanel({ onViewCargo }: ProcessOrgChartPanelProps)
       if (firstError) throw firstError;
     },
     onSuccess: () => {
-      showSuccess("Organograma e Atividades salvos!");
+      showSuccess("Organograma e Atividades salvos com sucesso!");
       orgNodesQ.refetch();
       layoutQ.refetch();
     },
@@ -319,40 +326,21 @@ export function ProcessOrgChartPanel({ onViewCargo }: ProcessOrgChartPanelProps)
     onError: (err: any) => showError(err.message),
   });
 
-  const removeNodeM = useMutation({
-    mutationFn: async (node: Node) => {
-      if (node.type === 'userNode') {
-        const { error } = await supabase
-          .from("org_nodes")
-          .delete()
-          .eq("tenant_id", activeTenantId)
-          .eq("user_id", node.id);
-        if (error) throw error;
-      }
-      // Activities are removed from the local state and won't be saved on next Save
-      return true;
+  const removeUserFromOrgM = useMutation({
+    mutationFn: async (userId: string) => {
+      const { error } = await supabase
+        .from("org_nodes")
+        .delete()
+        .eq("tenant_id", activeTenantId)
+        .eq("user_id", userId);
+      if (error) throw error;
     },
-    onSuccess: (_, node) => {
-      if (node.type === 'userNode') orgNodesQ.refetch();
-      setNodes(nds => nds.filter(n => n.id !== node.id));
-      setEdges(eds => eds.filter(e => e.source !== node.id && e.target !== node.id));
-      showSuccess("Nó removido.");
+    onSuccess: () => {
+      orgNodesQ.refetch();
+      showSuccess("Usuário removido.");
     },
     onError: (err: any) => showError(err.message),
   });
-
-  const addActivity = () => {
-    const label = window.prompt("Nome da Atividade Chave:");
-    if (!label) return;
-
-    const newNode: Node = {
-      id: `act-${crypto.randomUUID()}`,
-      type: 'activityNode',
-      position: { x: 100, y: 100 },
-      data: { label },
-    };
-    setNodes(nds => [...nds, newNode]);
-  };
 
   const availableUsers = useMemo(() => {
     const list = usersQ.data || [];
@@ -396,24 +384,15 @@ export function ProcessOrgChartPanel({ onViewCargo }: ProcessOrgChartPanelProps)
                                 {u.role}
                             </Badge>
                         </div>
-                        <Button size="icon" variant="ghost" className="h-8 w-8 rounded-full opacity-0 group-hover:opacity-100 bg-white shadow-sm border border-slate-100">
-                            <Plus className="h-4 w-4 text-[hsl(var(--byfrost-accent))]" />
-                        </Button>
+                        <Plus className="h-4 w-4 text-[hsl(var(--byfrost-accent))]" />
                     </div>
                 ))}
             </div>
         </ScrollArea>
-
-        <div className="pt-4 border-t border-slate-100 space-y-3">
-            <Button 
-                onClick={addActivity}
-                className="w-full rounded-2xl bg-white border border-slate-200 text-slate-900 hover:bg-slate-50 shadow-sm font-bold text-xs py-5"
-            >
-                <Target className="mr-2 h-4 w-4 text-[hsl(var(--byfrost-accent))]" />
-                Adicionar Atividade Chave
-            </Button>
+        
+        <div className="pt-4 border-t border-slate-100">
             <p className="text-[10px] text-slate-400 leading-relaxed italic">
-                Crie atividades para detalhar as funções entre gestores e subordinados.
+                Clique no "+" de cada card para adicionar atividades específicas e relacioná-las a subordinados.
             </p>
         </div>
       </div>
@@ -425,8 +404,8 @@ export function ProcessOrgChartPanel({ onViewCargo }: ProcessOrgChartPanelProps)
                 <GitFork className="h-5 w-5" />
             </div>
             <div>
-                <h2 className="text-sm font-bold text-slate-900">Organograma Estratégico</h2>
-                <p className="text-[11px] text-slate-500">Mapeie usuários e atividades chaves da corporação.</p>
+                <h2 className="text-sm font-bold text-slate-900">Editor de Organograma</h2>
+                <p className="text-[11px] text-slate-500">Mapeie a estrutura e as atividades chaves de cada membro.</p>
             </div>
             </div>
             
@@ -441,7 +420,7 @@ export function ProcessOrgChartPanel({ onViewCargo }: ProcessOrgChartPanelProps)
                 disabled={saveOrgChartM.isPending}
             >
                 <Save className="mr-2 h-3.5 w-3.5" />
-                {saveOrgChartM.isPending ? "Salvando..." : "Salvar Organograma"}
+                {saveOrgChartM.isPending ? "Salvando..." : "Salvar Tudo"}
             </Button>
             </div>
         </div>
@@ -464,15 +443,15 @@ export function ProcessOrgChartPanel({ onViewCargo }: ProcessOrgChartPanelProps)
                     <Button 
                         variant="destructive" 
                         size="sm" 
-                        className="rounded-xl h-9 shadow-lg"
+                        className="rounded-xl h-9 shadow-lg opacity-40 hover:opacity-100 transition-opacity"
                         onClick={() => {
-                            const selected = nodes.find(n => n.selected);
-                            if (selected && window.confirm(`Remover nó do organograma?`)) {
-                                removeNodeM.mutate(selected);
+                            const selected = nodes.filter(n => n.selected);
+                            if (selected.length > 0 && window.confirm(`Remover selecionados?`)) {
+                                selected.forEach(n => removeUserFromOrgM.mutate(n.id));
                             }
                         }}
                     >
-                        <Trash2 className="mr-2 h-3.5 w-3.5" /> Remover Selecionado
+                        <Trash2 className="mr-2 h-3.5 w-3.5" /> Remover
                     </Button>
                 </Panel>
             </ReactFlow>
