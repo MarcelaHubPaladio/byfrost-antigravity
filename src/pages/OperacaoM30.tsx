@@ -412,8 +412,46 @@ export default function OperacaoM30() {
     staleTime: 60_000,
   });
 
+  const filteredContracts = useMemo(() => {
+    let base = contractsQ.data || [];
+
+    // Filter by Entity (Cliente)
+    if (entityFilterId !== "all") {
+      base = base.filter(c => {
+        const eid = c.customer_entity_id;
+        if (entityFilterId === "__unassigned__") return !eid;
+        return eid === entityFilterId;
+      });
+    }
+
+    // Filter by Dates
+    if (startDate) {
+      const start = new Date(startDate).getTime();
+      base = base.filter(c => new Date(c.created_at).getTime() >= start);
+    }
+    if (endDate) {
+      const end = new Date(endDate);
+      end.setHours(23, 59, 59, 999);
+      const endMs = end.getTime();
+      base = base.filter(c => new Date(c.created_at).getTime() <= endMs);
+    }
+
+    // Filter by Search Query
+    const qq = q.trim().toLowerCase();
+    if (qq) {
+      base = base.filter(c => {
+        const name = (c.customer?.display_name || "").toLowerCase();
+        const label = (c.customer?.metadata?.internal_label || "").toLowerCase();
+        const id = c.id.toLowerCase();
+        return name.includes(qq) || label.includes(qq) || id.includes(qq);
+      });
+    }
+
+    return base;
+  }, [contractsQ.data, entityFilterId, startDate, endDate, q]);
+
   const groupedM30Contracts = useMemo(() => {
-    const list = contractsQ.data || [];
+    const list = filteredContracts;
     const groups: Record<string, any[]> = {};
     for (const c of list) {
       const eid = c.customer_entity_id;
@@ -421,7 +459,7 @@ export default function OperacaoM30() {
       groups[eid].push(c);
     }
     return groups;
-  }, [contractsQ.data]);
+  }, [filteredContracts]);
 
   // Back-compat: /app?journey=<uuid> -> /app/j/<journeys.key>
   const legacyJourneyId = useMemo(() => {
