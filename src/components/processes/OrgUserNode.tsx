@@ -34,7 +34,7 @@ function firstName(name: string) {
 export const OrgUserNode = ({ data, selected }: OrgUserNodeProps) => {
   return (
     <div className={cn(
-      "group relative flex flex-row min-w-[650px] rounded-[32px] border-2 bg-white shadow-xl transition-all duration-300 divide-x divide-slate-100 overflow-hidden",
+      "group relative flex flex-row w-fit max-w-[700px] rounded-[32px] border-2 bg-white shadow-xl transition-all duration-300 divide-x divide-slate-100 overflow-hidden org-user-card",
       selected 
         ? "border-[hsl(var(--byfrost-accent))] ring-8 ring-[hsl(var(--byfrost-accent)/0.1)] -translate-y-1" 
         : "border-slate-200 hover:border-slate-300 hover:shadow-2xl"

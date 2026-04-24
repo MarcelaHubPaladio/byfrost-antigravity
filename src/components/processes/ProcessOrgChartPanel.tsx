@@ -257,85 +257,88 @@ export function ProcessOrgChartPanel({ onViewCargo }: ProcessOrgChartPanelProps)
       const element = document.querySelector('.react-flow__viewport') as HTMLElement;
       if (!element) return;
 
-      // 2. Generate PNG with manual bounds to ensure nothing is cut
-      const dataUrl = await toPng(element, { 
-        backgroundColor: '#fff',
-        width: bounds.width + padding * 2,
-        height: bounds.height + padding * 2,
-        style: {
-          width: `${bounds.width + padding * 2}px`,
-          height: `${bounds.height + padding * 2}px`,
-          // This transform ensures we capture from the top-left of the structure
-          transform: `translate(${-bounds.x + padding}px, ${-bounds.y + padding}px) scale(1)`,
-        },
-        pixelRatio: 2,
-        filter: (node: any) => {
-          if (node?.classList?.contains('exclude-from-print')) return false;
-          return true;
-        }
-      });
+      // 2. Temporarily hide columns to allow layout reflow for capture
+      const cols = document.querySelectorAll('.exclude-from-print');
+      cols.forEach((c: any) => c.style.display = 'none');
 
-      // 3. Create a print-friendly window
-      const printWindow = window.open('', '_blank');
-      if (!printWindow) return;
+      try {
+        const dataUrl = await toPng(element, { 
+          backgroundColor: '#fff',
+          width: bounds.width + padding * 2,
+          height: bounds.height + padding * 2,
+          style: {
+            width: `${bounds.width + padding * 2}px`,
+            height: `${bounds.height + padding * 2}px`,
+            transform: `translate(${-bounds.x + padding}px, ${-bounds.y + padding}px) scale(1)`,
+          },
+          pixelRatio: 2
+        });
 
-      printWindow.document.write(`
-        <html>
-          <head>
-            <title>Organograma - Byfrost</title>
-            <style>
-              body { 
-                margin: 0; 
-                padding: 40px;
-                display: flex; 
-                flex-direction: column;
-                align-items: center; 
-                background: #f8fafc; 
-                font-family: sans-serif;
-              }
-              img { 
-                max-width: 100%; 
-                height: auto; 
-                box-shadow: 0 20px 50px rgba(0,0,0,0.1);
-                border-radius: 20px;
-                background: white;
-              }
-              .header {
-                width: 100%;
-                max-width: 1200px;
-                display: flex;
-                justify-content: space-between;
-                align-items: center;
-                margin-bottom: 30px;
-              }
-              .title { font-weight: 900; font-size: 24px; color: #0f172a; }
-              .date { font-weight: 500; font-size: 14px; color: #64748b; }
-              
-              @media print {
-                @page { size: landscape; margin: 0; }
-                body { padding: 0; background: white; }
-                img { box-shadow: none; border-radius: 0; }
-                .header { display: none; }
-              }
-            </style>
-          </head>
-          <body>
-            <div class="header">
-                <span class="title">ORGANOGRAMA CORPORATIVO</span>
-                <span class="date">${new Date().toLocaleDateString('pt-BR')}</span>
-            </div>
-            <img src="${dataUrl}" />
-            <script>
-              window.onload = () => {
-                setTimeout(() => {
-                  window.print();
-                }, 800);
-              }
-            </script>
-          </body>
-        </html>
-      `);
-      printWindow.document.close();
+        // 3. Create a print-friendly window
+        const printWindow = window.open('', '_blank');
+        if (!printWindow) return;
+
+        printWindow.document.write(`
+          <html>
+            <head>
+              <title>Organograma - Byfrost</title>
+              <style>
+                body { 
+                  margin: 0; 
+                  padding: 40px;
+                  display: flex; 
+                  flex-direction: column;
+                  align-items: center; 
+                  background: #f8fafc; 
+                  font-family: sans-serif;
+                }
+                img { 
+                  max-width: 100%; 
+                  height: auto; 
+                  box-shadow: 0 20px 50px rgba(0,0,0,0.1);
+                  border-radius: 20px;
+                  background: white;
+                }
+                .header {
+                  width: 100%;
+                  max-width: 1200px;
+                  display: flex;
+                  justify-content: space-between;
+                  align-items: center;
+                  margin-bottom: 30px;
+                }
+                .title { font-weight: 900; font-size: 24px; color: #0f172a; }
+                .date { font-weight: 500; font-size: 14px; color: #64748b; }
+                
+                @media print {
+                  @page { size: landscape; margin: 0; }
+                  body { padding: 0; background: white; }
+                  img { box-shadow: none; border-radius: 0; }
+                  .header { display: none; }
+                }
+              </style>
+            </head>
+            <body>
+              <div class="header">
+                  <span class="title">ORGANOGRAMA CORPORATIVO</span>
+                  <span class="date">${new Date().toLocaleDateString('pt-BR')}</span>
+              </div>
+              <img src="${dataUrl}" />
+              <script>
+                window.onload = () => {
+                  setTimeout(() => {
+                    window.print();
+                  }, 800);
+                }
+              </script>
+            </body>
+          </html>
+        `);
+        printWindow.document.close();
+      } finally {
+        // Restore columns
+        cols.forEach((c: any) => c.style.display = '');
+      }
     } catch (err: any) {
       console.error(err);
       showError("Erro ao gerar impressão: " + err.message);
