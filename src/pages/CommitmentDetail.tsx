@@ -379,13 +379,13 @@ export default function CommitmentDetail() {
     // We use allTenantCasesQ instead of casesQ for broader visibility
     const cases = allTenantCasesQ.data ?? [];
     
-    // Map cases to deliverables
+    // Map cases to deliverables (only for deliverables in the current commitment)
+    const deliverableIds = new Set(deliverables.map(d => d.id));
     const deliverableCasesMap = new Map<string, any[]>();
     for (const c of cases) {
-      if (!c.deliverable_id) continue;
+      if (!c.deliverable_id || !deliverableIds.has(c.deliverable_id)) continue;
       if (!deliverableCasesMap.has(c.deliverable_id)) deliverableCasesMap.set(c.deliverable_id, []);
       deliverableCasesMap.get(c.deliverable_id)!.push(c);
-      console.log(`[CRM] Mapping case ${c.id} to deliverable ${c.deliverable_id}`);
     }
 
     const merged = deliverables.map(d => ({
