@@ -15,6 +15,7 @@ function err(message: string, status = 400, detail?: any) {
 
 type OrchestrateInput = {
   commitment_id?: string;
+  force?: boolean;
 };
 
 serve(async (req) => {
@@ -26,6 +27,7 @@ serve(async (req) => {
   try {
     const input = (await req.json().catch(() => ({}))) as OrchestrateInput;
     const commitmentId = String(input?.commitment_id ?? "").trim();
+    const force = Boolean(input?.force);
     if (!commitmentId) return err("missing_commitment_id", 400);
 
     const supabase = createSupabaseAdmin();
@@ -48,9 +50,9 @@ serve(async (req) => {
     }
 
     const tenantId = String((commitment as any).tenant_id);
-    const status = String((commitment as any).status ?? "");
+    const status = String((commitment as any).status ?? "").toLowerCase();
 
-    if (status !== "active") {
+    if (status !== "active" && !force) {
       console.log(`[${fn}] Commitment ${commitmentId} is not active (status: ${status}). Skipping.`);
       return json({ ok: true, skipped: true, reason: "commitment_not_active", tenant_id: tenantId, commitment_id: commitmentId });
     }
@@ -71,7 +73,7 @@ serve(async (req) => {
       return err("deliverables_check_failed", 500, { message: eErr.message });
     }
 
-    if ((existingAny as any)?.id) {
+    if ((existingAny as any)?.id && !force) {
       console.log(`[${fn}] deliverables already exist for commitment ${commitmentId}. Skipping.`);
       return json({ ok: true, skipped: true, reason: "deliverables_already_generated", tenant_id: tenantId, commitment_id: commitmentId });
     }
@@ -124,7 +126,19 @@ serve(async (req) => {
         return err("deliverable_templates_query_failed", 500, { message: tErr.message, offering_entity_id: offeringEntityId });
       }
 
-      for (const tpl of (templates ?? []) as any[]) {
+      const tTemplates = (templates ?? []) as any[];
+      if (tTemplates.length === 0) {
+        console.warn(`[${fn}] No templates found for offering ${offeringEntityId} (item ${itemId})`);
+        // Log a specific event to help debugging why no deliverables were created
+        await supabase.rpc("log_commercial_commitment_event", {
+          p_tenant_id: tenantId,
+          p_commitment_id: commitmentId,
+          p_event_type: "orchestrator_warning",
+          p_payload: { note: "no_templates_found", offering_id: offeringEntityId, item_id: itemId },
+        });
+      }
+
+      for (const tpl of tTemplates) {
         const templateId = String(tpl.id);
         const overrides = it.metadata?.deliverable_overrides ?? {};
         const overrideQty = overrides[templateId]?.quantity;
@@ -137,6 +151,24 @@ serve(async (req) => {
         console.log(`[${fn}] Generating ${finalQty} deliverables for item ${itemId} (template: ${templateId}, base: ${baseQty}, multiplier: ${itemMultiplier})`);
 
         for (let q = 0; q < Math.max(0, finalQty); q++) {
+          const seq = q + 1;
+
+          // Per-deliverable idempotency: avoid duplicates if we are in 'force' mode or rerunning.
+          const { data: exists } = await supabase
+            .from("deliverables")
+            .select("id")
+            .eq("tenant_id", tenantId)
+            .eq("commitment_id", commitmentId)
+            .eq("template_id", templateId)
+            .contains("metadata", { commitment_item_id: itemId, seq })
+            .is("deleted_at", null)
+            .maybeSingle();
+
+          if (exists) {
+            console.log(`[${fn}] Deliverable for item ${itemId} tpl ${templateId} seq ${seq} already exists. Skipping.`);
+            continue;
+          }
+
           const { data: inserted, error: dErr } = await supabase
             .from("deliverables")
             .insert({

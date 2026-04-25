@@ -1397,7 +1397,10 @@ serve(async (req: any) => {
               "Content-Type": "application/json",
               Authorization: `Bearer ${serviceKey}`,
             },
-            body: JSON.stringify({ commitment_id: commitmentId }),
+            body: JSON.stringify({ 
+              commitment_id: commitmentId, 
+              force: Boolean(manualCommitmentId) 
+            }),
           });
 
           const text = await res.text();
