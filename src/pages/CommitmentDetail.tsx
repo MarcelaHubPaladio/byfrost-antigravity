@@ -460,6 +460,12 @@ export default function CommitmentDetail() {
           run_after: new Date().toISOString()
         });
       if (error) throw error;
+
+      // Kick the jobs-processor immediately so the user doesn't have to wait for the cron
+      supabase.functions.invoke('jobs-processor', {
+        body: { commitment_id: commitmentId }
+      }).catch(err => console.warn("Failed to kick jobs-processor", err));
+
       showSuccess("Solicitação de re-processamento enviada. Aguarde alguns segundos.");
       
       // Auto-refresh deliverables after 5s
@@ -623,66 +629,66 @@ export default function CommitmentDetail() {
               </div>
             </div>
 
-            <div className="grid gap-4 lg:grid-cols-4">
-              {activeTenantId && canSeeCapacity && (
-                <Card className="rounded-2xl border-slate-200 p-4 lg:col-span-1">
-                  <div className="text-sm font-semibold text-slate-900">Capacidade (previsão)</div>
-                  <div className="mt-4">
-                    <CapacitySemaphore tenantId={activeTenantId} />
+            {/* Se não existem entregáveis (ou no-items), mostramos o card de sincronização e o relacionamento. Se já existem, limpamos a UI. */}
+            {(deliverablesQ.data ?? []).length === 0 ? (
+              <div className="grid gap-4 lg:grid-cols-4">
+                {activeTenantId && canSeeCapacity && (
+                  <Card className="rounded-2xl border-slate-200 p-4 lg:col-span-1">
+                    <div className="text-sm font-semibold text-slate-900">Capacidade (previsão)</div>
+                    <div className="mt-4">
+                      <CapacitySemaphore tenantId={activeTenantId} />
+                    </div>
+                  </Card>
+                )}
+
+                <Card className="rounded-2xl border-slate-200 p-4 lg:col-span-2">
+                  <div className="text-sm font-semibold text-slate-900">Relacionamento com Propostas</div>
+                  <div className="mt-3 space-y-2">
+                    {proposalsQ.isLoading ? (
+                      <div className="text-xs text-slate-400">Carregando propostas...</div>
+                    ) : (proposalsQ.data ?? []).length === 0 ? (
+                      <div className="text-xs text-slate-500 italic">Este compromisso não está vinculado a nenhuma proposta pública ainda.</div>
+                    ) : (
+                      (proposalsQ.data ?? []).map(p => (
+                        <div key={p.id} className="flex items-center justify-between rounded-xl border bg-slate-50 p-2 px-3">
+                          <div className="flex items-center gap-2">
+                            <Link2 className="h-3 w-3 text-slate-400" />
+                            <div className="text-xs font-semibold text-slate-700">Proposta {p.token.slice(0,6)}…</div>
+                            <Badge variant="outline" className="text-[10px] uppercase font-mono">{p.status}</Badge>
+                          </div>
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            className="h-7 text-[10px] font-bold text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                            onClick={() => nav(`/app/entities/${commitmentQ.data?.customer_entity_id}?tab=proposal`)}
+                          >
+                            GERENCIAR
+                          </Button>
+                        </div>
+                      ))
+                    )}
                   </div>
                 </Card>
-              )}
 
-              <Card className="rounded-2xl border-slate-200 p-4 lg:col-span-2">
-                <div className="text-sm font-semibold text-slate-900">Relacionamento com Propostas</div>
-                <div className="mt-3 space-y-2">
-                  {proposalsQ.isLoading ? (
-                    <div className="text-xs text-slate-400">Carregando propostas...</div>
-                  ) : (proposalsQ.data ?? []).length === 0 ? (
-                    <div className="text-xs text-slate-500 italic">Este compromisso não está vinculado a nenhuma proposta pública ainda.</div>
-                  ) : (
-                    (proposalsQ.data ?? []).map(p => (
-                      <div key={p.id} className="flex items-center justify-between rounded-xl border bg-slate-50 p-2 px-3">
-                        <div className="flex items-center gap-2">
-                          <Link2 className="h-3 w-3 text-slate-400" />
-                          <div className="text-xs font-semibold text-slate-700">Proposta {p.token.slice(0,6)}…</div>
-                          <Badge variant="outline" className="text-[10px] uppercase">{p.status}</Badge>
-                        </div>
-                        <Button 
-                          variant="ghost" 
-                          size="sm" 
-                          className="h-7 text-[10px] font-bold text-blue-600 hover:text-blue-700 hover:bg-blue-50"
-                          onClick={() => nav(`/app/entities/${commitmentQ.data?.customer_entity_id}?tab=proposal`)}
-                        >
-                          GERENCIAR
-                        </Button>
-                      </div>
-                    ))
-                  )}
-                </div>
-                <div className="mt-3 text-[10px] text-slate-400">
-                  Compromissos são vinculados a propostas para aprovação do cliente.
-                </div>
-              </Card>
-
-              <Card className="rounded-2xl border-slate-200 p-4 lg:col-span-1">
-                <div className="text-sm font-semibold text-slate-900">Sincronização</div>
-                <div className="mt-3 space-y-3">
-                  <div className="text-[11px] text-slate-600 leading-relaxed">
-                    Se os entregáveis não apareceram ou precisam ser atualizados conforme o contrato.
+                <Card className="rounded-2xl border-slate-200 p-4 lg:col-span-1">
+                  <div className="text-sm font-semibold text-slate-900">Sincronização</div>
+                  <div className="mt-3 space-y-3">
+                    <div className="text-[11px] text-slate-600 leading-relaxed">
+                      Se os entregáveis não apareceram ou precisam ser atualizados conforme o contrato.
+                    </div>
+                    <Button 
+                      variant="outline" 
+                      className="w-full rounded-xl border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100 h-9 text-xs"
+                      onClick={manualSync}
+                      disabled={saving}
+                    >
+                      <RefreshCw className={cn("h-3.5 w-3.5 mr-2", saving && "animate-spin")} /> 
+                      Solicitar Re-processamento
+                    </Button>
                   </div>
-                  <Button 
-                    variant="outline" 
-                    className="w-full rounded-xl border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100 h-9 text-xs"
-                    onClick={manualSync}
-                    disabled={saving}
-                  >
-                    <RefreshCw className={cn("h-3.5 w-3.5 mr-2", saving && "animate-spin")} /> 
-                    Solicitar Re-processamento
-                  </Button>
-                </div>
-              </Card>
-            </div>
+                </Card>
+              </div>
+            ) : null}
 
             {/* Execution Stats Summary */}
             {commitmentQ.data?.commitment_type === 'contract' && (
