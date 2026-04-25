@@ -209,6 +209,7 @@ export function PartyProposalCard({
   const [paymentMethod, setPaymentMethod] = useState<string>("");
   const [installmentsDueDate, setInstallmentsDueDate] = useState<string>("");
   const [scopeNotes, setScopeNotes] = useState<string>("");
+  const [proposalStatus, setProposalStatus] = useState<string>("draft");
 
   // Product search state
   const [searchQuery, setSearchQuery] = useState("");
@@ -380,6 +381,7 @@ export function PartyProposalCard({
     setPaymentMethod(safe(activeProposal.approval_json?.payment_method));
     setInstallmentsDueDate(safe(activeProposal.approval_json?.installments_due_date));
     setScopeNotes(safe(activeProposal.approval_json?.scope_notes));
+    setProposalStatus(activeProposal.status || "draft");
   }, [activeProposal?.id, templates.length]);
 
   const selectedIds = useMemo(() => {
@@ -560,7 +562,11 @@ export function PartyProposalCard({
 
       const { error } = await supabase
         .from("party_proposals")
-        .update({ selected_commitment_ids: selectedIds, approval_json: nextApprovalJson })
+        .update({ 
+          selected_commitment_ids: selectedIds, 
+          approval_json: nextApprovalJson,
+          status: proposalStatus
+        })
         .eq("tenant_id", tenantId)
         .eq("id", activeProposal.id)
         .is("deleted_at", null);
@@ -570,6 +576,29 @@ export function PartyProposalCard({
       await qc.invalidateQueries({ queryKey: ["party_proposals", tenantId, partyId] });
     } catch (e: any) {
       showError(e?.message ?? "Erro ao salvar proposta");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDeleteProposal = async () => {
+    if (!activeProposal) return;
+    if (!confirm("Deseja realmente excluir esta proposta? Esta ação não pode ser desfeita.")) return;
+
+    setSaving(true);
+    try {
+      const { error } = await supabase
+        .from("party_proposals")
+        .update({ deleted_at: new Date().toISOString() })
+        .eq("tenant_id", tenantId)
+        .eq("id", activeProposal.id);
+      if (error) throw error;
+
+      showSuccess("Proposta excluída.");
+      setActiveProposalId(null);
+      await qc.invalidateQueries({ queryKey: ["party_proposals", tenantId, partyId] });
+    } catch (e: any) {
+      showError(e?.message ?? "Erro ao excluir proposta");
     } finally {
       setSaving(false);
     }
@@ -700,11 +729,30 @@ export function PartyProposalCard({
                 <div className="mt-0.5 text-sm font-semibold text-slate-900">
                   {activeProposal ? `${activeProposal.status} • ${String(activeProposal.id).slice(0, 8)}…` : "—"}
                 </div>
-                {activeProposal?.autentique_json?.status ? (
-                  <div className="mt-1 text-xs text-slate-600">Assinatura: {String(activeProposal.autentique_json.status)}</div>
+                {activeProposal ? (
+                  <div className="mt-2 flex items-center gap-2">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase">Status:</span>
+                    <Select value={proposalStatus} onValueChange={setProposalStatus} disabled={saving}>
+                      <SelectTrigger className="h-7 w-[140px] rounded-lg text-[11px] font-bold uppercase">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="draft">draft</SelectItem>
+                        <SelectItem value="approved">approved</SelectItem>
+                        <SelectItem value="contract_sent">contract_sent</SelectItem>
+                        <SelectItem value="signed">signed</SelectItem>
+                        <SelectItem value="active">active</SelectItem>
+                        <SelectItem value="cancelled">cancelled</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
                 ) : null}
               </div>
               <div className="flex items-center gap-2">
+                <Button variant="outline" className="rounded-xl border-red-200 text-red-600 hover:bg-red-50" onClick={handleDeleteProposal} disabled={saving || !activeProposal}>
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Excluir
+                </Button>
                 <Button variant="outline" className="rounded-xl" onClick={saveActiveProposal} disabled={saving || !activeProposal}>
                   {saving ? "Salvando…" : "Salvar proposta"}
                 </Button>
