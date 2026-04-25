@@ -27,6 +27,8 @@ import {
   Rocket,
   FileText,
   Package,
+  Link2,
+  Zap,
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import {
@@ -356,6 +358,22 @@ export default function CommitmentDetail() {
     staleTime: 30_000,
   });
 
+  const proposalsQ = useQuery({
+    queryKey: ["commitment_proposals", activeTenantId, commitmentId],
+    enabled: Boolean(activeTenantId && commitmentId),
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("party_proposals")
+        .select("id, token, status, created_at")
+        .filter("selected_commitment_ids", "cs", `{${commitmentId}}`)
+        .eq("tenant_id", activeTenantId!)
+        .is("deleted_at", null);
+      if (error) throw error;
+      return data || [];
+    },
+    staleTime: 10_000,
+  });
+
   const groupedDeliverables = useMemo(() => {
     const deliverables = deliverablesQ.data ?? [];
     // We use allTenantCasesQ instead of casesQ for broader visibility
@@ -423,6 +441,34 @@ export default function CommitmentDetail() {
       nav("/app/commitments");
     } catch (err: any) {
       showError(err.message ?? "Erro ao excluir");
+      setSaving(false);
+    }
+  };
+
+  const manualSync = async () => {
+    if (!activeTenantId || !commitmentId) return;
+    setSaving(true);
+    try {
+      const { error } = await supabase
+        .from("job_queue")
+        .insert({
+          tenant_id: activeTenantId,
+          type: 'COMMITMENT_ORCHESTRATE',
+          idempotency_key: `RETRY_${commitmentId}_${Date.now()}`,
+          payload_json: { commitment_id: commitmentId },
+          status: 'pending',
+          run_after: new Date().toISOString()
+        });
+      if (error) throw error;
+      showSuccess("Solicitação de re-processamento enviada. Aguarde alguns segundos.");
+      
+      // Auto-refresh deliverables after 5s
+      setTimeout(() => {
+        deliverablesQ.refetch();
+      }, 5000);
+    } catch (err: any) {
+      showError(err.message ?? "Erro ao solicitar sincronização");
+    } finally {
       setSaving(false);
     }
   };
@@ -577,12 +623,66 @@ export default function CommitmentDetail() {
               </div>
             </div>
 
-            {activeTenantId && canSeeCapacity && (
-              <Card className="rounded-2xl border-slate-200 p-4">
-                <div className="mb-2 text-sm font-semibold text-slate-900">Capacidade (previsão)</div>
-                <CapacitySemaphore tenantId={activeTenantId} />
+            <div className="grid gap-4 lg:grid-cols-4">
+              {activeTenantId && canSeeCapacity && (
+                <Card className="rounded-2xl border-slate-200 p-4 lg:col-span-1">
+                  <div className="text-sm font-semibold text-slate-900">Capacidade (previsão)</div>
+                  <div className="mt-4">
+                    <CapacitySemaphore tenantId={activeTenantId} />
+                  </div>
+                </Card>
+              )}
+
+              <Card className="rounded-2xl border-slate-200 p-4 lg:col-span-2">
+                <div className="text-sm font-semibold text-slate-900">Relacionamento com Propostas</div>
+                <div className="mt-3 space-y-2">
+                  {proposalsQ.isLoading ? (
+                    <div className="text-xs text-slate-400">Carregando propostas...</div>
+                  ) : (proposalsQ.data ?? []).length === 0 ? (
+                    <div className="text-xs text-slate-500 italic">Este compromisso não está vinculado a nenhuma proposta pública ainda.</div>
+                  ) : (
+                    (proposalsQ.data ?? []).map(p => (
+                      <div key={p.id} className="flex items-center justify-between rounded-xl border bg-slate-50 p-2 px-3">
+                        <div className="flex items-center gap-2">
+                          <Link2 className="h-3 w-3 text-slate-400" />
+                          <div className="text-xs font-semibold text-slate-700">Proposta {p.token.slice(0,6)}…</div>
+                          <Badge variant="outline" className="text-[10px] uppercase">{p.status}</Badge>
+                        </div>
+                        <Button 
+                          variant="ghost" 
+                          size="sm" 
+                          className="h-7 text-[10px] font-bold text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                          onClick={() => nav(`/app/entities/${commitmentQ.data?.customer_entity_id}?tab=proposal`)}
+                        >
+                          GERENCIAR
+                        </Button>
+                      </div>
+                    ))
+                  )}
+                </div>
+                <div className="mt-3 text-[10px] text-slate-400">
+                  Compromissos são vinculados a propostas para aprovação do cliente.
+                </div>
               </Card>
-            )}
+
+              <Card className="rounded-2xl border-slate-200 p-4 lg:col-span-1">
+                <div className="text-sm font-semibold text-slate-900">Sincronização</div>
+                <div className="mt-3 space-y-3">
+                  <div className="text-[11px] text-slate-600 leading-relaxed">
+                    Se os entregáveis não apareceram ou precisam ser atualizados conforme o contrato.
+                  </div>
+                  <Button 
+                    variant="outline" 
+                    className="w-full rounded-xl border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100 h-9 text-xs"
+                    onClick={manualSync}
+                    disabled={saving}
+                  >
+                    <RefreshCw className={cn("h-3.5 w-3.5 mr-2", saving && "animate-spin")} /> 
+                    Solicitar Re-processamento
+                  </Button>
+                </div>
+              </Card>
+            </div>
 
             {/* Execution Stats Summary */}
             {commitmentQ.data?.commitment_type === 'contract' && (
