@@ -449,22 +449,10 @@ export default function CommitmentDetail() {
     if (!activeTenantId || !commitmentId) return;
     setSaving(true);
     try {
-      const { error } = await supabase
-        .from("job_queue")
-        .insert({
-          tenant_id: activeTenantId,
-          type: 'COMMITMENT_ORCHESTRATE',
-          idempotency_key: `RETRY_${commitmentId}_${Date.now()}`,
-          payload_json: { commitment_id: commitmentId },
-          status: 'pending',
-          run_after: new Date().toISOString()
-        });
+      const { error } = await supabase.rpc('request_commitment_orchestration', { 
+        p_commitment_id: commitmentId 
+      });
       if (error) throw error;
-
-      // Kick the jobs-processor immediately so the user doesn't have to wait for the cron
-      supabase.functions.invoke('jobs-processor', {
-        body: { commitment_id: commitmentId }
-      }).catch(err => console.warn("Failed to kick jobs-processor", err));
 
       showSuccess("Solicitação de re-processamento enviada. Aguarde alguns segundos.");
       
