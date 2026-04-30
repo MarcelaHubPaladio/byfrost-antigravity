@@ -797,6 +797,10 @@ export default function Orders() {
                         <Text style={styles.infoValue}>{f?.payment_method || "—"}</Text>
                       </View>
                       <View style={{ flexDirection: "row", gap: 3 }}>
+                        <Text style={styles.infoLabel}>Status Pgto:</Text>
+                        <Text style={styles.infoValue}>{f?.billing_status || "—"}</Text>
+                      </View>
+                      <View style={{ flexDirection: "row", gap: 3 }}>
                         <Text style={styles.infoLabel}>Data:</Text>
                         <Text style={styles.infoValue}>{f?.sale_date_text || format(new Date(r.created_at), "dd/MM/yyyy")}</Text>
                       </View>
@@ -811,7 +815,7 @@ export default function Orders() {
                       </View>
                       {items.map((it, idx) => (
                         <View key={idx} style={styles.itemRow}>
-                          <Text style={styles.colDesc}>{it.description || "—"}</Text>
+                          <Text style={styles.colDesc}>{(it.description || "—").toUpperCase()}</Text>
                           <Text style={styles.colQty}>{it.qty}</Text>
                           <Text style={styles.colPrice}>{formatMoneyBRL(it.price || 0)}</Text>
                           <Text style={styles.colTotal}>{formatMoneyBRL(it.total || 0)}</Text>
