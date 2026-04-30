@@ -793,6 +793,10 @@ export default function Orders() {
                         <Text style={styles.infoValue}>{r.users_profile?.display_name || "—"}</Text>
                       </View>
                       <View style={{ flexDirection: "row", gap: 3 }}>
+                        <Text style={styles.infoLabel}>Forma Pgto:</Text>
+                        <Text style={styles.infoValue}>{f?.payment_method || "—"}</Text>
+                      </View>
+                      <View style={{ flexDirection: "row", gap: 3 }}>
                         <Text style={styles.infoLabel}>Data:</Text>
                         <Text style={styles.infoValue}>{f?.sale_date_text || format(new Date(r.created_at), "dd/MM/yyyy")}</Text>
                       </View>
