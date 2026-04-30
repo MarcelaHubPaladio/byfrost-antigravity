@@ -700,68 +700,112 @@ export default function Orders() {
       
       if (itemsErr) throw itemsErr;
 
-      const summaryMap = new Map<string, { code: string, description: string, qty: number, total: number }>();
+      const itemsByCase = new Map<string, any[]>();
       (allItems ?? []).forEach(it => {
-        const key = `${it.code || ""}-${it.description || ""}`;
-        const cur = summaryMap.get(key) || { code: it.code || "", description: it.description || "", qty: 0, total: 0 };
-        cur.qty += Number(it.qty || 0);
-        cur.total += Number(it.total || 0);
-        summaryMap.set(key, cur);
+        const arr = itemsByCase.get(it.case_id) ?? [];
+        arr.push(it);
+        itemsByCase.set(it.case_id, arr);
       });
-      const summary = Array.from(summaryMap.values()).sort((a,b) => b.qty - a.qty);
 
-      const tenantName = "Byfrost";
       const styles = StyleSheet.create({
-        page: { padding: 30, fontSize: 10, fontFamily: "Helvetica" },
-        header: { marginBottom: 20, borderBottom: 1, borderBottomColor: "#e2e8f0", pb: 10 },
-        title: { fontSize: 18, fontWeight: "bold", color: "#1e293b" },
-        subtitle: { fontSize: 10, color: "#64748b", marginTop: 4 },
-        sectionTitle: { fontSize: 12, fontWeight: "bold", color: "#1e40af", marginTop: 20, marginBottom: 10 },
-        table: { width: "auto", borderStyle: "solid", borderWidth: 1, borderColor: "#e2e8f0", borderBottomWidth: 0 },
-        tableRow: { flexDirection: "row", borderBottomColor: "#e2e8f0", borderBottomWidth: 1, minHeight: 25, alignItems: "center" },
-        tableHeader: { backgroundColor: "#f8fafc" },
-        tableColHeader: { width: "20%", borderStyle: "solid", padding: 5, fontWeight: "bold" },
-        tableColDesc: { width: "40%", borderStyle: "solid", padding: 5, fontWeight: "bold" },
-        tableColQty: { width: "15%", borderStyle: "solid", padding: 5, textAlign: "right", fontWeight: "bold" },
-        tableColPrice: { width: "25%", borderStyle: "solid", padding: 5, textAlign: "right", fontWeight: "bold" },
-        tableCell: { width: "20%", padding: 5 },
-        tableCellDesc: { width: "40%", padding: 5 },
-        tableCellQty: { width: "15%", padding: 5, textAlign: "right" },
-        tableCellPrice: { width: "25%", padding: 5, textAlign: "right" },
-        totalRow: { marginTop: 20, textAlign: "right", fontSize: 12, fontWeight: "bold" }
+        page: { padding: 30, fontSize: 8, fontFamily: "Helvetica", color: "#334155" },
+        header: { marginBottom: 15, borderBottom: 1, borderBottomColor: "#e2e8f0", paddingBottom: 10 },
+        title: { fontSize: 14, fontWeight: "bold", color: "#0f172a" },
+        subtitle: { fontSize: 8, color: "#64748b", marginTop: 2 },
+        
+        orderCard: { marginBottom: 12, padding: 8, borderRadius: 6, border: 1, borderColor: "#f1f5f9", backgroundColor: "#fff" },
+        orderHeader: { flexDirection: "row", justifyContent: "space-between", marginBottom: 6, paddingBottom: 4, borderBottom: 1, borderBottomColor: "#f1f5f9" },
+        orderMainInfo: { fontSize: 9, fontWeight: "bold", color: "#1e40af" },
+        orderSubInfo: { flexDirection: "row", gap: 10, marginBottom: 4 },
+        infoLabel: { color: "#94a3b8", fontWeight: "bold" },
+        infoValue: { color: "#475569" },
+
+        itemTable: { marginTop: 4 },
+        itemHeader: { flexDirection: "row", backgroundColor: "#f8fafc", padding: 3, borderBottom: 1, borderBottomColor: "#f1f5f9" },
+        itemRow: { flexDirection: "row", padding: 3, borderBottom: 1, borderBottomColor: "#f1f5f9" },
+        colDesc: { flex: 4 },
+        colQty: { flex: 1, textAlign: "right" },
+        colPrice: { flex: 2, textAlign: "right" },
+        colTotal: { flex: 2, textAlign: "right" },
+        
+        orderFooter: { flexDirection: "row", justifyContent: "flex-end", marginTop: 4, paddingTop: 2 },
+        orderTotal: { fontSize: 9, fontWeight: "bold", color: "#0f172a" },
+        
+        totalSummary: { marginTop: 20, padding: 10, backgroundColor: "#f8fafc", borderRadius: 8, textAlign: "right" },
+        totalLabel: { fontSize: 10, color: "#64748b" },
+        totalValue: { fontSize: 14, fontWeight: "bold", color: "#1e40af" }
       });
 
       const MyDoc = () => (
-        <Document title="Relatório de Itens de Pedidos">
+        <Document title="Relatório Detalhado de Pedidos">
           <Page size="A4" style={styles.page}>
             <View style={styles.header}>
-              <Text style={styles.title}>Relatório de Itens de Pedidos</Text>
+              <Text style={styles.title}>Relatório Detalhado de Pedidos</Text>
               <Text style={styles.subtitle}>
-                Filtro: {format(dateRange.from, "dd/MM/yyyy")} a {format(dateRange.to || dateRange.from, "dd/MM/yyyy")}
+                Período: {format(dateRange.from, "dd/MM/yyyy")} a {format(dateRange.to || dateRange.from, "dd/MM/yyyy")}
               </Text>
-              <Text style={styles.subtitle}>Total de Pedidos: {filteredRows.length}</Text>
+              <Text style={styles.subtitle}>Total de Pedidos na Lista: {filteredRows.length}</Text>
             </View>
 
-            <Text style={styles.sectionTitle}>Resumo Consolidado de Itens</Text>
-            <View style={styles.table}>
-              <View style={[styles.tableRow, styles.tableHeader]}>
-                <Text style={styles.tableColHeader}>Código</Text>
-                <Text style={styles.tableColDesc}>Descrição</Text>
-                <Text style={styles.tableColQty}>Qtd</Text>
-                <Text style={styles.tableColPrice}>Total Líquido</Text>
-              </View>
-              {summary.map((it, i) => (
-                <View key={i} style={styles.tableRow}>
-                  <Text style={styles.tableCell}>{it.code || "-"}</Text>
-                  <Text style={styles.tableCellDesc}>{it.description}</Text>
-                  <Text style={styles.tableCellQty}>{it.qty}</Text>
-                  <Text style={styles.tableCellPrice}>{formatMoneyBRL(it.total)}</Text>
+            {filteredRows.map((r) => {
+              const f = caseDataQ.data?.fields.get(r.id);
+              const cust = customersQ.data?.get(r.customer_id!);
+              const items = itemsByCase.get(r.id) ?? [];
+              const orderTotal = caseDataQ.data?.totals.get(r.id) || 0;
+              const orderNum = r.meta_json?.external_id || r.id.slice(0, 8);
+
+              return (
+                <View key={r.id} style={styles.orderCard} wrap={false}>
+                  <View style={styles.orderHeader}>
+                    <Text style={styles.orderMainInfo}>Pedido #{orderNum}</Text>
+                    <Text style={styles.orderTotal}>{formatMoneyBRL(orderTotal)}</Text>
+                  </View>
+                  
+                  <View style={styles.orderSubInfo}>
+                    <View style={{ flexDirection: "row", gap: 3 }}>
+                      <Text style={styles.infoLabel}>Cliente:</Text>
+                      <Text style={styles.infoValue}>{cust?.name || r.title || "—"}</Text>
+                    </View>
+                    <View style={{ flexDirection: "row", gap: 3 }}>
+                      <Text style={styles.infoLabel}>Cidade:</Text>
+                      <Text style={styles.infoValue}>{f?.city || "—"}</Text>
+                    </View>
+                  </View>
+                  
+                  <View style={styles.orderSubInfo}>
+                    <View style={{ flexDirection: "row", gap: 3 }}>
+                      <Text style={styles.infoLabel}>Vendedor:</Text>
+                      <Text style={styles.infoValue}>{r.users_profile?.display_name || "—"}</Text>
+                    </View>
+                    <View style={{ flexDirection: "row", gap: 3 }}>
+                      <Text style={styles.infoLabel}>Data:</Text>
+                      <Text style={styles.infoValue}>{f?.sale_date_text || format(new Date(r.created_at), "dd/MM/yyyy")}</Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.itemTable}>
+                    <View style={styles.itemHeader}>
+                      <Text style={styles.colDesc}>Item / Descrição</Text>
+                      <Text style={styles.colQty}>Qtd</Text>
+                      <Text style={styles.colPrice}>Unitário</Text>
+                      <Text style={styles.colTotal}>Subtotal</Text>
+                    </View>
+                    {items.map((it, idx) => (
+                      <View key={idx} style={styles.itemRow}>
+                        <Text style={styles.colDesc}>{it.description || "—"}</Text>
+                        <Text style={styles.colQty}>{it.qty}</Text>
+                        <Text style={styles.colPrice}>{formatMoneyBRL(it.price || 0)}</Text>
+                        <Text style={styles.colTotal}>{formatMoneyBRL(it.total || 0)}</Text>
+                      </View>
+                    ))}
+                  </View>
                 </View>
-              ))}
-            </View>
+              );
+            })}
 
-            <View style={styles.totalRow}>
-              <Text>Total Geral: {formatMoneyBRL(stats.totalValue)}</Text>
+            <View style={styles.totalSummary}>
+              <Text style={styles.totalLabel}>Valor Total Geral (Filtro)</Text>
+              <Text style={styles.totalValue}>{formatMoneyBRL(stats.totalValue)}</Text>
             </View>
           </Page>
         </Document>
@@ -771,10 +815,10 @@ export default function Orders() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `relatorio_pedidos_${format(new Date(), "yyyy-MM-dd")}.pdf`;
+      a.download = `pedidos_detalhado_${format(new Date(), "yyyy-MM-dd")}.pdf`;
       a.click();
       URL.revokeObjectURL(url);
-      showSuccess(`PDF gerado com ${summary.length} itens.`);
+      showSuccess(`PDF detalhado gerado com ${filteredRows.length} pedidos.`);
     } catch (e: any) {
       showError(`Falha na exportação PDF: ${e.message}`);
     } finally {
