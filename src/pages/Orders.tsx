@@ -38,7 +38,8 @@ import {
   Users2,
   Calendar as CalendarIcon,
   Check,
-  XCircle
+  XCircle,
+  FileText
 } from "lucide-react";
 import {
   AreaChart,
@@ -160,6 +161,7 @@ export default function Orders() {
   }>({ open: false, nextStateName: "", reasons: [] });
   const [newSalesOrderOpen, setNewSalesOrderOpen] = useState(false);
   const [exportingCsv, setExportingCsv] = useState(false);
+  const [exportingPdf, setExportingPdf] = useState(false);
   const [viewMode, setViewMode] = useState<"kanban" | "list">("kanban");
 
   useEffect(() => {
@@ -627,12 +629,6 @@ export default function Orders() {
       
       const csvRows = [headers.map(csvCell).join(",")];
       
-      // We need item-level data, which we have in caseDataQ.data
-      // But we need the detailed items for each case.
-      // Since caseDataQ only gets totals, we might need a more detailed fetch for items if we want per-item export.
-      // However, the import supports multiple items per case by repeating rows.
-      // Let's fetch all items for the filtered cases.
-      
       const filteredCaseIds = filteredRows.map(r => r.id);
       const { data: allItems, error: itemsErr } = await supabase
         .from("case_items")
@@ -651,7 +647,7 @@ export default function Orders() {
       filteredRows.forEach(r => {
         const f = caseDataQ.data?.fields.get(r.id);
         const cust = customersQ.data?.get(r.customer_id!);
-        const items = itemsByCase.get(r.id) ?? [{}]; // At least one row even if no items
+        const items = itemsByCase.get(r.id) ?? [{}]; 
         
         items.forEach(it => {
           const row = [
@@ -687,6 +683,102 @@ export default function Orders() {
       showError(`Falha na exportação: ${e.message}`);
     } finally {
       setExportingCsv(false);
+    }
+  };
+
+  const exportOrdersPdf = async () => {
+    if (!activeTenantId || exportingPdf || filteredRows.length === 0) return;
+    setExportingPdf(true);
+    try {
+      const { pdf, Document, Page, Text, View, StyleSheet, Image } = await import("@react-pdf/renderer");
+
+      const filteredCaseIds = filteredRows.map(r => r.id);
+      const { data: allItems, error: itemsErr } = await supabase
+        .from("case_items")
+        .select("*")
+        .in("case_id", filteredCaseIds);
+      
+      if (itemsErr) throw itemsErr;
+
+      const summaryMap = new Map<string, { code: string, description: string, qty: number, total: number }>();
+      (allItems ?? []).forEach(it => {
+        const key = `${it.code || ""}-${it.description || ""}`;
+        const cur = summaryMap.get(key) || { code: it.code || "", description: it.description || "", qty: 0, total: 0 };
+        cur.qty += Number(it.qty || 0);
+        cur.total += Number(it.total || 0);
+        summaryMap.set(key, cur);
+      });
+      const summary = Array.from(summaryMap.values()).sort((a,b) => b.qty - a.qty);
+
+      const tenantName = "Byfrost";
+      const styles = StyleSheet.create({
+        page: { padding: 30, fontSize: 10, fontFamily: "Helvetica" },
+        header: { marginBottom: 20, borderBottom: 1, borderBottomColor: "#e2e8f0", pb: 10 },
+        title: { fontSize: 18, fontWeight: "bold", color: "#1e293b" },
+        subtitle: { fontSize: 10, color: "#64748b", marginTop: 4 },
+        sectionTitle: { fontSize: 12, fontWeight: "bold", color: "#1e40af", marginTop: 20, marginBottom: 10 },
+        table: { width: "auto", borderStyle: "solid", borderWidth: 1, borderColor: "#e2e8f0", borderBottomWidth: 0 },
+        tableRow: { flexDirection: "row", borderBottomColor: "#e2e8f0", borderBottomWidth: 1, minHeight: 25, alignItems: "center" },
+        tableHeader: { backgroundColor: "#f8fafc" },
+        tableColHeader: { width: "20%", borderStyle: "solid", padding: 5, fontWeight: "bold" },
+        tableColDesc: { width: "40%", borderStyle: "solid", padding: 5, fontWeight: "bold" },
+        tableColQty: { width: "15%", borderStyle: "solid", padding: 5, textAlign: "right", fontWeight: "bold" },
+        tableColPrice: { width: "25%", borderStyle: "solid", padding: 5, textAlign: "right", fontWeight: "bold" },
+        tableCell: { width: "20%", padding: 5 },
+        tableCellDesc: { width: "40%", padding: 5 },
+        tableCellQty: { width: "15%", padding: 5, textAlign: "right" },
+        tableCellPrice: { width: "25%", padding: 5, textAlign: "right" },
+        totalRow: { marginTop: 20, textAlign: "right", fontSize: 12, fontWeight: "bold" }
+      });
+
+      const MyDoc = () => (
+        <Document title="Relatório de Itens de Pedidos">
+          <Page size="A4" style={styles.page}>
+            <View style={styles.header}>
+              <Text style={styles.title}>Relatório de Itens de Pedidos</Text>
+              <Text style={styles.subtitle}>
+                Filtro: {format(dateRange.from, "dd/MM/yyyy")} a {format(dateRange.to || dateRange.from, "dd/MM/yyyy")}
+              </Text>
+              <Text style={styles.subtitle}>Total de Pedidos: {filteredRows.length}</Text>
+            </View>
+
+            <Text style={styles.sectionTitle}>Resumo Consolidado de Itens</Text>
+            <View style={styles.table}>
+              <View style={[styles.tableRow, styles.tableHeader]}>
+                <Text style={styles.tableColHeader}>Código</Text>
+                <Text style={styles.tableColDesc}>Descrição</Text>
+                <Text style={styles.tableColQty}>Qtd</Text>
+                <Text style={styles.tableColPrice}>Total Líquido</Text>
+              </View>
+              {summary.map((it, i) => (
+                <View key={i} style={styles.tableRow}>
+                  <Text style={styles.tableCell}>{it.code || "-"}</Text>
+                  <Text style={styles.tableCellDesc}>{it.description}</Text>
+                  <Text style={styles.tableCellQty}>{it.qty}</Text>
+                  <Text style={styles.tableCellPrice}>{formatMoneyBRL(it.total)}</Text>
+                </View>
+              ))}
+            </View>
+
+            <View style={styles.totalRow}>
+              <Text>Total Geral: {formatMoneyBRL(stats.totalValue)}</Text>
+            </View>
+          </Page>
+        </Document>
+      );
+
+      const blob = await pdf(<MyDoc />).toBlob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `relatorio_pedidos_${format(new Date(), "yyyy-MM-dd")}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+      showSuccess(`PDF gerado com ${summary.length} itens.`);
+    } catch (e: any) {
+      showError(`Falha na exportação PDF: ${e.message}`);
+    } finally {
+      setExportingPdf(false);
     }
   };
 
@@ -936,7 +1028,11 @@ export default function Orders() {
                 </div>
 
                 <Button variant="secondary" className="h-10 rounded-2xl bg-slate-900 text-white hover:bg-slate-800 border-none shadow-sm" onClick={exportOrdersCsv} disabled={exportingCsv}>
-                  <Download className="mr-2 h-4 w-4" /> Exportar ({filteredRows.length})
+                  <Download className="mr-2 h-4 w-4" /> CSV ({filteredRows.length})
+                </Button>
+
+                <Button variant="secondary" className="h-10 rounded-2xl bg-rose-600 text-white hover:bg-rose-700 border-none shadow-sm" onClick={exportOrdersPdf} disabled={exportingPdf}>
+                  <FileText className="mr-2 h-4 w-4" /> PDF ({filteredRows.length})
                 </Button>
 
                 <ImportOrdersDialog
