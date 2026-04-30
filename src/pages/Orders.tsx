@@ -747,78 +747,95 @@ export default function Orders() {
               <Text style={styles.subtitle}>Total de Pedidos na Lista: {filteredRows.length}</Text>
             </View>
 
-            {filteredRows.map((r) => {
-              const f = caseDataQ.data?.fields.get(r.id);
-              const cust = customersQ.data?.get(r.customer_id!);
-              const items = itemsByCase.get(r.id) ?? [];
-              const orderTotal = caseDataQ.data?.totals.get(r.id) || 0;
-              const orderNum = r.meta_json?.external_id || r.id.slice(0, 8);
-              
-              const assignedUser = (usersQ.data ?? []).find(u => u.user_id === r.assigned_user_id);
-              const baseCommissionPct = Number(assignedUser?.meta_json?.commission_rules?.base_percent ?? 0);
-              const brutoTotal = items.reduce((acc, it) => acc + (Number(it.qty || 0) * Number(it.price || 0)), 0);
-              const fullCommissionValue = brutoTotal * (baseCommissionPct / 100);
+            {(() => {
+              let totalFullCommission = 0;
+              const cards = filteredRows.map((r) => {
+                const f = caseDataQ.data?.fields.get(r.id);
+                const cust = customersQ.data?.get(r.customer_id!);
+                const items = itemsByCase.get(r.id) ?? [];
+                const orderTotal = caseDataQ.data?.totals.get(r.id) || 0;
+                const orderNum = r.meta_json?.external_id || r.id.slice(0, 8);
+                
+                const assignedUser = (usersQ.data ?? []).find(u => u.user_id === r.assigned_user_id);
+                const baseCommissionPct = Number(assignedUser?.meta_json?.commission_rules?.base_percent ?? 0);
+                const brutoTotal = items.reduce((acc, it) => acc + (Number(it.qty || 0) * Number(it.price || 0)), 0);
+                const fullCommissionValue = brutoTotal * (baseCommissionPct / 100);
+                totalFullCommission += fullCommissionValue;
+
+                return (
+                  <View key={r.id} style={styles.orderCard} wrap={false}>
+                    <View style={styles.orderHeader}>
+                      <Text style={styles.orderMainInfo}>Pedido #{orderNum}</Text>
+                      <View style={{ alignItems: "right" }}>
+                        <Text style={styles.orderTotal}>{formatMoneyBRL(orderTotal)}</Text>
+                        {fullCommissionValue > 0 && (
+                          <Text style={{ fontSize: 7, color: "#64748b", marginTop: 1 }}>
+                            Comissão Cheia: {formatMoneyBRL(fullCommissionValue)} ({baseCommissionPct}%)
+                          </Text>
+                        )}
+                      </View>
+                    </View>
+                    
+                    <View style={styles.orderSubInfo}>
+                      <View style={{ flexDirection: "row", gap: 3 }}>
+                        <Text style={styles.infoLabel}>Cliente:</Text>
+                        <Text style={styles.infoValue}>{cust?.name || r.title || "—"}</Text>
+                      </View>
+                      <View style={{ flexDirection: "row", gap: 3 }}>
+                        <Text style={styles.infoLabel}>Cidade:</Text>
+                        <Text style={styles.infoValue}>{f?.city || "—"}</Text>
+                      </View>
+                    </View>
+                    
+                    <View style={styles.orderSubInfo}>
+                      <View style={{ flexDirection: "row", gap: 3 }}>
+                        <Text style={styles.infoLabel}>Vendedor:</Text>
+                        <Text style={styles.infoValue}>{r.users_profile?.display_name || "—"}</Text>
+                      </View>
+                      <View style={{ flexDirection: "row", gap: 3 }}>
+                        <Text style={styles.infoLabel}>Data:</Text>
+                        <Text style={styles.infoValue}>{f?.sale_date_text || format(new Date(r.created_at), "dd/MM/yyyy")}</Text>
+                      </View>
+                    </View>
+
+                    <View style={styles.itemTable}>
+                      <View style={styles.itemHeader}>
+                        <Text style={styles.colDesc}>Item / Descrição</Text>
+                        <Text style={styles.colQty}>Qtd</Text>
+                        <Text style={styles.colPrice}>Unitário</Text>
+                        <Text style={styles.colTotal}>Subtotal</Text>
+                      </View>
+                      {items.map((it, idx) => (
+                        <View key={idx} style={styles.itemRow}>
+                          <Text style={styles.colDesc}>{it.description || "—"}</Text>
+                          <Text style={styles.colQty}>{it.qty}</Text>
+                          <Text style={styles.colPrice}>{formatMoneyBRL(it.price || 0)}</Text>
+                          <Text style={styles.colTotal}>{formatMoneyBRL(it.total || 0)}</Text>
+                        </View>
+                      ))}
+                    </View>
+                  </View>
+                );
+              });
 
               return (
-                <View key={r.id} style={styles.orderCard} wrap={false}>
-                  <View style={styles.orderHeader}>
-                    <Text style={styles.orderMainInfo}>Pedido #{orderNum}</Text>
-                    <View style={{ alignItems: "right" }}>
-                      <Text style={styles.orderTotal}>{formatMoneyBRL(orderTotal)}</Text>
-                      {fullCommissionValue > 0 && (
-                        <Text style={{ fontSize: 7, color: "#64748b", marginTop: 1 }}>
-                          Comissão Cheia: {formatMoneyBRL(fullCommissionValue)} ({baseCommissionPct}%)
-                        </Text>
-                      )}
+                <>
+                  {cards}
+                  <View style={styles.totalSummary}>
+                    <View style={{ marginBottom: 4 }}>
+                      <Text style={styles.totalLabel}>Valor Total Geral (Filtro)</Text>
+                      <Text style={styles.totalValue}>{formatMoneyBRL(stats.totalValue)}</Text>
                     </View>
-                  </View>
-                  
-                  <View style={styles.orderSubInfo}>
-                    <View style={{ flexDirection: "row", gap: 3 }}>
-                      <Text style={styles.infoLabel}>Cliente:</Text>
-                      <Text style={styles.infoValue}>{cust?.name || r.title || "—"}</Text>
-                    </View>
-                    <View style={{ flexDirection: "row", gap: 3 }}>
-                      <Text style={styles.infoLabel}>Cidade:</Text>
-                      <Text style={styles.infoValue}>{f?.city || "—"}</Text>
-                    </View>
-                  </View>
-                  
-                  <View style={styles.orderSubInfo}>
-                    <View style={{ flexDirection: "row", gap: 3 }}>
-                      <Text style={styles.infoLabel}>Vendedor:</Text>
-                      <Text style={styles.infoValue}>{r.users_profile?.display_name || "—"}</Text>
-                    </View>
-                    <View style={{ flexDirection: "row", gap: 3 }}>
-                      <Text style={styles.infoLabel}>Data:</Text>
-                      <Text style={styles.infoValue}>{f?.sale_date_text || format(new Date(r.created_at), "dd/MM/yyyy")}</Text>
-                    </View>
-                  </View>
-
-                  <View style={styles.itemTable}>
-                    <View style={styles.itemHeader}>
-                      <Text style={styles.colDesc}>Item / Descrição</Text>
-                      <Text style={styles.colQty}>Qtd</Text>
-                      <Text style={styles.colPrice}>Unitário</Text>
-                      <Text style={styles.colTotal}>Subtotal</Text>
-                    </View>
-                    {items.map((it, idx) => (
-                      <View key={idx} style={styles.itemRow}>
-                        <Text style={styles.colDesc}>{it.description || "—"}</Text>
-                        <Text style={styles.colQty}>{it.qty}</Text>
-                        <Text style={styles.colPrice}>{formatMoneyBRL(it.price || 0)}</Text>
-                        <Text style={styles.colTotal}>{formatMoneyBRL(it.total || 0)}</Text>
+                    {totalFullCommission > 0 && (
+                      <View>
+                        <Text style={styles.totalLabel}>Total Comissões Cheias</Text>
+                        <Text style={[styles.totalValue, { color: "#64748b", fontSize: 11 }]}>{formatMoneyBRL(totalFullCommission)}</Text>
                       </View>
-                    ))}
+                    )}
                   </View>
-                </View>
+                </>
               );
-            })}
-
-            <View style={styles.totalSummary}>
-              <Text style={styles.totalLabel}>Valor Total Geral (Filtro)</Text>
-              <Text style={styles.totalValue}>{formatMoneyBRL(stats.totalValue)}</Text>
-            </View>
+            })()}
           </Page>
         </Document>
       );
