@@ -272,7 +272,7 @@ export default function Orders() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("users_profile")
-        .select("user_id, display_name, email")
+        .select("user_id, display_name, email, meta_json")
         .eq("tenant_id", activeTenantId!)
         .is("deleted_at", null)
         .order("display_name", { ascending: true });
@@ -753,12 +753,24 @@ export default function Orders() {
               const items = itemsByCase.get(r.id) ?? [];
               const orderTotal = caseDataQ.data?.totals.get(r.id) || 0;
               const orderNum = r.meta_json?.external_id || r.id.slice(0, 8);
+              
+              const assignedUser = (usersQ.data ?? []).find(u => u.user_id === r.assigned_user_id);
+              const baseCommissionPct = Number(assignedUser?.meta_json?.commission_rules?.base_percent ?? 0);
+              const brutoTotal = items.reduce((acc, it) => acc + (Number(it.qty || 0) * Number(it.price || 0)), 0);
+              const fullCommissionValue = brutoTotal * (baseCommissionPct / 100);
 
               return (
                 <View key={r.id} style={styles.orderCard} wrap={false}>
                   <View style={styles.orderHeader}>
                     <Text style={styles.orderMainInfo}>Pedido #{orderNum}</Text>
-                    <Text style={styles.orderTotal}>{formatMoneyBRL(orderTotal)}</Text>
+                    <View style={{ alignItems: "right" }}>
+                      <Text style={styles.orderTotal}>{formatMoneyBRL(orderTotal)}</Text>
+                      {fullCommissionValue > 0 && (
+                        <Text style={{ fontSize: 7, color: "#64748b", marginTop: 1 }}>
+                          Comissão Cheia: {formatMoneyBRL(fullCommissionValue)} ({baseCommissionPct}%)
+                        </Text>
+                      )}
+                    </View>
                   </View>
                   
                   <View style={styles.orderSubInfo}>
