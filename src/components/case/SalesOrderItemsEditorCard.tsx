@@ -11,6 +11,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Plus, ReceiptText, Save, Trash2, Check, ChevronsUpDown, Loader2, DollarSign } from "lucide-react";
 import { useTenant } from "@/providers/TenantProvider";
 import { useSession } from "@/providers/SessionProvider";
+import { QuickCreateProductDialog } from "@/components/case/QuickCreateProductDialog";
 
 type CaseItemRow = {
   id: string;
@@ -95,6 +96,13 @@ export function SalesOrderItemsEditorCard(props: { caseId: string; className?: s
   const [searchOffering, setSearchOffering] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [openOfferingPerLine, setOpenOfferingPerLine] = useState<Record<number, boolean>>({});
+
+  // Quick Create State
+  const [quickCreate, setQuickCreate] = useState<{ open: boolean; name: string; lineNo: number | null }>({
+    open: false,
+    name: "",
+    lineNo: null
+  });
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedSearch(searchOffering), 300);
@@ -555,8 +563,21 @@ export function SalesOrderItemsEditorCard(props: { caseId: string; className?: s
                               </button>
                             ))}
                             {!offeringsQ.isFetching && offeringsQ.data?.length === 0 && (
-                              <div className="p-4 text-center text-xs text-slate-500">
-                                Nenhum produto encontrado para "{searchOffering}".
+                              <div className="p-4 flex flex-col items-center gap-3 text-center">
+                                <div className="text-xs text-slate-500">
+                                  Nenhum produto encontrado para "{searchOffering}".
+                                </div>
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  className="h-9 rounded-xl border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 font-bold px-4"
+                                  onClick={() => {
+                                    setQuickCreate({ open: true, name: searchOffering, lineNo: row.line_no });
+                                    setOpenOfferingPerLine((prev) => ({ ...prev, [`mob-${row.line_no}`]: false, [`desk-${row.line_no}`]: false }));
+                                  }}
+                                >
+                                  <Plus className="mr-2 h-3 w-3" /> Cadastrar este produto
+                                </Button>
                               </div>
                             )}
                           </div>
@@ -756,8 +777,21 @@ export function SalesOrderItemsEditorCard(props: { caseId: string; className?: s
                               </button>
                             ))}
                             {!offeringsQ.isFetching && offeringsQ.data?.length === 0 && (
-                              <div className="p-4 text-center text-xs text-slate-500">
-                                Nenhum produto encontrado para "{searchOffering}".
+                              <div className="p-4 flex flex-col items-center gap-3 text-center">
+                                <div className="text-xs text-slate-500">
+                                  Nenhum produto encontrado para "{searchOffering}".
+                                </div>
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  className="h-9 rounded-xl border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 font-bold px-4"
+                                  onClick={() => {
+                                    setQuickCreate({ open: true, name: searchOffering, lineNo: row.line_no });
+                                    setOpenOfferingPerLine((prev) => ({ ...prev, [`mob-${row.line_no}`]: false, [`desk-${row.line_no}`]: false }));
+                                  }}
+                                >
+                                  <Plus className="mr-2 h-3 w-3" /> Cadastrar este produto
+                                </Button>
                               </div>
                             )}
                           </div>
@@ -799,6 +833,33 @@ export function SalesOrderItemsEditorCard(props: { caseId: string; className?: s
           </div>
         </div>
       )}
+
+
+      <QuickCreateProductDialog
+        open={quickCreate.open}
+        onOpenChange={(v) => setQuickCreate((p) => ({ ...p, open: v }))}
+        tenantId={activeTenantId!}
+        initialName={quickCreate.name}
+        onCreated={(entity) => {
+          if (quickCreate.lineNo != null) {
+            setDraft((prev) =>
+              prev.map((x) =>
+                x.line_no === quickCreate.lineNo
+                  ? {
+                      ...x,
+                      code: entity.metadata?.code || x.code,
+                      description: entity.display_name,
+                      offering_entity_id: entity.id,
+                      price: entity.metadata?.price != null 
+                        ? String(entity.metadata.price).replace(/\./g, ",") 
+                        : x.price
+                    }
+                  : x
+              )
+            );
+          }
+        }}
+      />
 
       <div className="sticky bottom-0 bg-white pt-5 border-t border-slate-100 z-10 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mt-6">
         <Button type="button" variant="secondary" className="h-11 rounded-2xl" onClick={addRow}>
