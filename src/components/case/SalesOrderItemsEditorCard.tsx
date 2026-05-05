@@ -406,7 +406,7 @@ export function SalesOrderItemsEditorCard(props: { caseId: string; className?: s
         </div>
       )}
 
-      <div className="mt-4 overflow-hidden rounded-2xl border border-slate-200">
+      <div className="mt-4 rounded-2xl border border-slate-200">
         {/* Header (desktop) */}
         <div className="hidden grid-cols-[100px_1fr_80px_100px_90px_110px_48px] gap-2 bg-slate-50 px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-600 sm:grid">
           <div>ID</div>
@@ -426,7 +426,7 @@ export function SalesOrderItemsEditorCard(props: { caseId: string; className?: s
             const total = computeRowTotal(parsedQty, parsedPrice, parsedDiscount);
 
             return (
-              <div key={`${row.id ?? "new"}:${row.line_no}`} className="px-3 py-3">
+              <div key={`${row.id ?? "new"}:${row.line_no}`} className="px-3 py-3 relative z-auto">
                 {/* Mobile layout */}
                 <div className="grid gap-3 sm:hidden">
                   <div className="grid grid-cols-2 gap-3">
@@ -554,9 +554,9 @@ export function SalesOrderItemsEditorCard(props: { caseId: string; className?: s
                                 </div>
                               </button>
                             ))}
-                            {!offeringsQ.isFetching && offeringsQ.data?.length === 0 && searchOffering.length > 2 && (
+                            {!offeringsQ.isFetching && offeringsQ.data?.length === 0 && (
                               <div className="p-4 text-center text-xs text-slate-500">
-                                Nenhum produto encontrado.
+                                Nenhum produto encontrado para "{searchOffering}".
                               </div>
                             )}
                           </div>
@@ -755,9 +755,9 @@ export function SalesOrderItemsEditorCard(props: { caseId: string; className?: s
                                 </div>
                               </button>
                             ))}
-                            {!offeringsQ.isFetching && offeringsQ.data?.length === 0 && searchOffering.length > 2 && (
+                            {!offeringsQ.isFetching && offeringsQ.data?.length === 0 && (
                               <div className="p-4 text-center text-xs text-slate-500">
-                                Nenhum produto encontrado.
+                                Nenhum produto encontrado para "{searchOffering}".
                               </div>
                             )}
                           </div>
