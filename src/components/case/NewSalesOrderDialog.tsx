@@ -139,16 +139,16 @@ export function NewSalesOrderDialog(props: {
 
       // 3. Create Case Fields
       const fields = [
-        { tenant_id: tenantId, case_id: caseId, key: "name", value_text: customerName },
-        { tenant_id: tenantId, case_id: caseId, key: "city", value_text: city },
-        { tenant_id: tenantId, case_id: caseId, key: "obs", value_text: observations },
+        { case_id: caseId, key: "name", value_text: customerName },
+        { case_id: caseId, key: "city", value_text: city },
+        { case_id: caseId, key: "obs", value_text: observations },
       ];
 
       if (orderPath) {
-        fields.push({ tenant_id: tenantId, case_id: caseId, key: "order_attachment", value_text: orderPath });
+        fields.push({ case_id: caseId, key: "order_attachment", value_text: orderPath });
       }
       if (docPaths.length > 0) {
-        fields.push({ tenant_id: tenantId, case_id: caseId, key: "docs_attachments", value_text: JSON.stringify(docPaths) });
+        fields.push({ case_id: caseId, key: "docs_attachments", value_text: JSON.stringify(docPaths) });
       }
 
       const { error: fieldsErr } = await supabase.from("case_fields").insert(fields);
