@@ -68,7 +68,7 @@ export default function SalesOrderCase() {
 
   // Review Dialog State
   const [reviewOpen, setReviewOpen] = useState(false);
-  const [reviewImageUrl, setReviewImageUrl] = useState<string | null>(null);
+  const [selectedAttachment, setSelectedAttachment] = useState<any>(null);
   const [transitionBlock, setTransitionBlock] = useState<{
     open: boolean;
     nextStateName: string;
@@ -628,7 +628,7 @@ export default function SalesOrderCase() {
                                   <div 
                                     className="flex-1 flex items-center gap-3 min-w-0"
                                     onClick={() => {
-                                      setReviewImageUrl(a.storage_path);
+                                      setSelectedAttachment(a);
                                       setReviewOpen(true);
                                     }}
                                   >
@@ -794,7 +794,9 @@ export default function SalesOrderCase() {
           open={reviewOpen}
           onOpenChange={setReviewOpen}
           caseId={caseId!}
-          imageUrl={reviewImageUrl}
+          imageUrl={selectedAttachment?.storage_path || null}
+          contentType={selectedAttachment?.content_type || null}
+          filename={selectedAttachment?.original_filename || null}
           fields={fieldsData}
         />
       </AppShell>

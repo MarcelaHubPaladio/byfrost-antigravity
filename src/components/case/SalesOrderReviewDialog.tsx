@@ -12,7 +12,7 @@ import { Separator } from "@/components/ui/separator";
 import { CaseCustomerDataEditorCard } from "@/components/case/CaseCustomerDataEditorCard";
 import { SalesOrderItemsEditorCard } from "@/components/case/SalesOrderItemsEditorCard";
 import { ZoomableImage } from "@/components/case/ZoomableImage";
-import { ExternalLink, Image as ImageIcon } from "lucide-react";
+import { ExternalLink, Image as ImageIcon, FileText, FileCode, FileSpreadsheet, FileArchive, Download } from "lucide-react";
 
 type FieldRow = {
   key: string;
@@ -26,9 +26,11 @@ export function SalesOrderReviewDialog(props: {
   onOpenChange: (open: boolean) => void;
   caseId: string;
   imageUrl: string | null;
+  contentType?: string | null;
+  filename?: string | null;
   fields: FieldRow[] | undefined;
 }) {
-  const { open, onOpenChange, caseId, imageUrl, fields } = props;
+  const { open, onOpenChange, caseId, imageUrl, contentType, filename, fields } = props;
 
   const safeUrl = useMemo(() => {
     const u = (imageUrl ?? "").trim();
@@ -68,14 +70,58 @@ export function SalesOrderReviewDialog(props: {
             {/* Left: image (60%) */}
             <div className="relative h-full min-h-0 overflow-hidden border-t border-slate-200 bg-slate-50 md:border-r">
               {safeUrl ? (
-                <ZoomableImage src={safeUrl} alt="Anexo do pedido" className="h-full w-full" />
+                <>
+                  {contentType?.startsWith("image/") ? (
+                    <ZoomableImage src={safeUrl} alt={filename || "Anexo"} className="h-full w-full" />
+                  ) : contentType === "application/pdf" ? (
+                    <iframe
+                      src={`${safeUrl}#toolbar=0`}
+                      className="h-full w-full border-0"
+                      title={filename || "PDF Preview"}
+                    />
+                  ) : (
+                    <div className="flex h-full flex-col items-center justify-center gap-6 p-8">
+                      <div className="relative">
+                        <div className="flex h-24 w-24 items-center justify-center rounded-3xl bg-white shadow-xl">
+                          {contentType?.includes("csv") || contentType?.includes("sheet") ? (
+                            <FileSpreadsheet className="h-12 w-12 text-emerald-600" />
+                          ) : contentType?.includes("zip") || contentType?.includes("rar") ? (
+                            <FileArchive className="h-12 w-12 text-amber-600" />
+                          ) : (
+                            <FileText className="h-12 w-12 text-blue-600" />
+                          )}
+                        </div>
+                        <div className="absolute -bottom-2 -right-2 h-10 w-10 rounded-full bg-blue-600 border-4 border-slate-50 flex items-center justify-center text-white shadow-lg">
+                          <Download className="h-4 w-4" />
+                        </div>
+                      </div>
+                      
+                      <div className="text-center max-w-sm">
+                        <h3 className="text-lg font-bold text-slate-900 mb-2 truncate px-4">
+                          {filename || "Documento"}
+                        </h3>
+                        <p className="text-sm text-slate-600 mb-6">
+                          Este formato de arquivo ({contentType || "desconhecido"}) não pode ser visualizado diretamente no navegador.
+                        </p>
+                        
+                        <Button
+                          onClick={() => window.open(safeUrl, "_blank", "noopener,noreferrer")}
+                          className="h-11 rounded-2xl bg-blue-600 px-8 font-bold text-white hover:bg-blue-700 shadow-lg shadow-blue-200"
+                        >
+                          Baixar e Abrir Arquivo
+                          <ExternalLink className="ml-2 h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </>
               ) : (
                 <div className="flex h-full flex-col items-center justify-center gap-2 p-8 text-slate-600">
                   <div className="grid h-12 w-12 place-items-center rounded-2xl bg-white shadow-sm">
                     <ImageIcon className="h-5 w-5" />
                   </div>
-                  <div className="text-sm font-semibold text-slate-900">Sem imagem</div>
-                  <div className="text-xs text-slate-600">Este anexo não tem URL.</div>
+                  <div className="text-sm font-semibold text-slate-900">Sem conteúdo</div>
+                  <div className="text-xs text-slate-600">Este anexo não tem URL ou conteúdo disponível.</div>
                 </div>
               )}
             </div>
