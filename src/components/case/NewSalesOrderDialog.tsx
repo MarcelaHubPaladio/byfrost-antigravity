@@ -139,20 +139,47 @@ export function NewSalesOrderDialog(props: {
 
       // 3. Create Case Fields
       const fields = [
-        { case_id: caseId, key: "name", value_text: customerName },
-        { case_id: caseId, key: "city", value_text: city },
-        { case_id: caseId, key: "obs", value_text: observations },
+        { case_id: caseId, key: "name", value_text: customerName, source: "panel" },
+        { case_id: caseId, key: "city", value_text: city, source: "panel" },
+        { case_id: caseId, key: "obs", value_text: observations, source: "panel" },
       ];
 
       if (orderPath) {
-        fields.push({ case_id: caseId, key: "order_attachment", value_text: orderPath });
+        fields.push({ case_id: caseId, key: "order_attachment", value_text: orderPath, source: "panel" });
       }
       if (docPaths.length > 0) {
-        fields.push({ case_id: caseId, key: "docs_attachments", value_text: JSON.stringify(docPaths) });
+        fields.push({ case_id: caseId, key: "docs_attachments", value_text: JSON.stringify(docPaths), source: "panel" });
       }
 
       const { error: fieldsErr } = await supabase.from("case_fields").insert(fields);
       if (fieldsErr) throw fieldsErr;
+
+      // 4. Create Case Attachments (for visibility in generic attachment lists)
+      const attachmentsPayload = [];
+      if (orderPath && orderFile) {
+        attachmentsPayload.push({
+          case_id: caseId,
+          kind: "order",
+          storage_path: supabase.storage.from("tenant-assets").getPublicUrl(orderPath).data.publicUrl,
+          original_filename: orderFile.name,
+          content_type: orderFile.type,
+          meta_json: { storage_path: orderPath, source: "simplified_modal" }
+        });
+      }
+      for (let i = 0; i < docFiles.length; i++) {
+        attachmentsPayload.push({
+          case_id: caseId,
+          kind: "document",
+          storage_path: supabase.storage.from("tenant-assets").getPublicUrl(docPaths[i]).data.publicUrl,
+          original_filename: docFiles[i].name,
+          content_type: docFiles[i].type,
+          meta_json: { storage_path: docPaths[i], source: "simplified_modal" }
+        });
+      }
+
+      if (attachmentsPayload.length > 0) {
+        await supabase.from("case_attachments").insert(attachmentsPayload);
+      }
 
       showSuccess("Pedido criado com sucesso!");
       

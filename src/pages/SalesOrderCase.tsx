@@ -146,6 +146,20 @@ export default function SalesOrderCase() {
     enabled: !!caseId,
   });
 
+  const { data: attachmentsData } = useQuery({
+    queryKey: ["case_attachments", caseId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("case_attachments")
+        .select("*")
+        .eq("case_id", caseId)
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!caseId,
+  });
+
   const getField = (key: string) => fieldsData?.find(f => f.key === key)?.value_text;
   
   const customerName = getField("name") || caseData?.customer?.name || "Cliente não identificado";
@@ -586,6 +600,44 @@ export default function SalesOrderCase() {
                         </AccordionTrigger>
                         <AccordionContent className="p-8 border-t border-slate-100 pt-8">
                           <SalesOrderItemsEditorCard caseId={caseId!} />
+
+                          {attachmentsData && attachmentsData.length > 0 && (
+                            <div className="mt-8 pt-8 border-t border-slate-100">
+                              <div className="flex items-center gap-2 mb-4">
+                                <FileText className="h-4 w-4 text-slate-400" />
+                                <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-400">Anexos do Pedido</h4>
+                              </div>
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                {attachmentsData.map((a: any) => (
+                                  <a 
+                                    key={a.id} 
+                                    href={a.storage_path} 
+                                    target="_blank" 
+                                    rel="noreferrer"
+                                    className="flex items-center justify-between p-4 rounded-2xl bg-slate-50 border border-slate-100 hover:bg-white hover:shadow-sm transition-all group"
+                                  >
+                                    <div className="flex items-center gap-3 min-w-0">
+                                      <div className={cn(
+                                        "h-10 w-10 rounded-xl flex items-center justify-center shrink-0",
+                                        a.kind === "order" ? "bg-blue-100 text-blue-600" : "bg-indigo-100 text-indigo-600"
+                                      )}>
+                                        <FileText className="h-5 w-5" />
+                                      </div>
+                                      <div className="min-w-0">
+                                        <p className="text-xs font-bold text-slate-700 truncate group-hover:text-blue-600 transition-colors">
+                                          {a.original_filename || "Arquivo"}
+                                        </p>
+                                        <p className="text-[10px] text-slate-400 font-medium uppercase tracking-wider">
+                                          {a.kind === "order" ? "Pedido Principal" : "Documento"}
+                                        </p>
+                                      </div>
+                                    </div>
+                                    <ChevronRight className="h-4 w-4 text-slate-300 group-hover:text-blue-400 transition-colors" />
+                                  </a>
+                                ))}
+                              </div>
+                            </div>
+                          )}
                         </AccordionContent>
                       </Card>
                     </AccordionItem>
