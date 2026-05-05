@@ -1,4 +1,4 @@
--- BYFROST — Performance Optimization for Order Visibility
+-- BYFROST — Performance Optimization for Order Visibility (Safe Version)
 -- Optimized RLS policies and indexes to resolve 500 errors and slowness.
 
 -- 1. Create missing indexes for faster RLS evaluation
@@ -71,10 +71,11 @@ END;
 $$;
 
 -- 4. Re-apply Cases RLS with optimized logic
--- We split the policy into two: one for privileged/admins (fast) and one for owners/vendors.
--- Postgres ORs these policies together efficiently.
+-- Using explicit table references to avoid "column does not exist" or ambiguity errors.
 
 DROP POLICY IF EXISTS cases_select ON public.cases;
+DROP POLICY IF EXISTS cases_select_privileged ON public.cases;
+DROP POLICY IF EXISTS cases_select_owners ON public.cases;
 
 -- Policy for privileged users (Admins, Managers, Supervisors, Leaders)
 CREATE POLICY cases_select_privileged ON public.cases
@@ -82,8 +83,8 @@ FOR SELECT TO authenticated
 USING (
     public.is_super_admin() 
     OR (
-        public.has_tenant_access(tenant_id)
-        AND public.is_privileged_role(tenant_id)
+        public.has_tenant_access(public.cases.tenant_id)
+        AND public.is_privileged_role(public.cases.tenant_id)
     )
 );
 
@@ -91,34 +92,32 @@ USING (
 CREATE POLICY cases_select_owners ON public.cases
 FOR SELECT TO authenticated
 USING (
-    public.has_tenant_access(tenant_id)
+    public.has_tenant_access(public.cases.tenant_id)
     AND (
-        assigned_user_id = auth.uid()
-        OR created_by_user_id = auth.uid()
-        OR assigned_vendor_id = public.get_my_vendor_id(tenant_id)
-        -- Hierarchy check (Subordinates)
-        OR (assigned_user_id IN (SELECT public.get_subordinates(tenant_id, auth.uid())))
+        public.cases.assigned_user_id = auth.uid()
+        OR public.cases.created_by_user_id = auth.uid()
+        OR public.cases.assigned_vendor_id = public.get_my_vendor_id(public.cases.tenant_id)
+        OR (public.cases.assigned_user_id IN (SELECT public.get_subordinates(public.cases.tenant_id, auth.uid())))
     )
 );
 
 -- 5. Optimize related tables to ensure sums work correctly
 -- case_fields and case_items should be readable if the case is readable.
--- Instead of complex RLS on fields, we can link them to the case visibility.
 
 DROP POLICY IF EXISTS case_fields_select ON public.case_fields;
 CREATE POLICY case_fields_select ON public.case_fields
 FOR SELECT TO authenticated
 USING (
-    public.has_tenant_access(tenant_id)
-    AND EXISTS (SELECT 1 FROM public.cases c WHERE c.id = case_id)
+    public.has_tenant_access(public.case_fields.tenant_id)
+    AND EXISTS (SELECT 1 FROM public.cases c WHERE c.id = public.case_fields.case_id)
 );
 
 DROP POLICY IF EXISTS case_items_select ON public.case_items;
 CREATE POLICY case_items_select ON public.case_items
 FOR SELECT TO authenticated
 USING (
-    public.has_tenant_access(tenant_id)
-    AND EXISTS (SELECT 1 FROM public.cases c WHERE c.id = case_id)
+    public.has_tenant_access(public.case_items.tenant_id)
+    AND EXISTS (SELECT 1 FROM public.cases c WHERE c.id = public.case_items.case_id)
 );
 
 COMMENT ON POLICY cases_select_privileged ON public.cases IS 'Performance-optimized access for management roles.';
