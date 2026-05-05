@@ -1,4 +1,4 @@
--- BYFROST — Performance Optimization for Order Visibility (V3 - Stable)
+-- BYFROST — Performance Optimization for Order Visibility (Final Working Version)
 -- Optimized RLS policies and indexes to resolve 500 errors and slowness.
 
 -- 1. Create missing indexes for faster RLS evaluation
@@ -71,13 +71,10 @@ END;
 $$;
 
 -- 4. Re-apply Cases RLS with optimized logic
--- Using simple column names to avoid schema/table resolution issues in Supabase.
-
 DROP POLICY IF EXISTS cases_select ON public.cases;
 DROP POLICY IF EXISTS cases_select_privileged ON public.cases;
 DROP POLICY IF EXISTS cases_select_owners ON public.cases;
 
--- Policy for privileged users (Admins, Managers, Supervisors, Leaders)
 CREATE POLICY cases_select_privileged ON public.cases
 FOR SELECT TO authenticated
 USING (
@@ -88,7 +85,6 @@ USING (
     )
 );
 
--- Policy for owners (Assigned Responsible, Creator, or Seller Vendor)
 CREATE POLICY cases_select_owners ON public.cases
 FOR SELECT TO authenticated
 USING (
@@ -101,18 +97,20 @@ USING (
     )
 );
 
--- 5. Restore stable RLS for related tables
--- Reverting to basic tenant-based access to ensure sums and fields load correctly.
-
+-- 5. Restore related tables access via Case visibility
 DROP POLICY IF EXISTS case_fields_select ON public.case_fields;
 CREATE POLICY case_fields_select ON public.case_fields
 FOR SELECT TO authenticated
-USING (public.has_tenant_access(tenant_id));
+USING (
+    EXISTS (SELECT 1 FROM public.cases c WHERE c.id = case_id)
+);
 
 DROP POLICY IF EXISTS case_items_select ON public.case_items;
 CREATE POLICY case_items_select ON public.case_items
 FOR SELECT TO authenticated
-USING (public.has_tenant_access(tenant_id));
+USING (
+    EXISTS (SELECT 1 FROM public.cases c WHERE c.id = case_id)
+);
 
 COMMENT ON POLICY cases_select_privileged ON public.cases IS 'Performance-optimized access for management roles.';
 COMMENT ON POLICY cases_select_owners ON public.cases IS 'Performance-optimized access for assigned users and sellers.';
