@@ -139,16 +139,16 @@ export function NewSalesOrderDialog(props: {
 
       // 3. Create Case Fields
       const fields = [
-        { case_id: caseId, key: "name", value_text: customerName, confidence: 1, last_updated_by: "panel" },
-        { case_id: caseId, key: "city", value_text: city, confidence: 1, last_updated_by: "panel" },
-        { case_id: caseId, key: "obs", value_text: observations, confidence: 1, last_updated_by: "panel" },
+        { case_id: caseId, key: "name", value_text: customerName, source: "admin", confidence: 1, last_updated_by: "panel" },
+        { case_id: caseId, key: "city", value_text: city, source: "admin", confidence: 1, last_updated_by: "panel" },
+        { case_id: caseId, key: "obs", value_text: observations, source: "admin", confidence: 1, last_updated_by: "panel" },
       ];
 
       if (orderPath) {
-        fields.push({ case_id: caseId, key: "order_attachment", value_text: orderPath, confidence: 1, last_updated_by: "panel" } as any);
+        fields.push({ case_id: caseId, key: "order_attachment", value_text: orderPath, source: "admin", confidence: 1, last_updated_by: "panel" } as any);
       }
       if (docPaths.length > 0) {
-        fields.push({ case_id: caseId, key: "docs_attachments", value_text: JSON.stringify(docPaths), confidence: 1, last_updated_by: "panel" } as any);
+        fields.push({ case_id: caseId, key: "docs_attachments", value_text: JSON.stringify(docPaths), source: "admin", confidence: 1, last_updated_by: "panel" } as any);
       }
 
       const { error: fieldsErr } = await supabase.from("case_fields").upsert(fields as any, { onConflict: "case_id,key" });
