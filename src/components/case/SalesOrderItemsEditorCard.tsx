@@ -475,53 +475,48 @@ export function SalesOrderItemsEditorCard(props: { caseId: string; className?: s
 
                   <div>
                     <Label className="text-[11px] text-slate-600">Produto / Serviço</Label>
-                    <Popover
-                      open={openOfferingPerLine[`mob-${row.line_no}`] || false}
-                      onOpenChange={(open) => {
-                        setOpenOfferingPerLine((prev) => ({ ...prev, [`mob-${row.line_no}`]: open }));
-                      }}
-                    >
-                      <PopoverTrigger asChild>
-                        <Input
-                          value={row.description}
-                          onChange={(e) => {
-                            const val = e.target.value;
-                            setDraft((prev) =>
-                              prev.map((x) =>
-                                x.line_no === row.line_no
-                                  ? { ...x, description: val, offering_entity_id: null }
-                                  : x
-                              )
-                            );
-                            setSearchOffering(val);
-                            setOpenOfferingPerLine((prev) => ({ ...prev, [`mob-${row.line_no}`]: true }));
-                          }}
-                          onFocus={() => {
-                            setSearchOffering(row.description);
-                            setOpenOfferingPerLine((prev) => ({ ...prev, [`mob-${row.line_no}`]: true }));
-                          }}
-                          className="mt-1 h-10 rounded-2xl"
-                          placeholder="Digite o nome do produto ou selecione..."
-                        />
-                      </PopoverTrigger>
-                      <PopoverContent 
-                        className="w-[300px] p-0 rounded-2xl overflow-hidden shadow-2xl" 
-                        side="bottom" 
-                        align="start"
-                        onOpenAutoFocus={(e) => e.preventDefault()}
-                      >
-                        <div className="flex flex-col">
+                    <div className="relative">
+                      <Input
+                        value={row.description}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setDraft((prev) =>
+                            prev.map((x) =>
+                              x.line_no === row.line_no
+                                ? { ...x, description: val, offering_entity_id: null }
+                                : x
+                            )
+                          );
+                          setSearchOffering(val);
+                          setOpenOfferingPerLine((prev) => ({ ...prev, [`mob-${row.line_no}`]: true }));
+                        }}
+                        onFocus={() => {
+                          setSearchOffering(row.description);
+                          setOpenOfferingPerLine((prev) => ({ ...prev, [`mob-${row.line_no}`]: true }));
+                        }}
+                        onBlur={() => {
+                          // Small timeout to allow onClick to fire on the results
+                          setTimeout(() => {
+                            setOpenOfferingPerLine((prev) => ({ ...prev, [`mob-${row.line_no}`]: false }));
+                          }, 200);
+                        }}
+                        className="mt-1 h-10 rounded-2xl"
+                        placeholder="Digite o nome do produto..."
+                      />
+                      
+                      {openOfferingPerLine[`mob-${row.line_no}`] && (
+                        <div className="absolute left-0 right-0 top-full z-[100] mt-1 max-h-[220px] overflow-y-auto rounded-2xl border border-slate-200 bg-white shadow-2xl">
                           {offeringsQ.isFetching && !offeringsQ.data?.length && (
                             <div className="p-4 text-center text-xs text-slate-500 flex items-center justify-center gap-2">
                               <Loader2 className="h-3 w-3 animate-spin" /> Procurando...
                             </div>
                           )}
-                          <div className="max-h-[220px] overflow-y-auto">
+                          <div className="flex flex-col">
                             {offeringsQ.data?.map((off: any) => (
-                              <Button
+                              <button
                                 key={off.id}
-                                variant="ghost"
-                                className="w-full justify-start rounded-none h-auto min-h-12 py-2 px-3 hover:bg-slate-50 whitespace-normal break-words text-left"
+                                type="button"
+                                className="w-full text-left rounded-none h-auto min-h-12 py-2 px-3 hover:bg-slate-50 transition-colors border-b border-slate-50 last:border-0"
                                 onClick={() => {
                                   setDraft((prev) =>
                                     prev.map((x) =>
@@ -542,30 +537,32 @@ export function SalesOrderItemsEditorCard(props: { caseId: string; className?: s
                                   setSearchOffering("");
                                 }}
                               >
-                                <div className="flex flex-col gap-0.5">
-                                  <div className="text-sm font-medium text-slate-900 leading-snug">
-                                    {off.display_name}
-                                  </div>
-                                  {(off.metadata?.short_name || off.metadata?.code) && (
-                                    <div className="text-[11px] text-slate-500 font-mono">
-                                      {off.metadata?.short_name || off.metadata?.code}
+                                <div className="flex items-center justify-between gap-3">
+                                  <div className="flex flex-col gap-0.5">
+                                    <div className="text-sm font-medium text-slate-900 leading-snug">
+                                      {off.display_name}
                                     </div>
+                                    {(off.metadata?.short_name || off.metadata?.code) && (
+                                      <div className="text-[11px] text-slate-500 font-mono">
+                                        {off.metadata?.short_name || off.metadata?.code}
+                                      </div>
+                                    )}
+                                  </div>
+                                  {row.offering_entity_id === off.id && (
+                                    <Check className="h-4 w-4 text-emerald-600 shrink-0" />
                                   )}
                                 </div>
-                                {row.offering_entity_id === off.id && (
-                                  <Check className="ml-auto h-4 w-4 text-emerald-600" />
-                                )}
-                              </Button>
+                              </button>
                             ))}
-                            {!offeringsQ.isFetching && offeringsQ.data?.length === 0 && (
+                            {!offeringsQ.isFetching && offeringsQ.data?.length === 0 && searchOffering.length > 2 && (
                               <div className="p-4 text-center text-xs text-slate-500">
                                 Nenhum produto encontrado.
                               </div>
                             )}
                           </div>
                         </div>
-                      </PopoverContent>
-                    </Popover>
+                      )}
+                    </div>
                   </div>
 
                   <div className="grid grid-cols-2 gap-3">
@@ -680,53 +677,47 @@ export function SalesOrderItemsEditorCard(props: { caseId: string; className?: s
 
                   <div>
                     <Label className="text-[11px] text-slate-600">Produto / Serviço</Label>
-                    <Popover
-                      open={openOfferingPerLine[`desk-${row.line_no}`] || false}
-                      onOpenChange={(open) => {
-                        setOpenOfferingPerLine((prev) => ({ ...prev, [`desk-${row.line_no}`]: open }));
-                      }}
-                    >
-                      <PopoverTrigger asChild>
-                        <Input
-                          value={row.description}
-                          onChange={(e) => {
-                            const val = e.target.value;
-                            setDraft((prev) =>
-                              prev.map((x) =>
-                                x.line_no === row.line_no
-                                  ? { ...x, description: val, offering_entity_id: null }
-                                  : x
-                              )
-                            );
-                            setSearchOffering(val);
-                            setOpenOfferingPerLine((prev) => ({ ...prev, [`desk-${row.line_no}`]: true }));
-                          }}
-                          onFocus={() => {
-                            setSearchOffering(row.description);
-                            setOpenOfferingPerLine((prev) => ({ ...prev, [`desk-${row.line_no}`]: true }));
-                          }}
-                          className="mt-1 h-10 rounded-2xl"
-                          placeholder="Digite o nome do produto ou selecione..."
-                        />
-                      </PopoverTrigger>
-                      <PopoverContent 
-                        className="w-[400px] p-0 rounded-2xl overflow-hidden shadow-2xl" 
-                        side="bottom" 
-                        align="start"
-                        onOpenAutoFocus={(e) => e.preventDefault()}
-                      >
-                        <div className="flex flex-col">
+                    <div className="relative">
+                      <Input
+                        value={row.description}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setDraft((prev) =>
+                            prev.map((x) =>
+                              x.line_no === row.line_no
+                                ? { ...x, description: val, offering_entity_id: null }
+                                : x
+                            )
+                          );
+                          setSearchOffering(val);
+                          setOpenOfferingPerLine((prev) => ({ ...prev, [`desk-${row.line_no}`]: true }));
+                        }}
+                        onFocus={() => {
+                          setSearchOffering(row.description);
+                          setOpenOfferingPerLine((prev) => ({ ...prev, [`desk-${row.line_no}`]: true }));
+                        }}
+                        onBlur={() => {
+                          setTimeout(() => {
+                            setOpenOfferingPerLine((prev) => ({ ...prev, [`desk-${row.line_no}`]: false }));
+                          }, 200);
+                        }}
+                        className="mt-1 h-10 rounded-2xl"
+                        placeholder="Digite o nome do produto..."
+                      />
+
+                      {openOfferingPerLine[`desk-${row.line_no}`] && (
+                        <div className="absolute left-0 right-0 top-full z-[100] mt-1 max-h-[260px] overflow-y-auto rounded-2xl border border-slate-200 bg-white shadow-2xl">
                           {offeringsQ.isFetching && !offeringsQ.data?.length && (
                             <div className="p-4 text-center text-xs text-slate-500 flex items-center justify-center gap-2">
                               <Loader2 className="h-3 w-3 animate-spin" /> Procurando...
                             </div>
                           )}
-                          <div className="max-h-[260px] overflow-y-auto">
+                          <div className="flex flex-col">
                             {offeringsQ.data?.map((off: any) => (
-                              <Button
+                              <button
                                 key={off.id}
-                                variant="ghost"
-                                className="w-full justify-start rounded-none h-auto min-h-12 py-2 px-3 hover:bg-slate-50 whitespace-normal break-words text-left"
+                                type="button"
+                                className="w-full text-left rounded-none h-auto min-h-12 py-2 px-3 hover:bg-slate-50 transition-colors border-b border-slate-50 last:border-0"
                                 onClick={() => {
                                   setDraft((prev) =>
                                     prev.map((x) =>
@@ -747,30 +738,32 @@ export function SalesOrderItemsEditorCard(props: { caseId: string; className?: s
                                   setSearchOffering("");
                                 }}
                               >
-                                <div className="flex flex-col gap-0.5">
-                                  <div className="text-sm font-medium text-slate-900 leading-snug">
-                                    {off.display_name}
-                                  </div>
-                                  {(off.metadata?.short_name || off.metadata?.code) && (
-                                    <div className="text-[11px] text-slate-500 font-mono">
-                                      {off.metadata?.short_name || off.metadata?.code}
+                                <div className="flex items-center justify-between gap-3">
+                                  <div className="flex flex-col gap-0.5">
+                                    <div className="text-sm font-medium text-slate-900 leading-snug">
+                                      {off.display_name}
                                     </div>
+                                    {(off.metadata?.short_name || off.metadata?.code) && (
+                                      <div className="text-[11px] text-slate-500 font-mono">
+                                        {off.metadata?.short_name || off.metadata?.code}
+                                      </div>
+                                    )}
+                                  </div>
+                                  {row.offering_entity_id === off.id && (
+                                    <Check className="h-4 w-4 text-emerald-600 shrink-0" />
                                   )}
                                 </div>
-                                {row.offering_entity_id === off.id && (
-                                  <Check className="ml-auto h-4 w-4 text-emerald-600" />
-                                )}
-                              </Button>
+                              </button>
                             ))}
-                            {!offeringsQ.isFetching && offeringsQ.data?.length === 0 && (
+                            {!offeringsQ.isFetching && offeringsQ.data?.length === 0 && searchOffering.length > 2 && (
                               <div className="p-4 text-center text-xs text-slate-500">
                                 Nenhum produto encontrado.
                               </div>
                             )}
                           </div>
                         </div>
-                      </PopoverContent>
-                    </Popover>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>
