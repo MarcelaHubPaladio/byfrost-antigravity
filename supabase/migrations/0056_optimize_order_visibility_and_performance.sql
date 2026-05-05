@@ -1,4 +1,4 @@
--- BYFROST — Performance Optimization for Order Visibility (Safe Version)
+-- BYFROST — Performance Optimization for Order Visibility (V3 - Stable)
 -- Optimized RLS policies and indexes to resolve 500 errors and slowness.
 
 -- 1. Create missing indexes for faster RLS evaluation
@@ -71,7 +71,7 @@ END;
 $$;
 
 -- 4. Re-apply Cases RLS with optimized logic
--- Using explicit table references to avoid "column does not exist" or ambiguity errors.
+-- Using simple column names to avoid schema/table resolution issues in Supabase.
 
 DROP POLICY IF EXISTS cases_select ON public.cases;
 DROP POLICY IF EXISTS cases_select_privileged ON public.cases;
@@ -83,8 +83,8 @@ FOR SELECT TO authenticated
 USING (
     public.is_super_admin() 
     OR (
-        public.has_tenant_access(public.cases.tenant_id)
-        AND public.is_privileged_role(public.cases.tenant_id)
+        public.has_tenant_access(tenant_id)
+        AND public.is_privileged_role(tenant_id)
     )
 );
 
@@ -92,33 +92,27 @@ USING (
 CREATE POLICY cases_select_owners ON public.cases
 FOR SELECT TO authenticated
 USING (
-    public.has_tenant_access(public.cases.tenant_id)
+    public.has_tenant_access(tenant_id)
     AND (
-        public.cases.assigned_user_id = auth.uid()
-        OR public.cases.created_by_user_id = auth.uid()
-        OR public.cases.assigned_vendor_id = public.get_my_vendor_id(public.cases.tenant_id)
-        OR (public.cases.assigned_user_id IN (SELECT public.get_subordinates(public.cases.tenant_id, auth.uid())))
+        assigned_user_id = auth.uid()
+        OR created_by_user_id = auth.uid()
+        OR (assigned_vendor_id IS NOT NULL AND assigned_vendor_id = public.get_my_vendor_id(tenant_id))
+        OR (assigned_user_id IN (SELECT public.get_subordinates(tenant_id, auth.uid())))
     )
 );
 
--- 5. Optimize related tables to ensure sums work correctly
--- case_fields and case_items should be readable if the case is readable.
+-- 5. Restore stable RLS for related tables
+-- Reverting to basic tenant-based access to ensure sums and fields load correctly.
 
 DROP POLICY IF EXISTS case_fields_select ON public.case_fields;
 CREATE POLICY case_fields_select ON public.case_fields
 FOR SELECT TO authenticated
-USING (
-    public.has_tenant_access(public.case_fields.tenant_id)
-    AND EXISTS (SELECT 1 FROM public.cases c WHERE c.id = public.case_fields.case_id)
-);
+USING (public.has_tenant_access(tenant_id));
 
 DROP POLICY IF EXISTS case_items_select ON public.case_items;
 CREATE POLICY case_items_select ON public.case_items
 FOR SELECT TO authenticated
-USING (
-    public.has_tenant_access(public.case_items.tenant_id)
-    AND EXISTS (SELECT 1 FROM public.cases c WHERE c.id = public.case_items.case_id)
-);
+USING (public.has_tenant_access(tenant_id));
 
 COMMENT ON POLICY cases_select_privileged ON public.cases IS 'Performance-optimized access for management roles.';
 COMMENT ON POLICY cases_select_owners ON public.cases IS 'Performance-optimized access for assigned users and sellers.';
