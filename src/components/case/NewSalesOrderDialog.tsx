@@ -139,25 +139,26 @@ export function NewSalesOrderDialog(props: {
 
       // 3. Create Case Fields
       const fields = [
-        { case_id: caseId, key: "name", value_text: customerName, source: "admin", confidence: 1, last_updated_by: "panel" },
-        { case_id: caseId, key: "city", value_text: city, source: "admin", confidence: 1, last_updated_by: "panel" },
-        { case_id: caseId, key: "obs", value_text: observations, source: "admin", confidence: 1, last_updated_by: "panel" },
-      ];
+        { case_id: caseId, key: "name", value_text: customerName, source: "ocr", confidence: 1, last_updated_by: "panel" },
+        { case_id: city && caseId, key: "city", value_text: city, source: "ocr", confidence: 1, last_updated_by: "panel" },
+        { case_id: observations && caseId, key: "obs", value_text: observations, source: "ocr", confidence: 1, last_updated_by: "panel" },
+      ].filter(f => f.case_id && f.value_text);
 
       if (orderPath) {
-        fields.push({ case_id: caseId, key: "order_attachment", value_text: orderPath, source: "admin", confidence: 1, last_updated_by: "panel" } as any);
+        fields.push({ case_id: caseId, key: "order_attachment", value_text: orderPath, source: "ocr", confidence: 1, last_updated_by: "panel" } as any);
       }
       if (docPaths.length > 0) {
-        fields.push({ case_id: caseId, key: "docs_attachments", value_text: JSON.stringify(docPaths), source: "admin", confidence: 1, last_updated_by: "panel" } as any);
+        fields.push({ case_id: caseId, key: "docs_attachments", value_text: JSON.stringify(docPaths), source: "ocr", confidence: 1, last_updated_by: "panel" } as any);
       }
 
       const { error: fieldsErr } = await supabase.from("case_fields").upsert(fields as any, { onConflict: "case_id,key" });
-      if (fieldsErr) throw fieldsErr;
+      if (fieldsErr) console.error("Error creating case fields:", fieldsErr);
 
       // 4. Create Case Attachments (for visibility in generic attachment lists)
       const attachmentsPayload = [];
       if (orderPath && orderFile) {
         attachmentsPayload.push({
+          tenant_id: tenantId,
           case_id: caseId,
           kind: "order",
           storage_path: supabase.storage.from("tenant-assets").getPublicUrl(orderPath).data.publicUrl,
@@ -168,6 +169,7 @@ export function NewSalesOrderDialog(props: {
       }
       for (let i = 0; i < docFiles.length; i++) {
         attachmentsPayload.push({
+          tenant_id: tenantId,
           case_id: caseId,
           kind: "document",
           storage_path: supabase.storage.from("tenant-assets").getPublicUrl(docPaths[i]).data.publicUrl,
@@ -178,7 +180,8 @@ export function NewSalesOrderDialog(props: {
       }
 
       if (attachmentsPayload.length > 0) {
-        await supabase.from("case_attachments").insert(attachmentsPayload);
+        const { error: attachErr } = await supabase.from("case_attachments").insert(attachmentsPayload);
+        if (attachErr) console.error("Error creating case attachments:", attachErr);
       }
 
       showSuccess("Pedido criado com sucesso!");
