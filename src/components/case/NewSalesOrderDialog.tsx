@@ -160,22 +160,22 @@ export function NewSalesOrderDialog(props: {
         attachmentsPayload.push({
           tenant_id: tenantId,
           case_id: caseId,
-          kind: "order",
+          kind: "doc",
           storage_path: supabase.storage.from("tenant-assets").getPublicUrl(orderPath).data.publicUrl,
           original_filename: orderFile.name,
           content_type: orderFile.type,
-          meta_json: { storage_path: orderPath, source: "simplified_modal" }
+          meta_json: { storage_path: orderPath, source: "simplified_modal", kind: "order" }
         });
       }
       for (let i = 0; i < docFiles.length; i++) {
         attachmentsPayload.push({
           tenant_id: tenantId,
           case_id: caseId,
-          kind: "document",
+          kind: "doc",
           storage_path: supabase.storage.from("tenant-assets").getPublicUrl(docPaths[i]).data.publicUrl,
           original_filename: docFiles[i].name,
           content_type: docFiles[i].type,
-          meta_json: { storage_path: docPaths[i], source: "simplified_modal" }
+          meta_json: { storage_path: docPaths[i], source: "simplified_modal", kind: "document" }
         });
       }
 

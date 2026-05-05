@@ -619,7 +619,7 @@ export default function SalesOrderCase() {
                                     <div className="flex items-center gap-3 min-w-0">
                                       <div className={cn(
                                         "h-10 w-10 rounded-xl flex items-center justify-center shrink-0",
-                                        a.kind === "order" ? "bg-blue-100 text-blue-600" : "bg-indigo-100 text-indigo-600"
+                                        (a.meta_json?.kind === "order" || a.kind === "order") ? "bg-blue-100 text-blue-600" : "bg-indigo-100 text-indigo-600"
                                       )}>
                                         <FileText className="h-5 w-5" />
                                       </div>
