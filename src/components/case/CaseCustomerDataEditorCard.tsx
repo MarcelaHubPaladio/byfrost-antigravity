@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { showError, showSuccess } from "@/utils/toast";
 import { cn } from "@/lib/utils";
-import { Banknote, ExternalLink, IdCard, MapPin, Save } from "lucide-react";
+import { Banknote, ExternalLink, IdCard, MapPin, Save, Mail, MessageSquare } from "lucide-react";
 import { useTenant } from "@/providers/TenantProvider";
 import { useSession } from "@/providers/SessionProvider";
 import {
@@ -61,6 +61,7 @@ export function CaseCustomerDataEditorCard(props: {
       customer_code: getField(fields, "customer_code"),
       phone: getField(fields, "phone"),
       email: getField(fields, "email"),
+      whatsapp: getFieldAny(fields, ["whatsapp", "phone"]), // Fallback to phone if whatsapp is empty
       cpf: getField(fields, "cpf"),
       cnpj: getField(fields, "cnpj"),
       rg: getField(fields, "rg"),
@@ -119,6 +120,7 @@ export function CaseCustomerDataEditorCard(props: {
         { key: "name", value_text: cleanOrNull(draft.name) },
         { key: "customer_code", value_text: cleanOrNull(draft.customer_code) },
         { key: "phone", value_text: cleanOrNull(draft.phone) },
+        { key: "whatsapp", value_text: cleanOrNull(draft.whatsapp) },
         { key: "email", value_text: cleanOrNull(draft.email) },
         { key: "cpf", value_text: cleanOrNull(draft.cpf) },
         { key: "cnpj", value_text: cleanOrNull(draft.cnpj) },
@@ -179,6 +181,8 @@ export function CaseCustomerDataEditorCard(props: {
         // cliente
         "customer_code",
         "email",
+        "phone",
+        "whatsapp",
         "cpf",
         "cnpj",
         "rg",
@@ -289,6 +293,34 @@ export function CaseCustomerDataEditorCard(props: {
       </div>
 
       <div className="mt-4 grid gap-3">
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div>
+            <Label className="text-xs">E-mail</Label>
+            <div className="relative">
+              <Mail className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
+              <Input
+                value={draft.email}
+                onChange={(e) => setDraft((p) => ({ ...p, email: e.target.value }))}
+                className="mt-1 h-10 rounded-2xl pl-9"
+                placeholder="exemplo@email.com"
+                type="email"
+              />
+            </div>
+          </div>
+          <div>
+            <Label className="text-xs">WhatsApp / Celular</Label>
+            <div className="relative">
+              <MessageSquare className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
+              <Input
+                value={draft.whatsapp}
+                onChange={(e) => setDraft((p) => ({ ...p, whatsapp: e.target.value }))}
+                className="mt-1 h-10 rounded-2xl pl-9"
+                placeholder="(00) 0 0000-0000"
+              />
+            </div>
+          </div>
+        </div>
+
         <div className="grid gap-3 sm:grid-cols-2">
           <div>
             <Label className="text-xs">Data de nascimento</Label>
