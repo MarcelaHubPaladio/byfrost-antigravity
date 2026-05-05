@@ -122,6 +122,7 @@ export function SalesOrderItemsEditorCard(props: { caseId: string; className?: s
       if (error) throw error;
       return data ?? [];
     },
+    placeholderData: (prev) => prev,
   });
 
   const initialDraft = useMemo<DraftRow[]>(() => {
@@ -475,7 +476,7 @@ export function SalesOrderItemsEditorCard(props: { caseId: string; className?: s
                   <div>
                     <Label className="text-[11px] text-slate-600">Produto / Serviço</Label>
                     <Popover
-                      open={(openOfferingPerLine[`mob-${row.line_no}`] || false) && offeringsQ.data && offeringsQ.data.length > 0}
+                      open={openOfferingPerLine[`mob-${row.line_no}`] || false}
                       onOpenChange={(open) => {
                         setOpenOfferingPerLine((prev) => ({ ...prev, [`mob-${row.line_no}`]: open }));
                       }}
@@ -504,12 +505,17 @@ export function SalesOrderItemsEditorCard(props: { caseId: string; className?: s
                         />
                       </PopoverTrigger>
                       <PopoverContent 
-                        className="w-[300px] p-0 rounded-2xl" 
+                        className="w-[300px] p-0 rounded-2xl overflow-hidden shadow-2xl" 
                         side="bottom" 
                         align="start"
                         onOpenAutoFocus={(e) => e.preventDefault()}
                       >
                         <div className="flex flex-col">
+                          {offeringsQ.isFetching && !offeringsQ.data?.length && (
+                            <div className="p-4 text-center text-xs text-slate-500 flex items-center justify-center gap-2">
+                              <Loader2 className="h-3 w-3 animate-spin" /> Procurando...
+                            </div>
+                          )}
                           <div className="max-h-[220px] overflow-y-auto">
                             {offeringsQ.data?.map((off: any) => (
                               <Button
@@ -551,6 +557,11 @@ export function SalesOrderItemsEditorCard(props: { caseId: string; className?: s
                                 )}
                               </Button>
                             ))}
+                            {!offeringsQ.isFetching && offeringsQ.data?.length === 0 && (
+                              <div className="p-4 text-center text-xs text-slate-500">
+                                Nenhum produto encontrado.
+                              </div>
+                            )}
                           </div>
                         </div>
                       </PopoverContent>
@@ -670,7 +681,7 @@ export function SalesOrderItemsEditorCard(props: { caseId: string; className?: s
                   <div>
                     <Label className="text-[11px] text-slate-600">Produto / Serviço</Label>
                     <Popover
-                      open={(openOfferingPerLine[`desk-${row.line_no}`] || false) && offeringsQ.data && offeringsQ.data.length > 0}
+                      open={openOfferingPerLine[`desk-${row.line_no}`] || false}
                       onOpenChange={(open) => {
                         setOpenOfferingPerLine((prev) => ({ ...prev, [`desk-${row.line_no}`]: open }));
                       }}
@@ -699,12 +710,17 @@ export function SalesOrderItemsEditorCard(props: { caseId: string; className?: s
                         />
                       </PopoverTrigger>
                       <PopoverContent 
-                        className="w-[400px] p-0 rounded-2xl" 
+                        className="w-[400px] p-0 rounded-2xl overflow-hidden shadow-2xl" 
                         side="bottom" 
                         align="start"
                         onOpenAutoFocus={(e) => e.preventDefault()}
                       >
                         <div className="flex flex-col">
+                          {offeringsQ.isFetching && !offeringsQ.data?.length && (
+                            <div className="p-4 text-center text-xs text-slate-500 flex items-center justify-center gap-2">
+                              <Loader2 className="h-3 w-3 animate-spin" /> Procurando...
+                            </div>
+                          )}
                           <div className="max-h-[260px] overflow-y-auto">
                             {offeringsQ.data?.map((off: any) => (
                               <Button
@@ -746,6 +762,11 @@ export function SalesOrderItemsEditorCard(props: { caseId: string; className?: s
                                 )}
                               </Button>
                             ))}
+                            {!offeringsQ.isFetching && offeringsQ.data?.length === 0 && (
+                              <div className="p-4 text-center text-xs text-slate-500">
+                                Nenhum produto encontrado.
+                              </div>
+                            )}
                           </div>
                         </div>
                       </PopoverContent>
