@@ -3,7 +3,7 @@ import { useParams, useNavigate, Link } from "react-router-dom";
 import { supabase } from "@/lib/supabase";
 import { useSession } from "@/providers/SessionProvider";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertCircle, Banknote, Calendar, Check, CheckCircle2, ChevronLeft, ClipboardList, Clock, CreditCard, DollarSign, FileText, History, MapPin, MoreVertical, Package, Plus, Save, Smartphone, Trash2, Truck, User, Users } from "lucide-react";
+import { AlertCircle, Banknote, Calendar, Check, CheckCircle2, ChevronLeft, ChevronRight, ClipboardList, Clock, CreditCard, DollarSign, FileText, History, MapPin, MoreVertical, Package, Plus, Save, Smartphone, Trash2, Truck, User, Users } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
