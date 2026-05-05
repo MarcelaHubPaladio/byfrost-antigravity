@@ -3,7 +3,7 @@ import { useParams, useNavigate, Link } from "react-router-dom";
 import { supabase } from "@/lib/supabase";
 import { useSession } from "@/providers/SessionProvider";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertCircle, Banknote, Calendar, Check, CheckCircle2, ChevronLeft, ChevronRight, ClipboardList, Clock, CreditCard, DollarSign, FileText, History, MapPin, MoreVertical, Package, Plus, Save, Smartphone, Trash2, Truck, User, Users } from "lucide-react";
+import { AlertCircle, Banknote, Calendar, Check, CheckCircle2, ChevronLeft, ChevronRight, ClipboardList, Clock, CreditCard, DollarSign, Eye, FileText, History, MapPin, MoreVertical, Package, Plus, Save, Smartphone, Trash2, Truck, User, Users } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/accordion";
 import { Card } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { SalesOrderReviewDialog } from "@/components/case/SalesOrderReviewDialog";
 import {
   Select,
   SelectContent,
@@ -63,6 +64,10 @@ export default function SalesOrderCase() {
   const qc = useQueryClient();
   const [updatingState, setUpdatingState] = useState(false);
   const [deleting, setDeleting] = useState(false);
+
+  // Review Dialog State
+  const [reviewOpen, setReviewOpen] = useState(false);
+  const [reviewImageUrl, setReviewImageUrl] = useState<string | null>(null);
   const [transitionBlock, setTransitionBlock] = useState<{
     open: boolean;
     nextStateName: string;
@@ -609,12 +614,13 @@ export default function SalesOrderCase() {
                               </div>
                               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                 {attachmentsData.map((a: any) => (
-                                  <a 
+                                  <div 
                                     key={a.id} 
-                                    href={a.storage_path} 
-                                    target="_blank" 
-                                    rel="noreferrer"
-                                    className="flex items-center justify-between p-4 rounded-2xl bg-slate-50 border border-slate-100 hover:bg-white hover:shadow-sm transition-all group"
+                                    onClick={() => {
+                                      setReviewImageUrl(a.storage_path);
+                                      setReviewOpen(true);
+                                    }}
+                                    className="flex items-center justify-between p-4 rounded-2xl bg-slate-50 border border-slate-100 hover:bg-white hover:shadow-sm transition-all group cursor-pointer"
                                   >
                                     <div className="flex items-center gap-3 min-w-0">
                                       <div className={cn(
@@ -628,12 +634,17 @@ export default function SalesOrderCase() {
                                           {a.original_filename || "Arquivo"}
                                         </p>
                                         <p className="text-[10px] text-slate-400 font-medium uppercase tracking-wider">
-                                          {a.kind === "order" ? "Pedido Principal" : "Documento"}
+                                          {(a.meta_json?.kind === "order" || a.kind === "order") ? "Pedido Principal" : "Documento"}
                                         </p>
                                       </div>
                                     </div>
-                                    <ChevronRight className="h-4 w-4 text-slate-300 group-hover:text-blue-400 transition-colors" />
-                                  </a>
+                                    <div className="flex items-center gap-2">
+                                      <div className="h-8 w-8 rounded-full bg-white border border-slate-100 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                        <Eye className="h-3.5 w-3.5 text-slate-400" />
+                                      </div>
+                                      <ChevronRight className="h-4 w-4 text-slate-300 group-hover:text-blue-400 transition-colors" />
+                                    </div>
+                                  </div>
                                 ))}
                               </div>
                             </div>
@@ -743,6 +754,15 @@ export default function SalesOrderCase() {
           onOpenChange={(open) => setTransitionBlock(p => ({ ...p, open }))}
           nextStateName={transitionBlock.nextStateName}
           blocks={transitionBlock.reasons}
+        />
+
+        {/* Review Dialog */}
+        <SalesOrderReviewDialog 
+          open={reviewOpen}
+          onOpenChange={setReviewOpen}
+          caseId={caseId!}
+          imageUrl={reviewImageUrl}
+          fields={fieldsData}
         />
       </AppShell>
     </RequireAuth>
