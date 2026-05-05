@@ -50,7 +50,7 @@ import { CaseTimeline } from "@/components/case/CaseTimeline";
 import { SalesOrderItemsEditorCard } from "@/components/case/SalesOrderItemsEditorCard";
 import { CaseCustomerDataEditorCard } from "@/components/case/CaseCustomerDataEditorCard";
 import { TransitionBlockDialog } from "@/components/case/TransitionBlockDialog";
-import { SalesOrderAddAttachmentExtractDialog } from "@/components/case/SalesOrderAddAttachmentExtractDialog";
+import { SalesOrderSimpleUploadDialog } from "@/components/case/SalesOrderSimpleUploadDialog";
 import { checkTransitionBlocks, TransitionBlockReason } from "@/lib/journeys/validation";
 import { getStateLabel } from "@/lib/journeyLabels";
 import { AppShell } from "@/components/AppShell";
@@ -614,7 +614,7 @@ export default function SalesOrderCase() {
                                   <FileText className="h-4 w-4 text-slate-400" />
                                   <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-400">Anexos do Pedido</h4>
                                 </div>
-                                <SalesOrderAddAttachmentExtractDialog 
+                                <SalesOrderSimpleUploadDialog 
                                   tenantId={tenantId!}
                                   caseId={caseId!}
                                 />
