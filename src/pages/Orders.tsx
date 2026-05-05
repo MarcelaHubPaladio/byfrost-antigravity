@@ -243,7 +243,7 @@ export default function Orders() {
     queryKey: ["customers_orders", activeTenantId, customerIds.length, customerIds[0], dateRange.from.getTime(), dateRange.to?.getTime()],
     enabled: Boolean(activeTenantId && customerIds.length),
     queryFn: async () => {
-      const CHUNK_SIZE = 20;
+      const CHUNK_SIZE = 100;
       const chunks: string[][] = [];
       for (let i = 0; i < customerIds.length; i += CHUNK_SIZE) {
         chunks.push(customerIds.slice(i, i + CHUNK_SIZE));
@@ -345,7 +345,7 @@ export default function Orders() {
     queryKey: ["orders_case_fields_extended", activeTenantId, journeyRows.length, journeyRows[0]?.id, dateRange.from.getTime(), dateRange.to?.getTime()],
     enabled: Boolean(activeTenantId && caseIdsForLookup.length),
     queryFn: async () => {
-      const CHUNK_SIZE = 10;
+      const CHUNK_SIZE = 100;
       const chunks: string[][] = [];
       for (let i = 0; i < caseIdsForLookup.length; i += CHUNK_SIZE) {
         chunks.push(caseIdsForLookup.slice(i, i + CHUNK_SIZE));
