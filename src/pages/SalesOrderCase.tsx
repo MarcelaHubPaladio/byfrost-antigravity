@@ -50,6 +50,7 @@ import { CaseTimeline } from "@/components/case/CaseTimeline";
 import { SalesOrderItemsEditorCard } from "@/components/case/SalesOrderItemsEditorCard";
 import { CaseCustomerDataEditorCard } from "@/components/case/CaseCustomerDataEditorCard";
 import { TransitionBlockDialog } from "@/components/case/TransitionBlockDialog";
+import { SalesOrderAddAttachmentExtractDialog } from "@/components/case/SalesOrderAddAttachmentExtractDialog";
 import { checkTransitionBlocks, TransitionBlockReason } from "@/lib/journeys/validation";
 import { getStateLabel } from "@/lib/journeyLabels";
 import { AppShell } from "@/components/AppShell";
@@ -608,43 +609,75 @@ export default function SalesOrderCase() {
 
                           {attachmentsData && attachmentsData.length > 0 && (
                             <div className="mt-8 pt-8 border-t border-slate-100">
-                              <div className="flex items-center gap-2 mb-4">
-                                <FileText className="h-4 w-4 text-slate-400" />
-                                <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-400">Anexos do Pedido</h4>
+                              <div className="flex items-center justify-between gap-2 mb-4">
+                                <div className="flex items-center gap-2">
+                                  <FileText className="h-4 w-4 text-slate-400" />
+                                  <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-400">Anexos do Pedido</h4>
+                                </div>
+                                <SalesOrderAddAttachmentExtractDialog 
+                                  tenantId={tenantId!}
+                                  caseId={caseId!}
+                                />
                               </div>
                               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                 {attachmentsData.map((a: any) => (
+                                <div 
+                                  key={a.id} 
+                                  className="flex items-center justify-between p-4 rounded-2xl bg-slate-50 border border-slate-100 hover:bg-white hover:shadow-sm transition-all group cursor-pointer"
+                                >
                                   <div 
-                                    key={a.id} 
+                                    className="flex-1 flex items-center gap-3 min-w-0"
                                     onClick={() => {
                                       setReviewImageUrl(a.storage_path);
                                       setReviewOpen(true);
                                     }}
-                                    className="flex items-center justify-between p-4 rounded-2xl bg-slate-50 border border-slate-100 hover:bg-white hover:shadow-sm transition-all group cursor-pointer"
                                   >
-                                    <div className="flex items-center gap-3 min-w-0">
-                                      <div className={cn(
-                                        "h-10 w-10 rounded-xl flex items-center justify-center shrink-0",
-                                        (a.meta_json?.kind === "order" || a.kind === "order") ? "bg-blue-100 text-blue-600" : "bg-indigo-100 text-indigo-600"
-                                      )}>
-                                        <FileText className="h-5 w-5" />
-                                      </div>
-                                      <div className="min-w-0">
-                                        <p className="text-xs font-bold text-slate-700 truncate group-hover:text-blue-600 transition-colors">
-                                          {a.original_filename || "Arquivo"}
-                                        </p>
-                                        <p className="text-[10px] text-slate-400 font-medium uppercase tracking-wider">
-                                          {(a.meta_json?.kind === "order" || a.kind === "order") ? "Pedido Principal" : "Documento"}
-                                        </p>
-                                      </div>
+                                    <div className={cn(
+                                      "h-10 w-10 rounded-xl flex items-center justify-center shrink-0",
+                                      (a.meta_json?.kind === "order" || a.kind === "order") ? "bg-blue-100 text-blue-600" : "bg-indigo-100 text-indigo-600"
+                                    )}>
+                                      <FileText className="h-5 w-5" />
                                     </div>
-                                    <div className="flex items-center gap-2">
-                                      <div className="h-8 w-8 rounded-full bg-white border border-slate-100 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                                        <Eye className="h-3.5 w-3.5 text-slate-400" />
-                                      </div>
-                                      <ChevronRight className="h-4 w-4 text-slate-300 group-hover:text-blue-400 transition-colors" />
+                                    <div className="min-w-0">
+                                      <p className="text-xs font-bold text-slate-700 truncate group-hover:text-blue-600 transition-colors">
+                                        {a.original_filename || "Arquivo"}
+                                      </p>
+                                      <p className="text-[10px] text-slate-400 font-medium uppercase tracking-wider">
+                                        {(a.meta_json?.kind === "order" || a.kind === "order") ? "Pedido Principal" : "Documento"}
+                                      </p>
                                     </div>
                                   </div>
+                                  <div className="flex items-center gap-2">
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        if (confirm("Deseja realmente excluir este anexo?")) {
+                                          supabase.from("case_attachments").delete().eq("id", a.id)
+                                            .then(({ error }) => {
+                                              if (error) showError("Erro ao excluir");
+                                              else {
+                                                showSuccess("Anexo excluído");
+                                                qc.invalidateQueries({ queryKey: ["case_attachments", caseId] });
+                                              }
+                                            });
+                                        }
+                                      }}
+                                      className="h-8 w-8 rounded-full bg-white border border-slate-100 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-50 hover:border-red-100 hover:text-red-500 text-slate-400"
+                                    >
+                                      <Trash2 className="h-3.5 w-3.5" />
+                                    </button>
+                                    <div 
+                                      onClick={() => {
+                                        setReviewImageUrl(a.storage_path);
+                                        setReviewOpen(true);
+                                      }}
+                                      className="h-8 w-8 rounded-full bg-white border border-slate-100 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                                    >
+                                      <Eye className="h-3.5 w-3.5 text-slate-400" />
+                                    </div>
+                                    <ChevronRight className="h-4 w-4 text-slate-300 group-hover:text-blue-400 transition-colors" />
+                                  </div>
+                                </div>
                                 ))}
                               </div>
                             </div>
