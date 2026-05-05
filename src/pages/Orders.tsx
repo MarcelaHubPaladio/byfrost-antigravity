@@ -88,6 +88,7 @@ type CaseRow = {
   is_chat?: boolean;
   users_profile?: { display_name: string | null; email: string | null } | null;
   journeys?: { key: string | null; name: string | null; is_crm?: boolean } | null;
+  assigned_vendor?: { display_name: string | null } | null;
   meta_json?: any;
 };
 
@@ -213,7 +214,7 @@ export default function Orders() {
       const { data, error } = await supabase
         .from("cases")
         .select(
-          "id,journey_id,customer_id,title,status,state,created_at,updated_at,assigned_user_id,is_chat,users_profile:users_profile!fk_cases_users_profile(display_name,email),journeys:journeys!cases_journey_id_fkey(key,name,is_crm),meta_json"
+          "id,journey_id,customer_id,title,status,state,created_at,updated_at,assigned_user_id,assigned_vendor_id,is_chat,users_profile:users_profile!fk_cases_users_profile(display_name,email),journeys:journeys!cases_journey_id_fkey(key,name,is_crm),assigned_vendor:vendors!cases_assigned_vendor_id_fkey(display_name),meta_json"
         )
         .eq("tenant_id", activeTenantId!)
         .eq("journey_id", selectedJourney!.id)
@@ -1340,7 +1341,20 @@ export default function Orders() {
                                 #{c.meta_json?.external_id || c.id.slice(0, 8)}
                               </Badge>
                             </div>
-                            <div className="mt-1 text-xs text-slate-500">{c.users_profile?.display_name || "Sem dono"}</div>
+                            <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1">
+                                <div className="flex items-center gap-1" title="Vendedor Comercial">
+                                  <div className="flex h-3.5 w-3.5 items-center justify-center rounded bg-blue-100 text-[7px] font-black text-blue-700">V</div>
+                                  <span className="text-[10px] font-medium text-slate-500 truncate max-w-[60px]">
+                                    {c.assigned_vendor?.display_name || "—"}
+                                  </span>
+                                </div>
+                                <div className="flex items-center gap-1" title="Responsável Atual">
+                                  <div className="flex h-3.5 w-3.5 items-center justify-center rounded bg-purple-100 text-[7px] font-black text-purple-700">R</div>
+                                  <span className="text-[10px] font-bold text-slate-700 truncate max-w-[60px]">
+                                    {c.users_profile?.display_name?.split(" ")[0] || "—"}
+                                  </span>
+                                </div>
+                            </div>
                             <div className="mt-3 flex items-center justify-between">
                               <div className="flex items-center gap-1 text-[10px] text-slate-400">
                                 <Clock className="h-3 w-3" /> {minutesAgo(c.updated_at)}m
@@ -1367,6 +1381,7 @@ export default function Orders() {
                       <TableHead>Valor</TableHead>
                       <TableHead>Itens</TableHead>
                       <TableHead>Vendedor</TableHead>
+                      <TableHead>Responsável</TableHead>
                       <TableHead>Etapa</TableHead>
                       <TableHead>Pagamento</TableHead>
                       <TableHead>Status</TableHead>
@@ -1397,7 +1412,10 @@ export default function Orders() {
                             {caseDataQ.data?.itemCounts.get(c.id) || 0}
                           </Badge>
                         </TableCell>
-                        <TableCell className="text-sm truncate max-w-[120px]" title={c.users_profile?.display_name || ""}>
+                        <TableCell className="text-sm truncate max-w-[120px]" title={c.assigned_vendor?.display_name || ""}>
+                          {c.assigned_vendor?.display_name || "—"}
+                        </TableCell>
+                        <TableCell className="text-[11px] font-bold text-slate-700 truncate max-w-[120px]" title={c.users_profile?.display_name || ""}>
                           {c.users_profile?.display_name || "—"}
                         </TableCell>
                         <TableCell>
