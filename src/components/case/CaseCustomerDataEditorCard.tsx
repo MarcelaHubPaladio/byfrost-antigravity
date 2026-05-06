@@ -243,6 +243,14 @@ export function CaseCustomerDataEditorCard(props: {
       });
       if (error) throw error;
 
+      // Also update the case title if name is provided to ensure it reflects in the UI header
+      if (draft.name) {
+        await supabase
+          .from("cases")
+          .update({ title: draft.name })
+          .eq("id", caseId);
+      }
+
       // Audit trail: timeline event with user + timestamp
       if (activeTenantId) {
         await supabase.from("timeline_events").insert({
@@ -293,6 +301,16 @@ export function CaseCustomerDataEditorCard(props: {
       </div>
 
       <div className="mt-4 grid gap-3">
+        <div>
+          <Label className="text-xs">Nome do Cliente</Label>
+          <Input
+            value={draft.name}
+            onChange={(e) => setDraft((p) => ({ ...p, name: e.target.value }))}
+            className="mt-1 h-10 rounded-2xl"
+            placeholder="Nome completo"
+          />
+        </div>
+
         <div className="grid gap-3 sm:grid-cols-2">
           <div>
             <Label className="text-xs">E-mail</Label>
