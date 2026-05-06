@@ -607,18 +607,19 @@ export default function SalesOrderCase() {
                         <AccordionContent className="p-8 border-t border-slate-100 pt-8">
                           <SalesOrderItemsEditorCard caseId={caseId!} />
 
-                          {attachmentsData && attachmentsData.length > 0 && (
-                            <div className="mt-8 pt-8 border-t border-slate-100">
-                              <div className="flex items-center justify-between gap-2 mb-4">
-                                <div className="flex items-center gap-2">
-                                  <FileText className="h-4 w-4 text-slate-400" />
-                                  <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-400">Anexos do Pedido</h4>
-                                </div>
-                                <SalesOrderSimpleUploadDialog 
-                                  tenantId={tenantId!}
-                                  caseId={caseId!}
-                                />
+                          <div className="mt-8 pt-8 border-t border-slate-100">
+                            <div className="flex items-center justify-between gap-2 mb-4">
+                              <div className="flex items-center gap-2">
+                                <FileText className="h-4 w-4 text-slate-400" />
+                                <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-400">Anexos do Pedido</h4>
                               </div>
+                              <SalesOrderSimpleUploadDialog 
+                                tenantId={tenantId!}
+                                caseId={caseId!}
+                              />
+                            </div>
+                            
+                            {attachmentsData && attachmentsData.length > 0 ? (
                               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                 {attachmentsData.map((a: any) => (
                                 <div 
@@ -680,8 +681,12 @@ export default function SalesOrderCase() {
                                 </div>
                                 ))}
                               </div>
-                            </div>
-                          )}
+                            ) : (
+                              <div className="py-4 px-6 rounded-2xl bg-slate-50/50 border border-dashed border-slate-200 text-center">
+                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Nenhum anexo encontrado</p>
+                              </div>
+                            )}
+                          </div>
                         </AccordionContent>
                       </Card>
                     </AccordionItem>
