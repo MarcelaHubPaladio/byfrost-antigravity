@@ -826,6 +826,7 @@ export function AppShell({
   const hasOperacaoM30 = journeys.some((r) => r.journeys?.key === "operacao_m30");
   const hasMktTecha = journeys.some((r) => r.journeys?.key === "mkt-super-techa");
   const hasOrders = journeys.some((r) => r.journeys?.key === "sales_order");
+  const hasClientesSawe = journeys.some((r) => r.journeys?.key === "clientes_sawe");
 
   const hasIncentivesCampaigns = Boolean(incentivesHasCampaignsQ.data);
   const isPresenceManager = isSuperAdmin || isPresenceManagerRole(activeTenant?.role);
@@ -1005,6 +1006,7 @@ export function AppShell({
                 {hasOperacaoM30 && <NavTile to="/app/operacao-m30" icon={Users} label="Clientes M30" disabled={!can("app.operacao_m30")} />}
                 {hasMktTecha && <NavTile to="/app/mkt-techa" icon={Star} label="MKT Técha" disabled={!can("app.dashboard")} />}
                 {hasOrders && <NavTile to="/app/orders" icon={Package} label="Pedidos" disabled={!can("app.dashboard")} />}
+                {hasClientesSawe && <NavTile to="/app/clientes-sawe" icon={Users} label="SAWE" disabled={!can("app.dashboard")} />}
                 {hasCrm && <NavTile to="/app/crm" icon={LayoutDashboard} label="CRM" disabled={!can("app.crm")} />}
                 {hasMetaContent && (
                   <NavTile to="/app/content" icon={Clapperboard} label="Conteúdo" disabled={!can("app.content")} />

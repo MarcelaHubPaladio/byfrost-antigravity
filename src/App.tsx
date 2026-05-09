@@ -99,9 +99,8 @@ const MktTechaPublicReport = lazyWithRetry(() => import("@/pages/MktTechaPublicR
 const SuperTasks = lazyWithRetry(() => import("@/pages/SuperTasks"));
 const Processes = lazyWithRetry(() => import("@/pages/Processes"));
 const ProcessEditor = lazyWithRetry(() => import("@/pages/ProcessEditor"));
-
-
-
+const ClientesSawe = lazyWithRetry(() => import("@/pages/ClientesSawe"));
+const ClientesSaweCase = lazyWithRetry(() => import("@/pages/ClientesSaweCase"));
 const GlobalLoading = () => (
   <div className="flex h-screen w-full items-center justify-center bg-slate-50 dark:bg-slate-950">
     <div className="h-8 w-8 animate-spin rounded-full border-4 border-slate-200 border-t-blue-500 dark:border-slate-800" />
@@ -725,6 +724,24 @@ const App = () => (
                     element={
                       <RequireRouteAccess routeKey="app.dashboard">
                         <SalesOrderCase />
+                      </RequireRouteAccess>
+                    }
+                  />
+
+                  <Route
+                    path="/app/clientes-sawe"
+                    element={
+                      <RequireRouteAccess routeKey="app.dashboard">
+                        <ClientesSawe />
+                      </RequireRouteAccess>
+                    }
+                  />
+
+                  <Route
+                    path="/app/clientes-sawe/:id"
+                    element={
+                      <RequireRouteAccess routeKey="app.dashboard">
+                        <ClientesSaweCase />
                       </RequireRouteAccess>
                     }
                   />

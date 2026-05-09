@@ -243,7 +243,7 @@ export default function Dashboard() {
       const opts: JourneyOpt[] = (data ?? [])
         .map((r: any) => r.journeys)
         .filter(Boolean)
-        .filter((j: any) => !j.is_crm && j.key !== "trello")
+        .filter((j: any) => !j.is_crm && j.key !== "trello" && j.key !== "clientes_sawe")
         .map((j: any) => ({
           id: j.id,
           key: j.key,
