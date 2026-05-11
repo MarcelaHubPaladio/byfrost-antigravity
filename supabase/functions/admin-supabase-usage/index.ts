@@ -30,9 +30,9 @@ serve(async (req) => {
     }
 
     // 3) Get Configuration
-    const token = Deno.env.get("SUPABASE_ACCESS_TOKEN");
+    const token = Deno.env.get("SB_MGMT_TOKEN");
     if (!token) {
-      return new Response(JSON.stringify({ error: "Missing SUPABASE_ACCESS_TOKEN secret" }), { status: 500, headers: corsHeaders });
+      return new Response(JSON.stringify({ error: "Missing SB_MGMT_TOKEN secret" }), { status: 500, headers: corsHeaders });
     }
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
