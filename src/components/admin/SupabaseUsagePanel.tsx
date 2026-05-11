@@ -37,6 +37,7 @@ import { showError } from "@/utils/toast";
 
 export function SupabaseUsagePanel() {
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [months, setMonths] = useState(6);
 
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ["admin_supabase_usage"],
@@ -85,14 +86,21 @@ export function SupabaseUsagePanel() {
     );
   }
 
-  const stats = data?.stats || [];
-  const current = stats[stats.length - 1] || {};
+  const allStats = data?.stats || [];
+  // Filter by selected months
+  const stats = allStats.slice(-months);
+  const current = allStats[allStats.length - 1] || {};
 
   const chartConfig = {
     egress: {
       label: "Largura de Banda (GB)",
       color: "hsl(var(--primary))",
     },
+  };
+
+  const formatGb = (val: number | undefined) => {
+    if (typeof val !== 'number') return "0.000";
+    return val.toFixed(3);
   };
 
   return (
@@ -104,16 +112,34 @@ export function SupabaseUsagePanel() {
             Monitoramento de infraestrutura e consumo (Project Ref: {data?.projectRef})
           </p>
         </div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={handleRefresh}
-          disabled={isRefreshing}
-          className="gap-2"
-        >
-          <RefreshCcw className={`h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`} />
-          Atualizar Dados
-        </Button>
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-1 rounded-2xl border border-slate-200 bg-white/50 p-1 dark:border-slate-800 dark:bg-slate-950/50">
+            {[3, 6, 12].map((m) => (
+              <button
+                key={m}
+                onClick={() => setMonths(m)}
+                className={cn(
+                  "px-3 py-1 text-[10px] font-bold uppercase transition-all rounded-xl",
+                  months === m 
+                    ? "bg-[hsl(var(--byfrost-accent))] text-white shadow-sm" 
+                    : "text-slate-500 hover:bg-slate-100"
+                )}
+              >
+                {m} Meses
+              </button>
+            ))}
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleRefresh}
+            disabled={isRefreshing}
+            className="gap-2 h-9 rounded-2xl"
+          >
+            <RefreshCcw className={`h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`} />
+            Atualizar
+          </Button>
+        </div>
       </div>
 
       {/* Summary Cards */}
@@ -126,7 +152,7 @@ export function SupabaseUsagePanel() {
             <Database className="h-4 w-4 text-indigo-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{current.db_size_gb?.toFixed(3)} GB</div>
+            <div className="text-2xl font-bold">{formatGb(current.db_size_gb)} GB</div>
             <p className="text-[10px] text-muted-foreground">Tamanho atual do banco</p>
           </CardContent>
         </Card>
@@ -139,7 +165,7 @@ export function SupabaseUsagePanel() {
             <HardDrive className="h-4 w-4 text-emerald-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{current.storage_size_gb?.toFixed(3)} GB</div>
+            <div className="text-2xl font-bold">{formatGb(current.storage_size_gb)} GB</div>
             <p className="text-[10px] text-muted-foreground">Arquivos e mídia</p>
           </CardContent>
         </Card>
@@ -152,7 +178,7 @@ export function SupabaseUsagePanel() {
             <Users className="h-4 w-4 text-blue-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{current.auth_users}</div>
+            <div className="text-2xl font-bold">{current.auth_users || 0}</div>
             <p className="text-[10px] text-muted-foreground">Total de contas criadas</p>
           </CardContent>
         </Card>
@@ -165,7 +191,7 @@ export function SupabaseUsagePanel() {
             <Zap className="h-4 w-4 text-amber-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{current.edge_functions_invocations?.toLocaleString()}</div>
+            <div className="text-2xl font-bold">{(current.edge_functions_invocations || 0).toLocaleString()}</div>
             <p className="text-[10px] text-muted-foreground">Chamadas neste período</p>
           </CardContent>
         </Card>
