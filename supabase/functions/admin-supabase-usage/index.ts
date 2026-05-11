@@ -45,22 +45,22 @@ serve(async (req) => {
 
     // 4) Dynamic SQL based on range
     let interval = "7 day";
-    let trunc = "day";
+    let trunc = "DAY";
     
     if (range === "day") {
       interval = "24 hour";
-      trunc = "hour";
+      trunc = "HOUR";
     } else if (range === "hour") {
       interval = "1 hour";
-      trunc = "minute";
+      trunc = "MINUTE";
     } else if (range === "minute") {
       interval = "1 minute";
-      trunc = "second";
+      trunc = "SECOND";
     }
 
     const egressSql = `
       SELECT 
-          date_trunc('${trunc}', timestamp_seconds(cast(timestamp / 1000000 as int64))) as time_bucket,
+          timestamp_trunc(timestamp, ${trunc}) as time_bucket,
           sum(safe_cast(m.response[OFFSET(0)].headers[OFFSET(0)].content_length as int64)) as bytes,
           count(*) as requests
       FROM 
@@ -72,6 +72,7 @@ serve(async (req) => {
       GROUP BY 1
       ORDER BY 1 DESC
     `;
+
 
     const logsUrl = `https://api.supabase.com/v1/projects/${projectRef}/analytics/endpoints/logs.all?sql=${encodeURIComponent(egressSql)}`;
     const logsRes = await fetch(logsUrl, {
