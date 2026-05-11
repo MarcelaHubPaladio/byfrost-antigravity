@@ -38,66 +38,75 @@ serve(async (req) => {
     const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
     const projectRef = new URL(supabaseUrl).hostname.split('.')[0];
 
-    // 4) Fetch Usage Data
-    const now = new Date();
-    const periods = [];
-    for (let i = 0; i < 12; i++) { // Fetch up to 12 months to have data for selector
-      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-      periods.push({ year: d.getFullYear(), month: d.getMonth() + 1 });
-    }
+    console.log(`[admin-supabase-usage] Fetching log-based usage for project ${projectRef}...`);
 
-    console.log(`[admin-supabase-usage] Fetching usage for project ${projectRef}...`);
+    // 4) Fetch Egress via Logs (Last 7 days)
+    const egressSql = `
+      SELECT 
+          date_trunc('day', timestamp_seconds(cast(timestamp / 1000000 as int64))) as day,
+          sum(safe_cast(m.response[OFFSET(0)].headers[OFFSET(0)].content_length as int64)) as bytes,
+          count(*) as requests
+      FROM 
+          edge_logs CROSS JOIN UNNEST(metadata) as m
+      WHERE 
+          m.request[OFFSET(0)].path LIKE '%/storage/%' 
+          AND m.response[OFFSET(0)].status_code IN (200, 206)
+          AND timestamp >= timestamp_sub(current_timestamp(), interval 7 day)
+      GROUP BY 1
+      ORDER BY 1 DESC
+    `;
 
-    const statsPromises = periods.map(async (p) => {
-      const url = `https://api.supabase.com/v1/projects/${projectRef}/usage?year=${p.year}&month=${p.month}`;
-      try {
-        const res = await fetch(url, {
-          headers: { "Authorization": `Bearer ${token}` }
-        });
-        const data = await res.json();
-        
-        if (!res.ok) {
-          console.error(`[admin-supabase-usage] Error fetching period ${p.month}/${p.year}:`, data);
-          return { ...p, ok: false, error: data };
-        }
-
-        return { ...p, data, ok: true };
-      } catch (err) {
-        return { ...p, ok: false, error: err.message };
+    const logsUrl = `https://api.supabase.com/v1/projects/${projectRef}/analytics/endpoints/logs.all?sql=${encodeURIComponent(egressSql)}`;
+    const logsRes = await fetch(logsUrl, {
+      headers: { 
+        "Authorization": `Bearer ${token}`,
+        "Accept": "application/json",
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
       }
     });
 
-    const results = await Promise.all(statsPromises);
+    const logsData = await logsRes.json();
+    const dailyEgress = logsData.result || [];
 
-    // Filter results and format
-    const formatted = results.reverse().map(r => {
-      if (!r.ok) return { year: r.year, month: r.month, periodLabel: `${r.month}/${r.year}`, error: true };
+    // 5) Fetch DB Metrics (Directly from DB via RPC or Query)
+    // We'll try to get these from the Management API first, if it fails, we show what we have from logs
+    const now = new Date();
+    const currentPeriod = { year: now.getFullYear(), month: now.getMonth() + 1 };
+    
+    const usageUrl = `https://api.supabase.com/v1/projects/${projectRef}/usage?year=${currentPeriod.year}&month=${currentPeriod.month}`;
+    const usageRes = await fetch(usageUrl, {
+      headers: { "Authorization": `Bearer ${token}` }
+    });
+    
+    let stats = [];
+    if (usageRes.ok) {
+      const d = await usageRes.json();
+      const getUsage = (key: string) => (d[key] && typeof d[key].usage === 'number') ? d[key].usage : 0;
       
-      const d = r.data;
-      // Helper to get usage safely
-      const getUsage = (key: string) => {
-        if (d[key] && typeof d[key].usage === 'number') return d[key].usage;
-        return 0;
-      };
-
-      return {
-        year: r.year,
-        month: r.month,
-        periodLabel: `${r.month}/${r.year}`,
+      stats.push({
+        year: currentPeriod.year,
+        month: currentPeriod.month,
+        periodLabel: `${currentPeriod.month}/${currentPeriod.year}`,
         egress_gb: getUsage('egress') / (1024 * 1024 * 1024),
         db_size_gb: getUsage('db_size') / (1024 * 1024 * 1024),
         storage_size_gb: getUsage('storage_size') / (1024 * 1024 * 1024),
         auth_users: getUsage('auth_users'),
         edge_functions_invocations: getUsage('edge_functions_invocations'),
-        raw: d
-      };
-    });
+        from_official_api: true
+      });
+    }
 
-    return new Response(JSON.stringify({ ok: true, projectRef, stats: formatted }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
-
-    return new Response(JSON.stringify({ ok: true, projectRef, stats: formatted }), {
+    // Always include the log-based metrics for the dashboard
+    return new Response(JSON.stringify({ 
+      ok: true, 
+      projectRef, 
+      stats: stats,
+      daily_egress: dailyEgress.map((d: any) => ({
+        day: d.day,
+        egress_gb: (d.bytes || 0) / (1024 * 1024 * 1024),
+        requests: d.requests
+      }))
+    }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
 
@@ -106,3 +115,4 @@ serve(async (req) => {
     return new Response(JSON.stringify({ error: e.message }), { status: 500, headers: corsHeaders });
   }
 });
+

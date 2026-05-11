@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { cn } from "@/lib/utils";
 import { supabase } from "@/lib/supabase";
 import {
   Card,
@@ -84,9 +85,9 @@ export function SupabaseUsagePanel() {
         </Button>
       </div>
     );
-  }
-
-  const allStats = data?.stats || [];
+  }  const allStats = data?.stats || [];
+  const dailyEgress = data?.daily_egress || [];
+  
   // Filter by selected months
   const stats = allStats.slice(-months);
   const current = allStats[allStats.length - 1] || {};
@@ -96,6 +97,10 @@ export function SupabaseUsagePanel() {
       label: "Largura de Banda (GB)",
       color: "hsl(var(--primary))",
     },
+    daily: {
+      label: "Consumo Diário (GB)",
+      color: "hsl(var(--byfrost-accent))",
+    }
   };
 
   const formatGb = (val: number | undefined) => {
@@ -103,8 +108,17 @@ export function SupabaseUsagePanel() {
     return val.toFixed(3);
   };
 
+  const formatDate = (dateStr: string) => {
+    try {
+      const d = new Date(dateStr);
+      return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+    } catch {
+      return dateStr;
+    }
+  };
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 pb-12">
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold tracking-tight">Status do Supabase</h2>
@@ -113,22 +127,6 @@ export function SupabaseUsagePanel() {
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <div className="flex items-center gap-1 rounded-2xl border border-slate-200 bg-white/50 p-1 dark:border-slate-800 dark:bg-slate-950/50">
-            {[3, 6, 12].map((m) => (
-              <button
-                key={m}
-                onClick={() => setMonths(m)}
-                className={cn(
-                  "px-3 py-1 text-[10px] font-bold uppercase transition-all rounded-xl",
-                  months === m 
-                    ? "bg-[hsl(var(--byfrost-accent))] text-white shadow-sm" 
-                    : "text-slate-500 hover:bg-slate-100"
-                )}
-              >
-                {m} Meses
-              </button>
-            ))}
-          </div>
           <Button
             variant="outline"
             size="sm"
@@ -160,13 +158,13 @@ export function SupabaseUsagePanel() {
         <Card className="overflow-hidden border-none bg-white/50 shadow-sm transition-all hover:shadow-md dark:bg-slate-900/50">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-xs font-medium uppercase tracking-wider text-slate-500">
-              Storage
+              Storage (Total)
             </CardTitle>
             <HardDrive className="h-4 w-4 text-emerald-500" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{formatGb(current.storage_size_gb)} GB</div>
-            <p className="text-[10px] text-muted-foreground">Arquivos e mídia</p>
+            <p className="text-[10px] text-muted-foreground">Arquivos e mídia armazenados</p>
           </CardContent>
         </Card>
 
@@ -183,72 +181,135 @@ export function SupabaseUsagePanel() {
           </CardContent>
         </Card>
 
-        <Card className="overflow-hidden border-none bg-white/50 shadow-sm transition-all hover:shadow-md dark:bg-slate-900/50">
+        <Card className="overflow-hidden border-none bg-[hsl(var(--byfrost-accent)/0.05)] border-[hsl(var(--byfrost-accent)/0.1)] shadow-sm transition-all hover:shadow-md dark:bg-slate-900/50">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-xs font-medium uppercase tracking-wider text-slate-500">
-              Edge Functions
+            <CardTitle className="text-xs font-medium uppercase tracking-wider text-[hsl(var(--byfrost-accent))]">
+              Egress Hoje (Logs)
             </CardTitle>
-            <Zap className="h-4 w-4 text-amber-500" />
+            <Activity className="h-4 w-4 text-[hsl(var(--byfrost-accent))]" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{(current.edge_functions_invocations || 0).toLocaleString()}</div>
-            <p className="text-[10px] text-muted-foreground">Chamadas neste período</p>
+            <div className="text-2xl font-bold text-[hsl(var(--byfrost-accent))]">
+              {formatGb(dailyEgress[0]?.egress_gb)} GB
+            </div>
+            <p className="text-[10px] text-muted-foreground">{dailyEgress[0]?.requests || 0} requisições de storage</p>
           </CardContent>
         </Card>
       </div>
 
-      {/* Bandwidth Chart */}
-      <Card className="border-none bg-white/50 shadow-sm dark:bg-slate-900/50">
-        <CardHeader>
-          <div className="flex items-center gap-2">
-            <BarChart3 className="h-5 w-5 text-indigo-500" />
-            <div>
-              <CardTitle>Consumo de Banda (Egress)</CardTitle>
-              <CardDescription>Consumo de saída de dados em GB por período</CardDescription>
+      <div className="grid gap-6 lg:grid-cols-2">
+        {/* Daily Monitoring Chart */}
+        <Card className="border-none bg-white/50 shadow-sm dark:bg-slate-900/50">
+          <CardHeader className="flex flex-row items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Activity className="h-5 w-5 text-[hsl(var(--byfrost-accent))]" />
+              <div>
+                <CardTitle>Monitoramento Diário</CardTitle>
+                <CardDescription>Consumo de banda (Storage) nos últimos 7 dias</CardDescription>
+              </div>
             </div>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <div className="h-[300px] w-full pt-4">
-            <ChartContainer config={chartConfig}>
-              <BarChart data={stats} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                <XAxis
-                  dataKey="periodLabel"
-                  axisLine={false}
-                  tickLine={false}
-                  tick={{ fontSize: 10, fill: "currentColor", opacity: 0.5 }}
-                />
-                <YAxis
-                  axisLine={false}
-                  tickLine={false}
-                  tick={{ fontSize: 10, fill: "currentColor", opacity: 0.5 }}
-                  tickFormatter={(val) => `${val}GB`}
-                />
-                <ChartTooltip content={<ChartTooltipContent />} />
-                <Bar
-                  dataKey="egress_gb"
-                  radius={[4, 4, 0, 0]}
-                  fill="var(--color-egress)"
-                  barSize={40}
+          </CardHeader>
+          <CardContent>
+            <div className="h-[300px] w-full pt-4">
+              <ChartContainer config={chartConfig}>
+                <BarChart data={[...dailyEgress].reverse()} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                  <XAxis
+                    dataKey="day"
+                    axisLine={false}
+                    tickLine={false}
+                    tick={{ fontSize: 10, fill: "currentColor", opacity: 0.5 }}
+                    tickFormatter={formatDate}
+                  />
+                  <YAxis
+                    axisLine={false}
+                    tickLine={false}
+                    tick={{ fontSize: 10, fill: "currentColor", opacity: 0.5 }}
+                    tickFormatter={(val) => `${val.toFixed(2)}GB`}
+                  />
+                  <ChartTooltip content={<ChartTooltipContent />} />
+                  <Bar
+                    dataKey="egress_gb"
+                    radius={[4, 4, 0, 0]}
+                    fill="hsl(var(--byfrost-accent))"
+                    barSize={40}
+                  />
+                </BarChart>
+              </ChartContainer>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Monthly Bandwidth Chart */}
+        <Card className="border-none bg-white/50 shadow-sm dark:bg-slate-900/50">
+          <CardHeader className="flex flex-row items-center justify-between">
+            <div className="flex items-center gap-2">
+              <BarChart3 className="h-5 w-5 text-indigo-500" />
+              <div>
+                <CardTitle>Consumo Mensal (Oficial)</CardTitle>
+                <CardDescription>Banda total acumulada por mês</CardDescription>
+              </div>
+            </div>
+            <div className="flex items-center gap-1 rounded-xl border border-slate-200 bg-white p-0.5 dark:border-slate-800 dark:bg-slate-950">
+              {[3, 6, 12].map((m) => (
+                <button
+                  key={m}
+                  onClick={() => setMonths(m)}
+                  className={cn(
+                    "px-2 py-1 text-[9px] font-bold uppercase transition-all rounded-lg",
+                    months === m 
+                      ? "bg-slate-100 text-slate-900 shadow-sm" 
+                      : "text-slate-500 hover:bg-slate-50"
+                  )}
                 >
-                  {stats.map((entry: any, index: number) => (
-                    <Cell
-                      key={`cell-${index}`}
-                      fillOpacity={index === stats.length - 1 ? 1 : 0.6}
-                    />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ChartContainer>
-          </div>
-        </CardContent>
-      </Card>
+                  {m}M
+                </button>
+              ))}
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="h-[300px] w-full pt-4">
+              <ChartContainer config={chartConfig}>
+                <BarChart data={stats} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                  <XAxis
+                    dataKey="periodLabel"
+                    axisLine={false}
+                    tickLine={false}
+                    tick={{ fontSize: 10, fill: "currentColor", opacity: 0.5 }}
+                  />
+                  <YAxis
+                    axisLine={false}
+                    tickLine={false}
+                    tick={{ fontSize: 10, fill: "currentColor", opacity: 0.5 }}
+                    tickFormatter={(val) => `${val.toFixed(1)}GB`}
+                  />
+                  <ChartTooltip content={<ChartTooltipContent />} />
+                  <Bar
+                    dataKey="egress_gb"
+                    radius={[4, 4, 0, 0]}
+                    fill="var(--color-egress)"
+                    barSize={40}
+                  >
+                    {stats.map((entry: any, index: number) => (
+                      <Cell
+                        key={`cell-${index}`}
+                        fillOpacity={index === stats.length - 1 ? 1 : 0.6}
+                      />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ChartContainer>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
 
       <div className="rounded-lg border border-slate-100 bg-slate-50/50 p-4 text-[11px] text-slate-500 dark:border-slate-800 dark:bg-slate-950/50">
-        <p>
-          <strong>Nota:</strong> Os dados de consumo são obtidos diretamente da API de Gerenciamento do Supabase. 
-          O gráfico mostra o consumo total acumulado de cada mês (Egress). 
-          O consumo pode levar alguns minutos para ser refletido após uma requisição de atualização.
+        <p className="flex items-center gap-1">
+          <AlertCircle className="h-3 w-3" />
+          <strong>Nota sobre o Monitoramento:</strong> 
+          O gráfico diário é calculado em tempo real a partir dos logs de borda (Edge Logs) do Supabase. 
+          Isso permite identificar picos de consumo de arquivos do Storage imediatamente. 
+          O gráfico mensal depende da API de Gerenciamento do Supabase e pode ter atrasos de até 24h.
         </p>
       </div>
     </div>
