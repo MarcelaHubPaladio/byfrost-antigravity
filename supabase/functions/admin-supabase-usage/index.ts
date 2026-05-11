@@ -84,6 +84,9 @@ serve(async (req) => {
     });
 
     const logsData = await logsRes.json();
+    if (!logsRes.ok) {
+      console.error(`[admin-supabase-usage] Logs API error:`, logsData);
+    }
     const egressData = logsData.result || [];
 
     // 5) Fetch DB Metrics (Current month only)
@@ -91,6 +94,8 @@ serve(async (req) => {
     const currentPeriod = { year: now.getFullYear(), month: now.getMonth() + 1 };
     
     const usageUrl = `https://api.supabase.com/v1/projects/${projectRef}/usage?year=${currentPeriod.year}&month=${currentPeriod.month}`;
+    console.log(`[admin-supabase-usage] Fetching monthly usage from: ${usageUrl}`);
+    
     const usageRes = await fetch(usageUrl, {
       headers: { "Authorization": `Bearer ${token}` }
     });
@@ -98,6 +103,7 @@ serve(async (req) => {
     let stats = [];
     if (usageRes.ok) {
       const d = await usageRes.json();
+      console.log(`[admin-supabase-usage] Monthly usage fetch success`);
       const getUsage = (key: string) => (d[key] && typeof d[key].usage === 'number') ? d[key].usage : 0;
       
       stats.push({
@@ -110,6 +116,9 @@ serve(async (req) => {
         auth_users: getUsage('auth_users'),
         edge_functions_invocations: getUsage('edge_functions_invocations')
       });
+    } else {
+      const errorData = await usageRes.text();
+      console.warn(`[admin-supabase-usage] Monthly usage API failed (Expected for some projects):`, errorData);
     }
 
     return new Response(JSON.stringify({ 
@@ -121,10 +130,12 @@ serve(async (req) => {
         time: d.time_bucket,
         egress_gb: (d.bytes || 0) / (1024 * 1024 * 1024),
         requests: d.requests
-      }))
+      })),
+      timestamp: new Date().toISOString()
     }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
+
 
   } catch (e) {
     console.error(e);

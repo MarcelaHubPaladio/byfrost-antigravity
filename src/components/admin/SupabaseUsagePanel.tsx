@@ -41,7 +41,7 @@ export function SupabaseUsagePanel() {
   const [months, setMonths] = useState(6);
   const [timeRange, setTimeRange] = useState("week"); // week, day, hour, minute
 
-  const { data, isLoading, error, refetch } = useQuery({
+  const { data, isLoading, isPlaceholderData, error, refetch } = useQuery({
     queryKey: ["admin_supabase_usage", timeRange],
     queryFn: async () => {
       const { data, error } = await supabase.functions.invoke("admin-supabase-usage", {
@@ -51,8 +51,10 @@ export function SupabaseUsagePanel() {
       if (!data.ok) throw new Error(data.error || "Erro ao buscar dados");
       return data;
     },
-    staleTime: 1000 * 60 * 1, // 1 minute (more frequent for real-time)
+    staleTime: 1000 * 30, // 30 seconds
+    placeholderData: (previousData) => previousData,
   });
+
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
@@ -141,14 +143,19 @@ export function SupabaseUsagePanel() {
           </p>
         </div>
         <div className="flex items-center gap-3">
+          {data?.timestamp && (
+            <span className="text-[10px] text-muted-foreground bg-slate-100 px-2 py-1 rounded-lg">
+              Sincronizado: {new Date(data.timestamp).toLocaleTimeString()}
+            </span>
+          )}
           <Button
             variant="outline"
             size="sm"
             onClick={handleRefresh}
-            disabled={isRefreshing}
+            disabled={isRefreshing || isLoading}
             className="gap-2 h-9 rounded-2xl"
           >
-            <RefreshCcw className={`h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`} />
+            <RefreshCcw className={`h-4 w-4 ${isRefreshing || isLoading ? "animate-spin" : ""}`} />
             Atualizar
           </Button>
         </div>
@@ -242,34 +249,43 @@ export function SupabaseUsagePanel() {
             </div>
           </CardHeader>
           <CardContent>
-            <div className="h-[300px] w-full pt-4">
-              <ChartContainer config={chartConfig}>
-                <BarChart data={[...egressMetrics].reverse()} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                  <XAxis
-                    dataKey="time"
-                    axisLine={false}
-                    tickLine={false}
-                    tick={{ fontSize: 10, fill: "currentColor", opacity: 0.5 }}
-                    tickFormatter={formatTime}
-                  />
-                  <YAxis
-                    axisLine={false}
-                    tickLine={false}
-                    tick={{ fontSize: 10, fill: "currentColor", opacity: 0.5 }}
-                    tickFormatter={(val) => `${val.toFixed(3)}GB`}
-                  />
-                  <ChartTooltip content={<ChartTooltipContent />} />
-                  <Bar
-                    dataKey="egress_gb"
-                    radius={[4, 4, 0, 0]}
-                    fill="hsl(var(--byfrost-accent))"
-                    barSize={40}
-                  />
-                </BarChart>
-              </ChartContainer>
+            <div className="h-[300px] w-full pt-4 relative">
+              {egressMetrics.length === 0 ? (
+                <div className="absolute inset-0 flex flex-col items-center justify-center text-center p-6 bg-slate-50/50 rounded-xl m-4">
+                  <BarChart3 className="h-10 w-10 text-slate-300 mb-2" />
+                  <p className="text-sm font-medium text-slate-500">Nenhum dado encontrado</p>
+                  <p className="text-[11px] text-slate-400">Não houve tráfego de storage neste período ({rangeLabels[timeRange]}).</p>
+                </div>
+              ) : (
+                <ChartContainer config={chartConfig}>
+                  <BarChart data={[...egressMetrics].reverse()} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                    <XAxis
+                      dataKey="time"
+                      axisLine={false}
+                      tickLine={false}
+                      tick={{ fontSize: 10, fill: "currentColor", opacity: 0.5 }}
+                      tickFormatter={formatTime}
+                    />
+                    <YAxis
+                      axisLine={false}
+                      tickLine={false}
+                      tick={{ fontSize: 10, fill: "currentColor", opacity: 0.5 }}
+                      tickFormatter={(val) => `${val.toFixed(3)}GB`}
+                    />
+                    <ChartTooltip content={<ChartTooltipContent />} />
+                    <Bar
+                      dataKey="egress_gb"
+                      radius={[4, 4, 0, 0]}
+                      fill="hsl(var(--byfrost-accent))"
+                      barSize={40}
+                    />
+                  </BarChart>
+                </ChartContainer>
+              )}
             </div>
           </CardContent>
         </Card>
+
 
         {/* Monthly Bandwidth Chart */}
         <Card className="border-none bg-white/50 shadow-sm dark:bg-slate-900/50">
