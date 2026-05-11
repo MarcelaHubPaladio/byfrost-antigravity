@@ -29,7 +29,10 @@ serve(async (req) => {
       return new Response(JSON.stringify({ error: "Forbidden: Super-admin only" }), { status: 403, headers: corsHeaders });
     }
 
-    // 3) Get Configuration
+    // 3) Get Parameters
+    const { searchParams } = new URL(req.url);
+    const range = searchParams.get("range") || "week"; // week, day, hour, minute
+
     const token = Deno.env.get("SB_MGMT_TOKEN");
     if (!token) {
       return new Response(JSON.stringify({ error: "Missing SB_MGMT_TOKEN secret" }), { status: 500, headers: corsHeaders });
@@ -38,12 +41,26 @@ serve(async (req) => {
     const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
     const projectRef = new URL(supabaseUrl).hostname.split('.')[0];
 
-    console.log(`[admin-supabase-usage] Fetching log-based usage for project ${projectRef}...`);
+    console.log(`[admin-supabase-usage] Fetching egress logs for range: ${range}`);
 
-    // 4) Fetch Egress via Logs (Last 7 days)
+    // 4) Dynamic SQL based on range
+    let interval = "7 day";
+    let trunc = "day";
+    
+    if (range === "day") {
+      interval = "24 hour";
+      trunc = "hour";
+    } else if (range === "hour") {
+      interval = "1 hour";
+      trunc = "minute";
+    } else if (range === "minute") {
+      interval = "1 minute";
+      trunc = "second";
+    }
+
     const egressSql = `
       SELECT 
-          date_trunc('day', timestamp_seconds(cast(timestamp / 1000000 as int64))) as day,
+          date_trunc('${trunc}', timestamp_seconds(cast(timestamp / 1000000 as int64))) as time_bucket,
           sum(safe_cast(m.response[OFFSET(0)].headers[OFFSET(0)].content_length as int64)) as bytes,
           count(*) as requests
       FROM 
@@ -51,7 +68,7 @@ serve(async (req) => {
       WHERE 
           m.request[OFFSET(0)].path LIKE '%/storage/%' 
           AND m.response[OFFSET(0)].status_code IN (200, 206)
-          AND timestamp >= timestamp_sub(current_timestamp(), interval 7 day)
+          AND timestamp >= timestamp_sub(current_timestamp(), interval ${interval})
       GROUP BY 1
       ORDER BY 1 DESC
     `;
@@ -66,10 +83,9 @@ serve(async (req) => {
     });
 
     const logsData = await logsRes.json();
-    const dailyEgress = logsData.result || [];
+    const egressData = logsData.result || [];
 
-    // 5) Fetch DB Metrics (Directly from DB via RPC or Query)
-    // We'll try to get these from the Management API first, if it fails, we show what we have from logs
+    // 5) Fetch DB Metrics (Current month only)
     const now = new Date();
     const currentPeriod = { year: now.getFullYear(), month: now.getMonth() + 1 };
     
@@ -91,18 +107,17 @@ serve(async (req) => {
         db_size_gb: getUsage('db_size') / (1024 * 1024 * 1024),
         storage_size_gb: getUsage('storage_size') / (1024 * 1024 * 1024),
         auth_users: getUsage('auth_users'),
-        edge_functions_invocations: getUsage('edge_functions_invocations'),
-        from_official_api: true
+        edge_functions_invocations: getUsage('edge_functions_invocations')
       });
     }
 
-    // Always include the log-based metrics for the dashboard
     return new Response(JSON.stringify({ 
       ok: true, 
       projectRef, 
+      range,
       stats: stats,
-      daily_egress: dailyEgress.map((d: any) => ({
-        day: d.day,
+      egress_metrics: egressData.map((d: any) => ({
+        time: d.time_bucket,
         egress_gb: (d.bytes || 0) / (1024 * 1024 * 1024),
         requests: d.requests
       }))
@@ -115,4 +130,5 @@ serve(async (req) => {
     return new Response(JSON.stringify({ error: e.message }), { status: 500, headers: corsHeaders });
   }
 });
+
 

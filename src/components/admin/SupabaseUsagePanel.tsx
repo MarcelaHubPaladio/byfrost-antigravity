@@ -39,16 +39,19 @@ import { showError } from "@/utils/toast";
 export function SupabaseUsagePanel() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [months, setMonths] = useState(6);
+  const [timeRange, setTimeRange] = useState("week"); // week, day, hour, minute
 
   const { data, isLoading, error, refetch } = useQuery({
-    queryKey: ["admin_supabase_usage"],
+    queryKey: ["admin_supabase_usage", timeRange],
     queryFn: async () => {
-      const { data, error } = await supabase.functions.invoke("admin-supabase-usage");
+      const { data, error } = await supabase.functions.invoke("admin-supabase-usage", {
+        queryParams: { range: timeRange }
+      });
       if (error) throw error;
       if (!data.ok) throw new Error(data.error || "Erro ao buscar dados");
       return data;
     },
-    staleTime: 1000 * 60 * 5, // 5 minutes
+    staleTime: 1000 * 60 * 1, // 1 minute (more frequent for real-time)
   });
 
   const handleRefresh = async () => {
@@ -86,7 +89,7 @@ export function SupabaseUsagePanel() {
       </div>
     );
   }  const allStats = data?.stats || [];
-  const dailyEgress = data?.daily_egress || [];
+  const egressMetrics = data?.egress_metrics || [];
   
   // Filter by selected months
   const stats = allStats.slice(-months);
@@ -98,7 +101,7 @@ export function SupabaseUsagePanel() {
       color: "hsl(var(--primary))",
     },
     daily: {
-      label: "Consumo Diário (GB)",
+      label: "Consumo de Banda (GB)",
       color: "hsl(var(--byfrost-accent))",
     }
   };
@@ -108,13 +111,24 @@ export function SupabaseUsagePanel() {
     return val.toFixed(3);
   };
 
-  const formatDate = (dateStr: string) => {
+  const formatTime = (timeStr: string) => {
     try {
-      const d = new Date(dateStr);
-      return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+      const d = new Date(timeStr);
+      if (timeRange === "week") return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+      if (timeRange === "day") return d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+      if (timeRange === "hour") return d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+      if (timeRange === "minute") return d.toLocaleTimeString('pt-BR', { minute: '2-digit', second: '2-digit' });
+      return d.toLocaleString();
     } catch {
-      return dateStr;
+      return timeStr;
     }
+  };
+
+  const rangeLabels: Record<string, string> = {
+    week: "Última Semana",
+    day: "Último Dia",
+    hour: "Última Hora",
+    minute: "Último Minuto"
   };
 
   return (
@@ -184,47 +198,65 @@ export function SupabaseUsagePanel() {
         <Card className="overflow-hidden border-none bg-[hsl(var(--byfrost-accent)/0.05)] border-[hsl(var(--byfrost-accent)/0.1)] shadow-sm transition-all hover:shadow-md dark:bg-slate-900/50">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-xs font-medium uppercase tracking-wider text-[hsl(var(--byfrost-accent))]">
-              Egress Hoje (Logs)
+              Egress no Período
             </CardTitle>
             <Activity className="h-4 w-4 text-[hsl(var(--byfrost-accent))]" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-[hsl(var(--byfrost-accent))]">
-              {formatGb(dailyEgress[0]?.egress_gb)} GB
+              {formatGb(egressMetrics.reduce((acc: number, m: any) => acc + (m.egress_gb || 0), 0))} GB
             </div>
-            <p className="text-[10px] text-muted-foreground">{dailyEgress[0]?.requests || 0} requisições de storage</p>
+            <p className="text-[10px] text-muted-foreground">
+              Total em {rangeLabels[timeRange]}
+            </p>
           </CardContent>
         </Card>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
-        {/* Daily Monitoring Chart */}
+        {/* Real-time Monitoring Chart */}
         <Card className="border-none bg-white/50 shadow-sm dark:bg-slate-900/50">
-          <CardHeader className="flex flex-row items-center justify-between">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0">
             <div className="flex items-center gap-2">
               <Activity className="h-5 w-5 text-[hsl(var(--byfrost-accent))]" />
               <div>
-                <CardTitle>Monitoramento Diário</CardTitle>
-                <CardDescription>Consumo de banda (Storage) nos últimos 7 dias</CardDescription>
+                <CardTitle>Monitoramento em Tempo Real</CardTitle>
+                <CardDescription>Tráfego de Storage por {timeRange}</CardDescription>
               </div>
+            </div>
+            <div className="flex items-center gap-1 rounded-xl border border-slate-200 bg-white p-0.5 dark:border-slate-800 dark:bg-slate-950">
+              {["week", "day", "hour", "minute"].map((r) => (
+                <button
+                  key={r}
+                  onClick={() => setTimeRange(r)}
+                  className={cn(
+                    "px-2 py-1 text-[9px] font-bold uppercase transition-all rounded-lg",
+                    timeRange === r 
+                      ? "bg-[hsl(var(--byfrost-accent))] text-white shadow-sm" 
+                      : "text-slate-500 hover:bg-slate-50"
+                  )}
+                >
+                  {r === "week" ? "Sem" : r === "day" ? "Dia" : r === "hour" ? "Hora" : "Min"}
+                </button>
+              ))}
             </div>
           </CardHeader>
           <CardContent>
             <div className="h-[300px] w-full pt-4">
               <ChartContainer config={chartConfig}>
-                <BarChart data={[...dailyEgress].reverse()} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                <BarChart data={[...egressMetrics].reverse()} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                   <XAxis
-                    dataKey="day"
+                    dataKey="time"
                     axisLine={false}
                     tickLine={false}
                     tick={{ fontSize: 10, fill: "currentColor", opacity: 0.5 }}
-                    tickFormatter={formatDate}
+                    tickFormatter={formatTime}
                   />
                   <YAxis
                     axisLine={false}
                     tickLine={false}
                     tick={{ fontSize: 10, fill: "currentColor", opacity: 0.5 }}
-                    tickFormatter={(val) => `${val.toFixed(2)}GB`}
+                    tickFormatter={(val) => `${val.toFixed(3)}GB`}
                   />
                   <ChartTooltip content={<ChartTooltipContent />} />
                   <Bar
@@ -241,7 +273,7 @@ export function SupabaseUsagePanel() {
 
         {/* Monthly Bandwidth Chart */}
         <Card className="border-none bg-white/50 shadow-sm dark:bg-slate-900/50">
-          <CardHeader className="flex flex-row items-center justify-between">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0">
             <div className="flex items-center gap-2">
               <BarChart3 className="h-5 w-5 text-indigo-500" />
               <div>
@@ -307,9 +339,8 @@ export function SupabaseUsagePanel() {
         <p className="flex items-center gap-1">
           <AlertCircle className="h-3 w-3" />
           <strong>Nota sobre o Monitoramento:</strong> 
-          O gráfico diário é calculado em tempo real a partir dos logs de borda (Edge Logs) do Supabase. 
-          Isso permite identificar picos de consumo de arquivos do Storage imediatamente. 
-          O gráfico mensal depende da API de Gerenciamento do Supabase e pode ter atrasos de até 24h.
+          O gráfico em tempo real usa logs de borda. Você pode filtrar por granularidade (Semana, Dia, Hora, Minuto). 
+          Isso é essencial para detectar picos repentinos de consumo no Storage.
         </p>
       </div>
     </div>
