@@ -108,9 +108,12 @@ export function SupabaseUsagePanel() {
     }
   };
 
-  const formatGb = (val: number | undefined) => {
-    if (typeof val !== 'number') return "0.000";
-    return val.toFixed(3);
+  const formatUsage = (val: number | undefined) => {
+    if (typeof val !== 'number' || isNaN(val)) return "0.00";
+    if (val < 0.1) {
+      return `${(val * 1024).toFixed(1)} MB`;
+    }
+    return `${val.toFixed(3)} GB`;
   };
 
   const formatTime = (timeStr: string) => {
@@ -171,7 +174,7 @@ export function SupabaseUsagePanel() {
             <Database className="h-4 w-4 text-indigo-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{formatGb(current.db_size_gb)} GB</div>
+            <div className="text-2xl font-bold">{formatUsage(current.db_size_gb)}</div>
             <p className="text-[10px] text-muted-foreground">Tamanho atual do banco</p>
           </CardContent>
         </Card>
@@ -184,7 +187,7 @@ export function SupabaseUsagePanel() {
             <HardDrive className="h-4 w-4 text-emerald-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{formatGb(current.storage_size_gb)} GB</div>
+            <div className="text-2xl font-bold">{formatUsage(current.storage_size_gb)}</div>
             <p className="text-[10px] text-muted-foreground">Arquivos e mídia armazenados</p>
           </CardContent>
         </Card>
@@ -211,7 +214,7 @@ export function SupabaseUsagePanel() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-[hsl(var(--byfrost-accent))]">
-              {formatGb(egressMetrics.reduce((acc: number, m: any) => acc + (m.egress_gb || 0), 0))} GB
+              {formatUsage(egressMetrics.reduce((acc: number, m: any) => acc + (m.egress_gb || 0), 0))}
             </div>
             <p className="text-[10px] text-muted-foreground">
               Total em {rangeLabels[timeRange]}
@@ -270,7 +273,7 @@ export function SupabaseUsagePanel() {
                       axisLine={false}
                       tickLine={false}
                       tick={{ fontSize: 10, fill: "currentColor", opacity: 0.5 }}
-                      tickFormatter={(val) => `${val.toFixed(3)}GB`}
+                      tickFormatter={(val) => formatUsage(val)}
                     />
                     <ChartTooltip content={<ChartTooltipContent />} />
                     <Bar
@@ -328,7 +331,7 @@ export function SupabaseUsagePanel() {
                     axisLine={false}
                     tickLine={false}
                     tick={{ fontSize: 10, fill: "currentColor", opacity: 0.5 }}
-                    tickFormatter={(val) => `${val.toFixed(1)}GB`}
+                    tickFormatter={(val) => formatUsage(val)}
                   />
                   <ChartTooltip content={<ChartTooltipContent />} />
                   <Bar
