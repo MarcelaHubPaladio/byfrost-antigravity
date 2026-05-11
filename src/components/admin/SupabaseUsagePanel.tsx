@@ -93,32 +93,45 @@ export function SupabaseUsagePanel() {
   }  const allStats = data?.stats || [];
   const egressMetrics = data?.egress_metrics || [];
   
+  // Debug to console
+  if (egressMetrics.length > 0) {
+    console.log("[SupabaseUsage] Egress Metrics Received:", egressMetrics);
+  }
+
   // Filter by selected months
   const stats = allStats.slice(-months);
   const current = allStats[allStats.length - 1] || {};
 
   const chartConfig = {
     egress: {
-      label: "Largura de Banda (GB)",
+      label: "Largura de Banda",
       color: "hsl(var(--primary))",
     },
     daily: {
-      label: "Consumo de Banda (GB)",
+      label: "Consumo de Banda",
       color: "hsl(var(--byfrost-accent))",
     }
   };
 
   const formatUsage = (val: number | undefined) => {
-    if (typeof val !== 'number' || isNaN(val)) return "0.00";
-    if (val < 0.1) {
+    if (val === undefined || val === null || isNaN(val)) return "0.0 MB";
+    if (val < 0.1 && val > 0) {
       return `${(val * 1024).toFixed(1)} MB`;
     }
-    return `${val.toFixed(3)} GB`;
+    if (val >= 0.1) {
+      return `${val.toFixed(3)} GB`;
+    }
+    return "0.0 MB";
   };
+
+  const totalEgress = egressMetrics.reduce((acc: number, m: any) => {
+    const val = typeof m.egress_gb === 'number' ? m.egress_gb : parseFloat(m.egress_gb || "0");
+    return acc + val;
+  }, 0);
 
   const formatTime = (timeStr: string) => {
     try {
-      const d = new Date(timeStr);
+      const d = new Date(typeof timeStr === 'number' ? timeStr / 1000 : timeStr);
       if (timeRange === "week") return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
       if (timeRange === "day") return d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
       if (timeRange === "hour") return d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
@@ -214,7 +227,7 @@ export function SupabaseUsagePanel() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-[hsl(var(--byfrost-accent))]">
-              {formatUsage(egressMetrics.reduce((acc: number, m: any) => acc + (m.egress_gb || 0), 0))}
+              {formatUsage(totalEgress)}
             </div>
             <p className="text-[10px] text-muted-foreground">
               Total em {rangeLabels[timeRange]}
