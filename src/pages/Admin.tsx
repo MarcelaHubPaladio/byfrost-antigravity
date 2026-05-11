@@ -48,6 +48,7 @@ import { IncentivesPanel } from "@/components/admin/IncentivesPanel";
 import { TenantModulesPanel } from "@/components/admin/TenantModulesPanel";
 import { PlansPanel } from "@/components/admin/PlansPanel";
 import { UsageIndicator } from "@/components/admin/UsageIndicator";
+import { SupabaseUsagePanel } from "@/components/admin/SupabaseUsagePanel";
 import { LayoutGrid, Users, Zap, MessageSquare, History, Database, Share2, Search, Smartphone, Shield, Plus, MoreVertical, Edit2, Trash2, PauseCircle, PlayCircle, ChevronLeft, ChevronRight, UsersRound, Copy, Settings2, UserCog, CreditCard, BarChart3, Package, Layers, UserPlus } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { useNavigate } from "react-router-dom";
@@ -1221,6 +1222,11 @@ export default function Admin() {
                 <TabsTrigger value="modules" className="rounded-xl">
                   Módulos
                 </TabsTrigger>
+                {isSuperAdmin && (
+                  <TabsTrigger value="supabase" className="rounded-xl">
+                    Supabase
+                  </TabsTrigger>
+                )}
               </TabsList>
 
               <TabsContent value="tenants" className="mt-4">
@@ -2409,6 +2415,12 @@ export default function Admin() {
               <TabsContent value="modules" className="mt-4">
                 <TenantModulesPanel />
               </TabsContent>
+
+              {isSuperAdmin && (
+                <TabsContent value="supabase" className="mt-4">
+                  <SupabaseUsagePanel />
+                </TabsContent>
+              )}
             </Tabs>
           </div>
 
