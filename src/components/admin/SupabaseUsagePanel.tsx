@@ -115,8 +115,11 @@ export function SupabaseUsagePanel() {
 
   const formatUsage = (val: number | undefined) => {
     if (val === undefined || val === null || isNaN(val)) return "0.0 MB";
+    if (val < 0.0001 && val > 0) {
+      return `${(val * 1024 * 1024).toFixed(1)} KB`;
+    }
     if (val < 0.1 && val > 0) {
-      return `${(val * 1024).toFixed(1)} MB`;
+      return `${(val * 1024).toFixed(2)} MB`;
     }
     if (val >= 0.1) {
       return `${val.toFixed(3)} GB`;
