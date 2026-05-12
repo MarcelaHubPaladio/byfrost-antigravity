@@ -25,6 +25,16 @@ import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 import { showError, showSuccess } from "@/utils/toast";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 const UPDATE_CATEGORIES = [
   { value: "faturamento", label: "Faturamento", color: "bg-blue-100 text-blue-700 border-blue-200" },
@@ -45,6 +55,7 @@ export function CaseUpdatesCard({ caseId, tenantId }: CaseUpdatesCardProps) {
   const [newText, setNewText] = useState("");
   const [category, setCategory] = useState("faturamento");
   const [saving, setSaving] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const { data: updates, isLoading } = useQuery({
     queryKey: ["case_updates", caseId],
@@ -91,13 +102,14 @@ export function CaseUpdatesCard({ caseId, tenantId }: CaseUpdatesCardProps) {
     }
   };
 
-  const handleDelete = async (eventId: string) => {
-    if (!confirm("Deseja realmente excluir esta atualização?")) return;
+  const handleDelete = async () => {
+    if (!deletingId || !tenantId) return;
     try {
       const { error } = await supabase
         .from("timeline_events")
         .delete()
-        .eq("id", eventId);
+        .eq("tenant_id", tenantId)
+        .eq("id", deletingId);
       
       if (error) throw error;
       
@@ -106,6 +118,8 @@ export function CaseUpdatesCard({ caseId, tenantId }: CaseUpdatesCardProps) {
       qc.invalidateQueries({ queryKey: ["case_timeline", caseId] });
     } catch (e: any) {
       showError(`Falha ao excluir: ${e.message}`);
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -190,7 +204,7 @@ export function CaseUpdatesCard({ caseId, tenantId }: CaseUpdatesCardProps) {
                     </div>
 
                     <button
-                      onClick={() => handleDelete(up.id)}
+                      onClick={() => setDeletingId(up.id)}
                       className="opacity-0 group-hover:opacity-100 h-8 w-8 rounded-full bg-rose-50 text-rose-500 flex items-center justify-center hover:bg-rose-100 transition-all"
                       title="Excluir atualização"
                     >
@@ -212,6 +226,27 @@ export function CaseUpdatesCard({ caseId, tenantId }: CaseUpdatesCardProps) {
           </div>
         )}
       </div>
+      </div>
+
+      <AlertDialog open={!!deletingId} onOpenChange={(open) => !open && setDeletingId(null)}>
+        <AlertDialogContent className="rounded-[32px] border-none shadow-2xl">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-xl font-black text-slate-900">Excluir atualização?</AlertDialogTitle>
+            <AlertDialogDescription className="text-sm font-medium text-slate-500">
+              Esta ação não pode ser desfeita. A atualização será removida permanentemente do histórico e da linha do tempo.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="mt-4">
+            <AlertDialogCancel className="rounded-2xl border-slate-200 font-bold text-xs">Cancelar</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={handleDelete}
+              className="rounded-2xl bg-rose-600 hover:bg-rose-700 font-bold text-xs shadow-lg shadow-rose-600/20"
+            >
+              Confirmar Exclusão
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
