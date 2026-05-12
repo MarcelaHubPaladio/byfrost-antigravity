@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { showError, showSuccess } from "@/utils/toast";
 import { cn } from "@/lib/utils";
-import { Banknote, ExternalLink, IdCard, MapPin, Save, Mail, MessageSquare } from "lucide-react";
+import { Banknote, ExternalLink, IdCard, MapPin, Save, Mail, MessageSquare, DollarSign } from "lucide-react";
 import { useTenant } from "@/providers/TenantProvider";
 import { useSession } from "@/providers/SessionProvider";
 import {
