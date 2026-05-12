@@ -96,8 +96,8 @@ export function SupabaseUsagePanel() {
   // Debug to console
   if (egressMetrics.length > 0) {
     console.log("[SupabaseUsage] Egress Metrics Received:", egressMetrics);
-    if (data?.raw_sample) {
-      console.log("[SupabaseUsage] RAW SAMPLE FOR DEBUG:", data.raw_sample);
+    if (data?.top_paths) {
+      console.log("[SupabaseUsage] TOP CONSUMING PATHS (Last 24h):", data.top_paths);
     }
   }
 

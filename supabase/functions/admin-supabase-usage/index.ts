@@ -88,19 +88,32 @@ serve(async (req) => {
       console.error(`[admin-supabase-usage] Logs API error:`, logsData);
     }
     const egressData = logsData.result || [];
+
+    // 4) Fetch TOP PATHS by egress to find where the traffic is
+    const topPathsSql = `
+      SELECT 
+          m.request[OFFSET(0)].path as path,
+          sum(safe_cast(m.response[OFFSET(0)].headers[OFFSET(0)].content_length as int64)) as bytes,
+          count(*) as requests
+      FROM 
+          edge_logs CROSS JOIN UNNEST(metadata) as m
+      WHERE 
+          timestamp >= timestamp_sub(current_timestamp(), interval 1 day)
+      GROUP BY 1
+      ORDER BY 2 DESC
+      LIMIT 5
+    `;
     
-    // DEBUG: Dump first result structure to see headers
-    if (egressData.length > 0) {
-      console.log(`[admin-supabase-usage] DEBUG SAMPLE:`, JSON.stringify(logsData.result[0], null, 2));
-    }
+    const topPathsRes = await fetch(`https://api.supabase.com/v1/projects/${projectRef}/analytics/endpoints/logs.all?sql=${encodeURIComponent(topPathsSql)}`, {
+      headers: { "Authorization": `Bearer ${token}`, "Accept": "application/json" }
+    });
+    const topPathsData = await topPathsRes.json();
 
     // 5) Fetch DB Metrics (Current month only)
     const now = new Date();
     const currentPeriod = { year: now.getFullYear(), month: now.getMonth() + 1 };
     
     const usageUrl = `https://api.supabase.com/v1/projects/${projectRef}/usage?year=${currentPeriod.year}&month=${currentPeriod.month}`;
-    console.log(`[admin-supabase-usage] Fetching monthly usage from: ${usageUrl}`);
-    
     const usageRes = await fetch(usageUrl, {
       headers: { "Authorization": `Bearer ${token}` }
     });
@@ -108,7 +121,6 @@ serve(async (req) => {
     let stats = [];
     if (usageRes.ok) {
       const d = await usageRes.json();
-      console.log(`[admin-supabase-usage] Monthly usage fetch success`);
       const getUsage = (key: string) => (d[key] && typeof d[key].usage === 'number') ? d[key].usage : 0;
       
       stats.push({
@@ -121,9 +133,6 @@ serve(async (req) => {
         auth_users: getUsage('auth_users'),
         edge_functions_invocations: getUsage('edge_functions_invocations')
       });
-    } else {
-      const errorData = await usageRes.text();
-      console.warn(`[admin-supabase-usage] Monthly usage API failed (Expected for some projects):`, errorData);
     }
 
     return new Response(JSON.stringify({ 
@@ -136,11 +145,13 @@ serve(async (req) => {
         egress_gb: (d.bytes || 0) / (1024 * 1024 * 1024),
         requests: d.requests
       })),
-      raw_sample: egressData[0] || null,
+      top_paths: topPathsData.result || [],
       timestamp: new Date().toISOString()
     }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
+
+
 
 
 
