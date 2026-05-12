@@ -595,8 +595,16 @@ export default function Orders() {
       const billingStatus = (f?.billing_status ?? "Pendente").toLowerCase();
 
       totalValue += val;
+      
+      const partialPaid = Number(f?.partial_paid_value || 0);
+
       if (billingStatus.includes("pago") || billingStatus.includes("faturado")) {
-        invoicedValue += val;
+        // Se for faturado parcial, soma apenas o que foi pago. Se for faturado total, soma o valor cheio.
+        if (billingStatus.includes("parcial")) {
+          invoicedValue += partialPaid;
+        } else {
+          invoicedValue += val;
+        }
         invoicedCount++;
       } else if (billingStatus.includes("canc")) {
         canceledValue += val;
@@ -627,7 +635,17 @@ export default function Orders() {
         const saleDate = parseSafeDate(saleDateText, r.created_at);
 
         if (isSameDay(saleDate, d)) {
-          dailyTotal += caseDataQ.data?.totals.get(r.id) ?? 0;
+          const billing_status = (f?.billing_status ?? "Pendente").toLowerCase();
+          const val = caseDataQ.data?.totals.get(r.id) ?? 0;
+          const partialPaid = Number(f?.partial_paid_value || 0);
+
+          if (billing_status.includes("pago") || billing_status.includes("faturado")) {
+            if (billing_status.includes("parcial")) {
+              dailyTotal += partialPaid;
+            } else {
+              dailyTotal += val;
+            }
+          }
         }
       });
 
@@ -1560,7 +1578,6 @@ export default function Orders() {
                       <TableHead>Responsável</TableHead>
                       <TableHead>Etapa</TableHead>
                       <TableHead>Pagamento</TableHead>
-                      <TableHead>Status</TableHead>
                       <TableHead>Atualizado</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -1621,10 +1638,10 @@ export default function Orders() {
                             <option value="Aguardando Banco">Aguardando Banco</option>
                             <option value="Pago">Pago</option>
                             <option value="Faturado">Faturado</option>
+                            <option value="Faturado Parcial">Faturado Parcial</option>
                             <option value="Cancelado">Cancelado</option>
                           </select>
                         </TableCell>
-                        <TableCell><Badge variant="outline" className="text-[10px] font-normal uppercase">{c.status}</Badge></TableCell>
                         <TableCell className="text-[10px] text-slate-500 whitespace-nowrap">{minutesAgo(c.updated_at)} min atrás</TableCell>
                       </TableRow>
                     ))}

@@ -72,6 +72,7 @@ export function CaseCustomerDataEditorCard(props: {
       state: getField(fields, "state"),
       uf: getField(fields, "uf"),
       billing_status: getField(fields, "billing_status"),
+      partial_paid_value: getField(fields, "partial_paid_value"),
       payment_method: getField(fields, "payment_method"),
 
       // Financeiro (nomes alinhados com a extração)
@@ -157,6 +158,7 @@ export function CaseCustomerDataEditorCard(props: {
           value_text: cleanOrNull(draft.delivery_forecast_text),
         },
         { key: "billing_status", value_text: cleanOrNull(draft.billing_status) },
+        { key: "partial_paid_value", value_text: cleanOrNull(draft.partial_paid_value) },
         { key: "payment_method", value_text: cleanOrNull(draft.payment_method) },
         { key: "local", value_text: cleanOrNull(draft.local) },
         { key: "latitude", value_text: cleanOrNull(draft.latitude) },
@@ -202,6 +204,7 @@ export function CaseCustomerDataEditorCard(props: {
         "proposal_validity_date_text",
         "delivery_forecast_text",
         "billing_status",
+        "partial_paid_value",
         "payment_method",
         "local",
         "latitude",
@@ -498,12 +501,23 @@ export function CaseCustomerDataEditorCard(props: {
         <div className="grid gap-3 sm:grid-cols-2">
           <div>
             <Label className="text-xs">Forma de pagamento</Label>
-            <Input
-              value={draft.payment_method}
-              onChange={(e) => setDraft((p) => ({ ...p, payment_method: e.target.value }))}
-              className="mt-1 h-10 rounded-2xl"
-              placeholder="Ex: Boleto / PIX / Cartão"
-            />
+            <Select
+              value={draft.payment_method || "Outros"}
+              onValueChange={(val) => setDraft((p) => ({ ...p, payment_method: val }))}
+            >
+              <SelectTrigger className="mt-1 h-10 rounded-2xl">
+                <SelectValue placeholder="Selecione a forma" />
+              </SelectTrigger>
+              <SelectContent className="rounded-2xl">
+                <SelectItem value="Boleto">Boleto</SelectItem>
+                <SelectItem value="PIX">PIX</SelectItem>
+                <SelectItem value="Cartão de Crédito">Cartão de Crédito</SelectItem>
+                <SelectItem value="Cartão de Débito">Cartão de Débito</SelectItem>
+                <SelectItem value="Dinheiro">Dinheiro</SelectItem>
+                <SelectItem value="Transferência">Transferência</SelectItem>
+                <SelectItem value="Outros">Outros</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
           <div>
             <Label className="text-xs">Status de faturamento</Label>
@@ -516,12 +530,31 @@ export function CaseCustomerDataEditorCard(props: {
               </SelectTrigger>
               <SelectContent className="rounded-2xl">
                 <SelectItem value="Pago">Pago</SelectItem>
+                <SelectItem value="Faturado Parcial">Faturado Parcial</SelectItem>
                 <SelectItem value="Pendente">Pendente</SelectItem>
                 <SelectItem value="Cancelado">Cancelado</SelectItem>
               </SelectContent>
             </Select>
           </div>
         </div>
+
+        {draft.billing_status === "Faturado Parcial" && (
+          <div className="bg-blue-50/50 border border-blue-100 p-4 rounded-2xl animate-in fade-in slide-in-from-top-1">
+            <Label className="text-xs font-bold text-blue-700">Valor Já Pago (R$)</Label>
+            <div className="relative mt-1">
+              <DollarSign className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-blue-500" />
+              <Input
+                value={draft.partial_paid_value}
+                onChange={(e) => setDraft((p) => ({ ...p, partial_paid_value: e.target.value }))}
+                className="h-10 rounded-xl pl-9 border-blue-200 focus:ring-blue-500"
+                placeholder="0,00"
+              />
+            </div>
+            <p className="text-[10px] text-blue-500 mt-2 font-medium">
+              Este valor será somado ao total de faturamento no dashboard.
+            </p>
+          </div>
+        )}
 
         <div className="grid gap-3 sm:grid-cols-2">
           <div>
