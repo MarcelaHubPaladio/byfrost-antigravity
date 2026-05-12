@@ -165,6 +165,42 @@ export default function Orders() {
   const [exportingPdf, setExportingPdf] = useState(false);
   const [viewMode, setViewMode] = useState<"kanban" | "list">("kanban");
 
+  // Filter Persistence
+  useEffect(() => {
+    const saved = localStorage.getItem("orders_filters_v2");
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (parsed.q) setQ(parsed.q);
+        if (parsed.sellerId) setSelectedSellerId(parsed.sellerId);
+        if (parsed.paymentMethods) setSelectedPaymentMethods(new Set(parsed.paymentMethods));
+        if (parsed.cities) setSelectedCities(new Set(parsed.cities));
+        if (parsed.dateRange) {
+          setDateRange({
+            from: parsed.dateRange.from ? new Date(parsed.dateRange.from) : startOfMonth(new Date()),
+            to: parsed.dateRange.to ? new Date(parsed.dateRange.to) : endOfMonth(new Date()),
+          });
+        }
+      } catch (e) {
+        console.error("Error loading filters", e);
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    const filters = {
+      q,
+      sellerId: selectedSellerId,
+      paymentMethods: Array.from(selectedPaymentMethods),
+      cities: Array.from(selectedCities),
+      dateRange: {
+        from: dateRange.from?.toISOString(),
+        to: dateRange.to?.toISOString()
+      }
+    };
+    localStorage.setItem("orders_filters_v2", JSON.stringify(filters));
+  }, [q, selectedSellerId, selectedPaymentMethods, selectedCities, dateRange]);
+
   useEffect(() => {
     const saved = localStorage.getItem(ORDERS_VIEW_MODE_KEY);
     if (saved === "kanban" || saved === "list") setViewMode(saved);
@@ -1375,11 +1411,16 @@ export default function Orders() {
                                   <Clock className="h-3 w-3" /> {formatRelativeUpdate(c.updated_at)}
                                 </div>
                               </div>
-                              {pendQ.data?.get(c.id)?.open ? (
-                                <Badge className="bg-amber-100 text-amber-700 border-0">{pendQ.data.get(c.id)!.open} pend.</Badge>
-                              ) : (
-                                <Badge className="bg-emerald-100 text-emerald-700 border-0">OK</Badge>
-                              )}
+                              <div className="flex flex-col items-end gap-1.5">
+                                <div className="text-[11px] font-black text-slate-900 tracking-tight">
+                                  {formatMoneyBRL(caseDataQ.data?.totals.get(c.id) || 0)}
+                                </div>
+                                {pendQ.data?.get(c.id)?.open ? (
+                                  <Badge className="bg-amber-100 text-amber-700 border-0">{pendQ.data.get(c.id)!.open} pend.</Badge>
+                                ) : (
+                                  <Badge className="bg-emerald-100 text-emerald-700 border-0">OK</Badge>
+                                )}
+                              </div>
                             </div>
                           </Link>
                         );
