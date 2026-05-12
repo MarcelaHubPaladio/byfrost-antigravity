@@ -64,9 +64,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
   Command,
   CommandEmpty,
+  CommandGroup,
   CommandInput,
   CommandItem,
   CommandList,
@@ -1135,16 +1135,26 @@ export default function Orders() {
                     <CommandInput placeholder="Buscar ativo..." className="h-9 border-none focus:ring-0" />
                     <CommandList className="max-h-[300px]">
                       <CommandEmpty>Nenhum item encontrado.</CommandEmpty>
-                      <div className="p-2 border-b border-slate-100 flex items-center justify-between">
-                        <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Ativos do Inventário</p>
-                        {selectedInventoryIds.size > 0 && (
-                          <button onClick={() => setSelectedInventoryIds(new Set())} className="text-[10px] text-blue-600 font-bold hover:underline">Limpar</button>
-                        )}
-                      </div>
-                      <div className="p-1">
+                      <CommandGroup 
+                        heading={
+                          <div className="flex items-center justify-between w-full pr-1">
+                            <span>Ativos do Inventário</span>
+                            {selectedInventoryIds.size > 0 && (
+                              <button 
+                                onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                                onClick={() => setSelectedInventoryIds(new Set())} 
+                                className="text-[10px] text-blue-600 font-bold hover:underline normal-case"
+                              >
+                                Limpar
+                              </button>
+                            )}
+                          </div>
+                        }
+                      >
                         {inventoryQ.data?.map((item) => (
                           <CommandItem
                             key={item.id}
+                            value={item.display_name} // Important for filtering
                             onSelect={() => {
                               const next = new Set(selectedInventoryIds);
                               next.has(item.id) ? next.delete(item.id) : next.add(item.id);
@@ -1161,7 +1171,7 @@ export default function Orders() {
                             <span className="text-xs font-semibold text-slate-700 truncate">{item.display_name}</span>
                           </CommandItem>
                         ))}
-                      </div>
+                      </CommandGroup>
                     </CommandList>
                   </Command>
                 </PopoverContent>
