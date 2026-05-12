@@ -25,19 +25,27 @@ export function useJourneyTransition() {
         if (!newState || newState === oldState) return;
 
         setUpdating(true);
+        console.log("[Transition] Iniciando transição:", { caseId, oldState, newState, activeTenantId });
+        
         try {
             // 1. Atualiza estado no banco
             // O Trigger 'trg_journey_transition' irá detectar a mudança e chamar a Edge Function via pg_net.
-            const { error, count } = await supabase
+            const { error, count, status, statusText } = await supabase
                 .from("cases")
                 .update({ state: newState }, { count: 'exact' })
                 .eq("tenant_id", activeTenantId)
                 .eq("id", caseId);
 
-            if (error) throw error;
+            console.log("[Transition] Resultado do banco:", { error, count, status, statusText });
+
+            if (error) {
+                console.error("[Transition] Erro de rede/banco:", error);
+                throw error;
+            }
             
             if (count === 0) {
-                throw new Error("Não foi possível atualizar o pedido. Verifique se você tem permissão para alterar a etapa deste registro.");
+                console.warn("[Transition] Nenhuma linha afetada. Possível falha de RLS (permissão).");
+                throw new Error("Não foi possível atualizar o pedido. Verifique se você tem permissão para alterar a etapa deste registro (RLS).");
             }
 
             const label = getStateLabel(journeyConfig as any, newState);
