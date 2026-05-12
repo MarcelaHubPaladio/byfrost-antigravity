@@ -464,7 +464,8 @@ export default function SalesOrderCase() {
                       <>
                         <span className="w-1 h-1 rounded-full bg-slate-300" />
                         <span className="flex items-center gap-1.5 text-blue-500 font-black" title="Responsável Atual">
-                          <User className="h-3 w-3" /> {caseData.assigned_user.display_name || caseData.assigned_user.email}
+                          <div className="flex h-3.5 w-3.5 items-center justify-center rounded bg-blue-100 text-[8px] font-black text-blue-700">R</div>
+                          {caseData.assigned_user.display_name || caseData.assigned_user.email}
                         </span>
                       </>
                     )}
@@ -472,7 +473,8 @@ export default function SalesOrderCase() {
                       <>
                         <span className="w-1 h-1 rounded-full bg-slate-300" />
                         <span className="flex items-center gap-1.5 text-emerald-600 font-black" title="Vendedor Comercial">
-                          <UsersRound className="h-3 w-3" /> {caseData.assigned_vendor.display_name || caseData.assigned_vendor.phone_e164}
+                          <div className="flex h-3.5 w-3.5 items-center justify-center rounded bg-emerald-100 text-[8px] font-black text-emerald-700">V</div>
+                          {caseData.assigned_vendor.display_name || caseData.assigned_vendor.phone_e164}
                         </span>
                       </>
                     )}
@@ -485,7 +487,7 @@ export default function SalesOrderCase() {
                   <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 ml-1">Responsável Atual</span>
                   <Select value={caseData?.assigned_user_id || "unassigned"} onValueChange={assignUser}>
                     <SelectTrigger className="h-10 w-[180px] rounded-2xl bg-white border-slate-200 shadow-sm font-bold text-xs">
-                      <User className="w-4 h-4 mr-2 text-blue-500" />
+                      <div className="flex h-4 w-4 mr-2 items-center justify-center rounded bg-blue-100 text-[9px] font-black text-blue-700">R</div>
                       <SelectValue placeholder="Responsável..." />
                     </SelectTrigger>
                     <SelectContent className="rounded-2xl border-slate-200">
@@ -503,7 +505,7 @@ export default function SalesOrderCase() {
                   <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 ml-1">Vendedor Comercial</span>
                   <Select value={caseData?.assigned_vendor_id || "unassigned"} onValueChange={assignVendor}>
                     <SelectTrigger className="h-10 w-[180px] rounded-2xl bg-white border-slate-200 shadow-sm font-bold text-xs">
-                      <UsersRound className="w-4 h-4 mr-2 text-emerald-500" />
+                      <div className="flex h-4 w-4 mr-2 items-center justify-center rounded bg-emerald-100 text-[9px] font-black text-emerald-700">V</div>
                       <SelectValue placeholder="Vendedor..." />
                     </SelectTrigger>
                     <SelectContent className="rounded-2xl border-slate-200">
