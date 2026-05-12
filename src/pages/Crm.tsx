@@ -110,6 +110,8 @@ function samePhoneLoose(a: string | null | undefined, b: string | null | undefin
   return da === db;
 }
 
+const CRM_FILTERS_KEY = "crm_filters_v1";
+
 export default function Crm() {
   const { activeTenantId, activeTenant, isSuperAdmin } = useTenant();
   const { user } = useSession();
@@ -117,16 +119,48 @@ export default function Crm() {
 
   const isAdminOrSuper = isSuperAdmin || activeTenant?.role === "admin";
 
-  const [selectedKey, setSelectedKey] = useState<string>("");
-  const [q, setQ] = useState("");
+  const [selectedKey, setSelectedKey] = useState<string>(() => {
+    const s = localStorage.getItem(CRM_FILTERS_KEY);
+    if (!s) return "";
+    try { return JSON.parse(s).selectedKey || ""; } catch { return ""; }
+  });
+  const [q, setQ] = useState(() => {
+    const s = localStorage.getItem(CRM_FILTERS_KEY);
+    if (!s) return "";
+    try { return JSON.parse(s).q || ""; } catch { return ""; }
+  });
   const [movingCaseId, setMovingCaseId] = useState<string | null>(null);
   const [tagQuery, setTagQuery] = useState("");
-  const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  const [selectedTags, setSelectedTags] = useState<string[]>(() => {
+    const s = localStorage.getItem(CRM_FILTERS_KEY);
+    if (!s) return [];
+    try { return JSON.parse(s).selectedTags || []; } catch { return []; }
+  });
 
   const [userQuery, setUserQuery] = useState("");
-  const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
+  const [selectedUserIds, setSelectedUserIds] = useState<string[]>(() => {
+    const s = localStorage.getItem(CRM_FILTERS_KEY);
+    if (!s) return [];
+    try { return JSON.parse(s).selectedUserIds || []; } catch { return []; }
+  });
 
-  const [instanceFilterId, setInstanceFilterId] = useState<string>("all");
+  const [instanceFilterId, setInstanceFilterId] = useState<string>(() => {
+    const s = localStorage.getItem(CRM_FILTERS_KEY);
+    if (!s) return "all";
+    try { return JSON.parse(s).instanceFilterId || "all"; } catch { return "all"; }
+  });
+
+  useEffect(() => {
+    const filters = {
+      selectedKey,
+      q,
+      selectedTags,
+      selectedUserIds,
+      instanceFilterId,
+    };
+    localStorage.setItem(CRM_FILTERS_KEY, JSON.stringify(filters));
+  }, [selectedKey, q, selectedTags, selectedUserIds, instanceFilterId]);
+
   const [exportingCsv, setExportingCsv] = useState(false);
 
   const allInstancesQ = useQuery({
