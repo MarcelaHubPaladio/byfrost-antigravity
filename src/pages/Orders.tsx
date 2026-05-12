@@ -282,6 +282,13 @@ export default function Orders() {
     }
   });
 
+  const formatRelativeUpdate = (iso: string) => {
+    if (!iso) return "—";
+    const d = new Date(iso);
+    if (isSameDay(d, new Date())) return "Hoje";
+    return format(d, "dd/MM", { locale: ptBR });
+  };
+
   const parseSafeDate = (input: string | null | undefined, fallback: string | Date): Date => {
     if (!input) return new Date(fallback);
     let s = String(input ?? "").trim().replace(/\s/g, "");
@@ -1358,9 +1365,15 @@ export default function Orders() {
                                   </span>
                                 </div>
                             </div>
-                            <div className="mt-3 flex items-center justify-between">
-                              <div className="flex items-center gap-1 text-[10px] text-slate-400">
-                                <Clock className="h-3 w-3" /> {minutesAgo(c.updated_at)}m
+                            <div className="mt-3 flex items-center justify-between border-t border-slate-50 pt-2.5">
+                              <div className="flex flex-col gap-1">
+                                <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-500">
+                                  <CalendarIcon className="h-3 w-3 text-slate-400" />
+                                  {format(parseSafeDate(caseDataQ.data?.fields.get(c.id)?.sale_date_text, c.created_at), "dd/MM")}
+                                </div>
+                                <div className="flex items-center gap-1.5 text-[10px] font-medium text-slate-400">
+                                  <Clock className="h-3 w-3" /> {formatRelativeUpdate(c.updated_at)}
+                                </div>
                               </div>
                               {pendQ.data?.get(c.id)?.open ? (
                                 <Badge className="bg-amber-100 text-amber-700 border-0">{pendQ.data.get(c.id)!.open} pend.</Badge>
