@@ -9,9 +9,10 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Search, Package, Image as ImageIcon, LayoutGrid, List as ListIcon, MapPin, Tag as TagIcon, Home } from "lucide-react";
+import { Plus, Search, Package, Image as ImageIcon, LayoutGrid, List as ListIcon, MapPin, Tag as TagIcon, Home, Download } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useNavigate } from "react-router-dom";
+import { toast } from "sonner";
 
 type InventoryItem = {
     id: string;
@@ -57,12 +58,13 @@ export default function Inventory() {
                     id, 
                     display_name, 
                     subtype, 
-                    status,                     metadata, 
-                     updated_at,
-                     property_type,
-                     total_area,
-                     useful_area,
-                     core_entity_tags(tag)
+                    status, 
+                    metadata, 
+                    updated_at,
+                    property_type,
+                    total_area,
+                    useful_area,
+                    core_entity_tags(tag)
                 `)
                 .eq("tenant_id", activeTenantId!)
                 .eq("entity_type", "offering")
@@ -92,8 +94,53 @@ export default function Inventory() {
         nav("/app/inventory/new");
     };
 
+    const handleExportCSV = () => {
+        if (items.length === 0) {
+            toast.error("Não há itens para exportar");
+            return;
+        }
+
+        try {
+            // Cabeçalho do CSV
+            const headers = ["Codigo", "Nome", "Estoque", "Link da Foto"];
+            
+            // Mapeia os itens para linhas do CSV
+            const rows = items.map(item => [
+                item.metadata.internal_code || "",
+                item.display_name.replace(/,/g, " "), // Remove vírgulas para não quebrar o CSV
+                item.metadata.stock_quantity !== undefined ? item.metadata.stock_quantity : "—",
+                item.metadata.photo_url || ""
+            ]);
+
+            // Monta o conteúdo final
+            const csvContent = [
+                headers.join(","),
+                ...rows.map(row => row.join(","))
+            ].join("\n");
+
+            // Cria o blob e dispara o download
+            const blob = new Blob(["\uFEFF" + csvContent], { type: "text/csv;charset=utf-8;" });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            
+            const timestamp = new Date().toISOString().split('T')[0];
+            link.setAttribute("href", url);
+            link.setAttribute("download", `inventario_${timestamp}.csv`);
+            link.style.visibility = 'hidden';
+            
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            
+            toast.success("Exportação concluída!");
+        } catch (err) {
+            console.error("Erro ao exportar CSV:", err);
+            toast.error("Falha ao gerar CSV");
+        }
+    };
+
     return (
-        <AppShell>
+        <AppShell title="Inventário">
             <div className="space-y-6">
                 <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between bg-white p-6 rounded-2xl border shadow-sm">
                     <div>
@@ -115,6 +162,16 @@ export default function Inventory() {
                                 <ListIcon className="w-4 h-4" />
                             </button>
                         </div>
+                        
+                        <Button 
+                            variant="outline"
+                            onClick={handleExportCSV} 
+                            className="rounded-xl h-10 border-slate-200 text-slate-600 hover:bg-slate-50"
+                        >
+                            <Download className="w-4 h-4 mr-2" />
+                            Exportar CSV
+                        </Button>
+
                         <Button onClick={handleCreate} className="rounded-xl h-10 bg-indigo-600 hover:bg-indigo-700">
                             <Plus className="w-4 h-4 mr-2" />
                             Novo Ativo
