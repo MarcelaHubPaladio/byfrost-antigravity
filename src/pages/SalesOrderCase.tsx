@@ -230,7 +230,8 @@ export default function SalesOrderCase() {
     if (!caseId || !tenantId) return;
     try {
       setUpdatingState(true);
-      const reasons = await checkTransitionBlocks(
+      const isSalesOrder = journey?.key === "sales_order";
+      const reasons = isSalesOrder ? [] : await checkTransitionBlocks(
         supabase, 
         tenantId, 
         caseId, 
@@ -347,6 +348,7 @@ export default function SalesOrderCase() {
 
   const currentPendencies = useMemo(() => {
     if (!caseData?.state || !stateMachine || !tenantId || !caseId) return [];
+    if (journey?.key === "sales_order") return [];
     
     // Find possible next states from current state
     const statesConfig = stateMachine.status_configs || {};

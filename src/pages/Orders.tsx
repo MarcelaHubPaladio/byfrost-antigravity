@@ -704,7 +704,8 @@ export default function Orders() {
     setMovingCaseId(caseId);
     try {
       const journeyConfig = selectedJourney?.default_state_machine_json as unknown as StateMachine;
-      const blocks = await checkTransitionBlocks(supabase, activeTenantId, caseId, currentCase.state, nextState, journeyConfig);
+      const isSalesOrder = selectedJourney?.key === "sales_order";
+      const blocks = isSalesOrder ? [] : await checkTransitionBlocks(supabase, activeTenantId, caseId, currentCase.state, nextState, journeyConfig);
       if (blocks.length > 0) {
         setTransitionBlock({ open: true, nextStateName: nextState, reasons: blocks });
         return;
