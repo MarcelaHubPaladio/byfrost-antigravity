@@ -57,6 +57,9 @@ import { AppShell } from "@/components/AppShell";
 import { RequireAuth } from "@/components/RequireAuth";
 import { useTenant } from "@/providers/TenantProvider";
 import { showError, showSuccess } from "@/utils/toast";
+import { useJourneyTransition } from "@/hooks/useJourneyTransition";
+import { UsersRound, RefreshCw } from "lucide-react";
+import { CaseUpdatesCard } from "@/components/case/CaseUpdatesCard";
 
 export default function SalesOrderCase() {
   const { id: caseId } = useParams<{ id: string }>();
@@ -65,6 +68,7 @@ export default function SalesOrderCase() {
   const qc = useQueryClient();
   const [updatingState, setUpdatingState] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const { transitionState, updating: transitioning } = useJourneyTransition();
 
   // Review Dialog State
   const [reviewOpen, setReviewOpen] = useState(false);
@@ -87,7 +91,8 @@ export default function SalesOrderCase() {
           *,
           journey:journeys(*),
           customer:customer_accounts(*),
-          assigned_user:users_profile(display_name, email)
+          assigned_user:users_profile(display_name, email),
+          assigned_vendor:vendors!cases_assigned_vendor_id_fkey(id, display_name, phone_e164)
         `)
         .eq("id", caseId)
         .single();
@@ -131,6 +136,21 @@ export default function SalesOrderCase() {
       const { data, error } = await supabase
         .from("users_profile")
         .select("user_id, display_name, email")
+        .eq("tenant_id", tenantId!)
+        .is("deleted_at", null)
+        .order("display_name");
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  const { data: vendors } = useQuery({
+    queryKey: ["vendors", tenantId],
+    enabled: !!tenantId && !!caseId,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("vendors")
+        .select("id, display_name, phone_e164")
         .eq("tenant_id", tenantId!)
         .is("deleted_at", null)
         .order("display_name");
@@ -223,31 +243,45 @@ export default function SalesOrderCase() {
         setTransitionBlock({ open: true, nextStateName: nextState, reasons });
         return;
       }
-      const { error } = await supabase
-        .from("cases")
-        .update({ state: nextState, updated_at: new Date().toISOString() })
-        .eq("id", caseId);
-      if (error) throw error;
       
-      // Audit trail: timeline event
-      await supabase.from("timeline_events").insert({
-        tenant_id: tenantId,
-        case_id: caseId,
-        event_type: "case_state_changed",
-        actor_type: "admin",
-        actor_id: sessionUser?.id ?? null,
-        message: `Status do pedido alterado para "${getStateLabel(journey, nextState)}".`,
-        meta_json: { from: caseData?.state, to: nextState },
-        occurred_at: new Date().toISOString(),
-      });
-
-      showSuccess(`Status atualizado para ${getStateLabel(journey, nextState)}`);
+      await transitionState(caseId, caseData?.state, nextState, journey?.default_state_machine_json);
+      
       qc.invalidateQueries({ queryKey: ["case", caseId] });
       qc.invalidateQueries({ queryKey: ["case_timeline", caseId] });
     } catch (err: any) {
       showError(err.message || "Erro ao atualizar status");
     } finally {
       setUpdatingState(false);
+    }
+  };
+
+  const assignVendor = async (vendorId: string) => {
+    if (!caseId || !tenantId) return;
+    try {
+      const { error } = await supabase
+        .from("cases")
+        .update({ assigned_vendor_id: vendorId === "unassigned" ? null : vendorId })
+        .eq("id", caseId);
+      if (error) throw error;
+      
+      // Audit trail
+      const vendorLabel = vendors?.find(v => v.id === vendorId)?.display_name || vendorId;
+      await supabase.from("timeline_events").insert({
+        tenant_id: tenantId,
+        case_id: caseId!,
+        event_type: "case_assigned_vendor",
+        actor_type: "admin",
+        actor_id: sessionUser?.id ?? null,
+        message: `Vendedor comercial alterado para "${vendorLabel}".`,
+        meta_json: { assigned_vendor_id: vendorId },
+        occurred_at: new Date().toISOString(),
+      });
+
+      showSuccess("Vendedor comercial atualizado");
+      qc.invalidateQueries({ queryKey: ["case", caseId] });
+      qc.invalidateQueries({ queryKey: ["case_timeline", caseId] });
+    } catch (err: any) {
+      showError(err.message);
     }
   };
 
@@ -429,8 +463,16 @@ export default function SalesOrderCase() {
                     {caseData?.assigned_user && (
                       <>
                         <span className="w-1 h-1 rounded-full bg-slate-300" />
-                        <span className="flex items-center gap-1.5 text-blue-500 font-black">
+                        <span className="flex items-center gap-1.5 text-blue-500 font-black" title="Responsável Atual">
                           <User className="h-3 w-3" /> {caseData.assigned_user.display_name || caseData.assigned_user.email}
+                        </span>
+                      </>
+                    )}
+                    {caseData?.assigned_vendor && (
+                      <>
+                        <span className="w-1 h-1 rounded-full bg-slate-300" />
+                        <span className="flex items-center gap-1.5 text-emerald-600 font-black" title="Vendedor Comercial">
+                          <UsersRound className="h-3 w-3" /> {caseData.assigned_vendor.display_name || caseData.assigned_vendor.phone_e164}
                         </span>
                       </>
                     )}
@@ -439,21 +481,41 @@ export default function SalesOrderCase() {
               </div>
 
               <div className="flex items-center gap-4">
-                {/* User Assignment */}
-                <Select value={caseData?.assigned_user_id || "unassigned"} onValueChange={assignUser}>
-                  <SelectTrigger className="h-10 w-[200px] rounded-2xl bg-slate-50/50 border-none shadow-none font-bold text-xs">
-                    <Users className="w-4 h-4 mr-2 text-slate-400" />
-                    <SelectValue placeholder="Responsável..." />
-                  </SelectTrigger>
-                  <SelectContent className="rounded-2xl border-slate-200">
-                    <SelectItem value="unassigned" className="font-bold text-xs">Sem responsável</SelectItem>
-                    {tenantUsers?.map((u) => (
-                      <SelectItem key={u.user_id} value={u.user_id} className="font-bold text-xs">
-                        {u.display_name || u.email}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <div className="flex flex-col gap-1">
+                  <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 ml-1">Responsável Atual</span>
+                  <Select value={caseData?.assigned_user_id || "unassigned"} onValueChange={assignUser}>
+                    <SelectTrigger className="h-10 w-[180px] rounded-2xl bg-white border-slate-200 shadow-sm font-bold text-xs">
+                      <User className="w-4 h-4 mr-2 text-blue-500" />
+                      <SelectValue placeholder="Responsável..." />
+                    </SelectTrigger>
+                    <SelectContent className="rounded-2xl border-slate-200">
+                      <SelectItem value="unassigned" className="font-bold text-xs">Sem responsável</SelectItem>
+                      {tenantUsers?.map((u) => (
+                        <SelectItem key={u.user_id} value={u.user_id} className="font-bold text-xs">
+                          {u.display_name || u.email}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="flex flex-col gap-1">
+                  <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 ml-1">Vendedor Comercial</span>
+                  <Select value={caseData?.assigned_vendor_id || "unassigned"} onValueChange={assignVendor}>
+                    <SelectTrigger className="h-10 w-[180px] rounded-2xl bg-white border-slate-200 shadow-sm font-bold text-xs">
+                      <UsersRound className="w-4 h-4 mr-2 text-emerald-500" />
+                      <SelectValue placeholder="Vendedor..." />
+                    </SelectTrigger>
+                    <SelectContent className="rounded-2xl border-slate-200">
+                      <SelectItem value="unassigned" className="font-bold text-xs">Sem vendedor</SelectItem>
+                      {vendors?.map((v) => (
+                        <SelectItem key={v.id} value={v.id} className="font-bold text-xs">
+                          {v.display_name || v.phone_e164}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
 
                 <div className="h-8 w-px bg-slate-100 mx-1" />
 
@@ -711,26 +773,22 @@ export default function SalesOrderCase() {
                       </Card>
                     </AccordionItem>
 
-                    {/* Observations */}
-                    <AccordionItem value="obs" className="border-none">
+                    {/* Updates (Atualizações) */}
+                    <AccordionItem value="updates" className="border-none">
                       <Card className="rounded-[40px] overflow-hidden border-none bg-white shadow-sm transition-all hover:shadow-md">
                         <AccordionTrigger className="px-8 py-6 hover:no-underline hover:bg-slate-50 [&[data-state=open]]:bg-slate-50">
                           <div className="flex items-center gap-4 text-left">
-                            <div className="h-12 w-12 rounded-2xl bg-orange-50 text-orange-600 flex items-center justify-center">
-                              <FileText className="h-6 w-6" />
+                            <div className="h-12 w-12 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center">
+                              <RefreshCw className="h-6 w-6" />
                             </div>
                             <div>
-                              <h3 className="text-base font-black text-slate-900 tracking-tight">Observações</h3>
-                              <p className="text-[11px] text-slate-500 font-medium">Notas internas e avisos para logística.</p>
+                              <h3 className="text-base font-black text-slate-900 tracking-tight">Atualizações</h3>
+                              <p className="text-[11px] text-slate-500 font-medium">Histórico de faturamento, projeto, rota e expedição.</p>
                             </div>
                           </div>
                         </AccordionTrigger>
                         <AccordionContent className="p-8 border-t border-slate-100 pt-8">
-                          <div className="rounded-3xl border border-slate-100 p-6 bg-slate-50/50 min-h-[100px]">
-                            <p className="text-sm text-slate-600 italic leading-relaxed">
-                              {getField("obs") || getField("observacoes") || "Nenhuma observação informada."}
-                            </p>
-                          </div>
+                          <CaseUpdatesCard caseId={caseId!} tenantId={tenantId!} />
                         </AccordionContent>
                       </Card>
                     </AccordionItem>

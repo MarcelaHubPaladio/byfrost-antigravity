@@ -424,19 +424,21 @@ export default function Orders() {
       rows = rows.filter(r => r.assigned_user_id === selectedSellerId);
     }
 
-    // Filter by Date Range
-    rows = rows.filter(r => {
-      const f = caseDataQ.data?.fields.get(r.id);
-      const saleDateText = f?.sale_date_text;
-      
-      const d = parseSafeDate(saleDateText, r.created_at);
-      
-      if (!dateRange.from) return true;
-      const start = startOfDay(dateRange.from);
-      const end = endOfDay(dateRange.to || dateRange.from);
-      
-      return isWithinInterval(d, { start, end });
-    });
+    // Filter by Date Range - Skip if searching (q)
+    if (!qq) {
+      rows = rows.filter(r => {
+        const f = caseDataQ.data?.fields.get(r.id);
+        const saleDateText = f?.sale_date_text;
+        
+        const d = parseSafeDate(saleDateText, r.created_at);
+        
+        if (!dateRange.from) return true;
+        const start = startOfDay(dateRange.from);
+        const end = endOfDay(dateRange.to || dateRange.from);
+        
+        return isWithinInterval(d, { start, end });
+      });
+    }
 
     if (selectedPaymentMethods.size > 0) {
       rows = rows.filter(r => {
@@ -1259,7 +1261,7 @@ export default function Orders() {
               </div>
             </div>
             
-            <div className="h-[200px] w-full mt-4">
+            <div className="h-[130px] w-full mt-4">
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
                   <defs>
