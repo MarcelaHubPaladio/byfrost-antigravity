@@ -418,6 +418,7 @@ export default function Orders() {
 
   const filteredRows = useMemo(() => {
     let rows = journeyRows;
+    const qq = q.trim().toLowerCase();
 
     // Filter by seller
     if (selectedSellerId !== "all") {
@@ -454,7 +455,7 @@ export default function Orders() {
       });
     }
 
-    const qq = q.trim().toLowerCase();
+
     if (qq) {
       rows = rows.filter((r) => {
         const cust = customersQ.data?.get(r.customer_id!);
