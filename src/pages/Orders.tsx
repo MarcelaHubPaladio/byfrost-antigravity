@@ -64,6 +64,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Command,
+  CommandEmpty,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
 import { StateMachine } from "@/lib/journeys/types"
 import { GlobalJourneyLogsDialog } from "@/components/case/GlobalJourneyLogsDialog";
 import { checkTransitionBlocks } from "@/lib/journeys/validation";
@@ -154,6 +161,7 @@ export default function Orders() {
   const [selectedSellerId, setSelectedSellerId] = useState<string>("all");
   const [selectedPaymentMethods, setSelectedPaymentMethods] = useState<Set<string>>(new Set());
   const [selectedCities, setSelectedCities] = useState<Set<string>>(new Set());
+  const [selectedInventoryIds, setSelectedInventoryIds] = useState<Set<string>>(new Set());
   const [movingCaseId, setMovingCaseId] = useState<string | null>(null);
   const [transitionBlock, setTransitionBlock] = useState<{
     open: boolean;
@@ -175,6 +183,7 @@ export default function Orders() {
         if (parsed.sellerId) setSelectedSellerId(parsed.sellerId);
         if (parsed.paymentMethods) setSelectedPaymentMethods(new Set(parsed.paymentMethods));
         if (parsed.cities) setSelectedCities(new Set(parsed.cities));
+        if (parsed.inventoryIds) setSelectedInventoryIds(new Set(parsed.inventoryIds));
         if (parsed.dateRange) {
           setDateRange({
             from: parsed.dateRange.from ? new Date(parsed.dateRange.from) : startOfMonth(new Date()),
@@ -193,6 +202,7 @@ export default function Orders() {
       sellerId: selectedSellerId,
       paymentMethods: Array.from(selectedPaymentMethods),
       cities: Array.from(selectedCities),
+      inventoryIds: Array.from(selectedInventoryIds),
       dateRange: {
         from: dateRange.from?.toISOString(),
         to: dateRange.to?.toISOString()
@@ -315,7 +325,23 @@ export default function Orders() {
         .order("display_name", { ascending: true });
       if (error) throw error;
       return data ?? [];
-    }
+    },
+  });
+
+  const inventoryQ = useQuery({
+    queryKey: ["inventory_for_filter", activeTenantId],
+    enabled: Boolean(activeTenantId),
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("core_entities")
+        .select("id, display_name")
+        .eq("tenant_id", activeTenantId!)
+        .eq("entity_type", "offering")
+        .is("deleted_at", null)
+        .order("display_name", { ascending: true });
+      if (error) throw error;
+      return data ?? [];
+    },
   });
 
   const formatRelativeUpdate = (iso: string) => {
@@ -407,7 +433,7 @@ export default function Orders() {
             .limit(1000),
           supabase
             .from("case_items")
-            .select("case_id,total")
+            .select("case_id,total,offering_entity_id")
             .in("case_id", chunk)
         ]);
 
@@ -427,14 +453,22 @@ export default function Orders() {
 
       const totalsMap = new Map<string, number>();
       const itemCountsMap = new Map<string, number>();
+      const inventoryIdsMap = new Map<string, Set<string>>();
       for (const itm of allItems) {
         const cid = itm.case_id;
         const val = Number(itm.total ?? 0);
+        const invId = itm.offering_entity_id;
+
         totalsMap.set(cid, (totalsMap.get(cid) ?? 0) + val);
         itemCountsMap.set(cid, (itemCountsMap.get(cid) ?? 0) + 1);
+
+        if (invId) {
+          if (!inventoryIdsMap.has(cid)) inventoryIdsMap.set(cid, new Set());
+          inventoryIdsMap.get(cid)!.add(invId);
+        }
       }
 
-      return { fields: fieldMap, totals: totalsMap, itemCounts: itemCountsMap };
+      return { fields: fieldMap, totals: totalsMap, itemCounts: itemCountsMap, inventory: inventoryIdsMap };
     },
   });
 
@@ -498,6 +532,13 @@ export default function Orders() {
       });
     }
 
+    if (selectedInventoryIds.size > 0) {
+      rows = rows.filter(r => {
+        const orderInvIds = caseDataQ.data?.inventory.get(r.id);
+        if (!orderInvIds) return false;
+        return Array.from(selectedInventoryIds).some(id => orderInvIds.has(id));
+      });
+    }
 
     if (qq) {
       rows = rows.filter((r) => {
@@ -511,7 +552,7 @@ export default function Orders() {
     }
 
     return rows;
-  }, [journeyRows, q, dateRange, selectedSellerId, selectedPaymentMethods, selectedCities, customersQ.data, caseDataQ.data]);
+  }, [journeyRows, q, dateRange, selectedSellerId, selectedPaymentMethods, selectedCities, selectedInventoryIds, customersQ.data, caseDataQ.data]);
 
   const paymentOptions = useMemo(() => {
     const opts = new Set<string>();
@@ -1057,6 +1098,61 @@ export default function Orders() {
                       <p className="text-xs text-slate-400 px-2 py-2">Nenhuma opção encontrada</p>
                     )}
                   </div>
+                </PopoverContent>
+              </Popover>
+
+              {/* Inventário Multi-Select */}
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className={cn(
+                      "h-10 rounded-2xl border-slate-200 bg-white/70 text-xs font-bold text-slate-700 min-w-[160px] justify-start hover:bg-white hover:border-blue-400 transition-all shadow-sm gap-2",
+                      selectedInventoryIds.size > 0 && "border-blue-400 bg-blue-50 text-blue-700"
+                    )}
+                  >
+                    <Package className="h-4 w-4 text-slate-400 flex-shrink-0" />
+                    {selectedInventoryIds.size === 0
+                      ? "Inventário: Todos"
+                      : selectedInventoryIds.size === 1
+                      ? inventoryQ.data?.find(x => x.id === Array.from(selectedInventoryIds)[0])?.display_name || "1 selecionado"
+                      : `${selectedInventoryIds.size} itens`}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[280px] rounded-2xl shadow-xl border-slate-200 p-0" align="start">
+                  <Command>
+                    <CommandInput placeholder="Buscar ativo..." className="h-9 border-none focus:ring-0" />
+                    <CommandList className="max-h-[300px]">
+                      <CommandEmpty>Nenhum item encontrado.</CommandEmpty>
+                      <div className="p-2 border-b border-slate-100 flex items-center justify-between">
+                        <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Ativos do Inventário</p>
+                        {selectedInventoryIds.size > 0 && (
+                          <button onClick={() => setSelectedInventoryIds(new Set())} className="text-[10px] text-blue-600 font-bold hover:underline">Limpar</button>
+                        )}
+                      </div>
+                      <div className="p-1">
+                        {inventoryQ.data?.map((item) => (
+                          <CommandItem
+                            key={item.id}
+                            onSelect={() => {
+                              const next = new Set(selectedInventoryIds);
+                              next.has(item.id) ? next.delete(item.id) : next.add(item.id);
+                              setSelectedInventoryIds(next);
+                            }}
+                            className="flex items-center gap-2 px-2 py-1.5 rounded-xl cursor-pointer"
+                          >
+                            <div className={cn(
+                              "h-4 w-4 border rounded flex items-center justify-center transition-colors",
+                              selectedInventoryIds.has(item.id) ? "bg-blue-600 border-blue-600" : "border-slate-300"
+                            )}>
+                              {selectedInventoryIds.has(item.id) && <Check className="h-3 w-3 text-white" />}
+                            </div>
+                            <span className="text-xs font-semibold text-slate-700 truncate">{item.display_name}</span>
+                          </CommandItem>
+                        ))}
+                      </div>
+                    </CommandList>
+                  </Command>
                 </PopoverContent>
               </Popover>
 
