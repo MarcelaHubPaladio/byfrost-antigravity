@@ -441,7 +441,7 @@ export default function Orders() {
             .from("case_fields")
             .select("case_id,key,value_text")
             .in("case_id", chunk)
-            .in("key", ["whatsapp", "phone", "customer_phone", "sale_date_text", "billing_status", "total_value_raw", "obs", "payment_method", "city"])
+            .in("key", ["whatsapp", "phone", "customer_phone", "sale_date_text", "billing_status", "partial_paid_value", "total_value_raw", "obs", "payment_method", "city"])
             .limit(1000),
           supabase
             .from("case_items")
