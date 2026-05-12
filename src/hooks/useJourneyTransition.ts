@@ -28,13 +28,17 @@ export function useJourneyTransition() {
         try {
             // 1. Atualiza estado no banco
             // O Trigger 'trg_journey_transition' irá detectar a mudança e chamar a Edge Function via pg_net.
-            const { error } = await supabase
+            const { error, count } = await supabase
                 .from("cases")
-                .update({ state: newState })
+                .update({ state: newState }, { count: 'exact' })
                 .eq("tenant_id", activeTenantId)
                 .eq("id", caseId);
 
             if (error) throw error;
+            
+            if (count === 0) {
+                throw new Error("Não foi possível atualizar o pedido. Verifique se você tem permissão para alterar a etapa deste registro.");
+            }
 
             const label = getStateLabel(journeyConfig as any, newState);
             showSuccess(`Movido para ${label}. Atualizando...`);
@@ -42,6 +46,7 @@ export function useJourneyTransition() {
             // 2. Invalidação imediata (para mover o card visualmente de coluna sem lag)
             qc.invalidateQueries({ queryKey: ["cases_by_tenant", activeTenantId] });
             qc.invalidateQueries({ queryKey: ["crm_cases_by_tenant", activeTenantId] });
+            qc.invalidateQueries({ queryKey: ["cases_orders", activeTenantId] });
 
             // 3. Wait 1.5s to give Edge Function time to apply assignments/create pendencies
             await new Promise((resolve) => setTimeout(resolve, 1500));
@@ -52,7 +57,10 @@ export function useJourneyTransition() {
                 qc.invalidateQueries({ queryKey: ["timeline", activeTenantId, caseId] }), 
                 qc.invalidateQueries({ queryKey: ["cases_by_tenant", activeTenantId] }),
                 qc.invalidateQueries({ queryKey: ["crm_cases_by_tenant", activeTenantId] }),
+                qc.invalidateQueries({ queryKey: ["cases_orders", activeTenantId] }),
                 qc.invalidateQueries({ queryKey: ["pendencies", activeTenantId, caseId] }), 
+                qc.invalidateQueries({ queryKey: ["orders_case_fields_extended", activeTenantId] }),
+                qc.invalidateQueries({ queryKey: ["orders_pendencies", activeTenantId] }),
             ]);
 
         } catch (e: any) {
