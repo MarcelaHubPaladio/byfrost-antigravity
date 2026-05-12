@@ -153,15 +153,49 @@ export default function Orders() {
   const nav = useNavigate();
   const { prefs } = useTheme();
 
-  const [q, setQ] = useState("");
-  const [dateRange, setDateRange] = useState<{ from: Date; to: Date | undefined }>({ 
-    from: startOfMonth(new Date()), 
-    to: endOfMonth(new Date()) 
+  const [q, setQ] = useState(() => {
+    const s = localStorage.getItem("orders_filters_v2");
+    if (!s) return "";
+    try { return JSON.parse(s).q || ""; } catch { return ""; }
   });
-  const [selectedSellerId, setSelectedSellerId] = useState<string>("all");
-  const [selectedPaymentMethods, setSelectedPaymentMethods] = useState<Set<string>>(new Set());
-  const [selectedCities, setSelectedCities] = useState<Set<string>>(new Set());
-  const [selectedInventoryIds, setSelectedInventoryIds] = useState<Set<string>>(new Set());
+
+  const [dateRange, setDateRange] = useState<{ from: Date; to: Date | undefined }>(() => {
+    const s = localStorage.getItem("orders_filters_v2");
+    const fallback = { from: startOfMonth(new Date()), to: endOfMonth(new Date()) };
+    if (!s) return fallback;
+    try {
+      const p = JSON.parse(s);
+      if (!p.dateRange) return fallback;
+      return {
+        from: p.dateRange.from ? new Date(p.dateRange.from) : fallback.from,
+        to: p.dateRange.to ? new Date(p.dateRange.to) : fallback.to
+      };
+    } catch { return fallback; }
+  });
+
+  const [selectedSellerId, setSelectedSellerId] = useState<string>(() => {
+    const s = localStorage.getItem("orders_filters_v2");
+    if (!s) return "all";
+    try { return JSON.parse(s).sellerId || "all"; } catch { return "all"; }
+  });
+
+  const [selectedPaymentMethods, setSelectedPaymentMethods] = useState<Set<string>>(() => {
+    const s = localStorage.getItem("orders_filters_v2");
+    if (!s) return new Set();
+    try { return new Set(JSON.parse(s).paymentMethods || []); } catch { return new Set(); }
+  });
+
+  const [selectedCities, setSelectedCities] = useState<Set<string>>(() => {
+    const s = localStorage.getItem("orders_filters_v2");
+    if (!s) return new Set();
+    try { return new Set(JSON.parse(s).cities || []); } catch { return new Set(); }
+  });
+
+  const [selectedInventoryIds, setSelectedInventoryIds] = useState<Set<string>>(() => {
+    const s = localStorage.getItem("orders_filters_v2");
+    if (!s) return new Set();
+    try { return new Set(JSON.parse(s).inventoryIds || []); } catch { return new Set(); }
+  });
   const [movingCaseId, setMovingCaseId] = useState<string | null>(null);
   const [transitionBlock, setTransitionBlock] = useState<{
     open: boolean;
@@ -172,29 +206,6 @@ export default function Orders() {
   const [exportingCsv, setExportingCsv] = useState(false);
   const [exportingPdf, setExportingPdf] = useState(false);
   const [viewMode, setViewMode] = useState<"kanban" | "list">("kanban");
-
-  // Filter Persistence
-  useEffect(() => {
-    const saved = localStorage.getItem("orders_filters_v2");
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        if (parsed.q) setQ(parsed.q);
-        if (parsed.sellerId) setSelectedSellerId(parsed.sellerId);
-        if (parsed.paymentMethods) setSelectedPaymentMethods(new Set(parsed.paymentMethods));
-        if (parsed.cities) setSelectedCities(new Set(parsed.cities));
-        if (parsed.inventoryIds) setSelectedInventoryIds(new Set(parsed.inventoryIds));
-        if (parsed.dateRange) {
-          setDateRange({
-            from: parsed.dateRange.from ? new Date(parsed.dateRange.from) : startOfMonth(new Date()),
-            to: parsed.dateRange.to ? new Date(parsed.dateRange.to) : endOfMonth(new Date()),
-          });
-        }
-      } catch (e) {
-        console.error("Error loading filters", e);
-      }
-    }
-  }, []);
 
   useEffect(() => {
     const filters = {
@@ -209,7 +220,7 @@ export default function Orders() {
       }
     };
     localStorage.setItem("orders_filters_v2", JSON.stringify(filters));
-  }, [q, selectedSellerId, selectedPaymentMethods, selectedCities, dateRange]);
+  }, [q, selectedSellerId, selectedPaymentMethods, selectedCities, dateRange, selectedInventoryIds]);
 
   useEffect(() => {
     const saved = localStorage.getItem(ORDERS_VIEW_MODE_KEY);
