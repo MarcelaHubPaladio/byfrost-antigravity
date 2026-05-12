@@ -226,7 +226,6 @@ export function CaseUpdatesCard({ caseId, tenantId }: CaseUpdatesCardProps) {
           </div>
         )}
       </div>
-      </div>
 
       <AlertDialog open={!!deletingId} onOpenChange={(open) => !open && setDeletingId(null)}>
         <AlertDialogContent className="rounded-[32px] border-none shadow-2xl">
