@@ -88,6 +88,11 @@ serve(async (req) => {
       console.error(`[admin-supabase-usage] Logs API error:`, logsData);
     }
     const egressData = logsData.result || [];
+    
+    // DEBUG: Dump first result structure to see headers
+    if (egressData.length > 0) {
+      console.log(`[admin-supabase-usage] DEBUG SAMPLE:`, JSON.stringify(logsData.result[0], null, 2));
+    }
 
     // 5) Fetch DB Metrics (Current month only)
     const now = new Date();
@@ -131,10 +136,12 @@ serve(async (req) => {
         egress_gb: (d.bytes || 0) / (1024 * 1024 * 1024),
         requests: d.requests
       })),
+      raw_sample: egressData[0] || null,
       timestamp: new Date().toISOString()
     }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
+
 
 
   } catch (e) {
