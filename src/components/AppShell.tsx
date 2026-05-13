@@ -476,6 +476,11 @@ const CORE_NAV_CHILDREN: CoreNavChild[] = [
   { to: "/app/contracts", label: "Gestor", icon: ClipboardCheck, routeKey: "app.commitments" },
 ];
 
+const M30_NAV_CHILDREN = [
+  { to: "/app/operacao-m30", label: "Gestão M30", icon: Users, routeKey: "app.operacao_m30" },
+  { to: "/app/reports", label: "Relatórios", icon: BarChart3, routeKey: "app.commitments" },
+];
+
 const CREATE_NAV_CHILDREN = [
   { to: "/app/link-manager", label: "Links", icon: Link2, routeKey: "app.link_manager" },
   { to: "/app/media-kit", label: "Mídia Kit", icon: Palette, routeKey: "app.media_kit" },
@@ -562,6 +567,7 @@ export function AppShell({
   const [mobilePresenceOpen, setMobilePresenceOpen] = useState(false);
   const [mobileCoreOpen, setMobileCoreOpen] = useState(false);
   const [mobileCreateOpen, setMobileCreateOpen] = useState(false);
+  const [mobileM30Open, setMobileM30Open] = useState(false);
   const [isSuperTasksOpen, setIsSuperTasksOpen] = useState(() => {
     try {
       return localStorage.getItem("isSuperTasksOpen") === "true";
@@ -1015,7 +1021,26 @@ export function AppShell({
               <div className="grid justify-items-center gap-2">
                 <NavTile to={prefs.startRoute || "/app"} icon={LayoutGrid} label="Dashboard" disabled={!can("app.dashboard")} />
                 {hasTrello && <NavTile to="/app/trello" icon={KanbanSquare} label="Tarefas" disabled={!can("app.trello")} />}
-                {hasOperacaoM30 && <NavTile to="/app/operacao-m30" icon={Users} label="Clientes M30" disabled={!can("app.operacao_m30")} />}
+                {hasOperacaoM30 && (
+                  <DesktopHoverMenu
+                    title="M30"
+                    trigger={<div className="w-full"><NavTile to="/app/operacao-m30" icon={Users} label="Clientes M30" disabled={!can("app.operacao_m30")} /></div>}
+                  >
+                    {M30_NAV_CHILDREN.filter(c => {
+                      if (c.to === "/app/reports" && !reportsEnabledForTenant) return false;
+                      return true;
+                    }).map(({ to, label, icon, routeKey }) => (
+                      <DesktopHoverMenuLink
+                        key={to}
+                        to={to}
+                        label={label}
+                        icon={icon}
+                        active={loc.pathname === to || loc.pathname.startsWith(to + "/")}
+                        disabled={!can(routeKey)}
+                      />
+                    ))}
+                  </DesktopHoverMenu>
+                )}
                 {hasMktTecha && <NavTile to="/app/mkt-techa" icon={Star} label="MKT Técha" disabled={!can("app.dashboard")} />}
                 {hasOrders && <NavTile to="/app/orders" icon={Package} label="Pedidos" disabled={!can("app.dashboard")} />}
                 {hasClientesSawe && <NavTile to="/app/clientes-sawe" icon={Users} label="SAWE" disabled={!can("app.dashboard")} />}
@@ -1154,15 +1179,6 @@ export function AppShell({
                   />
                 )}
 
-                {reportsEnabledForTenant && (
-                  <NavTile
-                    to="/app/reports"
-                    icon={BarChart3}
-                    label="Relatórios"
-                    disabled={!can("app.commitments")}
-                  />
-                )}
-
                 {(activeTenant?.modules_json?.tasks_enabled) && (
                   <NavTile 
                     icon={ClipboardList} 
@@ -1277,13 +1293,46 @@ export function AppShell({
                               />
                             )}
                             {hasOperacaoM30 && (
-                              <MobileNavItem
-                                to="/app/operacao-m30"
-                                icon={Users}
-                                label="Clientes M30"
-                                disabled={!can("app.operacao_m30")}
-                                onNavigate={() => setMobileNavOpen(false)}
-                              />
+                              <Collapsible open={mobileM30Open} onOpenChange={setMobileM30Open}>
+                                <CollapsibleTrigger asChild>
+                                  <button
+                                    type="button"
+                                    className={cn(
+                                      "flex w-full items-center justify-between gap-3 rounded-2xl border px-4 py-3 transition",
+                                      M30_NAV_CHILDREN.some((c) => loc.pathname.startsWith(c.to))
+                                        ? "border-[hsl(var(--byfrost-accent)/0.35)] bg-[hsl(var(--byfrost-accent)/0.10)] text-[hsl(var(--byfrost-accent))]"
+                                        : "border-slate-200 bg-white/75 text-slate-800 hover:border-slate-300 hover:bg-white",
+                                      "dark:border-slate-800 dark:bg-slate-950/40 dark:text-slate-100 dark:hover:bg-slate-950/60"
+                                    )
+                                    }
+                                    title="M30"
+                                  >
+                                    <div className="flex items-center gap-3">
+                                      <Users className="h-5 w-5" />
+                                      <span className="text-sm font-semibold tracking-tight">Clientes M30</span>
+                                    </div>
+                                    <ChevronRight
+                                      className={cn("h-5 w-5 opacity-70 transition", mobileM30Open && "rotate-90")}
+                                    />
+                                  </button>
+                                </CollapsibleTrigger>
+
+                                <CollapsibleContent className="mt-2 grid gap-2 pl-2">
+                                  {M30_NAV_CHILDREN.filter(c => {
+                                    if (c.to === "/app/reports" && !reportsEnabledForTenant) return false;
+                                    return true;
+                                  }).map(({ to, label, icon, routeKey }) => (
+                                    <MobileNavItem
+                                      key={to}
+                                      to={to}
+                                      icon={icon}
+                                      label={label}
+                                      disabled={!can(routeKey)}
+                                      onNavigate={() => setMobileNavOpen(false)}
+                                    />
+                                  ))}
+                                </CollapsibleContent>
+                              </Collapsible>
                             )}
                             {hasMktTecha && (
                               <MobileNavItem
@@ -1552,6 +1601,7 @@ export function AppShell({
                                 onNavigate={() => setMobileNavOpen(false)}
                               />
                             )}
+
 
                             {processesEnabledForTenant && (
                               <MobileNavItem
