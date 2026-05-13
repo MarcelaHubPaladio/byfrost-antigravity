@@ -474,7 +474,6 @@ const CORE_NAV_CHILDREN: CoreNavChild[] = [
   },
   { to: "/app/commitments", label: "Venda", icon: Handshake, routeKey: "app.commitments" },
   { to: "/app/contracts", label: "Gestor", icon: ClipboardCheck, routeKey: "app.commitments" },
-  { to: "/app/reports", label: "Relatórios", icon: BarChart3, routeKey: "app.commitments" },
 ];
 
 const CREATE_NAV_CHILDREN = [
@@ -1059,10 +1058,7 @@ export function AppShell({
                     title="Core"
                     trigger={<div className="w-full"><NavTile to="/app/entities" icon={Building2} label="Core" disabled={!can("app.entities")} /></div>}
                   >
-                    {CORE_NAV_CHILDREN.filter(c => {
-                      if (c.to === "/app/reports" && !reportsEnabledForTenant) return false;
-                      return true;
-                    }).map(({ to, label, icon, routeKey }) => (
+                    {CORE_NAV_CHILDREN.map(({ to, label, icon, routeKey }) => (
                       <DesktopHoverMenuLink
                         key={to}
                         to={to}
@@ -1155,6 +1151,15 @@ export function AppShell({
                     icon={ClipboardCheck}
                     label="Processos"
                     disabled={!can("app.processes")}
+                  />
+                )}
+
+                {reportsEnabledForTenant && (
+                  <NavTile
+                    to="/app/reports"
+                    icon={BarChart3}
+                    label="Relatórios"
+                    disabled={!can("app.commitments")}
                   />
                 )}
 
@@ -1381,10 +1386,7 @@ export function AppShell({
                                 </CollapsibleTrigger>
 
                                 <CollapsibleContent className="mt-2 grid gap-2 pl-2">
-                                  {CORE_NAV_CHILDREN.filter(c => {
-                                    if (c.to === "/app/reports" && !reportsEnabledForTenant) return false;
-                                    return true;
-                                  }).map(({ to, label, icon, routeKey }) => (
+                                  {CORE_NAV_CHILDREN.map(({ to, label, icon, routeKey }) => (
                                     <MobileNavItem
                                       key={to}
                                       to={to}
@@ -1557,6 +1559,16 @@ export function AppShell({
                                 icon={ClipboardCheck}
                                 label="Processos"
                                 disabled={!can("app.processes")}
+                                onNavigate={() => setMobileNavOpen(false)}
+                              />
+                            )}
+
+                            {reportsEnabledForTenant && (
+                              <MobileNavItem
+                                to="/app/reports"
+                                icon={BarChart3}
+                                label="Relatórios"
+                                disabled={!can("app.commitments")}
                                 onNavigate={() => setMobileNavOpen(false)}
                               />
                             )}
