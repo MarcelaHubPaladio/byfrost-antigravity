@@ -284,17 +284,17 @@ export default function ReportDetail() {
               .no-print { display: none !important; }
               .print-only { display: block !important; }
               
-              /* Force Side-by-Side Layout */
-              .grid {
+              /* Force Side-by-Side Layout ONLY for main columns */
+              .report-main-grid {
                 display: flex !important;
                 flex-direction: row !important;
-                gap: 1rem !important;
+                gap: 1.5rem !important;
                 align-items: flex-start !important;
                 width: 100% !important;
               }
               
-              .lg\:col-span-7 { width: 65% !important; flex: 0 0 65% !important; }
-              .lg\:col-span-5 { width: 33% !important; flex: 0 0 33% !important; }
+              .lg\:col-span-7 { width: 64% !important; flex: 0 0 64% !important; }
+              .lg\:col-span-5 { width: 34% !important; flex: 0 0 34% !important; }
               
               /* Compact Content */
               .card { 
@@ -431,7 +431,7 @@ export default function ReportDetail() {
                 </div>
 
                 {/* Funnel & Main Stats */}
-                <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 print:grid-cols-1">
+                <div className="report-main-grid grid grid-cols-1 lg:grid-cols-12 gap-8">
                   {/* Left: Stats & Funnel */}
                   <Card className="lg:col-span-7 p-8 rounded-[32px] border-none bg-white shadow-xl shadow-slate-200/50 dark:bg-slate-950/50 dark:shadow-none print:shadow-none print:p-0">
                     <div className="flex items-center justify-between mb-8">
@@ -536,11 +536,12 @@ export default function ReportDetail() {
                     <Card className="p-8 rounded-[32px] border-none bg-white shadow-lg shadow-slate-200/50 dark:bg-slate-950/50">
                         <h3 className="text-lg font-bold mb-6 flex items-center gap-2">
                             <BarChart3 className="h-5 w-5 text-indigo-500" />
-                            Performance do Período
+                            <span className="print:hidden">Evolução Histórica</span>
+                            <span className="hidden print:block text-slate-900">Performance do Período</span>
                         </h3>
                         
-                        {/* Summary Grid for PDF/Dashboard */}
-                        <div className="grid grid-cols-3 gap-y-8 gap-x-4">
+                        {/* Summary Grid for PDF ONLY (3x3) */}
+                        <div className="hidden print:grid grid-cols-3 gap-y-10 gap-x-4">
                             <div className="text-center">
                                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Visualizações</p>
                                 <p className="text-xl font-black text-slate-900 dark:text-white">{selectedReport?.visualizations?.toLocaleString()}</p>
