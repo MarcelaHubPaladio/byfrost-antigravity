@@ -272,55 +272,55 @@ export default function ReportDetail() {
             @media print {
               @page { 
                 size: landscape; 
-                margin: 0.5cm; 
+                margin: 0.5cm !important; 
               }
               body { 
                 background: white !important; 
                 -webkit-print-color-adjust: exact; 
                 print-color-adjust: exact;
-                width: 100% !important;
-                height: 100% !important;
-                margin: 0 !important;
-                padding: 0 !important;
+                zoom: 0.8;
+                overflow: hidden !important;
               }
               .no-print { display: none !important; }
               .print-only { display: block !important; }
               
-              /* Force everything into one page */
-              .mx-auto { 
-                max-width: 100% !important; 
-                padding: 0 !important; 
-                margin: 0 !important; 
+              /* Force Side-by-Side Layout */
+              .grid {
+                display: flex !important;
+                flex-direction: row !important;
+                gap: 1.5rem !important;
+                align-items: flex-start !important;
                 width: 100% !important;
               }
-              .space-y-8 { space-y: 0 !important; gap: 1rem !important; display: flex !important; flex-direction: column !important; }
-              .space-y-8 > * { margin-top: 0 !important; }
               
+              .lg\:col-span-7 { width: 64% !important; flex: 0 0 64% !important; }
+              .lg\:col-span-5 { width: 34% !important; flex: 0 0 34% !important; }
+              
+              /* Compact Content */
               .card { 
                 border: 1px solid #e2e8f0 !important; 
                 box-shadow: none !important; 
-                break-inside: avoid;
+                break-inside: avoid !important;
+                page-break-inside: avoid !important;
+                padding: 1.2rem !important;
+                border-radius: 24px !important;
                 background: white !important;
-                padding: 1.5rem !important;
-                border-radius: 20px !important;
               }
               
               /* Scale headers */
-              h1.text-5xl { font-size: 3rem !important; line-height: 1 !important; }
-              .print-only p { margin-top: 0.25rem !important; }
+              h1.text-5xl { font-size: 3rem !important; line-height: 1 !important; margin-bottom: 0.5rem !important; }
               
-              /* Grid adjustments */
-              .grid { display: grid !important; }
-              .lg\:grid-cols-12 { grid-template-columns: repeat(12, minmax(0, 1fr)) !important; }
-              .lg\:col-span-7 { grid-column: span 7 / span 7 !important; }
-              .lg\:col-span-5 { grid-column: span 5 / span 5 !important; }
+              /* Reduce Funnel Height */
+              .py-6.min-h-\[500px\] { 
+                min-height: 380px !important; 
+                padding: 0 !important; 
+                margin: 0 !important;
+              }
               
-              /* Funnel and Chart Sizing */
-              .recharts-responsive-container { height: 260px !important; }
-              .py-6.min-h-\[500px\] { min-height: 400px !important; padding: 0 !important; }
+              .recharts-responsive-container { height: 220px !important; }
               
-              /* Footer */
-              .print-only-footer { margin-top: 1rem !important; padding-top: 0.5rem !important; }
+              .mx-auto { max-width: 100% !important; padding: 0 !important; margin: 0 !important; }
+              .pb-20 { pb: 0 !important; }
             }
           `}</style>
           <div className="mx-auto max-w-7xl animate-in fade-in slide-in-from-bottom-4 duration-700 pb-20 print:pb-0">
