@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { AppShell } from "@/components/AppShell";
@@ -34,8 +34,16 @@ type EntityWithContract = {
 
 export default function Reports() {
   const { activeTenantId } = useTenant();
-  const [searchTerm, setSearchTerm] = useState("");
-  const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
+  const [searchTerm, setSearchTerm] = useState(localStorage.getItem("reports_search") || "");
+  const [viewMode, setViewMode] = useState<"grid" | "list">((localStorage.getItem("reports_view_mode") as "grid" | "list") || "grid");
+
+  useEffect(() => {
+    localStorage.setItem("reports_search", searchTerm);
+  }, [searchTerm]);
+
+  useEffect(() => {
+    localStorage.setItem("reports_view_mode", viewMode);
+  }, [viewMode]);
 
   const entitiesQ = useQuery({
     queryKey: ["reports_entities", activeTenantId],
