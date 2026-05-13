@@ -628,7 +628,7 @@ export default function ReportDetail() {
                             <div>
                                 <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Melhor Período</p>
                                 <p className="text-2xl font-black text-slate-900">
-                                    {historyData.reduce((prev, current) => (prev.visualizations > current.visualizations) ? prev : current).name}
+                                    {historyData.length > 0 ? historyData.reduce((prev, current) => (prev.visualizations > current.visualizations) ? prev : current).name : "-"}
                                 </p>
                             </div>
                             <div>
