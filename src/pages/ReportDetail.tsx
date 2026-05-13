@@ -536,17 +536,58 @@ export default function ReportDetail() {
                     <Card className="p-8 rounded-[32px] border-none bg-white shadow-lg shadow-slate-200/50 dark:bg-slate-950/50">
                         <h3 className="text-lg font-bold mb-6 flex items-center gap-2">
                             <BarChart3 className="h-5 w-5 text-indigo-500" />
-                            Evolução Histórica
+                            Performance do Período
                         </h3>
-                        <div className="h-[250px] w-full">
+                        
+                        {/* Summary Grid for PDF/Dashboard */}
+                        <div className="grid grid-cols-3 gap-y-8 gap-x-4">
+                            <div className="text-center">
+                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Visualizações</p>
+                                <p className="text-xl font-black text-slate-900 dark:text-white">{selectedReport?.visualizations?.toLocaleString()}</p>
+                            </div>
+                            <div className="text-center">
+                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Visitas</p>
+                                <p className="text-xl font-black text-slate-900 dark:text-white">{selectedReport?.profile_visits?.toLocaleString()}</p>
+                            </div>
+                            <div className="text-center">
+                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Conversas</p>
+                                <p className="text-xl font-black text-slate-900 dark:text-white">{selectedReport?.initiated_conversations?.toLocaleString()}</p>
+                            </div>
+                            <div className="text-center">
+                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Vendas</p>
+                                <p className="text-xl font-black text-emerald-600">{selectedReport?.tracked_sales?.toLocaleString()}</p>
+                            </div>
+                            <div className="text-center">
+                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Investimento</p>
+                                <p className="text-xl font-black text-indigo-600">R$ {selectedReport?.ad_spend?.toLocaleString()}</p>
+                            </div>
+                            <div className="text-center">
+                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">ROI (1%)</p>
+                                <p className="text-xl font-black text-slate-900 dark:text-white">{Number(selectedReport?.sales_percentage || 0).toFixed(1)}%</p>
+                            </div>
+                            <div className="text-center">
+                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">CPV</p>
+                                <p className="text-lg font-bold text-slate-600 dark:text-slate-300">R$ {metrics.cpv.toFixed(2)}</p>
+                            </div>
+                            <div className="text-center">
+                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">CPL</p>
+                                <p className="text-lg font-bold text-slate-600 dark:text-slate-300">R$ {metrics.cpl.toFixed(2)}</p>
+                            </div>
+                            <div className="text-center">
+                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">CAC</p>
+                                <p className="text-lg font-bold text-slate-600 dark:text-slate-300">R$ {metrics.cac.toFixed(2)}</p>
+                            </div>
+                        </div>
+
+                        {/* Line Chart only on screen, hidden in print here */}
+                        <div className="h-[200px] w-full mt-8 no-print pt-6 border-t">
+                            <p className="text-[10px] font-bold text-slate-400 uppercase mb-4">Tendência do Período</p>
                             <ResponsiveContainer width="100%" height="100%">
                                 <LineChart data={historyData}>
                                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                                    <XAxis dataKey="name" style={{ fontSize: '10px' }} axisLine={false} tickLine={false} />
-                                    <YAxis style={{ fontSize: '10px' }} axisLine={false} tickLine={false} />
+                                    <XAxis dataKey="name" hide />
                                     <Tooltip />
-                                    <Line type="monotone" dataKey="visualizations" stroke="#6366f1" strokeWidth={3} dot={{ r: 4 }} />
-                                    <Line type="monotone" dataKey="sales" stroke="#f59e0b" strokeWidth={3} dot={{ r: 4 }} />
+                                    <Line type="monotone" dataKey="visualizations" stroke="#6366f1" strokeWidth={3} dot={false} />
                                 </LineChart>
                             </ResponsiveContainer>
                         </div>
@@ -554,10 +595,60 @@ export default function ReportDetail() {
                   </div>
                 </div>
 
-                {/* Print Only Footer */}
-                <div className="hidden print:block mt-20 pt-10 border-t text-center text-slate-400 text-xs">
-                    <p>Relatório gerado em {format(new Date(), "dd/MM/yyyy HH:mm")}</p>
+                {/* Print Only Footer (Page 1) */}
+                <div className="hidden print:block mt-10 pt-6 border-t text-center text-slate-400 text-[10px]">
+                    <p>Relatório gerado em {format(new Date(), "dd/MM/yyyy HH:mm")} • Página 1/2</p>
                     <p className="mt-1 font-bold uppercase tracking-widest">Confidencial • Uso Interno</p>
+                </div>
+
+                {/* Page 2: Full Page Historical Evolution (Print Only) */}
+                <div className="hidden print:block break-before-page pt-20">
+                    <div className="mb-10">
+                        <p className="text-[10px] font-black uppercase tracking-[0.4em] text-indigo-600 mb-2">Análise Evolutiva de Performance</p>
+                        <h1 className="text-4xl font-black uppercase tracking-tighter text-slate-900">{contractQ.data?.customer?.display_name}</h1>
+                        <p className="text-lg font-bold text-slate-500 mt-1">Evolução Histórica - {selectedUnit}</p>
+                    </div>
+
+                    <Card className="p-12 rounded-[40px] border-none bg-white">
+                        <div className="h-[500px] w-full">
+                            <ResponsiveContainer width="100%" height="100%">
+                                <LineChart data={historyData}>
+                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                                    <XAxis dataKey="name" style={{ fontSize: '12px', fontWeight: 'bold' }} />
+                                    <YAxis style={{ fontSize: '12px' }} />
+                                    <Tooltip contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }} />
+                                    <Line name="Visualizações" type="monotone" dataKey="visualizations" stroke="#6366f1" strokeWidth={5} dot={{ r: 6, fill: '#6366f1' }} />
+                                    <Line name="Vendas" type="monotone" dataKey="sales" stroke="#f59e0b" strokeWidth={5} dot={{ r: 6, fill: '#f59e0b' }} />
+                                    <Line name="Conversas" type="monotone" dataKey="conversations" stroke="#ec4899" strokeWidth={5} dot={{ r: 6, fill: '#ec4899' }} />
+                                </LineChart>
+                            </ResponsiveContainer>
+                        </div>
+                        <div className="grid grid-cols-3 gap-8 mt-12 pt-8 border-t">
+                            <div>
+                                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Melhor Período</p>
+                                <p className="text-2xl font-black text-slate-900">
+                                    {historyData.reduce((prev, current) => (prev.visualizations > current.visualizations) ? prev : current).name}
+                                </p>
+                            </div>
+                            <div>
+                                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Total Visualizações</p>
+                                <p className="text-2xl font-black text-slate-900">
+                                    {historyData.reduce((sum, item) => sum + item.visualizations, 0).toLocaleString()}
+                                </p>
+                            </div>
+                            <div>
+                                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Conversão Média</p>
+                                <p className="text-2xl font-black text-slate-900">
+                                    {(historyData.reduce((sum, item) => sum + item.sales, 0) / (historyData.length || 1)).toFixed(1)} / mês
+                                </p>
+                            </div>
+                        </div>
+                    </Card>
+
+                    <div className="mt-20 pt-10 border-t text-center text-slate-400 text-[10px]">
+                        <p>Relatório gerado em {format(new Date(), "dd/MM/yyyy HH:mm")} • Página 2/2</p>
+                        <p className="mt-1 font-bold uppercase tracking-widest">Confidencial • Uso Interno</p>
+                    </div>
                 </div>
               </div>
             )}
