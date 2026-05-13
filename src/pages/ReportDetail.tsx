@@ -272,13 +272,13 @@ export default function ReportDetail() {
             @media print {
               @page { 
                 size: landscape; 
-                margin: 0.5cm !important; 
+                margin: 0.3cm !important; 
               }
               body { 
                 background: white !important; 
                 -webkit-print-color-adjust: exact; 
                 print-color-adjust: exact;
-                zoom: 0.8;
+                zoom: 0.75;
                 overflow: hidden !important;
               }
               .no-print { display: none !important; }
@@ -288,13 +288,13 @@ export default function ReportDetail() {
               .grid {
                 display: flex !important;
                 flex-direction: row !important;
-                gap: 1.5rem !important;
+                gap: 1rem !important;
                 align-items: flex-start !important;
                 width: 100% !important;
               }
               
-              .lg\:col-span-7 { width: 64% !important; flex: 0 0 64% !important; }
-              .lg\:col-span-5 { width: 34% !important; flex: 0 0 34% !important; }
+              .lg\:col-span-7 { width: 65% !important; flex: 0 0 65% !important; }
+              .lg\:col-span-5 { width: 33% !important; flex: 0 0 33% !important; }
               
               /* Compact Content */
               .card { 
@@ -302,25 +302,28 @@ export default function ReportDetail() {
                 box-shadow: none !important; 
                 break-inside: avoid !important;
                 page-break-inside: avoid !important;
-                padding: 1.2rem !important;
+                padding: 1rem !important;
                 border-radius: 24px !important;
                 background: white !important;
               }
               
               /* Scale headers */
-              h1.text-5xl { font-size: 3rem !important; line-height: 1 !important; margin-bottom: 0.5rem !important; }
+              h1.text-5xl { font-size: 2.8rem !important; line-height: 1 !important; margin-bottom: 0.5rem !important; }
               
               /* Reduce Funnel Height */
               .py-6.min-h-\[500px\] { 
-                min-height: 380px !important; 
+                min-height: 350px !important; 
                 padding: 0 !important; 
                 margin: 0 !important;
               }
               
-              .recharts-responsive-container { height: 220px !important; }
+              .recharts-responsive-container { height: 180px !important; }
               
               .mx-auto { max-width: 100% !important; padding: 0 !important; margin: 0 !important; }
-              .pb-20 { pb: 0 !important; }
+              
+              /* Force footer to jump up */
+              .mt-20 { margin-top: 1rem !important; }
+              .pt-10 { padding-top: 0.5rem !important; }
             }
           `}</style>
           <div className="mx-auto max-w-7xl animate-in fade-in slide-in-from-bottom-4 duration-700 pb-20 print:pb-0">
