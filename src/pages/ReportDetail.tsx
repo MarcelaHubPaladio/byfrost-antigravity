@@ -167,6 +167,20 @@ export default function ReportDetail() {
     }));
   }, [unitReports]);
 
+  const metrics = useMemo(() => {
+    if (!selectedReport) return { cpv: 0, cpl: 0, cac: 0 };
+    const spend = Number(selectedReport.ad_spend) || 0;
+    const visits = Number(selectedReport.profile_visits) || 0;
+    const convs = Number(selectedReport.initiated_conversations) || 0;
+    const sales = Number(selectedReport.tracked_sales) || 0;
+
+    return {
+        cpv: visits > 0 ? (spend / visits) : 0,
+        cpl: convs > 0 ? (spend / convs) : 0,
+        cac: sales > 0 ? (spend / sales) : 0
+    };
+  }, [selectedReport]);
+
   const upsertReportM = useMutation({
     mutationFn: async (report: Partial<EntityReport>) => {
       const payload = {
@@ -366,7 +380,9 @@ export default function ReportDetail() {
                       {r.period_name}
                     </Button>
                   ))}
-                      {/* Funnel & Main Stats */}
+                </div>
+
+                {/* Funnel & Main Stats */}
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 print:grid-cols-1">
                   {/* Left: Stats & Funnel */}
                   <Card className="lg:col-span-7 p-8 rounded-[32px] border-none bg-white shadow-xl shadow-slate-200/50 dark:bg-slate-950/50 dark:shadow-none print:shadow-none print:p-0">
@@ -412,27 +428,21 @@ export default function ReportDetail() {
                            <div className="text-center">
                                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">CPV</p>
                                 <p className="text-xl font-black text-emerald-600">
-                                    {selectedReport?.ad_spend && selectedReport?.profile_visits && selectedReport.profile_visits > 0
-                                        ? `R$ ${(selectedReport.ad_spend / selectedReport.profile_visits).toFixed(2)}`
-                                        : "R$ 0,00"}
+                                    {metrics.cpv > 0 ? `R$ ${metrics.cpv.toFixed(2)}` : "R$ 0,00"}
                                 </p>
                                 <div className="h-1 w-8 bg-emerald-500 mx-auto mt-2 rounded-full" />
                            </div>
                            <div className="text-center">
                                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">CPL</p>
                                 <p className="text-xl font-black text-blue-600">
-                                    {selectedReport?.ad_spend && selectedReport?.initiated_conversations && selectedReport.initiated_conversations > 0
-                                        ? `R$ ${(selectedReport.ad_spend / selectedReport.initiated_conversations).toFixed(2)}`
-                                        : "R$ 0,00"}
+                                    {metrics.cpl > 0 ? `R$ ${metrics.cpl.toFixed(2)}` : "R$ 0,00"}
                                 </p>
                                 <div className="h-1 w-8 bg-blue-500 mx-auto mt-2 rounded-full" />
                            </div>
                            <div className="text-center">
                                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">CAC</p>
                                 <p className="text-xl font-black text-violet-600">
-                                    {selectedReport?.ad_spend && selectedReport?.tracked_sales && selectedReport.tracked_sales > 0
-                                        ? `R$ ${(selectedReport.ad_spend / selectedReport.tracked_sales).toFixed(2)}`
-                                        : "R$ 0,00"}
+                                    {metrics.cac > 0 ? `R$ ${metrics.cac.toFixed(2)}` : "R$ 0,00"}
                                 </p>
                                 <div className="h-1 w-8 bg-violet-500 mx-auto mt-2 rounded-full" />
                            </div>
@@ -710,9 +720,8 @@ function FunnelChart({ data }: { data: any[] }) {
                 
                 // Dynamic width based on funnel position and ratio
                 const maxWidth = 500;
-                const minWidth = 150;
                 const width = maxWidth - (index * 80);
-                const nextWidth = maxWidth - ((index + 1) * 80);
+                const translateX = (700 - width) * 0.5;
 
                 return (
                     <div key={index} className="relative flex flex-col items-center w-full group">
@@ -741,14 +750,14 @@ function FunnelChart({ data }: { data: any[] }) {
                                         d={`M 0,10 L ${width},10 L ${width - 30},50 L -30,50 Z`}
                                         fill={color}
                                         className="transition-all duration-1000"
-                                        style={{ transform: `translateX(${(700 - width) / 2}px)` }}
+                                        style={{ transform: `translateX(${translateX}px)` }}
                                     />
                                     {/* Reflection Effect */}
                                     <path 
                                         d={`M 10,15 L ${width - 10},15 L ${width - 35},25 L 5,25 Z`}
                                         fill="white"
                                         fillOpacity="0.1"
-                                        style={{ transform: `translateX(${(700 - width) / 2}px)` }}
+                                        style={{ transform: `translateX(${translateX}px)` }}
                                     />
                                 </svg>
 
