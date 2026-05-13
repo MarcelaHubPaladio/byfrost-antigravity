@@ -207,6 +207,29 @@ export default function ReportDetail() {
     );
   }
 
+  if (contractQ.isError || reportsQ.isError) {
+    return (
+      <AppShell>
+        <div className="mx-auto max-w-lg mt-20 text-center p-8 rounded-[32px] bg-rose-50 border border-rose-100">
+          <h2 className="text-xl font-bold text-rose-900 mb-2">Erro ao carregar dados</h2>
+          <p className="text-rose-700 text-sm mb-6">
+            Não foi possível carregar as informações do relatório. 
+            Isso pode acontecer se a tabela ainda não foi criada no banco de dados ou se houve um erro de conexão.
+          </p>
+          <Button 
+            onClick={() => {
+              contractQ.refetch();
+              reportsQ.refetch();
+            }}
+            className="bg-rose-600 hover:bg-rose-700 rounded-xl"
+          >
+            Tentar Novamente
+          </Button>
+        </div>
+      </AppShell>
+    );
+  }
+
   return (
     <RequireAuth>
       <RequireRouteAccess routeKey="app.commitments">
@@ -258,7 +281,7 @@ export default function ReportDetail() {
               </div>
             </div>
 
-            {reportsQ.data?.length === 0 ? (
+            {!reportsQ.data || reportsQ.data.length === 0 ? (
               <Card className="flex h-64 flex-col items-center justify-center border-dashed text-center p-12 no-print">
                 <FileText className="mb-4 h-12 w-12 text-slate-300" />
                 <h3 className="text-lg font-semibold">Nenhum período cadastrado</h3>
@@ -589,8 +612,6 @@ function ReportFormDialog({ onSave, isLoading, initialData }: { onSave: (data: a
                                 className="rounded-xl bg-white"
                             />
                         </div>
-                    </div>
-                        <p className="text-[10px] text-slate-500 italic">Mínimo 1% sugerido de vendas rastreadas.</p>
                     </div>
                 </div>
             </div>
