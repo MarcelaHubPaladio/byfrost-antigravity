@@ -64,6 +64,7 @@ type EntityReport = {
   initiated_conversations: number;
   tracked_sales: number;
   sales_percentage: number;
+  ad_spend: number;
   production_notes: string;
   created_at: string;
 };
@@ -372,29 +373,38 @@ export default function ReportDetail() {
                       </ResponsiveContainer>
                     </div>
 
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-8 border-t pt-8">
-                       {funnelData.slice(1).map((item, i) => (
-                         <div key={i} className="text-center">
-                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{item.name} / Anterior</p>
-                            <p className="text-2xl font-black text-slate-900 dark:text-white">{item.ratio.toFixed(1)}%</p>
-                            <div className="h-1 w-8 bg-indigo-500 mx-auto mt-2 rounded-full" style={{ backgroundColor: item.color }} />
-                         </div>
-                       ))}
-                        <div className="text-center">
-                             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">ROI Estimado (1%)</p>
-                             <p className="text-2xl font-black text-emerald-600">{Number(selectedReport?.sales_percentage || 0).toFixed(1)}%</p>
-                             <div className="h-1 w-8 bg-emerald-500 mx-auto mt-2 rounded-full" />
+                        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 mt-8 border-t pt-8">
+                           {funnelData.slice(1).map((item, i) => (
+                             <div key={i} className="text-center">
+                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{item.name} / Ant.</p>
+                                <p className="text-2xl font-black text-slate-900 dark:text-white">{item.ratio.toFixed(1)}%</p>
+                                <div className="h-1 w-8 bg-indigo-500 mx-auto mt-2 rounded-full" style={{ backgroundColor: item.color }} />
+                             </div>
+                           ))}
+                           <div className="text-center">
+                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">ROI (1%)</p>
+                                <p className="text-2xl font-black text-emerald-600">{Number(selectedReport?.sales_percentage || 0).toFixed(1)}%</p>
+                                <div className="h-1 w-8 bg-emerald-500 mx-auto mt-2 rounded-full" />
+                           </div>
+                           <div className="text-center">
+                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">CPL</p>
+                                <p className="text-2xl font-black text-blue-600">
+                                    {selectedReport?.ad_spend && selectedReport?.initiated_conversations && selectedReport.initiated_conversations > 0
+                                        ? `R$ ${(selectedReport.ad_spend / selectedReport.initiated_conversations).toFixed(2)}`
+                                        : "R$ 0,00"}
+                                </p>
+                                <div className="h-1 w-8 bg-blue-500 mx-auto mt-2 rounded-full" />
+                           </div>
+                           <div className="text-center">
+                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">CAC</p>
+                                <p className="text-2xl font-black text-violet-600">
+                                    {selectedReport?.ad_spend && selectedReport?.tracked_sales && selectedReport.tracked_sales > 0
+                                        ? `R$ ${(selectedReport.ad_spend / selectedReport.tracked_sales).toFixed(2)}`
+                                        : "R$ 0,00"}
+                                </p>
+                                <div className="h-1 w-8 bg-violet-500 mx-auto mt-2 rounded-full" />
+                           </div>
                         </div>
-                        <div className="text-center">
-                             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Conv. Global</p>
-                             <p className="text-2xl font-black text-blue-600">
-                                 {Number(selectedReport?.visualizations || 0) > 0 
-                                     ? ((Number(selectedReport?.tracked_sales || 0) / Number(selectedReport?.visualizations || 0)) * 100).toFixed(2) 
-                                     : "0.00"}%
-                             </p>
-                             <div className="h-1 w-8 bg-blue-500 mx-auto mt-2 rounded-full" />
-                        </div>
-                    </div>
                   </Card>
 
                   {/* Right: Production Notes */}
@@ -456,6 +466,7 @@ function ReportFormDialog({ onSave, isLoading, initialData }: { onSave: (data: a
         initiated_conversations: initialData?.initiated_conversations || 0,
         tracked_sales: initialData?.tracked_sales || 0,
         sales_percentage: initialData?.sales_percentage || 0,
+        ad_spend: initialData?.ad_spend || 0,
         production_notes: initialData?.production_notes || ""
     });
 
@@ -514,49 +525,71 @@ function ReportFormDialog({ onSave, isLoading, initialData }: { onSave: (data: a
                         <div className="space-y-2">
                             <Label className="flex items-center gap-1.5"><Eye className="h-3 w-3" /> Visualizações</Label>
                             <Input 
-                                type="number" 
                                 value={formData.visualizations} 
-                                onChange={e => setFormData({ ...formData, visualizations: parseInt(e.target.value) || 0 })}
+                                onChange={e => {
+                                    // Remove tudo que não for dígito para permitir colar números com separadores
+                                    const val = e.target.value.replace(/\D/g, "");
+                                    setFormData({ ...formData, visualizations: parseInt(val) || 0 });
+                                }}
                                 className="rounded-xl bg-white"
                             />
                         </div>
                         <div className="space-y-2">
                             <Label className="flex items-center gap-1.5"><User className="h-3 w-3" /> Visitas Perfil</Label>
                             <Input 
-                                type="number" 
                                 value={formData.profile_visits} 
-                                onChange={e => setFormData({ ...formData, profile_visits: parseInt(e.target.value) || 0 })}
+                                onChange={e => {
+                                    const val = e.target.value.replace(/\D/g, "");
+                                    setFormData({ ...formData, profile_visits: parseInt(val) || 0 });
+                                }}
                                 className="rounded-xl bg-white"
                             />
                         </div>
                         <div className="space-y-2">
                             <Label className="flex items-center gap-1.5"><MessageCircle className="h-3 w-3" /> Conversas</Label>
                             <Input 
-                                type="number" 
                                 value={formData.initiated_conversations} 
-                                onChange={e => setFormData({ ...formData, initiated_conversations: parseInt(e.target.value) || 0 })}
+                                onChange={e => {
+                                    const val = e.target.value.replace(/\D/g, "");
+                                    setFormData({ ...formData, initiated_conversations: parseInt(val) || 0 });
+                                }}
                                 className="rounded-xl bg-white"
                             />
                         </div>
                         <div className="space-y-2">
                             <Label className="flex items-center gap-1.5"><ShoppingCart className="h-3 w-3" /> Vendas</Label>
                             <Input 
-                                type="number" 
                                 value={formData.tracked_sales} 
-                                onChange={e => setFormData({ ...formData, tracked_sales: parseInt(e.target.value) || 0 })}
+                                onChange={e => {
+                                    const val = e.target.value.replace(/\D/g, "");
+                                    setFormData({ ...formData, tracked_sales: parseInt(val) || 0 });
+                                }}
                                 className="rounded-xl bg-white"
                             />
                         </div>
                     </div>
-                    <div className="space-y-2 pt-4">
-                        <Label className="flex items-center gap-1.5"><Percent className="h-3 w-3" /> % ROI / Performance</Label>
-                        <Input 
-                            type="number" 
-                            step="0.01"
-                            value={formData.sales_percentage} 
-                            onChange={e => setFormData({ ...formData, sales_percentage: parseFloat(e.target.value) || 0 })}
-                            className="rounded-xl bg-white"
-                        />
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                            <Label className="flex items-center gap-1.5"><Percent className="h-3 w-3" /> % ROI</Label>
+                            <Input 
+                                type="number" 
+                                step="0.01"
+                                value={formData.sales_percentage} 
+                                onChange={e => setFormData({ ...formData, sales_percentage: parseFloat(e.target.value) || 0 })}
+                                className="rounded-xl bg-white"
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <Label className="flex items-center gap-1.5"><Download className="h-3 w-3 rotate-180" /> Gasto (R$)</Label>
+                            <Input 
+                                type="number"
+                                step="0.01"
+                                value={formData.ad_spend} 
+                                onChange={e => setFormData({ ...formData, ad_spend: parseFloat(e.target.value) || 0 })}
+                                className="rounded-xl bg-white"
+                            />
+                        </div>
+                    </div>
                         <p className="text-[10px] text-slate-500 italic">Mínimo 1% sugerido de vendas rastreadas.</p>
                     </div>
                 </div>
