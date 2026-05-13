@@ -360,40 +360,8 @@ export default function ReportDetail() {
                       </div>
                     </div>
 
-                    <div className="h-[400px] w-full">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <BarChart
-                          layout="vertical"
-                          data={funnelData}
-                          margin={{ top: 20, right: 80, left: 20, bottom: 20 }}
-                        >
-                          <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9" />
-                          <XAxis type="number" hide />
-                          <YAxis 
-                            dataKey="name" 
-                            type="category" 
-                            axisLine={false} 
-                            tickLine={false} 
-                            width={120}
-                            style={{ fontSize: '12px', fontWeight: 'bold' }}
-                          />
-                          <Tooltip 
-                            contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
-                            cursor={{ fill: '#f8fafc' }}
-                          />
-                          <Bar dataKey="value" radius={[0, 10, 10, 0]} barSize={40}>
-                            {funnelData.map((entry, index) => (
-                              <Cell key={`cell-${index}`} fill={entry.color} />
-                            ))}
-                            <LabelList 
-                                dataKey="value" 
-                                position="right" 
-                                style={{ fontSize: '14px', fontWeight: 'black', fill: '#1e293b' }} 
-                                formatter={(v: number) => v.toLocaleString()}
-                            />
-                          </Bar>
-                        </BarChart>
-                      </ResponsiveContainer>
+                    <div className="py-10">
+                        <FunnelChart data={funnelData} />
                     </div>
 
                         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 mt-8 border-t pt-8">
@@ -625,5 +593,62 @@ function ReportFormDialog({ onSave, isLoading, initialData }: { onSave: (data: a
                 </Button>
             </DialogFooter>
         </DialogContent>
+    );
+}
+
+function FunnelChart({ data }: { data: any[] }) {
+    return (
+        <div className="flex flex-col gap-0 w-full max-w-2xl mx-auto">
+            {data.map((item, index) => {
+                const isLast = index === data.length - 1;
+                const nextItem = data[index + 1];
+                
+                // Calculate width relative to first item (max)
+                const maxWidth = data[0].value || 1;
+                const widthPercent = Math.max(15, (item.value / maxWidth) * 100);
+
+                return (
+                    <div key={index} className="flex flex-col items-center">
+                        {/* Bar */}
+                        <div className="relative w-full flex items-center justify-center h-16">
+                            {/* Label Left */}
+                            <div className="absolute left-0 w-32 text-right pr-4 text-xs font-bold text-slate-400 uppercase tracking-tighter">
+                                {item.name}
+                            </div>
+
+                            {/* Bar Visual */}
+                            <div 
+                                className="h-10 rounded-xl transition-all duration-1000 shadow-lg flex items-center justify-end px-4 text-white font-black text-sm"
+                                style={{ 
+                                    width: `${widthPercent}%`, 
+                                    backgroundColor: item.color,
+                                    boxShadow: `0 10px 20px -5px ${item.color}44`
+                                }}
+                            >
+                                {item.value.toLocaleString()}
+                            </div>
+                        </div>
+
+                        {/* Connector */}
+                        {!isLast && nextItem && (
+                            <div className="relative h-12 w-full flex flex-col items-center justify-center">
+                                {/* Vertical Line */}
+                                <div className="w-[2px] h-full bg-slate-100 dark:bg-slate-800 relative">
+                                    {/* Animated Arrow Down */}
+                                    <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-2 h-2 border-b-2 border-r-2 border-slate-300 rotate-45" />
+                                </div>
+                                
+                                {/* Percentage Badge */}
+                                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-white dark:bg-slate-900 px-3 py-1 rounded-full border border-slate-100 dark:border-slate-800 shadow-sm z-10">
+                                    <span className="text-[11px] font-black text-slate-600 dark:text-slate-300">
+                                        {nextItem.ratio.toFixed(1)}%
+                                    </span>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                );
+            })}
+        </div>
     );
 }
