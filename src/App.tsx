@@ -101,6 +101,8 @@ const Processes = lazyWithRetry(() => import("@/pages/Processes"));
 const ProcessEditor = lazyWithRetry(() => import("@/pages/ProcessEditor"));
 const ClientesSawe = lazyWithRetry(() => import("@/pages/ClientesSawe"));
 const ClientesSaweCase = lazyWithRetry(() => import("@/pages/ClientesSaweCase"));
+const Reports = lazyWithRetry(() => import("@/pages/Reports"));
+const ReportDetail = lazyWithRetry(() => import("@/pages/ReportDetail"));
 const GlobalLoading = () => (
   <div className="flex h-screen w-full items-center justify-center bg-slate-50 dark:bg-slate-950">
     <div className="h-8 w-8 animate-spin rounded-full border-4 border-slate-200 border-t-blue-500 dark:border-slate-800" />
@@ -438,6 +440,22 @@ const App = () => (
                     element={
                       <RequireRouteAccess routeKey="app.contracts">
                         <Contracts />
+                      </RequireRouteAccess>
+                    }
+                  />
+                  <Route
+                    path="/app/reports"
+                    element={
+                      <RequireRouteAccess routeKey="app.contracts">
+                        <Reports />
+                      </RequireRouteAccess>
+                    }
+                  />
+                  <Route
+                    path="/app/reports/:contractId"
+                    element={
+                      <RequireRouteAccess routeKey="app.contracts">
+                        <ReportDetail />
                       </RequireRouteAccess>
                     }
                   />

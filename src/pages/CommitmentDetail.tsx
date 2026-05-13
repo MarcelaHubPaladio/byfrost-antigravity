@@ -587,6 +587,16 @@ export default function CommitmentDetail() {
                     <FileText className="h-4 w-4 mr-2" /> Ver Contrato Principal
                   </Button>
                 )}
+                {commitmentQ.data?.commitment_type === 'contract' && activeTenant?.modules_json?.reports_enabled && (
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    className="rounded-xl border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100"
+                    onClick={() => nav(`/app/reports/${commitmentId}`)}
+                  >
+                    <BarChart3 className="h-4 w-4 mr-2" /> Ver Relatórios
+                  </Button>
+                )}
                 {commitmentQ.data?.commitment_type === 'contract' && (
                   <Button 
                     variant="outline" 
