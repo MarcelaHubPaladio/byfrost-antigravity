@@ -104,7 +104,10 @@ export default function ReportDetail() {
         .eq("contract_id", contractId!)
         .is("deleted_at", null)
         .order("start_date", { ascending: true });
-      if (error) throw error;
+      if (error) {
+        console.error("Error fetching reports:", error);
+        throw error;
+      }
       return data as EntityReport[];
     },
   });
@@ -117,10 +120,10 @@ export default function ReportDetail() {
   const funnelData = useMemo(() => {
     if (!selectedReport) return [];
     
-    const v = selectedReport.visualizations || 0;
-    const pv = selectedReport.profile_visits || 0;
-    const ic = selectedReport.initiated_conversations || 0;
-    const ts = selectedReport.tracked_sales || 0;
+    const v = Number(selectedReport.visualizations) || 0;
+    const pv = Number(selectedReport.profile_visits) || 0;
+    const ic = Number(selectedReport.initiated_conversations) || 0;
+    const ts = Number(selectedReport.tracked_sales) || 0;
 
     const pvRatio = v > 0 ? (pv / v) * 100 : 0;
     const icRatio = pv > 0 ? (ic / pv) * 100 : 0;
@@ -137,9 +140,9 @@ export default function ReportDetail() {
   const historyData = useMemo(() => {
     return (reportsQ.data || []).map(r => ({
       name: r.period_name,
-      visualizations: r.visualizations,
-      sales: r.tracked_sales,
-      conversations: r.initiated_conversations
+      visualizations: Number(r.visualizations) || 0,
+      sales: Number(r.tracked_sales) || 0,
+      conversations: Number(r.initiated_conversations) || 0
     }));
   }, [reportsQ.data]);
 
@@ -377,20 +380,20 @@ export default function ReportDetail() {
                             <div className="h-1 w-8 bg-indigo-500 mx-auto mt-2 rounded-full" style={{ backgroundColor: item.color }} />
                          </div>
                        ))}
-                       <div className="text-center">
-                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">ROI Estimado (1%)</p>
-                            <p className="text-2xl font-black text-emerald-600">{selectedReport?.sales_percentage}%</p>
-                            <div className="h-1 w-8 bg-emerald-500 mx-auto mt-2 rounded-full" />
-                       </div>
-                       <div className="text-center">
-                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Conv. Global</p>
-                            <p className="text-2xl font-black text-blue-600">
-                                {selectedReport?.visualizations && selectedReport?.visualizations > 0 
-                                    ? ((selectedReport.tracked_sales / selectedReport.visualizations) * 100).toFixed(2) 
-                                    : "0.00"}%
-                            </p>
-                            <div className="h-1 w-8 bg-blue-500 mx-auto mt-2 rounded-full" />
-                       </div>
+                        <div className="text-center">
+                             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">ROI Estimado (1%)</p>
+                             <p className="text-2xl font-black text-emerald-600">{Number(selectedReport?.sales_percentage || 0).toFixed(1)}%</p>
+                             <div className="h-1 w-8 bg-emerald-500 mx-auto mt-2 rounded-full" />
+                        </div>
+                        <div className="text-center">
+                             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Conv. Global</p>
+                             <p className="text-2xl font-black text-blue-600">
+                                 {Number(selectedReport?.visualizations || 0) > 0 
+                                     ? ((Number(selectedReport?.tracked_sales || 0) / Number(selectedReport?.visualizations || 0)) * 100).toFixed(2) 
+                                     : "0.00"}%
+                             </p>
+                             <div className="h-1 w-8 bg-blue-500 mx-auto mt-2 rounded-full" />
+                        </div>
                     </div>
                   </Card>
 
