@@ -130,6 +130,17 @@ const formatMoneyBRL = (v: number) => {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
 };
 
+const parseMoneySafe = (v: any): number => {
+  if (typeof v === "number") return v;
+  if (!v) return 0;
+  const s = String(v)
+    .replace(/[R$\s]/g, "") // Remove R$ e espaços
+    .replace(/\./g, "")     // Remove pontos de milhar
+    .replace(",", ".");     // Troca vírgula decimal por ponto
+  const n = parseFloat(s);
+  return isNaN(n) ? 0 : n;
+};
+
 function minutesAgo(iso: string) {
   const diff = Date.now() - new Date(iso).getTime();
   return Math.max(0, Math.round(diff / 60000));
@@ -596,7 +607,7 @@ export default function Orders() {
 
       totalValue += val;
       
-      const partialPaid = Number(f?.partial_paid_value || 0);
+      const partialPaid = parseMoneySafe(f?.partial_paid_value);
 
       if (billingStatus.includes("pago") || billingStatus.includes("faturado")) {
         // Se for faturado parcial, soma apenas o que foi pago. Se for faturado total, soma o valor cheio.
@@ -637,7 +648,7 @@ export default function Orders() {
         if (isSameDay(saleDate, d)) {
           const billing_status = (f?.billing_status ?? "Pendente").toLowerCase();
           const val = caseDataQ.data?.totals.get(r.id) ?? 0;
-          const partialPaid = Number(f?.partial_paid_value || 0);
+          const partialPaid = parseMoneySafe(f?.partial_paid_value);
 
           if (billing_status.includes("pago") || billing_status.includes("faturado")) {
             if (billing_status.includes("parcial")) {
