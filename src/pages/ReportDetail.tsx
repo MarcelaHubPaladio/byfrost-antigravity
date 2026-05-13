@@ -56,6 +56,7 @@ import { cn } from "@/lib/utils";
 
 type EntityReport = {
   id: string;
+  unit_name: string;
   period_name: string;
   start_date: string;
   end_date: string;
@@ -113,10 +114,28 @@ export default function ReportDetail() {
     },
   });
 
+  const [selectedUnit, setSelectedUnit] = useState<string | null>(null);
+
+  const units = useMemo(() => {
+    const rawReports = reportsQ.data || [];
+    const uniqueUnits = Array.from(new Set(rawReports.map(r => r.unit_name || "Geral")));
+    return uniqueUnits.sort();
+  }, [reportsQ.data]);
+
+  useEffect(() => {
+    if (units.length > 0 && !selectedUnit) {
+      setSelectedUnit(units[0]);
+    }
+  }, [units, selectedUnit]);
+
+  const unitReports = useMemo(() => {
+    return (reportsQ.data || []).filter(r => (r.unit_name || "Geral") === selectedUnit);
+  }, [reportsQ.data, selectedUnit]);
+
   const selectedReport = useMemo(() => {
-    if (!selectedPeriodId) return reportsQ.data?.[reportsQ.data.length - 1];
-    return reportsQ.data?.find(r => r.id === selectedPeriodId);
-  }, [reportsQ.data, selectedPeriodId]);
+    if (!selectedPeriodId) return unitReports?.[unitReports.length - 1];
+    return unitReports?.find(r => r.id === selectedPeriodId);
+  }, [unitReports, selectedPeriodId]);
 
   const funnelData = useMemo(() => {
     if (!selectedReport) return [];
@@ -139,13 +158,13 @@ export default function ReportDetail() {
   }, [selectedReport]);
 
   const historyData = useMemo(() => {
-    return (reportsQ.data || []).map(r => ({
+    return unitReports.map(r => ({
       name: r.period_name,
       visualizations: Number(r.visualizations) || 0,
       sales: Number(r.tracked_sales) || 0,
       conversations: Number(r.initiated_conversations) || 0
     }));
-  }, [reportsQ.data]);
+  }, [unitReports]);
 
   const upsertReportM = useMutation({
     mutationFn: async (report: Partial<EntityReport>) => {
@@ -281,6 +300,29 @@ export default function ReportDetail() {
               </div>
             </div>
 
+            {/* Units Tabs */}
+            {units.length > 0 && (
+                <div className="flex flex-wrap gap-2 mb-6 no-print">
+                    {units.map(unit => (
+                        <Button
+                            key={unit}
+                            variant={selectedUnit === unit ? "default" : "outline"}
+                            size="sm"
+                            className={cn(
+                                "rounded-full px-6 transition-all",
+                                selectedUnit === unit ? "bg-indigo-600 shadow-lg shadow-indigo-500/20" : "bg-white dark:bg-slate-950"
+                            )}
+                            onClick={() => {
+                                setSelectedUnit(unit);
+                                setSelectedPeriodId(null);
+                            }}
+                        >
+                            {unit}
+                        </Button>
+                    ))}
+                </div>
+            )}
+
             {!reportsQ.data || reportsQ.data.length === 0 ? (
               <Card className="flex h-64 flex-col items-center justify-center border-dashed text-center p-12 no-print">
                 <FileText className="mb-4 h-12 w-12 text-slate-300" />
@@ -298,6 +340,7 @@ export default function ReportDetail() {
                       <div>
                         <p className="text-[10px] font-black uppercase tracking-[0.4em] text-indigo-600 mb-2">Relatório Executivo de Performance</p>
                         <h1 className="text-5xl font-black uppercase tracking-tighter text-slate-900">{contractQ.data?.customer?.display_name}</h1>
+                        <p className="text-xl font-bold text-slate-500 mt-2">{selectedUnit}</p>
                       </div>
                       <div className="text-right">
                         <p className="text-sm font-bold text-slate-500 uppercase tracking-widest">Contrato #{contractId?.slice(0, 8)}</p>
@@ -308,7 +351,7 @@ export default function ReportDetail() {
 
                 {/* Period Selector (Tabs-like) */}
                 <div className="flex gap-2 overflow-x-auto pb-2 no-print">
-                  {reportsQ.data?.map(r => (
+                  {unitReports.map(r => (
                     <Button
                       key={r.id}
                       variant={selectedReport?.id === r.id ? "default" : "outline"}
@@ -449,6 +492,7 @@ export default function ReportDetail() {
 
 function ReportFormDialog({ onSave, isLoading, initialData }: { onSave: (data: any) => void, isLoading: boolean, initialData?: EntityReport }) {
     const [formData, setFormData] = useState({
+        unit_name: initialData?.unit_name || "Geral",
         period_name: initialData?.period_name || "",
         start_date: initialData?.start_date || format(new Date(), "yyyy-MM-01"),
         end_date: initialData?.end_date || format(new Date(), "yyyy-MM-28"),
@@ -470,6 +514,15 @@ function ReportFormDialog({ onSave, isLoading, initialData }: { onSave: (data: a
             </DialogHeader>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 py-4">
                 <div className="space-y-4">
+                    <div className="space-y-2">
+                        <Label>Unidade / Loja</Label>
+                        <Input 
+                            value={formData.unit_name} 
+                            onChange={e => setFormData({ ...formData, unit_name: e.target.value })}
+                            placeholder="Ex: Loja SMS, Matriz..."
+                            className="rounded-xl font-bold text-indigo-600"
+                        />
+                    </div>
                     <div className="space-y-2">
                         <Label>Nome do Período (Ex: Janeiro 2024)</Label>
                         <Input 
