@@ -66,6 +66,7 @@ type EntityReport = {
   tracked_sales: number;
   sales_percentage: number;
   ad_spend: number;
+  advertised_products: string;
   production_notes: string;
   created_at: string;
 };
@@ -295,6 +296,7 @@ export default function ReportDetail() {
                   <ReportFormDialog 
                     onSave={(data) => upsertReportM.mutate(data)} 
                     isLoading={upsertReportM.isPending}
+                    existingUnits={units}
                   />
                 </Dialog>
               </div>
@@ -364,9 +366,7 @@ export default function ReportDetail() {
                       {r.period_name}
                     </Button>
                   ))}
-                </div>
-
-                {/* Funnel & Main Stats */}
+                      {/* Funnel & Main Stats */}
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 print:grid-cols-1">
                   {/* Left: Stats & Funnel */}
                   <Card className="lg:col-span-7 p-8 rounded-[32px] border-none bg-white shadow-xl shadow-slate-200/50 dark:bg-slate-950/50 dark:shadow-none print:shadow-none print:p-0">
@@ -386,6 +386,7 @@ export default function ReportDetail() {
                                initialData={selectedReport}
                                onSave={(data) => upsertReportM.mutate({ ...data, id: selectedReport?.id })} 
                                isLoading={upsertReportM.isPending}
+                               existingUnits={units}
                             />
                          </Dialog>
                          <Button 
@@ -403,26 +404,23 @@ export default function ReportDetail() {
                       </div>
                     </div>
 
-                    <div className="py-10">
+                    <div className="py-6 min-h-[500px]">
                         <FunnelChart data={funnelData} />
                     </div>
 
-                        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 mt-8 border-t pt-8">
-                           {funnelData.slice(1).map((item, i) => (
-                             <div key={i} className="text-center">
-                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{item.name} / Ant.</p>
-                                <p className="text-2xl font-black text-slate-900 dark:text-white">{item.ratio.toFixed(1)}%</p>
-                                <div className="h-1 w-8 bg-indigo-500 mx-auto mt-2 rounded-full" style={{ backgroundColor: item.color }} />
-                             </div>
-                           ))}
+                    <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-4 mt-8 border-t pt-8">
                            <div className="text-center">
-                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">ROI (1%)</p>
-                                <p className="text-2xl font-black text-emerald-600">{Number(selectedReport?.sales_percentage || 0).toFixed(1)}%</p>
+                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">CPV</p>
+                                <p className="text-xl font-black text-emerald-600">
+                                    {selectedReport?.ad_spend && selectedReport?.profile_visits && selectedReport.profile_visits > 0
+                                        ? `R$ ${(selectedReport.ad_spend / selectedReport.profile_visits).toFixed(2)}`
+                                        : "R$ 0,00"}
+                                </p>
                                 <div className="h-1 w-8 bg-emerald-500 mx-auto mt-2 rounded-full" />
                            </div>
                            <div className="text-center">
                                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">CPL</p>
-                                <p className="text-2xl font-black text-blue-600">
+                                <p className="text-xl font-black text-blue-600">
                                     {selectedReport?.ad_spend && selectedReport?.initiated_conversations && selectedReport.initiated_conversations > 0
                                         ? `R$ ${(selectedReport.ad_spend / selectedReport.initiated_conversations).toFixed(2)}`
                                         : "R$ 0,00"}
@@ -431,18 +429,40 @@ export default function ReportDetail() {
                            </div>
                            <div className="text-center">
                                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">CAC</p>
-                                <p className="text-2xl font-black text-violet-600">
+                                <p className="text-xl font-black text-violet-600">
                                     {selectedReport?.ad_spend && selectedReport?.tracked_sales && selectedReport.tracked_sales > 0
                                         ? `R$ ${(selectedReport.ad_spend / selectedReport.tracked_sales).toFixed(2)}`
                                         : "R$ 0,00"}
                                 </p>
                                 <div className="h-1 w-8 bg-violet-500 mx-auto mt-2 rounded-full" />
                            </div>
-                        </div>
+                           <div className="text-center">
+                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">ROI (1%)</p>
+                                <p className="text-xl font-black text-slate-900 dark:text-white">{Number(selectedReport?.sales_percentage || 0).toFixed(1)}%</p>
+                                <div className="h-1 w-8 bg-slate-300 mx-auto mt-2 rounded-full" />
+                           </div>
+                           {funnelData.slice(1).map((item, i) => (
+                             <div key={i} className="text-center">
+                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{item.name} / Ant.</p>
+                                <p className="text-xl font-black text-slate-700 dark:text-slate-200">{item.ratio.toFixed(1)}%</p>
+                                <div className="h-1 w-8 mx-auto mt-2 rounded-full" style={{ backgroundColor: item.color }} />
+                             </div>
+                           ))}
+                    </div>
                   </Card>
 
-                  {/* Right: Production Notes */}
+                  {/* Right: Info Panels */}
                   <div className="lg:col-span-5 space-y-6">
+                    <Card className="p-8 rounded-[32px] border-none bg-slate-900 text-white shadow-xl">
+                        <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
+                            <ShoppingCart className="h-5 w-5 text-indigo-400" />
+                            Produtos Anunciados
+                        </h3>
+                        <p className="text-sm opacity-90 leading-relaxed italic">
+                            {selectedReport?.advertised_products || "Nenhum produto listado."}
+                        </p>
+                    </Card>
+
                     <Card className="p-8 rounded-[32px] border-none bg-gradient-to-br from-indigo-600 to-indigo-800 text-white shadow-xl shadow-indigo-500/30">
                         <h3 className="text-lg font-bold mb-6 flex items-center gap-2">
                             <Calendar className="h-5 w-5" />
@@ -490,7 +510,7 @@ export default function ReportDetail() {
   );
 }
 
-function ReportFormDialog({ onSave, isLoading, initialData }: { onSave: (data: any) => void, isLoading: boolean, initialData?: EntityReport }) {
+function ReportFormDialog({ onSave, isLoading, initialData, existingUnits = [] }: { onSave: (data: any) => void, isLoading: boolean, initialData?: EntityReport, existingUnits?: string[] }) {
     const [formData, setFormData] = useState({
         unit_name: initialData?.unit_name || "Geral",
         period_name: initialData?.period_name || "",
@@ -502,6 +522,7 @@ function ReportFormDialog({ onSave, isLoading, initialData }: { onSave: (data: a
         tracked_sales: initialData?.tracked_sales || 0,
         sales_percentage: initialData?.sales_percentage || 0,
         ad_spend: initialData?.ad_spend || 0,
+        advertised_products: initialData?.advertised_products || "",
         production_notes: initialData?.production_notes || ""
     });
 
@@ -516,6 +537,23 @@ function ReportFormDialog({ onSave, isLoading, initialData }: { onSave: (data: a
                 <div className="space-y-4">
                     <div className="space-y-2">
                         <Label>Unidade / Loja</Label>
+                        <div className="flex flex-wrap gap-2 mb-2">
+                            {existingUnits.map(unit => (
+                                <button
+                                    key={unit}
+                                    type="button"
+                                    onClick={() => setFormData({ ...formData, unit_name: unit })}
+                                    className={cn(
+                                        "text-[10px] px-2 py-1 rounded-md border transition-all",
+                                        formData.unit_name === unit 
+                                            ? "bg-indigo-600 text-white border-indigo-600" 
+                                            : "bg-slate-100 text-slate-600 border-slate-200 hover:border-indigo-300"
+                                    )}
+                                >
+                                    {unit}
+                                </button>
+                            ))}
+                        </div>
                         <Input 
                             value={formData.unit_name} 
                             onChange={e => setFormData({ ...formData, unit_name: e.target.value })}
@@ -551,6 +589,15 @@ function ReportFormDialog({ onSave, isLoading, initialData }: { onSave: (data: a
                                 className="rounded-xl"
                             />
                         </div>
+                    </div>
+                    <div className="space-y-2">
+                        <Label>Produtos Anunciados no Período</Label>
+                        <Input 
+                            value={formData.advertised_products} 
+                            onChange={e => setFormData({ ...formData, advertised_products: e.target.value })}
+                            placeholder="Ex: Tênis Nike, Camisa Polo..."
+                            className="rounded-xl"
+                        />
                     </div>
                     <div className="space-y-2">
                         <Label>Notas de Produção (Produzidos no período)</Label>
@@ -650,54 +697,76 @@ function ReportFormDialog({ onSave, isLoading, initialData }: { onSave: (data: a
 }
 
 function FunnelChart({ data }: { data: any[] }) {
+    const actions = ["ATRAIR", "CONVERTER", "RELACIONAR", "VENDER"];
+    const labels = ["VISUALIZAÇÕES", "VISITANTES", "LEADS", "CLIENTES"];
+    const colors = ["#FF4B6C", "#3B4148", "#FFB020", "#00A3FF"];
+
     return (
-        <div className="flex flex-col gap-0 w-full max-w-2xl mx-auto">
+        <div className="w-full flex flex-col items-center gap-1">
             {data.map((item, index) => {
-                const isLast = index === data.length - 1;
-                const nextItem = data[index + 1];
+                const action = actions[index] || "PRODUZIR";
+                const label = labels[index] || item.name.toUpperCase();
+                const color = colors[index] || item.color;
                 
-                // Calculate width relative to first item (max)
-                const maxWidth = data[0].value || 1;
-                const widthPercent = Math.max(15, (item.value / maxWidth) * 100);
+                // Dynamic width based on funnel position and ratio
+                const maxWidth = 500;
+                const minWidth = 150;
+                const width = maxWidth - (index * 80);
+                const nextWidth = maxWidth - ((index + 1) * 80);
 
                 return (
-                    <div key={index} className="flex flex-col items-center">
-                        {/* Bar */}
-                        <div className="relative w-full flex items-center justify-center h-16">
-                            {/* Label Left */}
-                            <div className="absolute left-0 w-32 text-right pr-4 text-xs font-bold text-slate-400 uppercase tracking-tighter">
-                                {item.name}
+                    <div key={index} className="relative flex flex-col items-center w-full group">
+                        {/* Ribbon Container */}
+                        <div className="flex items-center w-full max-w-[700px] h-20">
+                            
+                            {/* Action Tag (Left) */}
+                            <div className="relative z-20 flex items-center">
+                                <div 
+                                    className="h-10 px-4 flex items-center justify-center text-[10px] font-black text-white rounded-l-lg"
+                                    style={{ backgroundColor: color }}
+                                >
+                                    {action}
+                                </div>
+                                <div 
+                                    className="w-0 h-0 border-y-[20px] border-y-transparent border-l-[15px]" 
+                                    style={{ borderLeftColor: color }}
+                                />
                             </div>
 
-                            {/* Bar Visual */}
-                            <div 
-                                className="h-10 rounded-xl transition-all duration-1000 shadow-lg flex items-center justify-end px-4 text-white font-black text-sm"
-                                style={{ 
-                                    width: `${widthPercent}%`, 
-                                    backgroundColor: item.color,
-                                    boxShadow: `0 10px 20px -5px ${item.color}44`
-                                }}
-                            >
-                                {item.value.toLocaleString()}
+                            {/* Main Body */}
+                            <div className="flex-1 relative flex items-center justify-center -ml-2">
+                                {/* SVG Ribbon Shape */}
+                                <svg className="absolute inset-0 w-full h-full drop-shadow-lg" preserveAspectRatio="none">
+                                    <path 
+                                        d={`M 0,10 L ${width},10 L ${width - 30},50 L -30,50 Z`}
+                                        fill={color}
+                                        className="transition-all duration-1000"
+                                        style={{ transform: `translateX(${(700 - width) / 2}px)` }}
+                                    />
+                                    {/* Reflection Effect */}
+                                    <path 
+                                        d={`M 10,15 L ${width - 10},15 L ${width - 35},25 L 5,25 Z`}
+                                        fill="white"
+                                        fillOpacity="0.1"
+                                        style={{ transform: `translateX(${(700 - width) / 2}px)` }}
+                                    />
+                                </svg>
+
+                                {/* Text Over SVG */}
+                                <div className="relative z-10 flex flex-col items-center text-white">
+                                    <span className="text-xs font-black tracking-[0.2em] opacity-80">{label}</span>
+                                    <span className="text-2xl font-black">{item.value.toLocaleString()}</span>
+                                </div>
                             </div>
                         </div>
 
-                        {/* Connector */}
-                        {!isLast && nextItem && (
-                            <div className="relative h-12 w-full flex flex-col items-center justify-center">
-                                {/* Vertical Line */}
-                                <div className="w-[2px] h-full bg-slate-100 dark:bg-slate-800 relative">
-                                    {/* Animated Arrow Down */}
-                                    <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-2 h-2 border-b-2 border-r-2 border-slate-300 rotate-45" />
-                                </div>
-                                
-                                {/* Percentage Badge */}
-                                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-white dark:bg-slate-900 px-3 py-1 rounded-full border border-slate-100 dark:border-slate-800 shadow-sm z-10">
-                                    <span className="text-[11px] font-black text-slate-600 dark:text-slate-300">
-                                        {nextItem.ratio.toFixed(1)}%
-                                    </span>
-                                </div>
-                            </div>
+                        {/* Connector Percentage */}
+                        {index < data.length - 1 && (
+                             <div className="z-30 -my-4 bg-white dark:bg-slate-900 border border-slate-100 px-3 py-1 rounded-full shadow-sm">
+                                <span className="text-[10px] font-black text-slate-500">
+                                    {data[index + 1].ratio.toFixed(1)}%
+                                </span>
+                             </div>
                         )}
                     </div>
                 );
