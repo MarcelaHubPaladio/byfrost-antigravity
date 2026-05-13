@@ -718,20 +718,20 @@ function FunnelChart({ data }: { data: any[] }) {
                 const label = labels[index] || item.name.toUpperCase();
                 const color = colors[index] || item.color;
                 
-                // Dynamic width based on funnel position and ratio
-                const maxWidth = 500;
-                const width = maxWidth - (index * 80);
+                // Dynamic width based on funnel position
+                const maxWidth = 550;
+                const width = maxWidth - (index * 60);
                 const translateX = (700 - width) * 0.5;
 
                 return (
                     <div key={index} className="relative flex flex-col items-center w-full group">
                         {/* Ribbon Container */}
-                        <div className="flex items-center w-full max-w-[700px] h-20">
+                        <div className="flex items-center w-full max-w-[700px] h-28">
                             
                             {/* Action Tag (Left) */}
-                            <div className="relative z-20 flex items-center">
+                            <div className="relative z-30 flex items-center -mr-4">
                                 <div 
-                                    className="h-10 px-4 flex items-center justify-center text-[10px] font-black text-white rounded-l-lg"
+                                    className="h-10 px-5 flex items-center justify-center text-[10px] font-black text-white rounded-l-xl shadow-lg"
                                     style={{ backgroundColor: color }}
                                 >
                                     {action}
@@ -743,36 +743,48 @@ function FunnelChart({ data }: { data: any[] }) {
                             </div>
 
                             {/* Main Body */}
-                            <div className="flex-1 relative flex items-center justify-center -ml-2">
+                            <div className="flex-1 relative h-full flex items-center justify-center">
                                 {/* SVG Ribbon Shape */}
-                                <svg className="absolute inset-0 w-full h-full drop-shadow-lg" preserveAspectRatio="none">
-                                    <path 
-                                        d={`M 0,10 L ${width},10 L ${width - 30},50 L -30,50 Z`}
-                                        fill={color}
-                                        className="transition-all duration-1000"
-                                        style={{ transform: `translateX(${translateX}px)` }}
-                                    />
-                                    {/* Reflection Effect */}
-                                    <path 
-                                        d={`M 10,15 L ${width - 10},15 L ${width - 35},25 L 5,25 Z`}
-                                        fill="white"
-                                        fillOpacity="0.1"
-                                        style={{ transform: `translateX(${translateX}px)` }}
-                                    />
+                                <svg className="absolute inset-0 w-full h-full drop-shadow-2xl" preserveAspectRatio="none" viewBox="0 0 700 112">
+                                    <defs>
+                                        <linearGradient id={`grad-${index}`} x1="0%" y1="0%" x2="100%" y2="0%">
+                                            <stop offset="0%" stopColor={color} />
+                                            <stop offset="100%" stopColor={color} stopOpacity="0.85" />
+                                        </linearGradient>
+                                    </defs>
+                                    <g transform={`translate(${translateX}, 20)`}>
+                                        <path 
+                                            d={`M 0,0 L ${width},0 L ${width - 40},70 L -40,70 Z`}
+                                            fill={`url(#grad-${index})`}
+                                            className="transition-all duration-1000"
+                                        />
+                                        {/* Shine Effect */}
+                                        <path 
+                                            d={`M 5,5 L ${width - 5},5 L ${width - 40},30 L 0,30 Z`}
+                                            fill="white"
+                                            fillOpacity="0.15"
+                                        />
+                                        {/* Darker Bottom Edge for 3D depth */}
+                                        <path 
+                                            d={`M -40,70 L ${width - 40},70 L ${width - 35},75 L -35,75 Z`}
+                                            fill="black"
+                                            fillOpacity="0.2"
+                                        />
+                                    </g>
                                 </svg>
 
-                                {/* Text Over SVG */}
-                                <div className="relative z-10 flex flex-col items-center text-white">
-                                    <span className="text-xs font-black tracking-[0.2em] opacity-80">{label}</span>
-                                    <span className="text-2xl font-black">{item.value.toLocaleString()}</span>
+                                {/* Text Over SVG - Centered in the 70px ribbon height (which starts at y=20) */}
+                                <div className="relative z-10 flex flex-col items-center text-white mt-1">
+                                    <span className="text-[10px] font-black tracking-[0.3em] opacity-80 mb-1">{label}</span>
+                                    <span className="text-3xl font-black drop-shadow-md">{item.value.toLocaleString()}</span>
                                 </div>
                             </div>
                         </div>
 
                         {/* Connector Percentage */}
                         {index < data.length - 1 && (
-                             <div className="z-30 -my-4 bg-white dark:bg-slate-900 border border-slate-100 px-3 py-1 rounded-full shadow-sm">
-                                <span className="text-[10px] font-black text-slate-500">
+                             <div className="z-40 -my-6 bg-white dark:bg-slate-900 border-2 border-slate-50 px-4 py-1.5 rounded-full shadow-xl">
+                                <span className="text-xs font-black text-slate-600">
                                     {data[index + 1].ratio.toFixed(1)}%
                                 </span>
                              </div>
