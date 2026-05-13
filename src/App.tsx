@@ -4,6 +4,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
+import { BarChart3 } from "lucide-react";
 
 import { SessionProvider } from "@/providers/SessionProvider";
 import { TenantProvider } from "@/providers/TenantProvider";
@@ -438,7 +439,7 @@ const App = () => (
                   <Route
                     path="/app/contracts"
                     element={
-                      <RequireRouteAccess routeKey="app.contracts">
+                      <RequireRouteAccess routeKey="app.commitments">
                         <Contracts />
                       </RequireRouteAccess>
                     }
@@ -446,7 +447,7 @@ const App = () => (
                   <Route
                     path="/app/reports"
                     element={
-                      <RequireRouteAccess routeKey="app.contracts">
+                      <RequireRouteAccess routeKey="app.commitments">
                         <Reports />
                       </RequireRouteAccess>
                     }
@@ -454,7 +455,7 @@ const App = () => (
                   <Route
                     path="/app/reports/:contractId"
                     element={
-                      <RequireRouteAccess routeKey="app.contracts">
+                      <RequireRouteAccess routeKey="app.commitments">
                         <ReportDetail />
                       </RequireRouteAccess>
                     }

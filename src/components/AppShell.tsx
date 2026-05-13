@@ -52,6 +52,7 @@ import {
   Palette,
   Bell,
   Calculator,
+  BarChart3,
 } from "lucide-react";
 import { SuperTasksPanel } from "@/components/super-tasks/SuperTasksPanel";
 import { UsageIndicator } from "@/components/admin/UsageIndicator";

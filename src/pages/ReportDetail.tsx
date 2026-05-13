@@ -205,7 +205,7 @@ export default function ReportDetail() {
 
   return (
     <RequireAuth>
-      <RequireRouteAccess routeKey="app.contracts">
+      <RequireRouteAccess routeKey="app.commitments">
         <AppShell>
           <style>{`
             @media print {
