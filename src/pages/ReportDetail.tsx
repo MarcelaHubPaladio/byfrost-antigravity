@@ -270,12 +270,33 @@ export default function ReportDetail() {
         <AppShell>
           <style>{`
             @media print {
-              body { background: white !important; }
+              @page { 
+                size: landscape; 
+                margin: 1cm; 
+              }
+              body { 
+                background: white !important; 
+                -webkit-print-color-adjust: exact; 
+                print-color-adjust: exact;
+              }
               .no-print { display: none !important; }
               .print-only { display: block !important; }
-              .card { border: none !important; box-shadow: none !important; }
-              .recharts-responsive-container { width: 100% !important; height: 300px !important; }
-              @page { margin: 2cm; }
+              .card { 
+                border: 1px solid #e2e8f0 !important; 
+                box-shadow: none !important; 
+                break-inside: avoid;
+                background: white !important;
+              }
+              .mx-auto { max-width: 100% !important; padding: 0 !important; margin: 0 !important; }
+              .grid { display: grid !important; }
+              /* Force columns in print for landscape */
+              .lg\:grid-cols-12 { grid-template-columns: repeat(12, minmax(0, 1fr)) !important; }
+              .lg\:col-span-7 { grid-column: span 7 / span 7 !important; }
+              .lg\:col-span-5 { grid-column: span 5 / span 5 !important; }
+              
+              /* Ensure funnel and charts are visible */
+              .recharts-responsive-container { width: 100% !important; height: 350px !important; }
+              svg { max-width: 100% !important; }
             }
           `}</style>
           <div className="mx-auto max-w-7xl animate-in fade-in slide-in-from-bottom-4 duration-700 pb-20">

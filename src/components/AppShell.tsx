@@ -956,7 +956,7 @@ export function AppShell({
           isSuperTasksOpen ? "md:grid-cols-[96px_1fr_350px]" : "md:grid-cols-[96px_1fr]"
         )}>
           {/* Sidebar (desktop) */}
-          <aside className="relative z-20 hidden flex-col overflow-visible rounded-[28px] border border-slate-200 bg-white/65 shadow-sm backdrop-blur md:sticky md:top-4 md:flex md:h-[calc(100vh-32px)] dark:border-slate-800 dark:bg-slate-950/40">
+          <aside className="relative z-20 hidden flex-col overflow-visible rounded-[28px] border border-slate-200 bg-white/65 shadow-sm backdrop-blur md:sticky md:top-4 md:flex md:h-[calc(100vh-32px)] dark:border-slate-800 dark:bg-slate-950/40 no-print">
             {/* Top brand block */}
             <div className="bg-[hsl(var(--byfrost-accent))] px-2 pb-2 pt-1.5">
               <Link
@@ -1202,7 +1202,7 @@ export function AppShell({
           <div className="relative z-0 min-w-0">
             {/* Content header (tenant accent border) */}
             {!hideTopBar && (
-              <div className="overflow-hidden rounded-[28px] border border-slate-200 border-t-4 border-t-[hsl(var(--byfrost-accent))] bg-white/65 px-4 py-3 shadow-sm backdrop-blur dark:border-slate-800 dark:bg-slate-950/40">
+              <div className="overflow-hidden rounded-[28px] border border-slate-200 border-t-4 border-t-[hsl(var(--byfrost-accent))] bg-white/65 px-4 py-3 shadow-sm backdrop-blur dark:border-slate-800 dark:bg-slate-950/40 no-print">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div className="flex min-w-0 flex-1 items-center gap-2">
                     <Sheet open={mobileNavOpen} onOpenChange={setMobileNavOpen}>
