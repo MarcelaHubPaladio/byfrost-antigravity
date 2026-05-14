@@ -246,15 +246,11 @@ export function CaseCustomerDataEditorCard(props: {
       });
       if (error) throw error;
 
-      // Also update the case title and state if applicable
-      const caseUpdates: any = {};
-      if (draft.name) caseUpdates.title = draft.name;
-      if (draft.billing_status === "Cancelado") caseUpdates.state = "CANCELLED";
-
-      if (Object.keys(caseUpdates).length > 0) {
+      // Also update the case title if name is provided to ensure it reflects in the UI header
+      if (draft.name) {
         await supabase
           .from("cases")
-          .update(caseUpdates)
+          .update({ title: draft.name })
           .eq("id", caseId);
       }
 

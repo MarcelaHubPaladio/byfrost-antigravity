@@ -416,12 +416,12 @@ export function SalesOrderItemsEditorCard(props: { caseId: string; className?: s
 
       <div className="mt-4 rounded-2xl border border-slate-200">
         {/* Header (desktop) */}
-        <div className="hidden grid-cols-[100px_1fr_80px_100px_90px_110px_48px] gap-2 bg-slate-50 px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-600 sm:grid">
-          <div>ID</div>
-          <div>Descrição</div>
-          <div className="text-right">Quant</div>
+        <div className="hidden grid-cols-[90px_1fr_70px_110px_80px_110px_40px] gap-2 bg-slate-50 px-3 py-3 text-[10px] font-black uppercase tracking-[0.1em] text-slate-500 sm:grid border-b border-slate-200">
+          <div>ID / Ref</div>
+          <div>Descrição do Produto / Serviço</div>
+          <div className="text-right">Qtd</div>
           <div className="text-right">Unitário</div>
-          <div className="text-right">Desc. %</div>
+          <div className="text-right">Desc %</div>
           <div className="text-right">Total Líq.</div>
           <div className="text-right">Ações</div>
         </div>
@@ -620,11 +620,9 @@ export function SalesOrderItemsEditorCard(props: { caseId: string; className?: s
                       <Trash2 className="mr-2 h-4 w-4" /> Remover
                     </Button>
                   </div>
-                </div>
-
-                 {/* Desktop/table layout */}
-                <div className="hidden gap-2 sm:grid">
-                  <div className="grid grid-cols-[100px_80px_120px_100px_120px_48px] items-start gap-2">
+                   {/* Desktop/table layout */}
+                  <div className="hidden grid-cols-[90px_1fr_70px_110px_80px_110px_40px] items-center gap-2 sm:grid">
+                    {/* ID / Code */}
                     <div>
                       <Input
                         value={row.code}
@@ -633,71 +631,12 @@ export function SalesOrderItemsEditorCard(props: { caseId: string; className?: s
                             prev.map((x) => (x.line_no === row.line_no ? { ...x, code: e.target.value } : x))
                           )
                         }
-                        className="h-10 rounded-2xl"
-                        placeholder="Cód."
+                        className="h-10 rounded-xl bg-slate-50/50 border-slate-200 text-xs font-mono"
+                        placeholder="ID"
                       />
                     </div>
-                    <div>
-                      <Input
-                        value={row.qty}
-                        onChange={(e) =>
-                          setDraft((prev) =>
-                            prev.map((x) => (x.line_no === row.line_no ? { ...x, qty: e.target.value } : x))
-                          )
-                        }
-                        className="h-10 rounded-2xl text-right tabular-nums"
-                        inputMode="decimal"
-                        placeholder="1"
-                      />
-                    </div>
-                    <div>
-                      <Input
-                        value={row.price}
-                        onChange={(e) =>
-                          setDraft((prev) =>
-                            prev.map((x) => (x.line_no === row.line_no ? { ...x, price: e.target.value } : x))
-                          )
-                        }
-                        className="h-10 rounded-2xl text-right tabular-nums"
-                        inputMode="decimal"
-                        placeholder="0,00"
-                      />
-                    </div>
-                    <div>
-                      <Input
-                        value={row.discount_percent}
-                        onChange={(e) =>
-                          setDraft((prev) =>
-                            prev.map((x) => (x.line_no === row.line_no ? { ...x, discount_percent: e.target.value } : x))
-                          )
-                        }
-                        className="h-10 rounded-2xl text-right tabular-nums bg-amber-50 border-amber-200"
-                        inputMode="decimal"
-                        placeholder="Desc. %"
-                        title="Desconto em Porcentagem"
-                      />
-                    </div>
-                    <div className="flex items-center justify-end">
-                      <div className="text-right text-sm font-bold tabular-nums text-blue-700 whitespace-nowrap">
-                        {moneyPtBr(total)}
-                      </div>
-                    </div>
-                    <div className="flex items-center justify-end">
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        className="h-10 w-10 rounded-full text-slate-300 hover:text-rose-600 hover:bg-rose-50"
-                        onClick={() => removeRow(row)}
-                        title="Remover item"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </div>
 
-                  <div>
-                    <Label className="text-[11px] text-slate-600">Produto / Serviço</Label>
+                    {/* Description + Search */}
                     <div className="relative">
                       <Input
                         value={row.description}
@@ -722,8 +661,8 @@ export function SalesOrderItemsEditorCard(props: { caseId: string; className?: s
                             setOpenOfferingPerLine((prev) => ({ ...prev, [`desk-${row.line_no}`]: false }));
                           }, 200);
                         }}
-                        className="mt-1 h-10 rounded-2xl"
-                        placeholder="Digite o nome do produto..."
+                        className="h-10 rounded-xl text-sm border-slate-200"
+                        placeholder="Nome do produto ou serviço..."
                       />
 
                       {openOfferingPerLine[`desk-${row.line_no}`] && (
@@ -798,11 +737,77 @@ export function SalesOrderItemsEditorCard(props: { caseId: string; className?: s
                         </div>
                       )}
                     </div>
+
+                    {/* Quantity */}
+                    <div>
+                      <Input
+                        value={row.qty}
+                        onChange={(e) =>
+                          setDraft((prev) =>
+                            prev.map((x) => (x.line_no === row.line_no ? { ...x, qty: e.target.value } : x))
+                          )
+                        }
+                        className="h-10 rounded-xl text-right tabular-nums border-slate-200"
+                        inputMode="decimal"
+                        placeholder="1"
+                      />
+                    </div>
+
+                    {/* Unit Price */}
+                    <div className="relative">
+                      <DollarSign className="absolute left-2.5 top-1/2 h-3 w-3 -translate-y-1/2 text-slate-400" />
+                      <Input
+                        value={row.price}
+                        onChange={(e) =>
+                          setDraft((prev) =>
+                            prev.map((x) => (x.line_no === row.line_no ? { ...x, price: e.target.value } : x))
+                          )
+                        }
+                        className="h-10 rounded-xl text-right tabular-nums pl-7 border-slate-200"
+                        inputMode="decimal"
+                        placeholder="0,00"
+                      />
+                    </div>
+
+                    {/* Discount */}
+                    <div>
+                      <Input
+                        value={row.discount_percent}
+                        onChange={(e) =>
+                          setDraft((prev) =>
+                            prev.map((x) => (x.line_no === row.line_no ? { ...x, discount_percent: e.target.value } : x))
+                          )
+                        }
+                        className="h-10 rounded-xl text-right tabular-nums bg-amber-50/50 border-amber-200 text-amber-700 font-medium"
+                        inputMode="decimal"
+                        placeholder="0"
+                      />
+                    </div>
+
+                    {/* Total */}
+                    <div className="text-right">
+                      <div className="text-sm font-black tabular-nums text-slate-900 whitespace-nowrap">
+                        {moneyPtBr(total)}
+                      </div>
+                    </div>
+
+                    {/* Actions */}
+                    <div className="flex items-center justify-end">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-9 w-9 rounded-xl text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
+                        onClick={() => removeRow(row)}
+                        title="Remover item"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
                   </div>
                 </div>
-              </div>
-            );
-          })}
+              );
+            })}
 
           {draft.length === 0 && !itemsQ.isError && (
             <div className="p-4 text-sm text-slate-600">

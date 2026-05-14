@@ -127,21 +127,56 @@ type JourneyOpt = {
 };
 
 const STAGE_LABELS: Record<string, string> = {
-  "NEW": "Novo",
+  "new": "Pedido",
+  "em_anlise": "Análise",
+  "projeto": "Projeto",
+  "faturado": "Faturado",
+  "in_separation": "Em Separação",
+  "in_route": "Em Rota",
+  "delivered": "Expedição",
+  "finalized": "Concluído",
+  "cancelled": "Cancelado",
+  // Mapeamentos de compatibilidade para dados antigos
+  "NEW": "Pedido",
   "PROJETO": "Projeto",
   "IN_ROUTE": "Em Rota",
-  "DELIVERED": "Entregue",
-  "FINALIZED": "Finalizado",
+  "DELIVERED": "Expedição",
+  "FINALIZED": "Concluído",
   "CANCELLED": "Cancelado",
   "CANCELADO": "Cancelado",
   "IN_PRODUCTION": "Em Produção",
-  "IN_ANALYSIS": "Em Análise",
+  "IN_ANALYSIS": "Análise",
   "APPROVED": "Aprovado"
 };
 
-const SALES_ORDER_STAGES = ["NEW", "PROJETO", "IN_PRODUCTION", "IN_ROUTE", "DELIVERED", "FINALIZED", "CANCELLED", "CANCELADO"];
+const SALES_ORDER_STAGES = [
+  "new", 
+  "em_anlise", 
+  "projeto", 
+  "faturado", 
+  "in_separation", 
+  "in_route", 
+  "delivered", 
+  "finalized"
+];
 
-const getStageLabel = (s: string) => STAGE_LABELS[s] || s;
+const getStageLabel = (s: string) => STAGE_LABELS[s?.toUpperCase()] || s;
+
+function isStateMatch(rowState: string, targetState: string) {
+  const s = (rowState || "").toLowerCase();
+  const t = (targetState || "").toLowerCase();
+  
+  // Agrupamentos lógicos
+  if (t === "cancelled" || t === "cancelled") {
+    return s === "cancelled" || s === "cancelado" || s === "cancelled";
+  }
+  if (t === "new") return s === "new" || s === "pedido";
+  if (t === "em_anlise") return s === "em_anlise" || s === "análise" || s === "analise";
+  if (t === "delivered") return s === "delivered" || s === "expedição" || s === "entregue";
+  if (t === "finalized") return s === "finalized" || s === "concluído" || s === "finalizado";
+  
+  return s === t;
+}
 
 const ORDERS_FILTERS_V2_KEY = "orders_filters_v2";
 
@@ -492,15 +527,6 @@ export default function Orders() {
         }, { onConflict: "case_id,key" });
 
       if (error) throw error;
-      
-      // If status is Cancelado, also move the case to CANCELLED state
-      if (status === "Cancelado") {
-        await supabase
-          .from("cases")
-          .update({ state: "CANCELLED", updated_at: new Date().toISOString() })
-          .eq("id", caseId);
-      }
-
       showSuccess(`Status de pagamento: ${status}`);
       caseDataQ.refetch();
       casesQ.refetch();
@@ -1365,9 +1391,9 @@ export default function Orders() {
                           </TableCell>
                           <TableCell>
                             <div onClick={(e) => e.stopPropagation()}>
-                              <Select value={c.state?.toUpperCase()} onValueChange={(val) => updateState(c.id, val)}>
+                              <Select value={c.state?.toLowerCase()} onValueChange={(val) => updateState(c.id, val)}>
                                 <SelectTrigger className="h-8 w-[130px] rounded-xl text-[10px] font-black uppercase bg-white border-slate-200">
-                                  <SelectValue placeholder={getStageLabel(c.state?.toUpperCase())} />
+                                  <SelectValue placeholder={getStageLabel(c.state?.toLowerCase())} />
                                 </SelectTrigger>
                                 <SelectContent className="rounded-2xl border-slate-200 shadow-xl">
                                   {states.map((s) => (
@@ -1422,7 +1448,7 @@ export default function Orders() {
                 <div className="overflow-x-auto pb-4 no-scrollbar">
                   <div className="flex gap-6 min-w-max px-2">
                     {states.map((state) => {
-                      const stateRows = filteredRows.filter(r => (r.state || "").toUpperCase() === (state || "").toUpperCase());
+                      const stateRows = filteredRows.filter(r => isStateMatch(r.state, state));
                       const stateTotal = stateRows.reduce((acc, r) => acc + (caseDataQ.data?.totals.get(r.id) || 0), 0);
 
                       return (
