@@ -683,7 +683,7 @@ export default function Orders() {
         const extId = r.meta_json?.external_id || "";
         const f = caseDataQ.data?.fields.get(r.id);
         const phones = `${f?.whatsapp ?? ""} ${f?.phone ?? ""} ${f?.customer_phone ?? ""}`;
-        const text = `${r.title} ${r.users_profile?.display_name} ${cust?.name} ${cust?.phone_e164} ${phones} ${extId}`.toLowerCase();
+        const text = `${r.id} ${r.title} ${r.users_profile?.display_name} ${cust?.name} ${cust?.phone_e164} ${phones} ${extId}`.toLowerCase();
         return text.includes(qq);
       });
       console.log("[DEBUG] After Search Filter:", rows.length);
