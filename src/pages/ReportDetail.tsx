@@ -662,19 +662,55 @@ export default function ReportDetail() {
 
 function ReportFormDialog({ onSave, isLoading, initialData, existingUnits = [] }: { onSave: (data: any) => void, isLoading: boolean, initialData?: EntityReport, existingUnits?: string[] }) {
     const [formData, setFormData] = useState({
-        unit_name: initialData?.unit_name || "Geral",
-        period_name: initialData?.period_name || "",
-        start_date: initialData?.start_date || format(new Date(), "yyyy-MM-01"),
-        end_date: initialData?.end_date || format(new Date(), "yyyy-MM-28"),
-        visualizations: initialData?.visualizations || 0,
-        profile_visits: initialData?.profile_visits || 0,
-        initiated_conversations: initialData?.initiated_conversations || 0,
-        tracked_sales: initialData?.tracked_sales || 0,
-        sales_percentage: initialData?.sales_percentage || 0,
-        ad_spend: initialData?.ad_spend || 0,
-        advertised_products: initialData?.advertised_products || "",
-        production_notes: initialData?.production_notes || ""
+        unit_name: "Geral",
+        period_name: "",
+        start_date: format(new Date(), "yyyy-MM-01"),
+        end_date: format(new Date(), "yyyy-MM-28"),
+        visualizations: 0,
+        profile_visits: 0,
+        initiated_conversations: 0,
+        tracked_sales: 0,
+        sales_percentage: 0,
+        ad_spend: 0,
+        advertised_products: "",
+        production_notes: ""
     });
+
+    // Sync form with initialData when it changes (e.g. when opening edit modal)
+    useEffect(() => {
+        if (initialData) {
+            setFormData({
+                unit_name: initialData.unit_name || "Geral",
+                period_name: initialData.period_name || "",
+                start_date: initialData.start_date || format(new Date(), "yyyy-MM-01"),
+                end_date: initialData.end_date || format(new Date(), "yyyy-MM-28"),
+                visualizations: initialData.visualizations || 0,
+                profile_visits: initialData.profile_visits || 0,
+                initiated_conversations: initialData.initiated_conversations || 0,
+                tracked_sales: initialData.tracked_sales || 0,
+                sales_percentage: initialData.sales_percentage || 0,
+                ad_spend: initialData.ad_spend || 0,
+                advertised_products: initialData.advertised_products || "",
+                production_notes: initialData.production_notes || ""
+            });
+        } else {
+            // Reset to defaults for new reports
+            setFormData({
+                unit_name: "Geral",
+                period_name: "",
+                start_date: format(new Date(), "yyyy-MM-01"),
+                end_date: format(new Date(), "yyyy-MM-28"),
+                visualizations: 0,
+                profile_visits: 0,
+                initiated_conversations: 0,
+                tracked_sales: 0,
+                sales_percentage: 0,
+                ad_spend: 0,
+                advertised_products: "",
+                production_notes: ""
+            });
+        }
+    }, [initialData]);
 
     return (
         <DialogContent className="max-w-2xl rounded-[32px]">
