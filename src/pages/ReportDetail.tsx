@@ -1,234 +1,196 @@
-import { useState, useMemo, useRef, useEffect } from "react";
-import { useParams, Link } from "react-router-dom";
+import { useEffect, useMemo, useState, useRef } from "react";
+import { useParams, useNavigate, Link } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { AppShell } from "@/components/AppShell";
-import { RequireAuth } from "@/components/RequireAuth";
-import { RequireRouteAccess } from "@/components/RequireRouteAccess";
-import { useTenant } from "@/providers/TenantProvider";
 import { supabase } from "@/lib/supabase";
-import { Card } from "@/components/ui/card";
+import { useTenant } from "@/providers/TenantProvider";
+import { useAuth } from "@/providers/AuthProvider";
 import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { 
-  Dialog, 
-  DialogContent, 
-  DialogHeader, 
-  DialogTitle, 
-  DialogTrigger,
-  DialogFooter
-} from "@/components/ui/dialog";
-import { 
-  BarChart, 
-  Bar, 
-  XAxis, 
-  YAxis, 
-  CartesianGrid, 
-  Tooltip, 
-  ResponsiveContainer,
-  LineChart,
-  Line,
-  Cell,
-  LabelList
-} from "recharts";
-import { 
+  BarChart3, 
+  ArrowLeft, 
   Plus, 
   Trash2, 
   Edit3, 
+  Download, 
   Printer, 
-  ArrowLeft, 
-  FileText, 
-  TrendingUp,
-  BarChart3,
+  FileText,
   Calendar,
+  TrendingUp,
+  ShoppingCart,
+  MessageCircle,
   Eye,
   User,
-  MessageCircle,
-  ShoppingCart,
   Percent,
-  Download,
   Check
 } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { showError, showSuccess } from "@/utils/toast";
+import AppShell from "@/components/AppShell";
+import RequireAuth from "@/components/RequireAuth";
+import RequireRouteAccess from "@/components/RequireRouteAccess";
+import { 
+    Dialog, 
+    DialogContent, 
+    DialogHeader, 
+    DialogTitle, 
+    DialogTrigger,
+    DialogFooter 
+} from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
+import { showError, showSuccess } from "@/utils/toast";
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
 type EntityReport = {
-  id: string;
-  unit_name: string;
-  period_name: string;
-  start_date: string;
-  end_date: string;
-  visualizations: number;
-  profile_visits: number;
-  initiated_conversations: number;
-  tracked_sales: number;
-  sales_percentage: number;
-  ad_spend: number;
-  advertised_products: string;
-  production_notes: string;
-  created_at: string;
+    id: string;
+    tenant_id: string;
+    entity_id: string;
+    period_name: string;
+    start_date: string;
+    end_date: string;
+    visualizations: number;
+    profile_visits: number;
+    initiated_conversations: number;
+    tracked_sales: number;
+    sales_percentage: number;
+    ad_spend: number;
+    advertised_products: string | null;
+    production_notes: string | null;
+    unit_name: string;
+    created_at: string;
 };
 
 export default function ReportDetail() {
   const { contractId } = useParams();
   const { activeTenantId } = useTenant();
+  const { user } = useAuth();
   const queryClient = useQueryClient();
+  const printRef = useRef<HTMLDivElement>(null);
+
+  const [selectedUnit, setSelectedUnit] = useState<string>("Geral");
   const [selectedPeriodId, setSelectedPeriodId] = useState<string | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
   const [reportsToPrintIds, setReportsToPrintIds] = useState<string[]>([]);
-  const printRef = useRef<HTMLDivElement>(null);
 
   const contractQ = useQuery({
-    queryKey: ["contract_for_report", contractId],
-    enabled: Boolean(contractId),
+    queryKey: ["contract", contractId],
+    enabled: !!contractId,
     queryFn: async () => {
       const { data, error } = await supabase
-        .from("commercial_commitments")
-        .select(`
-          id,
-          status,
-          customer:core_entities!commercial_commitments_customer_fk(id, display_name, metadata)
-        `)
+        .from("core_entities")
+        .select("*, customer:core_entities!core_entities_parent_id_fkey(*)")
         .eq("id", contractId!)
         .single();
       if (error) throw error;
       return data;
-    },
+    }
   });
 
   const reportsQ = useQuery({
-    queryKey: ["entity_reports", contractId],
-    enabled: Boolean(contractId),
+    queryKey: ["reports", contractId],
+    enabled: !!contractId,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("entity_reports")
         .select("*")
-        .eq("contract_id", contractId!)
-        .is("deleted_at", null)
-        .order("start_date", { ascending: true });
-      if (error) {
-        console.error("Error fetching reports:", error);
-        throw error;
-      }
+        .eq("entity_id", contractId!)
+        .order("start_date", { ascending: false });
+      if (error) throw error;
       return data as EntityReport[];
-    },
+    }
   });
 
-  const [selectedUnit, setSelectedUnit] = useState<string | null>(null);
-
   const units = useMemo(() => {
-    const rawReports = reportsQ.data || [];
-    const uniqueUnits = Array.from(new Set(rawReports.map(r => r.unit_name || "Geral")));
-    return uniqueUnits.sort();
+    const u = new Set<string>(["Geral"]);
+    (reportsQ.data || []).forEach(r => {
+        if (r.unit_name) u.add(r.unit_name);
+    });
+    return Array.from(u).sort();
   }, [reportsQ.data]);
 
-  useEffect(() => {
-    if (units.length > 0 && !selectedUnit) {
-      setSelectedUnit(units[0]);
-    }
-  }, [units, selectedUnit]);
-
   const unitReports = useMemo(() => {
-    return (reportsQ.data || []).filter(r => (r.unit_name || "Geral") === selectedUnit);
+    return (reportsQ.data || []).filter(r => r.unit_name === selectedUnit);
   }, [reportsQ.data, selectedUnit]);
 
   const selectedReport = useMemo(() => {
-    if (!selectedPeriodId) return unitReports?.[unitReports.length - 1];
-    return unitReports?.find(r => r.id === selectedPeriodId);
+    if (selectedPeriodId) {
+        return unitReports.find(r => r.id === selectedPeriodId) || unitReports[0];
+    }
+    return unitReports[0];
   }, [unitReports, selectedPeriodId]);
+
+  const metrics = useMemo(() => {
+    if (!selectedReport) return { cpv: 0, cpl: 0, cac: 0 };
+    const adSpend = Number(selectedReport.ad_spend) || 0;
+    return {
+        cpv: adSpend / (selectedReport.profile_visits || 1),
+        cpl: adSpend / (selectedReport.initiated_conversations || 1),
+        cac: adSpend / (selectedReport.tracked_sales || 1)
+    };
+  }, [selectedReport]);
 
   const funnelData = useMemo(() => {
     if (!selectedReport) return [];
-    
     const v = Number(selectedReport.visualizations) || 0;
     const pv = Number(selectedReport.profile_visits) || 0;
     const ic = Number(selectedReport.initiated_conversations) || 0;
     const ts = Number(selectedReport.tracked_sales) || 0;
-
-    const pvRatio = v > 0 ? (pv / v) * 100 : 0;
-    const icRatio = pv > 0 ? (ic / pv) * 100 : 0;
-    const tsRatio = ic > 0 ? (ts / ic) * 100 : 0;
-
+    
     return [
-      { name: "Visualizações", value: v, ratio: 100, color: "#6366f1" },
-      { name: "Visitas Perfil", value: pv, ratio: pvRatio, color: "#8b5cf6" },
-      { name: "Conversas", value: ic, ratio: icRatio, color: "#ec4899" },
-      { name: "Vendas", value: ts, ratio: tsRatio, color: "#f59e0b" },
+        { name: "Visualizações", value: v, ratio: 100, color: "#6366f1" },
+        { name: "Visitas Perfil", value: pv, ratio: v > 0 ? (pv/v)*100 : 0, color: "#8b5cf6" },
+        { name: "Conversas", value: ic, ratio: pv > 0 ? (ic/pv)*100 : 0, color: "#ec4899" },
+        { name: "Vendas", value: ts, ratio: ic > 0 ? (ts/ic)*100 : 0, color: "#f59e0b" },
     ];
   }, [selectedReport]);
 
   const historyData = useMemo(() => {
-    return unitReports.map(r => ({
-      name: r.period_name,
-      visualizations: Number(r.visualizations) || 0,
-      sales: Number(r.tracked_sales) || 0,
-      conversations: Number(r.initiated_conversations) || 0
+    return unitReports.slice().reverse().map(r => ({
+        name: r.period_name,
+        visualizations: r.visualizations,
+        visits: r.profile_visits,
+        conversations: r.initiated_conversations,
+        sales: r.tracked_sales
     }));
   }, [unitReports]);
 
-  const metrics = useMemo(() => {
-    if (!selectedReport) return { cpv: 0, cpl: 0, cac: 0 };
-    const spend = Number(selectedReport.ad_spend) || 0;
-    const visits = Number(selectedReport.profile_visits) || 0;
-    const convs = Number(selectedReport.initiated_conversations) || 0;
-    const sales = Number(selectedReport.tracked_sales) || 0;
-
-    return {
-        cpv: visits > 0 ? (spend / visits) : 0,
-        cpl: convs > 0 ? (spend / convs) : 0,
-        cac: sales > 0 ? (spend / sales) : 0
-    };
-  }, [selectedReport]);
-
   const upsertReportM = useMutation({
-    mutationFn: async (report: Partial<EntityReport>) => {
-      const payload = {
-        ...report,
-        tenant_id: activeTenantId,
-        entity_id: contractQ.data?.customer?.id,
-        contract_id: contractId,
-      };
-
-      if (report.id) {
-        const { error } = await supabase
-          .from("entity_reports")
-          .update(payload)
-          .eq("id", report.id);
-        if (error) throw error;
-      } else {
-        const { error } = await supabase
-          .from("entity_reports")
-          .insert([payload]);
-        if (error) throw error;
-      }
+    mutationFn: async (data: any) => {
+        const payload = {
+            ...data,
+            tenant_id: activeTenantId,
+            entity_id: contractId
+        };
+        if (data.id) {
+            const { error } = await supabase.from("entity_reports").update(payload).eq("id", data.id);
+            if (error) throw error;
+        } else {
+            const { error } = await supabase.from("entity_reports").insert([payload]);
+            if (error) throw error;
+        }
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["entity_reports", contractId] });
-      showSuccess("Relatório salvo com sucesso!");
-      setIsDialogOpen(false);
-      setIsEditDialogOpen(false);
+        showSuccess("Dados salvos com sucesso.");
+        queryClient.invalidateQueries({ queryKey: ["reports", contractId] });
+        setIsDialogOpen(false);
+        setIsEditDialogOpen(false);
     },
-    onError: (err) => {
-      showError("Erro ao salvar relatório: " + err.message);
-    }
+    onError: (e: any) => showError(`Erro ao salvar: ${e.message}`)
   });
 
   const deleteReportM = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase
-        .from("entity_reports")
-        .update({ deleted_at: new Date().toISOString() })
-        .eq("id", id);
-      if (error) throw error;
+        const { error } = await supabase.from("entity_reports").delete().eq("id", id);
+        if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["entity_reports", contractId] });
-      showSuccess("Relatório removido.");
+        showSuccess("Período removido.");
+        queryClient.invalidateQueries({ queryKey: ["reports", contractId] });
     }
   });
 
@@ -236,503 +198,427 @@ export default function ReportDetail() {
     setIsPrintModalOpen(true);
   };
 
-  const confirmPrint = (ids: string[]) => {
-    setReportsToPrintIds(ids);
+  const confirmPrint = (selectedIds: string[]) => {
+    setReportsToPrintIds(selectedIds);
     setIsPrintModalOpen(false);
     setTimeout(() => {
-      window.print();
-    }, 300);
+        window.print();
+    }, 500);
   };
 
-  if (contractQ.isLoading || reportsQ.isLoading) {
-    return (
-      <AppShell>
-        <div className="flex h-64 items-center justify-center">
-          <div className="h-8 w-8 animate-spin rounded-full border-4 border-slate-200 border-t-indigo-500" />
-        </div>
-      </AppShell>
-    );
-  }
-
-  if (contractQ.isError || reportsQ.isError) {
-    return (
-      <AppShell>
-        <div className="mx-auto max-w-lg mt-20 text-center p-8 rounded-[32px] bg-rose-50 border border-rose-100">
-          <h2 className="text-xl font-bold text-rose-900 mb-2">Erro ao carregar dados</h2>
-          <p className="text-rose-700 text-sm mb-6">
-            Não foi possível carregar as informações do relatório. 
-            Isso pode acontecer se a tabela ainda não foi criada no banco de dados ou se houve um erro de conexão.
-          </p>
-          <Button 
-            onClick={() => {
-              contractQ.refetch();
-              reportsQ.refetch();
-            }}
-            className="bg-rose-600 hover:bg-rose-700 rounded-xl"
-          >
-            Tentar Novamente
-          </Button>
-        </div>
-      </AppShell>
-    );
-  }
+  if (!contractId) return null;
 
   return (
     <RequireAuth>
-      <RequireRouteAccess routeKey="app.commitments">
-        <AppShell>
-          <style>{`
-            @media print {
-              @page { 
-                size: landscape; 
-                margin: 0 !important; 
-              }
-              body { 
-                background: white !important; 
-                -webkit-print-color-adjust: exact; 
-                print-color-adjust: exact;
-                margin: 0 !important;
-                padding: 0 !important;
-              }
-              .no-print { display: none !important; }
-              
-              .report-page {
-                height: 100vh !important;
-                width: 100vw !important;
-                margin: 0 !important;
-                padding: 3rem 4rem !important;
-                box-sizing: border-box !important;
-                display: flex !important;
-                flex-direction: column !important;
-                page-break-after: always !important;
-                background: white !important;
-                overflow: hidden !important;
-              }
-
-              .text-slate-900 { color: #0f172a !important; }
-              .text-slate-500 { color: #64748b !important; }
-              .text-indigo-600 { color: #4f46e5 !important; }
-              .bg-slate-100 { background-color: #f1f5f9 !important; }
-              .bg-slate-900 { background-color: #0f172a !important; }
-              .bg-indigo-600 { background-color: #4f46e5 !important; }
-            }
-              
-              .recharts-responsive-container { height: 180px !important; }
-              
-              .mx-auto { max-width: 100% !important; padding: 0 !important; margin: 0 !important; }
-              
-              /* Force footer to jump up */
-              .mt-20 { margin-top: 1rem !important; }
-              .pt-10 { padding-top: 0.5rem !important; }
-            }
-          `}</style>
-          <div className="mx-auto max-w-7xl animate-in fade-in slide-in-from-bottom-4 duration-700 pb-20 print:pb-0">
-            {/* Header / Nav */}
-            <div className="mb-8 flex items-center justify-between no-print">
-              <div className="flex items-center gap-4">
-                <Link to="/app/reports">
-                  <Button variant="ghost" size="icon" className="rounded-full">
-                    <ArrowLeft className="h-5 w-5" />
-                  </Button>
-                </Link>
-                <div>
-                  <h1 className="text-2xl font-black text-slate-900 dark:text-white flex items-center gap-2">
-                    <BarChart3 className="h-6 w-6 text-indigo-500" />
-                    Relatórios: {contractQ.data?.customer?.display_name}
-                  </h1>
-                  <p className="text-sm text-slate-500">Contrato #{contractId?.slice(0, 8)}</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-3">
-                <Button variant="outline" onClick={handlePrint} className="gap-2 rounded-xl">
-                  <Printer className="h-4 w-4" />
-                  Imprimir / Exportar
-                </Button>
-                <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-                  <DialogTrigger asChild>
-                    <Button className="gap-2 rounded-xl bg-indigo-600 hover:bg-indigo-700">
-                      <Plus className="h-4 w-4" />
-                      Novo Período
+      <RequireRouteAccess route="/app/reports">
+        <AppShell hideTopBar>
+          <div className="min-h-screen bg-slate-50/50 dark:bg-slate-950/20">
+            <div className="mx-auto max-w-[1400px] px-4 py-8 md:px-8">
+              <div className="mb-8 flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between no-print">
+                <div className="flex items-center gap-4">
+                  <Link to="/app/reports">
+                    <Button variant="ghost" size="icon" className="rounded-full">
+                      <ArrowLeft className="h-5 w-5" />
                     </Button>
-                  </DialogTrigger>
-                  <ReportFormDialog 
-                    onSave={(data) => upsertReportM.mutate(data)} 
-                    isLoading={upsertReportM.isPending}
-                    existingUnits={units}
-                  />
-                </Dialog>
-              </div>
-            </div>
-
-            {/* Units Tabs */}
-            {units.length > 0 && (
-                <div className="flex flex-wrap gap-2 mb-6 no-print">
-                    {units.map(unit => (
-                        <Button
-                            key={unit}
-                            variant={selectedUnit === unit ? "default" : "outline"}
-                            size="sm"
-                            className={cn(
-                                "rounded-full px-6 transition-all",
-                                selectedUnit === unit ? "bg-indigo-600 shadow-lg shadow-indigo-500/20" : "bg-white dark:bg-slate-950"
-                            )}
-                            onClick={() => {
-                                setSelectedUnit(unit);
-                                setSelectedPeriodId(null);
-                            }}
-                        >
-                            {unit}
-                        </Button>
-                    ))}
-                </div>
-            )}
-
-            {!reportsQ.data || reportsQ.data.length === 0 ? (
-              <Card className="flex h-64 flex-col items-center justify-center border-dashed text-center p-12 no-print">
-                <FileText className="mb-4 h-12 w-12 text-slate-300" />
-                <h3 className="text-lg font-semibold">Nenhum período cadastrado</h3>
-                <p className="text-sm text-slate-500 mb-6">Comece adicionando os dados do primeiro mês de contrato.</p>
-                <Button onClick={() => setIsDialogOpen(true)} variant="outline" className="rounded-xl border-indigo-200 text-indigo-600">
-                  Cadastrar Primeiro Período
-                </Button>
-              </Card>
-            ) : (
-              <div className="space-y-8" ref={printRef}>
-                {/* Print Only Header */}
-                <div className="hidden print:block mb-12 border-b-2 border-slate-900 pb-10">
-                   <div className="flex justify-between items-end">
-                      <div>
-                        <p className="text-[10px] font-black uppercase tracking-[0.4em] text-indigo-600 mb-2">Relatório Executivo de Performance</p>
-                        <h1 className="text-5xl font-black uppercase tracking-tighter text-slate-900">{contractQ.data?.customer?.display_name}</h1>
-                        <p className="text-xl font-bold text-slate-500 mt-2">{selectedUnit}</p>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-sm font-bold text-slate-500 uppercase tracking-widest">Contrato #{contractId?.slice(0, 8)}</p>
-                        <p className="text-2xl font-black text-slate-900 mt-1">{selectedReport?.period_name}</p>
-                      </div>
-                   </div>
-                </div>
-
-                {/* Period Selector (Tabs-like) */}
-                <div className="flex gap-2 overflow-x-auto pb-2 no-print">
-                  {unitReports.map(r => (
-                    <Button
-                      key={r.id}
-                      variant={selectedReport?.id === r.id ? "default" : "outline"}
-                      className={cn(
-                        "rounded-full px-6 h-10 transition-all",
-                        selectedReport?.id === r.id ? "bg-indigo-600" : "hover:border-indigo-200"
-                      )}
-                      onClick={() => setSelectedPeriodId(r.id)}
-                    >
-                      {r.period_name}
-                    </Button>
-                  ))}
-                </div>
-
-                {/* Funnel & Main Stats */}
-                <div className="report-main-grid grid grid-cols-1 lg:grid-cols-12 gap-8">
-                  {/* Left: Stats & Funnel */}
-                  <Card className="lg:col-span-7 p-8 rounded-[32px] border-none bg-white shadow-xl shadow-slate-200/50 dark:bg-slate-950/50 dark:shadow-none print:shadow-none print:p-0">
-                    <div className="flex items-center justify-between mb-8">
-                      <h3 className="text-lg font-bold flex items-center gap-2">
-                        <TrendingUp className="h-5 w-5 text-indigo-500" />
-                        Funil de Conversão
-                      </h3>
-                      <div className="flex gap-2 no-print">
-                         <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-                            <DialogTrigger asChild>
-                               <Button variant="ghost" size="icon" className="rounded-full text-slate-400 hover:text-indigo-600">
-                                 <Edit3 className="h-4 w-4" />
-                               </Button>
-                            </DialogTrigger>
-                            <ReportFormDialog 
-                               initialData={selectedReport}
-                               onSave={(data) => upsertReportM.mutate({ ...data, id: selectedReport?.id })} 
-                               isLoading={upsertReportM.isPending}
-                               existingUnits={units}
-                            />
-                         </Dialog>
-                         <Button 
-                            variant="ghost" 
-                            size="icon" 
-                            className="rounded-full text-slate-400 hover:text-rose-600"
-                            onClick={() => {
-                                if (confirm("Deseja realmente remover este período?")) {
-                                    deleteReportM.mutate(selectedReport!.id);
-                                }
-                            }}
-                        >
-                           <Trash2 className="h-4 w-4" />
-                         </Button>
-                      </div>
-                    </div>
-
-                    <div className="py-6 min-h-[500px]">
-                        <FunnelChart data={funnelData} />
-                    </div>
-
-                    <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-4 mt-8 border-t pt-8">
-                           <div className="text-center">
-                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">CPV</p>
-                                <p className="text-xl font-black text-emerald-600">
-                                    {metrics.cpv > 0 ? `R$ ${metrics.cpv.toFixed(2)}` : "R$ 0,00"}
-                                </p>
-                                <div className="h-1 w-8 bg-emerald-500 mx-auto mt-2 rounded-full" />
-                           </div>
-                           <div className="text-center">
-                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">CPL</p>
-                                <p className="text-xl font-black text-blue-600">
-                                    {metrics.cpl > 0 ? `R$ ${metrics.cpl.toFixed(2)}` : "R$ 0,00"}
-                                </p>
-                                <div className="h-1 w-8 bg-blue-500 mx-auto mt-2 rounded-full" />
-                           </div>
-                           <div className="text-center">
-                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">CAC</p>
-                                <p className="text-xl font-black text-violet-600">
-                                    {metrics.cac > 0 ? `R$ ${metrics.cac.toFixed(2)}` : "R$ 0,00"}
-                                </p>
-                                <div className="h-1 w-8 bg-violet-500 mx-auto mt-2 rounded-full" />
-                           </div>
-                           <div className="text-center">
-                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">ROI (1%)</p>
-                                <p className="text-xl font-black text-slate-900 dark:text-white">{Number(selectedReport?.sales_percentage || 0).toFixed(1)}%</p>
-                                <div className="h-1 w-8 bg-slate-300 mx-auto mt-2 rounded-full" />
-                           </div>
-                           {funnelData.slice(1).map((item, i) => (
-                             <div key={i} className="text-center">
-                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{item.name} / Ant.</p>
-                                <p className="text-xl font-black text-slate-700 dark:text-slate-200">{item.ratio.toFixed(1)}%</p>
-                                <div className="h-1 w-8 mx-auto mt-2 rounded-full" style={{ backgroundColor: item.color }} />
-                             </div>
-                           ))}
-                    </div>
-                  </Card>
-
-                  {/* Right: Info Panels */}
-                  <div className="lg:col-span-5 space-y-6">
-                    <Card className="p-8 rounded-[32px] border-none bg-slate-900 text-white shadow-xl">
-                        <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
-                            <ShoppingCart className="h-5 w-5 text-indigo-400" />
-                            Produtos Anunciados
-                        </h3>
-                        <p className="text-sm opacity-90 leading-relaxed italic">
-                            {selectedReport?.advertised_products || "Nenhum produto listado."}
-                        </p>
-                    </Card>
-
-                    <Card className="p-8 rounded-[32px] border-none bg-gradient-to-br from-indigo-600 to-indigo-800 text-white shadow-xl shadow-indigo-500/30">
-                        <h3 className="text-lg font-bold mb-6 flex items-center gap-2">
-                            <Calendar className="h-5 w-5" />
-                            Produção do Período
-                        </h3>
-                        <div className="prose prose-invert max-w-none">
-                            <p className="text-sm opacity-90 leading-relaxed whitespace-pre-wrap">
-                                {selectedReport?.production_notes || "Nenhuma nota de produção cadastrada para este período."}
-                            </p>
-                        </div>
-                    </Card>
-
-                    <Card className="p-8 rounded-[32px] border-none bg-white shadow-lg shadow-slate-200/50 dark:bg-slate-950/50">
-                        <h3 className="text-lg font-bold mb-6 flex items-center gap-2">
-                            <BarChart3 className="h-5 w-5 text-indigo-500" />
-                            <span className="print:hidden">Evolução Histórica</span>
-                            <span className="hidden print:block text-slate-900">Performance do Período</span>
-                        </h3>
-                        
-                        {/* Summary Grid for PDF ONLY (3x3) */}
-                        <div className="hidden print:grid grid-cols-3 gap-y-10 gap-x-4">
-                            <div className="text-center">
-                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Visualizações</p>
-                                <p className="text-xl font-black text-slate-900 dark:text-white">{selectedReport?.visualizations?.toLocaleString()}</p>
-                            </div>
-                            <div className="text-center">
-                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Visitas</p>
-                                <p className="text-xl font-black text-slate-900 dark:text-white">{selectedReport?.profile_visits?.toLocaleString()}</p>
-                            </div>
-                            <div className="text-center">
-                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Conversas</p>
-                                <p className="text-xl font-black text-slate-900 dark:text-white">{selectedReport?.initiated_conversations?.toLocaleString()}</p>
-                            </div>
-                            <div className="text-center">
-                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Vendas</p>
-                                <p className="text-xl font-black text-emerald-600">{selectedReport?.tracked_sales?.toLocaleString()}</p>
-                            </div>
-                            <div className="text-center">
-                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Investimento</p>
-                                <p className="text-xl font-black text-indigo-600">R$ {selectedReport?.ad_spend?.toLocaleString()}</p>
-                            </div>
-                            <div className="text-center">
-                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">ROI (1%)</p>
-                                <p className="text-xl font-black text-slate-900 dark:text-white">{Number(selectedReport?.sales_percentage || 0).toFixed(1)}%</p>
-                            </div>
-                            <div className="text-center">
-                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">CPV</p>
-                                <p className="text-lg font-bold text-slate-600 dark:text-slate-300">R$ {metrics.cpv.toFixed(2)}</p>
-                            </div>
-                            <div className="text-center">
-                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">CPL</p>
-                                <p className="text-lg font-bold text-slate-600 dark:text-slate-300">R$ {metrics.cpl.toFixed(2)}</p>
-                            </div>
-                            <div className="text-center">
-                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">CAC</p>
-                                <p className="text-lg font-bold text-slate-600 dark:text-slate-300">R$ {metrics.cac.toFixed(2)}</p>
-                            </div>
-                        </div>
-
-                        {/* Line Chart only on screen, hidden in print here */}
-                        <div className="h-[200px] w-full mt-8 no-print pt-6 border-t">
-                            <p className="text-[10px] font-bold text-slate-400 uppercase mb-4">Tendência do Período</p>
-                            <ResponsiveContainer width="100%" height="100%">
-                                <LineChart data={historyData}>
-                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                                    <XAxis dataKey="name" hide />
-                                    <Tooltip />
-                                    <Line type="monotone" dataKey="visualizations" stroke="#6366f1" strokeWidth={3} dot={false} />
-                                </LineChart>
-                            </ResponsiveContainer>
-                        </div>
-                    </Card>
+                  </Link>
+                  <div>
+                    <h1 className="text-2xl font-black text-slate-900 dark:text-white flex items-center gap-2">
+                      <BarChart3 className="h-6 w-6 text-indigo-500" />
+                      Relatórios: {contractQ.data?.customer?.display_name}
+                    </h1>
+                    <p className="text-sm text-slate-500">Contrato #{contractId?.slice(0, 8)}</p>
                   </div>
                 </div>
-
-                {/* Print Only Content (Multi-page) */}
-                <div className="hidden print:block">
-                  {unitReports.filter(r => reportsToPrintIds.includes(r.id)).map((report, idx) => {
-                    const v = Number(report.visualizations) || 0;
-                    const pv = Number(report.profile_visits) || 0;
-                    const ic = Number(report.initiated_conversations) || 0;
-                    const ts = Number(report.tracked_sales) || 0;
-                    
-                    const printFunnelData = [
-                      { name: "Visualizações", value: v, ratio: 100, color: "#6366f1" },
-                      { name: "Visitas Perfil", value: pv, ratio: v > 0 ? (pv/v)*100 : 0, color: "#8b5cf6" },
-                      { name: "Conversas", value: ic, ratio: pv > 0 ? (ic/pv)*100 : 0, color: "#ec4899" },
-                      { name: "Vendas", value: ts, ratio: ic > 0 ? (ts/ic)*100 : 0, color: "#f59e0b" },
-                    ];
-
-                    return (
-                      <div key={report.id} className="report-page">
-                        {/* High Impact Header */}
-                        <div className="mb-10 border-b-2 border-slate-900 pb-8 flex justify-between items-end">
-                          <div className="flex-1">
-                            <p className="text-[10px] font-black uppercase tracking-[0.4em] text-indigo-600 mb-2">Relatório Executivo de Performance</p>
-                            <h1 className="text-5xl font-black uppercase tracking-tighter text-slate-900 leading-none mb-4">{contractQ.data?.customer?.display_name}</h1>
-                            <div className="flex items-center gap-6">
-                              <p className="text-xl font-bold text-slate-500 uppercase tracking-widest">{report.unit_name}</p>
-                              <div className="h-6 w-px bg-slate-200" />
-                              <div className="flex items-center gap-3">
-                                <Calendar className="h-5 w-5 text-indigo-600" />
-                                <p className="text-xl font-black text-slate-900">
-                                  {format(new Date(report.start_date), "dd/MM/yyyy")} — {format(new Date(report.end_date), "dd/MM/yyyy")}
-                                </p>
-                              </div>
-                            </div>
-                          </div>
-                          <div className="text-right">
-                            <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Contrato #{contractId?.slice(0, 8)}</p>
-                            <div className="bg-slate-100 px-6 py-3 rounded-2xl inline-block border border-slate-200">
-                              <p className="text-xl font-black text-slate-900 uppercase">{report.period_name}</p>
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Main Grid: Funnel & Metrics */}
-                        <div className="flex gap-16 flex-1 items-center">
-                          {/* Funnel Section */}
-                          <div className="w-[60%] flex flex-col">
-                            <h3 className="text-2xl font-black uppercase tracking-tighter mb-8 flex items-center gap-3">
-                              <TrendingUp className="h-7 w-7 text-indigo-600" />
-                              Funil de Conversão
-                            </h3>
-                            <div className="w-full h-[500px]">
-                              <FunnelChart data={printFunnelData} />
-                            </div>
-                          </div>
-
-                          {/* Metrics & Info Section */}
-                          <div className="w-[35%] flex flex-col gap-6">
-                            <div className="p-8 rounded-[32px] bg-slate-900 text-white">
-                              <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
-                                <ShoppingCart className="h-5 w-5 text-indigo-400" />
-                                Produtos Anunciados
-                              </h3>
-                              <p className="text-sm opacity-90 leading-relaxed italic line-clamp-3">
-                                {report.advertised_products || "Nenhum produto listado."}
-                              </p>
-                            </div>
-
-                            <div className="p-8 rounded-[32px] bg-indigo-600 text-white">
-                              <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
-                                <Calendar className="h-5 w-5 text-indigo-200" />
-                                Produção do Período
-                              </h3>
-                              <p className="text-sm opacity-90 leading-relaxed italic line-clamp-3">
-                                {report.production_notes || "Nenhuma nota de produção cadastrada."}
-                              </p>
-                            </div>
-
-                            <div className="p-8 rounded-[32px] bg-white border-2 border-slate-100">
-                              <h3 className="text-lg font-bold mb-6 flex items-center gap-2 text-slate-900">
-                                <BarChart3 className="h-5 w-5 text-indigo-600" />
-                                Performance do Período
-                              </h3>
-                              <div className="grid grid-cols-3 gap-y-8 gap-x-4">
-                                <div className="text-center">
-                                  <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Visualizações</p>
-                                  <p className="text-lg font-black text-slate-900">{report.visualizations.toLocaleString()}</p>
-                                </div>
-                                <div className="text-center">
-                                  <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Visitas</p>
-                                  <p className="text-lg font-black text-slate-900">{report.profile_visits.toLocaleString()}</p>
-                                </div>
-                                <div className="text-center">
-                                  <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Conversas</p>
-                                  <p className="text-lg font-black text-slate-900">{report.initiated_conversations.toLocaleString()}</p>
-                                </div>
-                                <div className="text-center">
-                                  <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Vendas</p>
-                                  <p className="text-lg font-black text-emerald-600">{report.tracked_sales.toLocaleString()}</p>
-                                </div>
-                                <div className="text-center">
-                                  <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Investimento</p>
-                                  <p className="text-lg font-black text-indigo-600">R$ {report.ad_spend.toLocaleString()}</p>
-                                </div>
-                                <div className="text-center">
-                                  <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">ROI (1%)</p>
-                                  <p className="text-lg font-black text-slate-900">{(Number(report.sales_percentage || 0)).toFixed(1)}%</p>
-                                </div>
-                                <div className="text-center">
-                                  <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">CPV</p>
-                                  <p className="text-md font-bold text-slate-600">R$ {(report.ad_spend / (report.profile_visits || 1)).toFixed(2)}</p>
-                                </div>
-                                <div className="text-center">
-                                  <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">CPL</p>
-                                  <p className="text-md font-bold text-slate-600">R$ {(report.ad_spend / (report.initiated_conversations || 1)).toFixed(2)}</p>
-                                </div>
-                                <div className="text-center">
-                                  <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">CAC</p>
-                                  <p className="text-md font-bold text-slate-600">R$ {(report.ad_spend / (report.tracked_sales || 1)).toFixed(2)}</p>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Footer Info */}
-                        <div className="mt-10 pt-6 border-t border-slate-100 flex justify-between items-center text-slate-400 text-[10px]">
-                          <p className="font-bold uppercase tracking-[0.2em]">Confidencial • Gerado via AgenteHub</p>
-                            <p>Página {idx + 1} de {reportsToPrintIds.length} • {format(new Date(), "dd/MM/yyyy HH:mm")}</p>
-                        </div>
-                      </div>
-                    );
-                  })}
+                <div className="flex items-center gap-3">
+                  <Button variant="outline" onClick={handlePrint} className="gap-2 rounded-xl">
+                    <Printer className="h-4 w-4" />
+                    Imprimir / Exportar
+                  </Button>
+                  <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+                    <DialogTrigger asChild>
+                      <Button className="gap-2 rounded-xl bg-indigo-600 hover:bg-indigo-700">
+                        <Plus className="h-4 w-4" />
+                        Novo Período
+                      </Button>
+                    </DialogTrigger>
+                    <ReportFormDialog 
+                      onSave={(data) => upsertReportM.mutate(data)} 
+                      isLoading={upsertReportM.isPending}
+                      existingUnits={units}
+                    />
+                  </Dialog>
                 </div>
               </div>
+
+              {/* Units Tabs */}
+              {units.length > 0 && (
+                  <div className="flex flex-wrap gap-2 mb-6 no-print">
+                      {units.map(unit => (
+                          <Button
+                              key={unit}
+                              variant={selectedUnit === unit ? "default" : "outline"}
+                              size="sm"
+                              className={cn(
+                                  "rounded-full px-6 transition-all",
+                                  selectedUnit === unit ? "bg-indigo-600 shadow-lg shadow-indigo-500/20" : "bg-white dark:bg-slate-950"
+                              )}
+                              onClick={() => {
+                                  setSelectedUnit(unit);
+                                  setSelectedPeriodId(null);
+                              }}
+                          >
+                              {unit}
+                          </Button>
+                      ))}
+                  </div>
+              )}
+
+              {!reportsQ.data || reportsQ.data.length === 0 ? (
+                <Card className="flex h-64 flex-col items-center justify-center border-dashed text-center p-12 no-print">
+                  <FileText className="mb-4 h-12 w-12 text-slate-300" />
+                  <h3 className="text-lg font-semibold">Nenhum período cadastrado</h3>
+                  <p className="text-sm text-slate-500 mb-6">Comece adicionando os dados do primeiro mês de contrato.</p>
+                  <Button onClick={() => setIsDialogOpen(true)} variant="outline" className="rounded-xl border-indigo-200 text-indigo-600">
+                    Cadastrar Primeiro Período
+                  </Button>
+                </Card>
+              ) : (
+                <div className="space-y-8" ref={printRef}>
+                  {/* Print Only Header */}
+                  <div className="hidden print:block mb-12 border-b-2 border-slate-900 pb-10">
+                     <div className="flex justify-between items-end">
+                        <div>
+                          <p className="text-[10px] font-black uppercase tracking-[0.4em] text-indigo-600 mb-2">Relatório Executivo de Performance</p>
+                          <h1 className="text-5xl font-black uppercase tracking-tighter text-slate-900">{contractQ.data?.customer?.display_name}</h1>
+                          <p className="text-xl font-bold text-slate-500 mt-2">{selectedUnit}</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-sm font-bold text-slate-500 uppercase tracking-widest">Contrato #{contractId?.slice(0, 8)}</p>
+                          <p className="text-2xl font-black text-slate-900 mt-1">{selectedReport?.period_name}</p>
+                        </div>
+                     </div>
+                  </div>
+
+                  {/* Period Selector (Tabs-like) */}
+                  <div className="flex gap-2 overflow-x-auto pb-2 no-print">
+                    {unitReports.map(r => (
+                      <Button
+                        key={r.id}
+                        variant={selectedReport?.id === r.id ? "default" : "outline"}
+                        className={cn(
+                          "rounded-full px-6 h-10 transition-all",
+                          selectedReport?.id === r.id ? "bg-indigo-600" : "hover:border-indigo-200"
+                        )}
+                        onClick={() => setSelectedPeriodId(r.id)}
+                      >
+                        {r.period_name}
+                      </Button>
+                    ))}
+                  </div>
+
+                  {/* Funnel & Main Stats */}
+                  <div className="report-main-grid grid grid-cols-1 lg:grid-cols-12 gap-8">
+                    {/* Left: Stats & Funnel */}
+                    <Card className="lg:col-span-7 p-8 rounded-[32px] border-none bg-white shadow-xl shadow-slate-200/50 dark:bg-slate-950/50 dark:shadow-none print:shadow-none print:p-0">
+                      <div className="flex items-center justify-between mb-8">
+                        <h3 className="text-lg font-bold flex items-center gap-2">
+                          <TrendingUp className="h-5 w-5 text-indigo-500" />
+                          Funil de Conversão
+                        </h3>
+                        <div className="flex gap-2 no-print">
+                           <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+                              <DialogTrigger asChild>
+                                 <Button variant="ghost" size="icon" className="rounded-full text-slate-400 hover:text-indigo-600">
+                                   <Edit3 className="h-4 w-4" />
+                                 </Button>
+                              </DialogTrigger>
+                              <ReportFormDialog 
+                                 initialData={selectedReport}
+                                 onSave={(data) => upsertReportM.mutate({ ...data, id: selectedReport?.id })} 
+                                 isLoading={upsertReportM.isPending}
+                                 existingUnits={units}
+                              />
+                           </Dialog>
+                           <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              className="rounded-full text-slate-400 hover:text-rose-600"
+                              onClick={() => {
+                                  if (confirm("Deseja realmente remover este período?")) {
+                                      deleteReportM.mutate(selectedReport!.id);
+                                  }
+                              }}
+                          >
+                             <Trash2 className="h-4 w-4" />
+                           </Button>
+                        </div>
+                      </div>
+
+                      <div className="py-6 min-h-[500px]">
+                          <FunnelChart data={funnelData} />
+                      </div>
+
+                      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-4 mt-8 border-t pt-8">
+                             <div className="text-center">
+                                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">CPV</p>
+                                  <p className="text-xl font-black text-emerald-600">
+                                      {metrics.cpv > 0 ? `R$ ${metrics.cpv.toFixed(2)}` : "R$ 0,00"}
+                                  </p>
+                                  <div className="h-1 w-8 bg-emerald-500 mx-auto mt-2 rounded-full" />
+                             </div>
+                             <div className="text-center">
+                                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">CPL</p>
+                                  <p className="text-xl font-black text-blue-600">
+                                      {metrics.cpl > 0 ? `R$ ${metrics.cpl.toFixed(2)}` : "R$ 0,00"}
+                                  </p>
+                                  <div className="h-1 w-8 bg-blue-500 mx-auto mt-2 rounded-full" />
+                             </div>
+                             <div className="text-center">
+                                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">CAC</p>
+                                  <p className="text-xl font-black text-violet-600">
+                                      {metrics.cac > 0 ? `R$ ${metrics.cac.toFixed(2)}` : "R$ 0,00"}
+                                  </p>
+                                  <div className="h-1 w-8 bg-violet-500 mx-auto mt-2 rounded-full" />
+                             </div>
+                             <div className="text-center">
+                                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">ROI (1%)</p>
+                                  <p className="text-xl font-black text-slate-900 dark:text-white">{Number(selectedReport?.sales_percentage || 0).toFixed(1)}%</p>
+                                  <div className="h-1 w-8 bg-slate-300 mx-auto mt-2 rounded-full" />
+                             </div>
+                             {funnelData.slice(1).map((item, i) => (
+                               <div key={i} className="text-center">
+                                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{item.name} / Ant.</p>
+                                  <p className="text-xl font-black text-slate-700 dark:text-slate-200">{item.ratio.toFixed(1)}%</p>
+                                  <div className="h-1 w-8 mx-auto mt-2 rounded-full" style={{ backgroundColor: item.color }} />
+                               </div>
+                             ))}
+                      </div>
+                    </Card>
+
+                    {/* Right: Info Panels */}
+                    <div className="lg:col-span-5 space-y-6">
+                      <Card className="p-8 rounded-[32px] border-none bg-slate-900 text-white shadow-xl">
+                          <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
+                              <ShoppingCart className="h-5 w-5 text-indigo-400" />
+                              Produtos Anunciados
+                          </h3>
+                          <p className="text-sm opacity-90 leading-relaxed italic">
+                              {selectedReport?.advertised_products || "Nenhum produto listado."}
+                          </p>
+                      </Card>
+
+                      <Card className="p-8 rounded-[32px] border-none bg-gradient-to-br from-indigo-600 to-indigo-800 text-white shadow-xl shadow-indigo-500/30">
+                          <h3 className="text-lg font-bold mb-6 flex items-center gap-2">
+                              <Calendar className="h-5 w-5" />
+                              Produção do Período
+                          </h3>
+                          <div className="prose prose-invert max-w-none">
+                              <p className="text-sm opacity-90 leading-relaxed whitespace-pre-wrap">
+                                  {selectedReport?.production_notes || "Nenhuma nota de produção cadastrada para este período."}
+                              </p>
+                          </div>
+                      </Card>
+
+                      <Card className="p-8 rounded-[32px] border-none bg-white shadow-lg shadow-slate-200/50 dark:bg-slate-950/50">
+                          <h3 className="text-lg font-bold mb-6 flex items-center gap-2">
+                              <BarChart3 className="h-5 w-5 text-indigo-500" />
+                              <span className="print:hidden">Evolução Histórica</span>
+                              <span className="hidden print:block text-slate-900">Performance do Período</span>
+                          </h3>
+                          
+                          {/* Summary Grid for PDF ONLY (3x3) */}
+                          <div className="hidden print:grid grid-cols-3 gap-y-10 gap-x-4">
+                              <div className="text-center">
+                                  <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Visualizações</p>
+                                  <p className="text-xl font-black text-slate-900 dark:text-white">{selectedReport?.visualizations?.toLocaleString()}</p>
+                              </div>
+                              <div className="text-center">
+                                  <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Visitas</p>
+                                  <p className="text-xl font-black text-slate-900 dark:text-white">{selectedReport?.profile_visits?.toLocaleString()}</p>
+                              </div>
+                              <div className="text-center">
+                                  <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Conversas</p>
+                                  <p className="text-xl font-black text-slate-900 dark:text-white">{selectedReport?.initiated_conversations?.toLocaleString()}</p>
+                              </div>
+                              <div className="text-center">
+                                  <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Vendas</p>
+                                  <p className="text-xl font-black text-emerald-600">{selectedReport?.tracked_sales?.toLocaleString()}</p>
+                              </div>
+                              <div className="text-center">
+                                  <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Investimento</p>
+                                  <p className="text-xl font-black text-indigo-600">R$ {selectedReport?.ad_spend?.toLocaleString()}</p>
+                              </div>
+                              <div className="text-center">
+                                  <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">ROI (1%)</p>
+                                  <p className="text-xl font-black text-slate-900 dark:text-white">{Number(selectedReport?.sales_percentage || 0).toFixed(1)}%</p>
+                              </div>
+                              <div className="text-center">
+                                  <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">CPV</p>
+                                  <p className="text-lg font-bold text-slate-600 dark:text-slate-300">R$ {metrics.cpv.toFixed(2)}</p>
+                              </div>
+                              <div className="text-center">
+                                  <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">CPL</p>
+                                  <p className="text-lg font-bold text-slate-600 dark:text-slate-300">R$ {metrics.cpl.toFixed(2)}</p>
+                              </div>
+                              <div className="text-center">
+                                  <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">CAC</p>
+                                  <p className="text-lg font-bold text-slate-600 dark:text-slate-300">R$ {metrics.cac.toFixed(2)}</p>
+                              </div>
+                          </div>
+
+                          {/* Line Chart only on screen, hidden in print here */}
+                          <div className="h-[200px] w-full mt-8 no-print pt-6 border-t">
+                              <p className="text-[10px] font-bold text-slate-400 uppercase mb-4">Tendência do Período</p>
+                              <ResponsiveContainer width="100%" height="100%">
+                                  <LineChart data={historyData}>
+                                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                                      <XAxis dataKey="name" hide />
+                                      <Tooltip />
+                                      <Line type="monotone" dataKey="visualizations" stroke="#6366f1" strokeWidth={3} dot={false} />
+                                  </LineChart>
+                              </ResponsiveContainer>
+                          </div>
+                      </Card>
+                    </div>
+                  </div>
+
+                  {/* Print Only Content (Multi-page) */}
+                  <div className="hidden print:block">
+                    {unitReports.filter(r => reportsToPrintIds.includes(r.id)).map((report, idx) => {
+                      const v = Number(report.visualizations) || 0;
+                      const pv = Number(report.profile_visits) || 0;
+                      const ic = Number(report.initiated_conversations) || 0;
+                      const ts = Number(report.tracked_sales) || 0;
+                      
+                      const printFunnelData = [
+                        { name: "Visualizações", value: v, ratio: 100, color: "#6366f1" },
+                        { name: "Visitas Perfil", value: pv, ratio: v > 0 ? (pv/v)*100 : 0, color: "#8b5cf6" },
+                        { name: "Conversas", value: ic, ratio: pv > 0 ? (ic/pv)*100 : 0, color: "#ec4899" },
+                        { name: "Vendas", value: ts, ratio: ic > 0 ? (ts/ic)*100 : 0, color: "#f59e0b" },
+                      ];
+
+                      return (
+                        <div key={report.id} className="report-page">
+                          {/* High Impact Header */}
+                          <div className="mb-10 border-b-2 border-slate-900 pb-8 flex justify-between items-end">
+                            <div className="flex-1">
+                              <p className="text-[10px] font-black uppercase tracking-[0.4em] text-indigo-600 mb-2">Relatório Executivo de Performance</p>
+                              <h1 className="text-5xl font-black uppercase tracking-tighter text-slate-900 leading-none mb-4">{contractQ.data?.customer?.display_name}</h1>
+                              <div className="flex items-center gap-6">
+                                <p className="text-xl font-bold text-slate-500 uppercase tracking-widest">{report.unit_name}</p>
+                                <div className="h-6 w-px bg-slate-200" />
+                                <div className="flex items-center gap-3">
+                                  <Calendar className="h-5 w-5 text-indigo-600" />
+                                  <p className="text-xl font-black text-slate-900">
+                                    {format(new Date(report.start_date), "dd/MM/yyyy")} — {format(new Date(report.end_date), "dd/MM/yyyy")}
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Contrato #{contractId?.slice(0, 8)}</p>
+                              <div className="bg-slate-100 px-6 py-3 rounded-2xl inline-block border border-slate-200">
+                                <p className="text-xl font-black text-slate-900 uppercase">{report.period_name}</p>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Main Grid: Funnel & Metrics */}
+                          <div className="flex gap-16 flex-1 items-center">
+                            {/* Funnel Section */}
+                            <div className="w-[60%] flex flex-col">
+                              <h3 className="text-2xl font-black uppercase tracking-tighter mb-8 flex items-center gap-3">
+                                <TrendingUp className="h-7 w-7 text-indigo-600" />
+                                Funil de Conversão
+                              </h3>
+                              <div className="w-full h-[500px]">
+                                <FunnelChart data={printFunnelData} />
+                              </div>
+                            </div>
+
+                            {/* Metrics & Info Section */}
+                            <div className="w-[35%] flex flex-col gap-6">
+                              <div className="p-8 rounded-[32px] bg-slate-900 text-white">
+                                <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
+                                  <ShoppingCart className="h-5 w-5 text-indigo-400" />
+                                  Produtos Anunciados
+                                </h3>
+                                <p className="text-sm opacity-90 leading-relaxed italic line-clamp-3">
+                                  {report.advertised_products || "Nenhum produto listado."}
+                                </p>
+                              </div>
+
+                              <div className="p-8 rounded-[32px] bg-indigo-600 text-white">
+                                <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
+                                  <Calendar className="h-5 w-5 text-indigo-200" />
+                                  Produção do Período
+                                </h3>
+                                <p className="text-sm opacity-90 leading-relaxed italic line-clamp-3">
+                                  {report.production_notes || "Nenhuma nota de produção cadastrada."}
+                                </p>
+                              </div>
+
+                              <div className="p-8 rounded-[32px] bg-white border-2 border-slate-100">
+                                <h3 className="text-lg font-bold mb-6 flex items-center gap-2 text-slate-900">
+                                  <BarChart3 className="h-5 w-5 text-indigo-600" />
+                                  Performance do Período
+                                </h3>
+                                <div className="grid grid-cols-3 gap-y-8 gap-x-4">
+                                  <div className="text-center">
+                                    <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Visualizações</p>
+                                    <p className="text-lg font-black text-slate-900">{report.visualizations.toLocaleString()}</p>
+                                  </div>
+                                  <div className="text-center">
+                                    <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Visitas</p>
+                                    <p className="text-lg font-black text-slate-900">{report.profile_visits.toLocaleString()}</p>
+                                  </div>
+                                  <div className="text-center">
+                                    <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Conversas</p>
+                                    <p className="text-lg font-black text-slate-900">{report.initiated_conversations.toLocaleString()}</p>
+                                  </div>
+                                  <div className="text-center">
+                                    <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Vendas</p>
+                                    <p className="text-lg font-black text-emerald-600">{report.tracked_sales.toLocaleString()}</p>
+                                  </div>
+                                  <div className="text-center">
+                                    <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Investimento</p>
+                                    <p className="text-lg font-black text-indigo-600">R$ {report.ad_spend.toLocaleString()}</p>
+                                  </div>
+                                  <div className="text-center">
+                                    <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">ROI (1%)</p>
+                                    <p className="text-lg font-black text-slate-900">{(Number(report.sales_percentage || 0)).toFixed(1)}%</p>
+                                  </div>
+                                  <div className="text-center">
+                                    <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">CPV</p>
+                                    <p className="text-md font-bold text-slate-600">R$ {(report.ad_spend / (report.profile_visits || 1)).toFixed(2)}</p>
+                                  </div>
+                                  <div className="text-center">
+                                    <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">CPL</p>
+                                    <p className="text-md font-bold text-slate-600">R$ {(report.ad_spend / (report.initiated_conversations || 1)).toFixed(2)}</p>
+                                  </div>
+                                  <div className="text-center">
+                                    <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">CAC</p>
+                                    <p className="text-md font-bold text-slate-600">R$ {(report.ad_spend / (report.tracked_sales || 1)).toFixed(2)}</p>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Footer Info */}
+                          <div className="mt-10 pt-6 border-t border-slate-100 flex justify-between items-center text-slate-400 text-[10px]">
+                            <p className="font-bold uppercase tracking-[0.2em]">Confidencial • Gerado via AgenteHub</p>
+                            <p>Página {idx + 1} de {reportsToPrintIds.length} • {format(new Date(), "dd/MM/yyyy HH:mm")}</p>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
-          )}
+          </div>
           
-          {/* Multi-Period Selection Modal */}
           <PrintSelectionDialog 
             reports={unitReports}
             isOpen={isPrintModalOpen}
@@ -844,7 +730,6 @@ function ReportFormDialog({ onSave, isLoading, initialData, existingUnits = [] }
         production_notes: ""
     });
 
-    // Sync form with initialData when it changes (e.g. when opening edit modal)
     useEffect(() => {
         if (initialData) {
             setFormData({
@@ -860,22 +745,6 @@ function ReportFormDialog({ onSave, isLoading, initialData, existingUnits = [] }
                 ad_spend: initialData.ad_spend || 0,
                 advertised_products: initialData.advertised_products || "",
                 production_notes: initialData.production_notes || ""
-            });
-        } else {
-            // Reset to defaults for new reports
-            setFormData({
-                unit_name: "Geral",
-                period_name: "",
-                start_date: format(new Date(), "yyyy-MM-01"),
-                end_date: format(new Date(), "yyyy-MM-28"),
-                visualizations: 0,
-                profile_visits: 0,
-                initiated_conversations: 0,
-                tracked_sales: 0,
-                sales_percentage: 0,
-                ad_spend: 0,
-                advertised_products: "",
-                production_notes: ""
             });
         }
     }, [initialData]);
@@ -972,7 +841,6 @@ function ReportFormDialog({ onSave, isLoading, initialData, existingUnits = [] }
                             <Input 
                                 value={formData.visualizations} 
                                 onChange={e => {
-                                    // Remove tudo que não for dígito para permitir colar números com separadores
                                     const val = e.target.value.replace(/\D/g, "");
                                     setFormData({ ...formData, visualizations: parseInt(val) || 0 });
                                 }}
@@ -1035,9 +903,8 @@ function ReportFormDialog({ onSave, isLoading, initialData, existingUnits = [] }
                             />
                         </div>
                     </div>
-              </div>
+                </div>
             </div>
-          </div>
             <DialogFooter>
                 <Button 
                     className="w-full h-12 rounded-xl bg-indigo-600 hover:bg-indigo-700"
@@ -1063,17 +930,13 @@ function FunnelChart({ data }: { data: any[] }) {
                 const label = labels[index] || item.name.toUpperCase();
                 const color = colors[index] || item.color;
                 
-                // Dynamic width based on funnel position
                 const maxWidth = 550;
                 const width = maxWidth - (index * 60);
                 const translateX = (700 - width) * 0.5;
 
                 return (
                     <div key={index} className="relative flex flex-col items-center w-full group">
-                        {/* Ribbon Container */}
                         <div className="flex items-center w-full max-w-[700px] h-28">
-                            
-                            {/* Action Tag (Left) */}
                             <div className="relative z-30 flex items-center -mr-4">
                                 <div 
                                     className="h-10 px-5 flex items-center justify-center text-[10px] font-black text-white rounded-l-xl shadow-lg"
@@ -1087,9 +950,7 @@ function FunnelChart({ data }: { data: any[] }) {
                                 />
                             </div>
 
-                            {/* Main Body */}
                             <div className="flex-1 relative h-full flex items-center justify-center">
-                                {/* SVG Ribbon Shape */}
                                 <svg className="absolute inset-0 w-full h-full drop-shadow-2xl" preserveAspectRatio="none" viewBox="0 0 700 112">
                                     <defs>
                                         <linearGradient id={`grad-${index}`} x1="0%" y1="0%" x2="100%" y2="0%">
@@ -1103,13 +964,11 @@ function FunnelChart({ data }: { data: any[] }) {
                                             fill={`url(#grad-${index})`}
                                             className="transition-all duration-1000"
                                         />
-                                        {/* Shine Effect */}
                                         <path 
                                             d={`M 5,5 L ${width - 5},5 L ${width - 40},30 L 0,30 Z`}
                                             fill="white"
                                             fillOpacity="0.15"
                                         />
-                                        {/* Darker Bottom Edge for 3D depth */}
                                         <path 
                                             d={`M -40,70 L ${width - 40},70 L ${width - 35},75 L -35,75 Z`}
                                             fill="black"
@@ -1118,7 +977,6 @@ function FunnelChart({ data }: { data: any[] }) {
                                     </g>
                                 </svg>
 
-                                {/* Text Over SVG - Centered in the 70px ribbon height (which starts at y=20) */}
                                 <div className="relative z-10 flex flex-col items-center text-white mt-1">
                                     <span className="text-[10px] font-black tracking-[0.3em] opacity-80 mb-1">{label}</span>
                                     <span className="text-3xl font-black drop-shadow-md">{item.value.toLocaleString()}</span>
@@ -1126,7 +984,6 @@ function FunnelChart({ data }: { data: any[] }) {
                             </div>
                         </div>
 
-                        {/* Connector Percentage */}
                         {index < data.length - 1 && (
                              <div className="z-40 -my-6 bg-white dark:bg-slate-900 border-2 border-slate-50 px-4 py-1.5 rounded-full shadow-xl">
                                 <span className="text-xs font-black text-slate-600">
