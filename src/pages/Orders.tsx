@@ -237,7 +237,7 @@ export default function Orders() {
       const { data, error } = await supabase
         .from("cases")
         .select(
-          "id,journey_id,customer_id,title,status,state,created_at,updated_at,assigned_user_id,assigned_vendor_id,is_chat,users_profile:users_profile!fk_cases_users_profile(display_name,email),journeys:journeys!cases_journey_id_fkey(key,name,is_crm),assigned_vendor:vendors!cases_assigned_vendor_id_fkey(display_name),meta_json"
+          "id,journey_id,customer_id,title,status,state,created_at,updated_at,assigned_user_id,is_chat,users_profile:users_profile!fk_cases_users_profile(display_name,email),journeys:journeys!cases_journey_id_fkey(key,name,is_crm),meta_json"
         )
         .eq("tenant_id", activeTenantId!)
         .eq("journey_id", selectedJourney!.id)
