@@ -303,11 +303,7 @@ export default function Orders() {
         .order("updated_at", { ascending: false })
         .limit(5000);
 
-      if (error) {
-        console.error("[DEBUG] casesQ Error:", error);
-        throw error;
-      }
-      console.log("[DEBUG] casesQ Success:", data?.length ?? 0, "rows");
+      if (error) throw error;
       return (data ?? []) as any as CaseRow[];
     },
   });
@@ -376,11 +372,7 @@ export default function Orders() {
         .eq("tenant_id", activeTenantId!)
         .is("deleted_at", null)
         .order("display_name", { ascending: true });
-      if (error) {
-        console.error("[DEBUG] vendorsQ Error:", error);
-        throw error;
-      }
-      console.log("[DEBUG] vendorsQ Success:", data?.length ?? 0, "vendors");
+      if (error) throw error;
       return data ?? [];
     },
   });
@@ -599,14 +591,6 @@ export default function Orders() {
     let rows = journeyRows;
     const qq = q.trim().toLowerCase();
 
-    console.log("[DEBUG] Starting Filter:", {
-      totalRows: journeyRows.length,
-      selectedSellerId,
-      q: qq,
-      dateRangeFrom: dateRange.from?.toISOString(),
-      caseDataLoaded: !!caseDataQ.data
-    });
-
     // Filter by seller
     if (selectedSellerId !== "all") {
       const selectedVendor = vendorsQ.data?.find(v => v.id === selectedSellerId);
@@ -626,7 +610,6 @@ export default function Orders() {
         
         return false;
       });
-      console.log("[DEBUG] After Seller Filter:", rows.length);
     }
 
     // Filter by Date Range - Skip if searching (q)
@@ -644,14 +627,8 @@ export default function Orders() {
         const start = startOfDay(dateRange.from);
         const end = endOfDay(dateRange.to || dateRange.from);
         
-        const match = isWithinInterval(d, { start, end });
-        if (!match && journeyRows.length > 50 && rows.length < 20) {
-          // Loga apenas alguns descartes se o resultado estiver muito pequeno
-          console.log(`[DEBUG] Case ${r.title} (ID: ${r.id}) descartado pela data. Data usada: ${d.toISOString()}, SaleDateText: ${saleDateText}, CreatedAt: ${r.created_at}`);
-        }
         return match;
       });
-      console.log("[DEBUG] After Date Filter:", rows.length);
     }
 
     if (selectedPaymentMethods.size > 0) {
@@ -659,7 +636,6 @@ export default function Orders() {
         const f = caseDataQ.data?.fields.get(r.id);
         return selectedPaymentMethods.has(String(f?.payment_method ?? "").trim());
       });
-      console.log("[DEBUG] After Payment Filter:", rows.length);
     }
 
     if (selectedCities.size > 0) {
@@ -686,7 +662,6 @@ export default function Orders() {
         const text = `${r.id} ${r.title} ${r.users_profile?.display_name} ${cust?.name} ${cust?.phone_e164} ${phones} ${extId}`.toLowerCase();
         return text.includes(qq);
       });
-      console.log("[DEBUG] After Search Filter:", rows.length);
     }
 
     return rows;
