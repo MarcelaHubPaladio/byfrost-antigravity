@@ -287,7 +287,7 @@ export default function Orders() {
   const selectedJourney = journeyQ.data;
 
   const casesQ = useQuery({
-    queryKey: ["cases_orders", activeTenantId],
+    queryKey: ["cases_orders", activeTenantId, selectedJourney?.id],
     enabled: Boolean(activeTenantId && selectedJourney),
     refetchInterval: 60_000,
     queryFn: async () => {
@@ -632,6 +632,10 @@ export default function Orders() {
         const end = endOfDay(dateRange.to || dateRange.from);
         
         const match = isWithinInterval(d, { start, end });
+        if (!match && journeyRows.length > 50 && rows.length < 20) {
+          // Loga apenas alguns descartes se o resultado estiver muito pequeno
+          console.log(`[DEBUG] Case ${r.title} (ID: ${r.id}) descartado pela data. Data usada: ${d.toISOString()}, SaleDateText: ${saleDateText}, CreatedAt: ${r.created_at}`);
+        }
         return match;
       });
       console.log("[DEBUG] After Date Filter:", rows.length);
