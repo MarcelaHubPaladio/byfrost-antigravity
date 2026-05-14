@@ -72,6 +72,13 @@ import {
   CommandItem,
   CommandList,
 } from "@/components/ui/command";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { StateMachine } from "@/lib/journeys/types"
 import { GlobalJourneyLogsDialog } from "@/components/case/GlobalJourneyLogsDialog";
 import { checkTransitionBlocks } from "@/lib/journeys/validation";
@@ -218,6 +225,9 @@ export default function Orders() {
   const [exportingCsv, setExportingCsv] = useState(false);
   const [exportingPdf, setExportingPdf] = useState(false);
   const [viewMode, setViewMode] = useState<"kanban" | "list">("kanban");
+  const [partialPaidOpen, setPartialPaidOpen] = useState(false);
+  const [partialPaidCaseId, setPartialPaidCaseId] = useState<string | null>(null);
+  const [partialPaidValue, setPartialPaidValue] = useState("");
 
   useEffect(() => {
     const filters = {
@@ -343,6 +353,21 @@ export default function Orders() {
       const { data, error } = await supabase
         .from("users_profile")
         .select("user_id, display_name, email, meta_json")
+        .eq("tenant_id", activeTenantId!)
+        .is("deleted_at", null)
+        .order("display_name", { ascending: true });
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+
+  const vendorsQ = useQuery({
+    queryKey: ["vendors_for_filter", activeTenantId],
+    enabled: Boolean(activeTenantId),
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("vendors")
+        .select("id, display_name, phone_e164")
         .eq("tenant_id", activeTenantId!)
         .is("deleted_at", null)
         .order("display_name", { ascending: true });
@@ -496,6 +521,14 @@ export default function Orders() {
   });
 
   const updateBillingStatus = async (caseId: string, status: string) => {
+    if (status === "Faturado Parcial") {
+      const currentVal = caseDataQ.data?.fields.get(caseId)?.partial_paid_value || "";
+      setPartialPaidValue(currentVal);
+      setPartialPaidCaseId(caseId);
+      setPartialPaidOpen(true);
+      return;
+    }
+
     try {
       const { error } = await supabase
         .from("case_fields")
@@ -516,13 +549,50 @@ export default function Orders() {
     }
   };
 
+  const savePartialPaidValue = async () => {
+    if (!partialPaidCaseId) return;
+    try {
+      const { error: err1 } = await supabase
+        .from("case_fields")
+        .upsert({
+          case_id: partialPaidCaseId,
+          key: "billing_status",
+          value_text: "Faturado Parcial",
+          confidence: 1,
+          source: "admin",
+          last_updated_by: "panel"
+        }, { onConflict: "case_id,key" });
+
+      if (err1) throw err1;
+
+      const { error: err2 } = await supabase
+        .from("case_fields")
+        .upsert({
+          case_id: partialPaidCaseId,
+          key: "partial_paid_value",
+          value_text: partialPaidValue,
+          confidence: 1,
+          source: "admin",
+          last_updated_by: "panel"
+        }, { onConflict: "case_id,key" });
+
+      if (err2) throw err2;
+
+      showSuccess("Valor de pagamento parcial salvo");
+      setPartialPaidOpen(false);
+      caseDataQ.refetch();
+    } catch (e: any) {
+      showError(`Falha ao salvar valor: ${e.message}`);
+    }
+  };
+
   const filteredRows = useMemo(() => {
     let rows = journeyRows;
     const qq = q.trim().toLowerCase();
 
     // Filter by seller
     if (selectedSellerId !== "all") {
-      rows = rows.filter(r => r.assigned_user_id === selectedSellerId);
+      rows = rows.filter(r => r.assigned_vendor_id === selectedSellerId);
     }
 
     // Filter by Date Range - Skip if searching (q)
@@ -1039,9 +1109,9 @@ export default function Orders() {
                   onChange={(e) => setSelectedSellerId(e.target.value)}
                 >
                   <option value="all">Vendedor: Todos</option>
-                  {(usersQ.data ?? []).map((u) => (
-                    <option key={u.user_id} value={u.user_id}>
-                      {u.display_name || u.email}
+                  {(vendorsQ.data ?? []).map((v) => (
+                    <option key={v.id} value={v.id}>
+                      {v.display_name || v.phone_e164}
                     </option>
                   ))}
                 </select>
@@ -1675,6 +1745,32 @@ export default function Orders() {
             nextStateName={transitionBlock.nextStateName}
             blocks={transitionBlock.reasons}
           />
+
+          <Dialog open={partialPaidOpen} onOpenChange={setPartialPaidOpen}>
+            <DialogContent className="rounded-[32px]">
+              <DialogHeader>
+                <DialogTitle>Valor do Faturamento Parcial</DialogTitle>
+              </DialogHeader>
+              <div className="py-4 space-y-4">
+                <p className="text-xs text-slate-500 font-medium">
+                  Insira o valor que já foi pago para este pedido. Este valor será refletido nos totais do dashboard.
+                </p>
+                <div className="relative">
+                  <DollarSign className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-blue-500" />
+                  <Input
+                    value={partialPaidValue}
+                    onChange={(e) => setPartialPaidValue(e.target.value)}
+                    placeholder="0,00"
+                    className="pl-10 h-12 rounded-2xl border-blue-100 bg-blue-50/30 focus:ring-blue-500"
+                  />
+                </div>
+              </div>
+              <DialogFooter>
+                <Button variant="ghost" onClick={() => setPartialPaidOpen(false)} className="rounded-2xl">Cancelar</Button>
+                <Button onClick={savePartialPaidValue} className="rounded-2xl bg-blue-600 hover:bg-blue-700">Salvar Valor</Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
         </div>
       </AppShell>
     </RequireAuth>

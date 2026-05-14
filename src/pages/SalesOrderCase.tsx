@@ -247,8 +247,9 @@ export default function SalesOrderCase() {
       
       await transitionState(caseId, caseData?.state, nextState, journey?.default_state_machine_json);
       
-      qc.invalidateQueries({ queryKey: ["case", caseId] });
-      qc.invalidateQueries({ queryKey: ["case_timeline", caseId] });
+      await qc.invalidateQueries({ queryKey: ["case", caseId] });
+      await qc.invalidateQueries({ queryKey: ["case_timeline", caseId] });
+      await qc.refetchQueries({ queryKey: ["case", caseId] });
     } catch (err: any) {
       showError(err.message || "Erro ao atualizar status");
     } finally {
@@ -279,8 +280,9 @@ export default function SalesOrderCase() {
       });
 
       showSuccess("Vendedor comercial atualizado");
-      qc.invalidateQueries({ queryKey: ["case", caseId] });
-      qc.invalidateQueries({ queryKey: ["case_timeline", caseId] });
+      await qc.invalidateQueries({ queryKey: ["case", caseId] });
+      await qc.invalidateQueries({ queryKey: ["case_timeline", caseId] });
+      await qc.refetchQueries({ queryKey: ["case", caseId] });
     } catch (err: any) {
       showError(err.message);
     }
@@ -309,8 +311,9 @@ export default function SalesOrderCase() {
       });
 
       showSuccess("Responsável atualizado");
-      qc.invalidateQueries({ queryKey: ["case", caseId] });
-      qc.invalidateQueries({ queryKey: ["case_timeline", caseId] });
+      await qc.invalidateQueries({ queryKey: ["case", caseId] });
+      await qc.invalidateQueries({ queryKey: ["case_timeline", caseId] });
+      await qc.refetchQueries({ queryKey: ["case", caseId] });
     } catch (err: any) {
       showError(err.message);
     }

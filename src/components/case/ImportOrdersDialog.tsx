@@ -86,6 +86,7 @@ type GroupedOrder = {
   customerCity: string;
   paymentMethod: string;
   billingStatus: string;
+  assigned_vendor_id: string | null;
   obs: string;
   items: OrderItem[];
 };
@@ -329,6 +330,7 @@ export function ImportOrdersDialog({
             customerCity: idxCity >= 0 ? String(row[idxCity] ?? "").trim() : "",
             paymentMethod: idxPayMethod >= 0 ? String(row[idxPayMethod] ?? "").trim() : "",
             billingStatus: idxBillStatus >= 0 ? normalizeBillingStatus(row[idxBillStatus]) : "Pendente",
+            assigned_vendor_id: null,
             obs: (() => {
               const baseObs = idxObs >= 0 ? String(row[idxObs] ?? "").trim() : "";
               const totalVal = idxTotalValue >= 0 ? String(row[idxTotalValue] ?? "").trim() : "";
@@ -385,15 +387,16 @@ export function ImportOrdersDialog({
         if (u.email) usersMap.set(u.email.toLowerCase().trim(), u);
       });
 
-      // Load offerings (products) for matching
-      const { data: offeringsData } = await supabase
-        .from("core_entities")
-        .select("id,display_name,metadata")
+      const offerings = (offeringsData ?? []) as any[];
+
+      // Load vendors for mapping
+      const { data: vendorsData } = await supabase
+        .from("vendors")
+        .select("id, display_name, phone_e164")
         .eq("tenant_id", tenantId)
-        .eq("entity_type", "offering")
         .is("deleted_at", null);
       
-      const offerings = (offeringsData ?? []) as any[];
+      const vendors = (vendorsData ?? []) as any[];
 
       const firstState = (journey.default_state_machine_json?.states ?? [])[0] || "new";
 
@@ -439,7 +442,15 @@ export function ImportOrdersDialog({
 
         const ownerProfile = usersMap.get(o.ownerEmail.toLowerCase().trim());
         const ownerUserId = ownerProfile?.user_id || null;
+        const ownerDisplayName = ownerProfile?.display_name || "";
         const ownerCommissionRules = ownerProfile?.meta_json?.commission_rules;
+
+        // Try to find vendor by name or phone
+        let vendorId = null;
+        if (ownerDisplayName) {
+          const match = vendors.find(v => v.display_name === ownerDisplayName);
+          if (match) vendorId = match.id;
+        }
 
         // Try to find existing case by provided dbId or externalId
         if (o.dbId) {
@@ -471,6 +482,7 @@ export function ImportOrdersDialog({
             .update({
               customer_id: customerId || undefined,
               assigned_user_id: ownerUserId || undefined,
+              assigned_vendor_id: vendorId || undefined,
               title: o.customerName || undefined,
               updated_at: new Date().toISOString(),
               meta_json: { 
@@ -492,6 +504,7 @@ export function ImportOrdersDialog({
               journey_id: journey.id,
               customer_id: customerId,
               assigned_user_id: ownerUserId,
+              assigned_vendor_id: vendorId,
               title: o.customerName || "Pedido Importado",
               case_type: "sales_order",
               status: "open",
