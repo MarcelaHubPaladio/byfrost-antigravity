@@ -73,7 +73,7 @@ import { GlobalJourneyLogsDialog } from "@/components/case/GlobalJourneyLogsDial
 import { checkTransitionBlocks } from "@/lib/journeys/validation";
 import { TransitionBlockDialog } from "@/components/case/TransitionBlockDialog";
 import { showError, showSuccess } from "@/utils/toast";
-import AppShell from "@/components/AppShell";
+import { AppShell } from "@/components/AppShell";
 import { RequireAuth } from "@/components/RequireAuth";
 import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianGrid } from "recharts";
 import { ScrollArea } from "@/components/ui/scroll-area";

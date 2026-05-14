@@ -29,7 +29,7 @@ import {
 } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import AppShell from "@/components/AppShell";
+import { AppShell } from "@/components/AppShell";
 import { RequireAuth } from "@/components/RequireAuth";
 import { RequireRouteAccess } from "@/components/RequireRouteAccess";
 import { 
