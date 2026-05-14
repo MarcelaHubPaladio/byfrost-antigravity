@@ -205,18 +205,23 @@ export default function Orders() {
     localStorage.setItem(ORDERS_FILTERS_V2_KEY, JSON.stringify(filters));
   }, [selectedSellerId, dateRange]);
 
-  // Force fresh build - query cleaned
+  // Force fresh build - query cleaned v5
   const journeyQ = useQuery({
     queryKey: ["journey_orders", activeTenantId],
     enabled: Boolean(activeTenantId),
     queryFn: async () => {
+      console.log("[DEBUG v5] Starting journey fetch for key 'sales_order'...");
       const { data, error } = await supabase
         .from("journeys")
         .select("id,key,name,is_crm")
         .eq("tenant_id", activeTenantId!)
         .eq("key", "sales_order")
         .single();
-      if (error) throw error;
+      if (error) {
+        console.error("[DEBUG v5] Journey fetch error:", error);
+        throw error;
+      }
+      console.log("[DEBUG v5] Journey fetch success:", data);
       const j = data as any;
       return {
         id: j.id,
