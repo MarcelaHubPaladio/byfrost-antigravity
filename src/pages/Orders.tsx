@@ -592,7 +592,10 @@ export default function Orders() {
 
     // Filter by seller
     if (selectedSellerId !== "all") {
-      rows = rows.filter(r => r.assigned_vendor_id === selectedSellerId);
+      rows = rows.filter(r => 
+        r.assigned_vendor_id === selectedSellerId || 
+        r.assigned_user_id === selectedSellerId
+      );
     }
 
     // Filter by Date Range - Skip if searching (q)
