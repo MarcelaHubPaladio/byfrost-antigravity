@@ -722,7 +722,7 @@ export default function ReportDetail() {
                         {/* Footer Info */}
                         <div className="mt-10 pt-6 border-t border-slate-100 flex justify-between items-center text-slate-400 text-[10px]">
                           <p className="font-bold uppercase tracking-[0.2em]">Confidencial • Gerado via AgenteHub</p>
-                          <p>Página {idx + 1} de {reportsToPrintIds.length} • {format(new Date(), "dd/MM/yyyy HH:mm")}</p>
+                            <p>Página {idx + 1} de {reportsToPrintIds.length} • {format(new Date(), "dd/MM/yyyy HH:mm")}</p>
                         </div>
                       </div>
                     );
