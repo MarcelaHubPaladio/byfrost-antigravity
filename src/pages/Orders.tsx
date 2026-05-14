@@ -104,14 +104,34 @@ type JourneyOpt = {
   default_state_machine_json: StateMachine;
 };
 
+const STAGE_LABELS: Record<string, string> = {
+  "IN_ROUTE": "Em Rota",
+  "FINALIZED": "Finalizado",
+  "DELIVERED": "Entregue",
+  "PROJETO": "Projeto",
+  "IN_PRODUCTION": "Em Produção",
+  "CANCELLED": "Cancelado",
+  "PENDING": "Pendente",
+  "IN_ANALYSIS": "Em Análise",
+  "APPROVED": "Aprovado",
+  "WAITING_PAYMENT": "Aguardando Pagamento",
+  "SHIPPED": "Enviado",
+  "READY": "Pronto"
+};
+
+const getStageLabel = (s: string) => STAGE_LABELS[s] || s;
+
 const ORDERS_FILTERS_V2_KEY = "orders_filters_v2";
 
-const billingStatusOptions = [
-  "Pendente",
-  "Faturado",
-  "Faturado Parcial",
-  "Cancelado"
-];
+const normalizeBillingStatus = (s: string) => {
+  const val = String(s || "Pendente").trim();
+  if (val === "Pago") return "Faturado";
+  if (val === "Aguardando Banco") return "Pendente";
+  return val;
+};
+
+const billingStatusOptions = ["Pendente", "Faturado", "Faturado Parcial", "Cancelado"];
+const allBillingStatusOptions = ["Pendente", "Faturado", "Faturado Parcial", "Cancelado", "Pago", "Aguardando Banco"];
 
 function normalizeBillingStatus(raw: string): string {
   const s = String(raw ?? "").trim().toLowerCase();
@@ -1335,7 +1355,7 @@ export default function Orders() {
                                   <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent className="rounded-2xl border-slate-200 shadow-xl">
-                                  {billingStatusOptions.map((opt) => (
+                                  {allBillingStatusOptions.map((opt) => (
                                     <SelectItem key={opt} value={opt} className="text-[10px] font-black uppercase rounded-xl">
                                       {opt}
                                     </SelectItem>
@@ -1364,7 +1384,7 @@ export default function Orders() {
                       <div className="flex items-center justify-between px-2">
                         <div className="flex items-center gap-2">
                           <Badge className="bg-slate-900 text-white border-none rounded-md px-2 py-0.5 text-[10px] font-black uppercase">
-                            {state}
+                            {getStageLabel(state)}
                           </Badge>
                           <span className="text-[11px] font-bold text-slate-400">{stateRows.length}</span>
                         </div>
