@@ -78,31 +78,39 @@ export default function ReportDetail() {
   const [reportsToPrintIds, setReportsToPrintIds] = useState<string[]>([]);
 
   const contractQ = useQuery({
-    queryKey: ["contract", contractId],
-    enabled: !!contractId,
+    queryKey: ["contract_for_report", contractId],
+    enabled: Boolean(contractId),
     queryFn: async () => {
       const { data, error } = await supabase
-        .from("core_entities")
-        .select("*, customer:core_entities!core_entities_parent_id_fkey(*)")
+        .from("commercial_commitments")
+        .select(`
+          id,
+          status,
+          customer:core_entities!commercial_commitments_customer_fk(id, display_name, metadata)
+        `)
         .eq("id", contractId!)
         .single();
       if (error) throw error;
       return data;
-    }
+    },
   });
 
   const reportsQ = useQuery({
-    queryKey: ["reports", contractId],
-    enabled: !!contractId,
+    queryKey: ["entity_reports", contractId],
+    enabled: Boolean(contractId),
     queryFn: async () => {
       const { data, error } = await supabase
         .from("entity_reports")
         .select("*")
-        .eq("entity_id", contractId!)
-        .order("start_date", { ascending: false });
-      if (error) throw error;
+        .eq("contract_id", contractId!)
+        .is("deleted_at", null)
+        .order("start_date", { ascending: true });
+      if (error) {
+        console.error("Error fetching reports:", error);
+        throw error;
+      }
       return data as EntityReport[];
-    }
+    },
   });
 
   const units = useMemo(() => {
@@ -160,37 +168,49 @@ export default function ReportDetail() {
   }, [unitReports]);
 
   const upsertReportM = useMutation({
-    mutationFn: async (data: any) => {
-        const payload = {
-            ...data,
-            tenant_id: activeTenantId,
-            entity_id: contractId
-        };
-        if (data.id) {
-            const { error } = await supabase.from("entity_reports").update(payload).eq("id", data.id);
-            if (error) throw error;
-        } else {
-            const { error } = await supabase.from("entity_reports").insert([payload]);
-            if (error) throw error;
-        }
+    mutationFn: async (report: Partial<EntityReport>) => {
+      const payload = {
+        ...report,
+        tenant_id: activeTenantId,
+        entity_id: contractQ.data?.customer?.id,
+        contract_id: contractId,
+      };
+
+      if (report.id) {
+        const { error } = await supabase
+          .from("entity_reports")
+          .update(payload)
+          .eq("id", report.id);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase
+          .from("entity_reports")
+          .insert([payload]);
+        if (error) throw error;
+      }
     },
     onSuccess: () => {
-        showSuccess("Dados salvos com sucesso.");
-        queryClient.invalidateQueries({ queryKey: ["reports", contractId] });
-        setIsDialogOpen(false);
-        setIsEditDialogOpen(false);
+      queryClient.invalidateQueries({ queryKey: ["entity_reports", contractId] });
+      showSuccess("Relatório salvo com sucesso!");
+      setIsDialogOpen(false);
+      setIsEditDialogOpen(false);
     },
-    onError: (e: any) => showError(`Erro ao salvar: ${e.message}`)
+    onError: (err) => {
+      showError("Erro ao salvar relatório: " + err.message);
+    }
   });
 
   const deleteReportM = useMutation({
     mutationFn: async (id: string) => {
-        const { error } = await supabase.from("entity_reports").delete().eq("id", id);
-        if (error) throw error;
+      const { error } = await supabase
+        .from("entity_reports")
+        .update({ deleted_at: new Date().toISOString() })
+        .eq("id", id);
+      if (error) throw error;
     },
     onSuccess: () => {
-        showSuccess("Período removido.");
-        queryClient.invalidateQueries({ queryKey: ["reports", contractId] });
+      queryClient.invalidateQueries({ queryKey: ["entity_reports", contractId] });
+      showSuccess("Relatório removido.");
     }
   });
 
@@ -210,10 +230,45 @@ export default function ReportDetail() {
 
   return (
     <RequireAuth>
-      <RequireRouteAccess routeKey="/app/reports">
-        <AppShell hideTopBar>
-          <div className="min-h-screen bg-slate-50/50 dark:bg-slate-950/20">
-            <div className="mx-auto max-w-[1400px] px-4 py-8 md:px-8">
+      <RequireRouteAccess routeKey="app.commitments">
+        <AppShell>
+          <style>{`
+            @media print {
+              @page { 
+                size: landscape; 
+                margin: 0 !important; 
+              }
+              body { 
+                background: white !important; 
+                -webkit-print-color-adjust: exact; 
+                print-color-adjust: exact;
+                margin: 0 !important;
+                padding: 0 !important;
+              }
+              .no-print { display: none !important; }
+              
+              .report-page {
+                height: 100vh !important;
+                width: 100vw !important;
+                margin: 0 !important;
+                padding: 3rem 4rem !important;
+                box-sizing: border-box !important;
+                display: flex !important;
+                flex-direction: column !important;
+                page-break-after: always !important;
+                background: white !important;
+                overflow: hidden !important;
+              }
+
+              .text-slate-900 { color: #0f172a !important; }
+              .text-slate-500 { color: #64748b !important; }
+              .text-indigo-600 { color: #4f46e5 !important; }
+              .bg-slate-100 { background-color: #f1f5f9 !important; }
+              .bg-slate-900 { background-color: #0f172a !important; }
+              .bg-indigo-600 { background-color: #4f46e5 !important; }
+            }
+          `}</style>
+          <div className="mx-auto max-w-7xl animate-in fade-in slide-in-from-bottom-4 duration-700 pb-20 print:pb-0">
               <div className="mb-8 flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between no-print">
                 <div className="flex items-center gap-4">
                   <Link to="/app/reports">
@@ -613,11 +668,9 @@ export default function ReportDetail() {
                         </div>
                       );
                     })}
-                  </div>
                 </div>
               )}
             </div>
-          </div>
           
           <PrintSelectionDialog 
             reports={unitReports}
