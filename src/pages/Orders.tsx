@@ -39,7 +39,7 @@ import {
   MoreVertical,
   DollarSign
 } from "lucide-react";
-import { format, startOfMonth, endOfMonth, isWithinInterval, isSameDay, startOfDay, endOfDay, parse, parseISO } from "date-fns";
+import { format, startOfMonth, endOfMonth, isWithinInterval, isSameDay, startOfDay, endOfDay, parse, parseISO, subDays, subMonths } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar as CalendarComponent } from "@/components/ui/calendar";
