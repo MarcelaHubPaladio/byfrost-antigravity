@@ -100,6 +100,7 @@ type CaseRow = {
   created_at: string;
   updated_at: string;
   assigned_user_id: string | null;
+  assigned_vendor_id: string | null;
   is_chat?: boolean;
   users_profile?: { display_name: string | null; email: string | null } | null;
   journeys?: { key: string | null; name: string | null; is_crm?: boolean } | null;
@@ -302,7 +303,11 @@ export default function Orders() {
         .order("updated_at", { ascending: false })
         .limit(5000);
 
-      if (error) throw error;
+      if (error) {
+        console.error("[DEBUG] casesQ Error:", error);
+        throw error;
+      }
+      console.log("[DEBUG] casesQ Success:", data?.length ?? 0, "rows");
       return (data ?? []) as any as CaseRow[];
     },
   });
@@ -371,7 +376,11 @@ export default function Orders() {
         .eq("tenant_id", activeTenantId!)
         .is("deleted_at", null)
         .order("display_name", { ascending: true });
-      if (error) throw error;
+      if (error) {
+        console.error("[DEBUG] vendorsQ Error:", error);
+        throw error;
+      }
+      console.log("[DEBUG] vendorsQ Success:", data?.length ?? 0, "vendors");
       return data ?? [];
     },
   });
@@ -590,28 +599,42 @@ export default function Orders() {
     let rows = journeyRows;
     const qq = q.trim().toLowerCase();
 
+    console.log("[DEBUG] Starting Filter:", {
+      totalRows: journeyRows.length,
+      selectedSellerId,
+      q: qq,
+      dateRangeFrom: dateRange.from?.toISOString(),
+      caseDataLoaded: !!caseDataQ.data
+    });
+
     // Filter by seller
     if (selectedSellerId !== "all") {
-      rows = rows.filter(r => 
-        r.assigned_vendor_id === selectedSellerId || 
-        r.assigned_user_id === selectedSellerId
-      );
+      rows = rows.filter(r => {
+        const match = r.assigned_vendor_id === selectedSellerId || r.assigned_user_id === selectedSellerId;
+        return match;
+      });
+      console.log("[DEBUG] After Seller Filter:", rows.length);
     }
 
     // Filter by Date Range - Skip if searching (q)
     if (!qq) {
       rows = rows.filter(r => {
         const f = caseDataQ.data?.fields.get(r.id);
-        const saleDateText = f?.sale_date_text;
         
+        // Se estiver carregando e não tiver o campo ainda, não filtramos por data para evitar sumir com pedidos
+        if (caseDataQ.isLoading && !f) return true;
+
+        const saleDateText = f?.sale_date_text;
         const d = parseSafeDate(saleDateText, r.created_at);
         
         if (!dateRange.from) return true;
         const start = startOfDay(dateRange.from);
         const end = endOfDay(dateRange.to || dateRange.from);
         
-        return isWithinInterval(d, { start, end });
+        const match = isWithinInterval(d, { start, end });
+        return match;
       });
+      console.log("[DEBUG] After Date Filter:", rows.length);
     }
 
     if (selectedPaymentMethods.size > 0) {
@@ -619,6 +642,7 @@ export default function Orders() {
         const f = caseDataQ.data?.fields.get(r.id);
         return selectedPaymentMethods.has(String(f?.payment_method ?? "").trim());
       });
+      console.log("[DEBUG] After Payment Filter:", rows.length);
     }
 
     if (selectedCities.size > 0) {
@@ -645,10 +669,11 @@ export default function Orders() {
         const text = `${r.title} ${r.users_profile?.display_name} ${cust?.name} ${cust?.phone_e164} ${phones} ${extId}`.toLowerCase();
         return text.includes(qq);
       });
+      console.log("[DEBUG] After Search Filter:", rows.length);
     }
 
     return rows;
-  }, [journeyRows, q, dateRange, selectedSellerId, selectedPaymentMethods, selectedCities, selectedInventoryIds, customersQ.data, caseDataQ.data]);
+  }, [journeyRows, q, dateRange, selectedSellerId, selectedPaymentMethods, selectedCities, selectedInventoryIds, customersQ.data, caseDataQ.data, caseDataQ.isLoading]);
 
   const paymentOptions = useMemo(() => {
     const opts = new Set<string>();
