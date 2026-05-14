@@ -214,7 +214,6 @@ export default function Orders() {
       const { data, error } = await supabase
         .from("journeys")
         .select("id,key,name,is_crm")
-        .eq("tenant_id", activeTenantId!)
         .eq("key", "sales_order")
         .single();
       if (error) {
