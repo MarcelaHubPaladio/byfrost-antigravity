@@ -727,8 +727,9 @@ export default function ReportDetail() {
                       </div>
                     );
                   })}
-                </div>
               </div>
+            </div>
+          </div>
           
           {/* Multi-Period Selection Modal */}
           <PrintSelectionDialog 
