@@ -105,19 +105,18 @@ type JourneyOpt = {
 };
 
 const STAGE_LABELS: Record<string, string> = {
-  "IN_ROUTE": "Em Rota",
-  "FINALIZED": "Finalizado",
-  "DELIVERED": "Entregue",
+  "NEW": "Novo",
   "PROJETO": "Projeto",
-  "IN_PRODUCTION": "Em Produção",
+  "IN_ROUTE": "Em Rota",
+  "DELIVERED": "Entregue",
+  "FINALIZED": "Finalizado",
   "CANCELLED": "Cancelado",
-  "PENDING": "Pendente",
+  "IN_PRODUCTION": "Em Produção",
   "IN_ANALYSIS": "Em Análise",
-  "APPROVED": "Aprovado",
-  "WAITING_PAYMENT": "Aguardando Pagamento",
-  "SHIPPED": "Enviado",
-  "READY": "Pronto"
+  "APPROVED": "Aprovado"
 };
+
+const SALES_ORDER_STAGES = ["NEW", "PROJETO", "IN_ROUTE", "DELIVERED", "FINALIZED", "CANCELLED"];
 
 const getStageLabel = (s: string) => STAGE_LABELS[s] || s;
 
@@ -728,13 +727,9 @@ export default function Orders() {
     const configStates = selectedJourney?.default_state_machine_json?.states || [];
     if (configStates.length > 0) return configStates;
     
-    const autoStates = new Set<string>();
-    journeyRows.forEach(r => {
-      if (r.state) autoStates.add(r.state);
-    });
-    const list = Array.from(autoStates);
-    return list.length > 0 ? list : ["FILA"];
-  }, [selectedJourney, journeyRows]);
+    // Default stages for Sales Order if config is missing
+    return SALES_ORDER_STAGES;
+  }, [selectedJourney]);
 
   const updateState = async (caseId: string, nextState: string) => {
     const caseRow = journeyRows.find(c => c.id === caseId);
@@ -1321,12 +1316,12 @@ export default function Orders() {
                             <div onClick={(e) => e.stopPropagation()}>
                               <Select value={c.state} onValueChange={(val) => updateState(c.id, val)}>
                                 <SelectTrigger className="h-8 w-[130px] rounded-xl text-[10px] font-black uppercase bg-white border-slate-200">
-                                  <SelectValue />
+                                  <SelectValue placeholder={getStageLabel(c.state)} />
                                 </SelectTrigger>
                                 <SelectContent className="rounded-2xl border-slate-200 shadow-xl">
                                   {states.map((s) => (
                                     <SelectItem key={s} value={s} className="text-[10px] font-black uppercase rounded-xl">
-                                      {s}
+                                      {getStageLabel(s)}
                                     </SelectItem>
                                   ))}
                                 </SelectContent>
