@@ -1,16 +1,12 @@
-import { useMemo, useEffect, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { Link, useNavigate } from "react-router-dom";
-import { AppShell } from "@/components/AppShell";
-import { RequireAuth } from "@/components/RequireAuth";
-import { useTenant } from "@/providers/TenantProvider";
-import { useSession } from "@/providers/SessionProvider";
-import { useTheme } from "@/providers/ThemeProvider";
+import { useMemo, useState, useEffect } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
-import { titleizeState } from "@/lib/utils";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { useTenant } from "@/providers/TenantProvider";
+import { useAuth } from "@/providers/AuthProvider";
+import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import {
   Table,
   TableBody,
@@ -19,59 +15,52 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import {
-  Clock,
-  MapPin,
+import { 
+  Search, 
+  Plus, 
+  Package, 
+  Calendar, 
+  Users2, 
+  Download, 
+  FileText, 
   RefreshCw,
-  Search,
-  Plus,
-  LayoutList,
-  Columns2,
-  Download,
-  Package,
-  ChevronLeft as ChevronLeftIcon,
-  ChevronRight,
-  TrendingUp,
-  CreditCard,
-  DollarSign,
-  Briefcase,
-  Users2,
-  Calendar as CalendarIcon,
+  Clock,
   Check,
   XCircle,
-  FileText
+  TrendingUp,
+  CreditCard,
+  MapPin,
+  Filter,
+  Eye,
+  BarChart2,
+  LayoutList,
+  Columns2,
+  ChevronRight,
+  MoreVertical,
+  DollarSign
 } from "lucide-react";
-import {
-  AreaChart,
-  Area,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip as RechartsTooltip,
-  ResponsiveContainer,
-} from "recharts";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Calendar } from "@/components/ui/calendar";
-import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, parse, isSameDay, parseISO, isWithinInterval, startOfDay, endOfDay, subDays, subMonths } from "date-fns";
+import { format, startOfMonth, endOfMonth, isWithinInterval, isSameDay, startOfDay, endOfDay, parse, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar as CalendarComponent } from "@/components/ui/calendar";
+import { DateRange } from "react-day-picker";
+import { cn } from "@/lib/utils";
 import { NewSalesOrderDialog } from "@/components/case/NewSalesOrderDialog";
-import { getStateLabel } from "@/lib/journeyLabels";
-import { useJourneyTransition } from "@/hooks/useJourneyTransition";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
+import { ImportOrdersDialog } from "@/components/case/ImportOrdersDialog";
+import { Link, useNavigate } from "react-router-dom";
+import { 
+  Select, 
+  SelectContent, 
+  SelectItem, 
+  SelectTrigger, 
+  SelectValue 
 } from "@/components/ui/select";
 import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from "@/components/ui/command";
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   Dialog,
   DialogContent,
@@ -83,18 +72,17 @@ import { StateMachine } from "@/lib/journeys/types"
 import { GlobalJourneyLogsDialog } from "@/components/case/GlobalJourneyLogsDialog";
 import { checkTransitionBlocks } from "@/lib/journeys/validation";
 import { TransitionBlockDialog } from "@/components/case/TransitionBlockDialog";
-import { cn } from "@/lib/utils";
 import { showError, showSuccess } from "@/utils/toast";
-import { ImportOrdersDialog } from "@/components/case/ImportOrdersDialog";
-
-const ORDERS_VIEW_MODE_KEY = "orders_view_mode_v1";
-const SALES_ORDER_KEY = "sales_order";
+import AppShell from "@/components/AppShell";
+import RequireAuth from "@/components/RequireAuth";
+import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianGrid } from "recharts";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 type CaseRow = {
   id: string;
-  journey_id: string | null;
-  customer_id?: string | null;
-  title: string | null;
+  journey_id: string;
+  customer_id: string | null;
+  title: string;
   status: string;
   state: string;
   created_at: string;
@@ -112,168 +100,123 @@ type JourneyOpt = {
   id: string;
   key: string;
   name: string;
-  is_crm?: boolean;
-  default_state_machine_json?: any;
+  is_crm: boolean;
+  default_state_machine_json: StateMachine;
 };
 
-function csvCell(v: any) {
-  const s = String(v ?? "");
-  const escaped = s.replace(/\"/g, '""');
-  if (/[\n\r",]/.test(escaped)) return `"${escaped}"`;
-  return escaped;
-}
+const ORDERS_FILTERS_V2_KEY = "orders_filters_v2";
 
-function downloadTextFile(filename: string, content: string, mime = "text/plain;charset=utf-8") {
-  const blob = new Blob([content], { type: mime });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-}
+const billingStatusOptions = [
+  "Pendente",
+  "Faturado",
+  "Faturado Parcial",
+  "Cancelado"
+];
 
-const formatMoneyBRL = (v: number) => {
-  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
-};
-
-const parseMoneySafe = (v: any): number => {
-  if (typeof v === "number") return v;
-  if (!v) return 0;
-  const s = String(v)
-    .replace(/[R$\s]/g, "") // Remove R$ e espaços
-    .replace(/\./g, "")     // Remove pontos de milhar
-    .replace(",", ".");     // Troca vírgula decimal por ponto
-  const n = parseFloat(s);
-  return isNaN(n) ? 0 : n;
-};
-
-function minutesAgo(iso: string) {
-  const diff = Date.now() - new Date(iso).getTime();
-  return Math.max(0, Math.round(diff / 60000));
-}
-
-function getMetaPhone(meta: any): string | null {
-  if (!meta || typeof meta !== "object") return null;
-  const direct =
-    meta.customer_phone ??
-    meta.customerPhone ??
-    meta.phone ??
-    meta.whatsapp ??
-    meta.to_phone ??
-    meta.toPhone ??
-    null;
-  return typeof direct === "string" && direct.trim() ? direct.trim() : null;
+function normalizeBillingStatus(raw: string): string {
+  const s = String(raw ?? "").trim().toLowerCase();
+  if (s.includes("pago") || s.includes("faturado")) return "Pago";
+  if (s.includes("cancel")) return "Cancelado";
+  if (s.includes("pendente")) return "Pendente";
+  if (s.includes("banco") || s.includes("aguardando")) return "Aguardando Banco";
+  return "Pendente";
 }
 
 export default function Orders() {
   const { activeTenantId } = useTenant();
-  const { user } = useSession();
-  const nav = useNavigate();
-  const { prefs } = useTheme();
+  const { user } = useAuth();
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
 
-  const [q, setQ] = useState(() => {
-    const s = localStorage.getItem("orders_filters_v2");
-    if (!s) return "";
-    try { return JSON.parse(s).q || ""; } catch { return ""; }
+  const [q, setQ] = useState("");
+  const [selectedSellerId, setSelectedSellerId] = useState<string>(() => {
+    const saved = localStorage.getItem(ORDERS_FILTERS_V2_KEY);
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        return parsed.sellerId || "all";
+      } catch (e) {
+        return "all";
+      }
+    }
+    return "all";
   });
 
   const [dateRange, setDateRange] = useState<{ from: Date; to: Date | undefined }>(() => {
-    const s = localStorage.getItem("orders_filters_v2");
-    const fallback = { from: startOfMonth(new Date()), to: endOfMonth(new Date()) };
-    if (!s) return fallback;
-    try {
-      const p = JSON.parse(s);
-      if (!p.dateRange) return fallback;
-      return {
-        from: p.dateRange.from ? new Date(p.dateRange.from) : fallback.from,
-        to: p.dateRange.to ? new Date(p.dateRange.to) : fallback.to
-      };
-    } catch { return fallback; }
+    const saved = localStorage.getItem(ORDERS_FILTERS_V2_KEY);
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (parsed.dateRange?.from) {
+          return {
+            from: new Date(parsed.dateRange.from),
+            to: parsed.dateRange.to ? new Date(parsed.dateRange.to) : undefined
+          };
+        }
+      } catch (e) {}
+    }
+    return { from: startOfMonth(new Date()), to: endOfMonth(new Date()) };
   });
 
-  const [selectedSellerId, setSelectedSellerId] = useState<string>(() => {
-    const s = localStorage.getItem("orders_filters_v2");
-    if (!s) return "all";
-    try { return JSON.parse(s).sellerId || "all"; } catch { return "all"; }
-  });
-
-  const [selectedPaymentMethods, setSelectedPaymentMethods] = useState<Set<string>>(() => {
-    const s = localStorage.getItem("orders_filters_v2");
-    if (!s) return new Set();
-    try { return new Set(JSON.parse(s).paymentMethods || []); } catch { return new Set(); }
-  });
-
-  const [selectedCities, setSelectedCities] = useState<Set<string>>(() => {
-    const s = localStorage.getItem("orders_filters_v2");
-    if (!s) return new Set();
-    try { return new Set(JSON.parse(s).cities || []); } catch { return new Set(); }
-  });
-
-  const [selectedInventoryIds, setSelectedInventoryIds] = useState<Set<string>>(() => {
-    const s = localStorage.getItem("orders_filters_v2");
-    if (!s) return new Set();
-    try { return new Set(JSON.parse(s).inventoryIds || []); } catch { return new Set(); }
-  });
-  const [movingCaseId, setMovingCaseId] = useState<string | null>(null);
-  const [transitionBlock, setTransitionBlock] = useState<{
-    open: boolean;
-    nextStateName: string;
-    reasons: any[];
-  }>({ open: false, nextStateName: "", reasons: [] });
-  const [newSalesOrderOpen, setNewSalesOrderOpen] = useState(false);
+  const [selectedPaymentMethods, setSelectedPaymentMethods] = useState<Set<string>>(new Set());
+  const [selectedCities, setSelectedCities] = useState<Set<string>>(new Set());
+  const [selectedInventoryIds, setSelectedInventoryIds] = useState<Set<string>>(new Set());
+  
   const [exportingCsv, setExportingCsv] = useState(false);
   const [exportingPdf, setExportingPdf] = useState(false);
-  const [viewMode, setViewMode] = useState<"kanban" | "list">("kanban");
+  const [viewMode, setViewMode] = useState<"kanban" | "list">(() => {
+    return (localStorage.getItem("orders_view_mode") as any) || "kanban";
+  });
+  const [showStats, setShowStats] = useState(() => {
+    return localStorage.getItem("orders_show_stats") !== "false";
+  });
+  
   const [partialPaidOpen, setPartialPaidOpen] = useState(false);
   const [partialPaidCaseId, setPartialPaidCaseId] = useState<string | null>(null);
   const [partialPaidValue, setPartialPaidValue] = useState("");
 
+  const [transitionBlock, setTransitionBlock] = useState<{
+    open: boolean;
+    caseId: string;
+    nextState: string;
+    nextStateName: string;
+    reasons: any[];
+  }>({
+    open: false,
+    caseId: "",
+    nextState: "",
+    nextStateName: "",
+    reasons: [],
+  });
+
+  const setAndPersistViewMode = (mode: "kanban" | "list") => {
+    setViewMode(mode);
+    localStorage.setItem("orders_view_mode", mode);
+  };
+
   useEffect(() => {
     const filters = {
-      q,
       sellerId: selectedSellerId,
-      paymentMethods: Array.from(selectedPaymentMethods),
-      cities: Array.from(selectedCities),
-      inventoryIds: Array.from(selectedInventoryIds),
       dateRange: {
         from: dateRange.from?.toISOString(),
         to: dateRange.to?.toISOString()
       }
     };
-    localStorage.setItem("orders_filters_v2", JSON.stringify(filters));
-  }, [q, selectedSellerId, selectedPaymentMethods, selectedCities, dateRange, selectedInventoryIds]);
-
-  useEffect(() => {
-    const saved = localStorage.getItem(ORDERS_VIEW_MODE_KEY);
-    if (saved === "kanban" || saved === "list") setViewMode(saved);
-  }, []);
-
-  const setAndPersistViewMode = (next: "kanban" | "list") => {
-    setViewMode(next);
-    localStorage.setItem(ORDERS_VIEW_MODE_KEY, next);
-  };
+    localStorage.setItem(ORDERS_FILTERS_V2_KEY, JSON.stringify(filters));
+  }, [selectedSellerId, dateRange]);
 
   const journeyQ = useQuery({
-    queryKey: ["tenant_orders_journey", activeTenantId],
+    queryKey: ["journey_orders", activeTenantId],
     enabled: Boolean(activeTenantId),
     queryFn: async () => {
       const { data, error } = await supabase
-        .from("tenant_journeys")
-        .select(`
-          journey_id, 
-          journeys!inner(id,key,name,is_crm,default_state_machine_json)
-        `)
+        .from("journeys")
+        .select("id,key,name,is_crm,default_state_machine_json")
         .eq("tenant_id", activeTenantId!)
-        .eq("journeys.key", SALES_ORDER_KEY)
-        .eq("enabled", true)
-        .maybeSingle();
-      
+        .eq("key", "sales_order")
+        .single();
       if (error) throw error;
-      if (!data) return null;
-
-      const j = (data as any).journeys;
+      const j = data as any;
       return {
         id: j.id,
         key: j.key,
@@ -310,43 +253,6 @@ export default function Orders() {
 
   const journeyRows = casesQ.data ?? [];
 
-  const customerIds = useMemo(() => {
-    const ids = new Set<string>();
-    for (const r of journeyRows) {
-      const cid = String((r as any).customer_id ?? "");
-      if (cid && cid.length > 10) ids.add(cid);
-    }
-    return Array.from(ids);
-  }, [journeyRows]);
-
-  const customersQ = useQuery({
-    queryKey: ["customers_orders", activeTenantId, customerIds.length, customerIds[0], dateRange.from.getTime(), dateRange.to?.getTime()],
-    enabled: Boolean(activeTenantId && customerIds.length),
-    queryFn: async () => {
-      const CHUNK_SIZE = 100;
-      const chunks: string[][] = [];
-      for (let i = 0; i < customerIds.length; i += CHUNK_SIZE) {
-        chunks.push(customerIds.slice(i, i + CHUNK_SIZE));
-      }
-
-      const allCustomers: any[] = [];
-      await Promise.all(chunks.map(async (chunk) => {
-        const { data, error } = await supabase
-          .from("customer_accounts")
-          .select("id,phone_e164,name,email")
-          .eq("tenant_id", activeTenantId!)
-          .in("id", chunk)
-          .is("deleted_at", null);
-        if (error) throw error;
-        if (data) allCustomers.push(...data);
-      }));
-
-      const m = new Map<string, any>();
-      for (const c of allCustomers) m.set((c as any).id, c);
-      return m;
-    },
-  });
-  
   const usersQ = useQuery({
     queryKey: ["tenant_users_profiles", activeTenantId],
     enabled: Boolean(activeTenantId),
@@ -405,16 +311,13 @@ export default function Orders() {
     let s = String(input ?? "").trim().replace(/\s/g, "");
     if (!s || s === "undefined" || s === "null") return new Date(fallback);
 
-    // 0. Try YYYY-MM-DD (ISO)
     if (/^\d{4}-\d{2}-\d{2}/.test(s)) {
       const d = parseISO(s);
       if (!isNaN(d.getTime())) return d;
     }
 
-    // Handle double slashes
     s = s.replace(/\/\/+/g, "/");
 
-    // 1. Try DD/MM/YYYY or DD/MM/YY (standard or with separators like . -)
     const slashMatch = s.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{2,4})$/);
     if (slashMatch) {
       let [_, d, m, y] = slashMatch;
@@ -423,7 +326,6 @@ export default function Orders() {
       if (!isNaN(parsed.getTime())) return parsed;
     }
 
-    // 2. Try typo DD/MMYYYY (like 31/032026)
     const typoMatch1 = s.match(/^(\d{1,2})[\/\-\.](\d{1,2})(\d{4})$/);
     if (typoMatch1) {
       const [_, d, m, y] = typoMatch1;
@@ -431,7 +333,6 @@ export default function Orders() {
       if (!isNaN(parsed.getTime())) return parsed;
     }
 
-    // 3. Try typo DDMMYYYY (like 31032026)
     const typoMatch2 = s.match(/^(\d{2})(\d{2})(\d{4})$/);
     if (typoMatch2) {
       const [_, d, m, y] = typoMatch2;
@@ -439,25 +340,15 @@ export default function Orders() {
       if (!isNaN(parsed.getTime())) return parsed;
     }
 
-    // 2. Try parse with date-fns for standard formats
     try {
       const d = parse(s, "dd/MM/yyyy", new Date());
-      if (!isNaN(d.getTime())) return d;
-    } catch {}
-
-    // 3. Fallback to native Date constructor
-    try {
-      const d = new Date(s);
       if (!isNaN(d.getTime())) return d;
     } catch {}
 
     return new Date(fallback);
   };
 
-  const caseIdsForLookup = useMemo(() => {
-    const ids = journeyRows.map((r) => r.id).filter(id => typeof id === "string" && id.length > 30);
-    return Array.from(new Set(ids));
-  }, [journeyRows]);
+  const caseIdsForLookup = useMemo(() => journeyRows.map(r => r.id), [journeyRows]);
 
   const caseDataQ = useQuery({
     queryKey: ["orders_case_fields_extended", activeTenantId, journeyRows.length, journeyRows[0]?.id, dateRange.from.getTime(), dateRange.to?.getTime()],
@@ -505,12 +396,11 @@ export default function Orders() {
       const inventoryIdsMap = new Map<string, Set<string>>();
       for (const itm of allItems) {
         const cid = itm.case_id;
-        const val = Number(itm.total ?? 0);
+        const val = Number(itm.total || 0);
+        totalsMap.set(cid, (totalsMap.get(cid) || 0) + val);
+        itemCountsMap.set(cid, (itemCountsMap.get(cid) || 0) + 1);
+        
         const invId = itm.offering_entity_id;
-
-        totalsMap.set(cid, (totalsMap.get(cid) ?? 0) + val);
-        itemCountsMap.set(cid, (itemCountsMap.get(cid) ?? 0) + 1);
-
         if (invId) {
           if (!inventoryIdsMap.has(cid)) inventoryIdsMap.set(cid, new Set());
           inventoryIdsMap.get(cid)!.add(invId);
@@ -597,27 +487,20 @@ export default function Orders() {
       const sellerName = selectedVendor?.display_name?.toLowerCase();
 
       rows = rows.filter(r => {
-        // 1. Direct ID match
         if (r.assigned_vendor_id === selectedSellerId) return true;
         if (r.assigned_user_id === selectedSellerId) return true;
-        
-        // 2. Name match (transition fallback)
         if (sellerName) {
           const rowUserName = r.users_profile?.display_name?.toLowerCase();
           const rowVendorName = r.assigned_vendor?.display_name?.toLowerCase();
           if (rowUserName === sellerName || rowVendorName === sellerName) return true;
         }
-        
         return false;
       });
     }
 
-    // Filter by Date Range - Skip if searching (q)
     if (!qq) {
       rows = rows.filter(r => {
         const f = caseDataQ.data?.fields.get(r.id);
-        
-        // Se estiver carregando e não tiver o campo ainda, não filtramos por data para evitar sumir com pedidos
         if (caseDataQ.isLoading && !f) return true;
 
         const saleDateText = f?.sale_date_text;
@@ -665,457 +548,280 @@ export default function Orders() {
     }
 
     return rows;
-  }, [journeyRows, q, dateRange, selectedSellerId, selectedPaymentMethods, selectedCities, selectedInventoryIds, customersQ.data, caseDataQ.data, caseDataQ.isLoading]);
+  }, [journeyRows, q, dateRange, selectedSellerId, selectedPaymentMethods, selectedCities, selectedInventoryIds, caseDataQ.data, caseDataQ.isLoading, vendorsQ.data]);
 
   const paymentOptions = useMemo(() => {
     const opts = new Set<string>();
-    caseDataQ.data?.fields.forEach(f => {
-      if (f.payment_method) opts.add(String(f.payment_method).trim());
-    });
-    return Array.from(opts).filter(Boolean).sort();
-  }, [caseDataQ.data]);
+    for (const r of journeyRows) {
+      const f = caseDataQ.data?.fields.get(r.id);
+      const val = String(f?.payment_method ?? "").trim();
+      if (val) opts.add(val);
+    }
+    const list = Array.from(opts);
+    list.sort();
+    return list;
+  }, [journeyRows, caseDataQ.data]);
 
   const cityOptions = useMemo(() => {
     const opts = new Set<string>();
-    caseDataQ.data?.fields.forEach(f => {
-      if (f.city) opts.add(String(f.city).trim());
-    });
-    return Array.from(opts).filter(Boolean).sort();
-  }, [caseDataQ.data]);
+    for (const r of journeyRows) {
+      const f = caseDataQ.data?.fields.get(r.id);
+      const val = String(f?.city ?? "").trim();
+      if (val) opts.add(val);
+    }
+    const list = Array.from(opts);
+    list.sort();
+    return list;
+  }, [journeyRows, caseDataQ.data]);
 
   const stats = useMemo(() => {
     let totalValue = 0;
-    let pendingValue = 0;
     let invoicedValue = 0;
-    let canceledValue = 0;
-    let invoicedCount = 0;
+    let pendingValue = 0;
+    let cancelledValue = 0;
 
     filteredRows.forEach(r => {
-      const val = caseDataQ.data?.totals.get(r.id) ?? 0;
       const f = caseDataQ.data?.fields.get(r.id);
-      const billingStatus = (f?.billing_status ?? "Pendente").toLowerCase();
+      const billingStatus = normalizeBillingStatus(f?.billing_status || "Pendente").toLowerCase();
+      const caseTotal = caseDataQ.data?.totals.get(r.id) || 0;
+      const partialVal = Number(f?.partial_paid_value || 0);
 
-      totalValue += val;
-      
-      const partialPaid = parseMoneySafe(f?.partial_paid_value);
+      totalValue += caseTotal;
 
       if (billingStatus.includes("pago") || billingStatus.includes("faturado")) {
-        // Se for faturado parcial, soma apenas o que foi pago. Se for faturado total, soma o valor cheio.
-        if (billingStatus.includes("parcial")) {
-          invoicedValue += partialPaid;
-        } else {
-          invoicedValue += val;
-        }
-        invoicedCount++;
-      } else if (billingStatus.includes("canc")) {
-        canceledValue += val;
+        invoicedValue += caseTotal;
+      } else if (billingStatus.includes("cancel")) {
+        cancelledValue += caseTotal;
+      } else if (billingStatus.includes("parcial")) {
+        invoicedValue += partialVal;
+        pendingValue += (caseTotal - partialVal);
       } else {
-        pendingValue += val;
+        pendingValue += caseTotal;
       }
     });
-
-    const avgTicket = invoicedCount > 0 ? invoicedValue / invoicedCount : 0;
 
     const invoicedPct = totalValue > 0 ? (invoicedValue / totalValue) * 100 : 0;
     const pendingPct = totalValue > 0 ? (pendingValue / totalValue) * 100 : 0;
-    const canceledPct = totalValue > 0 ? (canceledValue / totalValue) * 100 : 0;
+    const cancelledPct = totalValue > 0 ? (cancelledValue / totalValue) * 100 : 0;
+    const avgTicket = filteredRows.length > 0 ? totalValue / filteredRows.length : 0;
 
-    return { totalValue, pendingValue, invoicedValue, canceledValue, avgTicket, invoicedPct, pendingPct, canceledPct };
+    return { totalValue, invoicedValue, pendingValue, cancelledValue, invoicedPct, pendingPct, cancelledPct, avgTicket };
   }, [filteredRows, caseDataQ.data]);
 
   const chartData = useMemo(() => {
-    const start = startOfDay(dateRange.from || new Date());
-    const end = endOfDay(dateRange.to || dateRange.from || new Date());
-    const days = eachDayOfInterval({ start, end });
+    if (!dateRange.from) return [];
+    const daysInMonth: { day: string; value: number }[] = [];
+    const start = startOfMonth(dateRange.from);
+    const end = endOfMonth(dateRange.to || dateRange.from);
 
-    return days.map(d => {
-      let dailyTotal = 0;
-      filteredRows.forEach(r => {
-        const f = caseDataQ.data?.fields.get(r.id);
+    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+      daysInMonth.push({ day: format(d, "dd"), value: 0 });
+    }
+
+    filteredRows.forEach(r => {
+      const f = caseDataQ.data?.fields.get(r.id);
+      const billStatus = normalizeBillingStatus(f?.billing_status || "Pendente").toLowerCase();
+      
+      if (billStatus.includes("pago") || billStatus.includes("faturado") || billStatus.includes("parcial")) {
         const saleDateText = f?.sale_date_text;
-        const saleDate = parseSafeDate(saleDateText, r.created_at);
-
-        if (isSameDay(saleDate, d)) {
-          const billing_status = (f?.billing_status ?? "Pendente").toLowerCase();
-          const val = caseDataQ.data?.totals.get(r.id) ?? 0;
-          const partialPaid = parseMoneySafe(f?.partial_paid_value);
-
-          if (billing_status.includes("pago") || billing_status.includes("faturado")) {
-            if (billing_status.includes("parcial")) {
-              dailyTotal += partialPaid;
+        const d = parseSafeDate(saleDateText, r.created_at);
+        
+        if (isWithinInterval(d, { start, end })) {
+          const dayLabel = format(d, "dd");
+          const idx = daysInMonth.findIndex(x => x.day === dayLabel);
+          if (idx >= 0) {
+            const caseTotal = caseDataQ.data?.totals.get(r.id) || 0;
+            const partialVal = Number(f?.partial_paid_value || 0);
+            
+            if (billStatus.includes("parcial")) {
+              daysInMonth[idx].value += partialVal;
             } else {
-              dailyTotal += val;
+              daysInMonth[idx].value += caseTotal;
             }
           }
         }
-      });
-
-      return {
-        day: format(d, "dd"),
-        total: dailyTotal,
-      };
+      }
     });
+
+    return daysInMonth;
   }, [filteredRows, dateRange, caseDataQ.data]);
 
-  const pendQ = useQuery({
-    queryKey: ["orders_pendencies", activeTenantId, filteredRows.length, filteredRows[0]?.id, dateRange.from.getTime(), dateRange.to?.getTime()],
-    enabled: Boolean(activeTenantId && filteredRows.length),
+  const customersQ = useQuery({
+    queryKey: ["orders_customers", activeTenantId],
+    enabled: Boolean(activeTenantId),
     queryFn: async () => {
-      const ids = Array.from(new Set(filteredRows.map((c) => c.id).filter(id => typeof id === "string" && id.length > 30)));
-      const CHUNK_SIZE = 10;
-      const chunks: string[][] = [];
-      for (let i = 0; i < ids.length; i += CHUNK_SIZE) {
-        chunks.push(ids.slice(i, i + CHUNK_SIZE));
-      }
-
-      const allPendencies: any[] = [];
-      await Promise.all(chunks.map(async (chunk) => {
-        const { data, error } = await supabase
-          .from("pendencies")
-          .select("case_id,type,status")
-          .in("case_id", chunk)
-          .eq("status", "open");
-        if (error) throw error;
-        if (data) allPendencies.push(...data);
-      }));
-
-      const byCase = new Map<string, { open: number; need_location: boolean }>();
-      for (const p of allPendencies) {
-        const cid = (p as any).case_id;
-        const cur = byCase.get(cid) ?? { open: 0, need_location: false };
-        cur.open++;
-        if ((p as any).type === "need_location") cur.need_location = true;
-        byCase.set(cid, cur);
-      }
-      return byCase;
+      const { data, error } = await supabase
+        .from("core_entities")
+        .select("id, display_name, metadata")
+        .eq("tenant_id", activeTenantId!)
+        .eq("entity_type", "customer");
+      if (error) throw error;
+      const m = new Map<string, { name: string; phone_e164: string }>();
+      (data ?? []).forEach(d => {
+        m.set(d.id, { 
+          name: d.display_name || "Sem Nome", 
+          phone_e164: d.metadata?.phone_e164 || "" 
+        });
+      });
+      return m;
     },
   });
 
-  const states = useMemo(() => {
-    const st = (selectedJourney?.default_state_machine_json?.states ?? []) as string[];
-    return Array.from(new Set(st.map(s => String(s)).filter(Boolean)));
-  }, [selectedJourney]);
-
-  const columns = useMemo(() => {
-    const baseStates = states.length ? states : Array.from(new Set(filteredRows.map((r) => r.state)));
-    const known = new Set(baseStates);
-    const extras = Array.from(new Set(filteredRows.map((r) => r.state))).filter((s) => !known.has(s));
-    const all = [...baseStates, ...(extras.length ? ["__other__"] : [])];
-
-    return all.map((st) => {
-      const items = filteredRows.filter(r => st === "__other__" ? !known.has(r.state) : r.state === st)
-        .sort((a,b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
-      return {
-        key: st,
-        label: st === "__other__" ? "Outros" : getStateLabel(selectedJourney as any, st),
-        items,
-      };
-    });
-  }, [filteredRows, states, selectedJourney]);
-
-  const { transitionState, updating: updatingCaseState } = useJourneyTransition();
-
-  const updateCaseState = async (caseId: string, nextState: string) => {
-    if (!activeTenantId || movingCaseId || updatingCaseState) return;
-    const currentCase = filteredRows.find(c => c.id === caseId);
-    if (!currentCase || currentCase.state === nextState) return;
-
-    setMovingCaseId(caseId);
-    try {
-      const journeyConfig = selectedJourney?.default_state_machine_json as unknown as StateMachine;
-      const isSalesOrder = selectedJourney?.key === "sales_order";
-      const blocks = isSalesOrder ? [] : await checkTransitionBlocks(supabase, activeTenantId, caseId, currentCase.state, nextState, journeyConfig);
-      if (blocks.length > 0) {
-        setTransitionBlock({ open: true, nextStateName: nextState, reasons: blocks });
-        return;
-      }
-      await transitionState(caseId, currentCase.state, nextState, journeyConfig);
-    } finally {
-      setMovingCaseId(null);
-    }
-  };
-
   const exportOrdersCsv = async () => {
-    if (!activeTenantId || exportingCsv || filteredRows.length === 0) return;
     setExportingCsv(true);
     try {
-      const headers = [
-        "id", "id_externo", "data_venda", "cliente_nome", "cliente_whatsapp", 
-        "cliente_email", "cliente_cpf_cnpj", "cliente_endereco", "cliente_cidade", 
-        "vendedor_email", "pagamento_condicoes", "forma_pagamento", "valor_sinal", 
-        "vencimento", "status_faturamento", "item_codigo", "item_descricao", 
-        "item_qtd", "item_valor_unit", "item_desconto_pct", "obs"
-      ];
-      
-      const csvRows = [headers.map(csvCell).join(",")];
-      
-      const filteredCaseIds = filteredRows.map(r => r.id);
-      const { data: allItems, error: itemsErr } = await supabase
-        .from("case_items")
-        .select("*")
-        .in("case_id", filteredCaseIds);
-      
-      if (itemsErr) throw itemsErr;
-      
-      const itemsByCase = new Map<string, any[]>();
-      (allItems ?? []).forEach(it => {
-        const arr = itemsByCase.get(it.case_id) ?? [];
-        arr.push(it);
-        itemsByCase.set(it.case_id, arr);
-      });
-
-      filteredRows.forEach(r => {
+      const headers = ["ID", "Título", "Cliente", "Vendedor", "Responsável", "Etapa", "Status Pagamento", "Total", "Data"];
+      const rows = filteredRows.map(r => {
         const f = caseDataQ.data?.fields.get(r.id);
         const cust = customersQ.data?.get(r.customer_id!);
-        const items = itemsByCase.get(r.id) ?? [{}]; 
-        
-        items.forEach(it => {
-          const row = [
-            r.id,
-            r.meta_json?.external_id ?? "",
-            f?.sale_date_text ?? format(new Date(r.created_at), "yyyy-MM-dd"),
-            cust?.name ?? r.title ?? "",
-            cust?.phone_e164 ?? f?.whatsapp ?? f?.phone ?? "",
-            cust?.email ?? f?.email ?? "",
-            f?.cpf ?? "",
-            f?.address ?? "",
-            f?.city ?? "",
-            r.users_profile?.email ?? "",
-            f?.payment_terms ?? "",
-            f?.payment_method ?? "",
-            f?.payment_signal_value_raw ?? "",
-            f?.payment_due_date_text ?? "",
-            f?.billing_status ?? "Pendente",
-            it.code ?? "",
-            it.description ?? "",
-            it.qty ?? "",
-            it.price ?? "",
-            it.discount_percent ?? "",
-            f?.obs ?? ""
-          ];
-          csvRows.push(row.map(csvCell).join(","));
-        });
+        return [
+          r.id,
+          r.title,
+          cust?.name || "—",
+          r.assigned_vendor?.display_name || "—",
+          r.users_profile?.display_name || "—",
+          r.state,
+          f?.billing_status || "Pendente",
+          caseDataQ.data?.totals.get(r.id) || 0,
+          r.created_at
+        ];
       });
-      
-      downloadTextFile(`pedidos_export_${format(new Date(), "yyyy-MM-dd")}.csv`, csvRows.join("\n"), "text/csv");
-      showSuccess(`${filteredRows.length} pedidos exportados.`);
-    } catch (e: any) {
-      showError(`Falha na exportação: ${e.message}`);
+      const csvContent = [headers, ...rows].map(e => e.join(";")).join("\n");
+      const blob = new Blob(["\ufeff" + csvContent], { type: "text/csv;charset=utf-8;" });
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.setAttribute("download", `pedidos_${format(new Date(), "yyyyMMdd_HHmm")}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
     } finally {
       setExportingCsv(false);
     }
   };
 
   const exportOrdersPdf = async () => {
-    if (!activeTenantId || exportingPdf || filteredRows.length === 0) return;
     setExportingPdf(true);
+    window.print();
+    setExportingPdf(false);
+  };
+
+  const states = useMemo(() => {
+    return selectedJourney?.default_state_machine_json?.states || [];
+  }, [selectedJourney]);
+
+  const updateState = async (caseId: string, nextState: string) => {
+    const caseRow = journeyRows.find(c => c.id === caseId);
+    if (!caseRow || !selectedJourney) return;
+
+    const currentState = caseRow.state;
+    const sm = selectedJourney.default_state_machine_json;
+    const blocks = checkTransitionBlocks(sm, currentState, nextState, {});
+
+    if (blocks.length > 0) {
+      const stateObj = (sm as any).states_config?.[nextState];
+      setTransitionBlock({
+        open: true,
+        caseId,
+        nextState,
+        nextStateName: stateObj?.label || nextState,
+        reasons: blocks,
+      });
+      return;
+    }
+
     try {
-      const { pdf, Document, Page, Text, View, StyleSheet, Image } = await import("@react-pdf/renderer");
+      const { error } = await supabase
+        .from("cases")
+        .update({ state: nextState, updated_at: new Date().toISOString() })
+        .eq("id", caseId);
 
-      const filteredCaseIds = filteredRows.map(r => r.id);
-      const { data: allItems, error: itemsErr } = await supabase
-        .from("case_items")
-        .select("*")
-        .in("case_id", filteredCaseIds);
-      
-      if (itemsErr) throw itemsErr;
-
-      const itemsByCase = new Map<string, any[]>();
-      (allItems ?? []).forEach(it => {
-        const arr = itemsByCase.get(it.case_id) ?? [];
-        arr.push(it);
-        itemsByCase.set(it.case_id, arr);
-      });
-
-      const styles = StyleSheet.create({
-        page: { padding: 30, fontSize: 8, fontFamily: "Helvetica", color: "#334155" },
-        header: { marginBottom: 15, borderBottom: 1, borderBottomColor: "#e2e8f0", paddingBottom: 10 },
-        title: { fontSize: 14, fontWeight: "bold", color: "#0f172a" },
-        subtitle: { fontSize: 8, color: "#64748b", marginTop: 2 },
-        
-        orderCard: { marginBottom: 12, padding: 8, borderRadius: 6, border: 1, borderColor: "#f1f5f9", backgroundColor: "#fff" },
-        orderHeader: { flexDirection: "row", justifyContent: "space-between", marginBottom: 6, paddingBottom: 4, borderBottom: 1, borderBottomColor: "#f1f5f9" },
-        orderMainInfo: { fontSize: 9, fontWeight: "bold", color: "#1e40af" },
-        orderSubInfo: { flexDirection: "row", gap: 10, marginBottom: 4 },
-        infoLabel: { color: "#94a3b8", fontWeight: "bold" },
-        infoValue: { color: "#475569" },
-
-        itemTable: { marginTop: 4 },
-        itemHeader: { flexDirection: "row", backgroundColor: "#f8fafc", padding: 3, borderBottom: 1, borderBottomColor: "#f1f5f9" },
-        itemRow: { flexDirection: "row", padding: 3, borderBottom: 1, borderBottomColor: "#f1f5f9" },
-        colDesc: { flex: 4 },
-        colQty: { flex: 1, textAlign: "right" },
-        colPrice: { flex: 2, textAlign: "right" },
-        colTotal: { flex: 2, textAlign: "right" },
-        
-        orderFooter: { flexDirection: "row", justifyContent: "flex-end", marginTop: 4, paddingTop: 2 },
-        orderTotal: { fontSize: 9, fontWeight: "bold", color: "#0f172a" },
-        
-        totalSummary: { marginTop: 20, padding: 10, backgroundColor: "#f8fafc", borderRadius: 8, textAlign: "right" },
-        totalLabel: { fontSize: 10, color: "#64748b" },
-        totalValue: { fontSize: 14, fontWeight: "bold", color: "#1e40af" }
-      });
-
-      const MyDoc = () => (
-        <Document title="Relatório Detalhado de Pedidos">
-          <Page size="A4" style={styles.page}>
-            <View style={styles.header}>
-              <Text style={styles.title}>Relatório Detalhado de Pedidos</Text>
-              <Text style={styles.subtitle}>
-                Período: {format(dateRange.from, "dd/MM/yyyy")} a {format(dateRange.to || dateRange.from, "dd/MM/yyyy")}
-              </Text>
-              <Text style={styles.subtitle}>Total de Pedidos na Lista: {filteredRows.length}</Text>
-            </View>
-
-            {(() => {
-              let totalFullCommission = 0;
-              const cards = filteredRows.map((r) => {
-                const f = caseDataQ.data?.fields.get(r.id);
-                const cust = customersQ.data?.get(r.customer_id!);
-                const items = itemsByCase.get(r.id) ?? [];
-                const orderTotal = caseDataQ.data?.totals.get(r.id) || 0;
-                const orderNum = r.meta_json?.external_id || r.id.slice(0, 8);
-                
-                const assignedUser = (usersQ.data ?? []).find(u => u.user_id === r.assigned_user_id);
-                const baseCommissionPct = Number(assignedUser?.meta_json?.commission_rules?.base_percent ?? 0);
-                const brutoTotal = items.reduce((acc, it) => acc + (Number(it.qty || 0) * Number(it.price || 0)), 0);
-                const fullCommissionValue = brutoTotal * (baseCommissionPct / 100);
-                totalFullCommission += fullCommissionValue;
-
-                return (
-                  <View key={r.id} style={styles.orderCard} wrap={false}>
-                    <View style={styles.orderHeader}>
-                      <Text style={styles.orderMainInfo}>Pedido #{orderNum}</Text>
-                      <View style={{ alignItems: "right" }}>
-                        <Text style={styles.orderTotal}>{formatMoneyBRL(orderTotal)}</Text>
-                        {fullCommissionValue > 0 && (
-                          <Text style={{ fontSize: 7, color: "#64748b", marginTop: 1 }}>
-                            Comissão Cheia: {formatMoneyBRL(fullCommissionValue)} ({baseCommissionPct}%)
-                          </Text>
-                        )}
-                      </View>
-                    </View>
-                    
-                    <View style={styles.orderSubInfo}>
-                      <View style={{ flexDirection: "row", gap: 3 }}>
-                        <Text style={styles.infoLabel}>Cliente:</Text>
-                        <Text style={styles.infoValue}>{cust?.name || r.title || "—"}</Text>
-                      </View>
-                      <View style={{ flexDirection: "row", gap: 3 }}>
-                        <Text style={styles.infoLabel}>Cidade:</Text>
-                        <Text style={styles.infoValue}>{f?.city || "—"}</Text>
-                      </View>
-                    </View>
-                    
-                    <View style={styles.orderSubInfo}>
-                      <View style={{ flexDirection: "row", gap: 3 }}>
-                        <Text style={styles.infoLabel}>Vendedor:</Text>
-                        <Text style={styles.infoValue}>{r.users_profile?.display_name || "—"}</Text>
-                      </View>
-                      <View style={{ flexDirection: "row", gap: 3 }}>
-                        <Text style={styles.infoLabel}>Forma Pgto:</Text>
-                        <Text style={styles.infoValue}>{f?.payment_method || "—"}</Text>
-                      </View>
-                      <View style={{ flexDirection: "row", gap: 3 }}>
-                        <Text style={styles.infoLabel}>Status Pgto:</Text>
-                        <Text style={styles.infoValue}>{f?.billing_status || "—"}</Text>
-                      </View>
-                      <View style={{ flexDirection: "row", gap: 3 }}>
-                        <Text style={styles.infoLabel}>Data:</Text>
-                        <Text style={styles.infoValue}>{f?.sale_date_text || format(new Date(r.created_at), "dd/MM/yyyy")}</Text>
-                      </View>
-                    </View>
-
-                    <View style={styles.itemTable}>
-                      <View style={styles.itemHeader}>
-                        <Text style={styles.colDesc}>Item / Descrição</Text>
-                        <Text style={styles.colQty}>Qtd</Text>
-                        <Text style={styles.colPrice}>Unitário</Text>
-                        <Text style={styles.colTotal}>Subtotal</Text>
-                      </View>
-                      {items.map((it, idx) => (
-                        <View key={idx} style={styles.itemRow}>
-                          <Text style={styles.colDesc}>{(it.description || "—").toUpperCase()}</Text>
-                          <Text style={styles.colQty}>{it.qty}</Text>
-                          <Text style={styles.colPrice}>{formatMoneyBRL(it.price || 0)}</Text>
-                          <Text style={styles.colTotal}>{formatMoneyBRL(it.total || 0)}</Text>
-                        </View>
-                      ))}
-                    </View>
-                  </View>
-                );
-              });
-
-              return (
-                <>
-                  {cards}
-                  <View style={styles.totalSummary}>
-                    <View style={{ marginBottom: 4 }}>
-                      <Text style={styles.totalLabel}>Valor Total Geral (Filtro)</Text>
-                      <Text style={styles.totalValue}>{formatMoneyBRL(stats.totalValue)}</Text>
-                    </View>
-                    {totalFullCommission > 0 && (
-                      <View>
-                        <Text style={styles.totalLabel}>Total Comissões Cheias</Text>
-                        <Text style={[styles.totalValue, { color: "#64748b", fontSize: 11 }]}>{formatMoneyBRL(totalFullCommission)}</Text>
-                      </View>
-                    )}
-                  </View>
-                </>
-              );
-            })()}
-          </Page>
-        </Document>
-      );
-
-      const blob = await pdf(<MyDoc />).toBlob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `pedidos_detalhado_${format(new Date(), "yyyy-MM-dd")}.pdf`;
-      a.click();
-      URL.revokeObjectURL(url);
-      showSuccess(`PDF detalhado gerado com ${filteredRows.length} pedidos.`);
+      if (error) throw error;
+      showSuccess(`Etapa atualizada para: ${nextState}`);
+      casesQ.refetch();
     } catch (e: any) {
-      showError(`Falha na exportação PDF: ${e.message}`);
-    } finally {
-      setExportingPdf(false);
+      showError(`Falha ao atualizar etapa: ${e.message}`);
     }
   };
 
-  if (journeyQ.isError || (!journeyQ.isLoading && !journeyQ.data)) {
-    return (
-      <AppShell>
-        <div className="flex flex-col items-center justify-center min-h-[50vh] p-8 text-center bg-white/40 rounded-[32px] border border-slate-200 backdrop-blur m-4">
-          <div className="h-16 w-16 bg-blue-50 text-blue-500 rounded-full flex items-center justify-center mb-4">
-            <Package className="h-8 w-8" />
-          </div>
-          <h2 className="text-xl font-semibold text-slate-800">Módulo de Pedidos não habilitado</h2>
-          <p className="text-slate-500 mt-2 max-w-sm">
-            A jornada de <span className="font-semibold">Venda (sales_order)</span> não foi encontrada ou não está habilitada para este tenant.
-          </p>
-          <Button asChild variant="outline" className="mt-6 rounded-2xl">
-            <Link to="/app">Voltar ao Dashboard</Link>
-          </Button>
-        </div>
-      </AppShell>
-    );
-  }
+  if (!activeTenantId) return null;
 
   return (
     <RequireAuth>
       <AppShell>
-        <div className="rounded-[28px] border border-slate-200 bg-white/65 p-4 shadow-sm backdrop-blur md:p-5">
-          <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-            <div className="flex items-center gap-3">
-              <div className="grid h-10 w-10 place-items-center rounded-2xl bg-blue-100 text-blue-600">
-                <Package className="h-6 w-6" />
-              </div>
+        <div className="flex flex-col gap-6 p-4 md:p-8">
+          {/* Header & Controls */}
+          <div className="relative z-10 space-y-6 no-print">
+            <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
               <div>
                 <h2 className="text-lg font-semibold tracking-tight text-slate-900">Pedidos</h2>
                 <div className="flex items-center gap-2 mt-0.5">
                   <p className="text-sm text-slate-600">Gestão dedicada de pedidos e processos internos.</p>
                 </div>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-3">
+                <NewSalesOrderDialog 
+                  tenantId={activeTenantId} 
+                  onSuccess={() => casesQ.refetch()} 
+                />
+
+                <div className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-white/70 p-1">
+                  <Button
+                    variant={viewMode === "list" ? "default" : "secondary"}
+                    className="h-8 rounded-xl px-3"
+                    onClick={() => setAndPersistViewMode("list")}
+                  >
+                    <LayoutList className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant={viewMode === "kanban" ? "default" : "secondary"}
+                    className="h-8 rounded-xl px-3"
+                    onClick={() => setAndPersistViewMode("kanban")}
+                  >
+                    <Columns2 className="h-4 w-4" />
+                  </Button>
+                </div>
+
+                <Button
+                  type="button"
+                  variant={showStats ? "secondary" : "outline"}
+                  className={cn("h-10 rounded-2xl w-10 p-0", !showStats && "bg-blue-50 border-blue-200 text-blue-600")}
+                  onClick={() => {
+                    const next = !showStats;
+                    setShowStats(next);
+                    localStorage.setItem("orders_show_stats", String(next));
+                  }}
+                  title={showStats ? "Esconder indicadores" : "Mostrar indicadores"}
+                >
+                  {showStats ? <BarChart2 className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </Button>
+
+                <Button
+                  type="button"
+                  variant="secondary"
+                  className="h-10 rounded-2xl w-10 p-0"
+                  onClick={() => {
+                    casesQ.refetch();
+                    caseDataQ.refetch();
+                    vendorsQ.refetch();
+                  }}
+                >
+                  <RefreshCw className="h-4 w-4" />
+                </Button>
+
+                <Button variant="secondary" className="h-10 rounded-2xl bg-slate-900 text-white hover:bg-slate-800 border-none shadow-sm" onClick={exportOrdersCsv} disabled={exportingCsv}>
+                  <Download className="mr-2 h-4 w-4" /> CSV ({filteredRows.length})
+                </Button>
+
+                <Button variant="secondary" className="h-10 rounded-2xl bg-rose-600 text-white hover:bg-rose-700 border-none shadow-sm" onClick={exportOrdersPdf} disabled={exportingPdf}>
+                  <FileText className="mr-2 h-4 w-4" /> PDF ({filteredRows.length})
+                </Button>
+
+                <ImportOrdersDialog
+                  tenantId={activeTenantId!}
+                  journey={selectedJourney!}
+                  actorUserId={user?.id || null}
+                />
               </div>
             </div>
 
@@ -1152,12 +858,12 @@ export default function Orders() {
                       ? "Pagamento: Todos"
                       : selectedPaymentMethods.size === 1
                       ? Array.from(selectedPaymentMethods)[0]
-                      : `${selectedPaymentMethods.size} formas selecionadas`}
+                      : `${selectedPaymentMethods.size} selecionados`}
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent className="w-[240px] rounded-2xl shadow-xl border-slate-200 p-2" align="start">
+                <PopoverContent className="w-[240px] rounded-2xl p-2 shadow-xl border-slate-200" align="start">
                   <div className="flex items-center justify-between px-2 py-1 mb-1">
-                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Forma de Pagamento</p>
+                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Pagamento</p>
                     {selectedPaymentMethods.size > 0 && (
                       <button onClick={() => setSelectedPaymentMethods(new Set())} className="text-[10px] text-blue-600 font-bold hover:underline">Limpar</button>
                     )}
@@ -1167,7 +873,7 @@ export default function Orders() {
                       <label key={opt} className="flex items-center gap-2.5 px-2 py-1.5 rounded-xl cursor-pointer hover:bg-slate-50 transition-colors">
                         <input
                           type="checkbox"
-                          className="accent-blue-600 h-3.5 w-3.5"
+                          className="accent-blue-600 h-3.5 w-3.5 rounded"
                           checked={selectedPaymentMethods.has(opt)}
                           onChange={() => {
                             const next = new Set(selectedPaymentMethods);
@@ -1178,9 +884,6 @@ export default function Orders() {
                         <span className="text-xs font-semibold text-slate-700 truncate">{opt}</span>
                       </label>
                     ))}
-                    {paymentOptions.length === 0 && (
-                      <p className="text-xs text-slate-400 px-2 py-2">Nenhuma opção encontrada</p>
-                    )}
                   </div>
                 </PopoverContent>
               </Popover>
@@ -1191,19 +894,15 @@ export default function Orders() {
                   <Button
                     variant="outline"
                     className={cn(
-                      "h-10 rounded-2xl border-slate-200 bg-white/70 text-xs font-bold text-slate-700 min-w-[160px] justify-start hover:bg-white hover:border-blue-400 transition-all shadow-sm gap-2",
+                      "h-10 rounded-2xl border-slate-200 bg-white/70 text-xs font-bold text-slate-700 min-w-[150px] justify-start hover:bg-white transition-all shadow-sm gap-2",
                       selectedCities.size > 0 && "border-blue-400 bg-blue-50 text-blue-700"
                     )}
                   >
                     <MapPin className="h-4 w-4 text-slate-400 flex-shrink-0" />
-                    {selectedCities.size === 0
-                      ? "Cidade: Todas"
-                      : selectedCities.size === 1
-                      ? Array.from(selectedCities)[0]
-                      : `${selectedCities.size} cidades`}
+                    {selectedCities.size === 0 ? "Cidade: Todas" : `${selectedCities.size} cidades`}
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent className="w-[220px] rounded-2xl shadow-xl border-slate-200 p-2" align="start">
+                <PopoverContent className="w-[200px] rounded-2xl p-2 shadow-xl border-slate-200" align="start">
                   <div className="flex items-center justify-between px-2 py-1 mb-1">
                     <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Cidade</p>
                     {selectedCities.size > 0 && (
@@ -1215,7 +914,7 @@ export default function Orders() {
                       <label key={opt} className="flex items-center gap-2.5 px-2 py-1.5 rounded-xl cursor-pointer hover:bg-slate-50 transition-colors">
                         <input
                           type="checkbox"
-                          className="accent-blue-600 h-3.5 w-3.5"
+                          className="accent-blue-600 h-3.5 w-3.5 rounded"
                           checked={selectedCities.has(opt)}
                           onChange={() => {
                             const next = new Set(selectedCities);
@@ -1226,9 +925,6 @@ export default function Orders() {
                         <span className="text-xs font-semibold text-slate-700 truncate">{opt}</span>
                       </label>
                     ))}
-                    {cityOptions.length === 0 && (
-                      <p className="text-xs text-slate-400 px-2 py-2">Nenhuma opção encontrada</p>
-                    )}
                   </div>
                 </PopoverContent>
               </Popover>
@@ -1239,529 +935,483 @@ export default function Orders() {
                   <Button
                     variant="outline"
                     className={cn(
-                      "h-10 rounded-2xl border-slate-200 bg-white/70 text-xs font-bold text-slate-700 min-w-[160px] justify-start hover:bg-white hover:border-blue-400 transition-all shadow-sm gap-2",
+                      "h-10 rounded-2xl border-slate-200 bg-white/70 text-xs font-bold text-slate-700 min-w-[150px] justify-start hover:bg-white transition-all shadow-sm gap-2",
                       selectedInventoryIds.size > 0 && "border-blue-400 bg-blue-50 text-blue-700"
                     )}
                   >
                     <Package className="h-4 w-4 text-slate-400 flex-shrink-0" />
-                    {selectedInventoryIds.size === 0
-                      ? "Inventário: Todos"
-                      : selectedInventoryIds.size === 1
-                      ? inventoryQ.data?.find(x => x.id === Array.from(selectedInventoryIds)[0])?.display_name || "1 selecionado"
-                      : `${selectedInventoryIds.size} itens`}
+                    {selectedInventoryIds.size === 0 ? "Inventário: Todos" : `${selectedInventoryIds.size} itens`}
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent className="w-[280px] rounded-2xl shadow-xl border-slate-200 p-0" align="start">
-                  <Command>
-                    <CommandInput placeholder="Buscar ativo..." className="h-9 border-none focus:ring-0" />
-                    <CommandList className="max-h-[300px]">
-                      <CommandEmpty>Nenhum item encontrado.</CommandEmpty>
-                      <CommandGroup 
-                        heading={
-                          <div className="flex items-center justify-between w-full pr-1">
-                            <span>Ativos do Inventário</span>
-                            {selectedInventoryIds.size > 0 && (
-                              <button 
-                                onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); }}
-                                onClick={() => setSelectedInventoryIds(new Set())} 
-                                className="text-[10px] text-blue-600 font-bold hover:underline normal-case"
-                              >
-                                Limpar
-                              </button>
-                            )}
-                          </div>
-                        }
-                      >
-                        {inventoryQ.data?.map((item) => (
-                          <CommandItem
-                            key={item.id}
-                            value={item.display_name} // Important for filtering
-                            onSelect={() => {
-                              const next = new Set(selectedInventoryIds);
-                              next.has(item.id) ? next.delete(item.id) : next.add(item.id);
-                              setSelectedInventoryIds(next);
-                            }}
-                            className="flex items-center gap-2 px-2 py-1.5 rounded-xl cursor-pointer"
-                          >
-                            <div className={cn(
-                              "h-4 w-4 border rounded flex items-center justify-center transition-colors",
-                              selectedInventoryIds.has(item.id) ? "bg-blue-600 border-blue-600" : "border-slate-300"
-                            )}>
-                              {selectedInventoryIds.has(item.id) && <Check className="h-3 w-3 text-white" />}
-                            </div>
-                            <span className="text-xs font-semibold text-slate-700 truncate">{item.display_name}</span>
-                          </CommandItem>
-                        ))}
-                      </CommandGroup>
-                    </CommandList>
-                  </Command>
+                <PopoverContent className="w-[220px] rounded-2xl p-2 shadow-xl border-slate-200" align="start">
+                  <div className="flex items-center justify-between px-2 py-1 mb-1">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Produtos</p>
+                    {selectedInventoryIds.size > 0 && (
+                      <button onClick={() => setSelectedInventoryIds(new Set())} className="text-[10px] text-blue-600 font-bold hover:underline">Limpar</button>
+                    )}
+                  </div>
+                  <div className="max-h-[300px] overflow-y-auto space-y-0.5">
+                    {(inventoryQ.data ?? []).map((opt) => (
+                      <label key={opt.id} className="flex items-center gap-2.5 px-2 py-1.5 rounded-xl cursor-pointer hover:bg-slate-50 transition-colors">
+                        <input
+                          type="checkbox"
+                          className="accent-blue-600 h-3.5 w-3.5 rounded"
+                          checked={selectedInventoryIds.has(opt.id)}
+                          onChange={() => {
+                            const next = new Set(selectedInventoryIds);
+                            next.has(opt.id) ? next.delete(opt.id) : next.add(opt.id);
+                            setSelectedInventoryIds(next);
+                          }}
+                        />
+                        <span className="text-xs font-semibold text-slate-700 truncate">{opt.display_name}</span>
+                      </label>
+                    ))}
+                  </div>
                 </PopoverContent>
               </Popover>
 
-              {/* Date Range Picker */}
+              {/* Data Filter */}
               <Popover>
                 <PopoverTrigger asChild>
                   <Button
                     variant="outline"
-                    className={cn(
-                      "h-10 justify-start text-left font-normal rounded-2xl border-slate-200 bg-white/70 min-w-[240px] hover:bg-white hover:border-blue-400 transition-all shadow-sm",
-                      !dateRange && "text-muted-foreground"
-                    )}
+                    className="h-10 rounded-2xl border-slate-200 bg-white/70 text-xs font-bold text-slate-700 transition-all shadow-sm"
                   >
-                    <CalendarIcon className="mr-2 h-4 w-4 text-blue-500" />
-                    {dateRange?.from ? (
+                    <Calendar className="mr-2 h-4 w-4 text-slate-400" />
+                    {dateRange.from ? (
                       dateRange.to ? (
-                        <span className="text-[12px] font-bold text-slate-700">
+                        <>
                           {format(dateRange.from, "dd/MM/yyyy")} - {format(dateRange.to, "dd/MM/yyyy")}
-                        </span>
+                        </>
                       ) : (
-                        <span className="text-[12px] font-bold text-slate-700">{format(dateRange.from, "dd/MM/yyyy")}</span>
+                        format(dateRange.from, "dd/MM/yyyy")
                       )
                     ) : (
-                      <span className="text-[12px]">Selecionar período</span>
+                      "Período"
                     )}
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent className="w-auto p-0 rounded-[28px] shadow-2xl border-slate-200 overflow-hidden flex flex-col md:flex-row" align="start">
-                  {/* Presets Side Bar */}
-                  <div className="w-full md:w-[180px] border-b md:border-b-0 md:border-r border-slate-100 bg-slate-50/50 p-3 space-y-1">
-                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 px-2 mb-2">Períodos</p>
-                    {[
-                      { label: "Hoje", range: { from: startOfDay(new Date()), to: endOfDay(new Date()) } },
-                      { label: "Ontem", range: { from: startOfDay(subDays(new Date(), 1)), to: endOfDay(subDays(new Date(), 1)) } },
-                      { label: "Últimos 7 dias", range: { from: startOfDay(subDays(new Date(), 6)), to: endOfDay(new Date()) } },
-                      { label: "Este Mês", range: { from: startOfMonth(new Date()), to: endOfMonth(new Date()) } },
-                      { label: "Mês Passado", range: { from: startOfMonth(subMonths(new Date(), 1)), to: endOfMonth(subMonths(new Date(), 1)) } },
-                      { label: "Últimos 3 meses", range: { from: startOfMonth(subMonths(new Date(), 2)), to: endOfMonth(new Date()) } },
-                    ].map((p) => (
-                      <button
-                        key={p.label}
-                        onClick={() => setDateRange(p.range)}
-                        className={cn(
-                          "w-full text-left px-3 py-2 rounded-xl text-xs font-semibold transition-all hover:bg-white hover:shadow-sm",
-                          dateRange?.from?.getTime() === p.range.from.getTime() && dateRange?.to?.getTime() === p.range.to.getTime()
-                            ? "bg-blue-600 text-white shadow-md hover:bg-blue-600"
-                            : "text-slate-600 hover:text-blue-600"
-                        )}
-                      >
-                        {p.label}
-                      </button>
-                    ))}
-                  </div>
-
-                  <div className="p-2">
-                    <Calendar
-                      initialFocus
-                      mode="range"
-                      defaultMonth={dateRange?.from}
-                      selected={dateRange}
-                      onSelect={(range: any) => setDateRange(range)}
-                      numberOfMonths={2}
-                      locale={ptBR}
-                      captionLayout="dropdown"
-                      fromYear={2020}
-                      toYear={2030}
-                    />
-                  </div>
+                <PopoverContent className="w-auto p-0 rounded-2xl border-slate-200 shadow-2xl" align="end">
+                  <CalendarComponent
+                    initialFocus
+                    mode="range"
+                    defaultMonth={dateRange.from}
+                    selected={{ from: dateRange.from, to: dateRange.to }}
+                    onSelect={(range: any) => range && setDateRange({ from: range.from, to: range.to })}
+                    numberOfMonths={2}
+                    locale={ptBR}
+                    className="rounded-2xl"
+                  />
                 </PopoverContent>
               </Popover>
-
-              <div className="h-8 w-px bg-slate-200 mx-1 hidden lg:block" />
-
-              <div className="flex flex-wrap gap-2">
-                <Button
-                  className="h-10 rounded-2xl bg-blue-600 text-white hover:bg-blue-700"
-                  onClick={() => setNewSalesOrderOpen(true)}
-                >
-                  <Plus className="mr-2 h-4 w-4" /> Novo pedido
-                </Button>
-
-                <div className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-white/70 p-1">
-                  <Button
-                    variant={viewMode === "list" ? "default" : "secondary"}
-                    className="h-8 rounded-xl px-3"
-                    onClick={() => setAndPersistViewMode("list")}
-                  >
-                    <LayoutList className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    variant={viewMode === "kanban" ? "default" : "secondary"}
-                    className="h-8 rounded-xl px-3"
-                    onClick={() => setAndPersistViewMode("kanban")}
-                  >
-                    <Columns2 className="h-4 w-4" />
-                  </Button>
-                </div>
-
-                <Button variant="secondary" className="h-10 rounded-2xl bg-slate-900 text-white hover:bg-slate-800 border-none shadow-sm" onClick={exportOrdersCsv} disabled={exportingCsv}>
-                  <Download className="mr-2 h-4 w-4" /> CSV ({filteredRows.length})
-                </Button>
-
-                <Button variant="secondary" className="h-10 rounded-2xl bg-rose-600 text-white hover:bg-rose-700 border-none shadow-sm" onClick={exportOrdersPdf} disabled={exportingPdf}>
-                  <FileText className="mr-2 h-4 w-4" /> PDF ({filteredRows.length})
-                </Button>
-
-                <ImportOrdersDialog
-                  tenantId={activeTenantId!}
-                  journey={selectedJourney!}
-                  actorUserId={user?.id || null}
-                />
-
-                <Button variant="secondary" className="h-10 rounded-2xl" onClick={() => casesQ.refetch()}>
-                  <RefreshCw className="mr-2 h-4 w-4" />
-                </Button>
-              </div>
             </div>
           </div>
 
-          <div className="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
-            {/* 1. Total Pedidos */}
-            <div className="rounded-[22px] border border-slate-100 bg-slate-50/50 p-5 shadow-sm transition-all hover:shadow-md">
-              <div className="flex items-center gap-3 text-slate-500 mb-3">
-                <div className="p-2 rounded-xl bg-blue-100 text-blue-600">
-                  <Package className="h-4 w-4" />
-                </div>
-                <span className="text-[10px] font-black uppercase tracking-widest">Total Pedidos</span>
-              </div>
-              <div className="text-xl font-black text-slate-900">
-                {caseDataQ.isLoading ? (
-                  <div className="h-7 w-24 bg-slate-200 animate-pulse rounded-lg" />
-                ) : (
-                  new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(stats.totalValue)
-                )}
-              </div>
-              <div className="mt-1 text-[10px] text-slate-400 font-bold uppercase tracking-tight">Referente ao mês selecionado</div>
-            </div>
-
-            {/* 2. Faturado */}
-            <div className="rounded-[22px] border border-slate-100 bg-slate-50/50 p-5 shadow-sm transition-all hover:shadow-md">
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-3 text-slate-500">
-                  <div className="p-2 rounded-xl bg-emerald-100 text-emerald-600">
-                    <Check className="h-4 w-4" />
+          {showStats && (
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5 no-print">
+              {/* 1. Total Pedidos */}
+              <div className="rounded-[22px] border border-slate-100 bg-white p-5 shadow-sm transition-all hover:shadow-md">
+                <div className="flex items-center gap-3 text-slate-500 mb-3">
+                  <div className="p-2 rounded-xl bg-blue-100 text-blue-600">
+                    <Package className="h-4 w-4" />
                   </div>
-                  <span className="text-[10px] font-black uppercase tracking-widest">Faturado</span>
+                  <span className="text-[10px] font-black uppercase tracking-widest">Total Pedidos</span>
                 </div>
-                {!caseDataQ.isLoading && (
-                  <span className="text-[10px] font-black text-emerald-700 bg-emerald-100/50 px-2 py-0.5 rounded-lg border border-emerald-200">
-                    {stats.invoicedPct.toFixed(1)}%
-                  </span>
-                )}
-              </div>
-              <div className="text-xl font-black text-emerald-600">
-                {caseDataQ.isLoading ? (
-                  <div className="h-7 w-24 bg-emerald-100/50 animate-pulse rounded-lg" />
-                ) : (
-                  new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(stats.invoicedValue)
-                )}
-              </div>
-              <div className="mt-1 text-[10px] text-slate-400 font-bold uppercase tracking-tight">Valor efetivamente recebido</div>
-            </div>
-
-            {/* 3. Pendente */}
-            <div className="rounded-[22px] border border-slate-100 bg-slate-50/50 p-5 shadow-sm transition-all hover:shadow-md">
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-3 text-slate-500">
-                  <div className="p-2 rounded-xl bg-amber-100 text-amber-600">
-                    <Clock className="h-4 w-4" />
-                  </div>
-                  <span className="text-[10px] font-black uppercase tracking-widest">Pendente</span>
+                <div className="text-xl font-black text-slate-900">
+                  {caseDataQ.isLoading ? (
+                    <div className="h-7 w-24 bg-slate-200 animate-pulse rounded-lg" />
+                  ) : (
+                    new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(stats.totalValue)
+                  )}
                 </div>
-                {!caseDataQ.isLoading && (
-                  <span className="text-[10px] font-black text-amber-700 bg-amber-100/50 px-2 py-0.5 rounded-lg border border-amber-200">
-                    {stats.pendingPct.toFixed(1)}%
-                  </span>
-                )}
+                <div className="mt-1 text-[10px] text-slate-400 font-bold uppercase tracking-tight">Referente ao mês selecionado</div>
               </div>
-              <div className="text-xl font-black text-amber-600">
-                {caseDataQ.isLoading ? (
-                  <div className="h-7 w-24 bg-amber-100/50 animate-pulse rounded-lg" />
-                ) : (
-                  new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(stats.pendingValue)
-                )}
-              </div>
-              <div className="mt-1 text-[10px] text-slate-400 font-bold uppercase tracking-tight">Pagamento não confirmado</div>
-            </div>
 
-            {/* 4. Total Cancelado */}
-            <div className="rounded-[22px] border border-slate-100 bg-slate-50/50 p-5 shadow-sm transition-all hover:shadow-md">
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-3 text-slate-500">
-                  <div className="p-2 rounded-xl bg-rose-100 text-rose-600">
-                    <XCircle className="h-4 w-4" />
-                  </div>
-                  <span className="text-[10px] font-black uppercase tracking-widest">Cancelado</span>
-                </div>
-                {!caseDataQ.isLoading && (
-                  <span className="text-[10px] font-black text-rose-700 bg-rose-100/50 px-2 py-0.5 rounded-lg border border-rose-200">
-                    {stats.canceledPct.toFixed(1)}%
-                  </span>
-                )}
-              </div>
-              <div className="text-xl font-black text-rose-600">
-                {caseDataQ.isLoading ? (
-                  <div className="h-7 w-24 bg-rose-100/50 animate-pulse rounded-lg" />
-                ) : (
-                  new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(stats.canceledValue)
-                )}
-              </div>
-              <div className="mt-1 text-[10px] text-slate-400 font-bold uppercase tracking-tight">Pedidos com status cancelado</div>
-            </div>
-
-            {/* 5. Ticket Médio */}
-            <div className="rounded-[22px] border border-slate-100 bg-slate-50/50 p-5 shadow-sm transition-all hover:shadow-md">
-              <div className="flex items-center gap-3 text-slate-500 mb-3">
-                <div className="p-2 rounded-xl bg-indigo-100 text-indigo-600">
-                  <TrendingUp className="h-4 w-4" />
-                </div>
-                <span className="text-[10px] font-black uppercase tracking-widest">Ticket Médio</span>
-              </div>
-              <div className="text-xl font-black text-slate-900">
-                {caseDataQ.isLoading ? (
-                  <div className="h-7 w-24 bg-indigo-100/50 animate-pulse rounded-lg" />
-                ) : (
-                  new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(stats.avgTicket)
-                )}
-              </div>
-              <div className="mt-1 text-[10px] text-slate-400 font-bold uppercase tracking-tight">Valor por venda faturada</div>
-            </div>
-          </div>
-
-          <div className="mt-6 rounded-[28px] border border-slate-100 bg-white/40 p-6 shadow-sm">
-            <div className="mb-6 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="h-8 w-8 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center">
-                  <TrendingUp className="h-4 w-4" />
-                </div>
-                <div>
-                  <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-400">Desempenho Diário</h4>
-                  <h3 className="text-sm font-bold text-slate-800">Vendas no Mês</h3>
-                </div>
-              </div>
-              <div className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-                Total Faturado: <span className="text-emerald-600 ml-1">{new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(stats.invoicedValue)}</span>
-              </div>
-            </div>
-            
-            <div className="h-[130px] w-full mt-4">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-                  <defs>
-                    <linearGradient id="colorTotal" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.1}/>
-                      <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                  <XAxis 
-                    dataKey="day" 
-                    axisLine={false} 
-                    tickLine={false} 
-                    tick={{ fontSize: 10, fill: "#94a3b8", fontWeight: 700 }}
-                    interval="preserveStartEnd"
-                  />
-                  <YAxis hide />
-                  <RechartsTooltip 
-                    contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', padding: '12px' }}
-                    labelStyle={{ display: 'none' }}
-                  />
-                  <Area
-                    type="monotone"
-                    dataKey="total"
-                    stroke="#3b82f6"
-                    strokeWidth={3}
-                    fillOpacity={1}
-                    fill="url(#colorTotal)"
-                  />
-                </AreaChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-
-          <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">
-            <div className="relative flex-1">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-              <Input
-                value={q}
-                onChange={(e) => setQ(e.target.value)}
-                placeholder="Buscar por cliente, vendedor ou telefone..."
-                className="h-11 rounded-2xl pl-10"
-              />
-            </div>
-          </div>
-
-          <div className="mt-6 overflow-x-auto pb-4">
-            {viewMode === "kanban" ? (
-              <div className="flex gap-4 min-w-max">
-                {columns.map((col) => (
-                  <div
-                    key={col.key}
-                    className="w-[300px] flex-shrink-0"
-                    onDragOver={(e) => col.key !== "__other__" && e.preventDefault()}
-                    onDrop={(e) => {
-                      const cid = e.dataTransfer.getData("text/caseId");
-                      if (cid) updateCaseState(cid, col.key);
-                    }}
-                  >
-                    <div className="mb-3 flex items-center justify-between px-2">
-                      <span className="text-sm font-bold text-slate-700">{col.label}</span>
-                      <Badge variant="secondary" className="rounded-full">{col.items.length}</Badge>
+              {/* 2. Faturado */}
+              <div className="rounded-[22px] border border-slate-100 bg-white p-5 shadow-sm transition-all hover:shadow-md">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-3 text-slate-500">
+                    <div className="p-2 rounded-xl bg-emerald-100 text-emerald-600">
+                      <Check className="h-4 w-4" />
                     </div>
-                    <div className="min-h-[500px] rounded-[24px] bg-slate-50/50 p-2 border border-dashed border-slate-200">
-                      {col.items.map((c) => {
-                        const cust = customersQ.data?.get(c.customer_id!);
-                        const title = cust?.name || c.title || "Pedido";
-                        return (
-                          <Link
-                            key={c.id}
-                            to={`/app/orders/${c.id}`}
-                            draggable
-                            onDragStart={(e) => e.dataTransfer.setData("text/caseId", c.id)}
-                            className="mb-3 block rounded-2xl border border-slate-200 bg-white p-4 shadow-sm hover:shadow-md transition"
-                          >
-                            <div className="flex items-center justify-between gap-2">
-                              <div className="font-semibold text-slate-900 truncate flex-1">{title}</div>
-                              <Badge variant="outline" className="text-[9px] h-4 px-1 font-bold text-blue-600 border-blue-100 flex-shrink-0">
-                                #{c.meta_json?.external_id || c.id.slice(0, 8)}
-                              </Badge>
-                            </div>
-                            <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1">
-                                <div className="flex items-center gap-1" title="Vendedor Comercial">
-                                  <div className="flex h-3.5 w-3.5 items-center justify-center rounded bg-blue-100 text-[7px] font-black text-blue-700">V</div>
-                                  <span className="text-[10px] font-medium text-slate-500 truncate max-w-[60px]">
-                                    {c.assigned_vendor?.display_name || "—"}
-                                  </span>
-                                </div>
-                                <div className="flex items-center gap-1" title="Responsável Atual">
-                                  <div className="flex h-3.5 w-3.5 items-center justify-center rounded bg-purple-100 text-[7px] font-black text-purple-700">R</div>
-                                  <span className="text-[10px] font-bold text-slate-700 truncate max-w-[60px]">
-                                    {c.users_profile?.display_name?.split(" ")[0] || "—"}
-                                  </span>
-                                </div>
-                            </div>
-                            <div className="mt-3 flex items-center justify-between border-t border-slate-50 pt-2.5">
-                              <div className="flex flex-col gap-1">
-                                <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-500">
-                                  <CalendarIcon className="h-3 w-3 text-slate-400" />
-                                  {format(parseSafeDate(caseDataQ.data?.fields.get(c.id)?.sale_date_text, c.created_at), "dd/MM")}
-                                </div>
-                                <div className="flex items-center gap-1.5 text-[10px] font-medium text-slate-400">
-                                  <Clock className="h-3 w-3" /> {formatRelativeUpdate(c.updated_at)}
-                                </div>
-                              </div>
-                              <div className="flex flex-col items-end gap-1.5">
-                                <div className="text-[11px] font-black text-slate-900 tracking-tight">
-                                  {formatMoneyBRL(caseDataQ.data?.totals.get(c.id) || 0)}
-                                </div>
-                                {pendQ.data?.get(c.id)?.open ? (
-                                  <Badge className="bg-amber-100 text-amber-700 border-0">{pendQ.data.get(c.id)!.open} pend.</Badge>
-                                ) : (
-                                  <Badge className="bg-emerald-100 text-emerald-700 border-0">OK</Badge>
-                                )}
-                              </div>
-                            </div>
-                          </Link>
-                        );
-                      })}
-                    </div>
+                    <span className="text-[10px] font-black uppercase tracking-widest">Faturado</span>
                   </div>
-                ))}
+                  {!caseDataQ.isLoading && (
+                    <span className="text-[10px] font-black text-emerald-700 bg-emerald-100/50 px-2 py-0.5 rounded-lg border border-emerald-200">
+                      {stats.invoicedPct.toFixed(1)}%
+                    </span>
+                  )}
+                </div>
+                <div className="text-xl font-black text-emerald-600">
+                  {caseDataQ.isLoading ? (
+                    <div className="h-7 w-24 bg-emerald-100/50 animate-pulse rounded-lg" />
+                  ) : (
+                    new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(stats.invoicedValue)
+                  )}
+                </div>
+                <div className="mt-1 text-[10px] text-slate-400 font-bold uppercase tracking-tight">Valor efetivamente recebido</div>
               </div>
-            ) : (
-              <div className="rounded-2xl border border-slate-200 bg-white overflow-hidden">
+
+              {/* 3. Pendente */}
+              <div className="rounded-[22px] border border-slate-100 bg-white p-5 shadow-sm transition-all hover:shadow-md">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-3 text-slate-500">
+                    <div className="p-2 rounded-xl bg-amber-100 text-amber-600">
+                      <Clock className="h-4 w-4" />
+                    </div>
+                    <span className="text-[10px] font-black uppercase tracking-widest">Pendente</span>
+                  </div>
+                  {!caseDataQ.isLoading && (
+                    <span className="text-[10px] font-black text-amber-700 bg-amber-100/50 px-2 py-0.5 rounded-lg border border-amber-200">
+                      {stats.pendingPct.toFixed(1)}%
+                    </span>
+                  )}
+                </div>
+                <div className="text-xl font-black text-amber-600">
+                  {caseDataQ.isLoading ? (
+                    <div className="h-7 w-24 bg-amber-100/50 animate-pulse rounded-lg" />
+                  ) : (
+                    new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(stats.pendingValue)
+                  )}
+                </div>
+                <div className="mt-1 text-[10px] text-slate-400 font-bold uppercase tracking-tight">Pagamento não confirmado</div>
+              </div>
+
+              {/* 4. Cancelado */}
+              <div className="rounded-[22px] border border-slate-100 bg-white p-5 shadow-sm transition-all hover:shadow-md">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-3 text-slate-500">
+                    <div className="p-2 rounded-xl bg-rose-100 text-rose-600">
+                      <XCircle className="h-4 w-4" />
+                    </div>
+                    <span className="text-[10px] font-black uppercase tracking-widest">Cancelado</span>
+                  </div>
+                  {!caseDataQ.isLoading && (
+                    <span className="text-[10px] font-black text-rose-700 bg-rose-100/50 px-2 py-0.5 rounded-lg border border-rose-200">
+                      {stats.cancelledPct.toFixed(1)}%
+                    </span>
+                  )}
+                </div>
+                <div className="text-xl font-black text-rose-600">
+                  {caseDataQ.isLoading ? (
+                    <div className="h-7 w-24 bg-rose-100/50 animate-pulse rounded-lg" />
+                  ) : (
+                    new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(stats.cancelledValue)
+                  )}
+                </div>
+                <div className="mt-1 text-[10px] text-slate-400 font-bold uppercase tracking-tight">Pedidos com status cancelado</div>
+              </div>
+
+              {/* 5. Ticket Médio */}
+              <div className="rounded-[22px] border border-slate-100 bg-white p-5 shadow-sm transition-all hover:shadow-md">
+                <div className="flex items-center gap-3 text-slate-500 mb-3">
+                  <div className="p-2 rounded-xl bg-indigo-100 text-indigo-600">
+                    <TrendingUp className="h-4 w-4" />
+                  </div>
+                  <span className="text-[10px] font-black uppercase tracking-widest">Ticket Médio</span>
+                </div>
+                <div className="text-xl font-black text-indigo-600">
+                  {caseDataQ.isLoading ? (
+                    <div className="h-7 w-24 bg-indigo-100/50 animate-pulse rounded-lg" />
+                  ) : (
+                    new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(stats.avgTicket)
+                  )}
+                </div>
+                <div className="mt-1 text-[10px] text-slate-400 font-bold uppercase tracking-tight">Valor por venda faturada</div>
+              </div>
+            </div>
+          )}
+
+          {showStats && (
+            <Card className="rounded-[32px] border-slate-100 bg-white p-6 shadow-sm no-print">
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-3">
+                  <div className="grid h-10 w-10 place-items-center rounded-2xl bg-blue-50 text-blue-600">
+                    <TrendingUp className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Desempenho Diário</p>
+                    <p className="text-sm font-bold text-slate-900">Vendas no Mês</p>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Total Faturado</p>
+                  <p className="text-sm font-black text-emerald-600">
+                    {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(stats.invoicedValue)}
+                  </p>
+                </div>
+              </div>
+
+              <div className="h-[220px] w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={chartData}>
+                    <defs>
+                      <linearGradient id="colorValue" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#2563eb" stopOpacity={0.15}/>
+                        <stop offset="95%" stopColor="#2563eb" stopOpacity={0}/>
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                    <XAxis 
+                      dataKey="day" 
+                      axisLine={false} 
+                      tickLine={false} 
+                      tick={{ fontSize: 10, fontWeight: 700, fill: '#94a3b8' }}
+                      interval={0}
+                    />
+                    <YAxis hide />
+                    <Tooltip 
+                      content={({ active, payload }) => {
+                        if (active && payload && payload.length) {
+                          return (
+                            <div className="rounded-2xl border border-slate-100 bg-white p-3 shadow-xl">
+                              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">Dia {payload[0].payload.day}</p>
+                              <p className="text-sm font-black text-blue-600">
+                                {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(payload[0].value as number)}
+                              </p>
+                            </div>
+                          );
+                        }
+                        return null;
+                      }}
+                    />
+                    <Area 
+                      type="monotone" 
+                      dataKey="value" 
+                      stroke="#2563eb" 
+                      strokeWidth={3}
+                      fillOpacity={1} 
+                      fill="url(#colorValue)" 
+                      animationDuration={1500}
+                    />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+            </Card>
+          )}
+
+          {/* Search bar */}
+          <div className="relative no-print">
+            <Search className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
+            <Input
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder="Buscar por cliente, vendedor ou telefone..."
+              className="h-14 rounded-[22px] border-slate-100 bg-white pl-12 text-sm shadow-sm transition-all focus:ring-blue-500"
+            />
+          </div>
+
+          {/* List or Kanban View */}
+          <div className="min-h-[400px]">
+            {viewMode === "list" ? (
+              <div className="overflow-hidden rounded-[32px] border border-slate-100 bg-white shadow-sm">
                 <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Pedido</TableHead>
-                      <TableHead>Valor</TableHead>
-                      <TableHead>Itens</TableHead>
-                      <TableHead>Vendedor</TableHead>
-                      <TableHead>Responsável</TableHead>
-                      <TableHead>Etapa</TableHead>
-                      <TableHead>Pagamento</TableHead>
-                      <TableHead>Atualizado</TableHead>
+                  <TableHeader className="bg-slate-50/50">
+                    <TableRow className="hover:bg-transparent">
+                      <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-400">Pedido</TableHead>
+                      <TableHead className="text-right text-[10px] font-black uppercase tracking-widest text-slate-400">Valor</TableHead>
+                      <TableHead className="text-center text-[10px] font-black uppercase tracking-widest text-slate-400">Itens</TableHead>
+                      <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-400">Vendedor</TableHead>
+                      <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-400">Responsável</TableHead>
+                      <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-400">Etapa</TableHead>
+                      <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-400">Pagamento</TableHead>
+                      <TableHead className="text-right text-[10px] font-black uppercase tracking-widest text-slate-400">Atualizado</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filteredRows.map((c) => (
-                      <TableRow key={c.id}>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            <Link to={`/app/orders/${c.id}`} className="font-semibold hover:underline">
-                              {customersQ.data?.get(c.customer_id!)?.name || c.title || "Pedido"}
-                            </Link>
-                            <Badge variant="outline" className="text-[9px] h-4 px-1 font-bold text-blue-600 border-blue-100">
-                                #{c.meta_json?.external_id || c.id.slice(0, 8)}
+                    {filteredRows.map((c) => {
+                      const total = caseDataQ.data?.totals.get(c.id) || 0;
+                      const items = caseDataQ.data?.itemCounts.get(c.id) || 0;
+                      const f = caseDataQ.data?.fields.get(c.id);
+                      const billingStatus = f?.billing_status || "Pendente";
+                      const partialVal = Number(f?.partial_paid_value || 0);
+
+                      return (
+                        <TableRow key={c.id} className="group cursor-pointer hover:bg-slate-50/80 transition-colors" onClick={() => navigate(`/app/orders/${c.id}`)}>
+                          <TableCell>
+                            <div className="flex flex-col gap-0.5">
+                              <div className="flex items-center gap-2">
+                                <span className="text-sm font-bold text-slate-900 uppercase">
+                                  {customersQ.data?.get(c.customer_id!)?.name || c.title || "Pedido"}
+                                </span>
+                                <Badge variant="secondary" className="rounded-md bg-blue-50 text-[10px] font-black text-blue-600 border-none">
+                                  #{c.id.slice(0, 8)}
+                                </Badge>
+                              </div>
+                              {c.meta_json?.external_id && (
+                                <span className="text-[10px] font-medium text-slate-400">Origem: {c.meta_json.external_id}</span>
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex flex-col items-end">
+                              <span className="text-sm font-black text-slate-900">
+                                {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(total)}
+                              </span>
+                              {billingStatus === "Faturado Parcial" && (
+                                <span className="text-[10px] font-bold text-emerald-600">
+                                  Pago: {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(partialVal)}
+                                </span>
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-center">
+                            <Badge variant="outline" className="rounded-full border-slate-200 px-2.5 font-bold text-slate-600">
+                              {items}
                             </Badge>
-                          </div>
-                          <div className="text-[10px] text-slate-400 truncate max-w-[200px]" title={caseDataQ.data?.fields.get(c.id)?.obs}>
-                            {caseDataQ.data?.fields.get(c.id)?.obs || c.id.slice(0, 8)}
-                          </div>
-                        </TableCell>
-                        <TableCell className="font-bold whitespace-nowrap">
-                          {formatMoneyBRL(caseDataQ.data?.totals.get(c.id) || 0)}
-                        </TableCell>
-                        <TableCell className="text-center font-medium">
-                          <Badge variant="secondary" className="rounded-lg h-5 min-w-[20px] justify-center">
-                            {caseDataQ.data?.itemCounts.get(c.id) || 0}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="text-sm truncate max-w-[120px]" title={c.assigned_vendor?.display_name || ""}>
-                          {c.assigned_vendor?.display_name || "—"}
-                        </TableCell>
-                        <TableCell className="text-[11px] font-bold text-slate-700 truncate max-w-[120px]" title={c.users_profile?.display_name || ""}>
-                          {c.users_profile?.display_name || "—"}
-                        </TableCell>
-                        <TableCell>
-                          <select
-                            value={c.state}
-                            onChange={(e) => updateCaseState(c.id, e.target.value)}
-                            className="text-[11px] font-bold border rounded-xl p-1.5 bg-slate-50 border-slate-200 outline-none focus:ring-2 focus:ring-blue-500/20"
-                          >
-                            {states.map(s => <option key={s} value={s}>{getStateLabel(selectedJourney as any, s)}</option>)}
-                          </select>
-                        </TableCell>
-                        <TableCell>
-                          <select
-                            value={caseDataQ.data?.fields.get(c.id)?.billing_status || "Pendente"}
-                            onChange={(e) => updateBillingStatus(c.id, e.target.value)}
-                            className={cn(
-                              "text-[10px] font-black uppercase tracking-tighter border rounded-xl p-1.5 outline-none focus:ring-2 transition-all",
-                              (() => {
-                                const s = (caseDataQ.data?.fields.get(c.id)?.billing_status || "Pendente").toLowerCase();
-                                if (s.includes("pago") || s.includes("fat")) return "bg-emerald-50 text-emerald-700 border-emerald-200 focus:ring-emerald-500/20";
-                                if (s.includes("can")) return "bg-rose-50 text-rose-700 border-rose-200 focus:ring-rose-500/20";
-                                return "bg-amber-50 text-amber-700 border-amber-200 focus:ring-amber-500/20";
-                              })()
-                            )}
-                          >
-                            <option value="Pendente">Pendente</option>
-                            <option value="Aguardando Banco">Aguardando Banco</option>
-                            <option value="Pago">Pago</option>
-                            <option value="Faturado">Faturado</option>
-                            <option value="Faturado Parcial">Faturado Parcial</option>
-                            <option value="Cancelado">Cancelado</option>
-                          </select>
-                        </TableCell>
-                        <TableCell className="text-[10px] text-slate-500 whitespace-nowrap">{minutesAgo(c.updated_at)} min atrás</TableCell>
-                      </TableRow>
-                    ))}
+                          </TableCell>
+                          <TableCell className="text-sm truncate max-w-[120px]" title={c.assigned_vendor?.display_name || ""}>
+                            {c.assigned_vendor?.display_name || "—"}
+                          </TableCell>
+                          <TableCell className="text-[11px] font-bold text-slate-700 truncate max-w-[120px]" title={c.users_profile?.display_name || ""}>
+                            {c.users_profile?.display_name || "—"}
+                          </TableCell>
+                          <TableCell>
+                            <div onClick={(e) => e.stopPropagation()}>
+                              <Select value={c.state} onValueChange={(val) => updateState(c.id, val)}>
+                                <SelectTrigger className="h-8 w-[130px] rounded-xl text-[10px] font-black uppercase bg-white border-slate-200">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent className="rounded-2xl border-slate-200 shadow-xl">
+                                  {states.map((s) => (
+                                    <SelectItem key={s} value={s} className="text-[10px] font-black uppercase rounded-xl">
+                                      {s}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <div onClick={(e) => e.stopPropagation()}>
+                              <Select value={billingStatus} onValueChange={(val) => updateBillingStatus(c.id, val)}>
+                                <SelectTrigger 
+                                  className={cn(
+                                    "h-8 w-[140px] rounded-xl text-[10px] font-black uppercase border-none",
+                                    billingStatus === "Pago" ? "bg-emerald-100 text-emerald-700" :
+                                    billingStatus === "Faturado Parcial" ? "bg-blue-100 text-blue-700" :
+                                    billingStatus === "Cancelado" ? "bg-rose-100 text-rose-700" :
+                                    billingStatus === "Aguardando Banco" ? "bg-amber-100 text-amber-700" :
+                                    "bg-amber-100 text-amber-700"
+                                  )}
+                                >
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent className="rounded-2xl border-slate-200 shadow-xl">
+                                  {billingStatusOptions.map((opt) => (
+                                    <SelectItem key={opt} value={opt} className="text-[10px] font-black uppercase rounded-xl">
+                                      {opt}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-right text-[11px] font-medium text-slate-500">
+                            {formatRelativeUpdate(c.updated_at)} min atrás
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
                   </TableBody>
                 </Table>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                {states.map((state) => {
+                  const stateRows = filteredRows.filter(r => r.state === state);
+                  const stateTotal = stateRows.reduce((acc, r) => acc + (caseDataQ.data?.totals.get(r.id) || 0), 0);
+
+                  return (
+                    <div key={state} className="flex flex-col gap-4">
+                      <div className="flex items-center justify-between px-2">
+                        <div className="flex items-center gap-2">
+                          <Badge className="bg-slate-900 text-white border-none rounded-md px-2 py-0.5 text-[10px] font-black uppercase">
+                            {state}
+                          </Badge>
+                          <span className="text-[11px] font-bold text-slate-400">{stateRows.length}</span>
+                        </div>
+                        <span className="text-[11px] font-black text-slate-900">
+                          {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(stateTotal)}
+                        </span>
+                      </div>
+                      
+                      <div className="flex flex-col gap-3">
+                        {stateRows.map(c => {
+                          const total = caseDataQ.data?.totals.get(c.id) || 0;
+                          const f = caseDataQ.data?.fields.get(c.id);
+                          const billingStatus = f?.billing_status || "Pendente";
+                          
+                          return (
+                            <Card 
+                              key={c.id} 
+                              className="cursor-pointer rounded-3xl border-slate-100 p-4 shadow-sm transition-all hover:shadow-md hover:border-blue-200"
+                              onClick={() => navigate(`/app/orders/${c.id}`)}
+                            >
+                              <div className="mb-3 flex items-start justify-between">
+                                <div className="flex flex-col gap-1">
+                                  <span className="text-sm font-black text-slate-900 uppercase line-clamp-1">
+                                    {customersQ.data?.get(c.customer_id!)?.name || c.title}
+                                  </span>
+                                  <span className="text-[10px] font-bold text-slate-400">#{c.id.slice(0, 8)}</span>
+                                </div>
+                                <div className={cn(
+                                  "rounded-lg px-2 py-1 text-[8px] font-black uppercase",
+                                  billingStatus === "Pago" ? "bg-emerald-100 text-emerald-700" :
+                                  billingStatus === "Faturado Parcial" ? "bg-blue-100 text-blue-700" :
+                                  billingStatus === "Cancelado" ? "bg-rose-100 text-rose-700" :
+                                  "bg-amber-100 text-amber-700"
+                                )}>
+                                  {billingStatus}
+                                </div>
+                              </div>
+
+                              <div className="mb-4 flex items-center justify-between">
+                                <span className="text-base font-black text-slate-900">
+                                  {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(total)}
+                                </span>
+                                <div className="flex items-center gap-1.5">
+                                  <Badge variant="outline" className="rounded-full border-slate-100 text-[10px] font-bold text-slate-500">
+                                    {caseDataQ.data?.itemCounts.get(c.id) || 0} itens
+                                  </Badge>
+                                </div>
+                              </div>
+
+                              <div className="flex items-center justify-between border-t border-slate-50 pt-3">
+                                <div className="flex flex-col gap-1.5">
+                                  <div className="flex items-center gap-1" title="Vendedor Comercial">
+                                    <div className="flex h-3.5 w-3.5 items-center justify-center rounded bg-blue-100 text-[7px] font-black text-blue-700">V</div>
+                                    <span className="text-[10px] font-medium text-slate-500 truncate max-w-[60px]">
+                                      {c.assigned_vendor?.display_name || "—"}
+                                    </span>
+                                  </div>
+                                  <div className="flex items-center gap-1" title="Responsável Atual">
+                                    <div className="flex h-3.5 w-3.5 items-center justify-center rounded bg-purple-100 text-[7px] font-black text-purple-700">R</div>
+                                    <span className="text-[10px] font-bold text-slate-700 truncate max-w-[60px]">
+                                      {c.users_profile?.display_name?.split(" ")[0] || "—"}
+                                    </span>
+                                  </div>
+                                </div>
+                                <span className="text-[9px] font-bold text-slate-400">
+                                  {formatRelativeUpdate(c.updated_at)}
+                                </span>
+                              </div>
+                            </Card>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>
 
-          <NewSalesOrderDialog
-            open={newSalesOrderOpen}
-            onOpenChange={setNewSalesOrderOpen}
-            tenantId={activeTenantId!}
-            journeyId={selectedJourney?.id!}
-          />
-
           <TransitionBlockDialog
             open={transitionBlock.open}
-            onOpenChange={(v) => setTransitionBlock({ ...transitionBlock, open: v })}
+            onOpenChange={(open) => setTransitionBlock(prev => ({ ...prev, open }))}
+            caseId={transitionBlock.caseId}
+            nextState={transitionBlock.nextState}
             nextStateName={transitionBlock.nextStateName}
             blocks={transitionBlock.reasons}
           />

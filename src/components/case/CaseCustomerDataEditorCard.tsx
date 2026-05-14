@@ -530,8 +530,6 @@ export function CaseCustomerDataEditorCard(props: {
               </SelectTrigger>
               <SelectContent className="rounded-2xl">
                 <SelectItem value="Pendente">Pendente</SelectItem>
-                <SelectItem value="Aguardando Banco">Aguardando Banco</SelectItem>
-                <SelectItem value="Pago">Pago</SelectItem>
                 <SelectItem value="Faturado">Faturado</SelectItem>
                 <SelectItem value="Faturado Parcial">Faturado Parcial</SelectItem>
                 <SelectItem value="Cancelado">Cancelado</SelectItem>
