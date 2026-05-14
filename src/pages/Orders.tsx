@@ -36,9 +36,31 @@ import {
   LayoutList,
   Columns2,
   ChevronRight,
-  MoreVertical,
-  DollarSign
+  DollarSign,
+  GripVertical
 } from "lucide-react";
+
+import {
+  DndContext,
+  closestCorners,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragOverlay,
+  defaultDropAnimationSideEffects,
+  DragStartEvent,
+  DragOverEvent,
+  DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+  useSortable,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import { format, startOfMonth, endOfMonth, isWithinInterval, isSameDay, startOfDay, endOfDay, parse, parseISO, subDays, subMonths } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -140,6 +162,24 @@ export default function Orders() {
   const { user } = useSession();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  );
+
+  const onDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over) return;
+    
+    const caseId = active.id as string;
+    const nextState = over.id as string;
+
+    const caseRow = journeyRows.find(c => c.id === caseId);
+    if (caseRow && (caseRow.state || "").toUpperCase() !== (nextState || "").toUpperCase()) {
+      updateState(caseId, nextState);
+    }
+  };
 
   const [q, setQ] = useState("");
   const [selectedSellerId, setSelectedSellerId] = useState<string>(() => {
@@ -1363,93 +1403,54 @@ export default function Orders() {
                 </Table>
               </div>
             ) : (
-              <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                {states.map((state) => {
-                  const stateRows = filteredRows.filter(r => r.state === state);
-                  const stateTotal = stateRows.reduce((acc, r) => acc + (caseDataQ.data?.totals.get(r.id) || 0), 0);
+              <DndContext
+                sensors={sensors}
+                collisionDetection={closestCorners}
+                onDragEnd={onDragEnd}
+              >
+                <div className="overflow-x-auto pb-4 no-scrollbar">
+                  <div className="flex gap-6 min-w-max px-2">
+                    {states.map((state) => {
+                      const stateRows = filteredRows.filter(r => (r.state || "").toUpperCase() === (state || "").toUpperCase());
+                      const stateTotal = stateRows.reduce((acc, r) => acc + (caseDataQ.data?.totals.get(r.id) || 0), 0);
 
-                  return (
-                    <div key={state} className="flex flex-col gap-4">
-                      <div className="flex items-center justify-between px-2">
-                        <div className="flex items-center gap-2">
-                          <Badge className="bg-slate-900 text-white border-none rounded-md px-2 py-0.5 text-[10px] font-black uppercase">
-                            {getStageLabel(state)}
-                          </Badge>
-                          <span className="text-[11px] font-bold text-slate-400">{stateRows.length}</span>
-                        </div>
-                        <span className="text-[11px] font-black text-slate-900">
-                          {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(stateTotal)}
-                        </span>
-                      </div>
-                      
-                      <div className="flex flex-col gap-3">
-                        {stateRows.map(c => {
-                          const total = caseDataQ.data?.totals.get(c.id) || 0;
-                          const f = caseDataQ.data?.fields.get(c.id);
-                          const billingStatus = f?.billing_status || "Pendente";
+                      return (
+                        <div key={state} className="flex flex-col gap-4 w-[320px] shrink-0">
+                          <div className="flex items-center justify-between px-2">
+                            <div className="flex items-center gap-2">
+                              <Badge className="bg-slate-900 text-white border-none rounded-md px-2 py-0.5 text-[10px] font-black uppercase">
+                                {getStageLabel(state)}
+                              </Badge>
+                              <span className="text-[11px] font-bold text-slate-400">{stateRows.length}</span>
+                            </div>
+                            <span className="text-[11px] font-black text-slate-900">
+                              {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(stateTotal)}
+                            </span>
+                          </div>
                           
-                          return (
-                            <Card 
-                              key={c.id} 
-                              className="cursor-pointer rounded-3xl border-slate-100 p-4 shadow-sm transition-all hover:shadow-md hover:border-blue-200"
-                              onClick={() => navigate(`/app/orders/${c.id}`)}
+                          <SortableContext items={stateRows.map(r => r.id)} strategy={verticalListSortingStrategy}>
+                            <div 
+                              id={state}
+                              className="flex flex-col gap-3 min-h-[500px] rounded-[32px] bg-slate-50/50 p-2 border border-dashed border-slate-200 transition-colors"
                             >
-                              <div className="mb-3 flex items-start justify-between">
-                                <div className="flex flex-col gap-1">
-                                  <span className="text-sm font-black text-slate-900 uppercase line-clamp-1">
-                                    {customersQ.data?.get(c.customer_id!)?.name || c.title}
-                                  </span>
-                                  <span className="text-[10px] font-bold text-slate-400">#{c.id.slice(0, 8)}</span>
-                                </div>
-                                <div className={cn(
-                                  "rounded-lg px-2 py-1 text-[8px] font-black uppercase",
-                                  billingStatus === "Pago" ? "bg-emerald-100 text-emerald-700" :
-                                  billingStatus === "Faturado Parcial" ? "bg-blue-100 text-blue-700" :
-                                  billingStatus === "Cancelado" ? "bg-rose-100 text-rose-700" :
-                                  "bg-amber-100 text-amber-700"
-                                )}>
-                                  {billingStatus}
-                                </div>
-                              </div>
-
-                              <div className="mb-4 flex items-center justify-between">
-                                <span className="text-base font-black text-slate-900">
-                                  {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(total)}
-                                </span>
-                                <div className="flex items-center gap-1.5">
-                                  <Badge variant="outline" className="rounded-full border-slate-100 text-[10px] font-bold text-slate-500">
-                                    {caseDataQ.data?.itemCounts.get(c.id) || 0} itens
-                                  </Badge>
-                                </div>
-                              </div>
-
-                              <div className="flex items-center justify-between border-t border-slate-50 pt-3">
-                                <div className="flex flex-col gap-1.5">
-                                  <div className="flex items-center gap-1" title="Vendedor Comercial">
-                                    <div className="flex h-3.5 w-3.5 items-center justify-center rounded bg-blue-100 text-[7px] font-black text-blue-700">V</div>
-                                    <span className="text-[10px] font-medium text-slate-500 truncate max-w-[60px]">
-                                      {c.assigned_vendor?.display_name || "—"}
-                                    </span>
-                                  </div>
-                                  <div className="flex items-center gap-1" title="Responsável Atual">
-                                    <div className="flex h-3.5 w-3.5 items-center justify-center rounded bg-purple-100 text-[7px] font-black text-purple-700">R</div>
-                                    <span className="text-[10px] font-bold text-slate-700 truncate max-w-[60px]">
-                                      {c.users_profile?.display_name?.split(" ")[0] || "—"}
-                                    </span>
-                                  </div>
-                                </div>
-                                <span className="text-[9px] font-bold text-slate-400">
-                                  {formatRelativeUpdate(c.updated_at)}
-                                </span>
-                              </div>
-                            </Card>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
+                              {stateRows.map(c => (
+                                <SortableOrderCard 
+                                  key={c.id} 
+                                  c={c} 
+                                  customersQ={customersQ} 
+                                  caseDataQ={caseDataQ} 
+                                  navigate={navigate} 
+                                  formatRelativeUpdate={formatRelativeUpdate} 
+                                />
+                              ))}
+                            </div>
+                          </SortableContext>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </DndContext>
             )}
           </div>
 
@@ -1490,5 +1491,93 @@ export default function Orders() {
         </div>
       </AppShell>
     </RequireAuth>
+  );
+}
+
+function SortableOrderCard({ c, customersQ, caseDataQ, navigate, formatRelativeUpdate }: any) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging
+  } = useSortable({ id: c.id });
+
+  const style = {
+    transform: CSS.Translate.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+    zIndex: isDragging ? 50 : 1,
+  };
+
+  const total = caseDataQ.data?.totals.get(c.id) || 0;
+  const f = caseDataQ.data?.fields.get(c.id);
+  const billingStatus = f?.billing_status || "Pendente";
+
+  return (
+    <Card 
+      ref={setNodeRef}
+      style={style}
+      {...attributes}
+      {...listeners}
+      className={cn(
+        "group cursor-pointer rounded-3xl border-slate-100 p-4 shadow-sm transition-all hover:shadow-md hover:border-blue-200 bg-white touch-none",
+        isDragging && "shadow-2xl ring-2 ring-blue-500/20"
+      )}
+      onClick={(e) => {
+        // Only navigate if not dragging
+        if (!isDragging) navigate(`/app/orders/${c.id}`);
+      }}
+    >
+      <div className="mb-3 flex items-start justify-between">
+        <div className="flex flex-col gap-1">
+          <span className="text-sm font-black text-slate-900 uppercase line-clamp-1">
+            {customersQ.data instanceof Map ? (customersQ.data.get(c.customer_id!)?.name || c.title || "Pedido") : (c.title || "Pedido")}
+          </span>
+          <span className="text-[10px] font-bold text-slate-400">#{c.id.slice(0, 8)}</span>
+        </div>
+        <div className={cn(
+          "rounded-lg px-2 py-1 text-[8px] font-black uppercase",
+          billingStatus === "Pago" || billingStatus === "Faturado" ? "bg-emerald-100 text-emerald-700" :
+          billingStatus === "Faturado Parcial" ? "bg-blue-100 text-blue-700" :
+          billingStatus === "Cancelado" ? "bg-rose-100 text-rose-700" :
+          "bg-amber-100 text-amber-700"
+        )}>
+          {billingStatus}
+        </div>
+      </div>
+
+      <div className="mb-4 flex items-center justify-between">
+        <span className="text-base font-black text-slate-900">
+          {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(total)}
+        </span>
+        <div className="flex items-center gap-1.5">
+          <Badge variant="outline" className="rounded-full border-slate-100 text-[10px] font-bold text-slate-500">
+            {caseDataQ.data?.itemCounts.get(c.id) || 0} itens
+          </Badge>
+        </div>
+      </div>
+
+      <div className="flex items-center justify-between border-t border-slate-50 pt-3">
+        <div className="flex flex-col gap-1.5">
+          <div className="flex items-center gap-1" title="Vendedor Comercial">
+            <div className="flex h-3.5 w-3.5 items-center justify-center rounded bg-blue-100 text-[7px] font-black text-blue-700">V</div>
+            <span className="text-[10px] font-medium text-slate-500 truncate max-w-[80px]">
+              {c.assigned_vendor?.display_name || "—"}
+            </span>
+          </div>
+          <div className="flex items-center gap-1" title="Responsável Atual">
+            <div className="flex h-3.5 w-3.5 items-center justify-center rounded bg-purple-100 text-[7px] font-black text-purple-700">R</div>
+            <span className="text-[10px] font-bold text-slate-700 truncate max-w-[80px]">
+              {c.users_profile?.display_name?.split(" ")[0] || "—"}
+            </span>
+          </div>
+        </div>
+        <span className="text-[9px] font-bold text-slate-400">
+          {formatRelativeUpdate(c.updated_at)}
+        </span>
+      </div>
+    </Card>
   );
 }
