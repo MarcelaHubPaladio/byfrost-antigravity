@@ -2,7 +2,7 @@ import { useMemo, useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { useTenant } from "@/providers/TenantProvider";
-import { useAuth } from "@/providers/AuthProvider";
+import { useSession } from "@/providers/SessionProvider";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -124,7 +124,7 @@ function normalizeBillingStatus(raw: string): string {
 
 export default function Orders() {
   const { activeTenantId } = useTenant();
-  const { user } = useAuth();
+  const { user } = useSession();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 

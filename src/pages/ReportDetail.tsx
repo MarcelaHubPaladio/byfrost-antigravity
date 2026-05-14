@@ -3,7 +3,7 @@ import { useParams, useNavigate, Link } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { useTenant } from "@/providers/TenantProvider";
-import { useAuth } from "@/providers/AuthProvider";
+import { useSession } from "@/providers/SessionProvider";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -66,7 +66,7 @@ type EntityReport = {
 export default function ReportDetail() {
   const { contractId } = useParams();
   const { activeTenantId } = useTenant();
-  const { user } = useAuth();
+  const { user } = useSession();
   const queryClient = useQueryClient();
   const printRef = useRef<HTMLDivElement>(null);
 
