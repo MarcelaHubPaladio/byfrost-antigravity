@@ -211,7 +211,7 @@ export default function Orders() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("journeys")
-        .select("id,key,name,is_crm,default_state_machine_json")
+        .select("id,key,name,is_crm")
         .eq("tenant_id", activeTenantId!)
         .eq("key", "sales_order")
         .single();
@@ -222,7 +222,7 @@ export default function Orders() {
         key: j.key,
         name: j.name,
         is_crm: Boolean(j.is_crm),
-        default_state_machine_json: j.default_state_machine_json ?? {},
+        default_state_machine_json: {},
       } as JourneyOpt;
     },
   });
