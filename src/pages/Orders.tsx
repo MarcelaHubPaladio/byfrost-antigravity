@@ -340,7 +340,7 @@ export default function Orders() {
         .eq("journey_id", selectedJourney!.id)
         .is("deleted_at", null)
         .eq("is_chat", false)
-        .order("updated_at", { ascending: false })
+        .order("created_at", { ascending: false })
         .limit(5000);
 
       if (error) throw error;
