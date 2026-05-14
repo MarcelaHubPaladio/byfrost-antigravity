@@ -609,9 +609,22 @@ export default function Orders() {
 
     // Filter by seller
     if (selectedSellerId !== "all") {
+      const selectedVendor = vendorsQ.data?.find(v => v.id === selectedSellerId);
+      const sellerName = selectedVendor?.display_name?.toLowerCase();
+
       rows = rows.filter(r => {
-        const match = r.assigned_vendor_id === selectedSellerId || r.assigned_user_id === selectedSellerId;
-        return match;
+        // 1. Direct ID match
+        if (r.assigned_vendor_id === selectedSellerId) return true;
+        if (r.assigned_user_id === selectedSellerId) return true;
+        
+        // 2. Name match (transition fallback)
+        if (sellerName) {
+          const rowUserName = r.users_profile?.display_name?.toLowerCase();
+          const rowVendorName = r.assigned_vendor?.display_name?.toLowerCase();
+          if (rowUserName === sellerName || rowVendorName === sellerName) return true;
+        }
+        
+        return false;
       });
       console.log("[DEBUG] After Seller Filter:", rows.length);
     }
