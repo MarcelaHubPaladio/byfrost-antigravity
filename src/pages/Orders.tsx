@@ -123,24 +123,18 @@ const getStageLabel = (s: string) => STAGE_LABELS[s] || s;
 
 const ORDERS_FILTERS_V2_KEY = "orders_filters_v2";
 
-const normalizeBillingStatus = (s: string) => {
-  const val = String(s || "Pendente").trim();
-  if (val === "Pago") return "Faturado";
-  if (val === "Aguardando Banco") return "Pendente";
-  return val;
-};
+function normalizeBillingStatus(raw: string): string {
+  const s = String(raw ?? "Pendente").trim();
+  const low = s.toLowerCase();
+  if (low === "pago" || low.includes("faturado")) return "Faturado";
+  if (low.includes("cancel")) return "Cancelado";
+  if (low.includes("parcial")) return "Faturado Parcial";
+  if (low.includes("banco") || low.includes("aguardando") || low === "pendente") return "Pendente";
+  return s;
+}
 
 const billingStatusOptions = ["Pendente", "Faturado", "Faturado Parcial", "Cancelado"];
 const allBillingStatusOptions = ["Pendente", "Faturado", "Faturado Parcial", "Cancelado", "Pago", "Aguardando Banco"];
-
-function normalizeBillingStatus(raw: string): string {
-  const s = String(raw ?? "").trim().toLowerCase();
-  if (s.includes("pago") || s.includes("faturado")) return "Pago";
-  if (s.includes("cancel")) return "Cancelado";
-  if (s.includes("pendente")) return "Pendente";
-  if (s.includes("banco") || s.includes("aguardando")) return "Aguardando Banco";
-  return "Pendente";
-}
 
 export default function Orders() {
   const { activeTenantId } = useTenant();
