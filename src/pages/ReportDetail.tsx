@@ -47,7 +47,8 @@ import {
   MessageCircle,
   ShoppingCart,
   Percent,
-  Download
+  Download,
+  Check
 } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -78,6 +79,8 @@ export default function ReportDetail() {
   const [selectedPeriodId, setSelectedPeriodId] = useState<string | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
+  const [reportsToPrintIds, setReportsToPrintIds] = useState<string[]>([]);
   const printRef = useRef<HTMLDivElement>(null);
 
   const contractQ = useQuery({
@@ -230,7 +233,15 @@ export default function ReportDetail() {
   });
 
   const handlePrint = () => {
-    window.print();
+    setIsPrintModalOpen(true);
+  };
+
+  const confirmPrint = (ids: string[]) => {
+    setReportsToPrintIds(ids);
+    setIsPrintModalOpen(false);
+    setTimeout(() => {
+      window.print();
+    }, 300);
   };
 
   if (contractQ.isLoading || reportsQ.isLoading) {
@@ -274,50 +285,37 @@ export default function ReportDetail() {
             @media print {
               @page { 
                 size: landscape; 
-                margin: 0.3cm !important; 
+                margin: 0 !important; 
               }
               body { 
                 background: white !important; 
                 -webkit-print-color-adjust: exact; 
                 print-color-adjust: exact;
-                zoom: 0.75;
-                overflow: hidden !important;
+                margin: 0 !important;
+                padding: 0 !important;
               }
               .no-print { display: none !important; }
-              .print-only { display: block !important; }
               
-              /* Force Side-by-Side Layout ONLY for main columns */
-              .report-main-grid {
-                display: flex !important;
-                flex-direction: row !important;
-                gap: 1.5rem !important;
-                align-items: flex-start !important;
-                width: 100% !important;
-              }
-              
-              .lg\:col-span-7 { width: 64% !important; flex: 0 0 64% !important; }
-              .lg\:col-span-5 { width: 34% !important; flex: 0 0 34% !important; }
-              
-              /* Compact Content */
-              .card { 
-                border: 1px solid #e2e8f0 !important; 
-                box-shadow: none !important; 
-                break-inside: avoid !important;
-                page-break-inside: avoid !important;
-                padding: 1rem !important;
-                border-radius: 24px !important;
-                background: white !important;
-              }
-              
-              /* Scale headers */
-              h1.text-5xl { font-size: 2.8rem !important; line-height: 1 !important; margin-bottom: 0.5rem !important; }
-              
-              /* Reduce Funnel Height */
-              .py-6.min-h-\[500px\] { 
-                min-height: 350px !important; 
-                padding: 0 !important; 
+              .report-page {
+                height: 100vh !important;
+                width: 100vw !important;
                 margin: 0 !important;
+                padding: 3rem 4rem !important;
+                box-sizing: border-box !important;
+                display: flex !important;
+                flex-direction: column !important;
+                page-break-after: always !important;
+                background: white !important;
+                overflow: hidden !important;
               }
+
+              .text-slate-900 { color: #0f172a !important; }
+              .text-slate-500 { color: #64748b !important; }
+              .text-indigo-600 { color: #4f46e5 !important; }
+              .bg-slate-100 { background-color: #f1f5f9 !important; }
+              .bg-slate-900 { background-color: #0f172a !important; }
+              .bg-indigo-600 { background-color: #4f46e5 !important; }
+            }
               
               .recharts-responsive-container { height: 180px !important; }
               
@@ -598,67 +596,233 @@ export default function ReportDetail() {
                   </div>
                 </div>
 
-                {/* Print Only Footer (Page 1) */}
-                <div className="hidden print:block mt-10 pt-6 border-t text-center text-slate-400 text-[10px]">
-                    <p>Relatório gerado em {format(new Date(), "dd/MM/yyyy HH:mm")} • Página 1/2</p>
-                    <p className="mt-1 font-bold uppercase tracking-widest">Confidencial • Uso Interno</p>
-                </div>
+                {/* Print Only Content (Multi-page) */}
+                <div className="hidden print:block">
+                  {unitReports.filter(r => reportsToPrintIds.includes(r.id)).map((report, idx) => {
+                    const v = Number(report.visualizations) || 0;
+                    const pv = Number(report.profile_visits) || 0;
+                    const ic = Number(report.initiated_conversations) || 0;
+                    const ts = Number(report.tracked_sales) || 0;
+                    
+                    const printFunnelData = [
+                      { name: "Visualizações", value: v, ratio: 100, color: "#6366f1" },
+                      { name: "Visitas Perfil", value: pv, ratio: v > 0 ? (pv/v)*100 : 0, color: "#8b5cf6" },
+                      { name: "Conversas", value: ic, ratio: pv > 0 ? (ic/pv)*100 : 0, color: "#ec4899" },
+                      { name: "Vendas", value: ts, ratio: ic > 0 ? (ts/ic)*100 : 0, color: "#f59e0b" },
+                    ];
 
-                {/* Page 2: Full Page Historical Evolution (Print Only) */}
-                <div className="hidden print:block break-before-page pt-20">
-                    <div className="mb-10">
-                        <p className="text-[10px] font-black uppercase tracking-[0.4em] text-indigo-600 mb-2">Análise Evolutiva de Performance</p>
-                        <h1 className="text-4xl font-black uppercase tracking-tighter text-slate-900">{contractQ.data?.customer?.display_name}</h1>
-                        <p className="text-lg font-bold text-slate-500 mt-1">Evolução Histórica - {selectedUnit}</p>
-                    </div>
-
-                    <Card className="p-12 rounded-[40px] border-none bg-white">
-                        <div className="h-[500px] w-full">
-                            <ResponsiveContainer width="100%" height="100%">
-                                <LineChart data={historyData}>
-                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                                    <XAxis dataKey="name" style={{ fontSize: '12px', fontWeight: 'bold' }} />
-                                    <YAxis style={{ fontSize: '12px' }} />
-                                    <Tooltip contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }} />
-                                    <Line name="Visualizações" type="monotone" dataKey="visualizations" stroke="#6366f1" strokeWidth={5} dot={{ r: 6, fill: '#6366f1' }} />
-                                    <Line name="Vendas" type="monotone" dataKey="sales" stroke="#f59e0b" strokeWidth={5} dot={{ r: 6, fill: '#f59e0b' }} />
-                                    <Line name="Conversas" type="monotone" dataKey="conversations" stroke="#ec4899" strokeWidth={5} dot={{ r: 6, fill: '#ec4899' }} />
-                                </LineChart>
-                            </ResponsiveContainer>
+                    return (
+                      <div key={report.id} className="report-page">
+                        {/* High Impact Header */}
+                        <div className="mb-10 border-b-2 border-slate-900 pb-8 flex justify-between items-end">
+                          <div className="flex-1">
+                            <p className="text-[10px] font-black uppercase tracking-[0.4em] text-indigo-600 mb-2">Relatório Executivo de Performance</p>
+                            <h1 className="text-5xl font-black uppercase tracking-tighter text-slate-900 leading-none mb-4">{contractQ.data?.customer?.display_name}</h1>
+                            <div className="flex items-center gap-6">
+                              <p className="text-xl font-bold text-slate-500 uppercase tracking-widest">{report.unit_name}</p>
+                              <div className="h-6 w-px bg-slate-200" />
+                              <div className="flex items-center gap-3">
+                                <Calendar className="h-5 w-5 text-indigo-600" />
+                                <p className="text-xl font-black text-slate-900">
+                                  {format(new Date(report.start_date), "dd/MM/yyyy")} — {format(new Date(report.end_date), "dd/MM/yyyy")}
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Contrato #{contractId?.slice(0, 8)}</p>
+                            <div className="bg-slate-100 px-6 py-3 rounded-2xl inline-block border border-slate-200">
+                              <p className="text-xl font-black text-slate-900 uppercase">{report.period_name}</p>
+                            </div>
+                          </div>
                         </div>
-                        <div className="grid grid-cols-3 gap-8 mt-12 pt-8 border-t">
-                            <div>
-                                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Melhor Período</p>
-                                <p className="text-2xl font-black text-slate-900">
-                                    {historyData.length > 0 ? historyData.reduce((prev, current) => (prev.visualizations > current.visualizations) ? prev : current).name : "-"}
-                                </p>
-                            </div>
-                            <div>
-                                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Total Visualizações</p>
-                                <p className="text-2xl font-black text-slate-900">
-                                    {historyData.reduce((sum, item) => sum + item.visualizations, 0).toLocaleString()}
-                                </p>
-                            </div>
-                            <div>
-                                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Conversão Média</p>
-                                <p className="text-2xl font-black text-slate-900">
-                                    {(historyData.reduce((sum, item) => sum + item.sales, 0) / (historyData.length || 1)).toFixed(1)} / mês
-                                </p>
-                            </div>
-                        </div>
-                    </Card>
 
-                    <div className="mt-20 pt-10 border-t text-center text-slate-400 text-[10px]">
-                        <p>Relatório gerado em {format(new Date(), "dd/MM/yyyy HH:mm")} • Página 2/2</p>
-                        <p className="mt-1 font-bold uppercase tracking-widest">Confidencial • Uso Interno</p>
-                    </div>
+                        {/* Main Grid: Funnel & Metrics */}
+                        <div className="flex gap-16 flex-1 items-center">
+                          {/* Funnel Section */}
+                          <div className="w-[60%] flex flex-col">
+                            <h3 className="text-2xl font-black uppercase tracking-tighter mb-8 flex items-center gap-3">
+                              <TrendingUp className="h-7 w-7 text-indigo-600" />
+                              Funil de Conversão
+                            </h3>
+                            <div className="w-full h-[500px]">
+                              <FunnelChart data={printFunnelData} />
+                            </div>
+                          </div>
+
+                          {/* Metrics & Info Section */}
+                          <div className="w-[35%] flex flex-col gap-6">
+                            <div className="p-8 rounded-[32px] bg-slate-900 text-white">
+                              <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
+                                <ShoppingCart className="h-5 w-5 text-indigo-400" />
+                                Produtos Anunciados
+                              </h3>
+                              <p className="text-sm opacity-90 leading-relaxed italic line-clamp-3">
+                                {report.advertised_products || "Nenhum produto listado."}
+                              </p>
+                            </div>
+
+                            <div className="p-8 rounded-[32px] bg-indigo-600 text-white">
+                              <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
+                                <Calendar className="h-5 w-5 text-indigo-200" />
+                                Produção do Período
+                              </h3>
+                              <p className="text-sm opacity-90 leading-relaxed italic line-clamp-3">
+                                {report.production_notes || "Nenhuma nota de produção cadastrada."}
+                              </p>
+                            </div>
+
+                            <div className="p-8 rounded-[32px] bg-white border-2 border-slate-100">
+                              <h3 className="text-lg font-bold mb-6 flex items-center gap-2 text-slate-900">
+                                <BarChart3 className="h-5 w-5 text-indigo-600" />
+                                Performance do Período
+                              </h3>
+                              <div className="grid grid-cols-3 gap-y-8 gap-x-4">
+                                <div className="text-center">
+                                  <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Visualizações</p>
+                                  <p className="text-lg font-black text-slate-900">{report.visualizations.toLocaleString()}</p>
+                                </div>
+                                <div className="text-center">
+                                  <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Visitas</p>
+                                  <p className="text-lg font-black text-slate-900">{report.profile_visits.toLocaleString()}</p>
+                                </div>
+                                <div className="text-center">
+                                  <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Conversas</p>
+                                  <p className="text-lg font-black text-slate-900">{report.initiated_conversations.toLocaleString()}</p>
+                                </div>
+                                <div className="text-center">
+                                  <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Vendas</p>
+                                  <p className="text-lg font-black text-emerald-600">{report.tracked_sales.toLocaleString()}</p>
+                                </div>
+                                <div className="text-center">
+                                  <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Investimento</p>
+                                  <p className="text-lg font-black text-indigo-600">R$ {report.ad_spend.toLocaleString()}</p>
+                                </div>
+                                <div className="text-center">
+                                  <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">ROI (1%)</p>
+                                  <p className="text-lg font-black text-slate-900">{(Number(report.sales_percentage || 0)).toFixed(1)}%</p>
+                                </div>
+                                <div className="text-center">
+                                  <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">CPV</p>
+                                  <p className="text-md font-bold text-slate-600">R$ {(report.ad_spend / (report.profile_visits || 1)).toFixed(2)}</p>
+                                </div>
+                                <div className="text-center">
+                                  <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">CPL</p>
+                                  <p className="text-md font-bold text-slate-600">R$ {(report.ad_spend / (report.initiated_conversations || 1)).toFixed(2)}</p>
+                                </div>
+                                <div className="text-center">
+                                  <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">CAC</p>
+                                  <p className="text-md font-bold text-slate-600">R$ {(report.ad_spend / (report.tracked_sales || 1)).toFixed(2)}</p>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Footer Info */}
+                        <div className="mt-10 pt-6 border-t border-slate-100 flex justify-between items-center text-slate-400 text-[10px]">
+                          <p className="font-bold uppercase tracking-[0.2em]">Confidencial • Gerado via AgenteHub</p>
+                          <p>Página {idx + 1} de {reportsToPrintIds.length} • {format(new Date(), "dd/MM/yyyy HH:mm")}</p>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
-            )}
-          </div>
+          
+          {/* Multi-Period Selection Modal */}
+          <PrintSelectionDialog 
+            reports={unitReports}
+            isOpen={isPrintModalOpen}
+            onClose={() => setIsPrintModalOpen(false)}
+            onConfirm={confirmPrint}
+          />
         </AppShell>
       </RequireRouteAccess>
     </RequireAuth>
+  );
+}
+
+function PrintSelectionDialog({ 
+  reports, 
+  isOpen, 
+  onClose, 
+  onConfirm 
+}: { 
+  reports: EntityReport[], 
+  isOpen: boolean, 
+  onClose: () => void, 
+  onConfirm: (selectedIds: string[]) => void 
+}) {
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (isOpen) {
+      setSelectedIds(reports.map(r => r.id)); // Default select all
+    }
+  }, [isOpen, reports]);
+
+  return (
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent className="max-w-md rounded-[32px]">
+        <DialogHeader>
+          <DialogTitle className="text-2xl font-black">Exportar Relatórios</DialogTitle>
+        </DialogHeader>
+        <div className="py-4 space-y-4">
+          <p className="text-sm text-slate-500 font-medium">Selecione os períodos para incluir no PDF:</p>
+          <div className="max-h-[400px] overflow-y-auto space-y-2 pr-2 custom-scrollbar">
+            {reports.map(r => (
+              <div 
+                key={r.id} 
+                className={cn(
+                  "flex items-center justify-between p-4 rounded-2xl border-2 transition-all cursor-pointer group",
+                  selectedIds.includes(r.id) 
+                    ? "border-indigo-600 bg-indigo-50/50 shadow-md" 
+                    : "border-slate-100 hover:border-slate-200 bg-slate-50/30"
+                )}
+                onClick={() => {
+                  if (selectedIds.includes(r.id)) {
+                    setSelectedIds(selectedIds.filter(id => id !== r.id));
+                  } else {
+                    setSelectedIds([...selectedIds, r.id]);
+                  }
+                }}
+              >
+                <div className="flex items-center gap-4">
+                  <div className={cn(
+                    "h-6 w-6 rounded-lg border-2 flex items-center justify-center transition-all",
+                    selectedIds.includes(r.id) ? "bg-indigo-600 border-indigo-600" : "border-slate-300 bg-white"
+                  )}>
+                    {selectedIds.includes(r.id) && <Check className="h-4 w-4 text-white" />}
+                  </div>
+                  <div>
+                    <p className="font-black text-slate-900 group-hover:text-indigo-600 transition-colors uppercase text-sm tracking-tight">{r.period_name}</p>
+                    <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-0.5">
+                      {format(new Date(r.start_date), "dd/MM/yy")} — {format(new Date(r.end_date), "dd/MM/yy")}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+        <DialogFooter className="gap-2 sm:justify-between items-center border-t pt-4">
+          <p className="text-xs text-slate-400 font-bold uppercase tracking-widest">
+            {selectedIds.length} selecionado{selectedIds.length !== 1 ? 's' : ''}
+          </p>
+          <div className="flex gap-2">
+            <Button variant="ghost" onClick={onClose} className="rounded-xl font-bold">Cancelar</Button>
+            <Button 
+              onClick={() => onConfirm(selectedIds)} 
+              className="bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold px-8 shadow-lg shadow-indigo-200"
+              disabled={selectedIds.length === 0}
+            >
+              Gerar PDF
+            </Button>
+          </div>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
