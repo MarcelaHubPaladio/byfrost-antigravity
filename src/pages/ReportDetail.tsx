@@ -727,9 +727,10 @@ export default function ReportDetail() {
                       </div>
                     );
                   })}
+                </div>
               </div>
             </div>
-          </div>
+          )}
           
           {/* Multi-Period Selection Modal */}
           <PrintSelectionDialog 
@@ -1034,8 +1035,9 @@ function ReportFormDialog({ onSave, isLoading, initialData, existingUnits = [] }
                             />
                         </div>
                     </div>
-                </div>
+              </div>
             </div>
+          </div>
             <DialogFooter>
                 <Button 
                     className="w-full h-12 rounded-xl bg-indigo-600 hover:bg-indigo-700"
