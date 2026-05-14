@@ -170,8 +170,8 @@ function isStateMatch(rowState: string, targetState: string) {
   const t = (targetState || "").toLowerCase();
   
   // Agrupamentos lógicos
-  if (t === "cancelled" || t === "cancelled") {
-    return s === "cancelled" || s === "cancelado" || s === "cancelled";
+  if (t === "cancelled") {
+    return s === "cancelled" || s === "cancelado";
   }
   if (t === "new") return s === "new" || s === "pedido";
   if (t === "em_anlise") return s === "em_anlise" || s === "análise" || s === "analise";
@@ -803,6 +803,17 @@ export default function Orders() {
     setExportingPdf(false);
   };
 
+  const workflowProgress = useMemo(() => {
+    const activeRows = filteredRows.filter(r => !isStateMatch(r.state, "cancelled"));
+    if (activeRows.length === 0) return { pct: 0, completed: 0, total: 0 };
+    const completed = activeRows.filter(r => isStateMatch(r.state, "finalized")).length;
+    return {
+      pct: (completed / activeRows.length) * 100,
+      completed,
+      total: activeRows.length
+    };
+  }, [filteredRows]);
+
   const states = useMemo(() => {
     const configStates = selectedJourney?.default_state_machine_json?.states || [];
     if (configStates.length > 0) return configStates;
@@ -1130,6 +1141,30 @@ export default function Orders() {
                   </div>
                 </PopoverContent>
               </Popover>
+            </div>
+          </div>
+
+          {/* Workflow Progress Bar */}
+          <div className="no-print">
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <div className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+                <span className="text-[10px] font-black uppercase tracking-[0.15em] text-slate-500">
+                  Progresso da Jornada
+                </span>
+              </div>
+              <div className="flex items-baseline gap-1">
+                <span className="text-sm font-black text-slate-900">{workflowProgress.pct.toFixed(0)}%</span>
+                <span className="text-[10px] font-bold text-slate-400">
+                  ({workflowProgress.completed}/{workflowProgress.total} Concluídos)
+                </span>
+              </div>
+            </div>
+            <div className="h-2.5 w-full overflow-hidden rounded-full bg-slate-100 shadow-inner">
+              <div 
+                className="h-full rounded-full bg-gradient-to-r from-blue-600 via-indigo-500 to-emerald-500 transition-all duration-700 ease-out shadow-lg"
+                style={{ width: `${workflowProgress.pct}%` }}
+              />
             </div>
           </div>
 
