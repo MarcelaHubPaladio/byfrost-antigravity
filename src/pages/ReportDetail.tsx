@@ -77,6 +77,7 @@ export default function ReportDetail() {
   const queryClient = useQueryClient();
   const [selectedPeriodId, setSelectedPeriodId] = useState<string | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const printRef = useRef<HTMLDivElement>(null);
 
   const contractQ = useQuery({
@@ -207,6 +208,7 @@ export default function ReportDetail() {
       queryClient.invalidateQueries({ queryKey: ["entity_reports", contractId] });
       showSuccess("Relatório salvo com sucesso!");
       setIsDialogOpen(false);
+      setIsEditDialogOpen(false);
     },
     onError: (err) => {
       showError("Erro ao salvar relatório: " + err.message);
@@ -440,7 +442,7 @@ export default function ReportDetail() {
                         Funil de Conversão
                       </h3>
                       <div className="flex gap-2 no-print">
-                         <Dialog>
+                         <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
                             <DialogTrigger asChild>
                                <Button variant="ghost" size="icon" className="rounded-full text-slate-400 hover:text-indigo-600">
                                  <Edit3 className="h-4 w-4" />
