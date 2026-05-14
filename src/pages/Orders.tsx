@@ -133,12 +133,13 @@ const STAGE_LABELS: Record<string, string> = {
   "DELIVERED": "Entregue",
   "FINALIZED": "Finalizado",
   "CANCELLED": "Cancelado",
+  "CANCELADO": "Cancelado",
   "IN_PRODUCTION": "Em Produção",
   "IN_ANALYSIS": "Em Análise",
   "APPROVED": "Aprovado"
 };
 
-const SALES_ORDER_STAGES = ["NEW", "PROJETO", "IN_ROUTE", "DELIVERED", "FINALIZED", "CANCELLED"];
+const SALES_ORDER_STAGES = ["NEW", "PROJETO", "IN_PRODUCTION", "IN_ROUTE", "DELIVERED", "FINALIZED", "CANCELLED", "CANCELADO"];
 
 const getStageLabel = (s: string) => STAGE_LABELS[s] || s;
 
@@ -491,8 +492,18 @@ export default function Orders() {
         }, { onConflict: "case_id,key" });
 
       if (error) throw error;
+      
+      // If status is Cancelado, also move the case to CANCELLED state
+      if (status === "Cancelado") {
+        await supabase
+          .from("cases")
+          .update({ state: "CANCELLED", updated_at: new Date().toISOString() })
+          .eq("id", caseId);
+      }
+
       showSuccess(`Status de pagamento: ${status}`);
       caseDataQ.refetch();
+      casesQ.refetch();
     } catch (e: any) {
       showError(`Falha ao atualizar status: ${e.message}`);
     }
@@ -1354,9 +1365,9 @@ export default function Orders() {
                           </TableCell>
                           <TableCell>
                             <div onClick={(e) => e.stopPropagation()}>
-                              <Select value={c.state} onValueChange={(val) => updateState(c.id, val)}>
+                              <Select value={c.state?.toUpperCase()} onValueChange={(val) => updateState(c.id, val)}>
                                 <SelectTrigger className="h-8 w-[130px] rounded-xl text-[10px] font-black uppercase bg-white border-slate-200">
-                                  <SelectValue placeholder={getStageLabel(c.state)} />
+                                  <SelectValue placeholder={getStageLabel(c.state?.toUpperCase())} />
                                 </SelectTrigger>
                                 <SelectContent className="rounded-2xl border-slate-200 shadow-xl">
                                   {states.map((s) => (

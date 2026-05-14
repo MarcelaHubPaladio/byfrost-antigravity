@@ -113,7 +113,7 @@ export function NewSalesOrderDialog(props: {
           journey_id: journeyId,
           case_type: "sales_order",
           status: "open",
-          state: "new",
+          state: "NEW",
           title: customerName,
           assigned_user_id: sellerId || null,
           created_by_channel: "panel",

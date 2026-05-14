@@ -398,7 +398,7 @@ export function ImportOrdersDialog({
       
       const vendors = (vendorsData ?? []) as any[];
 
-      const firstState = (journey.default_state_machine_json?.states ?? [])[0] || "new";
+      const firstState = (journey.default_state_machine_json?.states ?? [])[0] || "NEW";
 
       for (let i = 0; i < parsedOrders.length; i++) {
         const o = parsedOrders[i];

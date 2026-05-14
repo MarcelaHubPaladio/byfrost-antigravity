@@ -527,7 +527,7 @@ export default function SalesOrderCase() {
                 <div className="h-8 w-px bg-slate-100 mx-1" />
 
                 {/* State Transition Select */}
-                <Select value={caseData?.state} onValueChange={updateState} disabled={updatingState}>
+                <Select value={caseData?.state?.toUpperCase()} onValueChange={updateState} disabled={updatingState}>
                   <SelectTrigger className="h-10 w-[180px] rounded-2xl bg-blue-600 border-none shadow-lg shadow-blue-600/20 font-black text-[10px] uppercase tracking-widest px-4 text-white hover:bg-blue-700 transition-colors">
                     <SelectValue placeholder="Status..." />
                   </SelectTrigger>
