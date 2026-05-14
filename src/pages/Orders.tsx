@@ -205,6 +205,7 @@ export default function Orders() {
     localStorage.setItem(ORDERS_FILTERS_V2_KEY, JSON.stringify(filters));
   }, [selectedSellerId, dateRange]);
 
+  // Force fresh build - query cleaned
   const journeyQ = useQuery({
     queryKey: ["journey_orders", activeTenantId],
     enabled: Boolean(activeTenantId),
