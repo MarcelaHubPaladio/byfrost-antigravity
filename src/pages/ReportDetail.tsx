@@ -339,20 +339,7 @@ export default function ReportDetail() {
                 </Card>
               ) : (
                 <div className="space-y-8" ref={printRef}>
-                  {/* Print Only Header */}
-                  <div className="hidden print:block mb-12 border-b-2 border-slate-900 pb-10">
-                     <div className="flex justify-between items-end">
-                        <div>
-                          <p className="text-[10px] font-black uppercase tracking-[0.4em] text-indigo-600 mb-2">Relatório Executivo de Performance</p>
-                          <h1 className="text-5xl font-black uppercase tracking-tighter text-slate-900">{contractQ.data?.customer?.display_name}</h1>
-                          <p className="text-xl font-bold text-slate-500 mt-2">{selectedUnit}</p>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-sm font-bold text-slate-500 uppercase tracking-widest">Contrato #{contractId?.slice(0, 8)}</p>
-                          <p className="text-2xl font-black text-slate-900 mt-1">{selectedReport?.period_name}</p>
-                        </div>
-                     </div>
-                  </div>
+                  <div className="no-print space-y-8">
 
                   {/* Period Selector (Tabs-like) */}
                   <div className="flex gap-2 overflow-x-auto pb-2 no-print">
@@ -374,7 +361,7 @@ export default function ReportDetail() {
                   {/* Funnel & Main Stats */}
                   <div className="report-main-grid grid grid-cols-1 lg:grid-cols-12 gap-8">
                     {/* Left: Stats & Funnel */}
-                    <Card className="lg:col-span-7 p-8 rounded-[32px] border-none bg-white shadow-xl shadow-slate-200/50 dark:bg-slate-950/50 dark:shadow-none print:shadow-none print:p-0">
+                    <Card className="lg:col-span-7 p-8 rounded-[32px] border-none bg-white shadow-xl shadow-slate-200/50 dark:bg-slate-950/50 dark:shadow-none">
                       <div className="flex items-center justify-between mb-8">
                         <h3 className="text-lg font-bold flex items-center gap-2">
                           <TrendingUp className="h-5 w-5 text-indigo-500" />
@@ -478,48 +465,8 @@ export default function ReportDetail() {
                           <h3 className="text-lg font-bold mb-6 flex items-center gap-2">
                               <BarChart3 className="h-5 w-5 text-indigo-500" />
                               <span className="print:hidden">Evolução Histórica</span>
-                              <span className="hidden print:block text-slate-900">Performance do Período</span>
                           </h3>
                           
-                          {/* Summary Grid for PDF ONLY (3x3) */}
-                          <div className="hidden print:grid grid-cols-3 gap-y-10 gap-x-4">
-                              <div className="text-center">
-                                  <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Visualizações</p>
-                                  <p className="text-xl font-black text-slate-900 dark:text-white">{selectedReport?.visualizations?.toLocaleString()}</p>
-                              </div>
-                              <div className="text-center">
-                                  <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Visitas</p>
-                                  <p className="text-xl font-black text-slate-900 dark:text-white">{selectedReport?.profile_visits?.toLocaleString()}</p>
-                              </div>
-                              <div className="text-center">
-                                  <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Conversas</p>
-                                  <p className="text-xl font-black text-slate-900 dark:text-white">{selectedReport?.initiated_conversations?.toLocaleString()}</p>
-                              </div>
-                              <div className="text-center">
-                                  <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Vendas</p>
-                                  <p className="text-xl font-black text-emerald-600">{selectedReport?.tracked_sales?.toLocaleString()}</p>
-                              </div>
-                              <div className="text-center">
-                                  <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Investimento</p>
-                                  <p className="text-xl font-black text-indigo-600">R$ {selectedReport?.ad_spend?.toLocaleString()}</p>
-                              </div>
-                              <div className="text-center">
-                                  <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">ROI (1%)</p>
-                                  <p className="text-xl font-black text-slate-900 dark:text-white">{Number(selectedReport?.sales_percentage || 0).toFixed(1)}%</p>
-                              </div>
-                              <div className="text-center">
-                                  <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">CPV</p>
-                                  <p className="text-lg font-bold text-slate-600 dark:text-slate-300">R$ {metrics.cpv.toFixed(2)}</p>
-                              </div>
-                              <div className="text-center">
-                                  <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">CPL</p>
-                                  <p className="text-lg font-bold text-slate-600 dark:text-slate-300">R$ {metrics.cpl.toFixed(2)}</p>
-                              </div>
-                              <div className="text-center">
-                                  <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">CAC</p>
-                                  <p className="text-lg font-bold text-slate-600 dark:text-slate-300">R$ {metrics.cac.toFixed(2)}</p>
-                              </div>
-                          </div>
 
                           {/* Line Chart only on screen, hidden in print here */}
                           <div className="h-[200px] w-full mt-8 no-print pt-6 border-t">
