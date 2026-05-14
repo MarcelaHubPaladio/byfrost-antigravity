@@ -95,7 +95,7 @@ export function SalesOrderItemsEditorCard(props: { caseId: string; className?: s
 
   const [searchOffering, setSearchOffering] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
-  const [openOfferingPerLine, setOpenOfferingPerLine] = useState<Record<number, boolean>>({});
+  const [openOfferingPerLine, setOpenOfferingPerLine] = useState<Record<string, boolean>>({});
 
   // Quick Create State
   const [quickCreate, setQuickCreate] = useState<{ open: boolean; name: string; lineNo: number | null }>({
@@ -374,7 +374,7 @@ export function SalesOrderItemsEditorCard(props: { caseId: string; className?: s
             <ReceiptText className="h-4 w-4 text-slate-500" /> Itens do pedido
           </div>
           <div className="mt-1 text-xs text-slate-600">
-            Edite a tabela do pedido (ID, Quantidade, Valor Unitário). A descrição fica em uma área maior abaixo.
+            Edite a tabela do pedido (ID, Quantidade, Valor Unitário).
           </div>
           <div className="mt-1 text-[11px] text-slate-500">
             Carregados: <span className="font-semibold text-slate-700">{itemsQ.data?.length ?? 0}</span>
@@ -503,7 +503,6 @@ export function SalesOrderItemsEditorCard(props: { caseId: string; className?: s
                           setOpenOfferingPerLine((prev) => ({ ...prev, [`mob-${row.line_no}`]: true }));
                         }}
                         onBlur={() => {
-                          // Small timeout to allow onClick to fire on the results
                           setTimeout(() => {
                             setOpenOfferingPerLine((prev) => ({ ...prev, [`mob-${row.line_no}`]: false }));
                           }, 200);
@@ -620,194 +619,189 @@ export function SalesOrderItemsEditorCard(props: { caseId: string; className?: s
                       <Trash2 className="mr-2 h-4 w-4" /> Remover
                     </Button>
                   </div>
-                   {/* Desktop/table layout */}
-                  <div className="hidden grid-cols-[90px_1fr_70px_110px_80px_110px_40px] items-center gap-2 sm:grid">
-                    {/* ID / Code */}
-                    <div>
-                      <Input
-                        value={row.code}
-                        onChange={(e) =>
-                          setDraft((prev) =>
-                            prev.map((x) => (x.line_no === row.line_no ? { ...x, code: e.target.value } : x))
+                </div>
+
+                {/* Desktop/table layout */}
+                <div className="hidden grid-cols-[90px_1fr_70px_110px_80px_110px_40px] items-center gap-2 sm:grid">
+                  <div>
+                    <Input
+                      value={row.code}
+                      onChange={(e) =>
+                        setDraft((prev) =>
+                          prev.map((x) => (x.line_no === row.line_no ? { ...x, code: e.target.value } : x))
+                        )
+                      }
+                      className="h-10 rounded-xl bg-slate-50/50 border-slate-200 text-xs font-mono"
+                      placeholder="ID"
+                    />
+                  </div>
+
+                  <div className="relative">
+                    <Input
+                      value={row.description}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setDraft((prev) =>
+                          prev.map((x) =>
+                            x.line_no === row.line_no
+                              ? { ...x, description: val, offering_entity_id: null }
+                              : x
                           )
-                        }
-                        className="h-10 rounded-xl bg-slate-50/50 border-slate-200 text-xs font-mono"
-                        placeholder="ID"
-                      />
-                    </div>
+                        );
+                        setSearchOffering(val);
+                        setOpenOfferingPerLine((prev) => ({ ...prev, [`desk-${row.line_no}`]: true }));
+                      }}
+                      onFocus={() => {
+                        setSearchOffering(row.description);
+                        setOpenOfferingPerLine((prev) => ({ ...prev, [`desk-${row.line_no}`]: true }));
+                      }}
+                      onBlur={() => {
+                        setTimeout(() => {
+                          setOpenOfferingPerLine((prev) => ({ ...prev, [`desk-${row.line_no}`]: false }));
+                        }, 200);
+                      }}
+                      className="h-10 rounded-xl text-sm border-slate-200"
+                      placeholder="Nome do produto ou serviço..."
+                    />
 
-                    {/* Description + Search */}
-                    <div className="relative">
-                      <Input
-                        value={row.description}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          setDraft((prev) =>
-                            prev.map((x) =>
-                              x.line_no === row.line_no
-                                ? { ...x, description: val, offering_entity_id: null }
-                                : x
-                            )
-                          );
-                          setSearchOffering(val);
-                          setOpenOfferingPerLine((prev) => ({ ...prev, [`desk-${row.line_no}`]: true }));
-                        }}
-                        onFocus={() => {
-                          setSearchOffering(row.description);
-                          setOpenOfferingPerLine((prev) => ({ ...prev, [`desk-${row.line_no}`]: true }));
-                        }}
-                        onBlur={() => {
-                          setTimeout(() => {
-                            setOpenOfferingPerLine((prev) => ({ ...prev, [`desk-${row.line_no}`]: false }));
-                          }, 200);
-                        }}
-                        className="h-10 rounded-xl text-sm border-slate-200"
-                        placeholder="Nome do produto ou serviço..."
-                      />
-
-                      {openOfferingPerLine[`desk-${row.line_no}`] && (
-                        <div className="absolute left-0 right-0 top-full z-[100] mt-1 max-h-[260px] overflow-y-auto rounded-2xl border border-slate-200 bg-white shadow-2xl">
-                          {offeringsQ.isFetching && !offeringsQ.data?.length && (
-                            <div className="p-4 text-center text-xs text-slate-500 flex items-center justify-center gap-2">
-                              <Loader2 className="h-3 w-3 animate-spin" /> Procurando...
-                            </div>
-                          )}
-                          <div className="flex flex-col">
-                            {offeringsQ.data?.map((off: any) => (
-                              <button
-                                key={off.id}
-                                type="button"
-                                className="w-full text-left rounded-none h-auto min-h-12 py-2 px-3 hover:bg-slate-50 transition-colors border-b border-slate-50 last:border-0"
-                                onClick={() => {
-                                  setDraft((prev) =>
-                                    prev.map((x) =>
-                                      x.line_no === row.line_no
-                                        ? {
-                                            ...x,
-                                            code: off.metadata?.short_name || off.metadata?.code || x.code,
-                                            description: off.display_name,
-                                            offering_entity_id: off.id,
-                                            price: off.metadata?.price != null 
-                                              ? String(off.metadata.price).replace(/\./g, ",") 
-                                              : x.price
-                                          }
-                                        : x
-                                    )
-                                  );
-                                  setOpenOfferingPerLine((prev) => ({ ...prev, [`desk-${row.line_no}`]: false }));
-                                  setSearchOffering("");
-                                }}
-                              >
-                                <div className="flex items-center justify-between gap-3">
-                                  <div className="flex flex-col gap-0.5">
-                                    <div className="text-sm font-medium text-slate-900 leading-snug">
-                                      {off.display_name}
-                                    </div>
-                                    {(off.metadata?.short_name || off.metadata?.code) && (
-                                      <div className="text-[11px] text-slate-500 font-mono">
-                                        {off.metadata?.short_name || off.metadata?.code}
-                                      </div>
-                                    )}
+                    {openOfferingPerLine[`desk-${row.line_no}`] && (
+                      <div className="absolute left-0 right-0 top-full z-[100] mt-1 max-h-[260px] overflow-y-auto rounded-2xl border border-slate-200 bg-white shadow-2xl">
+                        {offeringsQ.isFetching && !offeringsQ.data?.length && (
+                          <div className="p-4 text-center text-xs text-slate-500 flex items-center justify-center gap-2">
+                            <Loader2 className="h-3 w-3 animate-spin" /> Procurando...
+                          </div>
+                        )}
+                        <div className="flex flex-col">
+                          {offeringsQ.data?.map((off: any) => (
+                            <button
+                              key={off.id}
+                              type="button"
+                              className="w-full text-left rounded-none h-auto min-h-12 py-2 px-3 hover:bg-slate-50 transition-colors border-b border-slate-50 last:border-0"
+                              onClick={() => {
+                                setDraft((prev) =>
+                                  prev.map((x) =>
+                                    x.line_no === row.line_no
+                                      ? {
+                                          ...x,
+                                          code: off.metadata?.short_name || off.metadata?.code || x.code,
+                                          description: off.display_name,
+                                          offering_entity_id: off.id,
+                                          price: off.metadata?.price != null 
+                                            ? String(off.metadata.price).replace(/\./g, ",") 
+                                            : x.price
+                                        }
+                                      : x
+                                  )
+                                );
+                                setOpenOfferingPerLine((prev) => ({ ...prev, [`desk-${row.line_no}`]: false }));
+                                setSearchOffering("");
+                              }}
+                            >
+                              <div className="flex items-center justify-between gap-3">
+                                <div className="flex flex-col gap-0.5">
+                                  <div className="text-sm font-medium text-slate-900 leading-snug">
+                                    {off.display_name}
                                   </div>
-                                  {row.offering_entity_id === off.id && (
-                                    <Check className="h-4 w-4 text-emerald-600 shrink-0" />
+                                  {(off.metadata?.short_name || off.metadata?.code) && (
+                                    <div className="text-[11px] text-slate-500 font-mono">
+                                      {off.metadata?.short_name || off.metadata?.code}
+                                    </div>
                                   )}
                                 </div>
-                              </button>
-                            ))}
-                            {!offeringsQ.isFetching && offeringsQ.data?.length === 0 && (
-                              <div className="p-4 flex flex-col items-center gap-3 text-center">
-                                <div className="text-xs text-slate-500">
-                                  Nenhum produto encontrado para "{searchOffering}".
-                                </div>
-                                <Button
-                                  type="button"
-                                  variant="outline"
-                                  className="h-9 rounded-xl border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 font-bold px-4"
-                                  onClick={() => {
-                                    setQuickCreate({ open: true, name: searchOffering, lineNo: row.line_no });
-                                    setOpenOfferingPerLine((prev) => ({ ...prev, [`mob-${row.line_no}`]: false, [`desk-${row.line_no}`]: false }));
-                                  }}
-                                >
-                                  <Plus className="mr-2 h-3 w-3" /> Cadastrar este produto
-                                </Button>
+                                {row.offering_entity_id === off.id && (
+                                  <Check className="h-4 w-4 text-emerald-600 shrink-0" />
+                                )}
                               </div>
-                            )}
-                          </div>
+                            </button>
+                          ))}
+                          {!offeringsQ.isFetching && offeringsQ.data?.length === 0 && (
+                            <div className="p-4 flex flex-col items-center gap-3 text-center">
+                              <div className="text-xs text-slate-500">
+                                Nenhum produto encontrado para "{searchOffering}".
+                              </div>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                className="h-9 rounded-xl border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 font-bold px-4"
+                                onClick={() => {
+                                  setQuickCreate({ open: true, name: searchOffering, lineNo: row.line_no });
+                                  setOpenOfferingPerLine((prev) => ({ ...prev, [`mob-${row.line_no}`]: false, [`desk-${row.line_no}`]: false }));
+                                }}
+                              >
+                                <Plus className="mr-2 h-3 w-3" /> Cadastrar este produto
+                              </Button>
+                            </div>
+                          )}
                         </div>
-                      )}
-                    </div>
-
-                    {/* Quantity */}
-                    <div>
-                      <Input
-                        value={row.qty}
-                        onChange={(e) =>
-                          setDraft((prev) =>
-                            prev.map((x) => (x.line_no === row.line_no ? { ...x, qty: e.target.value } : x))
-                          )
-                        }
-                        className="h-10 rounded-xl text-right tabular-nums border-slate-200"
-                        inputMode="decimal"
-                        placeholder="1"
-                      />
-                    </div>
-
-                    {/* Unit Price */}
-                    <div className="relative">
-                      <DollarSign className="absolute left-2.5 top-1/2 h-3 w-3 -translate-y-1/2 text-slate-400" />
-                      <Input
-                        value={row.price}
-                        onChange={(e) =>
-                          setDraft((prev) =>
-                            prev.map((x) => (x.line_no === row.line_no ? { ...x, price: e.target.value } : x))
-                          )
-                        }
-                        className="h-10 rounded-xl text-right tabular-nums pl-7 border-slate-200"
-                        inputMode="decimal"
-                        placeholder="0,00"
-                      />
-                    </div>
-
-                    {/* Discount */}
-                    <div>
-                      <Input
-                        value={row.discount_percent}
-                        onChange={(e) =>
-                          setDraft((prev) =>
-                            prev.map((x) => (x.line_no === row.line_no ? { ...x, discount_percent: e.target.value } : x))
-                          )
-                        }
-                        className="h-10 rounded-xl text-right tabular-nums bg-amber-50/50 border-amber-200 text-amber-700 font-medium"
-                        inputMode="decimal"
-                        placeholder="0"
-                      />
-                    </div>
-
-                    {/* Total */}
-                    <div className="text-right">
-                      <div className="text-sm font-black tabular-nums text-slate-900 whitespace-nowrap">
-                        {moneyPtBr(total)}
                       </div>
-                    </div>
+                    )}
+                  </div>
 
-                    {/* Actions */}
-                    <div className="flex items-center justify-end">
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        className="h-9 w-9 rounded-xl text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
-                        onClick={() => removeRow(row)}
-                        title="Remover item"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
+                  <div>
+                    <Input
+                      value={row.qty}
+                      onChange={(e) =>
+                        setDraft((prev) =>
+                          prev.map((x) => (x.line_no === row.line_no ? { ...x, qty: e.target.value } : x))
+                        )
+                      }
+                      className="h-10 rounded-xl text-right tabular-nums border-slate-200"
+                      inputMode="decimal"
+                      placeholder="1"
+                    />
+                  </div>
+
+                  <div className="relative">
+                    <DollarSign className="absolute left-2.5 top-1/2 h-3 w-3 -translate-y-1/2 text-slate-400" />
+                    <Input
+                      value={row.price}
+                      onChange={(e) =>
+                        setDraft((prev) =>
+                          prev.map((x) => (x.line_no === row.line_no ? { ...x, price: e.target.value } : x))
+                        )
+                      }
+                      className="h-10 rounded-xl text-right tabular-nums pl-7 border-slate-200"
+                      inputMode="decimal"
+                      placeholder="0,00"
+                    />
+                  </div>
+
+                  <div>
+                    <Input
+                      value={row.discount_percent}
+                      onChange={(e) =>
+                        setDraft((prev) =>
+                          prev.map((x) => (x.line_no === row.line_no ? { ...x, discount_percent: e.target.value } : x))
+                        )
+                      }
+                      className="h-10 rounded-xl text-right tabular-nums bg-amber-50/50 border-amber-200 text-amber-700 font-medium"
+                      inputMode="decimal"
+                      placeholder="0"
+                    />
+                  </div>
+
+                  <div className="text-right">
+                    <div className="text-sm font-black tabular-nums text-slate-900 whitespace-nowrap">
+                      {moneyPtBr(total)}
                     </div>
                   </div>
+
+                  <div className="flex items-center justify-end">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-9 w-9 rounded-xl text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
+                      onClick={() => removeRow(row)}
+                      title="Remover item"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </div>
-              );
-            })}
+              </div>
+            );
+          })}
 
           {draft.length === 0 && !itemsQ.isError && (
             <div className="p-4 text-sm text-slate-600">

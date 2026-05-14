@@ -160,7 +160,10 @@ const SALES_ORDER_STAGES = [
   "finalized"
 ];
 
-const getStageLabel = (s: string) => STAGE_LABELS[s?.toUpperCase()] || s;
+const getStageLabel = (s: string) => {
+  if (!s) return "";
+  return STAGE_LABELS[s] || STAGE_LABELS[s.toLowerCase()] || STAGE_LABELS[s.toUpperCase()] || s;
+};
 
 function isStateMatch(rowState: string, targetState: string) {
   const s = (rowState || "").toLowerCase();
