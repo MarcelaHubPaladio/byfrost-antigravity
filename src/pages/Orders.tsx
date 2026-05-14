@@ -996,17 +996,41 @@ export default function Orders() {
                     )}
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent className="w-auto p-0 rounded-2xl border-slate-200 shadow-2xl" align="end">
-                  <CalendarComponent
-                    initialFocus
-                    mode="range"
-                    defaultMonth={dateRange.from}
-                    selected={{ from: dateRange.from, to: dateRange.to }}
-                    onSelect={(range: any) => range && setDateRange({ from: range.from, to: range.to })}
-                    numberOfMonths={2}
-                    locale={ptBR}
-                    className="rounded-2xl"
-                  />
+                <PopoverContent className="w-auto p-0 rounded-3xl border-slate-200 shadow-2xl overflow-hidden" align="end">
+                  <div className="flex flex-col md:flex-row bg-white">
+                    <div className="w-full md:w-44 border-b md:border-b-0 md:border-r border-slate-100 p-3 flex flex-col gap-1 bg-slate-50/50">
+                      {[
+                        { label: "Hoje", get: () => ({ from: startOfDay(new Date()), to: endOfDay(new Date()) }) },
+                        { label: "Ontem", get: () => ({ from: startOfDay(subDays(new Date(), 1)), to: endOfDay(subDays(new Date(), 1)) }) },
+                        { label: "Últimos 7 dias", get: () => ({ from: startOfDay(subDays(new Date(), 7)), to: endOfDay(new Date()) }) },
+                        { label: "Últimos 30 dias", get: () => ({ from: startOfDay(subDays(new Date(), 30)), to: endOfDay(new Date()) }) },
+                        { label: "Mês Atual", get: () => ({ from: startOfMonth(new Date()), to: endOfMonth(new Date()) }) },
+                        { label: "Mês Passado", get: () => ({ from: startOfMonth(subMonths(new Date(), 1)), to: endOfMonth(subMonths(new Date(), 1)) }) },
+                        { label: "Todo Período", get: () => ({ from: undefined, to: undefined }) },
+                      ].map((btn) => (
+                        <Button
+                          key={btn.label}
+                          variant="ghost"
+                          className="h-9 justify-start rounded-xl text-[10px] font-black uppercase tracking-widest text-slate-500 hover:bg-white hover:text-blue-600 transition-all"
+                          onClick={() => setDateRange(btn.get())}
+                        >
+                          {btn.label}
+                        </Button>
+                      ))}
+                    </div>
+                    <div className="p-2">
+                      <CalendarComponent
+                        initialFocus
+                        mode="range"
+                        defaultMonth={dateRange.from}
+                        selected={{ from: dateRange.from, to: dateRange.to }}
+                        onSelect={(range: any) => range && setDateRange({ from: range.from, to: range.to })}
+                        numberOfMonths={2}
+                        locale={ptBR}
+                        className="rounded-2xl"
+                      />
+                    </div>
+                  </div>
                 </PopoverContent>
               </Popover>
             </div>
@@ -1237,7 +1261,7 @@ export default function Orders() {
                             <div className="flex flex-col gap-0.5">
                               <div className="flex items-center gap-2">
                                 <span className="text-sm font-bold text-slate-900 uppercase">
-                                  {customersQ.data?.get(c.customer_id!)?.name || c.title || "Pedido"}
+                                  {customersQ.data instanceof Map ? (customersQ.data.get(c.customer_id!)?.name || c.title || "Pedido") : (c.title || "Pedido")}
                                 </span>
                                 <Badge variant="secondary" className="rounded-md bg-blue-50 text-[10px] font-black text-blue-600 border-none">
                                   #{c.id.slice(0, 8)}
@@ -1313,7 +1337,7 @@ export default function Orders() {
                             </div>
                           </TableCell>
                           <TableCell className="text-right text-[11px] font-medium text-slate-500">
-                            {formatRelativeUpdate(c.updated_at)} min atrás
+                            {formatRelativeUpdate(c.updated_at)}
                           </TableCell>
                         </TableRow>
                       );
