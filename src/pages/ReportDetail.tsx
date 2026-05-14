@@ -579,84 +579,76 @@ export default function ReportDetail() {
                           </div>
 
                           {/* Main Grid: Funnel & Metrics */}
-                          <div className="flex gap-16 flex-1 items-center">
-                            {/* Funnel Section */}
-                            <div className="w-[60%] flex flex-col">
-                              <h3 className="text-2xl font-black uppercase tracking-tighter mb-8 flex items-center gap-3">
-                                <TrendingUp className="h-7 w-7 text-indigo-600" />
+                          {/* Main Content Area: Funnel & Indicators Side-by-Side */}
+                          <div className="flex gap-10 flex-1 min-h-0 overflow-hidden items-stretch">
+                            {/* Left: Funnel */}
+                            <div className="flex-[1.8] flex flex-col">
+                              <h3 className="text-xl font-black uppercase tracking-tighter mb-4 flex items-center gap-3 text-slate-800">
+                                <TrendingUp className="h-6 w-6 text-indigo-600" />
                                 Funil de Conversão
                               </h3>
-                              <div className="w-full h-[500px]">
-                                <FunnelChart data={printFunnelData} />
+                              <div className="flex-1 bg-slate-50/50 rounded-[40px] p-6 border border-slate-100 flex items-center justify-center">
+                                <div className="w-full h-full max-h-[400px]">
+                                  <FunnelChart data={printFunnelData} />
+                                </div>
                               </div>
                             </div>
 
-                            {/* Metrics & Info Section */}
-                            <div className="w-[35%] flex flex-col gap-6">
-                              <div className="p-8 rounded-[32px] bg-slate-900 text-white">
-                                <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
-                                  <ShoppingCart className="h-5 w-5 text-indigo-400" />
-                                  Produtos Anunciados
-                                </h3>
-                                <p className="text-sm opacity-90 leading-relaxed italic line-clamp-3">
-                                  {report.advertised_products || "Nenhum produto listado."}
-                                </p>
+                            {/* Right: Performance Grid */}
+                            <div className="flex-1 flex flex-col">
+                              <h3 className="text-xl font-black uppercase tracking-tighter mb-4 flex items-center gap-3 text-slate-800">
+                                <BarChart3 className="h-6 w-6 text-indigo-600" />
+                                Indicadores
+                              </h3>
+                              <div className="grid grid-cols-2 gap-3 flex-1">
+                                 <div className="p-5 rounded-[32px] bg-white border-2 border-slate-100 flex flex-col justify-center items-center text-center shadow-sm">
+                                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Investimento</p>
+                                    <p className="text-xl font-black text-indigo-600">R$ {report.ad_spend.toLocaleString()}</p>
+                                 </div>
+                                 <div className="p-5 rounded-[32px] bg-slate-900 text-white flex flex-col justify-center items-center text-center">
+                                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">ROI (1%)</p>
+                                    <p className="text-xl font-black">{(Number(report.sales_percentage || 0)).toFixed(1)}%</p>
+                                 </div>
+                                 <div className="p-5 rounded-[32px] bg-white border-2 border-slate-100 flex flex-col justify-center items-center text-center">
+                                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">CPV</p>
+                                    <p className="text-lg font-black text-emerald-600">R$ {(report.ad_spend / (report.profile_visits || 1)).toFixed(2)}</p>
+                                 </div>
+                                 <div className="p-5 rounded-[32px] bg-white border-2 border-slate-100 flex flex-col justify-center items-center text-center">
+                                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">CPL</p>
+                                    <p className="text-lg font-black text-blue-600">R$ {(report.ad_spend / (report.initiated_conversations || 1)).toFixed(2)}</p>
+                                 </div>
+                                 <div className="p-5 rounded-[32px] bg-white border-2 border-slate-100 flex flex-col justify-center items-center text-center">
+                                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">CAC</p>
+                                    <p className="text-lg font-black text-violet-600">R$ {(report.ad_spend / (report.tracked_sales || 1)).toFixed(2)}</p>
+                                 </div>
+                                 <div className="p-5 rounded-[32px] bg-indigo-50 border-2 border-indigo-100 flex flex-col justify-center items-center text-center">
+                                    <p className="text-[9px] font-black text-indigo-400 uppercase tracking-widest mb-1">Conversão</p>
+                                    <p className="text-lg font-black text-indigo-700">{((ts / (ic || 1)) * 100).toFixed(1)}%</p>
+                                 </div>
                               </div>
+                            </div>
+                          </div>
 
-                              <div className="p-8 rounded-[32px] bg-indigo-600 text-white">
-                                <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
-                                  <Calendar className="h-5 w-5 text-indigo-200" />
-                                  Produção do Período
-                                </h3>
-                                <p className="text-sm opacity-90 leading-relaxed italic line-clamp-3">
-                                  {report.production_notes || "Nenhuma nota de produção cadastrada."}
-                                </p>
+                          {/* Bottom Row: Products & Production */}
+                          <div className="grid grid-cols-2 gap-6 mt-8">
+                            <div className="p-6 rounded-[35px] bg-slate-900 text-white flex flex-col gap-3">
+                              <div className="flex items-center gap-3">
+                                <ShoppingCart className="h-4 w-4 text-indigo-400" />
+                                <h4 className="text-[10px] font-black uppercase tracking-widest">Produtos Anunciados</h4>
                               </div>
+                              <p className="text-[10px] opacity-70 leading-relaxed italic line-clamp-2">
+                                {report.advertised_products || "Nenhum produto listado."}
+                              </p>
+                            </div>
 
-                              <div className="p-8 rounded-[32px] bg-white border-2 border-slate-100">
-                                <h3 className="text-lg font-bold mb-6 flex items-center gap-2 text-slate-900">
-                                  <BarChart3 className="h-5 w-5 text-indigo-600" />
-                                  Performance do Período
-                                </h3>
-                                <div className="grid grid-cols-3 gap-y-8 gap-x-4">
-                                  <div className="text-center">
-                                    <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Visualizações</p>
-                                    <p className="text-lg font-black text-slate-900">{report.visualizations.toLocaleString()}</p>
-                                  </div>
-                                  <div className="text-center">
-                                    <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Visitas</p>
-                                    <p className="text-lg font-black text-slate-900">{report.profile_visits.toLocaleString()}</p>
-                                  </div>
-                                  <div className="text-center">
-                                    <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Conversas</p>
-                                    <p className="text-lg font-black text-slate-900">{report.initiated_conversations.toLocaleString()}</p>
-                                  </div>
-                                  <div className="text-center">
-                                    <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Vendas</p>
-                                    <p className="text-lg font-black text-emerald-600">{report.tracked_sales.toLocaleString()}</p>
-                                  </div>
-                                  <div className="text-center">
-                                    <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Investimento</p>
-                                    <p className="text-lg font-black text-indigo-600">R$ {report.ad_spend.toLocaleString()}</p>
-                                  </div>
-                                  <div className="text-center">
-                                    <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">ROI (1%)</p>
-                                    <p className="text-lg font-black text-slate-900">{(Number(report.sales_percentage || 0)).toFixed(1)}%</p>
-                                  </div>
-                                  <div className="text-center">
-                                    <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">CPV</p>
-                                    <p className="text-md font-bold text-slate-600">R$ {(report.ad_spend / (report.profile_visits || 1)).toFixed(2)}</p>
-                                  </div>
-                                  <div className="text-center">
-                                    <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">CPL</p>
-                                    <p className="text-md font-bold text-slate-600">R$ {(report.ad_spend / (report.initiated_conversations || 1)).toFixed(2)}</p>
-                                  </div>
-                                  <div className="text-center">
-                                    <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">CAC</p>
-                                    <p className="text-md font-bold text-slate-600">R$ {(report.ad_spend / (report.tracked_sales || 1)).toFixed(2)}</p>
-                                  </div>
-                                </div>
+                            <div className="p-6 rounded-[35px] bg-indigo-600 text-white flex flex-col gap-3 shadow-lg shadow-indigo-200">
+                              <div className="flex items-center gap-3">
+                                <Calendar className="h-4 w-4 text-indigo-200" />
+                                <h4 className="text-[10px] font-black uppercase tracking-widest">Produção do Período</h4>
                               </div>
+                              <p className="text-[10px] opacity-90 leading-relaxed italic line-clamp-2">
+                                {report.production_notes || "Nenhuma nota de produção cadastrada."}
+                              </p>
                             </div>
                           </div>
 
