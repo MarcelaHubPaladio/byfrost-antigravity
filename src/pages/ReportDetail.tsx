@@ -30,8 +30,8 @@ import {
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import AppShell from "@/components/AppShell";
-import RequireAuth from "@/components/RequireAuth";
-import RequireRouteAccess from "@/components/RequireRouteAccess";
+import { RequireAuth } from "@/components/RequireAuth";
+import { RequireRouteAccess } from "@/components/RequireRouteAccess";
 import { 
     Dialog, 
     DialogContent, 
@@ -210,7 +210,7 @@ export default function ReportDetail() {
 
   return (
     <RequireAuth>
-      <RequireRouteAccess route="/app/reports">
+      <RequireRouteAccess routeKey="/app/reports">
         <AppShell hideTopBar>
           <div className="min-h-screen bg-slate-50/50 dark:bg-slate-950/20">
             <div className="mx-auto max-w-[1400px] px-4 py-8 md:px-8">
