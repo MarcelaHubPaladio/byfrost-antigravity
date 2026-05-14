@@ -711,8 +711,16 @@ export default function Orders() {
   };
 
   const states = useMemo(() => {
-    return selectedJourney?.default_state_machine_json?.states || [];
-  }, [selectedJourney]);
+    const configStates = selectedJourney?.default_state_machine_json?.states || [];
+    if (configStates.length > 0) return configStates;
+    
+    const autoStates = new Set<string>();
+    journeyRows.forEach(r => {
+      if (r.state) autoStates.add(r.state);
+    });
+    const list = Array.from(autoStates);
+    return list.length > 0 ? list : ["FILA"];
+  }, [selectedJourney, journeyRows]);
 
   const updateState = async (caseId: string, nextState: string) => {
     const caseRow = journeyRows.find(c => c.id === caseId);
