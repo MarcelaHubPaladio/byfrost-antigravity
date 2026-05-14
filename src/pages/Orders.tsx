@@ -627,7 +627,7 @@ export default function Orders() {
         const start = startOfDay(dateRange.from);
         const end = endOfDay(dateRange.to || dateRange.from);
         
-        return match;
+        return isWithinInterval(d, { start, end });
       });
     }
 
