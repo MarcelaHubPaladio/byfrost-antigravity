@@ -595,30 +595,30 @@ export default function ReportDetail() {
                                 <BarChart3 className="h-6 w-6 text-indigo-600" />
                                 Indicadores
                               </h3>
-                              <div className="grid grid-cols-2 gap-3 flex-1">
-                                 <div className="p-5 rounded-[32px] bg-white border-2 border-slate-100 flex flex-col justify-center items-center text-center shadow-sm">
-                                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Investimento</p>
-                                    <p className="text-xl font-black text-indigo-600">R$ {report.ad_spend.toLocaleString()}</p>
+                              <div className="grid grid-cols-2 gap-2 flex-1">
+                                 <div className="p-3 rounded-[32px] bg-white border-2 border-slate-100 flex flex-col justify-center items-center text-center shadow-sm">
+                                    <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Investimento</p>
+                                    <p className="text-lg font-black text-indigo-600">R$ {report.ad_spend.toLocaleString()}</p>
                                  </div>
-                                 <div className="p-5 rounded-[32px] bg-slate-900 text-white flex flex-col justify-center items-center text-center">
-                                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">ROI (1%)</p>
-                                    <p className="text-xl font-black">{(Number(report.sales_percentage || 0)).toFixed(1)}%</p>
+                                 <div className="p-3 rounded-[32px] bg-slate-900 text-white flex flex-col justify-center items-center text-center">
+                                    <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-0.5">ROI (1%)</p>
+                                    <p className="text-lg font-black">{(Number(report.sales_percentage || 0)).toFixed(1)}%</p>
                                  </div>
-                                 <div className="p-5 rounded-[32px] bg-white border-2 border-slate-100 flex flex-col justify-center items-center text-center">
-                                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">CPV</p>
-                                    <p className="text-lg font-black text-emerald-600">R$ {(report.ad_spend / (report.profile_visits || 1)).toFixed(2)}</p>
+                                 <div className="p-3 rounded-[32px] bg-white border-2 border-slate-100 flex flex-col justify-center items-center text-center">
+                                    <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-0.5">CPV</p>
+                                    <p className="text-base font-black text-emerald-600">R$ {(report.ad_spend / (report.profile_visits || 1)).toFixed(2)}</p>
                                  </div>
-                                 <div className="p-5 rounded-[32px] bg-white border-2 border-slate-100 flex flex-col justify-center items-center text-center">
-                                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">CPL</p>
-                                    <p className="text-lg font-black text-blue-600">R$ {(report.ad_spend / (report.initiated_conversations || 1)).toFixed(2)}</p>
+                                 <div className="p-3 rounded-[32px] bg-white border-2 border-slate-100 flex flex-col justify-center items-center text-center">
+                                    <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-0.5">CPL</p>
+                                    <p className="text-base font-black text-blue-600">R$ {(report.ad_spend / (report.initiated_conversations || 1)).toFixed(2)}</p>
                                  </div>
-                                 <div className="p-5 rounded-[32px] bg-white border-2 border-slate-100 flex flex-col justify-center items-center text-center">
-                                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">CAC</p>
-                                    <p className="text-lg font-black text-violet-600">R$ {(report.ad_spend / (report.tracked_sales || 1)).toFixed(2)}</p>
+                                 <div className="p-3 rounded-[32px] bg-white border-2 border-slate-100 flex flex-col justify-center items-center text-center">
+                                    <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-0.5">CAC</p>
+                                    <p className="text-base font-black text-violet-600">R$ {(report.ad_spend / (report.tracked_sales || 1)).toFixed(2)}</p>
                                  </div>
-                                 <div className="p-4 rounded-[32px] bg-indigo-50 border-2 border-indigo-100 flex flex-col justify-center items-center text-center">
-                                    <p className="text-[9px] font-black text-indigo-400 uppercase tracking-widest mb-1">Conversão</p>
-                                    <p className="text-lg font-black text-indigo-700">{((ts / (ic || 1)) * 100).toFixed(1)}%</p>
+                                 <div className="p-3 rounded-[32px] bg-indigo-50 border-2 border-indigo-100 flex flex-col justify-center items-center text-center">
+                                    <p className="text-[8px] font-black text-indigo-400 uppercase tracking-widest mb-0.5">Conversão</p>
+                                    <p className="text-base font-black text-indigo-700">{((ts / (ic || 1)) * 100).toFixed(1)}%</p>
                                  </div>
                               </div>
                             </div>
@@ -727,29 +727,29 @@ export default function ReportDetail() {
                             <BarChart3 className="h-6 w-6 text-indigo-600" />
                             Indicadores
                           </h3>
-                          <div className="grid grid-cols-2 gap-3 flex-1">
-                             <div className="p-5 rounded-[32px] bg-white border-2 border-slate-100 flex flex-col justify-center items-center text-center shadow-sm">
-                                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Investimento</p>
-                                <p className="text-xl font-black text-indigo-600">R$ {report.ad_spend.toLocaleString()}</p>
+                          <div className="grid grid-cols-2 gap-2 flex-1">
+                             <div className="p-3 rounded-[32px] bg-white border-2 border-slate-100 flex flex-col justify-center items-center text-center shadow-sm">
+                                <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Investimento</p>
+                                <p className="text-lg font-black text-indigo-600">R$ {report.ad_spend.toLocaleString()}</p>
                              </div>
-                             <div className="p-5 rounded-[32px] bg-slate-900 text-white flex flex-col justify-center items-center text-center">
-                                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">ROI (1%)</p>
-                                <p className="text-xl font-black">{(Number(report.sales_percentage || 0)).toFixed(1)}%</p>
+                             <div className="p-3 rounded-[32px] bg-slate-900 text-white flex flex-col justify-center items-center text-center">
+                                <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-0.5">ROI (1%)</p>
+                                <p className="text-lg font-black">{(Number(report.sales_percentage || 0)).toFixed(1)}%</p>
                              </div>
-                             <div className="p-5 rounded-[32px] bg-white border-2 border-slate-100 flex flex-col justify-center items-center text-center">
-                                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">CPV</p>
-                                <p className="text-lg font-black text-emerald-600">R$ {(report.ad_spend / (report.profile_visits || 1)).toFixed(2)}</p>
+                             <div className="p-3 rounded-[32px] bg-white border-2 border-slate-100 flex flex-col justify-center items-center text-center">
+                                <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-0.5">CPV</p>
+                                <p className="text-base font-black text-emerald-600">R$ {(report.ad_spend / (report.profile_visits || 1)).toFixed(2)}</p>
                              </div>
-                             <div className="p-5 rounded-[32px] bg-white border-2 border-slate-100 flex flex-col justify-center items-center text-center">
-                                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">CPL</p>
-                                <p className="text-lg font-black text-blue-600">R$ {(report.ad_spend / (report.initiated_conversations || 1)).toFixed(2)}</p>
+                             <div className="p-3 rounded-[32px] bg-white border-2 border-slate-100 flex flex-col justify-center items-center text-center">
+                                <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-0.5">CPL</p>
+                                <p className="text-base font-black text-blue-600">R$ {(report.ad_spend / (report.initiated_conversations || 1)).toFixed(2)}</p>
                              </div>
-                             <div className="p-5 rounded-[32px] bg-white border-2 border-slate-100 flex flex-col justify-center items-center text-center">
-                                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">CAC</p>
-                                <p className="text-lg font-black text-violet-600">R$ {(report.ad_spend / (report.tracked_sales || 1)).toFixed(2)}</p>
+                             <div className="p-3 rounded-[32px] bg-white border-2 border-slate-100 flex flex-col justify-center items-center text-center">
+                                <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-0.5">CAC</p>
+                                <p className="text-base font-black text-violet-600">R$ {(report.ad_spend / (report.tracked_sales || 1)).toFixed(2)}</p>
                              </div>
                              <div className="p-3 rounded-[32px] bg-indigo-50 border-2 border-indigo-100 flex flex-col justify-center items-center text-center">
-                                <p className="text-[9px] font-black text-indigo-400 uppercase tracking-widest mb-1">Conversão</p>
+                                <p className="text-[8px] font-black text-indigo-400 uppercase tracking-widest mb-0.5">Conversão</p>
                                 <p className="text-base font-black text-indigo-700">{((ts / (ic || 1)) * 100).toFixed(1)}%</p>
                              </div>
                           </div>
