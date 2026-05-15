@@ -287,14 +287,15 @@ export default function ReportDetail() {
               .no-print { display: none !important; }
               
               .report-page {
-                height: 100vh !important;
+                height: 98vh !important;
                 width: 100vw !important;
                 margin: 0 !important;
-                padding: 2rem !important;
+                padding: 1.5rem 2rem !important;
                 box-sizing: border-box !important;
                 display: flex !important;
                 flex-direction: column !important;
                 page-break-after: always !important;
+                page-break-inside: avoid !important;
                 background: white !important;
                 overflow: hidden !important;
               }
@@ -475,43 +476,44 @@ export default function ReportDetail() {
                                   <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{item.name} / Ant.</p>
                                   <p className="text-xl font-black text-slate-700 dark:text-slate-200">{item.ratio.toFixed(1)}%</p>
                                   <div className="h-1 w-8 mx-auto mt-2 rounded-full" style={{ backgroundColor: item.color }} />
-                               </div>
-                             ))}
+                        </div>
                       </div>
-                    </Card>
 
-                    {/* Right: Info Panels */}
-                    <div className="lg:col-span-5 space-y-6">
-                      <Card className="p-8 rounded-[32px] border-none bg-slate-900 text-white shadow-xl">
-                          <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
-                              <ShoppingCart className="h-5 w-5 text-indigo-400" />
-                              Produtos Anunciados
-                          </h3>
-                          <p className="text-sm opacity-90 leading-relaxed italic">
-                              {selectedReport?.advertised_products || "Nenhum produto listado."}
-                          </p>
-                      </Card>
+                      <div className="flex flex-col gap-6">
+                        <div className="grid grid-cols-1 gap-6">
+                          <Card className="p-8 rounded-[40px] border-none bg-slate-900 text-white shadow-2xl shadow-slate-200">
+                            <div className="flex items-center gap-4 mb-6">
+                              <div className="h-12 w-12 rounded-2xl bg-indigo-500/20 flex items-center justify-center">
+                                <ShoppingCart className="h-6 w-6 text-indigo-400" />
+                              </div>
+                              <h3 className="text-xl font-black uppercase tracking-tight">Produtos Anunciados</h3>
+                            </div>
+                            <p className="text-slate-400 leading-relaxed italic text-lg">
+                              {selectedReport.advertised_products || "Nenhum produto listado para este período."}
+                            </p>
+                          </Card>
 
-                      <Card className="p-8 rounded-[32px] border-none bg-gradient-to-br from-indigo-600 to-indigo-800 text-white shadow-xl shadow-indigo-500/30">
-                          <h3 className="text-lg font-bold mb-6 flex items-center gap-2">
-                              <Calendar className="h-5 w-5" />
-                              Produção do Período
-                          </h3>
-                          <div className="prose prose-invert max-w-none">
-                              <p className="text-sm opacity-90 leading-relaxed whitespace-pre-wrap">
-                                  {selectedReport?.production_notes || "Nenhuma nota de produção cadastrada para este período."}
-                              </p>
+                          <Card className="p-8 rounded-[40px] border-none bg-indigo-600 text-white shadow-2xl shadow-indigo-100">
+                            <div className="flex items-center gap-4 mb-6">
+                              <div className="h-12 w-12 rounded-2xl bg-white/10 flex items-center justify-center">
+                                <Calendar className="h-6 w-6 text-indigo-100" />
+                              </div>
+                              <h3 className="text-xl font-black uppercase tracking-tight">Produção do Período</h3>
+                            </div>
+                            <p className="text-indigo-100/80 leading-relaxed italic text-lg">
+                              {selectedReport.production_notes || "Nenhuma nota de produção cadastrada para este período."}
+                            </p>
+                          </Card>
+                        </div>
+
+                        <Card className="p-8 rounded-[40px] border-none bg-white shadow-xl shadow-slate-100">
+                          <div className="flex items-center gap-4 mb-6">
+                            <div className="h-12 w-12 rounded-2xl bg-indigo-50 flex items-center justify-center">
+                              <BarChart3 className="h-6 w-6 text-indigo-600" />
+                            </div>
+                            <h3 className="text-xl font-black uppercase tracking-tight text-slate-800">Evolução Histórica</h3>
                           </div>
-                      </Card>
-
-                      <Card className="p-8 rounded-[32px] border-none bg-white shadow-lg shadow-slate-200/50 dark:bg-slate-950/50">
-                          <h3 className="text-lg font-bold mb-6 flex items-center gap-2">
-                              <BarChart3 className="h-5 w-5 text-indigo-500" />
-                              <span className="print:hidden">Evolução Histórica</span>
-                          </h3>
                           
-
-                          {/* Line Chart only on screen, hidden in print here */}
                           <div className="h-[200px] w-full mt-8 no-print pt-6 border-t">
                               <p className="text-[10px] font-bold text-slate-400 uppercase mb-4">Tendência do Período</p>
                               <ResponsiveContainer width="100%" height="100%">
@@ -579,8 +581,8 @@ export default function ReportDetail() {
                                 Funil de Conversão
                               </h3>
                               <div className="flex-1 bg-slate-50/50 rounded-[40px] p-6 border border-slate-100 flex items-center justify-center">
-                                <div className="w-full h-full max-h-[460px]">
-                                  <FunnelChart data={printFunnelData} />
+                                <div className="w-full h-full max-h-[480px]">
+                                  <FunnelChart data={printFunnelData} isCompact={true} />
                                 </div>
                               </div>
                             </div>
@@ -712,8 +714,8 @@ export default function ReportDetail() {
                             Funil de Conversão
                           </h3>
                           <div className="flex-1 bg-slate-50/50 rounded-[40px] p-6 border border-slate-100 flex items-center justify-center">
-                            <div className="w-full h-full max-h-[460px]">
-                              <FunnelChart data={funnelData} />
+                            <div className="w-full h-full max-h-[480px]">
+                              <FunnelChart data={funnelData} isCompact={true} />
                             </div>
                           </div>
                         </div>
@@ -1079,7 +1081,7 @@ function ReportFormDialog({ onSave, isLoading, initialData, existingUnits = [] }
     );
 }
 
-function FunnelChart({ data }: { data: any[] }) {
+function FunnelChart({ data, isCompact = false }: { data: any[], isCompact?: boolean }) {
     const chartId = useMemo(() => Math.random().toString(36).substr(2, 9), []);
     const actions = ["ATRAIR", "CONVERTER", "RELACIONAR", "VENDER"];
     const labels = ["VISUALIZAÇÕES", "VISITANTES", "LEADS", "CLIENTES"];
@@ -1098,7 +1100,10 @@ function FunnelChart({ data }: { data: any[] }) {
 
                 return (
                     <div key={index} className="relative flex flex-col items-center w-full group">
-                        <div className="flex items-center w-full max-w-[700px] h-20">
+                        <div className={cn(
+                            "flex items-center w-full max-w-[700px]",
+                            isCompact ? "h-20" : "h-28"
+                        )}>
                             <div className="relative z-30 flex items-center -mr-4">
                                 <div 
                                     className="h-10 px-5 flex items-center justify-center text-[10px] font-black text-white rounded-l-xl shadow-lg"
@@ -1122,17 +1127,26 @@ function FunnelChart({ data }: { data: any[] }) {
                                     </defs>
                                     <g transform={`translate(${translateX}, 20)`}>
                                         <path 
-                                            d={`M 0,0 L ${width},0 L ${width - 25},50 L -25,50 Z`}
+                                            d={isCompact 
+                                                ? `M 0,0 L ${width},0 L ${width - 25},50 L -25,50 Z`
+                                                : `M 0,0 L ${width},0 L ${width - 40},70 L -40,70 Z`
+                                            }
                                             fill={`url(#grad-${chartId}-${index})`}
                                             className="transition-all duration-1000"
                                         />
                                         <path 
-                                            d={`M 5,5 L ${width - 5},5 L ${width - 40},30 L 0,30 Z`}
+                                            d={isCompact
+                                                ? `M 5,5 L ${width - 5},5 L ${width - 25},25 L 0,25 Z`
+                                                : `M 5,5 L ${width - 5},5 L ${width - 40},30 L 0,30 Z`
+                                            }
                                             fill="white"
                                             fillOpacity="0.15"
                                         />
                                         <path 
-                                            d={`M -25,50 L ${width - 25},50 L ${width - 20},55 L -20,55 Z`}
+                                            d={isCompact
+                                                ? `M -25,50 L ${width - 25},50 L ${width - 20},55 L -20,55 Z`
+                                                : `M -40,70 L ${width - 40},70 L ${width - 35},75 L -35,75 Z`
+                                            }
                                             fill="black"
                                             fillOpacity="0.2"
                                         />
@@ -1141,7 +1155,10 @@ function FunnelChart({ data }: { data: any[] }) {
 
                                 <div className="relative z-10 flex flex-col items-center text-white mt-1">
                                     <span className="text-[10px] font-black tracking-[0.3em] opacity-90 mb-1 drop-shadow-sm">{label}</span>
-                                    <span className="text-2xl font-black drop-shadow-lg">{item.value.toLocaleString()}</span>
+                                    <span className={cn(
+                                        "font-black drop-shadow-lg",
+                                        isCompact ? "text-2xl" : "text-3xl"
+                                    )}>{item.value.toLocaleString()}</span>
                                 </div>
                             </div>
                         </div>
