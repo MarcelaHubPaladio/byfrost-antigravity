@@ -266,6 +266,7 @@ export default function Orders() {
   const [partialPaidOpen, setPartialPaidOpen] = useState(false);
   const [partialPaidCaseId, setPartialPaidCaseId] = useState<string | null>(null);
   const [partialPaidValue, setPartialPaidValue] = useState("");
+  const [isNewOrderDialogOpen, setIsNewOrderDialogOpen] = useState(false);
 
   const [transitionBlock, setTransitionBlock] = useState<{
     open: boolean;
@@ -874,9 +875,18 @@ export default function Orders() {
               </div>
 
               <div className="flex flex-wrap items-center gap-3">
+                <Button 
+                  onClick={() => setIsNewOrderDialogOpen(true)}
+                  className="h-10 rounded-2xl bg-blue-600 text-white hover:bg-blue-700 shadow-sm font-bold"
+                >
+                  <Plus className="mr-2 h-4 w-4" /> Novo Pedido
+                </Button>
+
                 <NewSalesOrderDialog 
+                  open={isNewOrderDialogOpen}
+                  onOpenChange={setIsNewOrderDialogOpen}
                   tenantId={activeTenantId} 
-                  onSuccess={() => casesQ.refetch()} 
+                  journeyId={selectedJourney?.id || ""}
                 />
 
                 <div className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-white/70 p-1">
