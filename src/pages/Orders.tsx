@@ -575,6 +575,27 @@ export default function Orders() {
     }
   };
 
+  const customersQ = useQuery({
+    queryKey: ["orders_customers", activeTenantId],
+    enabled: Boolean(activeTenantId),
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("core_entities")
+        .select("id, display_name, metadata")
+        .eq("tenant_id", activeTenantId!)
+        .eq("entity_type", "customer");
+      if (error) throw error;
+      const m = new Map<string, { name: string; phone_e164: string }>();
+      (data ?? []).forEach(d => {
+        m.set(d.id, { 
+          name: d.display_name || "Sem Nome", 
+          phone_e164: d.metadata?.phone_e164 || "" 
+        });
+      });
+      return m;
+    },
+  });
+
   const filteredRows = useMemo(() => {
     let rows = journeyRows;
     const qq = q.trim().toLowerCase();
@@ -744,26 +765,6 @@ export default function Orders() {
     return daysInMonth;
   }, [filteredRows, dateRange, caseDataQ.data]);
 
-  const customersQ = useQuery({
-    queryKey: ["orders_customers", activeTenantId],
-    enabled: Boolean(activeTenantId),
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("core_entities")
-        .select("id, display_name, metadata")
-        .eq("tenant_id", activeTenantId!)
-        .eq("entity_type", "customer");
-      if (error) throw error;
-      const m = new Map<string, { name: string; phone_e164: string }>();
-      (data ?? []).forEach(d => {
-        m.set(d.id, { 
-          name: d.display_name || "Sem Nome", 
-          phone_e164: d.metadata?.phone_e164 || "" 
-        });
-      });
-      return m;
-    },
-  });
 
   const exportOrdersCsv = async () => {
     setExportingCsv(true);
