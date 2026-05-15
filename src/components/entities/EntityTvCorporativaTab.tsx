@@ -7,7 +7,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
-import { Trash2, Loader2, UploadCloud, Link as LinkIcon, Youtube, Pencil, Check, X, Image as ImageIcon, Share2, RefreshCw, Copy, Plus } from "lucide-react";
+import { Trash2, Loader2, UploadCloud, Link as LinkIcon, Youtube, Pencil, Check, X, Image as ImageIcon, Share2, RefreshCw, Copy, Plus, ExternalLink, Play, Eye } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { showError, showSuccess } from "@/utils/toast";
 
 export function EntityTvCorporativaTab({ tenantId, entityId }: { tenantId: string; entityId: string; }) {
@@ -20,6 +21,7 @@ export function EntityTvCorporativaTab({ tenantId, entityId }: { tenantId: strin
     const [editingMediaId, setEditingMediaId] = useState<string | null>(null);
     const [editingName, setEditingName] = useState("");
     const [uploadingFrameId, setUploadingFrameId] = useState<string | null>(null); // 'default' or mediaId
+    const [previewMedia, setPreviewMedia] = useState<{ url: string; type: string; name: string } | null>(null);
 
     const entityQ = useQuery({
         queryKey: ["tv_entity_core", tenantId, entityId],
@@ -440,9 +442,27 @@ export function EntityTvCorporativaTab({ tenantId, entityId }: { tenantId: strin
                                             ) : (
                                                 <div className="group/title relative overflow-hidden pr-6">
                                                     <p className="text-xs font-bold text-slate-900 truncate">{m.name || "Sem nome"}</p>
-                                                    <p className="text-[10px] text-slate-400 truncate">{m.url}</p>
+                                                    <div className="flex items-center gap-2">
+                                                        <a 
+                                                            href={m.url} 
+                                                            target="_blank" 
+                                                            rel="noopener noreferrer" 
+                                                            className="text-[10px] text-indigo-500 hover:text-indigo-700 hover:underline truncate max-w-[180px] flex items-center gap-1"
+                                                            title={m.url}
+                                                        >
+                                                            {m.url}
+                                                            <ExternalLink className="h-2.5 w-2.5 shrink-0" />
+                                                        </a>
+                                                        <button 
+                                                            onClick={() => setPreviewMedia({ url: m.url, type: m.media_type, name: m.name })}
+                                                            className="text-[10px] text-slate-400 hover:text-indigo-600 flex items-center gap-0.5 font-medium"
+                                                        >
+                                                            <Eye className="h-2.5 w-2.5" />
+                                                            Preview
+                                                        </button>
+                                                    </div>
                                                     <button
-                                                        className="absolute right-0 top-1/2 -translate-y-1/2 p-1 text-slate-300 hover:text-indigo-600 sm:opacity-0 group-hover/title:opacity-100 transition-opacity"
+                                                        className="absolute right-0 top-0 p-1 text-slate-300 hover:text-indigo-600 sm:opacity-0 group-hover/title:opacity-100 transition-opacity"
                                                         onClick={() => {
                                                             setEditingMediaId(m.id);
                                                             setEditingName(m.name || "");
@@ -580,6 +600,42 @@ export function EntityTvCorporativaTab({ tenantId, entityId }: { tenantId: strin
                     </div>
                 )}
             </Card>
+
+            <Dialog open={Boolean(previewMedia)} onOpenChange={(open) => !open && setPreviewMedia(null)}>
+                <DialogContent className="max-w-4xl p-0 overflow-hidden bg-black border-none rounded-2xl">
+                    <DialogHeader className="p-4 bg-white/10 backdrop-blur-md absolute top-0 left-0 right-0 z-10">
+                        <DialogTitle className="text-white text-sm font-bold truncate">
+                            Preview: {previewMedia?.name}
+                        </DialogTitle>
+                    </DialogHeader>
+                    <div className="aspect-video w-full flex items-center justify-center bg-black">
+                        {previewMedia?.type === 'youtube_link' ? (
+                            <iframe
+                                className="w-full h-full"
+                                src={(() => {
+                                    const url = previewMedia.url;
+                                    let id = "";
+                                    if (url.includes("v=")) id = url.split("v=")[1].split("&")[0];
+                                    else if (url.includes("youtu.be/")) id = url.split("youtu.be/")[1].split("?")[0];
+                                    else if (url.includes("embed/")) id = url.split("embed/")[1].split("?")[0];
+                                    return `https://www.youtube.com/embed/${id}?autoplay=1`;
+                                })()}
+                                title="YouTube video player"
+                                frameBorder="0"
+                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                allowFullScreen
+                            ></iframe>
+                        ) : (
+                            <video 
+                                src={previewMedia?.url} 
+                                controls 
+                                autoPlay 
+                                className="max-w-full max-h-full"
+                            />
+                        )}
+                    </div>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }
