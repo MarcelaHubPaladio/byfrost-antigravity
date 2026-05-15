@@ -472,12 +472,14 @@ export default function ReportDetail() {
                                   <div className="h-1 w-8 bg-slate-300 mx-auto mt-2 rounded-full" />
                              </div>
                              {funnelData.slice(1).map((item, i) => (
-                               <div key={i} className="text-center">
-                                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{item.name} / Ant.</p>
-                                  <p className="text-xl font-black text-slate-700 dark:text-slate-200">{item.ratio.toFixed(1)}%</p>
-                                  <div className="h-1 w-8 mx-auto mt-2 rounded-full" style={{ backgroundColor: item.color }} />
-                        </div>
+                                <div key={i} className="text-center">
+                                   <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{item.name} / Ant.</p>
+                                   <p className="text-xl font-black text-slate-700 dark:text-slate-200">{item.ratio.toFixed(1)}%</p>
+                                   <div className="h-1 w-8 mx-auto mt-2 rounded-full" style={{ backgroundColor: item.color }} />
+                                </div>
+                             ))}
                       </div>
+                    </Card>
 
                       <div className="flex flex-col gap-6">
                         <div className="grid grid-cols-1 gap-6">
