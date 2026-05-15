@@ -287,10 +287,10 @@ export default function ReportDetail() {
               .no-print { display: none !important; }
               
               .report-page {
-                height: 98vh !important;
+                height: 95vh !important;
                 width: 100vw !important;
                 margin: 0 !important;
-                padding: 1.5rem 2rem !important;
+                padding: 1.5rem !important;
                 box-sizing: border-box !important;
                 display: flex !important;
                 flex-direction: column !important;
@@ -403,9 +403,9 @@ export default function ReportDetail() {
                   </div>
 
                   {/* Funnel & Main Stats */}
-                  <div className="report-main-grid grid grid-cols-1 lg:grid-cols-12 gap-8">
+                  <div className="report-main-grid grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
                     {/* Left: Stats & Funnel */}
-                    <Card className="lg:col-span-7 p-8 rounded-[32px] border-none bg-white shadow-xl shadow-slate-200/50 dark:bg-slate-950/50 dark:shadow-none">
+                    <Card className="lg:col-span-8 p-8 rounded-[40px] border-none bg-white shadow-xl shadow-slate-100">
                       <div className="flex items-center justify-between mb-8">
                         <h3 className="text-lg font-bold flex items-center gap-2">
                           <TrendingUp className="h-5 w-5 text-indigo-500" />
@@ -481,8 +481,8 @@ export default function ReportDetail() {
                       </div>
                     </Card>
 
-                      <div className="flex flex-col gap-6">
-                        <div className="grid grid-cols-1 gap-6">
+                    <div className="lg:col-span-4 flex flex-col gap-6">
+                      <div className="grid grid-cols-1 gap-6">
                           <Card className="p-8 rounded-[40px] border-none bg-slate-900 text-white shadow-2xl shadow-slate-200">
                             <div className="flex items-center gap-4 mb-6">
                               <div className="h-12 w-12 rounded-2xl bg-indigo-500/20 flex items-center justify-center">
@@ -631,7 +631,7 @@ export default function ReportDetail() {
                                 <ShoppingCart className="h-4 w-4 text-indigo-400" />
                                 <h4 className="text-[10px] font-black uppercase tracking-widest">Produtos Anunciados</h4>
                               </div>
-                              <p className="text-[10px] opacity-70 leading-relaxed italic line-clamp-2">
+                              <p className="text-[9px] opacity-70 leading-relaxed italic line-clamp-2">
                                 {report.advertised_products || "Nenhum produto listado."}
                               </p>
                             </div>
@@ -641,14 +641,14 @@ export default function ReportDetail() {
                                 <Calendar className="h-4 w-4 text-indigo-200" />
                                 <h4 className="text-[10px] font-black uppercase tracking-widest">Produção do Período</h4>
                               </div>
-                              <p className="text-[10px] opacity-90 leading-relaxed italic line-clamp-2">
+                              <p className="text-[9px] opacity-90 leading-relaxed italic line-clamp-2">
                                 {report.production_notes || "Nenhuma nota de produção cadastrada."}
                               </p>
                             </div>
                           </div>
 
                           {/* Footer Info */}
-                          <div className="mt-6 pt-4 border-t border-slate-100 flex justify-between items-center text-slate-400 text-[9px]">
+                          <div className="mt-4 pt-3 border-t border-slate-100 flex justify-between items-center text-slate-400 text-[8px]">
                             <p className="font-bold uppercase tracking-[0.2em]">Confidencial • Gerado via AgenteHub</p>
                             <p>Página {idx + 1} de {reportsToPrintIds.length} • {format(new Date(), "dd/MM/yyyy HH:mm")}</p>
                           </div>
