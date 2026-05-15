@@ -287,10 +287,10 @@ export default function ReportDetail() {
               .no-print { display: none !important; }
               
               .report-page {
-                height: 95vh !important;
+                height: 92vh !important;
                 width: 100vw !important;
                 margin: 0 !important;
-                padding: 1.5rem !important;
+                padding: 1rem !important;
                 box-sizing: border-box !important;
                 display: flex !important;
                 flex-direction: column !important;
@@ -583,7 +583,7 @@ export default function ReportDetail() {
                                 Funil de Conversão
                               </h3>
                               <div className="flex-1 bg-slate-50/50 rounded-[40px] p-6 border border-slate-100 flex items-center justify-center">
-                                <div className="w-full h-full max-h-[480px]">
+                                <div className="w-full h-full max-h-[400px]">
                                   <FunnelChart data={printFunnelData} isCompact={true} />
                                 </div>
                               </div>
@@ -616,9 +616,9 @@ export default function ReportDetail() {
                                     <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">CAC</p>
                                     <p className="text-lg font-black text-violet-600">R$ {(report.ad_spend / (report.tracked_sales || 1)).toFixed(2)}</p>
                                  </div>
-                                 <div className="p-4 rounded-[32px] bg-indigo-50 border-2 border-indigo-100 flex flex-col justify-center items-center text-center">
+                                 <div className="p-3 rounded-[32px] bg-indigo-50 border-2 border-indigo-100 flex flex-col justify-center items-center text-center">
                                     <p className="text-[9px] font-black text-indigo-400 uppercase tracking-widest mb-1">Conversão</p>
-                                    <p className="text-lg font-black text-indigo-700">{((ts / (ic || 1)) * 100).toFixed(1)}%</p>
+                                    <p className="text-base font-black text-indigo-700">{((ts / (ic || 1)) * 100).toFixed(1)}%</p>
                                  </div>
                               </div>
                             </div>
@@ -716,7 +716,7 @@ export default function ReportDetail() {
                             Funil de Conversão
                           </h3>
                           <div className="flex-1 bg-slate-50/50 rounded-[40px] p-6 border border-slate-100 flex items-center justify-center">
-                            <div className="w-full h-full max-h-[480px]">
+                            <div className="w-full h-full max-h-[400px]">
                               <FunnelChart data={funnelData} isCompact={true} />
                             </div>
                           </div>
@@ -748,9 +748,9 @@ export default function ReportDetail() {
                                 <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">CAC</p>
                                 <p className="text-lg font-black text-violet-600">R$ {(report.ad_spend / (report.tracked_sales || 1)).toFixed(2)}</p>
                              </div>
-                             <div className="p-4 rounded-[32px] bg-indigo-50 border-2 border-indigo-100 flex flex-col justify-center items-center text-center">
+                             <div className="p-3 rounded-[32px] bg-indigo-50 border-2 border-indigo-100 flex flex-col justify-center items-center text-center">
                                 <p className="text-[9px] font-black text-indigo-400 uppercase tracking-widest mb-1">Conversão</p>
-                                <p className="text-lg font-black text-indigo-700">{((ts / (ic || 1)) * 100).toFixed(1)}%</p>
+                                <p className="text-base font-black text-indigo-700">{((ts / (ic || 1)) * 100).toFixed(1)}%</p>
                              </div>
                           </div>
                         </div>
@@ -1104,7 +1104,7 @@ function FunnelChart({ data, isCompact = false }: { data: any[], isCompact?: boo
                     <div key={index} className="relative flex flex-col items-center w-full group">
                         <div className={cn(
                             "flex items-center w-full max-w-[700px]",
-                            isCompact ? "h-20" : "h-28"
+                            isCompact ? "h-18" : "h-28"
                         )}>
                             <div className="relative z-30 flex items-center -mr-4">
                                 <div 
@@ -1130,7 +1130,7 @@ function FunnelChart({ data, isCompact = false }: { data: any[], isCompact?: boo
                                     <g transform={`translate(${translateX}, 20)`}>
                                         <path 
                                             d={isCompact 
-                                                ? `M 0,0 L ${width},0 L ${width - 25},50 L -25,50 Z`
+                                                ? `M 0,0 L ${width},0 L ${width - 25},45 L -25,45 Z`
                                                 : `M 0,0 L ${width},0 L ${width - 40},70 L -40,70 Z`
                                             }
                                             fill={`url(#grad-${chartId}-${index})`}
@@ -1146,7 +1146,7 @@ function FunnelChart({ data, isCompact = false }: { data: any[], isCompact?: boo
                                         />
                                         <path 
                                             d={isCompact
-                                                ? `M -25,50 L ${width - 25},50 L ${width - 20},55 L -20,55 Z`
+                                                ? `M -25,45 L ${width - 25},45 L ${width - 20},50 L -20,50 Z`
                                                 : `M -40,70 L ${width - 40},70 L ${width - 35},75 L -35,75 Z`
                                             }
                                             fill="black"
