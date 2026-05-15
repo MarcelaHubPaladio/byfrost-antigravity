@@ -290,7 +290,7 @@ export default function ReportDetail() {
                 height: 100vh !important;
                 width: 100vw !important;
                 margin: 0 !important;
-                padding: 3rem 4rem !important;
+                padding: 2rem !important;
                 box-sizing: border-box !important;
                 display: flex !important;
                 flex-direction: column !important;
@@ -579,7 +579,7 @@ export default function ReportDetail() {
                                 Funil de Conversão
                               </h3>
                               <div className="flex-1 bg-slate-50/50 rounded-[40px] p-6 border border-slate-100 flex items-center justify-center">
-                                <div className="w-full h-full max-h-[420px]">
+                                <div className="w-full h-full max-h-[460px]">
                                   <FunnelChart data={printFunnelData} />
                                 </div>
                               </div>
@@ -612,7 +612,7 @@ export default function ReportDetail() {
                                     <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">CAC</p>
                                     <p className="text-lg font-black text-violet-600">R$ {(report.ad_spend / (report.tracked_sales || 1)).toFixed(2)}</p>
                                  </div>
-                                 <div className="p-5 rounded-[32px] bg-indigo-50 border-2 border-indigo-100 flex flex-col justify-center items-center text-center">
+                                 <div className="p-4 rounded-[32px] bg-indigo-50 border-2 border-indigo-100 flex flex-col justify-center items-center text-center">
                                     <p className="text-[9px] font-black text-indigo-400 uppercase tracking-widest mb-1">Conversão</p>
                                     <p className="text-lg font-black text-indigo-700">{((ts / (ic || 1)) * 100).toFixed(1)}%</p>
                                  </div>
@@ -621,8 +621,8 @@ export default function ReportDetail() {
                           </div>
 
                           {/* Bottom Row: Products & Production */}
-                          <div className="grid grid-cols-2 gap-6 mt-8">
-                            <div className="p-6 rounded-[35px] bg-slate-900 text-white flex flex-col gap-3">
+                          <div className="grid grid-cols-2 gap-4 mt-6">
+                            <div className="p-4 rounded-[30px] bg-slate-900 text-white flex flex-col gap-2">
                               <div className="flex items-center gap-3">
                                 <ShoppingCart className="h-4 w-4 text-indigo-400" />
                                 <h4 className="text-[10px] font-black uppercase tracking-widest">Produtos Anunciados</h4>
@@ -632,7 +632,7 @@ export default function ReportDetail() {
                               </p>
                             </div>
 
-                            <div className="p-6 rounded-[35px] bg-indigo-600 text-white flex flex-col gap-3 shadow-lg shadow-indigo-200">
+                            <div className="p-4 rounded-[30px] bg-indigo-600 text-white flex flex-col gap-2 shadow-lg shadow-indigo-200">
                               <div className="flex items-center gap-3">
                                 <Calendar className="h-4 w-4 text-indigo-200" />
                                 <h4 className="text-[10px] font-black uppercase tracking-widest">Produção do Período</h4>
@@ -644,7 +644,7 @@ export default function ReportDetail() {
                           </div>
 
                           {/* Footer Info */}
-                          <div className="mt-10 pt-6 border-t border-slate-100 flex justify-between items-center text-slate-400 text-[10px]">
+                          <div className="mt-6 pt-4 border-t border-slate-100 flex justify-between items-center text-slate-400 text-[9px]">
                             <p className="font-bold uppercase tracking-[0.2em]">Confidencial • Gerado via AgenteHub</p>
                             <p>Página {idx + 1} de {reportsToPrintIds.length} • {format(new Date(), "dd/MM/yyyy HH:mm")}</p>
                           </div>
@@ -679,7 +679,7 @@ export default function ReportDetail() {
                 ];
 
                 return (
-                  <div key={report.id} id={`report-slide-capture-${report.id}`} style={{ width: '1200px', height: '800px' }} className="bg-white p-12 flex flex-col mb-10">
+                  <div key={report.id} id={`report-slide-capture-${report.id}`} style={{ width: '1200px', height: '800px' }} className="bg-white p-10 flex flex-col">
                       {/* High Impact Header */}
                       <div className="mb-6 border-b-2 border-slate-900 pb-6 flex justify-between items-end">
                         <div className="flex-1">
@@ -712,7 +712,7 @@ export default function ReportDetail() {
                             Funil de Conversão
                           </h3>
                           <div className="flex-1 bg-slate-50/50 rounded-[40px] p-6 border border-slate-100 flex items-center justify-center">
-                            <div className="w-full h-full max-h-[420px]">
+                            <div className="w-full h-full max-h-[460px]">
                               <FunnelChart data={funnelData} />
                             </div>
                           </div>
@@ -744,7 +744,7 @@ export default function ReportDetail() {
                                 <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">CAC</p>
                                 <p className="text-lg font-black text-violet-600">R$ {(report.ad_spend / (report.tracked_sales || 1)).toFixed(2)}</p>
                              </div>
-                             <div className="p-5 rounded-[32px] bg-indigo-50 border-2 border-indigo-100 flex flex-col justify-center items-center text-center">
+                             <div className="p-4 rounded-[32px] bg-indigo-50 border-2 border-indigo-100 flex flex-col justify-center items-center text-center">
                                 <p className="text-[9px] font-black text-indigo-400 uppercase tracking-widest mb-1">Conversão</p>
                                 <p className="text-lg font-black text-indigo-700">{((ts / (ic || 1)) * 100).toFixed(1)}%</p>
                              </div>
@@ -752,8 +752,8 @@ export default function ReportDetail() {
                         </div>
                       </div>
 
-                      <div className="grid grid-cols-2 gap-6 mt-8">
-                        <div className="p-6 rounded-[35px] bg-slate-900 text-white flex flex-col gap-3">
+                      <div className="grid grid-cols-2 gap-4 mt-6">
+                        <div className="p-4 rounded-[30px] bg-slate-900 text-white flex flex-col gap-2">
                           <div className="flex items-center gap-3">
                             <ShoppingCart className="h-4 w-4 text-indigo-400" />
                             <h4 className="text-[10px] font-black uppercase tracking-widest">Produtos Anunciados</h4>
@@ -762,7 +762,7 @@ export default function ReportDetail() {
                             {report.advertised_products || "Nenhum produto listado."}
                           </p>
                         </div>
-                        <div className="p-6 rounded-[35px] bg-indigo-600 text-white flex flex-col gap-3 shadow-lg shadow-indigo-200">
+                        <div className="p-4 rounded-[30px] bg-indigo-600 text-white flex flex-col gap-2 shadow-lg shadow-indigo-200">
                           <div className="flex items-center gap-3">
                             <Calendar className="h-4 w-4 text-indigo-200" />
                             <h4 className="text-[10px] font-black uppercase tracking-widest">Produção do Período</h4>
@@ -1098,7 +1098,7 @@ function FunnelChart({ data }: { data: any[] }) {
 
                 return (
                     <div key={index} className="relative flex flex-col items-center w-full group">
-                        <div className="flex items-center w-full max-w-[700px] h-24">
+                        <div className="flex items-center w-full max-w-[700px] h-20">
                             <div className="relative z-30 flex items-center -mr-4">
                                 <div 
                                     className="h-10 px-5 flex items-center justify-center text-[10px] font-black text-white rounded-l-xl shadow-lg"
@@ -1122,7 +1122,7 @@ function FunnelChart({ data }: { data: any[] }) {
                                     </defs>
                                     <g transform={`translate(${translateX}, 20)`}>
                                         <path 
-                                            d={`M 0,0 L ${width},0 L ${width - 30},60 L -30,60 Z`}
+                                            d={`M 0,0 L ${width},0 L ${width - 25},50 L -25,50 Z`}
                                             fill={`url(#grad-${chartId}-${index})`}
                                             className="transition-all duration-1000"
                                         />
@@ -1132,7 +1132,7 @@ function FunnelChart({ data }: { data: any[] }) {
                                             fillOpacity="0.15"
                                         />
                                         <path 
-                                            d={`M -30,60 L ${width - 30},60 L ${width - 25},65 L -25,65 Z`}
+                                            d={`M -25,50 L ${width - 25},50 L ${width - 20},55 L -20,55 Z`}
                                             fill="black"
                                             fillOpacity="0.2"
                                         />
@@ -1141,7 +1141,7 @@ function FunnelChart({ data }: { data: any[] }) {
 
                                 <div className="relative z-10 flex flex-col items-center text-white mt-1">
                                     <span className="text-[10px] font-black tracking-[0.3em] opacity-90 mb-1 drop-shadow-sm">{label}</span>
-                                    <span className="text-3xl font-black drop-shadow-lg">{item.value.toLocaleString()}</span>
+                                    <span className="text-2xl font-black drop-shadow-lg">{item.value.toLocaleString()}</span>
                                 </div>
                             </div>
                         </div>
