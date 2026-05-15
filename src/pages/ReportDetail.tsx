@@ -287,10 +287,10 @@ export default function ReportDetail() {
               .no-print { display: none !important; }
               
               .report-page {
-                height: 92vh !important;
+                height: 100vh !important;
                 width: 100vw !important;
                 margin: 0 !important;
-                padding: 1rem !important;
+                padding: 1.5rem 2rem !important;
                 box-sizing: border-box !important;
                 display: flex !important;
                 flex-direction: column !important;
@@ -575,7 +575,7 @@ export default function ReportDetail() {
 
                           {/* Main Grid: Funnel & Metrics */}
                           {/* Main Content Area: Funnel & Indicators Side-by-Side */}
-                          <div className="flex gap-10 flex-1 min-h-0 overflow-hidden items-stretch">
+                          <div className="flex gap-8 flex-1 min-h-0 overflow-hidden items-stretch">
                             {/* Left: Funnel */}
                             <div className="flex-[1.8] flex flex-col">
                               <h3 className="text-xl font-black uppercase tracking-tighter mb-4 flex items-center gap-3 text-slate-800">
@@ -583,7 +583,7 @@ export default function ReportDetail() {
                                 Funil de Conversão
                               </h3>
                               <div className="flex-1 bg-slate-50/50 rounded-[40px] p-6 border border-slate-100 flex items-center justify-center">
-                                <div className="w-full h-full max-h-[400px]">
+                                <div className="w-full h-full max-h-[440px]">
                                   <FunnelChart data={printFunnelData} isCompact={true} />
                                 </div>
                               </div>
@@ -616,16 +616,16 @@ export default function ReportDetail() {
                                     <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">CAC</p>
                                     <p className="text-lg font-black text-violet-600">R$ {(report.ad_spend / (report.tracked_sales || 1)).toFixed(2)}</p>
                                  </div>
-                                 <div className="p-3 rounded-[32px] bg-indigo-50 border-2 border-indigo-100 flex flex-col justify-center items-center text-center">
+                                 <div className="p-4 rounded-[32px] bg-indigo-50 border-2 border-indigo-100 flex flex-col justify-center items-center text-center">
                                     <p className="text-[9px] font-black text-indigo-400 uppercase tracking-widest mb-1">Conversão</p>
-                                    <p className="text-base font-black text-indigo-700">{((ts / (ic || 1)) * 100).toFixed(1)}%</p>
+                                    <p className="text-lg font-black text-indigo-700">{((ts / (ic || 1)) * 100).toFixed(1)}%</p>
                                  </div>
                               </div>
                             </div>
                           </div>
 
                           {/* Bottom Row: Products & Production */}
-                          <div className="grid grid-cols-2 gap-4 mt-6">
+                          <div className="grid grid-cols-2 gap-4 mt-4">
                             <div className="p-4 rounded-[30px] bg-slate-900 text-white flex flex-col gap-2">
                               <div className="flex items-center gap-3">
                                 <ShoppingCart className="h-4 w-4 text-indigo-400" />
@@ -1104,7 +1104,7 @@ function FunnelChart({ data, isCompact = false }: { data: any[], isCompact?: boo
                     <div key={index} className="relative flex flex-col items-center w-full group">
                         <div className={cn(
                             "flex items-center w-full max-w-[700px]",
-                            isCompact ? "h-18" : "h-28"
+                            isCompact ? "h-20" : "h-28"
                         )}>
                             <div className="relative z-30 flex items-center -mr-4">
                                 <div 
@@ -1130,7 +1130,7 @@ function FunnelChart({ data, isCompact = false }: { data: any[], isCompact?: boo
                                     <g transform={`translate(${translateX}, 20)`}>
                                         <path 
                                             d={isCompact 
-                                                ? `M 0,0 L ${width},0 L ${width - 25},45 L -25,45 Z`
+                                                ? `M 0,0 L ${width},0 L ${width - 30},55 L -30,55 Z`
                                                 : `M 0,0 L ${width},0 L ${width - 40},70 L -40,70 Z`
                                             }
                                             fill={`url(#grad-${chartId}-${index})`}
@@ -1146,7 +1146,7 @@ function FunnelChart({ data, isCompact = false }: { data: any[], isCompact?: boo
                                         />
                                         <path 
                                             d={isCompact
-                                                ? `M -25,45 L ${width - 25},45 L ${width - 20},50 L -20,50 Z`
+                                                ? `M -30,55 L ${width - 30},55 L ${width - 25},60 L -25,60 Z`
                                                 : `M -40,70 L ${width - 40},70 L ${width - 35},75 L -35,75 Z`
                                             }
                                             fill="black"
