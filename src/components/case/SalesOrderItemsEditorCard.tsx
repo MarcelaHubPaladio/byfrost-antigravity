@@ -152,13 +152,13 @@ export function SalesOrderItemsEditorCard(props: { caseId: string; className?: s
     setDraft(initialDraft);
   }, [initialDraft]);
 
-    const { data: caseWithUser } = useQuery({
-        queryKey: ["case_with_user", caseId],
+    const { data: caseInfo } = useQuery({
+        queryKey: ["case_info_commission", caseId],
         enabled: !!caseId,
         queryFn: async () => {
             const { data, error } = await supabase
                 .from("cases")
-                .select("assigned_user_id, users_profile:users_profile!fk_cases_users_profile(meta_json)")
+                .select("assigned_user_id, assigned_vendor_id, users_profile:users_profile!fk_cases_users_profile(meta_json), assigned_vendor:vendors!cases_assigned_vendor_id_fkey(display_name)")
                 .eq("id", caseId)
                 .single();
             if (error) throw error;
@@ -166,14 +166,33 @@ export function SalesOrderItemsEditorCard(props: { caseId: string; className?: s
         }
     });
 
+    const { data: vendorUserProfile } = useQuery({
+        queryKey: ["vendor_user_profile", caseInfo?.assigned_vendor?.display_name],
+        enabled: !!caseInfo?.assigned_vendor?.display_name && !caseInfo?.users_profile,
+        queryFn: async () => {
+            const { data, error } = await supabase
+                .from("users_profile")
+                .select("meta_json")
+                .eq("display_name", caseInfo!.assigned_vendor!.display_name!)
+                .limit(1)
+                .maybeSingle();
+            if (error) return null;
+            return data;
+        }
+    });
+
+    const commissionRules = useMemo(() => {
+      const up = caseInfo?.users_profile;
+      const directRules = Array.isArray(up) ? (up[0] as any)?.meta_json?.commission_rules : (up as any)?.meta_json?.commission_rules;
+      if (directRules) return directRules;
+      return (vendorUserProfile as any)?.meta_json?.commission_rules;
+    }, [caseInfo, vendorUserProfile]);
+
   const nextLineNo = useMemo(() => {
     const max = Math.max(0, ...draft.map((d) => Number(d.line_no) || 0));
     return max + 1;
   }, [draft]);
 
-  const commissionRules = (Array.isArray(caseWithUser?.users_profile) 
-    ? caseWithUser?.users_profile[0]?.meta_json?.commission_rules 
-    : (caseWithUser?.users_profile as any)?.meta_json?.commission_rules);
 
   function calculateRowCommission(rowTotal: number, discountPct: number) {
     if (!commissionRules) return 0;

@@ -64,16 +64,30 @@ export function NewSalesOrderDialog(props: {
   
   const [openCity, setOpenCity] = useState(false);
 
+  const vendorsQ = useQuery({
+    queryKey: ["tenant_vendors", tenantId],
+    enabled: Boolean(open && tenantId),
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("vendors")
+        .select("id, display_name, phone_e164")
+        .eq("tenant_id", tenantId)
+        .is("deleted_at", null)
+        .order("display_name", { ascending: true });
+      if (error) throw error;
+      return data ?? [];
+    }
+  });
+
   const usersQ = useQuery({
     queryKey: ["tenant_users_profiles", tenantId],
     enabled: Boolean(open && tenantId),
     queryFn: async () => {
       const { data, error } = await supabase
         .from("users_profile")
-        .select("user_id, display_name, email")
+        .select("user_id, display_name, email, meta_json, phone_e164")
         .eq("tenant_id", tenantId)
-        .is("deleted_at", null)
-        .order("display_name", { ascending: true });
+        .is("deleted_at", null);
       if (error) throw error;
       return data ?? [];
     }
@@ -105,7 +119,19 @@ export function NewSalesOrderDialog(props: {
 
     setSaving(true);
     try {
-      // 1. Create Case
+      // 1. Resolve matching user if any
+      const selectedVendor = vendorsQ.data?.find(v => v.id === sellerId);
+      let matchedUserId = null;
+      if (selectedVendor && usersQ.data) {
+        // Match by display_name or phone
+        const uMatch = usersQ.data.find(u => 
+          (u.display_name && u.display_name === selectedVendor.display_name) ||
+          (u.phone_e164 && u.phone_e164 === selectedVendor.phone_e164)
+        );
+        if (uMatch) matchedUserId = uMatch.user_id;
+      }
+
+      // 2. Create Case
       const { data: caseRow, error: caseErr } = await supabase
         .from("cases")
         .insert({
@@ -115,7 +141,8 @@ export function NewSalesOrderDialog(props: {
           status: "open",
           state: "new",
           title: customerName,
-          assigned_user_id: sellerId || null,
+          assigned_vendor_id: sellerId || null,
+          assigned_user_id: matchedUserId || null,
           created_by_channel: "panel",
           meta_json: { created_from: "simplified_modal" }
         })
@@ -282,16 +309,16 @@ export function NewSalesOrderDialog(props: {
 
           <div className="space-y-2">
             <Label className="text-xs font-black uppercase tracking-widest text-slate-400 flex items-center gap-2">
-              <ClipboardList className="w-3 h-3" /> Vendedor Responsável
+              <ClipboardList className="w-3 h-3" /> Vendedor
             </Label>
             <Select value={sellerId} onValueChange={setSellerId}>
               <SelectTrigger className="h-12 rounded-2xl border-slate-200">
                 <SelectValue placeholder="Selecione um vendedor..." />
               </SelectTrigger>
               <SelectContent className="rounded-2xl">
-                {usersQ.data?.map(u => (
-                  <SelectItem key={u.user_id} value={u.user_id} className="rounded-xl">
-                    {u.display_name || u.email}
+                {vendorsQ.data?.map(v => (
+                  <SelectItem key={v.id} value={v.id} className="rounded-xl">
+                    {v.display_name}
                   </SelectItem>
                 ))}
               </SelectContent>

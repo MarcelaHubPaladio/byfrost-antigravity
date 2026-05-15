@@ -260,9 +260,22 @@ export default function SalesOrderCase() {
   const assignVendor = async (vendorId: string) => {
     if (!caseId || !tenantId) return;
     try {
+      const selectedVendor = vendors?.find(v => v.id === vendorId);
+      let matchedUserId = null;
+      if (selectedVendor && tenantUsers) {
+        const uMatch = tenantUsers.find(u => 
+          (u.display_name && u.display_name === selectedVendor.display_name) ||
+          (u.phone_e164 && u.phone_e164 === selectedVendor.phone_e164)
+        );
+        if (uMatch) matchedUserId = uMatch.user_id;
+      }
+
       const { error } = await supabase
         .from("cases")
-        .update({ assigned_vendor_id: vendorId === "unassigned" ? null : vendorId })
+        .update({ 
+          assigned_vendor_id: vendorId === "unassigned" ? null : vendorId,
+          assigned_user_id: matchedUserId || (vendorId === "unassigned" ? null : undefined) // only overwrite if we found a match or if unassigning
+        })
         .eq("id", caseId);
       if (error) throw error;
       
