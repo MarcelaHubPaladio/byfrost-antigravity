@@ -228,25 +228,41 @@ export default function ReportDetail() {
     }, 500);
   };
 
-  const downloadAsImage = async () => {
-    const element = document.getElementById('report-slide-capture');
-    if (!element) return;
+  const downloadBatchAsImage = async (selectedIds: string[]) => {
+    setIsPrintModalOpen(false);
     
-    try {
-      const dataUrl = await toPng(element, {
-        quality: 1,
-        pixelRatio: 2,
-        backgroundColor: '#fff',
-        width: 1200,
-        height: 800
-      });
-      const link = document.createElement('a');
-      link.download = `Relatorio-${contractQ.data?.customer?.display_name}-${selectedReport?.period_name}.png`;
-      link.href = dataUrl;
-      link.click();
-    } catch (err) {
-      console.error('Error exporting image:', err);
+    // Process each report sequentially to avoid browser blocks or high memory usage
+    for (const id of selectedIds) {
+      const element = document.getElementById(`report-slide-capture-${id}`);
+      if (!element) continue;
+      
+      const report = unitReports.find(r => r.id === id);
+      if (!report) continue;
+
+      try {
+        const dataUrl = await toPng(element, {
+          quality: 1,
+          pixelRatio: 2,
+          backgroundColor: '#fff',
+          width: 1200,
+          height: 800
+        });
+        const link = document.createElement('a');
+        link.download = `Relatorio-${contractQ.data?.customer?.display_name}-${report.period_name}.png`;
+        link.href = dataUrl;
+        link.click();
+        
+        // Small delay between downloads to help browser handle multiple files
+        await new Promise(resolve => setTimeout(resolve, 500));
+      } catch (err) {
+        console.error(`Error exporting image for report ${id}:`, err);
+      }
     }
+  };
+
+  const downloadAsImage = async () => {
+    if (!selectedReport) return;
+    downloadBatchAsImage([selectedReport.id]);
   };
 
   if (!contractId) return null;
@@ -533,13 +549,13 @@ export default function ReportDetail() {
                           <div className="mb-10 border-b-2 border-slate-900 pb-8 flex justify-between items-end">
                             <div className="flex-1">
                               <p className="text-[10px] font-black uppercase tracking-[0.4em] text-indigo-600 mb-2">Relatório Executivo de Performance</p>
-                              <h1 className="text-5xl font-black uppercase tracking-tighter text-slate-900 leading-none mb-4">{contractQ.data?.customer?.display_name}</h1>
+                              <h1 className="text-3xl font-black uppercase tracking-tighter text-slate-900 leading-none mb-3">{contractQ.data?.customer?.display_name}</h1>
                               <div className="flex items-center gap-6">
-                                <p className="text-xl font-bold text-slate-500 uppercase tracking-widest">{report.unit_name}</p>
-                                <div className="h-6 w-px bg-slate-200" />
+                                <p className="text-lg font-bold text-slate-500 uppercase tracking-widest">{report.unit_name}</p>
+                                <div className="h-4 w-px bg-slate-200" />
                                 <div className="flex items-center gap-3">
-                                  <Calendar className="h-5 w-5 text-indigo-600" />
-                                  <p className="text-xl font-black text-slate-900">
+                                  <Calendar className="h-4 w-4 text-indigo-600" />
+                                  <p className="text-lg font-black text-slate-900">
                                     {format(new Date(report.start_date), "dd/MM/yyyy")} — {format(new Date(report.end_date), "dd/MM/yyyy")}
                                   </p>
                                 </div>
@@ -563,7 +579,7 @@ export default function ReportDetail() {
                                 Funil de Conversão
                               </h3>
                               <div className="flex-1 bg-slate-50/50 rounded-[40px] p-6 border border-slate-100 flex items-center justify-center">
-                                <div className="w-full h-full max-h-[400px]">
+                                <div className="w-full h-full max-h-[350px]">
                                   <FunnelChart data={printFunnelData} />
                                 </div>
                               </div>
@@ -645,15 +661,16 @@ export default function ReportDetail() {
             isOpen={isPrintModalOpen}
             onClose={() => setIsPrintModalOpen(false)}
             onConfirm={confirmPrint}
+            onExportPng={downloadBatchAsImage}
           />
 
           {/* Hidden Capture Area for PNG Export */}
           <div className="fixed -left-[4000px] top-0 pointer-events-none">
-             {selectedReport && (() => {
-                const v = Number(selectedReport.visualizations) || 0;
-                const pv = Number(selectedReport.profile_visits) || 0;
-                const ic = Number(selectedReport.initiated_conversations) || 0;
-                const ts = Number(selectedReport.tracked_sales) || 0;
+             {unitReports.map((report) => {
+                const v = Number(report.visualizations) || 0;
+                const pv = Number(report.profile_visits) || 0;
+                const ic = Number(report.initiated_conversations) || 0;
+                const ts = Number(report.tracked_sales) || 0;
                 const funnelData = [
                   { name: "Visualizações", value: v, ratio: 100, color: "#6366f1" },
                   { name: "Visitas Perfil", value: pv, ratio: v > 0 ? (pv/v)*100 : 0, color: "#8b5cf6" },
@@ -662,19 +679,19 @@ export default function ReportDetail() {
                 ];
 
                 return (
-                  <div id="report-slide-capture" style={{ width: '1200px', height: '800px' }} className="bg-white p-16 flex flex-col">
+                  <div key={report.id} id={`report-slide-capture-${report.id}`} style={{ width: '1200px', height: '800px' }} className="bg-white p-12 flex flex-col mb-10">
                       {/* High Impact Header */}
                       <div className="mb-10 border-b-2 border-slate-900 pb-8 flex justify-between items-end">
                         <div className="flex-1">
                           <p className="text-[10px] font-black uppercase tracking-[0.4em] text-indigo-600 mb-2">Relatório Executivo de Performance</p>
-                          <h1 className="text-5xl font-black uppercase tracking-tighter text-slate-900 leading-none mb-4">{contractQ.data?.customer?.display_name}</h1>
+                          <h1 className="text-3xl font-black uppercase tracking-tighter text-slate-900 leading-none mb-3">{contractQ.data?.customer?.display_name}</h1>
                           <div className="flex items-center gap-6">
-                            <p className="text-xl font-bold text-slate-500 uppercase tracking-widest">{selectedReport.unit_name}</p>
-                            <div className="h-6 w-px bg-slate-200" />
+                            <p className="text-lg font-bold text-slate-500 uppercase tracking-widest">{report.unit_name}</p>
+                            <div className="h-4 w-px bg-slate-200" />
                             <div className="flex items-center gap-3">
-                              <Calendar className="h-5 w-5 text-indigo-600" />
-                              <p className="text-xl font-black text-slate-900">
-                                {format(new Date(selectedReport.start_date), "dd/MM/yyyy")} — {format(new Date(selectedReport.end_date), "dd/MM/yyyy")}
+                              <Calendar className="h-4 w-4 text-indigo-600" />
+                              <p className="text-lg font-black text-slate-900">
+                                {format(new Date(report.start_date), "dd/MM/yyyy")} — {format(new Date(report.end_date), "dd/MM/yyyy")}
                               </p>
                             </div>
                           </div>
@@ -682,7 +699,7 @@ export default function ReportDetail() {
                         <div className="text-right">
                           <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Contrato #{contractId?.slice(0, 8)}</p>
                           <div className="bg-slate-100 px-6 py-3 rounded-2xl inline-block border border-slate-200">
-                            <p className="text-xl font-black text-slate-900 uppercase">{selectedReport.period_name}</p>
+                            <p className="text-xl font-black text-slate-900 uppercase">{report.period_name}</p>
                           </div>
                         </div>
                       </div>
@@ -695,7 +712,7 @@ export default function ReportDetail() {
                             Funil de Conversão
                           </h3>
                           <div className="flex-1 bg-slate-50/50 rounded-[40px] p-6 border border-slate-100 flex items-center justify-center">
-                            <div className="w-full h-full max-h-[400px]">
+                            <div className="w-full h-full max-h-[350px]">
                               <FunnelChart data={funnelData} />
                             </div>
                           </div>
@@ -709,23 +726,23 @@ export default function ReportDetail() {
                           <div className="grid grid-cols-2 gap-3 flex-1">
                              <div className="p-5 rounded-[32px] bg-white border-2 border-slate-100 flex flex-col justify-center items-center text-center shadow-sm">
                                 <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Investimento</p>
-                                <p className="text-xl font-black text-indigo-600">R$ {selectedReport.ad_spend.toLocaleString()}</p>
+                                <p className="text-xl font-black text-indigo-600">R$ {report.ad_spend.toLocaleString()}</p>
                              </div>
                              <div className="p-5 rounded-[32px] bg-slate-900 text-white flex flex-col justify-center items-center text-center">
                                 <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">ROI (1%)</p>
-                                <p className="text-xl font-black">{(Number(selectedReport.sales_percentage || 0)).toFixed(1)}%</p>
+                                <p className="text-xl font-black">{(Number(report.sales_percentage || 0)).toFixed(1)}%</p>
                              </div>
                              <div className="p-5 rounded-[32px] bg-white border-2 border-slate-100 flex flex-col justify-center items-center text-center">
                                 <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">CPV</p>
-                                <p className="text-lg font-black text-emerald-600">R$ {(selectedReport.ad_spend / (selectedReport.profile_visits || 1)).toFixed(2)}</p>
+                                <p className="text-lg font-black text-emerald-600">R$ {(report.ad_spend / (report.profile_visits || 1)).toFixed(2)}</p>
                              </div>
                              <div className="p-5 rounded-[32px] bg-white border-2 border-slate-100 flex flex-col justify-center items-center text-center">
                                 <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">CPL</p>
-                                <p className="text-lg font-black text-blue-600">R$ {(selectedReport.ad_spend / (selectedReport.initiated_conversations || 1)).toFixed(2)}</p>
+                                <p className="text-lg font-black text-blue-600">R$ {(report.ad_spend / (report.initiated_conversations || 1)).toFixed(2)}</p>
                              </div>
                              <div className="p-5 rounded-[32px] bg-white border-2 border-slate-100 flex flex-col justify-center items-center text-center">
                                 <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">CAC</p>
-                                <p className="text-lg font-black text-violet-600">R$ {(selectedReport.ad_spend / (selectedReport.tracked_sales || 1)).toFixed(2)}</p>
+                                <p className="text-lg font-black text-violet-600">R$ {(report.ad_spend / (report.tracked_sales || 1)).toFixed(2)}</p>
                              </div>
                              <div className="p-5 rounded-[32px] bg-indigo-50 border-2 border-indigo-100 flex flex-col justify-center items-center text-center">
                                 <p className="text-[9px] font-black text-indigo-400 uppercase tracking-widest mb-1">Conversão</p>
@@ -742,22 +759,22 @@ export default function ReportDetail() {
                             <h4 className="text-[10px] font-black uppercase tracking-widest">Produtos Anunciados</h4>
                           </div>
                           <p className="text-[10px] opacity-70 leading-relaxed italic line-clamp-2">
-                            {selectedReport.advertised_products || "Nenhum produto listado."}
+                            {report.advertised_products || "Nenhum produto listado."}
                           </p>
                         </div>
-                        <div className="p-6 rounded-[35px] bg-indigo-600 text-white flex flex-col gap-3">
+                        <div className="p-6 rounded-[35px] bg-indigo-600 text-white flex flex-col gap-3 shadow-lg shadow-indigo-200">
                           <div className="flex items-center gap-3">
                             <Calendar className="h-4 w-4 text-indigo-200" />
                             <h4 className="text-[10px] font-black uppercase tracking-widest">Produção do Período</h4>
                           </div>
                           <p className="text-[10px] opacity-90 leading-relaxed italic line-clamp-2">
-                            {selectedReport.production_notes || "Nenhuma nota de produção cadastrada."}
+                            {report.production_notes || "Nenhuma nota de produção cadastrada."}
                           </p>
                         </div>
                       </div>
                   </div>
                 );
-             })()}
+             })}
           </div>
         </AppShell>
       </RequireRouteAccess>
@@ -769,12 +786,14 @@ function PrintSelectionDialog({
   reports, 
   isOpen, 
   onClose, 
-  onConfirm 
+  onConfirm,
+  onExportPng
 }: { 
   reports: EntityReport[], 
   isOpen: boolean, 
   onClose: () => void, 
-  onConfirm: (selectedIds: string[]) => void 
+  onConfirm: (selectedIds: string[]) => void,
+  onExportPng: (selectedIds: string[]) => void 
 }) {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
@@ -834,6 +853,14 @@ function PrintSelectionDialog({
           </p>
           <div className="flex gap-2">
             <Button variant="ghost" onClick={onClose} className="rounded-xl font-bold">Cancelar</Button>
+            <Button 
+              variant="outline"
+              onClick={() => onExportPng(selectedIds)} 
+              className="border-indigo-200 text-indigo-600 hover:bg-indigo-50 rounded-xl font-bold px-6"
+              disabled={selectedIds.length === 0}
+            >
+              Baixar PNGs
+            </Button>
             <Button 
               onClick={() => onConfirm(selectedIds)} 
               className="bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold px-8 shadow-lg shadow-indigo-200"
