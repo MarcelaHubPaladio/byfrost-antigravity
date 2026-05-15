@@ -546,7 +546,7 @@ export default function ReportDetail() {
                       return (
                         <div key={report.id} className="report-page">
                           {/* High Impact Header */}
-                          <div className="mb-10 border-b-2 border-slate-900 pb-8 flex justify-between items-end">
+                          <div className="mb-6 border-b-2 border-slate-900 pb-6 flex justify-between items-end">
                             <div className="flex-1">
                               <p className="text-[10px] font-black uppercase tracking-[0.4em] text-indigo-600 mb-2">Relatório Executivo de Performance</p>
                               <h1 className="text-3xl font-black uppercase tracking-tighter text-slate-900 leading-none mb-3">{contractQ.data?.customer?.display_name}</h1>
@@ -579,7 +579,7 @@ export default function ReportDetail() {
                                 Funil de Conversão
                               </h3>
                               <div className="flex-1 bg-slate-50/50 rounded-[40px] p-6 border border-slate-100 flex items-center justify-center">
-                                <div className="w-full h-full max-h-[350px]">
+                                <div className="w-full h-full max-h-[420px]">
                                   <FunnelChart data={printFunnelData} />
                                 </div>
                               </div>
@@ -681,7 +681,7 @@ export default function ReportDetail() {
                 return (
                   <div key={report.id} id={`report-slide-capture-${report.id}`} style={{ width: '1200px', height: '800px' }} className="bg-white p-12 flex flex-col mb-10">
                       {/* High Impact Header */}
-                      <div className="mb-10 border-b-2 border-slate-900 pb-8 flex justify-between items-end">
+                      <div className="mb-6 border-b-2 border-slate-900 pb-6 flex justify-between items-end">
                         <div className="flex-1">
                           <p className="text-[10px] font-black uppercase tracking-[0.4em] text-indigo-600 mb-2">Relatório Executivo de Performance</p>
                           <h1 className="text-3xl font-black uppercase tracking-tighter text-slate-900 leading-none mb-3">{contractQ.data?.customer?.display_name}</h1>
@@ -712,7 +712,7 @@ export default function ReportDetail() {
                             Funil de Conversão
                           </h3>
                           <div className="flex-1 bg-slate-50/50 rounded-[40px] p-6 border border-slate-100 flex items-center justify-center">
-                            <div className="w-full h-full max-h-[350px]">
+                            <div className="w-full h-full max-h-[420px]">
                               <FunnelChart data={funnelData} />
                             </div>
                           </div>
@@ -1097,7 +1097,7 @@ function FunnelChart({ data }: { data: any[] }) {
 
                 return (
                     <div key={index} className="relative flex flex-col items-center w-full group">
-                        <div className="flex items-center w-full max-w-[700px] h-28">
+                        <div className="flex items-center w-full max-w-[700px] h-24">
                             <div className="relative z-30 flex items-center -mr-4">
                                 <div 
                                     className="h-10 px-5 flex items-center justify-center text-[10px] font-black text-white rounded-l-xl shadow-lg"
@@ -1121,7 +1121,7 @@ function FunnelChart({ data }: { data: any[] }) {
                                     </defs>
                                     <g transform={`translate(${translateX}, 20)`}>
                                         <path 
-                                            d={`M 0,0 L ${width},0 L ${width - 40},70 L -40,70 Z`}
+                                            d={`M 0,0 L ${width},0 L ${width - 30},60 L -30,60 Z`}
                                             fill={`url(#grad-${index})`}
                                             className="transition-all duration-1000"
                                         />
@@ -1131,7 +1131,7 @@ function FunnelChart({ data }: { data: any[] }) {
                                             fillOpacity="0.15"
                                         />
                                         <path 
-                                            d={`M -40,70 L ${width - 40},70 L ${width - 35},75 L -35,75 Z`}
+                                            d={`M -30,60 L ${width - 30},60 L ${width - 25},65 L -25,65 Z`}
                                             fill="black"
                                             fillOpacity="0.2"
                                         />
