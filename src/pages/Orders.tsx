@@ -449,7 +449,7 @@ export default function Orders() {
   const caseIdsForLookup = useMemo(() => journeyRows.map(r => r.id), [journeyRows]);
 
   const caseDataQ = useQuery({
-    queryKey: ["orders_case_fields_extended", activeTenantId, journeyRows.length, journeyRows[0]?.id, dateRange.from.getTime(), dateRange.to?.getTime()],
+    queryKey: ["orders_case_fields_extended", activeTenantId, journeyRows.length, journeyRows[0]?.id, dateRange.from?.getTime() || "all", dateRange.to?.getTime() || "all"],
     enabled: Boolean(activeTenantId && caseIdsForLookup.length),
     queryFn: async () => {
       const CHUNK_SIZE = 100;
