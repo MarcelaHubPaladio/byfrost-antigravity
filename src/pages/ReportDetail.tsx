@@ -25,6 +25,7 @@ import {
   Eye,
   User,
   Percent,
+  Camera,
   Check
 } from "lucide-react";
 import { format } from "date-fns";
