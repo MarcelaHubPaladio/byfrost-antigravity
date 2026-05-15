@@ -1080,6 +1080,7 @@ function ReportFormDialog({ onSave, isLoading, initialData, existingUnits = [] }
 }
 
 function FunnelChart({ data }: { data: any[] }) {
+    const chartId = useMemo(() => Math.random().toString(36).substr(2, 9), []);
     const actions = ["ATRAIR", "CONVERTER", "RELACIONAR", "VENDER"];
     const labels = ["VISUALIZAÇÕES", "VISITANTES", "LEADS", "CLIENTES"];
     const colors = ["#FF4B6C", "#3B4148", "#FFB020", "#00A3FF"];
@@ -1112,17 +1113,17 @@ function FunnelChart({ data }: { data: any[] }) {
                             </div>
 
                             <div className="flex-1 relative h-full flex items-center justify-center">
-                                <svg className="absolute inset-0 w-full h-full drop-shadow-2xl" preserveAspectRatio="none" viewBox="0 0 700 112">
+                                <svg className="absolute inset-0 w-full h-full drop-shadow-md" preserveAspectRatio="none" viewBox="0 0 700 112">
                                     <defs>
-                                        <linearGradient id={`grad-${index}`} x1="0%" y1="0%" x2="100%" y2="0%">
+                                        <linearGradient id={`grad-${chartId}-${index}`} x1="0%" y1="0%" x2="100%" y2="0%">
                                             <stop offset="0%" stopColor={color} />
-                                            <stop offset="100%" stopColor={color} stopOpacity="0.85" />
+                                            <stop offset="100%" stopColor={color} stopOpacity="0.9" />
                                         </linearGradient>
                                     </defs>
                                     <g transform={`translate(${translateX}, 20)`}>
                                         <path 
                                             d={`M 0,0 L ${width},0 L ${width - 30},60 L -30,60 Z`}
-                                            fill={`url(#grad-${index})`}
+                                            fill={`url(#grad-${chartId}-${index})`}
                                             className="transition-all duration-1000"
                                         />
                                         <path 
@@ -1139,8 +1140,8 @@ function FunnelChart({ data }: { data: any[] }) {
                                 </svg>
 
                                 <div className="relative z-10 flex flex-col items-center text-white mt-1">
-                                    <span className="text-[10px] font-black tracking-[0.3em] opacity-80 mb-1">{label}</span>
-                                    <span className="text-3xl font-black drop-shadow-md">{item.value.toLocaleString()}</span>
+                                    <span className="text-[10px] font-black tracking-[0.3em] opacity-90 mb-1 drop-shadow-sm">{label}</span>
+                                    <span className="text-3xl font-black drop-shadow-lg">{item.value.toLocaleString()}</span>
                                 </div>
                             </div>
                         </div>
