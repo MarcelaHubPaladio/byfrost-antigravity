@@ -483,8 +483,9 @@ export default function ReportDetail() {
                       </Card>
                     </div>
                   </div>
+                </div>
 
-                  {/* Print Only Content (Multi-page) */}
+                {/* Print Only Content (Multi-page) */}
                   <div className="hidden print:block">
                     {unitReports.filter(r => reportsToPrintIds.includes(r.id)).map((report, idx) => {
                       const v = Number(report.visualizations) || 0;
