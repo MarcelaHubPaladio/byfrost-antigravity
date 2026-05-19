@@ -1517,7 +1517,7 @@ export default function Orders() {
                           <SortableContext items={stateRows.map(r => r.id)} strategy={verticalListSortingStrategy}>
                             <div 
                               id={state}
-                              className="flex flex-col gap-3 min-h-[500px] rounded-[32px] bg-slate-50/50 p-2 border border-dashed border-slate-200 transition-colors"
+                              className="flex flex-col gap-3 h-[65vh] min-h-[350px] overflow-y-auto kanban-scrollbar rounded-[32px] bg-slate-50/50 p-2 border border-dashed border-slate-200 transition-colors"
                             >
                               {stateRows.map(c => (
                                 <SortableOrderCard 
