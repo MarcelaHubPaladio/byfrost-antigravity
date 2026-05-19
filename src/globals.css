@@ -169,4 +169,20 @@
   .fill-mode-forwards {
     animation-fill-mode: forwards;
   }
+
+  .kanban-scrollbar::-webkit-scrollbar {
+    height: 12px;
+  }
+  .kanban-scrollbar::-webkit-scrollbar-track {
+    background: #f1f5f9; 
+    border-radius: 8px;
+  }
+  .kanban-scrollbar::-webkit-scrollbar-thumb {
+    background: #cbd5e1; 
+    border-radius: 8px;
+    border: 3px solid #f1f5f9;
+  }
+  .kanban-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: #94a3b8; 
+  }
 }

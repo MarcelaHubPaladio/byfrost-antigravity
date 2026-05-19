@@ -1494,7 +1494,7 @@ export default function Orders() {
                 collisionDetection={closestCorners}
                 onDragEnd={onDragEnd}
               >
-                <div className="overflow-x-auto pb-4 no-scrollbar">
+                <div className="overflow-x-auto pb-4 kanban-scrollbar">
                   <div className="flex gap-6 min-w-max px-2">
                     {states.map((state) => {
                       const stateRows = filteredRows.filter(r => isStateMatch(r.state, state));
