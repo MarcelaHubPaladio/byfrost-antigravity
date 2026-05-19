@@ -172,14 +172,20 @@
 
   .kanban-scrollbar::-webkit-scrollbar {
     height: 12px;
+    width: 6px;
   }
   .kanban-scrollbar::-webkit-scrollbar-track {
+    background: transparent; 
+  }
+  .kanban-scrollbar::-webkit-scrollbar-track:horizontal {
     background: #f1f5f9; 
     border-radius: 8px;
   }
   .kanban-scrollbar::-webkit-scrollbar-thumb {
     background: #cbd5e1; 
     border-radius: 8px;
+  }
+  .kanban-scrollbar::-webkit-scrollbar-thumb:horizontal {
     border: 3px solid #f1f5f9;
   }
   .kanban-scrollbar::-webkit-scrollbar-thumb:hover {
