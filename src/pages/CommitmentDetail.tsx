@@ -29,6 +29,7 @@ import {
   Package,
   Link2,
   Zap,
+  BarChart3,
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import {
