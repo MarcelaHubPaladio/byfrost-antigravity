@@ -280,7 +280,12 @@ async function processFinancialIngestion(opts: {
   if (dlErr || !dl) throw new Error(`download_failed:${dlErr?.message ?? "unknown"}`);
 
   const bytes = new Uint8Array(await dl.arrayBuffer());
-  const text = new TextDecoder().decode(bytes);
+  let text = "";
+  try {
+    text = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+  } catch (e) {
+    text = new TextDecoder("iso-8859-1").decode(bytes);
+  }
 
   const isOfx =
     /\n\s*OFXHEADER\s*:/i.test(text) ||
