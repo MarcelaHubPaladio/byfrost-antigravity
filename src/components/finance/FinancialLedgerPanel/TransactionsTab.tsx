@@ -138,6 +138,18 @@ export function TransactionsTab() {
     },
   });
 
+  const categoryById = useMemo(() => {
+    const m = new Map<string, CategoryRow>();
+    for (const c of categoriesQ.data ?? []) m.set(c.id, c);
+    return m;
+  }, [categoriesQ.data]);
+
+  const accountById = useMemo(() => {
+    const m = new Map<string, BankAccountRow>();
+    for (const a of accountsQ.data ?? []) m.set(a.id, a);
+    return m;
+  }, [accountsQ.data]);
+
   const sortedTransactions = useMemo(() => {
     let data = [...(transactionsQ.data || [])];
 
@@ -259,17 +271,9 @@ export function TransactionsTab() {
     setTxDialogOpen(true);
   };
 
-  const categoryById = useMemo(() => {
-    const m = new Map<string, CategoryRow>();
-    for (const c of categoriesQ.data ?? []) m.set(c.id, c);
-    return m;
-  }, [categoriesQ.data]);
+  
 
-  const accountById = useMemo(() => {
-    const m = new Map<string, BankAccountRow>();
-    for (const a of accountsQ.data ?? []) m.set(a.id, a);
-    return m;
-  }, [accountsQ.data]);
+  
 
   // Quick Create Dialogs
   const [quickEntityOpen, setQuickEntityOpen] = useState(false);
