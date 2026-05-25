@@ -314,14 +314,20 @@ export default function Crm() {
     refetchIntervalInBackground: false,
     refetchOnWindowFocus: true,
     queryFn: async () => {
-      const { data, error } = await supabase
+      let q = supabase
         .from("cases")
         .select(
           "id,journey_id,customer_id,customer_entity_id,title,status,state,created_at,updated_at,assigned_user_id,is_chat,users_profile:users_profile!fk_cases_users_profile(display_name,email),journeys:journeys!cases_journey_id_fkey(key,name,is_crm,default_state_machine_json),meta_json"
         )
         .eq("tenant_id", activeTenantId!)
         .is("deleted_at", null)
-        .eq("is_chat", false)
+        .eq("is_chat", false);
+
+      if (!isAdminOrSuper && user?.id) {
+        q = q.or(`assigned_user_id.eq.${user.id},assigned_user_id.is.null`);
+      }
+
+      const { data, error } = await q
         .order("updated_at", { ascending: false })
         .limit(800);
 
