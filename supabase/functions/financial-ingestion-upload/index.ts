@@ -142,8 +142,11 @@ function parseOfx(text: string) {
 }
 
 function parseAmountLoose(s: string): number | null {
-  const v = String(s ?? "").trim();
+  let v = String(s ?? "").trim();
   if (!v) return null;
+
+  // Handle case where tab or space separates whole and decimal parts (e.g. copy paste artifact "590\t00")
+  v = v.replace(/(\d)[\t\s]+(\d{2})$/, "$1,$2");
 
   // Remove currency and spaces
   let t = v.replace(/[^0-9,\.-]/g, "").trim();
@@ -221,8 +224,8 @@ function parseCsvWithPreamble(text: string) {
     if (parts.length < 3) return false;
     const joined = normalizeHeader(parts.join(" "));
     const hasDate = joined.includes("data");
-    const hasAmount = joined.includes("valor") || joined.includes("amount") || joined.includes("montante");
-    const hasDesc = joined.includes("descricao") || joined.includes("description") || joined.includes("historico");
+    const hasAmount = joined.includes("valor") || joined.includes("amount") || joined.includes("montante") || joined.includes("credito") || joined.includes("debito") || joined.includes("saldo");
+    const hasDesc = joined.includes("descricao") || joined.includes("description") || joined.includes("historico") || joined.includes("lancamento");
     return hasDate && hasAmount && hasDesc;
   };
 
@@ -319,7 +322,7 @@ async function processFinancialIngestion(opts: {
   }
 
   const dateKeys = ["transaction_date", "data", "date", "dt", "data_mov", "data_lancamento"];
-  const descKeys = ["description", "descricao", "historico", "memo", "narrativa", "desc"];
+  const descKeys = ["description", "descricao", "historico", "memo", "narrativa", "desc", "lancamento"];
   const amountKeys = ["amount", "valor", "montante", "value", "vlr"];
 
   const occurrenceMap = new Map<string, number>();
@@ -341,12 +344,34 @@ async function processFinancialIngestion(opts: {
     let inferredType: "credit" | "debit" = "debit";
 
     if (amt == null) {
+      // Try to read separate credit/debit columns (Bradesco style)
+      const credRaw = pickField(row, ["credito", "credito_r_", "creditos"]);
+      const debRaw = pickField(row, ["debito", "debito_r_", "debitos"]);
+      
+      const credAmt = parseAmountLoose(credRaw);
+      const debAmt = parseAmountLoose(debRaw);
+      
+      if (credAmt != null && credAmt > 0) {
+        amt = credAmt;
+        inferredType = "credit";
+      } else if (debAmt != null && debAmt !== 0) {
+        amt = Math.abs(debAmt);
+        inferredType = "debit";
+      }
+    }
+
+    if (amt == null) {
       errors.push(`invalid_amount:${JSON.stringify(row)}`);
       continue;
     }
 
-    inferredType = amt >= 0 ? "credit" : "debit";
-    if (amt < 0) amt = Math.abs(amt);
+    if (inferredType === "debit" && amt >= 0) {
+      inferredType = amt >= 0 ? "credit" : "debit";
+    }
+    if (amt < 0) {
+      amt = Math.abs(amt);
+      inferredType = "debit";
+    }
 
     const baseKey = JSON.stringify({
       transaction_date: txDate,

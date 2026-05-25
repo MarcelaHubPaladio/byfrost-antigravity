@@ -290,6 +290,7 @@ export function FinancialIngestionPanel() {
               <SelectContent>
                 <SelectItem value="auto">Automático (Inter/OFX)</SelectItem>
                 <SelectItem value="inter">Banco Inter (CSV)</SelectItem>
+                <SelectItem value="bradesco">Bradesco (CSV)</SelectItem>
                 <SelectItem value="cresol">Cresol (CSV)</SelectItem>
                 <SelectItem value="itau">Itaú (CSV)</SelectItem>
               </SelectContent>
