@@ -1,0 +1,1794 @@
+import React, { useEffect, useMemo, useState } from "react";
+import { cn, formatMoneyBRL } from "@/lib/utils";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { supabase } from "@/lib/supabase";
+import { useTenant } from "@/providers/TenantProvider";
+import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { showError, showSuccess } from "@/utils/toast";
+import { Checkbox } from "@/components/ui/checkbox";
+import { addDays, addMonths, subMonths, format, parseISO, startOfMonth, endOfMonth, startOfDay, endOfDay } from "date-fns";
+import { ptBR } from "date-fns/locale";
+import {
+  Download, Landmark, Pencil, Plus, Upload, Link2, CheckCircle2, Search, Info, Trash2, X, ChevronRight } from "lucide-react";
+import { AsyncSelect } from "@/components/ui/async-select";
+import { Badge } from "@/components/ui/badge";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Link } from "react-router-dom";
+
+import { CategoryType, CATEGORY_LABELS, normalizeDescription, stripOuterQuotes, splitCsvLine, parseCategoryType, ParsedCategory, parseCategoryCsv, sha256Hex, parseMoneyInput, prettyAccountType, currentMonthRangeIso } from "@/lib/financial-utils";
+type BankAccountRow = {
+  id: string;
+  bank_name: string;
+  account_name: string;
+  account_type: string;
+  currency: string;
+};
+
+export function TransactionsTab() {
+  
+  // Handle ?tab=dre in URL
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const t = params.get("tab");
+    if (t === "dre") setActiveTab("dre");
+  }, []);
+  const { activeTenantId } = useTenant();
+  const qc = useQueryClient();
+
+  const [txStartDate, setTxStartDate] = useState(() => currentMonthRangeIso().start);
+  const [txEndDate, setTxEndDate] = useState(() => currentMonthRangeIso().end);
+
+  useEffect(() => {
+    // Default filter always starts on current month when entering the screen / switching tenant.
+    if (!activeTenantId) return;
+    const r = currentMonthRangeIso();
+    setTxStartDate(r.start);
+    setTxEndDate(r.end);
+  }, [activeTenantId]);
+
+  const accountsQ = useQuery({
+    queryKey: ["bank_accounts", activeTenantId],
+    enabled: Boolean(activeTenantId),
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("bank_accounts")
+        .select("id,bank_name,account_name,account_type,currency")
+        .eq("tenant_id", activeTenantId!)
+        .order("created_at", { ascending: true });
+      if (error) throw error;
+      return (data ?? []) as BankAccountRow[];
+    },
+  });
+
+  const categoriesQ = useQuery({
+    queryKey: ["financial_categories", activeTenantId],
+    enabled: Boolean(activeTenantId),
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("financial_categories")
+        .select("id,name,type")
+        .eq("tenant_id", activeTenantId!)
+        .order("name", { ascending: true });
+      if (error) throw error;
+      return (data ?? []) as CategoryRow[];
+    },
+  });
+
+  // Sorting & Filtering State
+  const [filterEntityId, setFilterEntityId] = useState<string | null>(null);
+  const [filterCategoryId, setFilterCategoryId] = useState<string | null>(null);
+  const [sortKey, setSortKey] = useState<string | null>(null);
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+
+  const transactionsQ = useQuery({
+    queryKey: ["financial_transactions", activeTenantId, txStartDate, txEndDate],
+    enabled: Boolean(activeTenantId && txStartDate && txEndDate),
+    queryFn: async () => {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(txStartDate) || !/^\d{4}-\d{2}-\d{2}$/.test(txEndDate)) {
+        throw new Error("Filtro de datas inválido");
+      }
+
+      const { data, error } = await supabase
+        .from("financial_transactions")
+        .select(
+          "id,tenant_id,account_id,amount,type,description,transaction_date,status,source,fingerprint,category_id,created_at,entity_id,linked_payable_id,linked_receivable_id,invoice_number,core_entities(display_name),financial_categories(name)"
+        )
+        .eq("tenant_id", activeTenantId!)
+        .gte("transaction_date", txStartDate)
+        .lte("transaction_date", txEndDate)
+        .order("transaction_date", { ascending: false })
+        .order("created_at", { ascending: false })
+        .limit(500);
+      if (error) throw error;
+      return (data ?? []) as any[];
+    },
+  });
+
+  const sortedTransactions = useMemo(() => {
+    let data = [...(transactionsQ.data || [])];
+
+    // 1. Filtering
+    if (filterEntityId) {
+      data = data.filter((t) => t.entity_id === filterEntityId);
+    }
+    if (filterCategoryId) {
+      data = data.filter((t) => t.category_id === filterCategoryId);
+    }
+
+    // 2. Sorting
+    data.sort((a, b) => {
+      if (sortKey) {
+        let valA: any = a[sortKey];
+        let valB: any = b[sortKey];
+
+        if (sortKey === "amount") {
+          valA = Number(valA || 0);
+          valB = Number(valB || 0);
+        }
+
+        if (valA < valB) return sortDir === "asc" ? -1 : 1;
+        if (valA > valB) return sortDir === "asc" ? 1 : -1;
+        return 0;
+      }
+
+      // Default: Incomplete first, then date
+      const aIncomplete = !a.category_id || !a.entity_id;
+      const bIncomplete = !b.category_id || !b.entity_id;
+
+      if (aIncomplete && !bIncomplete) return -1;
+      if (!aIncomplete && bIncomplete) return 1;
+
+      if (a.transaction_date !== b.transaction_date) {
+        return b.transaction_date.localeCompare(a.transaction_date);
+      }
+      return b.created_at.localeCompare(a.created_at);
+    });
+
+    return data;
+  }, [transactionsQ.data, filterEntityId, filterCategoryId, sortKey, sortDir]);
+
+  const toggleSort = (key: string) => {
+    if (sortKey === key) {
+      setSortDir(sortDir === "asc" ? "desc" : "asc");
+    } else {
+      setSortKey(key);
+      setSortDir("desc");
+    }
+  };
+
+  const handleDownloadCsv = () => {
+    if (!sortedTransactions.length) {
+      showError("Nenhuma transação para exportar.");
+      return;
+    }
+
+    const headers = ["Data", "Descrição", "Entidade", "Conta", "Tipo", "Valor", "Categoria", "NFE"];
+    const rows = sortedTransactions.map((t) => {
+      const acc = accountById.get(t.account_id);
+      return [
+        t.transaction_date,
+        t.description,
+        t.core_entities?.display_name || "",
+        acc?.account_name || "",
+        t.type,
+        t.amount.toFixed(2).replace(".", ","),
+        t.financial_categories?.name || "",
+        t.invoice_number || "",
+      ];
+    });
+
+    const csvContent = [
+      headers.join(";"),
+      ...rows.map((row) =>
+        row
+          .map((cell) => {
+            const val = String(cell ?? "");
+            return `"${val.replace(/"/g, '""')}"`;
+          })
+          .join(";")
+      ),
+    ].join("\n");
+
+    const blob = new Blob(["\uFEFF" + csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", `lancamentos_${format(new Date(), "yyyy-MM-dd_HHmm")}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const handleEdit = (t: any) => {
+    setEditingTxId(t.id);
+    setAccountId(t.account_id);
+    setTxDate(t.transaction_date || "");
+    setTxType(t.type || "debit");
+    setAmount(String(t.amount || ""));
+    setDescription(t.description || "");
+    setTxEntityId(t.entity_id || null);
+    setCategoryId(t.category_id || "");
+    setTxInvoiceNumber(t.invoice_number || "");
+    setTxDialogOpen(true);
+  };
+
+  const categoryById = useMemo(() => {
+    const m = new Map<string, CategoryRow>();
+    for (const c of categoriesQ.data ?? []) m.set(c.id, c);
+    return m;
+  }, [categoriesQ.data]);
+
+  const accountById = useMemo(() => {
+    const m = new Map<string, BankAccountRow>();
+    for (const a of accountsQ.data ?? []) m.set(a.id, a);
+    return m;
+  }, [accountsQ.data]);
+
+  // Quick Create Dialogs
+  const [quickEntityOpen, setQuickEntityOpen] = useState(false);
+  const [quickEntityName, setQuickEntityName] = useState("");
+  const [quickEntitySubtype, setQuickEntitySubtype] = useState("cliente");
+  const [quickEntityTxId, setQuickEntityTxId] = useState<string | null>(null);
+
+  const [quickCatOpen, setQuickCatOpen] = useState(false);
+  const [quickCatName, setQuickCatName] = useState("");
+  const [quickCatType, setQuickCatType] = useState<CategoryType>("variable");
+  const [quickCatTxId, setQuickCatTxId] = useState<string | null>(null);
+
+  const quickCreateEntityM = useMutation({
+    mutationFn: async () => {
+      if (!activeTenantId) throw new Error("Tenant inválido");
+      const { data, error } = await supabase
+        .from("core_entities")
+        .insert({
+          tenant_id: activeTenantId,
+          display_name: quickEntityName,
+          subtype: quickEntitySubtype,
+          entity_type: ["cliente", "fornecedor", "indicador", "banco", "pintor"].includes(quickEntitySubtype) ? "party" : "offering",
+          status: "active"
+        })
+        .select()
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: async (newEntity) => {
+      showSuccess(`Entidade "${newEntity.display_name}" criada.`);
+      if (quickEntityTxId) {
+        updateTxEntityM.mutate({ 
+          id: quickEntityTxId, 
+          description: sortedTransactions.find(t => t.id === quickEntityTxId)?.description || "", 
+          entityId: newEntity.id 
+        });
+      }
+      setQuickEntityOpen(false);
+      setQuickEntityName("");
+      setQuickEntityTxId(null);
+      await qc.invalidateQueries({ queryKey: ["core_entities", activeTenantId] });
+    },
+    onError: (e: any) => showError(e.message || "Erro ao criar entidade")
+  });
+
+  const quickCreateCategoryM = useMutation({
+    mutationFn: async () => {
+      if (!activeTenantId) throw new Error("Tenant inválido");
+      const { data, error } = await supabase
+        .from("financial_categories")
+        .insert({
+          tenant_id: activeTenantId,
+          name: quickCatName,
+          type: quickCatType
+        })
+        .select()
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: async (newCat) => {
+      showSuccess(`Categoria "${newCat.name}" criada.`);
+      if (quickCatTxId) {
+        updateTxCategoryM.mutate({ 
+          id: quickCatTxId, 
+          description: sortedTransactions.find(t => t.id === quickCatTxId)?.description || "", 
+          categoryId: newCat.id 
+        });
+      }
+      setQuickCatOpen(false);
+      setQuickCatName("");
+      setQuickCatTxId(null);
+      await qc.invalidateQueries({ queryKey: ["financial_categories", activeTenantId] });
+    },
+    onError: (e: any) => showError(e.message || "Erro ao criar categoria")
+  });
+
+  // --------------------------
+  // Manual transaction (modal)
+  // --------------------------
+  const [txDialogOpen, setTxDialogOpen] = useState(false);
+  const [accountId, setAccountId] = useState<string>("");
+  const [txDate, setTxDate] = useState<string>(() => new Date().toISOString().slice(0, 10));
+  const [txType, setTxType] = useState<"credit" | "debit">("debit");
+  const [amount, setAmount] = useState<string>("");
+  const [description, setDescription] = useState<string>("");
+  const [txEntityId, setTxEntityId] = useState<string | null>(null);
+  const [txInvoiceNumber, setTxInvoiceNumber] = useState("");
+  const [editingTxId, setEditingTxId] = useState<string | null>(null);
+
+  const descNorm = useMemo(() => normalizeDescription(description), [description]);
+  const [categoryId, setCategoryId] = useState<string>("");
+  const [categoryTouched, setCategoryTouched] = useState(false);
+
+  useEffect(() => {
+    // Default to first account
+    if (!accountId && (accountsQ.data?.length ?? 0) > 0) {
+      setAccountId(accountsQ.data![0].id);
+    }
+  }, [accountId, accountsQ.data]);
+
+  const entitySuggestionQ = useQuery({
+    queryKey: ["financial_suggest_entity", activeTenantId, descNorm],
+    enabled: Boolean(activeTenantId && descNorm.length >= 3),
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("financial_suggest_entity", {
+        p_tenant_id: activeTenantId!,
+        p_description_norm: descNorm,
+      });
+      if (error) throw error;
+      return data as any;
+    },
+  });
+
+  const suggestedEntity = entitySuggestionQ.data?.match ? entitySuggestionQ.data : null;
+  const [entityTouched, setEntityTouched] = useState(false);
+
+  useEffect(() => {
+    if (!entityTouched && suggestedEntity?.entity_id) {
+      setTxEntityId(String(suggestedEntity.entity_id));
+    }
+    if (!description) {
+      setEntityTouched(false);
+      setTxEntityId(null);
+    }
+  }, [suggestedEntity?.entity_id, entityTouched, description]);
+
+  const suggestionQ = useQuery({
+    queryKey: ["financial_suggest_category", activeTenantId, descNorm],
+    enabled: Boolean(activeTenantId && descNorm.length >= 3),
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("financial_suggest_category", {
+        p_tenant_id: activeTenantId!,
+        p_description_norm: descNorm,
+      });
+      if (error) throw error;
+      return data as any;
+    },
+  });
+
+  const suggested = suggestionQ.data?.match ? suggestionQ.data : null;
+
+  useEffect(() => {
+    if (!categoryTouched && suggested?.category_id) {
+      setCategoryId(String(suggested.category_id));
+    }
+    if (!description) {
+      setCategoryTouched(false);
+      setCategoryId("");
+    }
+  }, [suggested?.category_id, categoryTouched, description]);
+
+  const createTxM = useMutation({
+    mutationFn: async () => {
+      if (!activeTenantId) throw new Error("Tenant inválido");
+      if (!accountId) throw new Error("Selecione uma conta");
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(txDate)) throw new Error("Data inválida");
+      if (!description.trim()) throw new Error("Descrição obrigatória");
+      const n = parseMoneyInput(amount);
+      if (!Number.isFinite(n) || n <= 0) throw new Error("Valor inválido");
+
+      const fingerprint = await sha256Hex(
+        JSON.stringify({
+          tenant_id: activeTenantId,
+          account_id: accountId,
+          transaction_date: txDate,
+          amount: Number(n.toFixed(2)),
+          description: descNorm,
+        })
+      );
+
+      if (editingTxId) {
+        const { error: updErr } = await supabase
+          .from("financial_transactions")
+          .update({
+            account_id: accountId,
+            amount: Number(n.toFixed(2)),
+            type: txType,
+            description: description.trim(),
+            transaction_date: txDate,
+            competence_date: txDate,
+            category_id: categoryId || null,
+            entity_id: txEntityId || null,
+            invoice_number: txInvoiceNumber || null,
+            fingerprint,
+          })
+          .eq("id", editingTxId)
+          .eq("tenant_id", activeTenantId);
+        if (updErr) throw updErr;
+      } else {
+        const { error: insErr } = await supabase.from("financial_transactions").insert({
+          tenant_id: activeTenantId,
+          account_id: accountId,
+          amount: Number(n.toFixed(2)),
+          type: txType,
+          description: description.trim(),
+          transaction_date: txDate,
+          competence_date: txDate,
+          status: "posted",
+          fingerprint,
+          source: "manual",
+          raw_payload: { origin: "manual" },
+          category_id: categoryId || null,
+          entity_id: txEntityId || null,
+          invoice_number: txInvoiceNumber || null,
+        });
+        if (insErr) throw insErr;
+      }
+
+      // Learning for Categories
+      if (categoryId) {
+        if (suggested?.rule_id && String(suggested.category_id) === categoryId && !categoryTouched) {
+          await supabase.rpc("financial_increment_rule_use", {
+            p_tenant_id: activeTenantId,
+            p_rule_id: String(suggested.rule_id),
+            p_used_increment: 1,
+          });
+        } else {
+          await supabase.rpc("financial_upsert_classification_rule", {
+            p_tenant_id: activeTenantId,
+            p_pattern: descNorm,
+            p_category_id: categoryId,
+            p_used_increment: 1,
+          });
+        }
+      }
+
+      // Learning for Entities
+      if (txEntityId) {
+        if (suggestedEntity?.rule_id && String(suggestedEntity.entity_id) === txEntityId && !entityTouched) {
+          await supabase.rpc("financial_increment_entity_rule_use", {
+            p_tenant_id: activeTenantId,
+            p_rule_id: String(suggestedEntity.rule_id),
+            p_used_increment: 1,
+          });
+        } else {
+          await supabase.rpc("financial_upsert_entity_rule", {
+            p_tenant_id: activeTenantId,
+            p_pattern: descNorm,
+            p_entity_id: txEntityId,
+            p_used_increment: 1,
+          });
+        }
+      }
+    },
+    onSuccess: async () => {
+      showSuccess(editingTxId ? "Lançamento atualizado." : "Lançamento criado.");
+      setAmount("");
+      setDescription("");
+      setCategoryId("");
+      setCategoryTouched(false);
+      setTxEntityId(null);
+      setEntityTouched(false);
+      setTxInvoiceNumber("");
+      setEditingTxId(null);
+      setTxDialogOpen(false);
+      await qc.invalidateQueries({ queryKey: ["financial_transactions", activeTenantId] });
+      await qc.invalidateQueries({ queryKey: ["financial_cash_projection", activeTenantId] });
+    },
+    onError: (e: any) => showError(e?.message ?? "Falha ao salvar transação"),
+  });
+
+  const deleteTxM = useMutation({
+    mutationFn: async (id: string) => {
+      if (!activeTenantId) throw new Error("Tenant inválido");
+      const { error } = await supabase
+        .from("financial_transactions")
+        .delete()
+        .eq("tenant_id", activeTenantId)
+        .eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: async () => {
+      showSuccess("Lançamento excluído.");
+      await qc.invalidateQueries({ queryKey: ["financial_transactions", activeTenantId] });
+      await qc.invalidateQueries({ queryKey: ["financial_cash_projection", activeTenantId] });
+    },
+    onError: (e: any) => showError(e?.message ?? "Falha ao excluir lançamento"),
+  });
+
+  const updateTxCategoryM = useMutation({
+    mutationFn: async ({ id, description, categoryId }: { id: string; description: string; categoryId: string }) => {
+      if (!activeTenantId) throw new Error("Tenant inválido");
+      const descN = normalizeDescription(description);
+
+      const { error } = await supabase
+        .from("financial_transactions")
+        .update({ category_id: categoryId || null })
+        .eq("tenant_id", activeTenantId)
+        .eq("id", id);
+      if (error) throw error;
+
+      if (categoryId) {
+        await supabase.rpc("financial_upsert_classification_rule", {
+          p_tenant_id: activeTenantId,
+          p_pattern: descN,
+          p_category_id: categoryId,
+          p_used_increment: 1,
+        });
+      }
+    },
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ["financial_transactions", activeTenantId] });
+      showSuccess("Categoria atualizada (regra aprendida).");
+    },
+    onError: (e: any) => showError(e?.message ?? "Falha ao atualizar categoria"),
+  });
+
+  const updateTxEntityM = useMutation({
+    mutationFn: async ({ id, description, entityId }: { id: string; description: string; entityId: string | null }) => {
+      if (!activeTenantId) throw new Error("Tenant inválido");
+      const descN = normalizeDescription(description);
+
+      const { error } = await supabase
+        .from("financial_transactions")
+        .update({ entity_id: entityId || null })
+        .eq("tenant_id", activeTenantId)
+        .eq("id", id);
+      if (error) throw error;
+
+      if (entityId) {
+        await supabase.rpc("financial_upsert_entity_rule", {
+          p_tenant_id: activeTenantId,
+          p_pattern: descN,
+          p_entity_id: entityId,
+          p_used_increment: 1,
+        });
+      }
+    },
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ["financial_transactions", activeTenantId] });
+      showSuccess("Entidade atrelada e regra de aprendizado criada.");
+    },
+    onError: (e: any) => showError(e?.message ?? "Falha ao atualizar entidade"),
+  });
+
+  const updateTxInvoiceM = useMutation({
+    mutationFn: async ({ id, invoiceNumber }: { id: string; invoiceNumber: string }) => {
+      if (!activeTenantId) throw new Error("Tenant inválido");
+
+      const { error } = await supabase
+        .from("financial_transactions")
+        .update({ invoice_number: invoiceNumber || null })
+        .eq("tenant_id", activeTenantId)
+        .eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ["financial_transactions", activeTenantId] });
+      showSuccess("NFE atualizada.");
+    },
+    onError: (e: any) => showError(e?.message ?? "Falha ao atualizar NFE"),
+  });
+
+  // --------------------------
+  // Reconciliation
+  // --------------------------
+  const [reconcileTxId, setReconcileTxId] = useState<string | null>(null);
+  const [reconcileIsRecurrent, setReconcileIsRecurrent] = useState(false);
+  const [reconcileInstallments, setReconcileInstallments] = useState("12");
+  const [reconcileDialogOpen, setReconcileDialogOpen] = useState(false);
+  const [reconcileOnlyCurrentMonth, setReconcileOnlyCurrentMonth] = useState(true);
+  const [reconcileEntityId, setReconcileEntityId] = useState<string | null>(null);
+  const [reconcileAdjustmentCatId, setReconcileAdjustmentCatId] = useState<string | null>(null);
+  const [reconcileDiff, setReconcileDiff] = useState<number | null>(null);
+  const [reconcilePendingLink, setReconcilePendingLink] = useState<{ id: string, type: string } | null>(null);
+  const [reconcilePendingLabel, setReconcilePendingLabel] = useState<string | null>(null);
+
+  const selectedTx = useMemo(() =>
+    transactionsQ.data?.find(t => t.id === reconcileTxId),
+    [transactionsQ.data, reconcileTxId]
+  );
+
+  const reconcileSuggestionsQ = useQuery({
+    queryKey: ["financial_suggest_reconciliation", activeTenantId, reconcileTxId],
+    enabled: Boolean(activeTenantId && reconcileTxId && reconcileDialogOpen),
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("financial_suggest_reconciliation", {
+        p_tenant_id: activeTenantId!,
+        p_transaction_id: reconcileTxId!
+      });
+      if (error) throw error;
+      return data as any;
+    }
+  });
+
+  const reconcileTxM = useMutation({
+    mutationFn: async ({ linkedId, type, adjustment }: { linkedId: string, type: string, adjustment?: { amount: number, categoryId: string } }) => {
+      if (!activeTenantId || !reconcileTxId) throw new Error("Parâmetros inválidos");
+      
+      const { data, error } = await supabase.rpc("financial_reconcile_transaction", {
+        p_tenant_id: activeTenantId,
+        p_transaction_id: reconcileTxId,
+        p_linked_id: linkedId,
+        p_type: type
+      });
+      if (error) throw error;
+      if (data?.ok === false) throw new Error(data.error || "Erro desconhecido");
+
+      if (adjustment && adjustment.amount !== 0) {
+        const table = type === 'payable' ? 'financial_payables' : 'financial_receivables';
+        const { data: adjData, error: adjErr } = await supabase.from(table).insert({
+          tenant_id: activeTenantId,
+          description: `Ajuste/Juros de conciliação (${reconcileTxId?.slice(0,8)})`,
+          amount: Math.abs(adjustment.amount),
+          due_date: selectedTx?.transaction_date,
+          status: 'paid',
+          category_id: adjustment.categoryId,
+          entity_id: reconcileEntityId
+        }).select('id').single();
+
+        if (adjErr) {
+          console.error("Falha ao criar ajuste:", adjErr);
+        } else if (adjData) {
+          // Link the adjustment to the transaction too
+          const linkPayload: any = {
+            tenant_id: activeTenantId,
+            transaction_id: reconcileTxId,
+            amount: Math.abs(adjustment.amount)
+          };
+          if (type === 'payable') linkPayload.payable_id = adjData.id;
+          else linkPayload.receivable_id = adjData.id;
+
+          await supabase.from("financial_reconciliation_links").insert(linkPayload);
+        }
+      }
+    },
+    onSuccess: async () => {
+      showSuccess("Transação conciliada com sucesso.");
+      setReconcileDialogOpen(false);
+      setReconcileTxId(null);
+      setReconcileDiff(null);
+      setReconcilePendingLink(null);
+      setReconcilePendingLabel(null);
+      setReconcileAdjustmentCatId(null);
+      await qc.invalidateQueries({ queryKey: ["financial_transactions", activeTenantId] });
+      await qc.invalidateQueries({ queryKey: ["financial_cash_projection", activeTenantId] });
+    },
+    onError: (e: any) => showError(e?.message ?? "Falha ao conciliar")
+  });
+
+  const createLinkedPayableM = useMutation({
+    mutationFn: async (tx: any) => {
+      if (!activeTenantId) throw new Error("Tenant inválido");
+      
+      const count = reconcileIsRecurrent ? parseInt(reconcileInstallments) || 1 : 1;
+      const groupId = reconcileIsRecurrent ? crypto.randomUUID() : null;
+      const items = [];
+      const baseDate = new Date(`${tx.transaction_date}T12:00:00`);
+
+      for (let i = 0; i < count; i++) {
+        const itemDate = addMonths(baseDate, i);
+        items.push({
+          tenant_id: activeTenantId,
+          description: count > 1 ? `${tx.description} (${i+1}/${count})` : tx.description,
+          amount: tx.amount,
+          due_date: format(itemDate, "yyyy-MM-dd"),
+          status: 'pending', 
+          recurrence_group_id: groupId,
+          installment_number: i + 1,
+          installments_total: count > 1 ? count : null,
+          entity_id: reconcileEntityId || tx.entity_id,
+          category_id: tx.category_id
+        });
+      }
+
+      const { data: insertedItems, error: payErr } = await supabase.from("financial_payables")
+        .insert(items)
+        .select();
+      
+      if (payErr) throw payErr;
+      const firstItem = insertedItems[0];
+
+      const { error: txErr } = await supabase.rpc("financial_reconcile_transaction", {
+        p_tenant_id: activeTenantId,
+        p_transaction_id: tx.id,
+        p_linked_id: firstItem.id,
+        p_type: 'payable'
+      });
+      if (txErr) throw txErr;
+    },
+    onSuccess: async () => {
+      showSuccess("Pagamento criado e vinculado.");
+      setReconcileDialogOpen(false);
+      setReconcileTxId(null);
+      await qc.invalidateQueries({ queryKey: ["financial_transactions", activeTenantId] });
+      await qc.invalidateQueries({ queryKey: ["financial_payables", activeTenantId] });
+      await qc.invalidateQueries({ queryKey: ["financial_cash_projection", activeTenantId] });
+    },
+    onError: (e: any) => showError(e?.message ?? "Falha ao criar")
+  });
+
+  const createLinkedReceivableM = useMutation({
+    mutationFn: async (tx: any) => {
+      if (!activeTenantId) throw new Error("Tenant inválido");
+      
+      const count = reconcileIsRecurrent ? parseInt(reconcileInstallments) || 1 : 1;
+      const groupId = reconcileIsRecurrent ? crypto.randomUUID() : null;
+      const items = [];
+      const baseDate = new Date(`${tx.transaction_date}T12:00:00`);
+
+      for (let i = 0; i < count; i++) {
+        const itemDate = addMonths(baseDate, i);
+        items.push({
+          tenant_id: activeTenantId,
+          description: count > 1 ? `${tx.description} (${i+1}/${count})` : tx.description,
+          amount: tx.amount,
+          due_date: format(itemDate, "yyyy-MM-dd"),
+          status: 'pending',
+          recurrence_group_id: groupId,
+          installment_number: i + 1,
+          installments_total: count > 1 ? count : null,
+          entity_id: reconcileEntityId || tx.entity_id,
+          category_id: tx.category_id
+        });
+      }
+
+      const { data: insertedItems, error: recvErr } = await supabase.from("financial_receivables")
+        .insert(items)
+        .select();
+      
+      if (recvErr) throw recvErr;
+      const firstItem = insertedItems[0];
+
+      const { error: txErr } = await supabase.rpc("financial_reconcile_transaction", {
+        p_tenant_id: activeTenantId,
+        p_transaction_id: tx.id,
+        p_linked_id: firstItem.id,
+        p_type: 'receivable'
+      });
+      if (txErr) throw txErr;
+    },
+    onSuccess: async () => {
+      showSuccess("Recebível criado e vinculado.");
+      setReconcileDialogOpen(false);
+      setReconcileTxId(null);
+      await qc.invalidateQueries({ queryKey: ["financial_transactions", activeTenantId] });
+      await qc.invalidateQueries({ queryKey: ["financial_receivables", activeTenantId] });
+      await qc.invalidateQueries({ queryKey: ["financial_cash_projection", activeTenantId] });
+    },
+    onError: (e: any) => showError(e?.message ?? "Falha ao criar")
+  });
+
+  return (
+    <>
+      <div className="grid gap-4">
+        <Card className="rounded-[22px] border-slate-200 bg-white/70 p-4 shadow-sm backdrop-blur dark:border-slate-800 dark:bg-slate-950/40">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">Lançamentos</div>
+              <div className="mt-1 text-xs text-slate-600 dark:text-slate-400">
+                Lançamentos manuais com sugestão automática de categoria e aprendizado por correções.
+              </div>
+            </div>
+
+            <Dialog 
+              open={txDialogOpen} 
+              onOpenChange={(open) => {
+                setTxDialogOpen(open);
+                if (!open) {
+                  setEditingTxId(null);
+                  setAmount("");
+                  setDescription("");
+                  setTxInvoiceNumber("");
+                  setTxEntityId(null);
+                  setCategoryId("");
+                  setCategoryTouched(false);
+                  setEntityTouched(false);
+                }
+              }}
+            >
+              <DialogTrigger asChild>
+                <Button 
+                  className="h-9 rounded-2xl" 
+                  disabled={!activeTenantId}
+                  onClick={() => {
+                    setEditingTxId(null);
+                    setTxDate(new Date().toISOString().slice(0, 10));
+                  }}
+                >
+                  <Plus className="mr-2 h-4 w-4" />
+                  Novo lançamento
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-[720px] max-h-[85vh] overflow-hidden">
+                <DialogHeader>
+                  <DialogTitle>{editingTxId ? "Editar lançamento" : "Novo lançamento"}</DialogTitle>
+                  <DialogDescription>
+                    Se uma regra bater com a descrição, sugerimos automaticamente uma categoria. Ao corrigir, o sistema aprende.
+                  </DialogDescription>
+                </DialogHeader>
+
+                <ScrollArea className="h-[65vh] pr-2">
+                  <div className="grid gap-3 md:grid-cols-6">
+                    <div className="md:col-span-2">
+                      <Label className="text-xs">Conta</Label>
+                      <Select value={accountId} onValueChange={setAccountId}>
+                        <SelectTrigger className="mt-1 rounded-2xl">
+                          <SelectValue
+                            placeholder={
+                              accountsQ.isLoading
+                                ? "Carregando…"
+                                : !(accountsQ.data ?? []).length
+                                  ? "Cadastre uma conta (aba Bancos)"
+                                  : "Selecione"
+                            }
+                          />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {(accountsQ.data ?? []).map((a) => (
+                            <SelectItem key={a.id} value={a.id}>
+                              {a.account_name} • {a.bank_name} ({a.currency})
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div>
+                      <Label className="text-xs">Data</Label>
+                      <Input
+                        className="mt-1 rounded-2xl"
+                        type="date"
+                        value={txDate}
+                        onChange={(e) => setTxDate(e.target.value)}
+                      />
+                    </div>
+
+                    <div>
+                      <Label className="text-xs">Tipo</Label>
+                      <Select value={txType} onValueChange={(v) => setTxType(v as any)}>
+                        <SelectTrigger className="mt-1 rounded-2xl">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="debit">debit</SelectItem>
+                          <SelectItem value="credit">credit</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div>
+                      <Label className="text-xs">Valor</Label>
+                      <Input
+                        className="mt-1 rounded-2xl"
+                        placeholder="Ex: 120,50"
+                        value={amount}
+                        onChange={(e) => setAmount(e.target.value)}
+                      />
+                    </div>
+
+                    <div className="md:col-span-2">
+                      <Label className="text-xs">Categoria {suggested?.category_id ? "(sugerida)" : ""}</Label>
+                      <Select
+                        value={categoryId}
+                        onValueChange={(v) => {
+                          setCategoryTouched(true);
+                          setCategoryId(v);
+                        }}
+                      >
+                        <SelectTrigger className="mt-1 rounded-2xl">
+                          <SelectValue placeholder={categoriesQ.isLoading ? "Carregando…" : "(sem categoria)"} />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {(categoriesQ.data ?? []).map((c) => (
+                            <SelectItem key={c.id} value={c.id}>
+                              {c.name} ({c.type})
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      {suggested?.pattern ? (
+                        <div className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
+                          Regra: "{suggested.pattern}" • conf: {Number(suggested.confidence ?? 0).toFixed(2)}
+                        </div>
+                      ) : null}
+                    </div>
+
+                    <div className="md:col-span-2">
+                      <Label className="text-xs">Entidade {suggestedEntity?.entity_id ? "(sugerida)" : ""}</Label>
+                      <AsyncSelect
+                        className="mt-1 h-9 rounded-2xl"
+                        value={txEntityId}
+                        initialLabel={suggestedEntity?.label}
+                        onChange={(v) => {
+                          setEntityTouched(true);
+                          setTxEntityId(v);
+                        }}
+                        onCreate={(val) => {
+                          setQuickEntityName(val);
+                          setQuickEntityTxId(null); // No txId when creating manual
+                          setQuickEntityOpen(true);
+                        }}
+                        placeholder="Buscar cliente/fornec..."
+                        loadOptions={async (val) => {
+                          if (!activeTenantId || val.length < 2) return [];
+                          const { data } = await supabase
+                            .from("core_entities")
+                            .select("id, display_name")
+                            .eq("tenant_id", activeTenantId)
+                            .ilike("display_name", `%${val}%`)
+                            .is("deleted_at", null)
+                            .limit(10);
+                          return (data || []).map((d) => ({ value: d.id, label: d.display_name }));
+                        }}
+                      />
+                      {suggestedEntity?.pattern ? (
+                        <div className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
+                          Regra: "{suggestedEntity.pattern}" • conf: {Number(suggestedEntity.confidence ?? 0).toFixed(2)}
+                        </div>
+                      ) : null}
+                    </div>
+
+                    <div className="md:col-span-3">
+                      <Label className="text-xs">Descrição</Label>
+                      <Input className="mt-1 rounded-2xl" value={description} onChange={(e) => setDescription(e.target.value)} />
+                    </div>
+
+                    <div className="md:col-span-1">
+                      <Label className="text-xs">NFE</Label>
+                      <Input 
+                        className="mt-1 rounded-2xl" 
+                        placeholder="Ex: 1234" 
+                        value={txInvoiceNumber} 
+                        onChange={(e) => setTxInvoiceNumber(e.target.value)} 
+                      />
+                    </div>
+                  </div>
+                </ScrollArea>
+
+                <DialogFooter>
+                  <Button variant="secondary" className="h-10 rounded-2xl" onClick={() => setTxDialogOpen(false)}>
+                    Cancelar
+                  </Button>
+                  <Button
+                    className="h-10 rounded-2xl"
+                    onClick={() => createTxM.mutate()}
+                    disabled={!activeTenantId || createTxM.isPending || !accountId}
+                  >
+                    {createTxM.isPending ? "Salvando…" : "Lançar"}
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          </div>
+
+          {!(accountsQ.data ?? []).length && !accountsQ.isLoading ? (
+            <div className="mt-3 rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-800/40 dark:bg-amber-950/30 dark:text-amber-200">
+              Você ainda não tem contas bancárias cadastradas. Vá na aba <b>Bancos</b> para criar uma conta (isso é necessário
+              para importação de extratos e lançamentos manuais).
+            </div>
+          ) : null}
+        </Card>
+
+        <Card className="rounded-[22px] border-slate-200 bg-white/70 p-4 shadow-sm backdrop-blur dark:border-slate-800 dark:bg-slate-950/40">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">Transações</div>
+              <div className="mt-1 text-xs text-slate-600 dark:text-slate-400">Filtre por período (padrão: mês atual).</div>
+            </div>
+
+            <div className="flex flex-wrap items-end gap-2">
+              <div>
+                <Label className="text-[11px]">De</Label>
+                <Input
+                  className="mt-1 h-9 w-[160px] rounded-2xl"
+                  type="date"
+                  value={txStartDate}
+                  onChange={(e) => setTxStartDate(e.target.value)}
+                />
+              </div>
+              <div>
+                <Label className="text-[11px]">Até</Label>
+                <Input
+                  className="mt-1 h-9 w-[160px] rounded-2xl"
+                  type="date"
+                  value={txEndDate}
+                  onChange={(e) => setTxEndDate(e.target.value)}
+                />
+              </div>
+              <Button
+                variant="secondary"
+                className="h-9 rounded-2xl"
+                onClick={() => {
+                  const r = currentMonthRangeIso();
+                  setTxStartDate(r.start);
+                  setTxEndDate(r.end);
+                }}
+              >
+                Mês atual
+              </Button>
+              <Button variant="secondary" className="h-9 rounded-2xl" onClick={() => transactionsQ.refetch()}>
+                Atualizar
+              </Button>
+              <Button
+                variant="outline"
+                className="h-9 rounded-2xl border-emerald-600/20 text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800 dark:border-emerald-500/20 dark:text-emerald-400 dark:hover:bg-emerald-950/30"
+                onClick={handleDownloadCsv}
+              >
+                <Download className="mr-2 h-4 w-4" />
+                Baixar CSV
+              </Button>
+            </div>
+          </div>
+
+          <div className="mt-3 overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-800">
+            <Table>
+              <TableHeader>
+                <TableRow className="bg-slate-50/50 dark:bg-slate-900/20">
+                  <TableHead className="w-[110px] cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800" onClick={() => toggleSort("transaction_date")}>
+                    Data {sortKey === "transaction_date" && (sortDir === "asc" ? "↑" : "↓")}
+                  </TableHead>
+                  <TableHead className="min-w-[200px] cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800" onClick={() => toggleSort("description")}>
+                    Descrição {sortKey === "description" && (sortDir === "asc" ? "↑" : "↓")}
+                  </TableHead>
+                  <TableHead className="w-[180px]">
+                    <div className="flex items-center justify-between">
+                      <span className="cursor-pointer" onClick={() => toggleSort("entity_id")}>Entidade</span>
+                      {filterEntityId && (
+                        <Button variant="ghost" size="sm" className="h-6 px-1 text-[10px]" onClick={() => setFilterEntityId(null)}>Limpar</Button>
+                      )}
+                    </div>
+                  </TableHead>
+                  <TableHead className="w-[140px]">Conta</TableHead>
+                  <TableHead className="w-[80px]">Tipo</TableHead>
+                  <TableHead className="w-[110px] text-right cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800" onClick={() => toggleSort("amount")}>
+                    Valor {sortKey === "amount" && (sortDir === "asc" ? "↑" : "↓")}
+                  </TableHead>
+                  <TableHead className="w-[180px]">
+                    <div className="flex items-center justify-between">
+                      <span className="cursor-pointer" onClick={() => toggleSort("category_id")}>Categoria</span>
+                      {filterCategoryId && (
+                        <Button variant="ghost" size="sm" className="h-6 px-1 text-[10px]" onClick={() => setFilterCategoryId(null)}>Limpar</Button>
+                      )}
+                    </div>
+                  </TableHead>
+                  <TableHead className="w-[100px]">NFE</TableHead>
+                  <TableHead className="w-[120px]">Conciliação</TableHead>
+                  <TableHead className="w-[100px] text-right">Ações</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {transactionsQ.isLoading ? (
+                  <TableRow>
+                    <TableCell colSpan={7} className="text-slate-600 dark:text-slate-400">
+                      Carregando...
+                    </TableCell>
+                  </TableRow>
+                ) : transactionsQ.isSuccess ? (
+                  sortedTransactions.map((t) => {
+                    const acc = accountById.get(t.account_id);
+                    const cat = t.category_id ? categoryById.get(t.category_id) : null;
+                    return (
+                      <TableRow key={t.id} className="group">
+                        <TableCell className="w-[110px] whitespace-nowrap">{t.transaction_date}</TableCell>
+                        <TableCell className="max-w-[300px]">
+                          <div className="truncate font-medium text-slate-900 dark:text-slate-100" title={t.description}>{t.description ?? "—"}</div>
+                          <div className="mt-0.5 text-[11px] text-slate-500 dark:text-slate-400">
+                            {t.source} • {t.status}
+                          </div>
+                        </TableCell>
+                        <TableCell className="w-[180px]">
+                          <AsyncSelect
+                            className="h-8 rounded-xl"
+                            value={t.entity_id ?? null}
+                            initialLabel={t.core_entities?.display_name ?? null}
+                            onChange={(v) => {
+                              updateTxEntityM.mutate({ id: t.id, description: t.description, entityId: v });
+                            }}
+                            onCreate={(val) => {
+                              setQuickEntityName(val);
+                              setQuickEntityTxId(t.id);
+                              setQuickEntityOpen(true);
+                            }}
+                            placeholder="(sem entidade)"
+                            loadOptions={async (val) => {
+                              if (!activeTenantId || val.length < 2) return [];
+                              const { data } = await supabase
+                                .from("core_entities")
+                                .select("id, display_name")
+                                .eq("tenant_id", activeTenantId)
+                                .ilike("display_name", `%${val}%`)
+                                .is("deleted_at", null)
+                                .limit(10);
+                              return (data || []).map((d) => ({ value: d.id, label: d.display_name }));
+                            }}
+                          />
+                          {t.entity_id && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="mt-1 h-5 w-full text-[10px] text-slate-400 opacity-0 group-hover:opacity-100"
+                              onClick={() => setFilterEntityId(t.entity_id)}
+                            >
+                              Filtrar este
+                            </Button>
+                          )}
+                        </TableCell>
+                        <TableCell className="w-[140px]">
+                          <div className="truncate text-[11px]" title={acc?.account_name}>
+                            {acc ? acc.account_name : String(t.account_id).slice(0, 8)}
+                          </div>
+                        </TableCell>
+                        <TableCell className="w-[80px] text-[11px] font-medium text-slate-900 dark:text-slate-100">{t.type}</TableCell>
+                        <TableCell className="w-[110px] text-right font-bold text-slate-900 dark:text-slate-100">
+                          {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(t.amount)}
+                        </TableCell>
+                        <TableCell className="w-[180px]">
+                          <AsyncSelect
+                            className="h-8 rounded-xl"
+                            value={t.category_id ?? null}
+                            initialLabel={(t as any).financial_categories?.name ?? null}
+                            onChange={(v) =>
+                              updateTxCategoryM.mutate({ id: t.id, description: t.description, categoryId: v })
+                            }
+                            onCreate={(val) => {
+                              setQuickCatName(val);
+                              setQuickCatTxId(t.id);
+                              setQuickCatOpen(true);
+                            }}
+                            placeholder="(sem categoria)"
+                            loadOptions={async (val) => {
+                              if (!activeTenantId) return [];
+                              const query = supabase
+                                .from("financial_categories")
+                                .select("id, name, type")
+                                .eq("tenant_id", activeTenantId)
+                                .order("name", { ascending: true })
+                                .limit(20);
+
+                              if (val.trim()) {
+                                query.ilike("name", `%${val}%`);
+                              }
+
+                              const { data } = await query;
+                              return (data || []).map((c) => ({
+                                value: c.id,
+                                label: `${c.name} (${c.type})`
+                              }));
+                            }}
+                          />
+                          <div className="flex items-center justify-between">
+                            {cat ? <div className="mt-1 text-[10px] text-slate-500 dark:text-slate-400">{cat.type}</div> : <div></div>}
+                            {t.category_id && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="mt-1 h-5 text-[10px] text-slate-400 opacity-0 group-hover:opacity-100"
+                                onClick={() => setFilterCategoryId(t.category_id)}
+                              >
+                                Filtrar
+                              </Button>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell className="w-[100px]">
+                          <Input
+                            className="h-8 rounded-xl text-[11px]"
+                            placeholder="NFE..."
+                            defaultValue={t.invoice_number ?? ""}
+                            onBlur={(e) => {
+                              const val = e.target.value.trim();
+                              if (val !== (t.invoice_number ?? "")) {
+                                updateTxInvoiceM.mutate({ id: t.id, invoiceNumber: val });
+                              }
+                            }}
+                          />
+                        </TableCell>
+                        <TableCell className="w-[120px]">
+                          {t.linked_payable_id || t.linked_receivable_id ? (
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <div className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400 font-medium text-xs">
+                                    <CheckCircle2 className="h-4 w-4" />
+                                    Conciliado
+                                  </div>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  {t.linked_payable_id ? "Vinculado a um Conta a Pagar" : "Vinculado a um Conta a Receber"}
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          ) : (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-8 rounded-xl text-slate-500 hover:text-[hsl(var(--byfrost-accent))] hover:bg-[hsl(var(--byfrost-accent)/0.1)] gap-1.5 px-2"
+                                onClick={() => {
+                                  setReconcileTxId(t.id);
+                                  setReconcileEntityId(t.entity_id || null);
+                                  setReconcileDialogOpen(true);
+                                }}
+                            >
+                              <Link2 className="h-3.5 w-3.5" />
+                              <span className="text-[11px]">Conciliar</span>
+                            </Button>
+                          )}
+                        </TableCell>
+                        <TableCell className="w-[100px]">
+                          <div className="flex justify-end gap-1">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 rounded-lg text-slate-400 hover:text-indigo-600"
+                              onClick={() => handleEdit(t)}
+                            >
+                              <Pencil className="h-3.5 w-3.5" />
+                            </Button>
+
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-7 w-7 rounded-lg text-slate-400 hover:text-rose-600"
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent className="rounded-2xl">
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>Excluir lançamento?</AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    Você tem certeza? Esta ação não pode ser desfeita.
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel className="rounded-xl">Cancelar</AlertDialogCancel>
+                                  <AlertDialogAction
+                                    className="rounded-xl bg-rose-600 hover:bg-rose-700"
+                                    onClick={() => deleteTxM.mutate(t.id)}
+                                  >
+                                    Excluir
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })
+                ) : null}
+
+                {!transactionsQ.isLoading && !(transactionsQ.data ?? []).length ? (
+                  <TableRow>
+                    <TableCell colSpan={7} className="text-slate-600 dark:text-slate-400">
+                      Nenhuma transação encontrada.
+                    </TableCell>
+                  </TableRow>
+                ) : null}
+              </TableBody>
+            </Table>
+          </div>
+        </Card>
+      </div>
+
+      <Dialog open={reconcileDialogOpen} onOpenChange={setReconcileDialogOpen}>
+        <DialogContent className="sm:max-w-[600px]">
+          <DialogHeader>
+            <DialogTitle>Conciliação Bancária</DialogTitle>
+            <DialogDescription>
+              Vincule esta transação a um registro de conta a pagar ou receber existente.
+            </DialogDescription>
+          </DialogHeader>
+
+          {selectedTx && (
+            <div className="grid gap-4 py-4">
+              <div className="rounded-2xl bg-slate-50 p-4 dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800">
+                <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Transação do Extrato</div>
+                <div className="flex justify-between items-start">
+                  <div>
+                    <div className="font-semibold text-slate-900 dark:text-slate-100">{selectedTx.description}</div>
+                    <div className="text-sm text-slate-600 dark:text-slate-400">{selectedTx.transaction_date}</div>
+                  </div>
+                  <div className={cn("text-lg font-bold", selectedTx.type === 'credit' ? 'text-emerald-600' : 'text-slate-900 dark:text-slate-100')}>
+                    {formatMoneyBRL(selectedTx.amount)}
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <Label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Busca manual (Conciliação Parcial)</Label>
+                  <div className="flex items-center gap-2">
+                    <Checkbox 
+                      id="dlg-only-month" 
+                      checked={reconcileOnlyCurrentMonth} 
+                      onCheckedChange={(v) => setReconcileOnlyCurrentMonth(!!v)} 
+                    />
+                    <Label htmlFor="dlg-only-month" className="text-[10px] text-slate-500 cursor-pointer">Apenas mês atual</Label>
+                  </div>
+                </div>
+                <AsyncSelect
+                  key={`reconcile-search-${reconcileOnlyCurrentMonth}`}
+                  className="h-10 rounded-2xl"
+                  placeholder="Buscar por descrição ou valor..."
+                  onChange={(jsonVal) => {
+                    if (jsonVal) {
+                      const { id, amount, label } = JSON.parse(jsonVal);
+                      const diff = Math.abs(selectedTx?.amount || 0) - (amount || 0);
+                      const type = selectedTx.type === 'debit' ? 'payable' : 'receivable';
+
+                      if (diff > 0.01) {
+                        setReconcileDiff(diff);
+                        setReconcilePendingLink({ id, type });
+                        setReconcilePendingLabel(label);
+                        setReconcileAdjustmentCatId(null);
+                      } else {
+                        reconcileTxM.mutate({ linkedId: id, type });
+                      }
+                    }
+                  }}
+                  loadOptions={async (val) => {
+                    if (!activeTenantId || val.length < 2) return [];
+                    const table = selectedTx.type === 'debit' ? 'financial_payables' : 'financial_receivables';
+                    
+                    let query = supabase
+                      .from(table)
+                      .select("id, description, amount, due_date, core_entities(display_name)")
+                      .eq("tenant_id", activeTenantId)
+                      .eq("status", "pending")
+                      .or(`description.ilike.%${val}%,description.ilike.%${val.replace(/[áàâãéèêíïóôõöúç]/gi, '_')}%`);
+
+                    if (reconcileOnlyCurrentMonth) {
+                      const baseDate = new Date(`${selectedTx.transaction_date}T12:00:00`);
+                      const startOfMonth = format(new Date(baseDate.getFullYear(), baseDate.getMonth(), 1), "yyyy-MM-dd");
+                      const endOfMonth = format(new Date(baseDate.getFullYear(), baseDate.getMonth() + 1, 0), "yyyy-MM-dd");
+                      query = query.gte("due_date", startOfMonth).lte("due_date", endOfMonth);
+                    }
+
+                    const { data } = await query
+                      .order("due_date", { ascending: true })
+                      .limit(10);
+                    
+                    return (data || []).map((d: any) => ({
+                      value: JSON.stringify({ id: d.id, amount: d.amount, label: d.description }),
+                      label: `${d.description}${d.core_entities?.display_name ? ` [${d.core_entities.display_name}]` : ""} - ${formatMoneyBRL(d.amount)} (${d.due_date})`
+                    }));
+                  }}
+                />
+              </div>
+
+              <div className="space-y-4">
+                <div className="flex items-center justify-between px-1">
+                  <div className="flex flex-col">
+                    <h4 className="text-sm font-bold text-slate-900 dark:text-slate-100 flex items-center gap-3">
+                      <Search className="h-4 w-4 text-[hsl(var(--byfrost-accent))]" />
+                      Sugestões de correspondência
+                    </h4>
+                    <p className="text-[10px] text-slate-500 font-medium">Buscamos lançamentos que batem com o valor e data</p>
+                  </div>
+                </div>
+
+                <div className="grid gap-3 p-1">
+                  {reconcileSuggestionsQ.isLoading ? (
+                    <div className="flex flex-col items-center py-10 rounded-3xl border border-dashed border-slate-200 dark:border-slate-800 animate-pulse">
+                      <div className="w-8 h-8 rounded-full border-2 border-[hsl(var(--byfrost-accent))] border-t-transparent animate-spin mb-3" />
+                      <div className="text-xs text-slate-500 font-medium">Analisando registros...</div>
+                    </div>
+                  ) : reconcileSuggestionsQ.isError ? (
+                    <div className="py-4 px-4 text-center rounded-2xl border border-rose-100 bg-rose-50/50 text-rose-600 text-xs">
+                      Erro ao buscar sugestões. Tente a busca manual abaixo.
+                    </div>
+                  ) : (reconcileSuggestionsQ.data?.matches?.length ?? 0) > 0 ? (
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-100 dark:border-emerald-800 text-[10px] font-bold text-emerald-600 uppercase tracking-tight w-fit animate-in fade-in zoom-in">
+                        <CheckCircle2 className="h-3 w-3" />
+                        {reconcileSuggestionsQ.data.matches.length} Correspondência{reconcileSuggestionsQ.data.matches.length > 1 ? 's' : ''} Encontrada{reconcileSuggestionsQ.data.matches.length > 1 ? 's' : ''}
+                      </div>
+                      
+                      {reconcileSuggestionsQ.data.matches.map((match: any) => (
+                        <div
+                          key={match.id}
+                          className="group relative flex items-center justify-between p-4 rounded-[24px] border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 hover:border-[hsl(var(--byfrost-accent)/0.5)] hover:bg-[hsl(var(--byfrost-accent)/0.02)] hover:shadow-lg hover:shadow-[hsl(var(--byfrost-accent)/0.05)] transition-all cursor-pointer overflow-hidden"
+                          onClick={() => reconcileTxM.mutate({ linkedId: match.id, type: match.type })}
+                        >
+                          <div className={cn(
+                            "absolute left-0 top-0 bottom-0 w-1.5 transition-all",
+                            match.days_diff === 0 ? "bg-emerald-500" : "bg-slate-200 dark:bg-slate-800"
+                          )} />
+                          <div className="flex flex-col pl-2">
+                            <span className="text-sm font-bold text-slate-900 dark:text-slate-100">{match.description}</span>
+                            <span className="text-xs text-slate-500 flex items-center gap-2 mt-0.5">
+                              {match.due_date} 
+                              <Badge variant="outline" className={cn(
+                                "text-[9px] py-0 px-1.5 h-4 border-slate-200",
+                                match.days_diff === 0 ? "text-emerald-600 bg-emerald-50 border-emerald-100" : "text-slate-500"
+                              )}>
+                                {match.days_diff === 0 ? "Data exata" : `${match.days_diff}d de dif.`}
+                              </Badge>
+                            </span>
+                          </div>
+                          <div className="flex flex-col items-end">
+                            <span className="text-sm font-extrabold text-slate-900 dark:text-slate-100">{formatMoneyBRL(match.amount)}</span>
+                            <div className="flex items-center gap-1.5 text-[10px] font-bold text-emerald-600 opacity-0 group-hover:opacity-100 transition-all translate-x-2 group-hover:translate-x-0">
+                              Conciliar <ChevronRight className="h-3 w-3" />
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="flex flex-col items-center py-8 px-4 text-center rounded-3xl border border-dashed border-slate-200 dark:border-slate-800 bg-slate-50/20 dark:bg-slate-950/20">
+                      <div className="p-3 rounded-full bg-slate-50 dark:bg-slate-900 text-slate-400 mb-2">
+                        <Link2 className="h-5 w-5" />
+                      </div>
+                      <p className="text-[11px] text-slate-500 font-medium">Nenhuma sugestão automática para este valor.<br/>Use a busca manual abaixo.</p>
+                    </div>
+                  )}
+
+                  <div className="relative pt-2">
+                    <div className="absolute inset-0 flex items-center" aria-hidden="true">
+                      <div className="w-full border-t border-slate-200 dark:border-slate-800"></div>
+                    </div>
+                    <div className="relative flex justify-center text-[10px] uppercase font-bold tracking-widest">
+                      <span className="bg-white px-2 text-slate-400 dark:bg-slate-950">Ou crie um novo registro</span>
+                    </div>
+                  </div>
+
+                  <div className="grid gap-4 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/30 dark:bg-slate-900/10">
+                    <div>
+                      <Label className="text-[10px] uppercase text-slate-500 font-bold block mb-1.5">Entidade (Cliente/Fornecedor)</Label>
+                      <AsyncSelect
+                        className="h-10 rounded-xl"
+                        value={reconcileEntityId}
+                        initialLabel={selectedTx?.core_entities?.display_name || null}
+                        onChange={setReconcileEntityId}
+                        onCreate={(val) => {
+                          setQuickEntityName(val);
+                          setQuickEntityTxId(reconcileTxId);
+                          setQuickEntityOpen(true);
+                        }}
+                        placeholder="Pesquisar..."
+                        loadOptions={async (val) => {
+                          if (!activeTenantId || val.length < 2) return [];
+                          const { data } = await supabase
+                            .from("core_entities")
+                            .select("id, display_name")
+                            .eq("tenant_id", activeTenantId)
+                            .ilike("display_name", `%${val}%`)
+                            .is("deleted_at", null)
+                            .limit(10);
+                          return (data || []).map((d) => ({ value: d.id, label: d.display_name }));
+                        }}
+                      />
+                    </div>
+
+                    <div className="flex items-center gap-6">
+                      <div className="flex items-center gap-2">
+                        <Checkbox 
+                          id="dlg-recurrent" 
+                          checked={reconcileIsRecurrent} 
+                          onCheckedChange={(v) => setReconcileIsRecurrent(!!v)} 
+                        />
+                        <Label htmlFor="dlg-recurrent" className="text-xs cursor-pointer">Recorrente</Label>
+                      </div>
+                      
+                      {reconcileIsRecurrent && (
+                        <div className="flex items-center gap-2">
+                          <Label className="text-[10px] uppercase text-slate-500 font-bold">Parcelas</Label>
+                          <Input 
+                            type="number" 
+                            className="h-8 w-14 text-xs rounded-lg" 
+                            value={reconcileInstallments} 
+                            onChange={(e) => setReconcileInstallments(e.target.value)} 
+                            min="2"
+                            max="60"
+                          />
+                        </div>
+                      )}
+                    </div>
+
+                    <Button 
+                      variant="secondary" 
+                      className="w-full h-10 rounded-xl text-xs font-bold bg-white hover:bg-slate-100 border-slate-200 dark:bg-slate-950 dark:hover:bg-slate-900 dark:border-slate-800"
+                      onClick={() => selectedTx.type === 'debit' ? createLinkedPayableM.mutate(selectedTx) : createLinkedReceivableM.mutate(selectedTx)}
+                      disabled={createLinkedPayableM.isPending || createLinkedReceivableM.isPending}
+                    >
+                      <Plus className="mr-2 h-4 w-4" />
+                      Criar Lançamento e Conciliar
+                    </Button>
+                  </div>
+                </div>
+              </div>
+
+              {reconcileDiff !== null && reconcilePendingLink && (
+                <div className="absolute inset-0 bg-white/95 dark:bg-slate-950/95 z-20 flex flex-col items-center justify-center p-6 text-center animate-in fade-in zoom-in duration-200">
+                  <div className="w-16 h-16 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-600 flex items-center justify-center mb-4">
+                    <Info className="h-8 w-8" />
+                  </div>
+                  <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100 mb-1">Diferença Detectada</h3>
+                  <div className="text-sm text-slate-600 dark:text-slate-400 mb-6">
+                    Você está vinculando a <strong>{reconcilePendingLabel}</strong>.<br/>
+                    O valor pago é maior em <strong className="text-emerald-600">{formatMoneyBRL(reconcileDiff)}</strong>.
+                  </div>
+
+                  <div className="w-full max-w-sm space-y-4 bg-slate-50 dark:bg-slate-900/50 p-6 rounded-3xl border border-slate-200 dark:border-slate-800">
+                    <div className="text-left">
+                      <Label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-2 block text-center">Classificar a diferença como:</Label>
+                      <AsyncSelect
+                        className="h-10 rounded-2xl"
+                        value={reconcileAdjustmentCatId}
+                        onChange={setReconcileAdjustmentCatId}
+                        onCreate={(val) => {
+                          setQuickCatName(val);
+                          setQuickCatTxId(reconcileTxId);
+                          setQuickCatOpen(true);
+                        }}
+                        placeholder="Selecione categoria (ex: Juros)..."
+                        loadOptions={async (val) => {
+                          if (!activeTenantId) return [];
+                          const { data } = await supabase
+                            .from("financial_categories")
+                            .select("id, name")
+                            .eq("tenant_id", activeTenantId)
+                            .ilike("name", `%${val}%`)
+                            .limit(10);
+                          return (data || []).map((d) => ({ value: d.id, label: d.name }));
+                        }}
+                      />
+                    </div>
+                    
+                    <div className="flex flex-col gap-2 pt-2">
+                       <Button 
+                        className="w-full h-11 rounded-2xl bg-[hsl(var(--byfrost-accent))] hover:bg-[hsl(var(--byfrost-accent)/0.9)]"
+                        disabled={!reconcileAdjustmentCatId || reconcileTxM.isPending}
+                        onClick={() => reconcileTxM.mutate({ 
+                          linkedId: reconcilePendingLink.id, 
+                          type: reconcilePendingLink.type,
+                          adjustment: { amount: reconcileDiff, categoryId: reconcileAdjustmentCatId! }
+                        })}
+                      >
+                        {reconcileTxM.isPending ? "Processando..." : "Confirmar Vínculo com Ajuste"}
+                      </Button>
+                      <Button 
+                        variant="ghost" 
+                        className="w-full h-11 rounded-2xl text-slate-500"
+                        onClick={() => {
+                          setReconcileDiff(null);
+                          setReconcilePendingLink(null);
+                        }}
+                      >
+                        Cancelar
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          <DialogFooter className="flex-col sm:flex-row gap-2">
+            <Button variant="ghost" className="h-10 rounded-2xl" onClick={() => setReconcileDialogOpen(false)}>
+              Fechar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Quick Create Entity Dialog */}
+      <Dialog open={quickEntityOpen} onOpenChange={setQuickEntityOpen}>
+        <DialogContent className="sm:max-w-[425px] rounded-3xl">
+          <DialogHeader>
+            <DialogTitle>Novo Cadastro Simplificado</DialogTitle>
+            <DialogDescription>
+              Cadastre rapidamente uma nova entidade para este lançamento.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid gap-2">
+              <Label htmlFor="q-name">Nome de Exibição</Label>
+              <Input
+                id="q-name"
+                value={quickEntityName}
+                onChange={(e) => setQuickEntityName(e.target.value)}
+                className="rounded-xl h-11"
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="q-subtype">Subtipo</Label>
+              <Select value={quickEntitySubtype} onValueChange={setQuickEntitySubtype}>
+                <SelectTrigger className="rounded-xl h-11">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="cliente">Cliente</SelectItem>
+                  <SelectItem value="fornecedor">Fornecedor</SelectItem>
+                  <SelectItem value="indicador">Indicador</SelectItem>
+                  <SelectItem value="banco">Banco</SelectItem>
+                  <SelectItem value="pintor">Pintor</SelectItem>
+                  <SelectItem value="servico">Serviço</SelectItem>
+                  <SelectItem value="produto">Produto</SelectItem>
+                  <SelectItem value="imovel">Imóvel</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="ghost"
+              onClick={() => setQuickEntityOpen(false)}
+              className="rounded-xl"
+            >
+              Cancelar
+            </Button>
+            <Button
+              onClick={() => quickCreateEntityM.mutate()}
+              disabled={!quickEntityName.trim() || quickCreateEntityM.isPending}
+              className="rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white"
+            >
+              {quickCreateEntityM.isPending ? "Criando..." : "Cadastrar Entidade"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Quick Create Category Dialog */}
+      <Dialog open={quickCatOpen} onOpenChange={setQuickCatOpen}>
+        <DialogContent className="sm:max-w-[425px] rounded-3xl">
+          <DialogHeader>
+            <DialogTitle>Nova Categoria</DialogTitle>
+            <DialogDescription>
+              Crie uma nova categoria financeira para este lançamento.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid gap-2">
+              <Label htmlFor="qc-name">Nome da Categoria</Label>
+              <Input
+                id="qc-name"
+                value={quickCatName}
+                onChange={(e) => setQuickCatName(e.target.value)}
+                className="rounded-xl h-11"
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="qc-type">Tipo de Categoria</Label>
+              <Select value={quickCatType} onValueChange={(v: any) => setQuickCatType(v)}>
+                <SelectTrigger className="rounded-xl h-11">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="revenue">Receita</SelectItem>
+                  <SelectItem value="cost">Custo Direto</SelectItem>
+                  <SelectItem value="fixed">Custo Fixo</SelectItem>
+                  <SelectItem value="variable">Custo Variável</SelectItem>
+                  <SelectItem value="investment">Investimento</SelectItem>
+                  <SelectItem value="financing">Financiamento</SelectItem>
+                  <SelectItem value="other">Outros</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="ghost"
+              onClick={() => setQuickCatOpen(false)}
+              className="rounded-xl"
+            >
+              Cancelar
+            </Button>
+            <Button
+              onClick={() => quickCreateCategoryM.mutate()}
+              disabled={!quickCatName.trim() || quickCreateCategoryM.isPending}
+              className="rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white"
+            >
+              {quickCreateCategoryM.isPending ? "Criando..." : "Cadastrar Categoria"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      {/* Remapear Lançamentos (Ao excluir categoria) */}
+      <Dialog 
+        open={Boolean(categoryToDelete)} 
+        onOpenChange={(v) => !v && setCategoryToDelete(null)}
+      >
+        <DialogContent className="sm:max-w-[425px] rounded-3xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-rose-600">
+              <Trash2 className="h-5 w-5" />
+              Remover Categoria
+            </DialogTitle>
+            <DialogDescription>
+              Você está removendo a categoria <strong>{categoryToDelete?.name}</strong>. 
+              Para qual categoria deseja mover os lançamentos existentes?
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="py-4">
+            <Label className="text-xs mb-2 block uppercase text-slate-500 font-bold">Categoria de Destino</Label>
+            <AsyncSelect
+              className="h-11 rounded-2xl"
+              value={remappingTargetId}
+              onChange={setRemappingTargetId}
+              placeholder="Selecione a nova categoria..."
+              loadOptions={async (val) => {
+                if (!activeTenantId) return [];
+                let query = supabase
+                  .from("financial_categories")
+                  .select("id, name")
+                  .eq("tenant_id", activeTenantId)
+                  .ilike("name", `%${val}%`);
+                
+                if (categoryToDelete?.id) {
+                  query = query.neq("id", categoryToDelete.id);
+                }
+
+                const { data } = await query.limit(10);
+                return (data || []).map((d) => ({ value: d.id, label: d.name }));
+              }}
+            />
+            <p className="mt-4 text-[11px] text-slate-500 leading-relaxed bg-slate-50 p-3 rounded-xl border border-slate-100">
+              <Info className="h-3 w-3 inline mr-1 mb-0.5" />
+              Esta ação é permanente. Todos os lançamentos vinculados a "{categoryToDelete?.name}" serão atualizados para a nova categoria selecionada.
+            </p>
+          </div>
+
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              variant="ghost"
+              onClick={() => setCategoryToDelete(null)}
+              className="rounded-2xl"
+            >
+              Cancelar
+            </Button>
+            <Button
+              variant="destructive"
+              className="rounded-2xl bg-rose-600 hover:bg-rose-700 font-bold"
+              disabled={!remappingTargetId || deleteCategoryWithRemapM.isPending}
+              onClick={() => deleteCategoryWithRemapM.mutate()}
+            >
+              {deleteCategoryWithRemapM.isPending ? "Processando..." : "Confirmar e Remover"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
