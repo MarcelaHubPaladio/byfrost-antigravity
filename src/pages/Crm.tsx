@@ -20,7 +20,7 @@ import {
   CommandList,
 } from "@/components/ui/command";
 import { showError, showSuccess } from "@/utils/toast";
-import { Check, Clock, Download, MapPin, RefreshCw, Search, Tags, UsersRound } from "lucide-react";
+import { Check, Clock, Download, MapPin, RefreshCw, Search, Tags, UsersRound, Package } from "lucide-react";
 import { ImportLeadsDialog } from "@/components/crm/ImportLeadsDialog";
 import { NewLeadDialog } from "@/components/crm/NewLeadDialog";
 import { getStateLabel } from "@/lib/journeyLabels";
@@ -110,6 +110,23 @@ function samePhoneLoose(a: string | null | undefined, b: string | null | undefin
   return da === db;
 }
 
+function formatDateSmall(iso: string) {
+  const d = new Date(iso);
+  const now = new Date();
+  if (d.getDate() === now.getDate() && d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear()) {
+    return "hoje";
+  }
+  return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
+}
+
+function toMoney(v: number) {
+  try {
+    return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+  } catch {
+    return `R$ ${v.toFixed(2)}`;
+  }
+}
+
 const CRM_FILTERS_KEY = "crm_filters_v1";
 
 export default function Crm() {
@@ -150,6 +167,12 @@ export default function Crm() {
     try { return JSON.parse(s).instanceFilterId || "all"; } catch { return "all"; }
   });
 
+  const [productFilterId, setProductFilterId] = useState<string>(() => {
+    const s = localStorage.getItem(CRM_FILTERS_KEY);
+    if (!s) return "all";
+    try { return JSON.parse(s).productFilterId || "all"; } catch { return "all"; }
+  });
+
   useEffect(() => {
     const filters = {
       selectedKey,
@@ -157,9 +180,10 @@ export default function Crm() {
       selectedTags,
       selectedUserIds,
       instanceFilterId,
+      productFilterId,
     };
     localStorage.setItem(CRM_FILTERS_KEY, JSON.stringify(filters));
-  }, [selectedKey, q, selectedTags, selectedUserIds, instanceFilterId]);
+  }, [selectedKey, q, selectedTags, selectedUserIds, instanceFilterId, productFilterId]);
 
   const [exportingCsv, setExportingCsv] = useState(false);
 
@@ -509,6 +533,47 @@ export default function Crm() {
     return Array.from(s).sort((a, b) => a.localeCompare(b));
   }, [tagsByCase]);
 
+  const caseItemsQ = useQuery({
+    queryKey: ["crm_case_items_batch", activeTenantId, caseIdsForLookup.join(",")],
+    enabled: Boolean(activeTenantId && caseIdsForLookup.length),
+    staleTime: 15_000,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("case_items")
+        .select("case_id, description, qty, price, total, offering_entity_id")
+        .eq("tenant_id", activeTenantId!)
+        .in("case_id", caseIdsForLookup)
+        .limit(5000);
+      if (error) throw error;
+      return (data ?? []) as any[];
+    },
+  });
+
+  const itemsByCase = useMemo(() => {
+    const m = new Map<string, { total: number; items: any[] }>();
+    for (const r of caseItemsQ.data ?? []) {
+      const cid = String(r.case_id);
+      const cur = m.get(cid) ?? { total: 0, items: [] };
+      const t = r.total ?? ((r.qty ?? 1) * (r.price ?? 0));
+      cur.total += Number(t) || 0;
+      cur.items.push(r);
+      m.set(cid, cur);
+    }
+    return m;
+  }, [caseItemsQ.data]);
+
+  const availableProducts = useMemo(() => {
+    const map = new Map<string, { id: string; name: string }>();
+    for (const r of caseItemsQ.data ?? []) {
+      const id = r.offering_entity_id || r.description;
+      const name = r.description || "Produto Desconhecido";
+      if (id && !map.has(id)) {
+        map.set(id, { id, name });
+      }
+    }
+    return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name));
+  }, [caseItemsQ.data]);
+
   const filteredRows = useMemo(() => {
     const qq = q.trim().toLowerCase();
     const tagSel = selectedTags;
@@ -535,6 +600,17 @@ export default function Crm() {
         if (!tagSel.every((t) => tags.includes(t))) return false;
       }
 
+      // Filtro de Produto
+      if (productFilterId !== "all") {
+        const caseData = itemsByCase.get(r.id);
+        if (!caseData) return false;
+        const hasProd = caseData.items.some(it => 
+          it.offering_entity_id === productFilterId || 
+          it.description === productFilterId
+        );
+        if (!hasProd) return false;
+      }
+
       if (!qq) return true;
 
       const cust = customersQ.data?.get(String((r as any).customer_id ?? "")) ?? null;
@@ -543,7 +619,7 @@ export default function Crm() {
       const t = `${r.title ?? ""} ${(r.users_profile?.display_name ?? "")} ${(r.users_profile?.email ?? "")} ${cust?.name ?? ""} ${cust?.phone_e164 ?? ""} ${cust?.email ?? ""} ${metaPhone ?? ""} ${fieldPhone ?? ""}`.toLowerCase();
       return t.includes(qq);
     });
-  }, [journeyRows, q, selectedTags, selectedUserIds, instanceFilterId, instanceIdByCase, customersQ.data, casePhoneQ.data, tagsByCase]);
+  }, [journeyRows, q, selectedTags, selectedUserIds, instanceFilterId, productFilterId, instanceIdByCase, customersQ.data, casePhoneQ.data, tagsByCase, itemsByCase]);
 
   function csvCell(v: any) {
     const s = String(v ?? "");
@@ -726,6 +802,7 @@ export default function Crm() {
     lastInboundQ.refetch();
     readsQ.refetch();
     usersQ.refetch();
+    caseItemsQ.refetch();
   };
 
   const visibleTags = useMemo(() => {
@@ -952,6 +1029,53 @@ export default function Crm() {
               )}
 
               {isAdminOrSuper && (
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="secondary" className="h-11 rounded-2xl">
+                    <Package className="mr-2 h-4 w-4" /> Produto
+                    {productFilterId !== "all" && (
+                      <span className="ml-2 rounded-full bg-white/70 px-2 py-0.5 text-[11px] font-semibold text-slate-700">1</span>
+                    )}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent align="end" className="w-[320px] rounded-2xl border-slate-200 bg-white p-2">
+                  <Command className="rounded-2xl border border-slate-200">
+                    <CommandInput placeholder="Filtrar produto…" className="h-11" />
+                    <CommandList className="max-h-[240px]">
+                      <CommandEmpty>Nenhum produto encontrado</CommandEmpty>
+                      <CommandGroup heading="Produtos / Serviços">
+                        <CommandItem
+                          onSelect={() => setProductFilterId("all")}
+                          className={cn("rounded-xl", productFilterId === "all" ? "bg-[hsl(var(--byfrost-accent)/0.10)]" : "")}
+                        >
+                          <div className={cn("mr-2 grid h-5 w-5 place-items-center rounded-md border", productFilterId === "all" ? "border-[hsl(var(--byfrost-accent)/0.35)] bg-[hsl(var(--byfrost-accent))] text-white" : "border-slate-200 bg-white")}>
+                            {productFilterId === "all" ? <Check className="h-3.5 w-3.5" /> : null}
+                          </div>
+                          <span className="truncate text-sm font-medium">Todos os Produtos</span>
+                        </CommandItem>
+                        {availableProducts.map((prod) => {
+                          const checked = productFilterId === prod.id;
+                          return (
+                            <CommandItem
+                              key={prod.id}
+                              onSelect={() => setProductFilterId(prod.id)}
+                              className={cn("rounded-xl", checked ? "bg-[hsl(var(--byfrost-accent)/0.10)]" : "")}
+                            >
+                              <div className={cn("mr-2 grid h-5 w-5 place-items-center rounded-md border", checked ? "border-[hsl(var(--byfrost-accent)/0.35)] bg-[hsl(var(--byfrost-accent))] text-white" : "border-slate-200 bg-white")}>
+                                {checked ? <Check className="h-3.5 w-3.5" /> : null}
+                              </div>
+                              <span className="truncate text-sm font-medium">{prod.name}</span>
+                            </CommandItem>
+                          );
+                        })}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
+              )}
+
+              {isAdminOrSuper && (
               <Button
                 variant="secondary"
                 className="h-11 rounded-2xl"
@@ -1010,7 +1134,16 @@ export default function Crm() {
                     }}
                   >
                     <div className="flex items-center justify-between px-1">
-                      <div className="text-sm font-semibold text-slate-800">{col.label}</div>
+                      <div className="flex flex-col">
+                        <div className="text-sm font-semibold text-slate-800">{col.label}</div>
+                        {(() => {
+                          const colTotal = col.items.reduce((acc, c) => acc + (itemsByCase.get(c.id)?.total || 0), 0);
+                          if (colTotal > 0) {
+                            return <div className="text-[11px] text-slate-500 font-medium">{toMoney(colTotal)}</div>;
+                          }
+                          return null;
+                        })()}
+                      </div>
                       <div className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-600">
                         {col.items.length}
                       </div>
@@ -1078,6 +1211,14 @@ export default function Crm() {
                                   </Badge>
                                 ) : null}
 
+                                {(() => {
+                                  const cTotal = itemsByCase.get(c.id)?.total || 0;
+                                  if (cTotal > 0) {
+                                    return <span className="text-xs font-semibold text-[hsl(var(--byfrost-accent))]">{toMoney(cTotal)}</span>;
+                                  }
+                                  return null;
+                                })()}
+
                                 {pend?.open ? (
                                   <Badge className="rounded-full border-0 bg-amber-100 text-amber-900 hover:bg-amber-100">
                                     {pend.open} pend.
@@ -1094,6 +1235,8 @@ export default function Crm() {
                               <div className="flex items-center gap-1">
                                 <Clock className="h-3.5 w-3.5 text-slate-400" />
                                 {age} min
+                                <span>•</span>
+                                {formatDateSmall(c.updated_at)}
                               </div>
                               {pend?.need_location && (
                                 <div className="flex items-center gap-1 rounded-full bg-rose-50 px-2 py-1 text-rose-700">
