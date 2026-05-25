@@ -51,27 +51,33 @@ type BankAccountRow = {
   currency: string;
 };
 
+
+function useSessionState<T>(key: string, initialValue: T | (() => T)) {
+  const [state, setState] = useState<T>(() => {
+    try {
+      const item = sessionStorage.getItem(key);
+      if (item !== null) return JSON.parse(item);
+    } catch {
+      // ignore
+    }
+    return typeof initialValue === "function" ? (initialValue as any)() : initialValue;
+  });
+
+  useEffect(() => {
+    sessionStorage.setItem(key, JSON.stringify(state));
+  }, [key, state]);
+
+  return [state, setState] as const;
+}
+
 export function TransactionsTab() {
   
   // Handle ?tab=dre in URL
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const t = params.get("tab");
-    if (t === "dre") setActiveTab("dre");
-  }, []);
   const { activeTenantId } = useTenant();
   const qc = useQueryClient();
 
-  const [txStartDate, setTxStartDate] = useState(() => currentMonthRangeIso().start);
-  const [txEndDate, setTxEndDate] = useState(() => currentMonthRangeIso().end);
-
-  useEffect(() => {
-    // Default filter always starts on current month when entering the screen / switching tenant.
-    if (!activeTenantId) return;
-    const r = currentMonthRangeIso();
-    setTxStartDate(r.start);
-    setTxEndDate(r.end);
-  }, [activeTenantId]);
+  const [txStartDate, setTxStartDate] = useSessionState("fin_tx_start", () => currentMonthRangeIso().start);
+  const [txEndDate, setTxEndDate] = useSessionState("fin_tx_end", () => currentMonthRangeIso().end);
 
   const accountsQ = useQuery({
     queryKey: ["bank_accounts", activeTenantId],
@@ -102,10 +108,11 @@ export function TransactionsTab() {
   });
 
   // Sorting & Filtering State
-  const [filterEntityId, setFilterEntityId] = useState<string | null>(null);
-  const [filterCategoryId, setFilterCategoryId] = useState<string | null>(null);
-  const [sortKey, setSortKey] = useState<string | null>(null);
-  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+  const [filterEntityId, setFilterEntityId] = useSessionState<string | null>("fin_tx_entity", null);
+  const [filterCategoryId, setFilterCategoryId] = useSessionState<string | null>("fin_tx_category", null);
+  const [sortKey, setSortKey] = useSessionState<string | null>("fin_tx_sort_key", "transaction_date");
+  const [sortDir, setSortDir] = useSessionState<"asc" | "desc">("fin_tx_sort_dir", "desc");
+  const [txSearchText, setTxSearchText] = useSessionState("fin_tx_search", "");
 
   const transactionsQ = useQuery({
     queryKey: ["financial_transactions", activeTenantId, txStartDate, txEndDate],
@@ -141,6 +148,17 @@ export function TransactionsTab() {
     if (filterCategoryId) {
       data = data.filter((t) => t.category_id === filterCategoryId);
     }
+    
+    if (txSearchText) {
+      const q = txSearchText.toLowerCase();
+      data = data.filter((t) => {
+        const desc = (t.description || "").toLowerCase();
+        const acc = accountById.get(t.account_id)?.account_name?.toLowerCase() || "";
+        const cat = categoryById.get(t.category_id)?.name?.toLowerCase() || "";
+        const ent = t.core_entities?.display_name?.toLowerCase() || "";
+        return desc.includes(q) || acc.includes(q) || cat.includes(q) || ent.includes(q);
+      });
+    }
 
     // 2. Sorting
     data.sort((a, b) => {
@@ -172,7 +190,7 @@ export function TransactionsTab() {
     });
 
     return data;
-  }, [transactionsQ.data, filterEntityId, filterCategoryId, sortKey, sortDir]);
+  }, [transactionsQ.data, filterEntityId, filterCategoryId, sortKey, sortDir, txSearchText, accountById, categoryById]);
 
   const toggleSort = (key: string) => {
     if (sortKey === key) {
@@ -1044,6 +1062,15 @@ export function TransactionsTab() {
             </div>
 
             <div className="flex flex-wrap items-end gap-2">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                <Input
+                  className="mt-1 h-9 w-[200px] rounded-2xl pl-9 bg-white dark:bg-slate-950"
+                  placeholder="Buscar lançamentos..."
+                  value={txSearchText}
+                  onChange={(e) => setTxSearchText(e.target.value)}
+                />
+              </div>
               <div>
                 <Label className="text-[11px]">De</Label>
                 <Input
