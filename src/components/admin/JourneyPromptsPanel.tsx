@@ -17,6 +17,8 @@ type JourneyRow = {
   key: string;
   name: string;
   description: string | null;
+  default_state_machine_json?: any;
+  sectors?: { id: string; name: string } | null;
 };
 
 type PromptVersionRow = {
@@ -67,7 +69,7 @@ export function JourneyPromptsPanel() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("tenant_journeys")
-        .select("journey_id,enabled,journeys(id,key,name,description)")
+        .select("journey_id,enabled,journeys(id,key,name,description,default_state_machine_json,sectors(id,name))")
         .eq("tenant_id", activeTenantId!)
         .limit(500);
 
@@ -231,9 +233,27 @@ export function JourneyPromptsPanel() {
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
                 <div className="truncate text-sm font-semibold text-slate-900">{selectedJourney.name}</div>
-                <div className="mt-0.5 truncate text-xs text-slate-600">key: {selectedJourney.key}</div>
+                <div className="mt-0.5 truncate text-xs text-slate-600">
+                  key: <span className="font-mono bg-slate-100 px-1 py-0.5 rounded">{selectedJourney.key}</span>
+                  {selectedJourney.sectors?.name && (
+                    <span className="ml-2">| Setor/Módulo: <span className="font-semibold text-indigo-600">{selectedJourney.sectors.name}</span></span>
+                  )}
+                </div>
                 {selectedJourney.description && (
                   <div className="mt-1 text-xs text-slate-600">{selectedJourney.description}</div>
+                )}
+                
+                {selectedJourney.default_state_machine_json?.states && (
+                  <div className="mt-3">
+                    <span className="text-[10px] font-bold uppercase text-slate-400">Estados da Jornada:</span>
+                    <div className="mt-1 flex flex-wrap gap-1.5">
+                      {(selectedJourney.default_state_machine_json.states as string[]).map(st => (
+                        <span key={st} className="bg-white border border-slate-200 text-slate-600 text-[10px] px-2 py-0.5 rounded-full font-mono">
+                          {st}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
                 )}
               </div>
               <Badge className="rounded-full border-0 bg-[hsl(var(--byfrost-accent)/0.10)] text-[hsl(var(--byfrost-accent))] hover:bg-[hsl(var(--byfrost-accent)/0.10)]">

@@ -39,6 +39,7 @@ import { StateMachine } from "@/lib/journeys/types"
 import { GlobalJourneyLogsDialog } from "@/components/case/GlobalJourneyLogsDialog";
 import { checkTransitionBlocks, TransitionBlockReason } from "@/lib/journeys/validation";
 import { TransitionBlockDialog } from "@/components/case/TransitionBlockDialog";
+import { GlobalDashboardOverview } from "@/components/dashboard/GlobalDashboardOverview";
 
 const DASHBOARD_VIEW_MODE_KEY_PREFIX = "dashboard_view_mode_v1:";
 
@@ -420,11 +421,11 @@ export default function Dashboard() {
       }
     }
 
-    // 2) Se não tem journeyKey na rota, manda para a primeira
-    if (!journeyKey) {
-      pickFirstJourney();
-      return;
-    }
+    // 2) Se não tem journeyKey na rota, mostraremos o Dashboard Global (Overview).
+    // if (!journeyKey) {
+    //   pickFirstJourney();
+    //   return;
+    // }
 
     // 3) Se a key não existe mais (ex: após reset), volta para a primeira
     if (journeyKey && !selectedJourney) {
@@ -896,6 +897,10 @@ export default function Dashboard() {
 
   const hasCrmAccess = (allJourneys: JourneyOpt[]) => allJourneys.some(j => j.is_crm);
 
+  if (!journeyKey) {
+    return <GlobalDashboardOverview />;
+  }
+
   if (!journeyKey && !journeyQ.isLoading && (journeyQ.data?.length ?? 0) === 0) {
     const allUserJourneys = (journeyQ.data || []); // This is already filtered
     // We need to know if they have ANY journey, even CRM
@@ -1192,12 +1197,6 @@ export default function Dashboard() {
                   </div>
                 </div>
               ) : null}
-            </div>
-          )}
-
-          {!selectedKey && (
-            <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
-              Habilite ao menos uma jornada no Admin.
             </div>
           )}
 

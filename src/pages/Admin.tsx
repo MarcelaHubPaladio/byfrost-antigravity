@@ -2501,6 +2501,7 @@ function TenantEditDialog({
   const [ovOfferings, setOvOfferings] = useState<string>(currentTp?.overrides_json?.max_offerings?.toString() || "");
   const [ovMessages, setOvMessages] = useState<string>(currentTp?.overrides_json?.max_messages?.toString() || "");
   const [ovAi, setOvAi] = useState<string>(currentTp?.overrides_json?.max_ai_tokens?.toString() || "");
+  const [ovReportFreq, setOvReportFreq] = useState<string>(currentTp?.overrides_json?.report_frequency || "realtime");
 
   const handleSave = () => {
     const ovs: any = {};
@@ -2511,6 +2512,7 @@ function TenantEditDialog({
     if (ovOfferings !== "") ovs.max_offerings = Number(ovOfferings);
     if (ovMessages !== "") ovs.max_messages = Number(ovMessages);
     if (ovAi !== "") ovs.max_ai_tokens = Number(ovAi);
+    if (ovReportFreq !== "") ovs.report_frequency = ovReportFreq;
 
     onSave(tenant.id, { name, status }, planId || null, ovs);
   };
@@ -2623,6 +2625,21 @@ function TenantEditDialog({
               <p className="text-[9px] text-slate-400 italic mt-1 leading-tight">
                 Deixe em branco para usar o limite padrão do plano. Use -1 para ilimitado.
               </p>
+            </div>
+
+            <div className="grid gap-2 mb-4 mt-2">
+              <Label className="text-[10px] font-bold uppercase text-slate-400 tracking-wider">Frequência Relatório (Guardião)</Label>
+              <Select value={ovReportFreq} onValueChange={setOvReportFreq}>
+                <SelectTrigger className="rounded-xl h-10 border-indigo-100">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="rounded-xl">
+                  <SelectItem value="realtime" className="rounded-xl">Tempo Real</SelectItem>
+                  <SelectItem value="hourly" className="rounded-xl">Por Hora</SelectItem>
+                  <SelectItem value="daily" className="rounded-xl">Diário</SelectItem>
+                  <SelectItem value="weekly" className="rounded-xl">Semanal</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </div>
         </div>
