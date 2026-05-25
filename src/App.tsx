@@ -43,6 +43,7 @@ const FinancingSimulator = lazyWithRetry(() => import("@/pages/FinancingSimulato
 const Settings = lazyWithRetry(() => import("@/pages/Settings"));
 const Me = lazyWithRetry(() => import("@/pages/Me"));
 const Admin = lazyWithRetry(() => import("@/pages/Admin"));
+const GlobalTimeline = lazyWithRetry(() => import("@/pages/GlobalTimeline"));
 const GoalsCenter = lazyWithRetry(() => import("@/pages/GoalsCenter"));
 const AdminUserDetail = lazyWithRetry(() => import("@/pages/AdminUserDetail"));
 const Crm = lazyWithRetry(() => import("@/pages/Crm"));
@@ -277,6 +278,14 @@ const App = () => (
                     element={
                       <RequireRouteAccess routeKey="app.dashboard">
                         <Dashboard />
+                      </RequireRouteAccess>
+                    }
+                  />
+                  <Route
+                    path="/app/timeline"
+                    element={
+                      <RequireRouteAccess routeKey="app.dashboard">
+                        <GlobalTimeline />
                       </RequireRouteAccess>
                     }
                   />

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { useTenant } from "@/providers/TenantProvider";
@@ -122,7 +123,7 @@ export function GlobalDashboardOverview() {
         .select("id, occurred_at, event_type, actor_type, message, case_id, cases(title, journeys(name))")
         .eq("tenant_id", activeTenantId!)
         .order("occurred_at", { ascending: false })
-        .limit(50);
+        .limit(5);
       if (error) throw error;
       return (data ?? []) as unknown as TimelineEvent[];
     }
@@ -378,6 +379,12 @@ export function GlobalDashboardOverview() {
                   </div>
                 ))
               )}
+            </div>
+            
+            <div className="mt-6 text-center border-t border-slate-100 pt-4">
+              <Link to="/app/timeline" className="text-[13px] font-semibold text-indigo-600 hover:text-indigo-800 transition-colors">
+                Ver Linha do Tempo Completa →
+              </Link>
             </div>
           </div>
 
