@@ -324,7 +324,7 @@ export default function Crm() {
         .eq("is_chat", false);
 
       if (!isAdminOrSuper && user?.id) {
-        q = q.or(`assigned_user_id.eq.${user.id},assigned_user_id.is.null`);
+        q = q.eq("assigned_user_id", user.id);
       }
 
       const { data, error } = await q
@@ -588,7 +588,7 @@ export default function Crm() {
     return journeyRows.filter((r) => {
       // Forçar filtro de hierarquia via JS para garantir que não vaze 
       if (!isAdminOrSuper && user?.id) {
-        if (r.assigned_user_id && r.assigned_user_id !== user.id) {
+        if (r.assigned_user_id !== user.id) {
           return false;
         }
       }
