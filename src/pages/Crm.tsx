@@ -308,7 +308,7 @@ export default function Crm() {
   }, [selectedJourney]);
 
   const casesQ = useQuery({
-    queryKey: ["crm_cases_by_tenant", activeTenantId],
+    queryKey: ["crm_cases_by_tenant", activeTenantId, user?.id, isAdminOrSuper],
     enabled: Boolean(activeTenantId),
     refetchInterval: 15_000,
     refetchIntervalInBackground: false,
@@ -586,6 +586,13 @@ export default function Crm() {
     const userSel = selectedUserIds;
 
     return journeyRows.filter((r) => {
+      // Forçar filtro de hierarquia via JS para garantir que não vaze 
+      if (!isAdminOrSuper && user?.id) {
+        if (r.assigned_user_id && r.assigned_user_id !== user.id) {
+          return false;
+        }
+      }
+
       // Filtro de Instância
       if (instanceFilterId !== "all") {
         const meta = r.meta_json as any;
@@ -625,7 +632,7 @@ export default function Crm() {
       const t = `${r.title ?? ""} ${(r.users_profile?.display_name ?? "")} ${(r.users_profile?.email ?? "")} ${cust?.name ?? ""} ${cust?.phone_e164 ?? ""} ${cust?.email ?? ""} ${metaPhone ?? ""} ${fieldPhone ?? ""}`.toLowerCase();
       return t.includes(qq);
     });
-  }, [journeyRows, q, selectedTags, selectedUserIds, instanceFilterId, productFilterId, instanceIdByCase, customersQ.data, casePhoneQ.data, tagsByCase, itemsByCase]);
+  }, [journeyRows, q, selectedTags, selectedUserIds, instanceFilterId, productFilterId, instanceIdByCase, customersQ.data, casePhoneQ.data, tagsByCase, itemsByCase, isAdminOrSuper, user?.id]);
 
   function csvCell(v: any) {
     const s = String(v ?? "");
