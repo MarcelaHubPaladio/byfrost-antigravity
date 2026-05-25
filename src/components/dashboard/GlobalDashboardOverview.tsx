@@ -254,7 +254,9 @@ export function GlobalDashboardOverview() {
                         )}
                         
                         <div className="mt-5 flex justify-between items-center">
-                          <div className="mt-5 text-center">
+                          <span className="text-[10px] text-slate-400">
+                            {insightData ? `Atualizado ${new Date(insightData.created_at).toLocaleDateString()}` : 'Aguardando agendamento'}
+                          </span>
                           <button 
                             onClick={() => setGeneratingJourneyId(journey.id)}
                             className="text-[11px] font-semibold text-indigo-600 hover:text-indigo-800 transition-colors"
