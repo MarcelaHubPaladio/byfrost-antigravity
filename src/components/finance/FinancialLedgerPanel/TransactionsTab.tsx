@@ -1724,71 +1724,7 @@ export function TransactionsTab() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-      {/* Remapear Lançamentos (Ao excluir categoria) */}
-      <Dialog 
-        open={Boolean(categoryToDelete)} 
-        onOpenChange={(v) => !v && setCategoryToDelete(null)}
-      >
-        <DialogContent className="sm:max-w-[425px] rounded-3xl">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-rose-600">
-              <Trash2 className="h-5 w-5" />
-              Remover Categoria
-            </DialogTitle>
-            <DialogDescription>
-              Você está removendo a categoria <strong>{categoryToDelete?.name}</strong>. 
-              Para qual categoria deseja mover os lançamentos existentes?
-            </DialogDescription>
-          </DialogHeader>
-          
-          <div className="py-4">
-            <Label className="text-xs mb-2 block uppercase text-slate-500 font-bold">Categoria de Destino</Label>
-            <AsyncSelect
-              className="h-11 rounded-2xl"
-              value={remappingTargetId}
-              onChange={setRemappingTargetId}
-              placeholder="Selecione a nova categoria..."
-              loadOptions={async (val) => {
-                if (!activeTenantId) return [];
-                let query = supabase
-                  .from("financial_categories")
-                  .select("id, name")
-                  .eq("tenant_id", activeTenantId)
-                  .ilike("name", `%${val}%`);
-                
-                if (categoryToDelete?.id) {
-                  query = query.neq("id", categoryToDelete.id);
-                }
 
-                const { data } = await query.limit(10);
-                return (data || []).map((d) => ({ value: d.id, label: d.name }));
-              }}
-            />
-            <p className="mt-4 text-[11px] text-slate-500 leading-relaxed bg-slate-50 p-3 rounded-xl border border-slate-100">
-              <Info className="h-3 w-3 inline mr-1 mb-0.5" />
-              Esta ação é permanente. Todos os lançamentos vinculados a "{categoryToDelete?.name}" serão atualizados para a nova categoria selecionada.
-            </p>
-          </div>
-
-          <DialogFooter className="gap-2 sm:gap-0">
-            <Button
-              variant="ghost"
-              onClick={() => setCategoryToDelete(null)}
-              className="rounded-2xl"
-            >
-              Cancelar
-            </Button>
-            <Button
-              variant="destructive"
-              className="rounded-2xl bg-rose-600 hover:bg-rose-700 font-bold"
-              disabled={!remappingTargetId || deleteCategoryWithRemapM.isPending}
-              onClick={() => deleteCategoryWithRemapM.mutate()}
-            >
-              {deleteCategoryWithRemapM.isPending ? "Processando..." : "Confirmar e Remover"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </>
   );
 }
