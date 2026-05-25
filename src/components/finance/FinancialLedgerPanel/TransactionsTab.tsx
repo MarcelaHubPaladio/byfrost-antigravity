@@ -42,7 +42,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Link } from "react-router-dom";
 
-import { CategoryType, CATEGORY_LABELS, normalizeDescription, stripOuterQuotes, splitCsvLine, parseCategoryType, ParsedCategory, parseCategoryCsv, sha256Hex, parseMoneyInput, prettyAccountType, currentMonthRangeIso } from "@/lib/financial-utils";
+import { CategoryType, CATEGORY_LABELS, normalizeDescription, stripOuterQuotes, splitCsvLine, parseCategoryType, ParsedCategory, parseCategoryCsv, sha256Hex, parseMoneyInput, formatMoneyInput, prettyAccountType, currentMonthRangeIso } from "@/lib/financial-utils";
 type BankAccountRow = {
   id: string;
   bank_name: string;
@@ -230,8 +230,10 @@ export function TransactionsTab() {
     setEditingTxId(t.id);
     setAccountId(t.account_id);
     setTxDate(t.transaction_date || "");
-    setTxType(t.type || "debit");
-    setAmount(String(t.amount || ""));
+    setTxType(t.type as any);
+    const formattedAmount = Number(t.amount || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    setAmount(formattedAmount);
+    setTxDate(t.transaction_date);
     setDescription(t.description || "");
     setTxEntityId(t.entity_id || null);
     setCategoryId(t.category_id || "");
@@ -835,27 +837,35 @@ export function TransactionsTab() {
                   Novo lançamento
                 </Button>
               </DialogTrigger>
-              <DialogContent className="sm:max-w-[720px] max-h-[85vh] overflow-hidden">
-                <DialogHeader>
-                  <DialogTitle>{editingTxId ? "Editar lançamento" : "Novo lançamento"}</DialogTitle>
-                  <DialogDescription>
-                    Se uma regra bater com a descrição, sugerimos automaticamente uma categoria. Ao corrigir, o sistema aprende.
-                  </DialogDescription>
-                </DialogHeader>
+              <DialogContent className="sm:max-w-[720px] max-h-[85vh] overflow-hidden rounded-3xl p-0">
+                <div className="p-6 pb-4 border-b border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-950">
+                  <DialogHeader>
+                    <DialogTitle className="flex items-center gap-2 text-xl">
+                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400">
+                        <Pencil className="h-4 w-4" />
+                      </div>
+                      {editingTxId ? "Editar lançamento" : "Novo lançamento"}
+                    </DialogTitle>
+                    <DialogDescription className="pt-2">
+                      Preencha os dados do lançamento. Se uma regra bater com a descrição, sugerimos automaticamente a categoria.
+                    </DialogDescription>
+                  </DialogHeader>
+                </div>
 
-                <ScrollArea className="h-[65vh] pr-2">
-                  <div className="grid gap-3 md:grid-cols-6">
-                    <div className="md:col-span-2">
-                      <Label className="text-xs">Conta</Label>
+                <ScrollArea className="h-[55vh] px-6 py-4 bg-slate-50/50 dark:bg-slate-900/20">
+                  <div className="grid gap-5 md:grid-cols-6">
+                    {/* Conta e Data */}
+                    <div className="md:col-span-3 space-y-1.5">
+                      <Label className="text-xs font-semibold text-slate-600 dark:text-slate-400">Conta Bancária</Label>
                       <Select value={accountId} onValueChange={setAccountId}>
-                        <SelectTrigger className="mt-1 rounded-2xl">
+                        <SelectTrigger className="h-10 rounded-2xl bg-white dark:bg-slate-950">
                           <SelectValue
                             placeholder={
                               accountsQ.isLoading
                                 ? "Carregando…"
                                 : !(accountsQ.data ?? []).length
-                                  ? "Cadastre uma conta (aba Bancos)"
-                                  : "Selecione"
+                                  ? "Cadastre uma conta"
+                                  : "Selecione a conta"
                             }
                           />
                         </SelectTrigger>
@@ -869,41 +879,72 @@ export function TransactionsTab() {
                       </Select>
                     </div>
 
-                    <div>
-                      <Label className="text-xs">Data</Label>
+                    <div className="md:col-span-3 space-y-1.5">
+                      <Label className="text-xs font-semibold text-slate-600 dark:text-slate-400">Data da Transação</Label>
                       <Input
-                        className="mt-1 rounded-2xl"
+                        className="h-10 rounded-2xl bg-white dark:bg-slate-950"
                         type="date"
                         value={txDate}
                         onChange={(e) => setTxDate(e.target.value)}
                       />
                     </div>
 
-                    <div>
-                      <Label className="text-xs">Tipo</Label>
+                    {/* Tipo e Valor */}
+                    <div className="md:col-span-3 space-y-1.5">
+                      <Label className="text-xs font-semibold text-slate-600 dark:text-slate-400">Natureza do Lançamento</Label>
                       <Select value={txType} onValueChange={(v) => setTxType(v as any)}>
-                        <SelectTrigger className="mt-1 rounded-2xl">
+                        <SelectTrigger className="h-10 rounded-2xl bg-white dark:bg-slate-950">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="debit">debit</SelectItem>
-                          <SelectItem value="credit">credit</SelectItem>
+                          <SelectItem value="debit">Saída (Despesa)</SelectItem>
+                          <SelectItem value="credit">Entrada (Receita)</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
 
-                    <div>
-                      <Label className="text-xs">Valor</Label>
-                      <Input
-                        className="mt-1 rounded-2xl"
-                        placeholder="Ex: 120,50"
-                        value={amount}
-                        onChange={(e) => setAmount(e.target.value)}
+                    <div className="md:col-span-3 space-y-1.5">
+                      <Label className="text-xs font-semibold text-slate-600 dark:text-slate-400">Valor</Label>
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-medium text-sm">R$</span>
+                        <Input
+                          className="h-10 pl-9 rounded-2xl bg-white dark:bg-slate-950 font-semibold text-slate-900 dark:text-slate-100"
+                          placeholder="0,00"
+                          value={amount}
+                          onChange={(e) => setAmount(formatMoneyInput(e.target.value))}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="md:col-span-6 border-t border-slate-200 dark:border-slate-800 my-1"></div>
+
+                    {/* Descrição */}
+                    <div className="md:col-span-4 space-y-1.5">
+                      <Label className="text-xs font-semibold text-slate-600 dark:text-slate-400">Descrição</Label>
+                      <Input 
+                        className="h-10 rounded-2xl bg-white dark:bg-slate-950" 
+                        placeholder="Ex: Compra de materiais..."
+                        value={description} 
+                        onChange={(e) => setDescription(e.target.value)} 
                       />
                     </div>
 
-                    <div className="md:col-span-2">
-                      <Label className="text-xs">Categoria {suggested?.category_id ? "(sugerida)" : ""}</Label>
+                    <div className="md:col-span-2 space-y-1.5">
+                      <Label className="text-xs font-semibold text-slate-600 dark:text-slate-400">NFE / Comprovante</Label>
+                      <Input 
+                        className="h-10 rounded-2xl bg-white dark:bg-slate-950" 
+                        placeholder="Nº da Nota" 
+                        value={txInvoiceNumber} 
+                        onChange={(e) => setTxInvoiceNumber(e.target.value)} 
+                      />
+                    </div>
+
+                    {/* Categoria e Entidade */}
+                    <div className="md:col-span-3 space-y-1.5">
+                      <Label className="text-xs font-semibold text-slate-600 dark:text-slate-400 flex items-center gap-1.5">
+                        Categoria 
+                        {suggested?.category_id && <Badge variant="secondary" className="h-4 text-[9px] px-1 bg-indigo-50 text-indigo-600 hover:bg-indigo-100">Sugerida</Badge>}
+                      </Label>
                       <Select
                         value={categoryId}
                         onValueChange={(v) => {
@@ -911,8 +952,8 @@ export function TransactionsTab() {
                           setCategoryId(v);
                         }}
                       >
-                        <SelectTrigger className="mt-1 rounded-2xl">
-                          <SelectValue placeholder={categoriesQ.isLoading ? "Carregando…" : "(sem categoria)"} />
+                        <SelectTrigger className="h-10 rounded-2xl bg-white dark:bg-slate-950">
+                          <SelectValue placeholder={categoriesQ.isLoading ? "Carregando…" : "Selecione..."} />
                         </SelectTrigger>
                         <SelectContent>
                           {(categoriesQ.data ?? []).map((c) => (
@@ -923,16 +964,19 @@ export function TransactionsTab() {
                         </SelectContent>
                       </Select>
                       {suggested?.pattern ? (
-                        <div className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
-                          Regra: "{suggested.pattern}" • conf: {Number(suggested.confidence ?? 0).toFixed(2)}
+                        <div className="text-[10px] font-medium text-slate-400">
+                          Regra automática: "{suggested.pattern}"
                         </div>
                       ) : null}
                     </div>
 
-                    <div className="md:col-span-2">
-                      <Label className="text-xs">Entidade {suggestedEntity?.entity_id ? "(sugerida)" : ""}</Label>
+                    <div className="md:col-span-3 space-y-1.5">
+                      <Label className="text-xs font-semibold text-slate-600 dark:text-slate-400 flex items-center gap-1.5">
+                        Entidade 
+                        {suggestedEntity?.entity_id && <Badge variant="secondary" className="h-4 text-[9px] px-1 bg-indigo-50 text-indigo-600 hover:bg-indigo-100">Sugerida</Badge>}
+                      </Label>
                       <AsyncSelect
-                        className="mt-1 h-9 rounded-2xl"
+                        className="h-10 rounded-2xl bg-white dark:bg-slate-950"
                         value={txEntityId}
                         initialLabel={suggestedEntity?.label}
                         onChange={(v) => {
@@ -941,10 +985,10 @@ export function TransactionsTab() {
                         }}
                         onCreate={(val) => {
                           setQuickEntityName(val);
-                          setQuickEntityTxId(null); // No txId when creating manual
+                          setQuickEntityTxId(null);
                           setQuickEntityOpen(true);
                         }}
-                        placeholder="Buscar cliente/fornec..."
+                        placeholder="Buscar cliente/fornecedor..."
                         loadOptions={async (val) => {
                           if (!activeTenantId || val.length < 2) return [];
                           const { data } = await supabase
@@ -958,41 +1002,28 @@ export function TransactionsTab() {
                         }}
                       />
                       {suggestedEntity?.pattern ? (
-                        <div className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
-                          Regra: "{suggestedEntity.pattern}" • conf: {Number(suggestedEntity.confidence ?? 0).toFixed(2)}
+                        <div className="text-[10px] font-medium text-slate-400">
+                          Regra automática: "{suggestedEntity.pattern}"
                         </div>
                       ) : null}
-                    </div>
-
-                    <div className="md:col-span-3">
-                      <Label className="text-xs">Descrição</Label>
-                      <Input className="mt-1 rounded-2xl" value={description} onChange={(e) => setDescription(e.target.value)} />
-                    </div>
-
-                    <div className="md:col-span-1">
-                      <Label className="text-xs">NFE</Label>
-                      <Input 
-                        className="mt-1 rounded-2xl" 
-                        placeholder="Ex: 1234" 
-                        value={txInvoiceNumber} 
-                        onChange={(e) => setTxInvoiceNumber(e.target.value)} 
-                      />
                     </div>
                   </div>
                 </ScrollArea>
 
-                <DialogFooter>
-                  <Button variant="secondary" className="h-10 rounded-2xl" onClick={() => setTxDialogOpen(false)}>
-                    Cancelar
-                  </Button>
-                  <Button
-                    className="h-10 rounded-2xl"
-                    onClick={() => createTxM.mutate()}
-                    disabled={!activeTenantId || createTxM.isPending || !accountId}
-                  >
-                    {createTxM.isPending ? "Salvando…" : "Lançar"}
-                  </Button>
-                </DialogFooter>
+                <div className="p-4 bg-white dark:bg-slate-950 border-t border-slate-100 dark:border-slate-800">
+                  <DialogFooter className="gap-2 sm:gap-0">
+                    <Button variant="ghost" className="h-11 rounded-2xl font-medium" onClick={() => setTxDialogOpen(false)}>
+                      Cancelar
+                    </Button>
+                    <Button
+                      className="h-11 rounded-2xl px-8 bg-indigo-600 hover:bg-indigo-700 font-bold"
+                      onClick={() => createTxM.mutate()}
+                      disabled={!activeTenantId || createTxM.isPending || !accountId}
+                    >
+                      {createTxM.isPending ? "Processando…" : (editingTxId ? "Salvar Alterações" : "Concluir Lançamento")}
+                    </Button>
+                  </DialogFooter>
+                </div>
               </DialogContent>
             </Dialog>
           </div>

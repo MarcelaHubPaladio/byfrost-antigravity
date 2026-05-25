@@ -175,6 +175,13 @@ export function parseMoneyInput(v: string) {
   return Number.isFinite(n) ? n : NaN;
 }
 
+export function formatMoneyInput(value: string) {
+  const digits = value.replace(/\D/g, "");
+  if (!digits) return "";
+  const num = parseInt(digits, 10) / 100;
+  return num.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
 export function prettyAccountType(s: string) {
   const t = String(s ?? "").trim().toLowerCase();
   if (t === "checking") return "Conta corrente";
