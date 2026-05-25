@@ -241,8 +241,54 @@ serve(async (req) => {
       }
     }
 
+    // 4) Enqueue Guardiao Insights (Only if report_frequency is configured in tenant)
+    const { data: plansData, error: plErr } = await supabase
+      .from("tenant_plans")
+      .select("tenant_id, overrides_json");
+
+    let guardiaoEnqueued = 0;
+    
+    if (!plErr && plansData) {
+      for (const p of plansData) {
+        const overrides = (p.overrides_json as any) || {};
+        const freq = overrides.report_frequency;
+        // For MVP, we will enqueue if it's set to realtime, hourly, daily or weekly.
+        if (freq && freq !== 'none') {
+          // Idempotency: For 'hourly', limit to 1 per hour. For others, 1 per day.
+          let idempTime = dateStr; // daily
+          if (freq === 'realtime' || freq === 'hourly') {
+            const h = new Date().getUTCHours();
+            idempTime = `${dateStr}-H${h}`;
+          }
+
+          // Fetch active journeys for this tenant
+          const { data: activeJourneys } = await supabase
+            .from("tenant_journeys")
+            .select("journey_id")
+            .eq("tenant_id", p.tenant_id)
+            .eq("enabled", true);
+
+          for (const j of activeJourneys ?? []) {
+            const idempotencyKey = `GUARDIAO_INSIGHTS:${p.tenant_id}:${j.journey_id}:${idempTime}`;
+            const { error } = await supabase.from("job_queue").insert({
+              tenant_id: p.tenant_id,
+              type: "GUARDIAO_INSIGHTS_GENERATE",
+              idempotency_key: idempotencyKey,
+              payload_json: { journey_id: j.journey_id, frequency: freq, model: "openai" },
+              status: "pending",
+              run_after: new Date().toISOString(),
+            });
+
+            if (!error) {
+              guardiaoEnqueued += 1;
+            }
+          }
+        }
+      }
+    }
+
     return new Response(
-      JSON.stringify({ ok: true, jobsProcessor, metaPublishEnqueued, escalated, dailySummaryEnqueued, date: dateStr, timeZone }),
+      JSON.stringify({ ok: true, jobsProcessor, metaPublishEnqueued, escalated, dailySummaryEnqueued, guardiaoEnqueued, date: dateStr, timeZone }),
       {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       }

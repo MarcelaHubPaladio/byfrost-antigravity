@@ -1296,6 +1296,101 @@ function addDaysIsoDate(dateIso: string, days: number) {
   d.setUTCDate(d.getUTCDate() + days);
   return d.toISOString().slice(0, 10);
 }
+
+async function processGuardiaoInsightsGenerateJob(opts: { supabase: any, tenantId: string, journeyId: string, model: string }) {
+  const { supabase, tenantId, journeyId, model } = opts;
+
+  // Fetch recent events for this journey
+  const { data: events } = await supabase
+    .from("timeline_events")
+    .select("event_type, actor_type, message, occurred_at, cases!inner(journey_id)")
+    .eq("tenant_id", tenantId)
+    .eq("cases.journey_id", journeyId)
+    .order("occurred_at", { ascending: false })
+    .limit(30);
+
+  if (!events || events.length === 0) return; // No events to analyze
+
+  // Build simple context
+  const contextText = events.map((e: any) => `[${e.occurred_at}] ${e.actor_type} - ${e.event_type}: ${e.message}`).join("\n");
+
+  const prompt = `Você é o Guardião de Negócio. Analise os eventos recentes desta jornada e retorne 3 insights principais baseados nesses eventos.
+Os insights podem ser pontos de atenção, anomalias, ou tendências.
+Retorne APENAS um array JSON de objetos no formato: [{"title": "título curto", "description": "descrição", "severity": "info|warn|error"}]. Não use marcações markdown como \`\`\`json.
+Eventos:
+${contextText}`;
+
+  let content = "[]";
+
+  if (model === "gemini") {
+    const apiKey = Deno.env.get("GEMINI_API_KEY") ?? "";
+    if (!apiKey) throw new Error("GEMINI_API_KEY is not set");
+
+    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: { temperature: 0.7, maxOutputTokens: 500 }
+      }),
+    });
+
+    if (!res.ok) {
+      const txt = await res.text();
+      throw new Error(`Gemini error: ${res.status} ${txt}`);
+    }
+
+    const json = await res.json();
+    content = json.candidates?.[0]?.content?.parts?.[0]?.text ?? "[]";
+    
+    // Cleanup markdown if Gemini ignores instructions
+    content = content.replace(/```json/g, '').replace(/```/g, '').trim();
+
+  } else {
+    // Default to OpenAI
+    const apiKey = Deno.env.get("OPENAI_API_KEY") ?? "";
+    if (!apiKey) throw new Error("OPENAI_API_KEY is not set");
+
+    const res = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: "gpt-4o-mini",
+        messages: [{ role: "user", content: prompt }],
+        temperature: 0.7,
+        max_tokens: 500
+      }),
+    });
+
+    if (!res.ok) {
+      const txt = await res.text();
+      throw new Error(`OpenAI error: ${res.status} ${txt}`);
+    }
+
+    const json = await res.json();
+    content = json.choices?.[0]?.message?.content ?? "[]";
+  }
+  
+  let insights = [];
+  try {
+    insights = JSON.parse(content);
+  } catch (e) {
+    throw new Error(`Failed to parse insights JSON from AI: ${content}`);
+  }
+
+  if (Array.isArray(insights)) {
+    await supabase.from("guardiao_insights").insert({
+      tenant_id: tenantId,
+      journey_id: journeyId,
+      insights_json: insights,
+      created_by: null
+    });
+  }
+}
+
 serve(async (req: any) => {
   const fn = "jobs-processor";
   try {
@@ -2177,6 +2272,18 @@ serve(async (req: any) => {
 
           await supabase.from("job_queue").update({ status: "done" }).eq("id", job.id);
           results.push({ id: job.id, ok: true, count: deliverablesToInsert.length });
+          continue;
+        }
+
+        if (job.type === "GUARDIAO_INSIGHTS_GENERATE") {
+          const journeyId = job.payload_json?.journey_id;
+          const model = job.payload_json?.model || "openai";
+          if (!journeyId) throw new Error("Missing journey_id in payload");
+          
+          await processGuardiaoInsightsGenerateJob({ supabase, tenantId, journeyId, model });
+          
+          await supabase.from("job_queue").update({ status: "done" }).eq("id", job.id);
+          results.push({ id: job.id, ok: true });
           continue;
         }
 
