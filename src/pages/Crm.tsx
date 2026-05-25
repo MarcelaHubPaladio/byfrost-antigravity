@@ -1234,8 +1234,6 @@ export default function Crm() {
                             <div className="mt-3 flex items-center justify-between gap-2 text-xs text-slate-600">
                               <div className="flex items-center gap-1">
                                 <Clock className="h-3.5 w-3.5 text-slate-400" />
-                                {age} min
-                                <span>•</span>
                                 {formatDateSmall(c.updated_at)}
                               </div>
                               {pend?.need_location && (
