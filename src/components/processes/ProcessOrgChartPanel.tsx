@@ -14,7 +14,6 @@ import {
   BackgroundVariant,
   useReactFlow,
   getNodesBounds,
-  getViewportForBounds,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { toPng } from 'html-to-image';
@@ -26,12 +25,12 @@ import {
   Users,
   FileText,
   Search,
-  UserPlus,
   Trash2,
   ChevronRight,
-  Info,
   Target,
-  Printer
+  Printer,
+  FilePlus,
+  FolderOpen
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -41,6 +40,7 @@ import { supabase } from '@/lib/supabase';
 import { useTenant } from '@/providers/TenantProvider';
 import { showError, showSuccess } from "@/utils/toast";
 import { OrgUserNode } from './OrgUserNode';
+import { OrgActivityNode } from './OrgActivityNode';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { 
@@ -66,17 +66,19 @@ interface ProcessOrgChartPanelProps {
 
 const nodeTypes = {
   userNode: OrgUserNode,
+  activityNode: OrgActivityNode,
 };
 
 export function ProcessOrgChartPanel({ onViewCargo }: ProcessOrgChartPanelProps) {
   const { activeTenantId } = useTenant();
   const qc = useQueryClient();
-  const { getNodes, getEdges, fitView } = useReactFlow();
+  const { getNodes, getEdges } = useReactFlow();
 
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
   const [search, setSearch] = useState("");
-  
+  const [selectedVersionId, setSelectedVersionId] = useState<string>("default");
+
   const [activityModal, setActivityModal] = useState<{
     isOpen: boolean;
     nodeId: string;
@@ -88,6 +90,12 @@ export function ProcessOrgChartPanel({ onViewCargo }: ProcessOrgChartPanelProps)
     nodeId: "",
     label: "",
     subordinateId: "none"
+  });
+
+  const [newVersionModal, setNewVersionModal] = useState({
+    isOpen: false,
+    name: "",
+    type: "free" // "free" | "hierarchical"
   });
 
   // 1. Fetch Users
@@ -152,7 +160,7 @@ export function ProcessOrgChartPanel({ onViewCargo }: ProcessOrgChartPanelProps)
     },
   });
 
-  // 5. Fetch Visual Layout
+  // 5. Fetch Visual Layout (Default)
   const layoutQ = useQuery({
     queryKey: ["org_chart_layout_storage", activeTenantId],
     enabled: !!activeTenantId,
@@ -166,6 +174,21 @@ export function ProcessOrgChartPanel({ onViewCargo }: ProcessOrgChartPanelProps)
       if (error) throw error;
       return data?.flowchart_json || { positions: {}, activities: {} };
     },
+  });
+
+  // 6. Fetch All Versions
+  const orgVersionsQ = useQuery({
+    queryKey: ["org_chart_versions", activeTenantId],
+    enabled: !!activeTenantId,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("processes")
+        .select("id, title, description, flowchart_json")
+        .eq("tenant_id", activeTenantId!)
+        .or("title.eq.__SYSTEM_ORG_CHART_LAYOUT__,title.like.__ORG_CHART_VERSION__:%");
+      if (error) throw error;
+      return data ?? [];
+    }
   });
 
   const handleAddActivity = useCallback((nodeId: string) => {
@@ -243,6 +266,34 @@ export function ProcessOrgChartPanel({ onViewCargo }: ProcessOrgChartPanelProps)
     return usersQ.data || [];
   }, [usersQ.data]);
 
+  // Parse versions and set selection list
+  const versionsList = useMemo(() => {
+    const dbVersions = orgVersionsQ.data || [];
+    const list = [
+      { id: "default", name: "Padrão do Sistema (Hierárquico)", type: "hierarchical", flowchart_json: null as any }
+    ];
+    dbVersions.forEach(v => {
+      if (v.title === "__SYSTEM_ORG_CHART_LAYOUT__") {
+        list[0].flowchart_json = v.flowchart_json;
+        return;
+      }
+      const parts = v.title.split(":");
+      const name = v.flowchart_json?.versionName || parts[1] || "Sem Nome";
+      const type = v.flowchart_json?.versionType || "free";
+      list.push({
+        id: v.id,
+        name: `${name} (${type === 'free' ? 'Livre' : 'Hierárquico'})`,
+        type,
+        flowchart_json: v.flowchart_json
+      });
+    });
+    return list;
+  }, [orgVersionsQ.data]);
+
+  const activeVersion = useMemo(() => {
+    return versionsList.find(v => v.id === selectedVersionId) || versionsList[0];
+  }, [versionsList, selectedVersionId]);
+
   const handlePrint = async () => {
     try {
       showSuccess("Gerando visualização de alta fidelidade...");
@@ -250,14 +301,12 @@ export function ProcessOrgChartPanel({ onViewCargo }: ProcessOrgChartPanelProps)
       const nodes = getNodes();
       if (nodes.length === 0) return;
 
-      // 1. Calculate bounds of all nodes
       const bounds = getNodesBounds(nodes);
-      const padding = 100; // Add some breathing room
+      const padding = 100;
 
       const element = document.querySelector('.react-flow__viewport') as HTMLElement;
       if (!element) return;
 
-      // 2. Temporarily hide columns to allow layout reflow for capture
       const cols = document.querySelectorAll('.exclude-from-print');
       cols.forEach((c: any) => c.style.display = 'none');
 
@@ -274,7 +323,6 @@ export function ProcessOrgChartPanel({ onViewCargo }: ProcessOrgChartPanelProps)
           pixelRatio: 2
         });
 
-        // 3. Create a print-friendly window
         const printWindow = window.open('', '_blank');
         if (!printWindow) return;
 
@@ -320,7 +368,7 @@ export function ProcessOrgChartPanel({ onViewCargo }: ProcessOrgChartPanelProps)
             </head>
             <body>
               <div class="header">
-                  <span class="title">ORGANOGRAMA CORPORATIVO</span>
+                  <span class="title">ORGANOGRAMA CORPORATIVO - ${activeVersion.name.toUpperCase()}</span>
                   <span class="date">${new Date().toLocaleDateString('pt-BR')}</span>
               </div>
               <img src="${dataUrl}" />
@@ -336,7 +384,6 @@ export function ProcessOrgChartPanel({ onViewCargo }: ProcessOrgChartPanelProps)
         `);
         printWindow.document.close();
       } finally {
-        // Restore columns
         cols.forEach((c: any) => c.style.display = '');
       }
     } catch (err: any) {
@@ -345,7 +392,7 @@ export function ProcessOrgChartPanel({ onViewCargo }: ProcessOrgChartPanelProps)
     }
   };
 
-  // Transform to React Flow
+  // Transform / Load React Flow structure based on selected version
   useEffect(() => {
     if (orgNodesQ.data && usersQ.data && rolesQ.data && processesQ.data && layoutQ.data) {
       const dbNodes = orgNodesQ.data;
@@ -354,46 +401,95 @@ export function ProcessOrgChartPanel({ onViewCargo }: ProcessOrgChartPanelProps)
       const processes = processesQ.data;
       const layout = layoutQ.data;
 
-      const newNodes: Node[] = dbNodes.map((dbNode) => {
-        const user = users.find(u => u.user_id === dbNode.user_id);
-        const role = roles.find(r => r.key === user?.role);
-        const roleProcesses = processes.filter(p => p.target_role === user?.role);
-        const pos = layout.positions?.[dbNode.user_id] || { x: Math.random() * 400, y: Math.random() * 400 };
-        const activities = layout.activities?.[dbNode.user_id] || [];
+      if (selectedVersionId !== "default" && activeVersion.flowchart_json) {
+        const fj = activeVersion.flowchart_json;
+        const loadedNodes = fj.nodes || [];
+        const loadedEdges = fj.edges || [];
 
-        return {
-          id: dbNode.user_id,
-          type: 'userNode',
-          position: pos,
-          data: {
-            userName: user?.display_name || user?.email || 'Desconhecido',
-            roleKey: user?.role,
-            roleName: role?.name || user?.role,
-            processes: roleProcesses,
-            activities: activities,
-            allUsers: allUsers,
-            onViewCargo: () => onViewCargo?.(role?.name || user?.role || ''),
-            onAddActivity: () => handleAddActivity(dbNode.user_id),
-            onEditActivity: (id: string) => handleEditActivity(dbNode.user_id, id),
-            onDeleteActivity: (id: string) => handleDeleteActivity(dbNode.user_id, id),
-          },
-        };
-      });
+        const enrichedNodes = loadedNodes.map((n: any) => {
+          if (n.type === 'userNode') {
+            const user = users.find(u => u.user_id === n.id);
+            const role = roles.find(r => r.key === user?.role);
+            const roleProcesses = processes.filter(p => p.target_role === user?.role);
+            
+            return {
+              ...n,
+              data: {
+                ...n.data,
+                userName: user?.display_name || user?.email || n.data.userName || 'Desconhecido',
+                roleKey: user?.role || n.data.roleKey,
+                roleName: role?.name || user?.role || n.data.roleName,
+                processes: roleProcesses,
+                allUsers: allUsers,
+                onViewCargo: () => onViewCargo?.(role?.name || user?.role || ''),
+                onAddActivity: () => handleAddActivity(n.id),
+                onEditActivity: (actId: string) => handleEditActivity(n.id, actId),
+                onDeleteActivity: (actId: string) => handleDeleteActivity(n.id, actId),
+              }
+            };
+          } else if (n.type === 'activityNode') {
+            return {
+              ...n,
+              data: {
+                ...n.data,
+                onChange: (id: string, newLabel: string) => {
+                  setNodes(nds => nds.map(nd => nd.id === id ? { ...nd, data: { ...nd.data, label: newLabel } } : nd));
+                },
+                onDelete: (id: string) => {
+                  setNodes(nds => nds.filter(nd => nd.id !== id));
+                  setEdges(eds => eds.filter(e => e.source !== id && e.target !== id));
+                }
+              }
+            };
+          }
+          return n;
+        });
 
-      const newEdges: Edge[] = dbNodes
-        .filter(n => n.parent_user_id)
-        .map(n => ({
-          id: `e-${n.parent_user_id}-${n.user_id}`,
-          source: n.parent_user_id!,
-          target: n.user_id,
-          animated: true,
-          style: { stroke: '#64748b', strokeWidth: 2 },
-        }));
+        setNodes(enrichedNodes);
+        setEdges(loadedEdges);
+      } else {
+        // Hierarchical (Padrão)
+        const newNodes: Node[] = dbNodes.map((dbNode) => {
+          const user = users.find(u => u.user_id === dbNode.user_id);
+          const role = roles.find(r => r.key === user?.role);
+          const roleProcesses = processes.filter(p => p.target_role === user?.role);
+          const pos = layout.positions?.[dbNode.user_id] || { x: Math.random() * 400, y: Math.random() * 400 };
+          const activities = layout.activities?.[dbNode.user_id] || [];
 
-      setNodes(newNodes);
-      setEdges(newEdges);
+          return {
+            id: dbNode.user_id,
+            type: 'userNode',
+            position: pos,
+            data: {
+              userName: user?.display_name || user?.email || 'Desconhecido',
+              roleKey: user?.role,
+              roleName: role?.name || user?.role,
+              processes: roleProcesses,
+              activities: activities,
+              allUsers: allUsers,
+              onViewCargo: () => onViewCargo?.(role?.name || user?.role || ''),
+              onAddActivity: () => handleAddActivity(dbNode.user_id),
+              onEditActivity: (id: string) => handleEditActivity(dbNode.user_id, id),
+              onDeleteActivity: (id: string) => handleDeleteActivity(dbNode.user_id, id),
+            },
+          };
+        });
+
+        const newEdges: Edge[] = dbNodes
+          .filter(n => n.parent_user_id)
+          .map(n => ({
+            id: `e-${n.parent_user_id}-${n.user_id}`,
+            source: n.parent_user_id!,
+            target: n.user_id,
+            animated: true,
+            style: { stroke: '#64748b', strokeWidth: 2 },
+          }));
+
+        setNodes(newNodes);
+        setEdges(newEdges);
+      }
     }
-  }, [orgNodesQ.data, usersQ.data, rolesQ.data, processesQ.data, layoutQ.data]);
+  }, [orgNodesQ.data, usersQ.data, rolesQ.data, processesQ.data, layoutQ.data, selectedVersionId, activeVersion]);
 
   const onConnect = useCallback(
     (params: Connection) => setEdges((eds) => addEdge({ ...params, animated: true, style: { stroke: '#64748b', strokeWidth: 2 } }, eds)),
@@ -404,60 +500,90 @@ export function ProcessOrgChartPanel({ onViewCargo }: ProcessOrgChartPanelProps)
     mutationFn: async () => {
       if (!activeTenantId) return;
 
-      // 1. Update org_nodes table
-      const updates = nodes.map(node => {
-        const parentEdge = edges.find(e => e.target === node.id);
-        const parentId = parentEdge ? parentEdge.source : null;
+      if (selectedVersionId === "default") {
+        // 1. Update org_nodes table for primary hierarchical layout
+        const updates = nodes.map(node => {
+          const parentEdge = edges.find(e => e.target === node.id);
+          const parentId = parentEdge ? parentEdge.source : null;
+          
+          return supabase
+            .from("org_nodes")
+            .update({
+              parent_user_id: parentId,
+              updated_at: new Date().toISOString()
+            })
+            .eq("tenant_id", activeTenantId)
+            .eq("user_id", node.id);
+        });
+
+        // 2. Update Layout Storage
+        const positions: Record<string, { x: number, y: number }> = {};
+        const activities: Record<string, any[]> = {};
         
-        return supabase
-          .from("org_nodes")
-          .update({
-            parent_user_id: parentId,
-            updated_at: new Date().toISOString()
-          })
+        nodes.forEach(n => {
+          positions[n.id] = n.position;
+          activities[n.id] = n.data.activities || [];
+        });
+
+        const flowchart_json = {
+          positions,
+          activities
+        };
+
+        const { data: existing } = await supabase
+          .from("processes")
+          .select("id")
           .eq("tenant_id", activeTenantId)
-          .eq("user_id", node.id);
-      });
+          .eq("title", "__SYSTEM_ORG_CHART_LAYOUT__")
+          .maybeSingle();
 
-      // 2. Update Layout Storage
-      const positions: Record<string, { x: number, y: number }> = {};
-      const activities: Record<string, any[]> = {};
-      
-      nodes.forEach(n => {
-        positions[n.id] = n.position;
-        activities[n.id] = n.data.activities || [];
-      });
+        const layoutUpdate = existing 
+          ? supabase.from("processes").update({ flowchart_json }).eq("id", existing.id)
+          : supabase.from("processes").insert({
+              tenant_id: activeTenantId,
+              title: "__SYSTEM_ORG_CHART_LAYOUT__",
+              process_type: 'roadmap',
+              flowchart_json,
+              deleted_at: new Date().toISOString()
+            });
 
-      const flowchart_json = {
-        positions,
-        activities
-      };
+        const results = await Promise.all([...updates, layoutUpdate]);
+        const firstError = results.find(r => (r as any).error)?.error;
+        if (firstError) throw firstError;
+      } else {
+        // Save dynamic data directly to custom version flowchart_json
+        const flowchart_json = {
+          isOrgChart: true,
+          versionName: activeVersion.name.split(" (")[0],
+          versionType: activeVersion.type,
+          nodes: nodes.map(n => ({
+            id: n.id,
+            type: n.type,
+            position: n.position,
+            data: {
+              userName: n.data.userName,
+              roleKey: n.data.roleKey,
+              roleName: n.data.roleName,
+              activities: n.data.activities || [],
+              label: n.data.label
+            }
+          })),
+          edges: edges
+        };
 
-      const { data: existing } = await supabase
-        .from("processes")
-        .select("id")
-        .eq("tenant_id", activeTenantId)
-        .eq("title", "__SYSTEM_ORG_CHART_LAYOUT__")
-        .maybeSingle();
+        const { error } = await supabase
+          .from("processes")
+          .update({ flowchart_json })
+          .eq("id", selectedVersionId);
 
-      const layoutUpdate = existing 
-        ? supabase.from("processes").update({ flowchart_json }).eq("id", existing.id)
-        : supabase.from("processes").insert({
-            tenant_id: activeTenantId,
-            title: "__SYSTEM_ORG_CHART_LAYOUT__",
-            process_type: 'roadmap',
-            flowchart_json,
-            deleted_at: new Date().toISOString()
-          });
-
-      const results = await Promise.all([...updates, layoutUpdate]);
-      const firstError = results.find(r => (r as any).error)?.error;
-      if (firstError) throw firstError;
+        if (error) throw error;
+      }
     },
     onSuccess: () => {
-      showSuccess("Organograma e Atividades salvos com sucesso!");
+      showSuccess("Organograma salvo com sucesso!");
       orgNodesQ.refetch();
       layoutQ.refetch();
+      orgVersionsQ.refetch();
     },
     onError: (err: any) => showError(err.message),
   });
@@ -496,22 +622,176 @@ export function ProcessOrgChartPanel({ onViewCargo }: ProcessOrgChartPanelProps)
     onError: (err: any) => showError(err.message),
   });
 
+  const handleAddUserToCanvas = (userId: string) => {
+    if (selectedVersionId === "default") {
+      addUserToOrgM.mutate(userId);
+    } else {
+      const user = allUsers.find(u => u.user_id === userId);
+      if (!user) return;
+
+      const role = (rolesQ.data || []).find(r => r.key === user.role);
+      const roleProcesses = (processesQ.data || []).filter(p => p.target_role === user.role);
+
+      const newNode: Node = {
+        id: userId,
+        type: 'userNode',
+        position: { x: Math.random() * 200 + 100, y: Math.random() * 200 + 100 },
+        data: {
+          userName: user.display_name || user.email || 'Desconhecido',
+          roleKey: user.role,
+          roleName: role?.name || user.role,
+          processes: roleProcesses,
+          activities: [],
+          allUsers: allUsers,
+          onViewCargo: () => onViewCargo?.(role?.name || user.role || ''),
+          onAddActivity: () => handleAddActivity(userId),
+          onEditActivity: (id: string) => handleEditActivity(userId, id),
+          onDeleteActivity: (id: string) => handleDeleteActivity(userId, id),
+        }
+      };
+
+      setNodes(nds => [...nds, newNode]);
+      showSuccess("Membro adicionado ao canvas.");
+    }
+  };
+
+  const handleRemoveSelected = () => {
+    const selected = nodes.filter(n => n.selected);
+    if (selected.length === 0) return;
+
+    if (window.confirm(`Remover selecionados?`)) {
+      if (selectedVersionId === "default") {
+        selected.forEach(n => removeUserFromOrgM.mutate(n.id));
+      } else {
+        const selectedIds = new Set(selected.map(n => n.id));
+        setNodes(nds => nds.filter(n => !selectedIds.has(n.id)));
+        setEdges(eds => eds.filter(e => !selectedIds.has(e.source) && !selectedIds.has(e.target)));
+        showSuccess("Itens removidos.");
+      }
+    }
+  };
+
+  const handleAddFreeActivityNode = () => {
+    const newId = `activity-${crypto.randomUUID()}`;
+    const newNode: Node = {
+      id: newId,
+      type: 'activityNode',
+      position: { x: Math.random() * 200 + 150, y: Math.random() * 200 + 150 },
+      data: {
+        label: 'Nova Atividade Chave',
+        onChange: (id: string, newLabel: string) => {
+          setNodes(nds => nds.map(nd => nd.id === id ? { ...nd, data: { ...nd.data, label: newLabel } } : nd));
+        },
+        onDelete: (id: string) => {
+          setNodes(nds => nds.filter(nd => nd.id !== id));
+          setEdges(eds => eds.filter(e => e.source !== id && e.target !== id));
+        }
+      }
+    };
+    setNodes(nds => [...nds, newNode]);
+    showSuccess("Atividade Chave adicionada ao canvas.");
+  };
+
+  const createVersionM = useMutation({
+    mutationFn: async () => {
+      if (!activeTenantId || !newVersionModal.name.trim()) return;
+
+      const title = `__ORG_CHART_VERSION__:${newVersionModal.name.trim()}`;
+      
+      const flowchart_json = {
+        isOrgChart: true,
+        versionName: newVersionModal.name.trim(),
+        versionType: newVersionModal.type,
+        nodes: nodes.map(n => ({
+          id: n.id,
+          type: n.type,
+          position: n.position,
+          data: {
+            userName: n.data.userName,
+            roleKey: n.data.roleKey,
+            roleName: n.data.roleName,
+            activities: n.data.activities || [],
+            label: n.data.label
+          }
+        })),
+        edges: edges
+      };
+
+      const { data, error } = await supabase
+        .from("processes")
+        .insert({
+          tenant_id: activeTenantId,
+          title,
+          process_type: 'roadmap',
+          flowchart_json,
+          deleted_at: new Date().toISOString()
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (data) => {
+      showSuccess("Versão do organograma criada com sucesso!");
+      orgVersionsQ.refetch();
+      if (data) {
+        setSelectedVersionId(data.id);
+      }
+      setNewVersionModal({ isOpen: false, name: "", type: "free" });
+    },
+    onError: (err: any) => showError(err.message)
+  });
+
+  const deleteVersionM = useMutation({
+    mutationFn: async (versionId: string) => {
+      const { error } = await supabase
+        .from("processes")
+        .delete()
+        .eq("id", versionId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      showSuccess("Versão excluída!");
+      setSelectedVersionId("default");
+      orgVersionsQ.refetch();
+    },
+    onError: (err: any) => showError(err.message)
+  });
+
   const availableUsers = useMemo(() => {
     const list = usersQ.data || [];
-    const inOrg = new Set(orgNodesQ.data?.map(n => n.user_id) || []);
+    const inOrg = new Set(
+      selectedVersionId === "default" 
+        ? orgNodesQ.data?.map(n => n.user_id) || []
+        : nodes.filter(n => n.type === 'userNode').map(n => n.id)
+    );
     return list.filter(u => !inOrg.has(u.user_id) && (
       !search.trim() || 
       (u.display_name?.toLowerCase().includes(search.toLowerCase())) ||
       (u.email?.toLowerCase().includes(search.toLowerCase()))
     ));
-  }, [usersQ.data, orgNodesQ.data, search]);
+  }, [usersQ.data, orgNodesQ.data, nodes, selectedVersionId, search]);
 
   return (
     <div className="flex gap-6 h-[calc(100vh-200px)] animate-in fade-in duration-500">
       <div className="w-80 flex flex-col gap-4 bg-white rounded-[32px] border border-slate-200 shadow-sm p-6 overflow-hidden">
-        <div className="flex items-center gap-2 mb-2">
-            <Users className="h-5 w-5 text-[hsl(var(--byfrost-accent))]" />
-            <h3 className="font-bold text-slate-900">Membros Disponíveis</h3>
+        <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-2">
+              <Users className="h-5 w-5 text-[hsl(var(--byfrost-accent))]" />
+              <h3 className="font-bold text-slate-900">Membros</h3>
+            </div>
+            {activeVersion.type === 'free' && (
+              <Button 
+                onClick={handleAddFreeActivityNode}
+                size="icon" 
+                variant="ghost" 
+                className="h-8 w-8 rounded-xl text-amber-500 hover:bg-amber-50"
+                title="Criar Atividade Chave Livre"
+              >
+                <Target className="h-4 w-4" />
+              </Button>
+            )}
         </div>
         
         <div className="relative">
@@ -530,7 +810,7 @@ export function ProcessOrgChartPanel({ onViewCargo }: ProcessOrgChartPanelProps)
                     <div 
                         key={u.user_id}
                         className="group flex items-center justify-between p-3 rounded-2xl border border-slate-100 hover:border-slate-200 hover:bg-slate-50 transition-all cursor-pointer"
-                        onClick={() => addUserToOrgM.mutate(u.user_id)}
+                        onClick={() => handleAddUserToCanvas(u.user_id)}
                     >
                         <div className="min-w-0">
                             <p className="text-xs font-bold text-slate-900 truncate">{u.display_name || u.email}</p>
@@ -546,44 +826,85 @@ export function ProcessOrgChartPanel({ onViewCargo }: ProcessOrgChartPanelProps)
         
         <div className="pt-4 border-t border-slate-100">
             <p className="text-[10px] text-slate-400 leading-relaxed italic">
-                Clique no "+" de cada card para adicionar atividades específicas e relacioná-las a subordinados.
+                {activeVersion.type === 'free' 
+                  ? "Adicione membros com o '+' e crie atividades com o botão de alvo no topo."
+                  : "Clique no '+' de cada card para adicionar atividades específicas e relacioná-las a subordinados."
+                }
             </p>
         </div>
       </div>
 
       <div className="flex-1 flex flex-col gap-4 overflow-hidden">
-        <div className="flex items-center justify-between px-2">
+        <div className="flex items-center justify-between px-2 gap-4">
             <div className="flex items-center gap-3">
-            <div className="grid h-10 w-10 place-items-center rounded-2xl bg-[hsl(var(--byfrost-accent)/0.12)] text-[hsl(var(--byfrost-accent))]">
-                <GitFork className="h-5 w-5" />
+              <div className="grid h-10 w-10 place-items-center rounded-2xl bg-[hsl(var(--byfrost-accent)/0.12)] text-[hsl(var(--byfrost-accent))]">
+                  <GitFork className="h-5 w-5" />
+              </div>
+              <div>
+                  <h2 className="text-sm font-bold text-slate-900">Editor de Organograma</h2>
+                  <p className="text-[11px] text-slate-500">Mapeie a estrutura e as atividades chaves de cada membro.</p>
+              </div>
             </div>
-            <div>
-                <h2 className="text-sm font-bold text-slate-900">Editor de Organograma</h2>
-                <p className="text-[11px] text-slate-500">Mapeie a estrutura e as atividades chaves de cada membro.</p>
-            </div>
+
+            <div className="flex items-center gap-2 flex-1 max-w-[320px]">
+              <FolderOpen className="h-4 w-4 text-slate-400 shrink-0" />
+              <Select value={selectedVersionId} onValueChange={setSelectedVersionId}>
+                <SelectTrigger className="h-9 rounded-xl border-slate-200 text-xs font-bold text-slate-700">
+                  <SelectValue placeholder="Selecione uma Versão" />
+                </SelectTrigger>
+                <SelectContent className="rounded-xl border-slate-150 shadow-xl max-h-[220px]">
+                  {versionsList.map(v => (
+                    <SelectItem key={v.id} value={v.id} className="text-xs font-bold rounded-lg py-1.5">
+                      {v.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             
-            <div className="flex items-center gap-2">
-            <Button 
+            <div className="flex items-center gap-2 shrink-0">
+              <Button 
                 variant="outline" 
                 size="sm" 
                 className="rounded-xl h-9 border-slate-200" 
-                onClick={handlePrint}
-            >
-                <Printer className="mr-2 h-3.5 w-3.5" /> PDF / Imprimir
-            </Button>
-            <Button variant="outline" size="sm" className="rounded-xl h-9" onClick={() => qc.invalidateQueries()}>
-                <RefreshCw className="mr-2 h-3.5 w-3.5" /> Atualizar
-            </Button>
-            <Button 
-                size="sm" 
-                className="rounded-xl h-9 bg-slate-900 text-white hover:bg-slate-800 shadow-lg shadow-slate-100"
-                onClick={() => saveOrgChartM.mutate()}
-                disabled={saveOrgChartM.isPending}
-            >
-                <Save className="mr-2 h-3.5 w-3.5" />
-                {saveOrgChartM.isPending ? "Salvando..." : "Salvar Tudo"}
-            </Button>
+                onClick={() => setNewVersionModal(p => ({ ...p, isOpen: true }))}
+              >
+                <FilePlus className="mr-2 h-3.5 w-3.5" /> Nova Versão
+              </Button>
+              {selectedVersionId !== 'default' && (
+                <Button 
+                  variant="destructive" 
+                  size="sm" 
+                  className="rounded-xl h-9" 
+                  onClick={() => {
+                    if (window.confirm("Excluir esta versão do organograma permanentemente?")) {
+                      deleteVersionM.mutate(selectedVersionId);
+                    }
+                  }}
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </Button>
+              )}
+              <Button 
+                  variant="outline" 
+                  size="sm" 
+                  className="rounded-xl h-9 border-slate-200" 
+                  onClick={handlePrint}
+              >
+                  <Printer className="mr-2 h-3.5 w-3.5" /> PDF
+              </Button>
+              <Button variant="outline" size="sm" className="rounded-xl h-9" onClick={() => qc.invalidateQueries()}>
+                  <RefreshCw className="mr-2 h-3.5 w-3.5" />
+              </Button>
+              <Button 
+                  size="sm" 
+                  className="rounded-xl h-9 bg-slate-900 text-white hover:bg-slate-800 shadow-lg shadow-slate-100 font-bold"
+                  onClick={() => saveOrgChartM.mutate()}
+                  disabled={saveOrgChartM.isPending}
+              >
+                  <Save className="mr-2 h-3.5 w-3.5" />
+                  {saveOrgChartM.isPending ? "Salvando..." : "Salvar Tudo"}
+              </Button>
             </div>
         </div>
 
@@ -606,12 +927,7 @@ export function ProcessOrgChartPanel({ onViewCargo }: ProcessOrgChartPanelProps)
                         variant="destructive" 
                         size="sm" 
                         className="rounded-xl h-9 shadow-lg opacity-40 hover:opacity-100 transition-opacity"
-                        onClick={() => {
-                            const selected = nodes.filter(n => n.selected);
-                            if (selected.length > 0 && window.confirm(`Remover selecionados?`)) {
-                                selected.forEach(n => removeUserFromOrgM.mutate(n.id));
-                            }
-                        }}
+                        onClick={handleRemoveSelected}
                     >
                         <Trash2 className="mr-2 h-3.5 w-3.5" /> Remover
                     </Button>
@@ -620,7 +936,7 @@ export function ProcessOrgChartPanel({ onViewCargo }: ProcessOrgChartPanelProps)
         </div>
       </div>
 
-      {/* Activity CRUD Modal */}
+      {/* Activity CRUD Modal (Hierarchy specific) */}
       <Dialog open={activityModal.isOpen} onOpenChange={(open) => setActivityModal(prev => ({ ...prev, isOpen: open }))}>
         <DialogContent className="sm:max-w-[425px] rounded-[32px] border-none shadow-2xl p-8">
             <DialogHeader className="mb-6">
@@ -691,6 +1007,83 @@ export function ProcessOrgChartPanel({ onViewCargo }: ProcessOrgChartPanelProps)
             </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* New Version Modal */}
+      <Dialog open={newVersionModal.isOpen} onOpenChange={(open) => setNewVersionModal(p => ({ ...p, isOpen: open }))}>
+        <DialogContent className="sm:max-w-[425px] rounded-[32px] border-none shadow-2xl p-8">
+          <DialogHeader className="mb-6">
+            <div className="bg-[hsl(var(--byfrost-accent)/0.12)] w-fit p-3 rounded-2xl mb-4">
+              <FilePlus className="h-6 w-6 text-[hsl(var(--byfrost-accent))]" />
+            </div>
+            <DialogTitle className="text-2xl font-black text-slate-900 leading-tight">
+              Nova Versão de Organograma
+            </DialogTitle>
+            <DialogDescription className="text-slate-500 font-medium mt-2">
+              Crie uma versão para planejar cargos, fluxos livres ou reestruturação.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-6 py-2">
+            <div className="space-y-2">
+              <Label className="text-[11px] font-black uppercase tracking-widest text-slate-400">
+                NOME DA VERSÃO
+              </Label>
+              <Input 
+                placeholder="Ex: Comercial 2026 Q3" 
+                value={newVersionModal.name}
+                onChange={e => setNewVersionModal(p => ({ ...p, name: e.target.value }))}
+                className="h-12 rounded-xl bg-slate-50 border-slate-100 focus:bg-white transition-all font-bold text-slate-900"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label className="text-[11px] font-black uppercase tracking-widest text-slate-400">
+                TIPO DE LAYOUT
+              </Label>
+              <Select 
+                value={newVersionModal.type} 
+                onValueChange={val => setNewVersionModal(p => ({ ...p, type: val }))}
+              >
+                <SelectTrigger className="h-12 rounded-xl bg-slate-50 border-slate-100 font-bold text-slate-700">
+                  <SelectValue placeholder="Selecione o tipo" />
+                </SelectTrigger>
+                <SelectContent className="rounded-xl border-slate-100 shadow-xl">
+                  <SelectItem value="free" className="rounded-lg font-bold text-slate-900">
+                    Livre / Sem Hierarquização
+                  </SelectItem>
+                  <SelectItem value="hierarchical" className="rounded-lg font-bold text-slate-900">
+                    Hierárquico (Padrão)
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-[10px] text-slate-400 font-medium italic mt-1 leading-relaxed px-1">
+                {newVersionModal.type === 'free' 
+                  ? "O modo Livre permite colocar membros em qualquer lugar, criar conexões personalizadas e adicionar atividades como blocos independentes."
+                  : "O modo Hierárquico segue a estrutura do sistema de subordinação direta."
+                }
+              </p>
+            </div>
+          </div>
+
+          <DialogFooter className="mt-10 sm:justify-start gap-2">
+            <Button 
+              className="flex-1 rounded-[20px] h-12 bg-slate-900 text-white hover:bg-slate-800 shadow-lg shadow-slate-200 font-black tracking-wide"
+              onClick={() => createVersionM.mutate()}
+              disabled={createVersionM.isPending}
+            >
+              {createVersionM.isPending ? "CRIANDO..." : "CRIAR VERSÃO"}
+            </Button>
+            <Button 
+              variant="ghost" 
+              className="rounded-[20px] h-12 font-bold text-slate-400 hover:text-slate-600"
+              onClick={() => setNewVersionModal(p => ({ ...p, isOpen: false }))}
+            >
+              CANCELAR
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
+
