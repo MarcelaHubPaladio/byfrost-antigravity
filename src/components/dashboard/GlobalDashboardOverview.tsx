@@ -182,14 +182,20 @@ export function GlobalDashboardOverview() {
       
       if (error) throw error;
       
-      // Group by journey_id (take the latest one only)
+      // Group by journey_id
       const latestByJourney = new Map<string, JourneyInsightData>();
+      const allByJourney = new Map<string, JourneyInsightData[]>();
       for (const row of data ?? []) {
+        if (!allByJourney.has(row.journey_id)) {
+          allByJourney.set(row.journey_id, []);
+        }
+        allByJourney.get(row.journey_id)!.push(row as JourneyInsightData);
+
         if (!latestByJourney.has(row.journey_id)) {
           latestByJourney.set(row.journey_id, row as JourneyInsightData);
         }
       }
-      return latestByJourney;
+      return { latestByJourney, allByJourney };
     }
   });
 
@@ -199,7 +205,7 @@ export function GlobalDashboardOverview() {
         const next = { ...prev };
         let changed = false;
         for (const journeyId in next) {
-          const newInsight = insightsQ.data.get(journeyId);
+          const newInsight = insightsQ.data.latestByJourney.get(journeyId);
           if (newInsight && newInsight.created_at !== next[journeyId]) {
             delete next[journeyId];
             changed = true;
@@ -307,8 +313,23 @@ export function GlobalDashboardOverview() {
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {journeysQ.data.map(journey => {
-                  const insightData = insightsQ.data?.get(journey.id);
-                  const insights = insightData?.insights_json ?? [];
+                  const insightData = insightsQ.data?.latestByJourney?.get(journey.id);
+                  const historyData = insightsQ.data?.allByJourney?.get(journey.id) || [];
+                  const rawJson = insightData?.insights_json;
+                  
+                  let insights: GuardiaoInsight[] = [];
+                  let eventsCount: number | null = null;
+                  let summaryText: string | null = null;
+                  let comparisonText: string | null = null;
+                  
+                  if (Array.isArray(rawJson)) {
+                    insights = rawJson;
+                  } else if (rawJson && typeof rawJson === 'object') {
+                    insights = Array.isArray((rawJson as any).insights) ? (rawJson as any).insights : [];
+                    eventsCount = (rawJson as any).events_count ?? null;
+                    summaryText = (rawJson as any).summary ?? null;
+                    comparisonText = (rawJson as any).comparison ?? null;
+                  }
 
                   return (
                     <div key={journey.id} className="bg-white border border-slate-200 rounded-[28px] overflow-hidden shadow-sm hover:shadow-md transition-shadow">
@@ -332,26 +353,75 @@ export function GlobalDashboardOverview() {
                             <Loader2 className="h-8 w-8 text-indigo-500 animate-spin" />
                             <p className="text-sm text-slate-500 font-medium animate-pulse">Gerando relatório com IA...</p>
                           </div>
-                        ) : insights.length > 0 ? (
-                          <ul className="space-y-4">
-                            {insights.map((insight, i) => (
-                              <li key={i} className="flex items-start gap-3 relative before:absolute before:left-1.5 before:top-6 before:-bottom-4 before:w-px before:bg-slate-100 last:before:hidden">
-                                <div className={`w-3 h-3 rounded-full mt-1 flex-shrink-0 z-10 border-2 border-white ring-1 ${
-                                  insight.severity === 'error' ? 'bg-rose-100 ring-rose-500/20' :
-                                  insight.severity === 'warn' ? 'bg-amber-100 ring-amber-500/20' :
-                                  'bg-indigo-100 ring-indigo-500/20'
-                                }`} />
-                                <div className={`rounded-2xl p-3 border w-full text-xs text-slate-600 ${
-                                  insight.severity === 'error' ? 'bg-rose-50/50 border-rose-50/80 text-rose-900' :
-                                  insight.severity === 'warn' ? 'bg-amber-50/50 border-amber-50/80 text-amber-900' :
-                                  'bg-indigo-50/50 border-indigo-50/80'
-                                }`}>
-                                  <span className="font-semibold block mb-1">{insight.title}</span>
-                                  {insight.description}
+                        ) : insights.length > 0 || summaryText ? (
+                          <div className="space-y-6">
+                            {(summaryText || comparisonText || eventsCount !== null) && (
+                              <div className="bg-slate-50 border border-slate-100 rounded-2xl p-4 shadow-sm space-y-3">
+                                {eventsCount !== null && (
+                                  <div className="flex items-center gap-2 text-xs font-semibold text-slate-500 mb-2 bg-white w-max px-2 py-1 rounded-full border border-slate-200">
+                                    <Database className="w-3 h-3" />
+                                    <span>{eventsCount} eventos analisados</span>
+                                  </div>
+                                )}
+                                {summaryText && (
+                                  <div>
+                                    <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Padrão de Comportamento</h4>
+                                    <p className="text-sm text-slate-700 leading-relaxed">{summaryText}</p>
+                                  </div>
+                                )}
+                                {comparisonText && (
+                                  <div>
+                                    <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1 mt-3">Comparativo</h4>
+                                    <p className="text-sm text-slate-700 leading-relaxed">{comparisonText}</p>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+
+                            {insights.length > 0 && (
+                              <div>
+                                <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-3">Pontos de Atenção</h4>
+                                <ul className="space-y-4">
+                                  {insights.map((insight, i) => (
+                                    <li key={i} className="flex items-start gap-3 relative before:absolute before:left-1.5 before:top-6 before:-bottom-4 before:w-px before:bg-slate-100 last:before:hidden">
+                                      <div className={`w-3 h-3 rounded-full mt-1 flex-shrink-0 z-10 border-2 border-white ring-1 ${
+                                        insight.severity === 'error' ? 'bg-rose-100 ring-rose-500/20' :
+                                        insight.severity === 'warn' ? 'bg-amber-100 ring-amber-500/20' :
+                                        'bg-indigo-100 ring-indigo-500/20'
+                                      }`} />
+                                      <div className={`rounded-2xl p-3 border w-full text-xs text-slate-600 ${
+                                        insight.severity === 'error' ? 'bg-rose-50/50 border-rose-50/80 text-rose-900' :
+                                        insight.severity === 'warn' ? 'bg-amber-50/50 border-amber-50/80 text-amber-900' :
+                                        'bg-indigo-50/50 border-indigo-50/80'
+                                      }`}>
+                                        <span className="font-semibold block mb-1">{insight.title}</span>
+                                        {insight.description}
+                                      </div>
+                                    </li>
+                                  ))}
+                                </ul>
+                              </div>
+                            )}
+                            
+                            {historyData.length > 1 && (
+                              <details className="mt-4 group">
+                                <summary className="text-xs font-semibold text-slate-500 cursor-pointer list-none flex items-center gap-2 hover:text-slate-800 transition-colors">
+                                  <span>Histórico de Relatórios ({historyData.length - 1})</span>
+                                  <svg className="w-4 h-4 transition-transform group-open:rotate-180" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                                </summary>
+                                <div className="mt-3 space-y-2 border-l-2 border-slate-100 pl-4">
+                                  {historyData.slice(1).map((hist, idx) => (
+                                    <div key={idx} className="text-xs text-slate-500 bg-slate-50 p-2 rounded-md">
+                                      <span className="font-medium block mb-1">{new Date(hist.created_at).toLocaleString()}</span>
+                                      {Array.isArray(hist.insights_json) 
+                                        ? `${hist.insights_json.length} insights gerados.` 
+                                        : (hist.insights_json as any)?.summary || "Relatório gerado."}
+                                    </div>
+                                  ))}
                                 </div>
-                              </li>
-                            ))}
-                          </ul>
+                              </details>
+                            )}
+                          </div>
                         ) : (
                           <div className="text-center py-6 text-sm text-slate-400">
                             Nenhum insight gerado recentemente.
@@ -443,7 +513,7 @@ export function GlobalDashboardOverview() {
                 <Button 
                   onClick={() => {
                     if (generatingJourneyId) {
-                      const oldInsight = insightsQ.data?.get(generatingJourneyId);
+                      const oldInsight = insightsQ.data?.latestByJourney?.get(generatingJourneyId);
                       setLoadingJourneys(prev => ({ ...prev, [generatingJourneyId]: oldInsight?.created_at || 'none' }));
                       generateInsightMut.mutate({ journeyId: generatingJourneyId, model: selectedModel, days: lookbackDays });
                     }

@@ -1318,6 +1318,21 @@ async function processGuardiaoInsightsGenerateJob(opts: { supabase: any, tenantI
   // Build simple context
   const contextText = events.map((e: any) => `[${e.occurred_at}] ${e.actor_type} - ${e.event_type}: ${e.message}`).join("\n");
 
+  // Fetch the latest insight for this journey to use for comparison
+  const { data: previousInsight } = await supabase
+    .from("guardiao_insights")
+    .select("insights_json, created_at")
+    .eq("tenant_id", tenantId)
+    .eq("journey_id", journeyId)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  const previousInsightContext = previousInsight ? `
+Relatório Anterior (${previousInsight.created_at}):
+${JSON.stringify(previousInsight.insights_json)}
+` : "";
+
   // Fetch active prompt
   const { data: activePrompt } = await supabase
     .from("prompt_versions")
@@ -1332,17 +1347,28 @@ async function processGuardiaoInsightsGenerateJob(opts: { supabase: any, tenantI
 
   const baseInstruction = customPrompt 
     ? customPrompt 
-    : `Você é o Guardião de Negócio. Analise os eventos recentes desta jornada e retorne 3 insights principais baseados nesses eventos.\nOs insights podem ser pontos de atenção, anomalias, ou tendências.`;
+    : `Você é o Guardião de Negócio. Analise os eventos recentes desta jornada e retorne insights valiosos baseados nesses eventos.
+Faça um breve resumo dos padrões de comportamento observados e um comparativo com o relatório anterior (se existir).`;
 
   const prompt = `${baseInstruction}
 
 INSTRUÇÃO OBRIGATÓRIA DE SAÍDA:
-Retorne APENAS um array JSON de objetos no formato: [{"title": "título curto", "description": "descrição", "severity": "info|warn|error"}]. Não use marcações markdown como \`\`\`json.
+Retorne APENAS um objeto JSON válido no formato abaixo. Não use marcações markdown como \`\`\`json.
+{
+  "events_count": ${events.length},
+  "summary": "Breve resumo do que foi analisado e do padrão de comportamento",
+  "comparison": "Comparativo em relação ao relatório anterior (ou informe que é o primeiro relatório se não houver)",
+  "insights": [
+    {"title": "título curto", "description": "descrição", "severity": "info|warn|error"}
+  ]
+}
+
+${previousInsightContext}
 
 Eventos Recentes para Análise:
 ${contextText}`;
 
-  let content = "[]";
+  let content = "{}";
 
   if (model === "gemini") {
     const apiKey = Deno.env.get("GEMINI_API_KEY") ?? "";
@@ -1353,7 +1379,7 @@ ${contextText}`;
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { temperature: 0.7, maxOutputTokens: 500 }
+        generationConfig: { temperature: 0.7, maxOutputTokens: 1500 }
       }),
     });
 
@@ -1363,7 +1389,7 @@ ${contextText}`;
     }
 
     const json = await res.json();
-    content = json.candidates?.[0]?.content?.parts?.[0]?.text ?? "[]";
+    content = json.candidates?.[0]?.content?.parts?.[0]?.text ?? "{}";
     
     // Cleanup markdown if Gemini ignores instructions
     content = content.replace(/```json/g, '').replace(/```/g, '').trim();
@@ -1383,7 +1409,7 @@ ${contextText}`;
         model: "gpt-4o-mini",
         messages: [{ role: "user", content: prompt }],
         temperature: 0.7,
-        max_tokens: 500
+        max_tokens: 1500
       }),
     });
 
@@ -1393,17 +1419,21 @@ ${contextText}`;
     }
 
     const json = await res.json();
-    content = json.choices?.[0]?.message?.content ?? "[]";
+    content = json.choices?.[0]?.message?.content ?? "{}";
   }
   
-  let insights = [];
+  let insights = {};
   try {
     insights = JSON.parse(content);
+    // Ensure we inject the actual event count directly in case the LLM ignored it or counted wrong
+    if (typeof insights === "object" && insights !== null) {
+      (insights as any).events_count = events.length;
+    }
   } catch (e) {
     throw new Error(`Failed to parse insights JSON from AI: ${content}`);
   }
 
-  if (Array.isArray(insights)) {
+  if (typeof insights === "object" && insights !== null) {
     await supabase.from("guardiao_insights").insert({
       tenant_id: tenantId,
       journey_id: journeyId,
