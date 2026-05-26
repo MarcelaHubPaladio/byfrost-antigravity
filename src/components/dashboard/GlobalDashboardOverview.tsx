@@ -84,14 +84,24 @@ export function GlobalDashboardOverview() {
       
       if (error && error.code !== "PGRST116") throw error;
 
-      // Try to get token usage from usage_counters if exists
-      const { data: usageData } = await supabase.rpc("admin_usage_stats", { p_tenant_id: activeTenantId! }).select("ai_tokens_count").single();
+      // Try to get token usage from usage_counters
+      const { data: counters } = await supabase
+        .from("usage_counters")
+        .select("metrics_json")
+        .eq("tenant_id", activeTenantId!);
+
+      let usedTokens = 0;
+      if (counters) {
+        usedTokens = counters.reduce((acc, curr) => {
+          const metrics = curr.metrics_json as any;
+          return acc + (Number(metrics?.ai_tokens) || 0);
+        }, 0);
+      }
 
       const overrides = (data?.overrides_json as any) || {};
       const planLimits = (data?.plans?.limits_json as any) || {};
       
       const maxTokens = overrides.max_ai_tokens !== undefined ? overrides.max_ai_tokens : (planLimits.max_ai_tokens || 10000);
-      const usedTokens = usageData?.ai_tokens_count || 0;
 
       return { maxTokens, usedTokens };
     }
@@ -113,21 +123,6 @@ export function GlobalDashboardOverview() {
     }
   });
 
-  // 3. Fetch Global Timeline
-  const timelineQ = useQuery({
-    queryKey: ["global_timeline", activeTenantId],
-    enabled: Boolean(activeTenantId),
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("timeline_events")
-        .select("id, occurred_at, event_type, actor_type, message, case_id, cases(title, journeys(name))")
-        .eq("tenant_id", activeTenantId!)
-        .order("occurred_at", { ascending: false })
-        .limit(5);
-      if (error) throw error;
-      return (data ?? []) as unknown as TimelineEvent[];
-    }
-  });
 
   // 4. Fetch Insights
   const insightsQ = useQuery({
@@ -162,15 +157,27 @@ export function GlobalDashboardOverview() {
     <AppShell title="Dashboard Global (Guardião)">
       <div className="mx-auto max-w-7xl px-4 py-8">
         
-        <div className="mb-8 flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
           <div>
-            <h1 className="text-2xl font-black tracking-tight text-slate-900 flex items-center gap-2">
-              <ShieldAlert className="h-6 w-6 text-indigo-600" />
+            <h1 className="text-2xl font-bold text-slate-800 tracking-tight flex items-center gap-3">
+              <div className="bg-indigo-100 p-2 rounded-xl">
+                <ShieldAlert className="h-6 w-6 text-indigo-600" />
+              </div>
               Guardião do Negócio
             </h1>
-            <p className="text-sm text-slate-500 mt-1">Visão macro de insights, eventos e consumo de IA em tempo real.</p>
+            <p className="text-slate-500 text-sm mt-1">
+              Visão macro de insights, eventos e consumo de IA em tempo real.
+            </p>
           </div>
-          <div className="flex gap-4">
+          
+          <div className="flex flex-col sm:flex-row items-center gap-4">
+            <Link to="/app/timeline">
+              <Button variant="outline" className="gap-2 bg-white text-indigo-600 border-indigo-200 hover:bg-indigo-50">
+                <Clock className="h-4 w-4" />
+                Ver Linha do Tempo Global
+              </Button>
+            </Link>
+
             <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm min-w-[200px]">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Tokens de IA</span>
@@ -192,7 +199,7 @@ export function GlobalDashboardOverview() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           
           {/* Coluna 1 & 2: Top 3 Insights por Jornada */}
           <div className="lg:col-span-2 space-y-6">
@@ -325,68 +332,6 @@ export function GlobalDashboardOverview() {
               </DialogFooter>
             </DialogContent>
           </Dialog>
-
-          {/* Coluna 3: Linha do Tempo Global */}
-          <div className="bg-white border border-slate-200 rounded-[32px] p-5 shadow-sm">
-            <h2 className="text-sm font-bold text-slate-800 uppercase tracking-wider flex items-center gap-2 mb-6">
-              <Activity className="h-4 w-4 text-emerald-500" />
-              Linha do Tempo
-            </h2>
-            
-            <div className="space-y-5">
-              {timelineQ.isLoading ? (
-                <div className="animate-pulse flex flex-col gap-4">
-                  {[1,2,3,4,5].map(i => (
-                    <div key={i} className="flex gap-3">
-                      <div className="w-8 h-8 rounded-full bg-slate-100" />
-                      <div className="flex-1 space-y-2">
-                        <div className="h-4 bg-slate-100 rounded w-3/4" />
-                        <div className="h-3 bg-slate-100 rounded w-1/2" />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : timelineQ.data?.length === 0 ? (
-                <div className="text-center text-sm text-slate-500 py-10">Nenhum evento registrado ainda.</div>
-              ) : (
-                timelineQ.data?.map(event => (
-                  <div key={event.id} className="flex items-start gap-3">
-                    <div className="w-8 h-8 rounded-full bg-slate-50 border border-slate-200 flex items-center justify-center flex-shrink-0 mt-0.5">
-                      {event.actor_type === 'ai' ? <Zap className="h-3.5 w-3.5 text-amber-500" /> :
-                       event.actor_type === 'customer' ? <Users className="h-3.5 w-3.5 text-blue-500" /> :
-                       <Clock className="h-3.5 w-3.5 text-slate-400" />}
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-[13px] text-slate-800 font-medium">
-                        {event.message}
-                      </p>
-                      <div className="flex items-center gap-2 mt-1 text-[11px] text-slate-500">
-                        <span className="font-mono bg-slate-100 px-1 py-0.5 rounded text-[10px]">
-                          {event.event_type}
-                        </span>
-                        <span>•</span>
-                        <span>{new Date(event.occurred_at).toLocaleTimeString()}</span>
-                        {event.cases && (
-                          <>
-                            <span>•</span>
-                            <span className="truncate max-w-[120px]" title={event.cases.title || "Caso"}>
-                              Caso: {event.cases.title || "Sem título"}
-                            </span>
-                          </>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-            
-            <div className="mt-6 text-center border-t border-slate-100 pt-4">
-              <Link to="/app/timeline" className="text-[13px] font-semibold text-indigo-600 hover:text-indigo-800 transition-colors">
-                Ver Linha do Tempo Completa →
-              </Link>
-            </div>
-          </div>
 
         </div>
       </div>
