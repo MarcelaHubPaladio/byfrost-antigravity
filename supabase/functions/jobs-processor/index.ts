@@ -1313,16 +1313,14 @@ async function processGuardiaoInsightsGenerateJob(opts: { supabase: any, tenantI
       .select("type, amount, description, transaction_date, status")
       .eq("tenant_id", tenantId)
       .gte("transaction_date", sinceDate.slice(0, 10))
-      .order("transaction_date", { ascending: false })
-      .limit(150);
+      .order("transaction_date", { ascending: false });
 
     const { data: tasks } = await supabase
-      .from("tasks")
-      .select("title, status, created_at, assigned_to_role")
+      .from("super_tasks")
+      .select("title, is_completed, created_at, users_profile!fk_super_tasks_assigned_user(display_name)")
       .eq("tenant_id", tenantId)
       .gte("created_at", sinceDate)
-      .order("created_at", { ascending: false })
-      .limit(150);
+      .order("created_at", { ascending: false });
 
     const fList = (finances || []);
     const tList = (tasks || []);
@@ -1334,7 +1332,7 @@ async function processGuardiaoInsightsGenerateJob(opts: { supabase: any, tenantI
     contextText += fList.map((f: any) => `[${f.transaction_date}] ${f.type.toUpperCase()}: R$ ${f.amount} - ${f.description} (Status: ${f.status})`).join("\n");
     
     contextText += `\n\n--- TAREFAS RECENTES ---\n`;
-    contextText += tList.map((t: any) => `[${t.created_at}] ${t.title} - Status: ${t.status} (Atribuído: ${t.assigned_to_role || 'N/A'})`).join("\n");
+    contextText += tList.map((t: any) => `[${t.created_at.slice(0, 10)}] ${t.title} - Status: ${t.is_completed ? 'Concluída' : 'Pendente'} (Atribuído a: ${t.users_profile?.display_name || 'Não atribuído'})`).join("\n");
 
   } else {
     // Journey context: timeline events
