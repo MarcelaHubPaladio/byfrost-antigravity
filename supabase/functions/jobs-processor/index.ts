@@ -1314,10 +1314,28 @@ async function processGuardiaoInsightsGenerateJob(opts: { supabase: any, tenantI
   // Build simple context
   const contextText = events.map((e: any) => `[${e.occurred_at}] ${e.actor_type} - ${e.event_type}: ${e.message}`).join("\n");
 
-  const prompt = `Você é o Guardião de Negócio. Analise os eventos recentes desta jornada e retorne 3 insights principais baseados nesses eventos.
-Os insights podem ser pontos de atenção, anomalias, ou tendências.
+  // Fetch active prompt
+  const { data: activePrompt } = await supabase
+    .from("prompt_versions")
+    .select("prompt_text")
+    .eq("tenant_id", tenantId)
+    .eq("journey_id", journeyId)
+    .eq("is_active", true)
+    .limit(1)
+    .maybeSingle();
+
+  const customPrompt = activePrompt?.prompt_text;
+
+  const baseInstruction = customPrompt 
+    ? customPrompt 
+    : `Você é o Guardião de Negócio. Analise os eventos recentes desta jornada e retorne 3 insights principais baseados nesses eventos.\nOs insights podem ser pontos de atenção, anomalias, ou tendências.`;
+
+  const prompt = `${baseInstruction}
+
+INSTRUÇÃO OBRIGATÓRIA DE SAÍDA:
 Retorne APENAS um array JSON de objetos no formato: [{"title": "título curto", "description": "descrição", "severity": "info|warn|error"}]. Não use marcações markdown como \`\`\`json.
-Eventos:
+
+Eventos Recentes para Análise:
 ${contextText}`;
 
   let content = "[]";
