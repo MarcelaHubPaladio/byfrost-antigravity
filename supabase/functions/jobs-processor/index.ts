@@ -1369,6 +1369,7 @@ Eventos Recentes para Análise:
 ${contextText}`;
 
   let content = "{}";
+  let tokensUsed = 0;
 
   if (model === "gemini") {
     const apiKey = Deno.env.get("GEMINI_API_KEY") ?? "";
@@ -1390,6 +1391,7 @@ ${contextText}`;
 
     const json = await res.json();
     content = json.candidates?.[0]?.content?.parts?.[0]?.text ?? "{}";
+    tokensUsed = json.usageMetadata?.totalTokenCount || 1000;
     
     // Cleanup markdown if Gemini ignores instructions
     content = content.replace(/```json/g, '').replace(/```/g, '').trim();
@@ -1420,6 +1422,7 @@ ${contextText}`;
 
     const json = await res.json();
     content = json.choices?.[0]?.message?.content ?? "{}";
+    tokensUsed = json.usage?.total_tokens || 1000;
   }
   
   let insights = {};
@@ -1440,6 +1443,43 @@ ${contextText}`;
       insights_json: insights,
       created_by: null
     });
+  }
+
+  // Update usage_counters for the current month
+  if (tokensUsed > 0) {
+    const periodStart = new Date();
+    periodStart.setDate(1);
+    const periodStartDate = periodStart.toISOString().slice(0, 10);
+
+    const { data: counter } = await supabase
+      .from("usage_counters")
+      .select("id, metrics_json")
+      .eq("tenant_id", tenantId)
+      .eq("period_start", periodStartDate)
+      .maybeSingle();
+
+    if (counter) {
+      const currentTokens = Number((counter.metrics_json as any)?.ai_tokens || 0);
+      await supabase
+        .from("usage_counters")
+        .update({
+          metrics_json: { ...counter.metrics_json, ai_tokens: currentTokens + tokensUsed }
+        })
+        .eq("id", counter.id);
+    } else {
+      // Calculate last day of the month
+      const periodEnd = new Date(periodStart.getFullYear(), periodStart.getMonth() + 1, 0);
+      const periodEndDate = periodEnd.toISOString().slice(0, 10);
+      
+      await supabase
+        .from("usage_counters")
+        .insert({
+          tenant_id: tenantId,
+          period_start: periodStartDate,
+          period_end: periodEndDate,
+          metrics_json: { ai_tokens: tokensUsed }
+        });
+    }
   }
 }
 
