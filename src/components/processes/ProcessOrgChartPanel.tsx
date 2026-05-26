@@ -78,6 +78,7 @@ export function ProcessOrgChartPanel({ onViewCargo }: ProcessOrgChartPanelProps)
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
   const [search, setSearch] = useState("");
   const [selectedVersionId, setSelectedVersionId] = useState<string>("default");
+  const [loadedVersionId, setLoadedVersionId] = useState<string | null>(null);
 
   const [activityModal, setActivityModal] = useState<{
     isOpen: boolean;
@@ -395,6 +396,8 @@ export function ProcessOrgChartPanel({ onViewCargo }: ProcessOrgChartPanelProps)
   // Transform / Load React Flow structure based on selected version
   useEffect(() => {
     if (orgNodesQ.data && usersQ.data && rolesQ.data && processesQ.data && layoutQ.data) {
+      if (selectedVersionId === loadedVersionId) return;
+
       const dbNodes = orgNodesQ.data;
       const users = usersQ.data;
       const roles = rolesQ.data;
@@ -488,8 +491,9 @@ export function ProcessOrgChartPanel({ onViewCargo }: ProcessOrgChartPanelProps)
         setNodes(newNodes);
         setEdges(newEdges);
       }
+      setLoadedVersionId(selectedVersionId);
     }
-  }, [orgNodesQ.data, usersQ.data, rolesQ.data, processesQ.data, layoutQ.data, selectedVersionId, activeVersion]);
+  }, [orgNodesQ.data, usersQ.data, rolesQ.data, processesQ.data, layoutQ.data, selectedVersionId, activeVersion, loadedVersionId]);
 
   const onConnect = useCallback(
     (params: Connection) => setEdges((eds) => addEdge({ ...params, animated: true, style: { stroke: '#64748b', strokeWidth: 2 } }, eds)),
@@ -927,7 +931,15 @@ export function ProcessOrgChartPanel({ onViewCargo }: ProcessOrgChartPanelProps)
               >
                   <Printer className="mr-2 h-3.5 w-3.5" /> PDF
               </Button>
-              <Button variant="outline" size="sm" className="rounded-xl h-9" onClick={() => qc.invalidateQueries()}>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="rounded-xl h-9" 
+                onClick={() => {
+                  setLoadedVersionId(null);
+                  qc.invalidateQueries();
+                }}
+              >
                   <RefreshCw className="mr-2 h-3.5 w-3.5" />
               </Button>
               <Button 
