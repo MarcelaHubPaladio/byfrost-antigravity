@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { useTenant } from "@/providers/TenantProvider";
-import { Activity, Sparkles, Database, ShieldAlert, Zap, Clock, Users, Loader2 } from "lucide-react";
+import { Activity, Sparkles, Database, ShieldAlert, Zap, Clock, Users, Loader2, Landmark } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { AppShell } from "@/components/AppShell";
@@ -18,6 +18,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import GlobalTimeline from "@/pages/GlobalTimeline";
 import { useToast } from "@/hooks/use-toast";
+import { OracleChat } from "./OracleChat";
 
 type TimelineEvent = {
   id: string;
@@ -49,7 +50,7 @@ type JourneyInsightData = {
 };
 
 export function GlobalDashboardOverview() {
-  const { activeTenantId } = useTenant();
+  const { activeTenantId, activeTenant } = useTenant();
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -251,6 +252,11 @@ export function GlobalDashboardOverview() {
   const { maxTokens, usedTokens } = tenantPlanQ.data || { maxTokens: 10000, usedTokens: 0 };
   const percentUsed = maxTokens > 0 ? Math.min(100, Math.round((usedTokens / maxTokens) * 100)) : 0;
 
+  const isFinanceEnabled = activeTenant?.modules_json?.finance_enabled === true;
+  const isTasksEnabled = activeTenant?.modules_json?.tasks_enabled === true;
+  const isGlobalEnabled = isFinanceEnabled || isTasksEnabled;
+  const hasItems = Boolean((journeysQ.data && journeysQ.data.length > 0) || isGlobalEnabled);
+
   return (
     <AppShell title="Dashboard Global (Guardião)">
       <div className="mx-auto max-w-7xl px-4 py-8">
@@ -291,9 +297,10 @@ export function GlobalDashboardOverview() {
         </div>
 
         <Tabs defaultValue="overview" className="w-full">
-          <TabsList className="mb-6 grid w-full max-w-md grid-cols-2 bg-slate-100/80 p-1 rounded-xl">
+          <TabsList className="mb-6 grid w-full max-w-lg grid-cols-3 bg-slate-100/80 p-1 rounded-xl">
             <TabsTrigger value="overview" className="rounded-lg">Visão Geral</TabsTrigger>
             <TabsTrigger value="timeline" className="rounded-lg">Linha do Tempo Global</TabsTrigger>
+            <TabsTrigger value="oracle" className="rounded-lg">Oráculo (IA)</TabsTrigger>
           </TabsList>
 
           <TabsContent value="overview" className="space-y-6 mt-0">
@@ -306,13 +313,149 @@ export function GlobalDashboardOverview() {
               Insights por Jornada (Top 3)
             </h2>
             
-            {!journeysQ.data?.length ? (
+            {!hasItems ? (
               <div className="bg-slate-50 border border-slate-200 rounded-3xl p-8 text-center">
-                <p className="text-slate-500 text-sm">Nenhuma jornada habilitada neste momento.</p>
+                <p className="text-slate-500 text-sm">Nenhuma jornada ou módulo global habilitado neste momento.</p>
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {journeysQ.data.map(journey => {
+                {/* Global Card */}
+                {isGlobalEnabled && (() => {
+                  const insightData = insightsQ.data?.latestByJourney?.get("GLOBAL");
+                  const historyData = insightsQ.data?.allByJourney?.get("GLOBAL") || [];
+                  const rawJson = insightData?.insights_json;
+                  
+                  let insights: GuardiaoInsight[] = [];
+                  let eventsCount: number | null = null;
+                  let summaryText: string | null = null;
+                  let comparisonText: string | null = null;
+                  
+                  if (Array.isArray(rawJson)) {
+                    insights = rawJson;
+                  } else if (rawJson && typeof rawJson === 'object') {
+                    insights = Array.isArray((rawJson as any).insights) ? (rawJson as any).insights : [];
+                    eventsCount = (rawJson as any).events_count ?? null;
+                    summaryText = (rawJson as any).summary ?? null;
+                    comparisonText = (rawJson as any).comparison ?? null;
+                  }
+
+                  return (
+                    <div className="bg-white border-2 border-indigo-500/20 rounded-[28px] overflow-hidden shadow-md hover:shadow-lg transition-all duration-300 md:col-span-2">
+                      <div className="bg-indigo-50/40 p-4 border-b border-indigo-100/50 flex justify-between items-start">
+                        <div className="flex items-center gap-2">
+                          <Landmark className="h-5 w-5 text-indigo-600" />
+                          <div>
+                            <h3 className="font-bold text-slate-800 text-sm">Visão Global do Negócio</h3>
+                            <span className="text-[9px] uppercase font-bold text-indigo-600 tracking-wider">
+                              Análise Geral (Financeiro & Tarefas)
+                            </span>
+                          </div>
+                        </div>
+                        <Badge className="bg-indigo-600 text-white rounded-full px-3 shadow-none">
+                          Global
+                        </Badge>
+                      </div>
+                      
+                      <div className="p-5 relative">
+                        {loadingJourneys["GLOBAL"] ? (
+                          <div className="py-12 flex flex-col items-center justify-center space-y-4">
+                            <Loader2 className="h-8 w-8 text-indigo-500 animate-spin" />
+                            <p className="text-sm text-slate-500 font-medium animate-pulse">Analisando Financeiro e Tarefas com IA...</p>
+                          </div>
+                        ) : insights.length > 0 || summaryText ? (
+                          <div className="space-y-6">
+                            {(summaryText || comparisonText || eventsCount !== null) && (
+                              <div className="bg-slate-50 border border-slate-100 rounded-2xl p-4 shadow-sm space-y-3">
+                                {eventsCount !== null && (
+                                  <div className="flex items-center gap-2 text-xs font-semibold text-slate-500 mb-2 bg-white w-max px-2 py-1 rounded-full border border-slate-200">
+                                    <Database className="w-3 h-3" />
+                                    <span>{eventsCount} registros analisados</span>
+                                  </div>
+                                )}
+                                {summaryText && (
+                                  <div>
+                                    <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Padrão de Comportamento</h4>
+                                    <p className="text-sm text-slate-700 leading-relaxed">{summaryText}</p>
+                                  </div>
+                                )}
+                                {comparisonText && (
+                                  <div>
+                                    <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1 mt-3">Comparativo com Relatório Anterior</h4>
+                                    <p className="text-sm text-slate-700 leading-relaxed">{comparisonText}</p>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+
+                            {insights.length > 0 && (
+                              <div>
+                                <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-3">Pontos de Atenção Estratégicos</h4>
+                                <ul className="space-y-4">
+                                  {insights.map((insight, i) => (
+                                    <li key={i} className="flex items-start gap-3 relative before:absolute before:left-1.5 before:top-6 before:-bottom-4 before:w-px before:bg-slate-100 last:before:hidden">
+                                      <div className={`w-3 h-3 rounded-full mt-1 flex-shrink-0 z-10 border-2 border-white ring-1 ${
+                                        insight.severity === 'error' ? 'bg-rose-100 ring-rose-500/20' :
+                                        insight.severity === 'warn' ? 'bg-amber-100 ring-amber-500/20' :
+                                        'bg-indigo-100 ring-indigo-500/20'
+                                      }`} />
+                                      <div className={`rounded-2xl p-3 border w-full text-xs text-slate-600 ${
+                                        insight.severity === 'error' ? 'bg-rose-50/50 border-rose-50/80 text-rose-900' :
+                                        insight.severity === 'warn' ? 'bg-amber-50/50 border-amber-50/80 text-amber-900' :
+                                        'bg-indigo-50/50 border-indigo-50/80'
+                                      }`}>
+                                        <span className="font-semibold block mb-1">{insight.title}</span>
+                                        {insight.description}
+                                      </div>
+                                    </li>
+                                  ))}
+                                </ul>
+                              </div>
+                            )}
+                            
+                            {historyData.length > 1 && (
+                              <details className="mt-4 group">
+                                <summary className="text-xs font-semibold text-slate-500 cursor-pointer list-none flex items-center gap-2 hover:text-slate-800 transition-colors">
+                                  <span>Histórico de Relatórios ({historyData.length - 1})</span>
+                                  <svg className="w-4 h-4 transition-transform group-open:rotate-180" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                                </summary>
+                                <div className="mt-3 space-y-2 border-l-2 border-slate-100 pl-4">
+                                  {historyData.slice(1).map((hist, idx) => (
+                                    <div key={idx} className="text-xs text-slate-500 bg-slate-50 p-2 rounded-md">
+                                      <span className="font-medium block mb-1">{new Date(hist.created_at).toLocaleString()}</span>
+                                      {Array.isArray(hist.insights_json) 
+                                        ? `${hist.insights_json.length} insights gerados.` 
+                                        : (hist.insights_json as any)?.summary || "Relatório gerado."}
+                                    </div>
+                                  ))}
+                                </div>
+                              </details>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="text-center py-6 text-sm text-slate-400">
+                            Nenhum insight gerado recentemente.
+                          </div>
+                        )}
+                        
+                        <div className="mt-5 flex justify-between items-center">
+                          <span className="text-[10px] text-slate-400">
+                            {insightData ? `Atualizado ${new Date(insightData.created_at).toLocaleDateString()}` : 'Aguardando agendamento'}
+                          </span>
+                          <button 
+                            onClick={() => setGeneratingJourneyId("GLOBAL")}
+                            disabled={!!loadingJourneys["GLOBAL"]}
+                            className="text-[11px] font-semibold text-indigo-600 hover:text-indigo-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                          >
+                            + Gerar Novo Relatório
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {/* Journeys Cards */}
+                {journeysQ.data?.map(journey => {
                   const insightData = insightsQ.data?.latestByJourney?.get(journey.id);
                   const historyData = insightsQ.data?.allByJourney?.get(journey.id) || [];
                   const rawJson = insightData?.insights_json;
@@ -531,6 +674,10 @@ export function GlobalDashboardOverview() {
 
         <TabsContent value="timeline" className="mt-0">
           <GlobalTimeline />
+        </TabsContent>
+
+        <TabsContent value="oracle" className="mt-0">
+          <OracleChat />
         </TabsContent>
 
       </Tabs>

@@ -1303,20 +1303,54 @@ async function processGuardiaoInsightsGenerateJob(opts: { supabase: any, tenantI
   // Calculate the since date
   const sinceDate = new Date(Date.now() - lookbackDays * 24 * 60 * 60 * 1000).toISOString();
 
-  // Fetch recent events for this journey
-  const { data: events } = await supabase
-    .from("timeline_events")
-    .select("event_type, actor_type, message, occurred_at, cases!inner(journey_id)")
-    .eq("tenant_id", tenantId)
-    .eq("cases.journey_id", journeyId)
-    .gte("occurred_at", sinceDate)
-    .order("occurred_at", { ascending: false })
-    .limit(300);
+  let contextText = "";
+  let totalEventsCount = 0;
 
-  if (!events || events.length === 0) return; // No events to analyze
+  if (journeyId === "GLOBAL") {
+    // Global context: Finance and Tasks
+    const { data: finances } = await supabase
+      .from("financial_transactions")
+      .select("type, amount, description, transaction_date, status")
+      .eq("tenant_id", tenantId)
+      .gte("transaction_date", sinceDate.slice(0, 10))
+      .order("transaction_date", { ascending: false })
+      .limit(150);
 
-  // Build simple context
-  const contextText = events.map((e: any) => `[${e.occurred_at}] ${e.actor_type} - ${e.event_type}: ${e.message}`).join("\n");
+    const { data: tasks } = await supabase
+      .from("tasks")
+      .select("title, status, created_at, assigned_to_role")
+      .eq("tenant_id", tenantId)
+      .gte("created_at", sinceDate)
+      .order("created_at", { ascending: false })
+      .limit(150);
+
+    const fList = (finances || []);
+    const tList = (tasks || []);
+    totalEventsCount = fList.length + tList.length;
+
+    if (totalEventsCount === 0) return;
+
+    contextText += `\n--- TRANSAÇÕES FINANCEIRAS RECENTES ---\n`;
+    contextText += fList.map((f: any) => `[${f.transaction_date}] ${f.type.toUpperCase()}: R$ ${f.amount} - ${f.description} (Status: ${f.status})`).join("\n");
+    
+    contextText += `\n\n--- TAREFAS RECENTES ---\n`;
+    contextText += tList.map((t: any) => `[${t.created_at}] ${t.title} - Status: ${t.status} (Atribuído: ${t.assigned_to_role || 'N/A'})`).join("\n");
+
+  } else {
+    // Journey context: timeline events
+    const { data: events } = await supabase
+      .from("timeline_events")
+      .select("event_type, actor_type, message, occurred_at, cases!inner(journey_id)")
+      .eq("tenant_id", tenantId)
+      .eq("cases.journey_id", journeyId)
+      .gte("occurred_at", sinceDate)
+      .order("occurred_at", { ascending: false })
+      .limit(300);
+
+    if (!events || events.length === 0) return; // No events to analyze
+    totalEventsCount = events.length;
+    contextText = events.map((e: any) => `[${e.occurred_at}] ${e.actor_type} - ${e.event_type}: ${e.message}`).join("\n");
+  }
 
   // Fetch the latest insight for this journey to use for comparison
   const { data: previousInsight } = await supabase
@@ -1334,28 +1368,33 @@ ${JSON.stringify(previousInsight.insights_json)}
 ` : "";
 
   // Fetch active prompt
-  const { data: activePrompt } = await supabase
-    .from("prompt_versions")
-    .select("prompt_text")
-    .eq("tenant_id", tenantId)
-    .eq("journey_id", journeyId)
-    .eq("is_active", true)
-    .limit(1)
-    .maybeSingle();
-
-  const customPrompt = activePrompt?.prompt_text;
+  let customPrompt = undefined;
+  if (journeyId !== "GLOBAL") {
+    const { data: activePrompt } = await supabase
+      .from("prompt_versions")
+      .select("prompt_text")
+      .eq("tenant_id", tenantId)
+      .eq("journey_id", journeyId)
+      .eq("is_active", true)
+      .limit(1)
+      .maybeSingle();
+    customPrompt = activePrompt?.prompt_text;
+  }
 
   const baseInstruction = customPrompt 
     ? customPrompt 
-    : `Você é o Guardião de Negócio. Analise os eventos recentes desta jornada e retorne insights valiosos baseados nesses eventos.
-Faça um breve resumo dos padrões de comportamento observados e um comparativo com o relatório anterior (se existir).`;
+    : (journeyId === "GLOBAL" 
+        ? `Você é o Guardião de Negócio. Analise as finanças e tarefas recentes de toda a operação da empresa e retorne insights valiosos sobre a saúde financeira e produtividade.
+Faça um breve resumo dos padrões observados (ex: fluxo de caixa, conclusão de tarefas) e um comparativo com o relatório anterior (se existir).` 
+        : `Você é o Guardião de Negócio. Analise os eventos recentes desta jornada e retorne insights valiosos baseados nesses eventos.
+Faça um breve resumo dos padrões de comportamento observados e um comparativo com o relatório anterior (se existir).`);
 
   const prompt = `${baseInstruction}
 
 INSTRUÇÃO OBRIGATÓRIA DE SAÍDA:
 Retorne APENAS um objeto JSON válido no formato abaixo. Não use marcações markdown como \`\`\`json.
 {
-  "events_count": ${events.length},
+  "events_count": ${totalEventsCount},
   "summary": "Breve resumo do que foi analisado e do padrão de comportamento",
   "comparison": "Comparativo em relação ao relatório anterior (ou informe que é o primeiro relatório se não houver)",
   "insights": [
@@ -1365,7 +1404,7 @@ Retorne APENAS um objeto JSON válido no formato abaixo. Não use marcações ma
 
 ${previousInsightContext}
 
-Eventos Recentes para Análise:
+Dados Recentes para Análise:
 ${contextText}`;
 
   let content = "{}";
@@ -1430,7 +1469,7 @@ ${contextText}`;
     insights = JSON.parse(content);
     // Ensure we inject the actual event count directly in case the LLM ignored it or counted wrong
     if (typeof insights === "object" && insights !== null) {
-      (insights as any).events_count = events.length;
+      (insights as any).events_count = totalEventsCount;
     }
   } catch (e) {
     throw new Error(`Failed to parse insights JSON from AI: ${content}`);
