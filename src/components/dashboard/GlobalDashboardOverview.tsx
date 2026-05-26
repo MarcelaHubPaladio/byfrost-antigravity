@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
@@ -55,6 +55,7 @@ export function GlobalDashboardOverview() {
 
   const [generatingJourneyId, setGeneratingJourneyId] = useState<string | null>(null);
   const [selectedModel, setSelectedModel] = useState<"openai" | "gemini">("openai");
+  const [loadingJourneys, setLoadingJourneys] = useState<Record<string, string>>({});
 
   const generateInsightMut = useMutation({
     mutationFn: async ({ journeyId, model }: { journeyId: string; model: string }) => {
@@ -137,6 +138,7 @@ export function GlobalDashboardOverview() {
   const insightsQ = useQuery({
     queryKey: ["guardiao_insights", activeTenantId],
     enabled: Boolean(activeTenantId),
+    refetchInterval: Object.keys(loadingJourneys).length > 0 ? 5000 : false,
     queryFn: async () => {
       // Get the latest insight array for each active journey
       const { data, error } = await supabase
@@ -158,6 +160,24 @@ export function GlobalDashboardOverview() {
       return latestByJourney;
     }
   });
+
+  useEffect(() => {
+    if (insightsQ.data && Object.keys(loadingJourneys).length > 0) {
+      setLoadingJourneys(prev => {
+        const next = { ...prev };
+        let changed = false;
+        for (const journeyId in next) {
+          const newInsight = insightsQ.data.get(journeyId);
+          if (newInsight && newInsight.created_at !== next[journeyId]) {
+            delete next[journeyId];
+            changed = true;
+            toast({ title: "Relatório gerado!", description: "Os insights da jornada foram atualizados.", variant: "default" });
+          }
+        }
+        return changed ? next : prev;
+      });
+    }
+  }, [insightsQ.data]);
 
   const { maxTokens, usedTokens } = tenantPlanQ.data || { maxTokens: 10000, usedTokens: 0 };
   const percentUsed = maxTokens > 0 ? Math.min(100, Math.round((usedTokens / maxTokens) * 100)) : 0;
@@ -243,8 +263,13 @@ export function GlobalDashboardOverview() {
                         </Badge>
                       </div>
                       
-                      <div className="p-4">
-                        {insights.length > 0 ? (
+                      <div className="p-4 relative">
+                        {loadingJourneys[journey.id] ? (
+                          <div className="py-12 flex flex-col items-center justify-center space-y-4">
+                            <Loader2 className="h-8 w-8 text-indigo-500 animate-spin" />
+                            <p className="text-sm text-slate-500 font-medium animate-pulse">Gerando relatório com IA...</p>
+                          </div>
+                        ) : insights.length > 0 ? (
                           <ul className="space-y-4">
                             {insights.map((insight, i) => (
                               <li key={i} className="flex items-start gap-3 relative before:absolute before:left-1.5 before:top-6 before:-bottom-4 before:w-px before:bg-slate-100 last:before:hidden">
@@ -276,7 +301,8 @@ export function GlobalDashboardOverview() {
                           </span>
                           <button 
                             onClick={() => setGeneratingJourneyId(journey.id)}
-                            className="text-[11px] font-semibold text-indigo-600 hover:text-indigo-800 transition-colors"
+                            disabled={!!loadingJourneys[journey.id]}
+                            className="text-[11px] font-semibold text-indigo-600 hover:text-indigo-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                           >
                             + Gerar Novo Relatório
                           </button>
@@ -333,7 +359,13 @@ export function GlobalDashboardOverview() {
                   Cancelar
                 </Button>
                 <Button 
-                  onClick={() => generatingJourneyId && generateInsightMut.mutate({ journeyId: generatingJourneyId, model: selectedModel })} 
+                  onClick={() => {
+                    if (generatingJourneyId) {
+                      const oldInsight = insightsQ.data?.get(generatingJourneyId);
+                      setLoadingJourneys(prev => ({ ...prev, [generatingJourneyId]: oldInsight?.created_at || 'none' }));
+                      generateInsightMut.mutate({ journeyId: generatingJourneyId, model: selectedModel });
+                    }
+                  }} 
                   disabled={generateInsightMut.isPending}
                 >
                   {generateInsightMut.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
