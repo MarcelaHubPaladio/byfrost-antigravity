@@ -75,14 +75,32 @@ export function GlobalDashboardOverview() {
       console.log("[Gerar Relatório] Retorno do insert no job_queue:", res);
       if (res.error) throw res.error;
       
-      // Aciona o worker imediatamente para não depender do intervalo do CRON
-      supabase.functions.invoke("jobs-processor").catch(err => console.error("[Gerar Relatório] Erro ao invocar jobs-processor:", err));
+      console.log("[Gerar Relatório] Chamando Edge Function 'jobs-processor' para processar a fila...");
+      
+      // Await para sabermos exatamente o resultado do processamento da IA
+      const invokeRes = await supabase.functions.invoke("jobs-processor");
+      
+      console.log("[Gerar Relatório] Retorno da IA (Edge Function):", invokeRes);
+      
+      if (invokeRes.error) {
+        throw new Error(`Falha na comunicação com a Edge Function: ${invokeRes.error.message}`);
+      }
+
+      // Se a Edge Function processou, o job não deve estar mais pendente
+      const jobResult = invokeRes.data?.results?.find((r: any) => r.id === res.data[0].id);
+      if (jobResult && !jobResult.ok) {
+         throw new Error(`Erro dentro da Edge Function: ${jobResult.error}`);
+      }
 
       return res.data;
     },
     onSuccess: () => {
-      toast({ title: "Geração iniciada", description: "O motor IA está analisando os dados em background. Isso pode levar alguns segundos." });
+      // toast de finalização será dado no useEffect quando os dados chegarem,
+      // mas podemos dar um feedback prévio aqui
+      console.log("✅ Edge Function terminou de processar com sucesso.");
       setGeneratingJourneyId(null);
+      // Força o refetch dos insights imediatamente
+      queryClient.invalidateQueries({ queryKey: ["guardiao_insights", activeTenantId] });
     },
     onError: (err: any) => {
       toast({ variant: "destructive", title: "Erro ao gerar", description: err.message });
