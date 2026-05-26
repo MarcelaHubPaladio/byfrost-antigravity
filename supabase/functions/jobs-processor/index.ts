@@ -1422,12 +1422,11 @@ serve(async (req: any) => {
     const manualCommitmentId = String(body.commitment_id ?? "").trim();
     const manualJourneyId = String(body.journey_id ?? "").trim();
 
-    // Fetch pending jobs
+    // Fetch pending jobs base query
     let jobsSelect: any = supabase
       .from("job_queue")
       .select("id, tenant_id, type, payload_json, attempts")
       .eq("status", "pending")
-      .lte("run_after", new Date().toISOString())
       .is("locked_at", null);
 
     if (manualCommitmentId) {
@@ -1468,7 +1467,10 @@ serve(async (req: any) => {
         .order("created_at", { ascending: false })
         .limit(1); // just process this one directly
     } else {
-      jobsSelect = jobsSelect.order("created_at", { ascending: true }).limit(batchSize);
+      jobsSelect = jobsSelect
+        .lte("run_after", new Date().toISOString())
+        .order("created_at", { ascending: true })
+        .limit(batchSize);
     }
 
     const { data: jobs, error: jobsErr } = await jobsSelect;
