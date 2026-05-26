@@ -199,7 +199,7 @@ export function GlobalDashboardOverview() {
       
       const { data, error } = await supabase
         .from("job_queue")
-        .select("id, status, error_message, created_at, payload_json")
+        .select("id, status, created_at, payload_json")
         .eq("tenant_id", activeTenantId!)
         .eq("type", "GUARDIAO_INSIGHTS_GENERATE")
         .order("created_at", { ascending: false })
