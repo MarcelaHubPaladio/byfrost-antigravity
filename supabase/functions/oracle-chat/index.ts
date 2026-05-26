@@ -170,6 +170,81 @@ serve(async (req: any) => {
         .maybeSingle();
       const journeyName = journey?.name || "Jornada Especificada";
 
+      // 1. Fetch Cases of this journey within the selected time window
+      const { data: journeyCases } = await supabase
+        .from("cases")
+        .select("id, title, status, created_at, assigned_user_id")
+        .eq("tenant_id", tenantId)
+        .eq("journey_id", focusKey)
+        .gte("created_at", sinceDate)
+        .lte("created_at", untilDate)
+        .is("deleted_at", null)
+        .eq("is_chat", false)
+        .order("created_at", { ascending: false });
+
+      let fields: any[] = [];
+      let items: any[] = [];
+      const caseIds = (journeyCases || []).map((c: any) => c.id);
+
+      if (caseIds.length > 0) {
+        // 2. Fetch associated Case Fields (city, total value, faturamento, payment_method)
+        const { data: fData } = await supabase
+          .from("case_fields")
+          .select("case_id, key, value_text")
+          .in("case_id", caseIds)
+          .in("key", ["whatsapp", "phone", "customer_phone", "sale_date_text", "billing_status", "partial_paid_value", "total_value_raw", "obs", "payment_method", "city"]);
+        fields = fData || [];
+
+        // 3. Fetch associated Case Items (products, descriptions, qty, prices, totals)
+        const { data: iData } = await supabase
+          .from("case_items")
+          .select("case_id, code, description, qty, price, total")
+          .in("case_id", caseIds);
+        items = iData || [];
+      }
+
+      // Build in-memory maps for O(1) correlation
+      const caseFieldsMap = new Map();
+      for (const f of fields) {
+        if (!caseFieldsMap.has(f.case_id)) caseFieldsMap.set(f.case_id, {});
+        caseFieldsMap.get(f.case_id)[f.key] = f.value_text;
+      }
+
+      const caseItemsMap = new Map();
+      for (const item of items) {
+        if (!caseItemsMap.has(item.case_id)) caseItemsMap.set(item.case_id, []);
+        caseItemsMap.get(item.case_id).push(item);
+      }
+
+      contextText += `\nDados Quantitativos de Pedidos/Casos Habilitados no Período para [Jornada: ${journeyName}]:\n`;
+      if (journeyCases && journeyCases.length > 0) {
+        contextText += journeyCases.map((c: any) => {
+          const fMap = caseFieldsMap.get(c.id) || {};
+          const cItems = caseItemsMap.get(c.id) || [];
+          
+          const city = fMap.city || "Não especificada";
+          const statusFaturamento = fMap.billing_status || "Pendente";
+          const totalRaw = fMap.total_value_raw || "0,00";
+          const method = fMap.payment_method || "Não informado";
+          
+          const itemsDetails = cItems.map((i: any) => {
+            return `  - [Prod/Serv: ${i.description} | Cód: ${i.code || 'S/C'}] Qtd: ${i.qty} x R$ ${i.price} = R$ ${i.total}`;
+          }).join("\n");
+
+          return `* Pedido/Caso: ${c.title} (ID: ${c.id})\n` +
+                 `  - Criado em: ${new Date(c.created_at).toLocaleDateString('pt-BR')}\n` +
+                 `  - Status Operacional: ${c.status}\n` +
+                 `  - Cidade: ${city}\n` +
+                 `  - Status Faturamento: ${statusFaturamento}\n` +
+                 `  - Método de Pagamento: ${method}\n` +
+                 `  - Valor do Pedido: R$ ${totalRaw}\n` +
+                 (itemsDetails ? `  - Produtos/Serviços do Pedido:\n${itemsDetails}\n` : `  - Sem itens cadastrados.\n`);
+        }).join("\n");
+      } else {
+        contextText += `Nenhum pedido/caso quantitativo cadastrado no período selecionado.\n`;
+      }
+
+      // 4. Fetch the historical Timeline Events log
       const { data: events } = await supabase
         .from("timeline_events")
         .select("event_type, actor_type, message, occurred_at, cases!inner(journey_id)")
@@ -179,9 +254,9 @@ serve(async (req: any) => {
         .lte("occurred_at", untilDate)
         .order("occurred_at", { ascending: false });
 
-      contextText += `Eventos e Histórico da Jornada [${journeyName}]:\n`;
+      contextText += `\nEventos e Histórico Operacional Recente:\n`;
       if (events && events.length > 0) {
-        contextText += events.map((e: any) => `[${e.occurred_at}] ${e.actor_type} - ${e.event_type}: ${e.message}`).join("\n");
+        contextText += events.map((e: any) => `[${e.occurred_at.slice(0, 16)}] ${e.actor_type} - ${e.event_type}: ${e.message}`).join("\n");
       } else {
         contextText += `Nenhum evento recente registrado para esta jornada.\n`;
       }
