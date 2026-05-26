@@ -135,6 +135,22 @@ serve(async (req: any) => {
       }
     }
 
+    if (focusKey === "global") {
+      const { data: events } = await supabase
+        .from("timeline_events")
+        .select("event_type, actor_type, message, occurred_at")
+        .eq("tenant_id", tenantId)
+        .gte("occurred_at", sinceDate)
+        .order("occurred_at", { ascending: false });
+
+      contextText += `\nHistórico e Eventos Recentes das Jornadas:\n`;
+      if (events && events.length > 0) {
+        contextText += events.map((e: any) => `[${e.occurred_at.slice(0, 16)}] ${e.actor_type} - ${e.event_type}: ${e.message}`).join("\n");
+      } else {
+        contextText += `Nenhum evento recente registrado nas jornadas.\n`;
+      }
+    }
+
     // UUID case (Specific Journey Focus)
     if (focusKey !== "global" && focusKey !== "finance" && focusKey !== "tasks") {
       const { data: journey } = await supabase
