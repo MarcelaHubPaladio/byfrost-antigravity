@@ -23,6 +23,31 @@ type TimelineEvent = {
   cases?: { title: string | null; journeys?: { name: string } } | null;
 };
 
+const EVENT_TYPE_LABELS: Record<string, string> = {
+  automation_executed: "Automação Executada",
+  bank_hour_ledger_adjusted: "Ajuste de Banco de Horas",
+  bank_hour_ledger_posted: "Lançamento de Banco de Horas",
+  card_created: "Cartão Criado",
+  case_deleted: "Caso Excluído",
+  case_opened: "Caso Aberto",
+  case_state_changed: "Etapa Alterada",
+  case_updated: "Caso Atualizado",
+  presence_punch: "Batida de Ponto",
+  task_created: "Tarefa Criada",
+  task_completed: "Tarefa Concluída",
+  comment_added: "Comentário Adicionado",
+  document_uploaded: "Documento Anexado",
+  message_sent: "Mensagem Enviada",
+  webhook_received: "Webhook Recebido",
+  integration_error: "Erro de Integração",
+  field_updated: "Campo Atualizado",
+  status_changed: "Status Alterado",
+  user_assigned: "Usuário Atribuído",
+  user_unassigned: "Usuário Removido",
+};
+
+const getEventLabel = (type: string) => EVENT_TYPE_LABELS[type] || type;
+
 export default function GlobalTimeline() {
   const { activeTenantId } = useTenant();
 
@@ -40,7 +65,7 @@ export default function GlobalTimeline() {
       if (error) throw error;
       const set = new Set<string>();
       data.forEach(d => { if (d.event_type) set.add(d.event_type); });
-      return Array.from(set).sort();
+      return Array.from(set).sort((a, b) => getEventLabel(a).localeCompare(getEventLabel(b)));
     }
   });
 
@@ -241,7 +266,7 @@ export default function GlobalTimeline() {
                           setSelectedEventTypes(next);
                         }}
                       />
-                      <span className="text-xs font-semibold text-slate-700 truncate">{opt}</span>
+                      <span className="text-xs font-semibold text-slate-700 truncate">{getEventLabel(opt)}</span>
                     </label>
                   ))}
                 </div>
@@ -347,7 +372,7 @@ export default function GlobalTimeline() {
                         {new Date(event.occurred_at).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}
                       </time>
                       <Badge variant="secondary" className="text-[10px] uppercase bg-slate-100 text-slate-500 px-2 py-0 h-5">
-                        {event.event_type}
+                        {getEventLabel(event.event_type)}
                       </Badge>
                     </div>
                     
