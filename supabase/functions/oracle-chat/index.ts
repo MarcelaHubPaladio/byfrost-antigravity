@@ -171,6 +171,20 @@ ${contextText}
 
     // Update usage counters (similar to jobs-processor)
     if (tokensUsed > 0) {
+      const costUsd = tokensUsed * 0.0000003;
+      await supabase.from("usage_events").insert({
+        tenant_id: tenantId,
+        type: "ai_token",
+        qty: tokensUsed,
+        ref_type: "oracle_chat",
+        ref_id: chatId,
+        meta_json: {
+          description: "Oráculo Chat: " + (message.length > 50 ? message.slice(0, 50) + "..." : message),
+          cost_usd: costUsd,
+          model: "gpt-4o-mini"
+        }
+      });
+
       const periodStart = new Date();
       periodStart.setDate(1);
       const periodStartDate = periodStart.toISOString().slice(0, 10);

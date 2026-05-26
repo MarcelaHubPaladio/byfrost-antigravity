@@ -1525,6 +1525,20 @@ ${contextText}`;
 
   // Update usage_counters for the current month
   if (tokensUsed > 0) {
+    const costUsd = tokensUsed * 0.0000003;
+    await supabase.from("usage_events").insert({
+      tenant_id: tenantId,
+      type: "ai_token",
+      qty: tokensUsed,
+      ref_type: "guardiao_insight",
+      ref_id: null,
+      meta_json: {
+        description: journeyId === "GLOBAL" ? "Guardião: Análise Global (Financeiro e Tarefas)" : `Guardião: Insights da Jornada (ID: ${journeyId})`,
+        cost_usd: costUsd,
+        model: model
+      }
+    });
+
     const periodStart = new Date();
     periodStart.setDate(1);
     const periodStartDate = periodStart.toISOString().slice(0, 10);
