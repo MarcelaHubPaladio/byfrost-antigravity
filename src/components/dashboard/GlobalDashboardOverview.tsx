@@ -89,9 +89,9 @@ export function GlobalDashboardOverview() {
         .select("overrides_json, plans(limits_json)")
         .eq("tenant_id", activeTenantId!)
         .limit(1)
-        .single();
+        .maybeSingle();
       
-      if (error && error.code !== "PGRST116") throw error;
+      if (error) throw error;
 
       // Try to get token usage from usage_counters
       const { data: counters } = await supabase
