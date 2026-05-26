@@ -49,9 +49,23 @@ serve(async (req: any) => {
     // Fetch dynamic context
     const sinceDate = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
     
+    // Fetch bank accounts and financial categories for mapping in memory
+    const { data: bankAccounts } = await supabase
+      .from("bank_accounts")
+      .select("id, bank_name, account_name")
+      .eq("tenant_id", tenantId);
+
+    const { data: financialCategories } = await supabase
+      .from("financial_categories")
+      .select("id, name")
+      .eq("tenant_id", tenantId);
+
+    const accountMap = new Map((bankAccounts || []).map((a: any) => [a.id, `${a.bank_name} (${a.account_name})`]));
+    const categoryMap = new Map((financialCategories || []).map((c: any) => [c.id, c.name]));
+
     const { data: finances } = await supabase
       .from("financial_transactions")
-      .select("type, amount, description, transaction_date, status")
+      .select("type, amount, description, transaction_date, status, source, created_at, account_id, category_id")
       .eq("tenant_id", tenantId)
       .gte("transaction_date", sinceDate.slice(0, 10))
       .order("transaction_date", { ascending: false });
@@ -83,7 +97,12 @@ serve(async (req: any) => {
     let contextText = `\n--- CONTEXTO ATUAL DA OPERAÇÃO ---\n`;
     contextText += `Transações Financeiras Recentes:\n`;
     if (finances && finances.length > 0) {
-      contextText += finances.map((f: any) => `[${f.transaction_date}] ${f.type.toUpperCase()}: R$ ${f.amount} - ${f.description} (${f.status})`).join("\n");
+      contextText += finances.map((f: any) => {
+        const bank = accountMap.get(f.account_id) || 'Desconhecido';
+        const cat = categoryMap.get(f.category_id) || 'Sem categoria';
+        const createdStr = new Date(f.created_at).toLocaleString('pt-BR');
+        return `[${f.transaction_date}] ${f.type.toUpperCase()}: R$ ${f.amount} - ${f.description} (Cat: ${cat} | Banco: ${bank} | Status: ${f.status} | Inserido em: ${createdStr} via ${f.source})`;
+      }).join("\n");
     } else {
       contextText += `Nenhuma transação financeira recente encontrada.\n`;
     }

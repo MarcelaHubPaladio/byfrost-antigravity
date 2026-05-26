@@ -1307,10 +1307,24 @@ async function processGuardiaoInsightsGenerateJob(opts: { supabase: any, tenantI
   let totalEventsCount = 0;
 
   if (journeyId === "GLOBAL") {
+    // Fetch bank accounts and financial categories for mapping in memory
+    const { data: bankAccounts } = await supabase
+      .from("bank_accounts")
+      .select("id, bank_name, account_name")
+      .eq("tenant_id", tenantId);
+
+    const { data: financialCategories } = await supabase
+      .from("financial_categories")
+      .select("id, name")
+      .eq("tenant_id", tenantId);
+
+    const accountMap = new Map((bankAccounts || []).map((a: any) => [a.id, `${a.bank_name} (${a.account_name})`]));
+    const categoryMap = new Map((financialCategories || []).map((c: any) => [c.id, c.name]));
+
     // Global context: Finance and Tasks
     const { data: finances } = await supabase
       .from("financial_transactions")
-      .select("type, amount, description, transaction_date, status")
+      .select("type, amount, description, transaction_date, status, source, created_at, account_id, category_id")
       .eq("tenant_id", tenantId)
       .gte("transaction_date", sinceDate.slice(0, 10))
       .order("transaction_date", { ascending: false });
@@ -1347,7 +1361,12 @@ async function processGuardiaoInsightsGenerateJob(opts: { supabase: any, tenantI
     if (totalEventsCount === 0) return;
 
     contextText += `\n--- TRANSAÇÕES FINANCEIRAS RECENTES ---\n`;
-    contextText += fList.map((f: any) => `[${f.transaction_date}] ${f.type.toUpperCase()}: R$ ${f.amount} - ${f.description} (Status: ${f.status})`).join("\n");
+    contextText += fList.map((f: any) => {
+      const bank = accountMap.get(f.account_id) || 'Desconhecido';
+      const cat = categoryMap.get(f.category_id) || 'Sem categoria';
+      const createdStr = new Date(f.created_at).toLocaleString('pt-BR');
+      return `[${f.transaction_date}] ${f.type.toUpperCase()}: R$ ${f.amount} - ${f.description} (Cat: ${cat} | Banco: ${bank} | Status: ${f.status} | Inserido em: ${createdStr} via ${f.source})`;
+    }).join("\n");
     
     contextText += `\n\n--- TAREFAS DE JORNADAS (PROCESSOS) ---\n`;
     contextText += jtList.map((t: any) => `[${t.created_at.slice(0, 10)}] ${t.title} - Status: ${t.status === 'done' ? 'Concluída' : 'Pendente'} (Atribuído a: ${profileMap.get(t.assigned_to_user_id) || 'Não atribuído'})`).join("\n");
