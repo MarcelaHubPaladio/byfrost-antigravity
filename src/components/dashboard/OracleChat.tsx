@@ -106,13 +106,21 @@ export function OracleChat() {
     if (!activeTenantId) return;
     try {
       const { data, error } = await supabase
-        .from("journeys")
-        .select("id, name")
+        .from("tenant_journeys")
+        .select("journey_id, enabled, journeys(id, name)")
         .eq("tenant_id", activeTenantId)
-        .order("name", { ascending: true });
+        .eq("enabled", true);
 
       if (error) throw error;
-      setJourneys(data || []);
+      
+      const mapped = (data || [])
+        .map((r: any) => r.journeys)
+        .filter(Boolean) as Journey[];
+
+      // Sort alphabetically in-memory
+      mapped.sort((a, b) => a.name.localeCompare(b.name));
+
+      setJourneys(mapped);
     } catch (err: any) {
       console.error("Error fetching journeys:", err);
     }
