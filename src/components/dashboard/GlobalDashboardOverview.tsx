@@ -187,13 +187,14 @@ export function GlobalDashboardOverview() {
       const latestByJourney = new Map<string, JourneyInsightData>();
       const allByJourney = new Map<string, JourneyInsightData[]>();
       for (const row of data ?? []) {
-        if (!allByJourney.has(row.journey_id)) {
-          allByJourney.set(row.journey_id, []);
+        const key = row.journey_id === null ? "GLOBAL" : row.journey_id;
+        if (!allByJourney.has(key)) {
+          allByJourney.set(key, []);
         }
-        allByJourney.get(row.journey_id)!.push(row as JourneyInsightData);
+        allByJourney.get(key)!.push({ ...row, journey_id: key } as JourneyInsightData);
 
-        if (!latestByJourney.has(row.journey_id)) {
-          latestByJourney.set(row.journey_id, row as JourneyInsightData);
+        if (!latestByJourney.has(key)) {
+          latestByJourney.set(key, { ...row, journey_id: key } as JourneyInsightData);
         }
       }
       return { latestByJourney, allByJourney };

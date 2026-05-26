@@ -1476,12 +1476,13 @@ ${contextText}`;
   }
 
   if (typeof insights === "object" && insights !== null) {
-    await supabase.from("guardiao_insights").insert({
+    const { error: insErr } = await supabase.from("guardiao_insights").insert({
       tenant_id: tenantId,
-      journey_id: journeyId,
+      journey_id: journeyId === "GLOBAL" ? null : journeyId,
       insights_json: insights,
       created_by: null
     });
+    if (insErr) throw insErr;
   }
 
   // Update usage_counters for the current month
