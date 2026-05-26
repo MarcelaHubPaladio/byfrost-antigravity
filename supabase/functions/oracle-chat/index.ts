@@ -21,7 +21,7 @@ serve(async (req: any) => {
     const supabase = createClient(supabaseUrl, supabaseKey);
 
     const body = await req.json();
-    const { chatId, message, tenantId } = body;
+    const { chatId, message, tenantId, startDate, endDate } = body;
 
     if (!chatId || !message || !tenantId) {
       return new Response(JSON.stringify({ error: "Missing required fields" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
@@ -56,9 +56,15 @@ serve(async (req: any) => {
     if (chatErr) throw chatErr;
     const focusKey = chatData?.focus_key || "global";
 
-    // Fetch dynamic context based on focusKey (using a wider 90-day window to prevent missing previous months like March/April)
-    const sinceDate = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString();
-    let contextText = `\n--- CONTEXTO ATUAL DA OPERAÇÃO (Foco: ${focusKey}) ---\n`;
+    // Parse custom date range or fallback to 90 days lookback
+    const sinceDate = startDate ? new Date(startDate).toISOString() : new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString();
+    const untilDate = endDate ? new Date(endDate).toISOString() : new Date().toISOString();
+
+    const rangeLabel = startDate && endDate 
+      ? `${new Date(startDate).toLocaleDateString('pt-BR')} até ${new Date(endDate).toLocaleDateString('pt-BR')}`
+      : 'últimos 90 dias';
+
+    let contextText = `\n--- CONTEXTO ATUAL DA OPERAÇÃO (Foco: ${focusKey} | Período: ${rangeLabel}) ---\n`;
 
     if (focusKey === "global" || focusKey === "finance") {
       // Fetch bank accounts and financial categories for mapping in memory
@@ -80,6 +86,7 @@ serve(async (req: any) => {
         .select("type, amount, description, transaction_date, status, source, created_at, account_id, category_id")
         .eq("tenant_id", tenantId)
         .gte("transaction_date", sinceDate.slice(0, 10))
+        .lte("transaction_date", untilDate.slice(0, 10))
         .order("transaction_date", { ascending: false });
 
       contextText += `Transações Financeiras Recentes:\n`;
@@ -110,6 +117,7 @@ serve(async (req: any) => {
         .select("title, status, created_at, assigned_to_user_id")
         .eq("tenant_id", tenantId)
         .gte("created_at", sinceDate)
+        .lte("created_at", untilDate)
         .order("created_at", { ascending: false });
 
       // Query 2: Super Tasks (Checklists)
@@ -118,6 +126,7 @@ serve(async (req: any) => {
         .select("title, is_completed, created_at, assigned_to")
         .eq("tenant_id", tenantId)
         .gte("created_at", sinceDate)
+        .lte("created_at", untilDate)
         .order("created_at", { ascending: false });
 
       contextText += `\nTarefas de Jornadas (Processos):\n`;
@@ -141,6 +150,7 @@ serve(async (req: any) => {
         .select("event_type, actor_type, message, occurred_at")
         .eq("tenant_id", tenantId)
         .gte("occurred_at", sinceDate)
+        .lte("occurred_at", untilDate)
         .order("occurred_at", { ascending: false });
 
       contextText += `\nHistórico e Eventos Recentes das Jornadas:\n`;
@@ -166,6 +176,7 @@ serve(async (req: any) => {
         .eq("tenant_id", tenantId)
         .eq("cases.journey_id", focusKey)
         .gte("occurred_at", sinceDate)
+        .lte("occurred_at", untilDate)
         .order("occurred_at", { ascending: false });
 
       contextText += `Eventos e Histórico da Jornada [${journeyName}]:\n`;

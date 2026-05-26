@@ -17,6 +17,11 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useQueryClient } from "@tanstack/react-query";
+import { format, subDays, subMonths, startOfMonth, endOfMonth, startOfDay, endOfDay } from "date-fns";
+import { ptBR } from "date-fns/locale";
+import { Calendar as CalendarComponent } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar as CalendarIcon } from "lucide-react";
 
 type Chat = {
   id: string;
@@ -45,6 +50,13 @@ export function OracleChat() {
   const [chats, setChats] = useState<Chat[]>([]);
   const [activeChatId, setActiveChatId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
+  const [dateRange, setDateRange] = useState<{ from: Date | undefined; to: Date | undefined }>(() => {
+    // Default to last 90 days lookback window
+    return {
+      from: startOfDay(subDays(new Date(), 90)),
+      to: endOfDay(new Date())
+    };
+  });
   const [inputMessage, setInputMessage] = useState("");
   const [loadingChats, setLoadingChats] = useState(true);
   const [loadingMessages, setLoadingMessages] = useState(false);
@@ -239,7 +251,9 @@ export function OracleChat() {
         body: {
           chatId,
           message: text,
-          tenantId: activeTenantId
+          tenantId: activeTenantId,
+          startDate: dateRange.from ? dateRange.from.toISOString() : null,
+          endDate: dateRange.to ? dateRange.to.toISOString() : null
         }
       });
 
@@ -360,36 +374,101 @@ export function OracleChat() {
             </div>
           </div>
 
-          {/* Foco Selector */}
-          <div className="flex items-center gap-2 bg-slate-50 border border-slate-200/60 hover:border-slate-300 px-3 py-1.5 rounded-2xl transition-all shadow-sm">
-            <Target className="w-4 h-4 text-indigo-600 animate-pulse" />
-            <div className="flex flex-col text-left">
-              <span className="text-[9px] uppercase tracking-wider font-bold text-slate-400 leading-none">Foco da IA</span>
-              <select
-                value={activeChat ? (activeChat.focus_key || "global") : newChatFocus}
-                onChange={(e) => {
-                  const val = e.target.value;
-                  if (activeChatId) {
-                    handleUpdateFocus(activeChatId, val);
-                  } else {
-                    setNewChatFocus(val);
-                    toast({
-                      title: "Foco estratégico definido",
-                      description: "A próxima conversa iniciada usará este foco estratégico."
-                    });
-                  }
-                }}
-                className="bg-transparent border-0 text-xs font-bold text-slate-700 focus:outline-none focus:ring-0 cursor-pointer pr-6 py-0 -mt-0.5"
-              >
-                <option value="global">🌐 Geral (Operação + Finanças)</option>
-                <option value="finance">💰 Apenas Financeiro</option>
-                <option value="tasks">📋 Apenas Tarefas e Processos</option>
-                {journeys.length > 0 && <option disabled>────────────────────</option>}
-                {journeys.map(j => (
-                  <option key={j.id} value={j.id}>🚀 Jornada: {j.name}</option>
-                ))}
-              </select>
+          <div className="flex items-center gap-3">
+            {/* Foco Selector */}
+            <div className="flex items-center gap-2 bg-slate-50 border border-slate-200/60 hover:border-slate-300 px-3 py-1.5 rounded-2xl transition-all shadow-sm">
+              <Target className="w-4 h-4 text-indigo-600 animate-pulse" />
+              <div className="flex flex-col text-left">
+                <span className="text-[9px] uppercase tracking-wider font-bold text-slate-400 leading-none">Foco da IA</span>
+                <select
+                  value={activeChat ? (activeChat.focus_key || "global") : newChatFocus}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    if (activeChatId) {
+                      handleUpdateFocus(activeChatId, val);
+                    } else {
+                      setNewChatFocus(val);
+                      toast({
+                        title: "Foco estratégico definido",
+                        description: "A próxima conversa iniciada usará este foco estratégico."
+                      });
+                    }
+                  }}
+                  className="bg-transparent border-0 text-xs font-bold text-slate-700 focus:outline-none focus:ring-0 cursor-pointer pr-6 py-0 -mt-0.5"
+                >
+                  <option value="global">🌐 Geral (Operação + Finanças)</option>
+                  <option value="finance">💰 Apenas Financeiro</option>
+                  <option value="tasks">📋 Apenas Tarefas e Processos</option>
+                  {journeys.length > 0 && <option disabled>────────────────────</option>}
+                  {journeys.map(j => (
+                    <option key={j.id} value={j.id}>🚀 Jornada: {j.name}</option>
+                  ))}
+                </select>
+              </div>
             </div>
+
+            {/* Date Range Picker */}
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button 
+                  variant="outline" 
+                  className="h-10 px-4 border border-slate-200/60 hover:border-slate-300 rounded-2xl text-xs font-bold text-slate-600 flex items-center gap-2 transition-all shadow-sm bg-slate-50"
+                >
+                  <CalendarIcon className="h-4 w-4 text-indigo-500" />
+                  {dateRange.from ? (
+                    dateRange.to ? (
+                      `${format(dateRange.from, "dd/MM/yyyy")} - ${format(dateRange.to, "dd/MM/yyyy")}`
+                    ) : (
+                      format(dateRange.from, "dd/MM/yyyy")
+                    )
+                  ) : (
+                    "Todo Período"
+                  )}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0 rounded-3xl border-slate-200 shadow-2xl overflow-hidden bg-white" align="end">
+                <div className="flex flex-col md:flex-row bg-white">
+                  <div className="w-full md:w-44 border-b md:border-b-0 md:border-r border-slate-100 p-3 flex flex-col gap-1 bg-slate-50/50">
+                    {[
+                      { label: "Hoje", get: () => ({ from: startOfDay(new Date()), to: endOfDay(new Date()) }) },
+                      { label: "Ontem", get: () => ({ from: startOfDay(subDays(new Date(), 1)), to: endOfDay(subDays(new Date(), 1)) }) },
+                      { label: "Últimos 7 dias", get: () => ({ from: startOfDay(subDays(new Date(), 7)), to: endOfDay(new Date()) }) },
+                      { label: "Últimos 30 dias", get: () => ({ from: startOfDay(subDays(new Date(), 30)), to: endOfDay(new Date()) }) },
+                      { label: "Mês Atual", get: () => ({ from: startOfMonth(new Date()), to: endOfMonth(new Date()) }) },
+                      { label: "Mês Passado", get: () => ({ from: startOfMonth(subMonths(new Date(), 1)), to: endOfMonth(subMonths(new Date(), 1)) }) },
+                      { label: "Todo Período", get: () => ({ from: undefined, to: undefined }) },
+                    ].map((btn) => (
+                      <Button
+                        key={btn.label}
+                        variant="ghost"
+                        className="h-9 justify-start rounded-xl text-[10px] font-black uppercase tracking-widest text-slate-500 hover:bg-white hover:text-indigo-600 transition-all text-left"
+                        onClick={() => {
+                          setDateRange(btn.get());
+                          toast({
+                            title: "Período alterado",
+                            description: `O filtro foi atualizado para: ${btn.label}`
+                          });
+                        }}
+                      >
+                        {btn.label}
+                      </Button>
+                    ))}
+                  </div>
+                  <div className="p-2">
+                    <CalendarComponent
+                      initialFocus
+                      mode="range"
+                      defaultMonth={dateRange.from}
+                      selected={{ from: dateRange.from, to: dateRange.to }}
+                      onSelect={(range: any) => range && setDateRange({ from: range.from, to: range.to })}
+                      numberOfMonths={2}
+                      locale={ptBR}
+                      className="rounded-2xl"
+                    />
+                  </div>
+                </div>
+              </PopoverContent>
+            </Popover>
           </div>
         </div>
 
