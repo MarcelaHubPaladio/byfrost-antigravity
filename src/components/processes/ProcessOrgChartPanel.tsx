@@ -622,6 +622,40 @@ export function ProcessOrgChartPanel({ onViewCargo }: ProcessOrgChartPanelProps)
     onError: (err: any) => showError(err.message),
   });
 
+  const clearAllUsersFromOrgM = useMutation({
+    mutationFn: async () => {
+      const { error } = await supabase
+        .from("org_nodes")
+        .delete()
+        .eq("tenant_id", activeTenantId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      orgNodesQ.refetch();
+      showSuccess("Todos os colaboradores foram removidos.");
+    },
+    onError: (err: any) => showError(err.message),
+  });
+
+  const handleClearAllCollaborators = () => {
+    const hasUsers = nodes.some(n => n.type === 'userNode');
+    if (!hasUsers) {
+      showError("Não há colaboradores no canvas.");
+      return;
+    }
+
+    if (window.confirm("Remover TODOS os colaboradores da pista?")) {
+      if (selectedVersionId === "default") {
+        clearAllUsersFromOrgM.mutate();
+      } else {
+        const userIds = new Set(nodes.filter(n => n.type === 'userNode').map(n => n.id));
+        setNodes(nds => nds.filter(n => n.type !== 'userNode'));
+        setEdges(eds => eds.filter(e => !userIds.has(e.source) && !userIds.has(e.target)));
+        showSuccess("Colaboradores removidos.");
+      }
+    }
+  };
+
   const handleAddUserToCanvas = (userId: string) => {
     if (selectedVersionId === "default") {
       addUserToOrgM.mutate(userId);
@@ -922,11 +956,19 @@ export function ProcessOrgChartPanel({ onViewCargo }: ProcessOrgChartPanelProps)
                 <Background variant={BackgroundVariant.Dots} gap={24} size={1} color="#e2e8f0" />
                 <Controls className="bg-white border-slate-200 shadow-sm rounded-xl overflow-hidden mb-4 ml-4" />
                 
-                <Panel position="top-right" className="m-4">
+                <Panel position="top-right" className="m-4 flex gap-2">
+                    <Button 
+                        variant="outline" 
+                        size="sm" 
+                        className="rounded-xl h-9 shadow-lg bg-white border-slate-200 text-slate-700 hover:bg-slate-50 opacity-60 hover:opacity-100 transition-opacity font-bold"
+                        onClick={handleClearAllCollaborators}
+                    >
+                        <Users className="mr-2 h-3.5 w-3.5 text-red-500" /> Tirar Todos
+                    </Button>
                     <Button 
                         variant="destructive" 
                         size="sm" 
-                        className="rounded-xl h-9 shadow-lg opacity-40 hover:opacity-100 transition-opacity"
+                        className="rounded-xl h-9 shadow-lg opacity-40 hover:opacity-100 transition-opacity font-bold"
                         onClick={handleRemoveSelected}
                     >
                         <Trash2 className="mr-2 h-3.5 w-3.5" /> Remover
