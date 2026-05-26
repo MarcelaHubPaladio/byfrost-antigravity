@@ -1297,8 +1297,11 @@ function addDaysIsoDate(dateIso: string, days: number) {
   return d.toISOString().slice(0, 10);
 }
 
-async function processGuardiaoInsightsGenerateJob(opts: { supabase: any, tenantId: string, journeyId: string, model: string }) {
-  const { supabase, tenantId, journeyId, model } = opts;
+async function processGuardiaoInsightsGenerateJob(opts: { supabase: any, tenantId: string, journeyId: string, model: string, lookbackDays: number }) {
+  const { supabase, tenantId, journeyId, model, lookbackDays } = opts;
+
+  // Calculate the since date
+  const sinceDate = new Date(Date.now() - lookbackDays * 24 * 60 * 60 * 1000).toISOString();
 
   // Fetch recent events for this journey
   const { data: events } = await supabase
@@ -1306,8 +1309,9 @@ async function processGuardiaoInsightsGenerateJob(opts: { supabase: any, tenantI
     .select("event_type, actor_type, message, occurred_at, cases!inner(journey_id)")
     .eq("tenant_id", tenantId)
     .eq("cases.journey_id", journeyId)
+    .gte("occurred_at", sinceDate)
     .order("occurred_at", { ascending: false })
-    .limit(30);
+    .limit(300);
 
   if (!events || events.length === 0) return; // No events to analyze
 
@@ -1429,6 +1433,8 @@ serve(async (req: any) => {
       .eq("status", "pending")
       .is("locked_at", null);
 
+    const debug: any = { manualJobId, jobsFound: -1, lockErrors: [] };
+
     if (manualCommitmentId) {
       // 1. Ensure a pending job exists for this commitment to be picked up
       const { data: existingJob } = await supabase
@@ -1478,19 +1484,22 @@ serve(async (req: any) => {
       return new Response("Failed to read jobs", { status: 500, headers: corsHeaders });
     }
 
+    debug.jobsFound = jobs?.length || 0;
+
     const lockedBy = crypto.randomUUID();
 
     // Lock jobs
     const locked: JobRow[] = [];
     for (const job of (jobs ?? []) as any[]) {
-      const { data: updated } = await supabase
+      const { data: updated, error: lockErr } = await supabase
         .from("job_queue")
-        .update({ status: "processing", locked_at: new Date().toISOString(), locked_by: lockedBy })
+        .update({ locked_at: new Date().toISOString(), locked_by: lockedBy })
         .eq("id", job.id)
         .eq("status", "pending")
         .select("id, tenant_id, type, payload_json, attempts")
         .maybeSingle();
       if (updated) locked.push(updated as any);
+      else debug.lockErrors.push({ jobId: job.id, lockErr });
     }
 
     const { data: agents } = await supabase.from("agents").select("id, key");
@@ -1749,6 +1758,66 @@ serve(async (req: any) => {
 
           await supabase.from("job_queue").update({ status: "done" }).eq("id", job.id);
           results.push({ id: job.id, ok: true, date: dateStr, inserted: inserts.length, cases: byCase.size });
+          continue;
+        }
+
+        if (job.type === "COMMITMENT_ORCHESTRATE") {
+          const commitmentId = job.payload_json?.commitment_id;
+          if (!commitmentId) throw new Error("Missing commitment_id");
+
+          const { data: items } = await supabase
+            .from("commitment_items")
+            .select("id, offering_entity_id, quantity")
+            .eq("commitment_id", commitmentId)
+            .eq("requires_fulfillment", true);
+
+          const deliverablesToInsert: any[] = [];
+
+          for (const item of (items || [])) {
+            const { data: templates } = await supabase
+              .from("deliverable_templates")
+              .select("id, name, quantity, estimated_minutes, required_resource_type")
+              .eq("offering_entity_id", item.offering_entity_id)
+              .is("deleted_at", null);
+
+            for (const t of (templates || [])) {
+              const baseQty = Number(t.quantity ?? 1);
+              const itemMultiplier = Number(item.quantity ?? 1);
+              const totalToCreate = baseQty * itemMultiplier;
+
+              for (let i = 0; i < totalToCreate; i++) {
+                deliverablesToInsert.push({
+                  tenant_id: tenantId,
+                  commitment_id: commitmentId,
+                  entity_id: item.offering_entity_id,
+                  template_id: t.id,
+                  name: t.name,
+                  status: 'pending'
+                });
+              }
+            }
+          }
+
+          if (deliverablesToInsert.length > 0) {
+            const { error: insErr } = await supabase.from("deliverables").insert(deliverablesToInsert);
+            if (insErr) throw insErr;
+          }
+
+          await supabase.from("job_queue").update({ status: "done" }).eq("id", job.id);
+          results.push({ id: job.id, ok: true, count: deliverablesToInsert.length });
+          continue;
+        }
+
+        if (job.type === "GUARDIAO_INSIGHTS_GENERATE") {
+          const journeyId = job.payload_json?.journey_id;
+          const model = job.payload_json?.model || "openai";
+          const lookbackDays = Number(job.payload_json?.lookback_days || 7);
+          if (!journeyId) throw new Error("Missing journey_id in payload");
+          
+          await processGuardiaoInsightsGenerateJob({ supabase, tenantId, journeyId, model, lookbackDays });
+          
+          await supabase.from("job_queue").update({ status: "done" }).eq("id", job.id);
+          results.push({ id: job.id, ok: true });
           continue;
         }
 
@@ -2254,64 +2323,6 @@ serve(async (req: any) => {
           continue;
         }
 
-        if (job.type === "COMMITMENT_ORCHESTRATE") {
-          const commitmentId = job.payload_json?.commitment_id;
-          if (!commitmentId) throw new Error("Missing commitment_id");
-
-          const { data: items } = await supabase
-            .from("commitment_items")
-            .select("id, offering_entity_id, quantity")
-            .eq("commitment_id", commitmentId)
-            .eq("requires_fulfillment", true);
-
-          const deliverablesToInsert: any[] = [];
-
-          for (const item of (items || [])) {
-            const { data: templates } = await supabase
-              .from("deliverable_templates")
-              .select("id, name, quantity, estimated_minutes, required_resource_type")
-              .eq("offering_entity_id", item.offering_entity_id)
-              .is("deleted_at", null);
-
-            for (const t of (templates || [])) {
-              const baseQty = Number(t.quantity ?? 1);
-              const itemMultiplier = Number(item.quantity ?? 1);
-              const totalToCreate = baseQty * itemMultiplier;
-
-              for (let i = 0; i < totalToCreate; i++) {
-                deliverablesToInsert.push({
-                  tenant_id: tenantId,
-                  commitment_id: commitmentId,
-                  entity_id: item.offering_entity_id,
-                  template_id: t.id,
-                  name: t.name,
-                  status: 'pending'
-                });
-              }
-            }
-          }
-
-          if (deliverablesToInsert.length > 0) {
-            const { error: insErr } = await supabase.from("deliverables").insert(deliverablesToInsert);
-            if (insErr) throw insErr;
-          }
-
-          await supabase.from("job_queue").update({ status: "done" }).eq("id", job.id);
-          results.push({ id: job.id, ok: true, count: deliverablesToInsert.length });
-          continue;
-        }
-
-        if (job.type === "GUARDIAO_INSIGHTS_GENERATE") {
-          const journeyId = job.payload_json?.journey_id;
-          const model = job.payload_json?.model || "openai";
-          if (!journeyId) throw new Error("Missing journey_id in payload");
-          
-          await processGuardiaoInsightsGenerateJob({ supabase, tenantId, journeyId, model });
-          
-          await supabase.from("job_queue").update({ status: "done" }).eq("id", job.id);
-          results.push({ id: job.id, ok: true });
-          continue;
-        }
 
         // Unknown job type
         await supabase.from("job_queue").update({ status: "failed", attempts: job.attempts + 1 }).eq("id", job.id);
@@ -2333,12 +2344,13 @@ serve(async (req: any) => {
         results.push({ id: job.id, ok: false, error: e?.message ?? String(e) });
       }
     }
-
-    return new Response(JSON.stringify({ ok: true, processed: results.length, results }), {
+    
+    debug.processed = results.length;
+    return new Response(JSON.stringify({ ok: true, processed: results.length, results, debug }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (e) {
     console.error("[jobs-processor] unhandled", { error: (e as any)?.message ?? String(e) });
-    return new Response("Internal error", { status: 500, headers: corsHeaders });
+    return new Response(JSON.stringify({ ok: false, error: (e as any)?.message, debug: { error: (e as any)?.message } }), { status: 500, headers: corsHeaders });
   }
 });

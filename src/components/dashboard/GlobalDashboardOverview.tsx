@@ -55,18 +55,19 @@ export function GlobalDashboardOverview() {
 
   const [generatingJourneyId, setGeneratingJourneyId] = useState<string | null>(null);
   const [selectedModel, setSelectedModel] = useState<"openai" | "gemini">("openai");
+  const [lookbackDays, setLookbackDays] = useState<number>(7);
   const [loadingJourneys, setLoadingJourneys] = useState<Record<string, string>>({});
 
   const generateInsightMut = useMutation({
-    mutationFn: async ({ journeyId, model }: { journeyId: string; model: string }) => {
+    mutationFn: async ({ journeyId, model, days }: { journeyId: string; model: string; days: number }) => {
       const idempotencyKey = `MANUAL_GUARDIAO_INSIGHTS:${activeTenantId}:${journeyId}:${Date.now()}`;
-      console.log(`[Gerar Relatório] Iniciando requisição para journeyId: ${journeyId}, model: ${model}, idempotencyKey: ${idempotencyKey}`);
+      console.log(`[Gerar Relatório] Iniciando requisição para journeyId: ${journeyId}, model: ${model}, days: ${days}`);
       
       const res = await supabase.from("job_queue").insert({
         tenant_id: activeTenantId!,
         type: "GUARDIAO_INSIGHTS_GENERATE",
         idempotency_key: idempotencyKey,
-        payload_json: { journey_id: journeyId, model },
+        payload_json: { journey_id: journeyId, model, lookback_days: days },
         status: "pending",
         // Avoid client clock skew issues: let the DB default or force a safe past date
         run_after: new Date(Date.now() - 60000).toISOString(),
@@ -415,6 +416,25 @@ export function GlobalDashboardOverview() {
                     className="w-4 h-4 text-indigo-600 focus:ring-indigo-500" 
                   />
                 </label>
+
+                <div className="mt-2 space-y-2">
+                  <span className="font-semibold text-sm text-slate-800">Período de Análise</span>
+                  <div className="flex flex-wrap gap-2">
+                    {[1, 3, 7, 15, 30].map(days => (
+                      <button
+                        key={days}
+                        onClick={() => setLookbackDays(days)}
+                        className={`px-3 py-1.5 text-xs font-medium rounded-full transition-colors border ${
+                          lookbackDays === days 
+                            ? 'bg-indigo-600 text-white border-indigo-600' 
+                            : 'bg-white text-slate-600 border-slate-200 hover:border-indigo-300'
+                        }`}
+                      >
+                        {days === 1 ? 'Últimas 24h' : `Últimos ${days} dias`}
+                      </button>
+                    ))}
+                  </div>
+                </div>
               </div>
               <DialogFooter>
                 <Button variant="outline" onClick={() => setGeneratingJourneyId(null)} disabled={generateInsightMut.isPending}>
@@ -425,7 +445,7 @@ export function GlobalDashboardOverview() {
                     if (generatingJourneyId) {
                       const oldInsight = insightsQ.data?.get(generatingJourneyId);
                       setLoadingJourneys(prev => ({ ...prev, [generatingJourneyId]: oldInsight?.created_at || 'none' }));
-                      generateInsightMut.mutate({ journeyId: generatingJourneyId, model: selectedModel });
+                      generateInsightMut.mutate({ journeyId: generatingJourneyId, model: selectedModel, days: lookbackDays });
                     }
                   }} 
                   disabled={generateInsightMut.isPending}
