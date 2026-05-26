@@ -1315,24 +1315,45 @@ async function processGuardiaoInsightsGenerateJob(opts: { supabase: any, tenantI
       .gte("transaction_date", sinceDate.slice(0, 10))
       .order("transaction_date", { ascending: false });
 
-    const { data: tasks } = await supabase
+    // Fetch users_profile to resolve assignments safely in memory
+    const { data: profiles } = await supabase
+      .from("users_profile")
+      .select("user_id, display_name")
+      .eq("tenant_id", tenantId);
+
+    const profileMap = new Map((profiles || []).map((p: any) => [p.user_id, p.display_name]));
+
+    // Query 1: Journey Tasks
+    const { data: journeyTasks } = await supabase
+      .from("tasks")
+      .select("title, status, created_at, assigned_to_user_id")
+      .eq("tenant_id", tenantId)
+      .gte("created_at", sinceDate)
+      .order("created_at", { ascending: false });
+
+    // Query 2: Super Tasks (Checklists)
+    const { data: superTasks } = await supabase
       .from("super_tasks")
-      .select("title, is_completed, created_at, users_profile!fk_super_tasks_assigned_user(display_name)")
+      .select("title, is_completed, created_at, assigned_to")
       .eq("tenant_id", tenantId)
       .gte("created_at", sinceDate)
       .order("created_at", { ascending: false });
 
     const fList = (finances || []);
-    const tList = (tasks || []);
-    totalEventsCount = fList.length + tList.length;
+    const jtList = (journeyTasks || []);
+    const stList = (superTasks || []);
+    totalEventsCount = fList.length + jtList.length + stList.length;
 
     if (totalEventsCount === 0) return;
 
     contextText += `\n--- TRANSAÇÕES FINANCEIRAS RECENTES ---\n`;
     contextText += fList.map((f: any) => `[${f.transaction_date}] ${f.type.toUpperCase()}: R$ ${f.amount} - ${f.description} (Status: ${f.status})`).join("\n");
     
-    contextText += `\n\n--- TAREFAS RECENTES ---\n`;
-    contextText += tList.map((t: any) => `[${t.created_at.slice(0, 10)}] ${t.title} - Status: ${t.is_completed ? 'Concluída' : 'Pendente'} (Atribuído a: ${t.users_profile?.display_name || 'Não atribuído'})`).join("\n");
+    contextText += `\n\n--- TAREFAS DE JORNADAS (PROCESSOS) ---\n`;
+    contextText += jtList.map((t: any) => `[${t.created_at.slice(0, 10)}] ${t.title} - Status: ${t.status === 'done' ? 'Concluída' : 'Pendente'} (Atribuído a: ${profileMap.get(t.assigned_to_user_id) || 'Não atribuído'})`).join("\n");
+
+    contextText += `\n\n--- CHECKLISTS GLOBAIS (SUPER-TAREFAS) ---\n`;
+    contextText += stList.map((t: any) => `[${t.created_at.slice(0, 10)}] ${t.title} - Status: ${t.is_completed ? 'Concluída' : 'Pendente'} (Atribuído a: ${profileMap.get(t.assigned_to) || 'Não atribuído'})`).join("\n");
 
   } else {
     // Journey context: timeline events

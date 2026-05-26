@@ -56,9 +56,26 @@ serve(async (req: any) => {
       .gte("transaction_date", sinceDate.slice(0, 10))
       .order("transaction_date", { ascending: false });
 
-    const { data: tasks } = await supabase
+    // Fetch users_profile to resolve assignments safely in memory
+    const { data: profiles } = await supabase
+      .from("users_profile")
+      .select("user_id, display_name")
+      .eq("tenant_id", tenantId);
+
+    const profileMap = new Map((profiles || []).map((p: any) => [p.user_id, p.display_name]));
+
+    // Query 1: Journey Tasks
+    const { data: journeyTasks } = await supabase
+      .from("tasks")
+      .select("title, status, created_at, assigned_to_user_id")
+      .eq("tenant_id", tenantId)
+      .gte("created_at", sinceDate)
+      .order("created_at", { ascending: false });
+
+    // Query 2: Super Tasks (Checklists)
+    const { data: superTasks } = await supabase
       .from("super_tasks")
-      .select("title, is_completed, created_at, users_profile!fk_super_tasks_assigned_user(display_name)")
+      .select("title, is_completed, created_at, assigned_to")
       .eq("tenant_id", tenantId)
       .gte("created_at", sinceDate)
       .order("created_at", { ascending: false });
@@ -71,11 +88,18 @@ serve(async (req: any) => {
       contextText += `Nenhuma transação financeira recente encontrada.\n`;
     }
 
-    contextText += `\nTarefas Recentes:\n`;
-    if (tasks && tasks.length > 0) {
-      contextText += tasks.map((t: any) => `[${t.created_at.slice(0,10)}] ${t.title} - Status: ${t.is_completed ? 'Concluída' : 'Pendente'} (Atribuído a: ${t.users_profile?.display_name || 'Não atribuído'})`).join("\n");
+    contextText += `\nTarefas de Jornadas (Processos):\n`;
+    if (journeyTasks && journeyTasks.length > 0) {
+      contextText += journeyTasks.map((t: any) => `[${t.created_at.slice(0,10)}] ${t.title} - Status: ${t.status === 'done' ? 'Concluída' : 'Pendente'} (Atribuído a: ${profileMap.get(t.assigned_to_user_id) || 'Não atribuído'})`).join("\n");
     } else {
-      contextText += `Nenhuma tarefa recente encontrada.\n`;
+      contextText += `Nenhuma tarefa de jornada recente encontrada.\n`;
+    }
+
+    contextText += `\nChecklists Globais (Super-tarefas):\n`;
+    if (superTasks && superTasks.length > 0) {
+      contextText += superTasks.map((t: any) => `[${t.created_at.slice(0,10)}] ${t.title} - Status: ${t.is_completed ? 'Concluída' : 'Pendente'} (Atribuído a: ${profileMap.get(t.assigned_to) || 'Não atribuído'})`).join("\n");
+    } else {
+      contextText += `Nenhum checklist global recente encontrado.\n`;
     }
 
     const systemPrompt = `Você é o Oráculo, um assistente virtual e consultor estratégico de negócios.
