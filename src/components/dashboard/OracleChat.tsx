@@ -12,15 +12,18 @@ import {
   HelpCircle,
   TrendingUp,
   Clock,
-  ArrowRight
+  ArrowRight,
+  Target
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useQueryClient } from "@tanstack/react-query";
 
 type Chat = {
   id: string;
   title: string | null;
   created_at: string;
   updated_at: string;
+  focus_key?: string;
 };
 
 type Message = {
@@ -30,9 +33,15 @@ type Message = {
   created_at: string;
 };
 
+type Journey = {
+  id: string;
+  name: string;
+};
+
 export function OracleChat() {
   const { activeTenantId } = useTenant();
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const [chats, setChats] = useState<Chat[]>([]);
   const [activeChatId, setActiveChatId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -40,8 +49,12 @@ export function OracleChat() {
   const [loadingChats, setLoadingChats] = useState(true);
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [sending, setSending] = useState(false);
+  const [journeys, setJourneys] = useState<Journey[]>([]);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Derived active chat
+  const activeChat = chats.find(c => c.id === activeChatId);
 
   // Suggested questions for empty/new chats
   const suggestions = [
@@ -76,6 +89,43 @@ export function OracleChat() {
     }
   };
 
+  // Fetch active tenant journeys to populate the selector
+  const fetchJourneys = async () => {
+    if (!activeTenantId) return;
+    try {
+      const { data, error } = await supabase
+        .from("journeys")
+        .select("id, name")
+        .eq("tenant_id", activeTenantId)
+        .order("name", { ascending: true });
+
+      if (error) throw error;
+      setJourneys(data || []);
+    } catch (err: any) {
+      console.error("Error fetching journeys:", err);
+    }
+  };
+
+  // Update conversation focus
+  const handleUpdateFocus = async (chatId: string, newFocus: string) => {
+    try {
+      const { error } = await supabase
+        .from("oracle_chats")
+        .update({ focus_key: newFocus })
+        .eq("id", chatId);
+
+      if (error) throw error;
+
+      setChats(prev => prev.map(c => c.id === chatId ? { ...c, focus_key: newFocus } : c));
+      toast({
+        title: "Foco da conversa atualizado",
+        description: `O Oráculo direcionou o foco da IA com sucesso.`
+      });
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "Erro ao atualizar foco", description: err.message });
+    }
+  };
+
   // Fetch messages for active chat
   const fetchMessages = async (chatId: string) => {
     try {
@@ -98,6 +148,7 @@ export function OracleChat() {
 
   useEffect(() => {
     fetchChats(true);
+    fetchJourneys();
   }, [activeTenantId]);
 
   useEffect(() => {
@@ -113,6 +164,8 @@ export function OracleChat() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, sending]);
 
+  const [newChatFocus, setNewChatFocus] = useState("global");
+
   // Create new chat
   const handleNewChat = async (initialMessage?: string) => {
     if (!activeTenantId) return;
@@ -125,7 +178,8 @@ export function OracleChat() {
         .from("oracle_chats")
         .insert({
           tenant_id: activeTenantId,
-          title: defaultTitle
+          title: defaultTitle,
+          focus_key: newChatFocus
         })
         .select()
         .single();
@@ -193,6 +247,9 @@ export function OracleChat() {
 
       // Reload messages to get the persisted database state
       await fetchMessages(chatId);
+
+      // Invalidate the query key to refresh token count on the UI in real-time!
+      queryClient.invalidateQueries({ queryKey: ["tenant_plan_overview", activeTenantId] });
       
       // Update chat title if it was the default and this is first message
       const currentChat = chats.find(c => c.id === chatId);
@@ -300,6 +357,38 @@ export function OracleChat() {
               <p className="text-[10px] text-slate-400 flex items-center gap-1">
                 <Clock className="w-3 h-3" /> Responde com base no seu Financeiro e Tarefas reais.
               </p>
+            </div>
+          </div>
+
+          {/* Foco Selector */}
+          <div className="flex items-center gap-2 bg-slate-50 border border-slate-200/60 hover:border-slate-300 px-3 py-1.5 rounded-2xl transition-all shadow-sm">
+            <Target className="w-4 h-4 text-indigo-600 animate-pulse" />
+            <div className="flex flex-col text-left">
+              <span className="text-[9px] uppercase tracking-wider font-bold text-slate-400 leading-none">Foco da IA</span>
+              <select
+                value={activeChat ? (activeChat.focus_key || "global") : newChatFocus}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  if (activeChatId) {
+                    handleUpdateFocus(activeChatId, val);
+                  } else {
+                    setNewChatFocus(val);
+                    toast({
+                      title: "Foco estratégico definido",
+                      description: "A próxima conversa iniciada usará este foco estratégico."
+                    });
+                  }
+                }}
+                className="bg-transparent border-0 text-xs font-bold text-slate-700 focus:outline-none focus:ring-0 cursor-pointer pr-6 py-0 -mt-0.5"
+              >
+                <option value="global">🌐 Geral (Operação + Finanças)</option>
+                <option value="finance">💰 Apenas Financeiro</option>
+                <option value="tasks">📋 Apenas Tarefas e Processos</option>
+                {journeys.length > 0 && <option disabled>────────────────────</option>}
+                {journeys.map(j => (
+                  <option key={j.id} value={j.id}>🚀 Jornada: {j.name}</option>
+                ))}
+              </select>
             </div>
           </div>
         </div>

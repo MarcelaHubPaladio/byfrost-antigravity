@@ -46,83 +46,122 @@ serve(async (req: any) => {
       .eq("chat_id", chatId)
       .order("created_at", { ascending: true });
 
-    // Fetch dynamic context
-    const sinceDate = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
-    
-    // Fetch bank accounts and financial categories for mapping in memory
-    const { data: bankAccounts } = await supabase
-      .from("bank_accounts")
-      .select("id, bank_name, account_name")
-      .eq("tenant_id", tenantId);
+    // Fetch focus_key from database for this chat to load focused context
+    const { data: chatData, error: chatErr } = await supabase
+      .from("oracle_chats")
+      .select("focus_key")
+      .eq("id", chatId)
+      .single();
 
-    const { data: financialCategories } = await supabase
-      .from("financial_categories")
-      .select("id, name")
-      .eq("tenant_id", tenantId);
+    if (chatErr) throw chatErr;
+    const focusKey = chatData?.focus_key || "global";
 
-    const accountMap = new Map((bankAccounts || []).map((a: any) => [a.id, `${a.bank_name} (${a.account_name})`]));
-    const categoryMap = new Map((financialCategories || []).map((c: any) => [c.id, c.name]));
+    // Fetch dynamic context based on focusKey (using a wider 90-day window to prevent missing previous months like March/April)
+    const sinceDate = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString();
+    let contextText = `\n--- CONTEXTO ATUAL DA OPERAÇÃO (Foco: ${focusKey}) ---\n`;
 
-    const { data: finances } = await supabase
-      .from("financial_transactions")
-      .select("type, amount, description, transaction_date, status, source, created_at, account_id, category_id")
-      .eq("tenant_id", tenantId)
-      .gte("transaction_date", sinceDate.slice(0, 10))
-      .order("transaction_date", { ascending: false });
+    if (focusKey === "global" || focusKey === "finance") {
+      // Fetch bank accounts and financial categories for mapping in memory
+      const { data: bankAccounts } = await supabase
+        .from("bank_accounts")
+        .select("id, bank_name, account_name")
+        .eq("tenant_id", tenantId);
 
-    // Fetch users_profile to resolve assignments safely in memory
-    const { data: profiles } = await supabase
-      .from("users_profile")
-      .select("user_id, display_name")
-      .eq("tenant_id", tenantId);
+      const { data: financialCategories } = await supabase
+        .from("financial_categories")
+        .select("id, name")
+        .eq("tenant_id", tenantId);
 
-    const profileMap = new Map((profiles || []).map((p: any) => [p.user_id, p.display_name]));
+      const accountMap = new Map((bankAccounts || []).map((a: any) => [a.id, `${a.bank_name} (${a.account_name})`]));
+      const categoryMap = new Map((financialCategories || []).map((c: any) => [c.id, c.name]));
 
-    // Query 1: Journey Tasks
-    const { data: journeyTasks } = await supabase
-      .from("tasks")
-      .select("title, status, created_at, assigned_to_user_id")
-      .eq("tenant_id", tenantId)
-      .gte("created_at", sinceDate)
-      .order("created_at", { ascending: false });
+      const { data: finances } = await supabase
+        .from("financial_transactions")
+        .select("type, amount, description, transaction_date, status, source, created_at, account_id, category_id")
+        .eq("tenant_id", tenantId)
+        .gte("transaction_date", sinceDate.slice(0, 10))
+        .order("transaction_date", { ascending: false });
 
-    // Query 2: Super Tasks (Checklists)
-    const { data: superTasks } = await supabase
-      .from("super_tasks")
-      .select("title, is_completed, created_at, assigned_to")
-      .eq("tenant_id", tenantId)
-      .gte("created_at", sinceDate)
-      .order("created_at", { ascending: false });
-
-    let contextText = `\n--- CONTEXTO ATUAL DA OPERAÇÃO ---\n`;
-    contextText += `Transações Financeiras Recentes:\n`;
-    if (finances && finances.length > 0) {
-      contextText += finances.map((f: any) => {
-        const bank = accountMap.get(f.account_id) || 'Desconhecido';
-        const cat = categoryMap.get(f.category_id) || 'Sem categoria';
-        const createdStr = new Date(f.created_at).toLocaleString('pt-BR');
-        return `[${f.transaction_date}] ${f.type.toUpperCase()}: R$ ${f.amount} - ${f.description} (Cat: ${cat} | Banco: ${bank} | Status: ${f.status} | Inserido em: ${createdStr} via ${f.source})`;
-      }).join("\n");
-    } else {
-      contextText += `Nenhuma transação financeira recente encontrada.\n`;
+      contextText += `Transações Financeiras Recentes:\n`;
+      if (finances && finances.length > 0) {
+        contextText += finances.map((f: any) => {
+          const bank = accountMap.get(f.account_id) || 'Desconhecido';
+          const cat = categoryMap.get(f.category_id) || 'Sem categoria';
+          const createdStr = new Date(f.created_at).toLocaleString('pt-BR');
+          return `[${f.transaction_date}] ${f.type.toUpperCase()}: R$ ${f.amount} - ${f.description} (Cat: ${cat} | Banco: ${bank} | Status: ${f.status} | Inserido em: ${createdStr} via ${f.source})`;
+        }).join("\n");
+      } else {
+        contextText += `Nenhuma transação financeira recente encontrada.\n`;
+      }
     }
 
-    contextText += `\nTarefas de Jornadas (Processos):\n`;
-    if (journeyTasks && journeyTasks.length > 0) {
-      contextText += journeyTasks.map((t: any) => `[${t.created_at.slice(0,10)}] ${t.title} - Status: ${t.status === 'done' ? 'Concluída' : 'Pendente'} (Atribuído a: ${profileMap.get(t.assigned_to_user_id) || 'Não atribuído'})`).join("\n");
-    } else {
-      contextText += `Nenhuma tarefa de jornada recente encontrada.\n`;
+    if (focusKey === "global" || focusKey === "tasks") {
+      // Fetch users_profile to resolve assignments safely in memory
+      const { data: profiles } = await supabase
+        .from("users_profile")
+        .select("user_id, display_name")
+        .eq("tenant_id", tenantId);
+
+      const profileMap = new Map((profiles || []).map((p: any) => [p.user_id, p.display_name]));
+
+      // Query 1: Journey Tasks
+      const { data: journeyTasks } = await supabase
+        .from("tasks")
+        .select("title, status, created_at, assigned_to_user_id")
+        .eq("tenant_id", tenantId)
+        .gte("created_at", sinceDate)
+        .order("created_at", { ascending: false });
+
+      // Query 2: Super Tasks (Checklists)
+      const { data: superTasks } = await supabase
+        .from("super_tasks")
+        .select("title, is_completed, created_at, assigned_to")
+        .eq("tenant_id", tenantId)
+        .gte("created_at", sinceDate)
+        .order("created_at", { ascending: false });
+
+      contextText += `\nTarefas de Jornadas (Processos):\n`;
+      if (journeyTasks && journeyTasks.length > 0) {
+        contextText += journeyTasks.map((t: any) => `[${t.created_at.slice(0,10)}] ${t.title} - Status: ${t.status === 'done' ? 'Concluída' : 'Pendente'} (Atribuído a: ${profileMap.get(t.assigned_to_user_id) || 'Não atribuído'})`).join("\n");
+      } else {
+        contextText += `Nenhuma tarefa de jornada recente encontrada.\n`;
+      }
+
+      contextText += `\nChecklists Globais (Super-tarefas):\n`;
+      if (superTasks && superTasks.length > 0) {
+        contextText += superTasks.map((t: any) => `[${t.created_at.slice(0,10)}] ${t.title} - Status: ${t.is_completed ? 'Concluída' : 'Pendente'} (Atribuído a: ${profileMap.get(t.assigned_to) || 'Não atribuído'})`).join("\n");
+      } else {
+        contextText += `Nenhum checklist global recente encontrado.\n`;
+      }
     }
 
-    contextText += `\nChecklists Globais (Super-tarefas):\n`;
-    if (superTasks && superTasks.length > 0) {
-      contextText += superTasks.map((t: any) => `[${t.created_at.slice(0,10)}] ${t.title} - Status: ${t.is_completed ? 'Concluída' : 'Pendente'} (Atribuído a: ${profileMap.get(t.assigned_to) || 'Não atribuído'})`).join("\n");
-    } else {
-      contextText += `Nenhum checklist global recente encontrado.\n`;
+    // UUID case (Specific Journey Focus)
+    if (focusKey !== "global" && focusKey !== "finance" && focusKey !== "tasks") {
+      const { data: journey } = await supabase
+        .from("journeys")
+        .select("name")
+        .eq("id", focusKey)
+        .maybeSingle();
+      const journeyName = journey?.name || "Jornada Especificada";
+
+      const { data: events } = await supabase
+        .from("timeline_events")
+        .select("event_type, actor_type, message, occurred_at, cases!inner(journey_id)")
+        .eq("tenant_id", tenantId)
+        .eq("cases.journey_id", focusKey)
+        .gte("occurred_at", sinceDate)
+        .order("occurred_at", { ascending: false });
+
+      contextText += `Eventos e Histórico da Jornada [${journeyName}]:\n`;
+      if (events && events.length > 0) {
+        contextText += events.map((e: any) => `[${e.occurred_at}] ${e.actor_type} - ${e.event_type}: ${e.message}`).join("\n");
+      } else {
+        contextText += `Nenhum evento recente registrado para esta jornada.\n`;
+      }
     }
 
     const systemPrompt = `Você é o Oráculo, um assistente virtual e consultor estratégico de negócios.
-Você tem acesso ao contexto financeiro e operacional da empresa do usuário. Use os dados fornecidos no contexto abaixo para responder às perguntas do usuário com precisão, insights estratégicos e sugestões práticas.
+Você tem acesso ao contexto selecionado da empresa do usuário. Use os dados fornecidos no contexto abaixo para responder às perguntas do usuário com precisão, insights estratégicos e sugestões práticas.
 Se o usuário perguntar sobre algo que não está no contexto, informe educadamente o que você consegue ver.
 Responda de forma clara, amigável e profissional, usando formatação markdown quando apropriado.
 
