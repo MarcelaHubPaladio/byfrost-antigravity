@@ -396,7 +396,7 @@ export function ProcessOrgChartPanel({ onViewCargo }: ProcessOrgChartPanelProps)
   // Transform / Load React Flow structure based on selected version
   useEffect(() => {
     if (orgNodesQ.data && usersQ.data && rolesQ.data && processesQ.data && layoutQ.data) {
-      if (selectedVersionId === loadedVersionId) return;
+      if (selectedVersionId !== "default" && selectedVersionId === loadedVersionId) return;
 
       const dbNodes = orgNodesQ.data;
       const users = usersQ.data;
