@@ -50,7 +50,7 @@ type JourneyInsightData = {
 };
 
 export function GlobalDashboardOverview() {
-  const { activeTenantId, activeTenant } = useTenant();
+  const { activeTenantId, activeTenant, isSuperAdmin } = useTenant();
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -314,11 +314,14 @@ export function GlobalDashboardOverview() {
         </div>
 
         <Tabs defaultValue="overview" className="w-full">
-          <TabsList className="mb-6 grid w-full max-w-2xl grid-cols-4 bg-slate-100/80 p-1 rounded-xl">
+          <TabsList className={`mb-6 grid w-full max-w-3xl ${isSuperAdmin ? "grid-cols-5" : "grid-cols-4"} bg-slate-100/80 p-1 rounded-xl`}>
             <TabsTrigger value="overview" className="rounded-lg">Visão Geral</TabsTrigger>
             <TabsTrigger value="timeline" className="rounded-lg">Linha do Tempo Global</TabsTrigger>
             <TabsTrigger value="oracle" className="rounded-lg">Oráculo (IA)</TabsTrigger>
-            <TabsTrigger value="token_usage" className="rounded-lg">Extrato de Tokens</TabsTrigger>
+            <TabsTrigger value="invoice" className="rounded-lg">Fatura</TabsTrigger>
+            {isSuperAdmin && (
+              <TabsTrigger value="token_usage" className="rounded-lg">Extrato de Tokens</TabsTrigger>
+            )}
           </TabsList>
 
           <TabsContent value="overview" className="space-y-6 mt-0">
@@ -698,22 +701,35 @@ export function GlobalDashboardOverview() {
           <OracleChat />
         </TabsContent>
 
-        <TabsContent value="token_usage" className="mt-0">
+        <TabsContent value="invoice" className="mt-0">
           <div className="bg-white border border-slate-200 rounded-[28px] p-6 shadow-sm">
-            <div className="mb-6 flex justify-between items-center">
+            <div className="mb-6 flex flex-col md:flex-row md:justify-between md:items-center gap-4">
               <div>
-                <h3 className="font-bold text-slate-800 text-base">Extrato de Consumo de Tokens</h3>
-                <p className="text-xs text-slate-500 mt-1">Histórico detalhado de requisições de Inteligência Artificial para este Tenant.</p>
+                <h3 className="font-bold text-slate-800 text-base">Fatura de Consumo de IA</h3>
+                <p className="text-xs text-slate-500 mt-1">Detalhamento operacional de requisições de Inteligência Artificial para este Tenant.</p>
               </div>
-              <Badge className="bg-emerald-50 text-emerald-700 border border-emerald-200/50 rounded-full px-3 py-1 text-[11px] font-semibold hover:bg-emerald-50">
-                Ativo
-              </Badge>
+
+              {/* Total final do Tenant (soma do custo de uso de tokens * 3 em Reais) */}
+              {!usageEventsQ.isLoading && usageEventsQ.data && (
+                (() => {
+                  const totalCostUsd = usageEventsQ.data.reduce((acc: number, event: any) => acc + Number(event.meta_json?.cost_usd || 0), 0);
+                  const totalCostBrl = totalCostUsd * 3 * 5.00; // Multiplicado por 3x e convertido em Reais (Câmbio comercial de R$ 5.00)
+                  return (
+                    <div className="bg-indigo-50/60 border border-indigo-100 rounded-2xl px-5 py-3 text-right">
+                      <span className="text-[9px] uppercase tracking-wider font-bold text-slate-400 block leading-none mb-1">Valor Final Faturado</span>
+                      <span className="text-lg font-black text-indigo-700">
+                        {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalCostBrl)}
+                      </span>
+                    </div>
+                  );
+                })()
+              )}
             </div>
 
             {usageEventsQ.isLoading ? (
               <div className="py-20 flex flex-col items-center justify-center space-y-4">
                 <Loader2 className="h-8 w-8 text-indigo-500 animate-spin" />
-                <p className="text-sm text-slate-500 font-medium">Buscando extrato de consumo...</p>
+                <p className="text-sm text-slate-500 font-medium">Buscando fatura de consumo...</p>
               </div>
             ) : !usageEventsQ.data?.length ? (
               <div className="text-center py-12 text-slate-400 text-sm">
@@ -728,13 +744,11 @@ export function GlobalDashboardOverview() {
                       <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Serviço / Descrição</th>
                       <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Modelo</th>
                       <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">Tokens</th>
-                      <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">Custo Est. ($)</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-50">
                     {usageEventsQ.data.map((event: any) => {
                       const meta = event.meta_json || {};
-                      const cost = Number(meta.cost_usd || 0);
                       const desc = meta.description || "Uso do sistema de IA";
                       const model = meta.model || "gpt-4o-mini";
                       
@@ -754,9 +768,6 @@ export function GlobalDashboardOverview() {
                           <td className="p-4 text-right font-mono font-bold text-slate-800 whitespace-nowrap">
                             {event.qty.toLocaleString()}
                           </td>
-                          <td className="p-4 text-right font-mono font-bold text-indigo-600 whitespace-nowrap">
-                            ${cost.toFixed(5)}
-                          </td>
                         </tr>
                       );
                     })}
@@ -766,6 +777,77 @@ export function GlobalDashboardOverview() {
             )}
           </div>
         </TabsContent>
+
+        {isSuperAdmin && (
+          <TabsContent value="token_usage" className="mt-0">
+            <div className="bg-white border border-slate-200 rounded-[28px] p-6 shadow-sm">
+              <div className="mb-6 flex justify-between items-center">
+                <div>
+                  <h3 className="font-bold text-slate-800 text-base">Extrato de Consumo de Tokens</h3>
+                  <p className="text-xs text-slate-500 mt-1">Histórico detalhado de requisições de Inteligência Artificial para este Tenant.</p>
+                </div>
+                <Badge className="bg-emerald-50 text-emerald-700 border border-emerald-200/50 rounded-full px-3 py-1 text-[11px] font-semibold hover:bg-emerald-50">
+                  Ativo
+                </Badge>
+              </div>
+
+              {usageEventsQ.isLoading ? (
+                <div className="py-20 flex flex-col items-center justify-center space-y-4">
+                  <Loader2 className="h-8 w-8 text-indigo-500 animate-spin" />
+                  <p className="text-sm text-slate-500 font-medium">Buscando extrato de consumo...</p>
+                </div>
+              ) : !usageEventsQ.data?.length ? (
+                <div className="text-center py-12 text-slate-400 text-sm">
+                  Nenhum uso de tokens registrado para este Tenant ainda.
+                </div>
+              ) : (
+                <div className="overflow-x-auto rounded-2xl border border-slate-100">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="bg-slate-50 border-b border-slate-100">
+                        <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Data / Hora</th>
+                        <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Serviço / Descrição</th>
+                        <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Modelo</th>
+                        <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">Tokens</th>
+                        <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">Custo Est. ($)</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-50">
+                      {usageEventsQ.data.map((event: any) => {
+                        const meta = event.meta_json || {};
+                        const cost = Number(meta.cost_usd || 0);
+                        const desc = meta.description || "Uso do sistema de IA";
+                        const model = meta.model || "gpt-4o-mini";
+                        
+                        return (
+                          <tr key={event.id} className="hover:bg-slate-50/50 transition-colors text-xs text-slate-600 font-medium">
+                            <td className="p-4 whitespace-nowrap">
+                              {new Date(event.occurred_at).toLocaleString('pt-BR')}
+                            </td>
+                            <td className="p-4">
+                              <span className="font-semibold text-slate-800 block">{desc}</span>
+                            </td>
+                            <td className="p-4 whitespace-nowrap">
+                              <Badge className="bg-slate-100 text-slate-600 shadow-none border-none hover:bg-slate-100 rounded-md">
+                                {model}
+                              </Badge>
+                            </td>
+                            <td className="p-4 text-right font-mono font-bold text-slate-800 whitespace-nowrap">
+                              {event.qty.toLocaleString()}
+                            </td>
+                            <td className="p-4 text-right font-mono font-bold text-indigo-600 whitespace-nowrap">
+                              ${cost.toFixed(5)}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </TabsContent>
+        )}
 
       </Tabs>
       </div>
