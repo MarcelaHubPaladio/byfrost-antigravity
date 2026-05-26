@@ -78,9 +78,12 @@ export function GlobalDashboardOverview() {
       console.log("[Gerar Relatório] Chamando Edge Function 'jobs-processor' para processar a fila...");
       
       // Await para sabermos exatamente o resultado do processamento da IA
-      const invokeRes = await supabase.functions.invoke("jobs-processor");
+      // Passamos o journey_id para que o worker puxe e processe este exato job imediatamente!
+      const invokeRes = await supabase.functions.invoke("jobs-processor", {
+        body: { journey_id: journeyId }
+      });
       
-      console.log("[Gerar Relatório] Retorno da IA (Edge Function):", invokeRes);
+      console.log("[Gerar Relatório] Retorno da IA (Edge Function):", JSON.stringify(invokeRes.data, null, 2));
       
       if (invokeRes.error) {
         throw new Error(`Falha na comunicação com a Edge Function: ${invokeRes.error.message}`);
@@ -221,7 +224,7 @@ export function GlobalDashboardOverview() {
       
       const { data, error } = await supabase
         .from("job_queue")
-        .select("id, status, created_at, payload_json")
+        .select("id, status, created_at, run_after, locked_at, payload_json")
         .eq("tenant_id", activeTenantId!)
         .eq("type", "GUARDIAO_INSIGHTS_GENERATE")
         .order("created_at", { ascending: false })
@@ -232,7 +235,7 @@ export function GlobalDashboardOverview() {
         return null;
       }
       
-      console.log(`[Status Poll 10s] Status da fila:`, data.map(j => `${j.id.split('-')[0]}... => ${j.status}`).join(" | "));
+      console.log(`[Status Poll 10s] Status da fila:`, data.map(j => `${j.id.split('-')[0]}... => ${j.status} (run_after: ${j.run_after}, locked_at: ${j.locked_at})`).join(" | "));
       console.log("[Status Poll 10s] Últimos 10 jobs de geração de insights (completo):", data);
       return data;
     }

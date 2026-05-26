@@ -1420,9 +1420,10 @@ serve(async (req: any) => {
     const batchSize = 10;
     const body = await req.json().catch(() => ({}));
     const manualCommitmentId = String(body.commitment_id ?? "").trim();
+    const manualJourneyId = String(body.journey_id ?? "").trim();
 
     // Fetch pending jobs
-    const jobsSelect = supabase
+    let jobsSelect: any = supabase
       .from("job_queue")
       .select("id, tenant_id, type, payload_json, attempts")
       .eq("status", "pending")
@@ -1458,9 +1459,16 @@ serve(async (req: any) => {
           });
         }
       }
-      jobsSelect.contains("payload_json", { commitment_id: manualCommitmentId });
+      // Re-assign the mutated builder!
+      jobsSelect = jobsSelect.contains("payload_json", { commitment_id: manualCommitmentId });
+    } else if (manualJourneyId) {
+      jobsSelect = jobsSelect
+        .eq("type", "GUARDIAO_INSIGHTS_GENERATE")
+        .contains("payload_json", { journey_id: manualJourneyId })
+        .order("created_at", { ascending: false })
+        .limit(1); // just process this one directly
     } else {
-      jobsSelect.order("created_at", { ascending: true }).limit(batchSize);
+      jobsSelect = jobsSelect.order("created_at", { ascending: true }).limit(batchSize);
     }
 
     const { data: jobs, error: jobsErr } = await jobsSelect;
