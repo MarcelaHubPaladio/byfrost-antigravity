@@ -192,6 +192,32 @@ export function ProcessOrgChartPanel({ onViewCargo }: ProcessOrgChartPanelProps)
     }
   });
 
+const syncActivityEdges = (currentNodes: Node[], currentEdges: Edge[]) => {
+  const nonActivityEdges = currentEdges.filter(e => !e.id.startsWith('act-edge-'));
+  const newActivityEdges: Edge[] = [];
+  
+  currentNodes.forEach(node => {
+    if (node.type === 'userNode' && node.data.activities) {
+      node.data.activities.forEach((act: any) => {
+        if (act.subordinateId) {
+          const targetExists = currentNodes.some(n => n.id === act.subordinateId);
+          if (targetExists) {
+            newActivityEdges.push({
+              id: `act-edge-${node.id}-${act.subordinateId}-${act.id}`,
+              source: node.id,
+              target: act.subordinateId,
+              animated: true,
+              style: { stroke: '#f59e0b', strokeWidth: 2, strokeDasharray: '5 5' },
+            });
+          }
+        }
+      });
+    }
+  });
+
+  return [...nonActivityEdges, ...newActivityEdges];
+};
+
   const handleAddActivity = useCallback((nodeId: string) => {
     setActivityModal({
         isOpen: true,
@@ -225,7 +251,8 @@ export function ProcessOrgChartPanel({ onViewCargo }: ProcessOrgChartPanelProps)
         return;
     }
 
-    setNodes((nds) => nds.map((n) => {
+    setNodes((nds) => {
+      const nextNodes = nds.map((n) => {
         if (n.id === activityModal.nodeId) {
             let activities = [...(n.data.activities || [])];
             const subId = activityModal.subordinateId === "none" ? undefined : activityModal.subordinateId;
@@ -247,20 +274,29 @@ export function ProcessOrgChartPanel({ onViewCargo }: ProcessOrgChartPanelProps)
             return { ...n, data: { ...n.data, activities } };
         }
         return n;
-    }));
+      });
+
+      setEdges(eds => syncActivityEdges(nextNodes, eds));
+      return nextNodes;
+    });
 
     setActivityModal(prev => ({ ...prev, isOpen: false }));
     showSuccess(activityModal.activityId ? "Atividade atualizada." : "Atividade adicionada.");
   };
 
   const handleDeleteActivity = useCallback((nodeId: string, activityId: string) => {
-    setNodes((nds) => nds.map((n) => {
-      if (n.id === nodeId) {
-        const activities = (n.data.activities || []).filter((a: any) => a.id !== activityId);
-        return { ...n, data: { ...n.data, activities } };
-      }
-      return n;
-    }));
+    setNodes((nds) => {
+      const nextNodes = nds.map((n) => {
+        if (n.id === nodeId) {
+          const activities = (n.data.activities || []).filter((a: any) => a.id !== activityId);
+          return { ...n, data: { ...n.data, activities } };
+        }
+        return n;
+      });
+
+      setEdges(eds => syncActivityEdges(nextNodes, eds));
+      return nextNodes;
+    });
   }, [setNodes]);
 
   const allUsers = useMemo(() => {
@@ -449,7 +485,7 @@ export function ProcessOrgChartPanel({ onViewCargo }: ProcessOrgChartPanelProps)
         });
 
         setNodes(enrichedNodes);
-        setEdges(loadedEdges);
+        setEdges(syncActivityEdges(enrichedNodes, loadedEdges));
       } else {
         // Hierarchical (Padrão)
         const newNodes: Node[] = dbNodes.map((dbNode) => {
@@ -489,7 +525,7 @@ export function ProcessOrgChartPanel({ onViewCargo }: ProcessOrgChartPanelProps)
           }));
 
         setNodes(newNodes);
-        setEdges(newEdges);
+        setEdges(syncActivityEdges(newNodes, newEdges));
       }
       setLoadedVersionId(selectedVersionId);
     }
