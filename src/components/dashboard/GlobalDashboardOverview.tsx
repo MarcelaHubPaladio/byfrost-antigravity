@@ -171,6 +171,7 @@ export function GlobalDashboardOverview() {
           if (newInsight && newInsight.created_at !== next[journeyId]) {
             delete next[journeyId];
             changed = true;
+            console.log("✅ Relatório retornado pela IA para a jornada:", journeyId, newInsight);
             toast({ title: "Relatório gerado!", description: "Os insights da jornada foram atualizados.", variant: "default" });
           }
         }
