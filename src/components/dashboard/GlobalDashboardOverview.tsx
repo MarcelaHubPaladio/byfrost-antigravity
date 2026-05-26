@@ -72,8 +72,11 @@ export function GlobalDashboardOverview() {
       }).select();
       
       console.log("[Gerar Relatório] Retorno do insert no job_queue:", res);
-      
       if (res.error) throw res.error;
+      
+      // Aciona o worker imediatamente para não depender do intervalo do CRON
+      supabase.functions.invoke("jobs-processor").catch(err => console.error("[Gerar Relatório] Erro ao invocar jobs-processor:", err));
+
       return res.data;
     },
     onSuccess: () => {
@@ -210,7 +213,8 @@ export function GlobalDashboardOverview() {
         return null;
       }
       
-      console.log("[Status Poll 10s] Últimos 10 jobs de geração de insights:", data);
+      console.log(`[Status Poll 10s] Status da fila:`, data.map(j => `${j.id.split('-')[0]}... => ${j.status}`).join(" | "));
+      console.log("[Status Poll 10s] Últimos 10 jobs de geração de insights (completo):", data);
       return data;
     }
   });
