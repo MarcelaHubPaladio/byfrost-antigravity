@@ -68,7 +68,8 @@ export function GlobalDashboardOverview() {
         idempotency_key: idempotencyKey,
         payload_json: { journey_id: journeyId, model },
         status: "pending",
-        run_after: new Date().toISOString(),
+        // Avoid client clock skew issues: let the DB default or force a safe past date
+        run_after: new Date(Date.now() - 60000).toISOString(),
       }).select();
       
       console.log("[Gerar Relatório] Retorno do insert no job_queue:", res);
