@@ -85,12 +85,12 @@ export function ProcessOrgChartPanel({ onViewCargo }: ProcessOrgChartPanelProps)
     nodeId: string;
     activityId?: string;
     label: string;
-    subordinateId: string;
+    subordinateIds: string[];
   }>({
     isOpen: false,
     nodeId: "",
     label: "",
-    subordinateId: "none"
+    subordinateIds: []
   });
 
   const [newVersionModal, setNewVersionModal] = useState({
@@ -199,18 +199,19 @@ const syncActivityEdges = (currentNodes: Node[], currentEdges: Edge[]) => {
   currentNodes.forEach(node => {
     if (node.type === 'userNode' && node.data.activities) {
       node.data.activities.forEach((act: any) => {
-        if (act.subordinateId) {
-          const targetExists = currentNodes.some(n => n.id === act.subordinateId);
+        const relatedIds = act.subordinateIds || (act.subordinateId ? [act.subordinateId] : []);
+        relatedIds.forEach((subId: string) => {
+          const targetExists = currentNodes.some(n => n.id === subId);
           if (targetExists) {
             newActivityEdges.push({
-              id: `act-edge-${node.id}-${act.subordinateId}-${act.id}`,
+              id: `act-edge-${node.id}-${subId}-${act.id}`,
               source: node.id,
-              target: act.subordinateId,
+              target: subId,
               animated: true,
               style: { stroke: '#f59e0b', strokeWidth: 2, strokeDasharray: '5 5' },
             });
           }
-        }
+        });
       });
     }
   });
@@ -223,7 +224,7 @@ const syncActivityEdges = (currentNodes: Node[], currentEdges: Edge[]) => {
         isOpen: true,
         nodeId,
         label: "",
-        subordinateId: "none"
+        subordinateIds: []
     });
   }, []);
 
@@ -238,7 +239,7 @@ const syncActivityEdges = (currentNodes: Node[], currentEdges: Edge[]) => {
                 nodeId,
                 activityId,
                 label: activity.label,
-                subordinateId: activity.subordinateId || "none"
+                subordinateIds: activity.subordinateIds || (activity.subordinateId ? [activity.subordinateId] : [])
             });
         }
         return nds;
@@ -255,12 +256,12 @@ const syncActivityEdges = (currentNodes: Node[], currentEdges: Edge[]) => {
       const nextNodes = nds.map((n) => {
         if (n.id === activityModal.nodeId) {
             let activities = [...(n.data.activities || [])];
-            const subId = activityModal.subordinateId === "none" ? undefined : activityModal.subordinateId;
+            const subIds = activityModal.subordinateIds;
 
             if (activityModal.activityId) {
                 // Edit
                 activities = activities.map(a => a.id === activityModal.activityId 
-                    ? { ...a, label: activityModal.label, subordinateId: subId } 
+                    ? { ...a, label: activityModal.label, subordinateIds: subIds, subordinateId: undefined } 
                     : a
                 );
             } else {
@@ -268,7 +269,7 @@ const syncActivityEdges = (currentNodes: Node[], currentEdges: Edge[]) => {
                 activities.push({
                     id: crypto.randomUUID(),
                     label: activityModal.label,
-                    subordinateId: subId
+                    subordinateIds: subIds
                 });
             }
             return { ...n, data: { ...n.data, activities } };
@@ -1054,28 +1055,55 @@ const syncActivityEdges = (currentNodes: Node[], currentEdges: Edge[]) => {
                     />
                 </div>
 
-                <div className="space-y-2">
+                <div className="space-y-3">
                     <Label className="text-[11px] font-black uppercase tracking-widest text-slate-400">
-                        MEMBRO RELACIONADO
+                        MEMBROS RELACIONADOS ({activityModal.subordinateIds.length})
                     </Label>
-                    <Select 
-                        value={activityModal.subordinateId} 
-                        onValueChange={val => setActivityModal(prev => ({ ...prev, subordinateId: val }))}
-                    >
-                        <SelectTrigger className="h-12 rounded-xl bg-slate-50 border-slate-100 font-bold text-slate-700">
-                            <SelectValue placeholder="Nenhum (Geral)" />
-                        </SelectTrigger>
-                        <SelectContent className="rounded-xl border-slate-100 shadow-xl p-1 max-h-[200px]">
-                            <SelectItem value="none" className="rounded-lg font-bold text-slate-400">Nenhum (Geral)</SelectItem>
-                            {allUsers.map(u => (
-                                <SelectItem key={u.user_id} value={u.user_id} className="rounded-lg font-bold text-slate-900">
-                                    {u.display_name || u.email}
-                                </SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
+                    <div className="rounded-2xl border border-slate-100 bg-slate-50/50 p-4">
+                        <ScrollArea className="h-[180px] pr-2">
+                            <div className="space-y-2">
+                                {allUsers.length === 0 ? (
+                                    <p className="text-xs text-slate-400 font-bold italic text-center py-4">Nenhum membro encontrado</p>
+                                ) : (
+                                    allUsers.map((u) => {
+                                        const isChecked = activityModal.subordinateIds.includes(u.user_id);
+                                        return (
+                                            <div 
+                                                key={u.user_id} 
+                                                className={cn(
+                                                    "flex items-center justify-between p-2.5 rounded-xl border transition-all cursor-pointer select-none",
+                                                    isChecked 
+                                                        ? "bg-white border-[hsl(var(--byfrost-accent)/0.3)] shadow-sm text-slate-900 font-bold" 
+                                                        : "bg-transparent border-transparent text-slate-500 hover:bg-white hover:border-slate-100 hover:text-slate-700"
+                                                )}
+                                                onClick={() => {
+                                                    setActivityModal(prev => {
+                                                        const ids = isChecked 
+                                                            ? prev.subordinateIds.filter(id => id !== u.user_id)
+                                                            : [...prev.subordinateIds, u.user_id];
+                                                        return { ...prev, subordinateIds: ids };
+                                                    });
+                                                }}
+                                            >
+                                                <div className="flex flex-col min-w-0">
+                                                    <span className="text-xs truncate">{u.display_name || u.email}</span>
+                                                    <span className="text-[9px] text-slate-400 uppercase tracking-wide font-medium mt-0.5">{u.role}</span>
+                                                </div>
+                                                <input 
+                                                    type="checkbox" 
+                                                    checked={isChecked}
+                                                    onChange={() => {}} // Controlled by wrapper div click
+                                                    className="h-4.5 w-4.5 rounded-md border-slate-350 text-[hsl(var(--byfrost-accent))] focus:ring-[hsl(var(--byfrost-accent))]"
+                                                />
+                                            </div>
+                                        );
+                                    })
+                                )}
+                            </div>
+                        </ScrollArea>
+                    </div>
                     <p className="text-[10px] text-slate-400 font-medium italic mt-1 leading-relaxed px-1">
-                        Selecione qualquer pessoa da equipe para indicar que esta atividade é executada em conjunto ou sob sua responsabilidade.
+                        Selecione as pessoas da equipe que executam esta atividade em conjunto ou sob sua responsabilidade para desenhar as linhas de conexão.
                     </p>
                 </div>
             </div>

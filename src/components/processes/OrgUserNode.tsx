@@ -82,7 +82,8 @@ export const OrgUserNode = ({ data, selected }: OrgUserNodeProps) => {
         <div className="flex flex-col gap-2">
             {data.activities && data.activities.length > 0 ? (
                 data.activities.map((act) => {
-                    const relatedUser = data.allUsers?.find(u => u.user_id === act.subordinateId);
+                    const relatedIds = act.subordinateIds || (act.subordinateId ? [act.subordinateId] : []);
+                    const relatedUsers = (data.allUsers || []).filter(u => relatedIds.includes(u.user_id));
                     return (
                         <div 
                             key={act.id} 
@@ -92,13 +93,26 @@ export const OrgUserNode = ({ data, selected }: OrgUserNodeProps) => {
                             <div className="flex items-center gap-3 min-w-0">
                                 <div className="flex flex-col min-w-0">
                                     <span className="text-[11px] font-bold text-slate-800 truncate">{act.label}</span>
-                                    {relatedUser && (
-                                        <div className="flex items-center gap-1.5 mt-1">
-                                            <div className="h-4 w-4 rounded-md bg-slate-100 flex items-center justify-center text-[7px] font-black text-slate-500 border border-slate-200">
-                                                {initials(relatedUser.display_name || relatedUser.email)}
+                                    {relatedUsers.length > 0 && (
+                                        <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                                            <div className="flex -space-x-1.5 overflow-hidden">
+                                                {relatedUsers.slice(0, 4).map((user) => (
+                                                    <div 
+                                                        key={user.user_id}
+                                                        className="inline-block h-5 w-5 rounded-full ring-2 ring-white bg-slate-100 flex items-center justify-center text-[7px] font-black text-slate-500 border border-slate-200"
+                                                        title={user.display_name || user.email}
+                                                    >
+                                                        {initials(user.display_name || user.email)}
+                                                    </div>
+                                                ))}
+                                                {relatedUsers.length > 4 && (
+                                                    <div className="inline-block h-5 w-5 rounded-full ring-2 ring-white bg-slate-200 flex items-center justify-center text-[7px] font-black text-slate-500 border border-slate-200">
+                                                        +{relatedUsers.length - 4}
+                                                    </div>
+                                                )}
                                             </div>
-                                            <span className="text-[9px] text-[hsl(var(--byfrost-accent))] font-bold italic">
-                                                {firstName(relatedUser.display_name || relatedUser.email)}
+                                            <span className="text-[9px] text-[hsl(var(--byfrost-accent))] font-bold italic truncate max-w-[180px]">
+                                                {relatedUsers.map(u => firstName(u.display_name || u.email)).join(', ')}
                                             </span>
                                         </div>
                                     )}
