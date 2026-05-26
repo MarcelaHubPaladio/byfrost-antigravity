@@ -78,9 +78,9 @@ export function GlobalDashboardOverview() {
       console.log("[Gerar Relatório] Chamando Edge Function 'jobs-processor' para processar a fila...");
       
       // Await para sabermos exatamente o resultado do processamento da IA
-      // Passamos o journey_id para que o worker puxe e processe este exato job imediatamente!
+      // Passamos o job_id exato que acabamos de criar para bypassar buscas complexas
       const invokeRes = await supabase.functions.invoke("jobs-processor", {
-        body: { journey_id: journeyId }
+        body: { job_id: res.data[0].id }
       });
       
       console.log("[Gerar Relatório] Retorno da IA (Edge Function):", JSON.stringify(invokeRes.data, null, 2));

@@ -1420,7 +1420,7 @@ serve(async (req: any) => {
     const batchSize = 10;
     const body = await req.json().catch(() => ({}));
     const manualCommitmentId = String(body.commitment_id ?? "").trim();
-    const manualJourneyId = String(body.journey_id ?? "").trim();
+    const manualJobId = String(body.job_id ?? "").trim();
 
     // Fetch pending jobs base query
     let jobsSelect: any = supabase
@@ -1460,12 +1460,10 @@ serve(async (req: any) => {
       }
       // Re-assign the mutated builder!
       jobsSelect = jobsSelect.contains("payload_json", { commitment_id: manualCommitmentId });
-    } else if (manualJourneyId) {
+    } else if (manualJobId) {
       jobsSelect = jobsSelect
-        .eq("type", "GUARDIAO_INSIGHTS_GENERATE")
-        .contains("payload_json", { journey_id: manualJourneyId })
-        .order("created_at", { ascending: false })
-        .limit(1); // just process this one directly
+        .eq("id", manualJobId)
+        .limit(1); // just process this exact job directly
     } else {
       jobsSelect = jobsSelect
         .lte("run_after", new Date().toISOString())
