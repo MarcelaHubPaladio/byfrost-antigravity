@@ -60,15 +60,21 @@ export function GlobalDashboardOverview() {
   const generateInsightMut = useMutation({
     mutationFn: async ({ journeyId, model }: { journeyId: string; model: string }) => {
       const idempotencyKey = `MANUAL_GUARDIAO_INSIGHTS:${activeTenantId}:${journeyId}:${Date.now()}`;
-      const { error } = await supabase.from("job_queue").insert({
+      console.log(`[Gerar Relatório] Iniciando requisição para journeyId: ${journeyId}, model: ${model}, idempotencyKey: ${idempotencyKey}`);
+      
+      const res = await supabase.from("job_queue").insert({
         tenant_id: activeTenantId!,
         type: "GUARDIAO_INSIGHTS_GENERATE",
         idempotency_key: idempotencyKey,
         payload_json: { journey_id: journeyId, model },
         status: "pending",
         run_after: new Date().toISOString(),
-      });
-      if (error) throw error;
+      }).select();
+      
+      console.log("[Gerar Relatório] Retorno do insert no job_queue:", res);
+      
+      if (res.error) throw res.error;
+      return res.data;
     },
     onSuccess: () => {
       toast({ title: "Geração iniciada", description: "O motor IA está analisando os dados em background. Isso pode levar alguns segundos." });
@@ -179,6 +185,35 @@ export function GlobalDashboardOverview() {
       });
     }
   }, [insightsQ.data]);
+
+  // Polling para debug: verifica a cada 10s o status da fila de jobs
+  useQuery({
+    queryKey: ["debug_job_queue_status", activeTenantId, Object.keys(loadingJourneys)],
+    enabled: Object.keys(loadingJourneys).length > 0,
+    refetchInterval: 10000,
+    queryFn: async () => {
+      const keys = Object.keys(loadingJourneys);
+      if (keys.length === 0) return null;
+      
+      console.log(`[Status Poll 10s] Checando status na job_queue para as jornadas que estão carregando...`);
+      
+      const { data, error } = await supabase
+        .from("job_queue")
+        .select("id, status, error_message, created_at, payload_json")
+        .eq("tenant_id", activeTenantId!)
+        .eq("type", "GUARDIAO_INSIGHTS_GENERATE")
+        .order("created_at", { ascending: false })
+        .limit(10);
+        
+      if (error) {
+        console.error("[Status Poll 10s] Erro ao consultar job_queue:", error);
+        return null;
+      }
+      
+      console.log("[Status Poll 10s] Últimos 10 jobs de geração de insights:", data);
+      return data;
+    }
+  });
 
   const { maxTokens, usedTokens } = tenantPlanQ.data || { maxTokens: 10000, usedTokens: 0 };
   const percentUsed = maxTokens > 0 ? Math.min(100, Math.round((usedTokens / maxTokens) * 100)) : 0;
