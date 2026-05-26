@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { useTenant } from "@/providers/TenantProvider";
-import { AppShell } from "@/components/AppShell";
+import { useTenant } from "@/providers/TenantProvider";
 import { Clock, Filter, Calendar, Zap, Search, Activity, Users, SearchX, User } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -13,6 +13,7 @@ type TimelineEvent = {
   occurred_at: string;
   event_type: string;
   actor_type: string;
+  actor_id?: string | null;
   message: string;
   case_id: string | null;
   cases?: { title: string | null; journeys?: { name: string } } | null;
@@ -34,7 +35,7 @@ export default function GlobalTimeline() {
     queryFn: async () => {
       let query = supabase
         .from("timeline_events")
-        .select("id, occurred_at, event_type, actor_type, message, case_id, cases(title, journeys(name))")
+        .select("id, occurred_at, event_type, actor_type, actor_id, message, case_id, cases(title, journeys(name))")
         .eq("tenant_id", activeTenantId!)
         .order("occurred_at", { ascending: false });
 
@@ -60,6 +61,30 @@ export default function GlobalTimeline() {
     }
   });
 
+  const usersQ = useQuery({
+    queryKey: ["users_profile", activeTenantId],
+    enabled: Boolean(activeTenantId),
+    queryFn: async () => {
+      const { data, error } = await supabase.from("users_profile").select("user_id, display_name, role").eq("tenant_id", activeTenantId!);
+      if (error) throw error;
+      const map = new Map<string, any>();
+      data?.forEach(u => map.set(u.user_id, u));
+      return map;
+    }
+  });
+
+  const getActorName = (evt: TimelineEvent) => {
+    let name = evt.actor_type;
+    if (evt.actor_id && usersQ.data?.has(evt.actor_id)) {
+      const u = usersQ.data.get(evt.actor_id);
+      const parts = (u.display_name || "Usuário").split(" ");
+      const firstName = parts[0];
+      const lastNameInit = parts.length > 1 ? ` ${parts[parts.length - 1][0]}.` : "";
+      name = `${firstName}${lastNameInit} (${u.role})`;
+    }
+    return name;
+  };
+
   const filteredData = timelineQ.data?.filter(evt => {
     if (!filterText) return true;
     const lower = filterText.toLowerCase();
@@ -72,25 +97,9 @@ export default function GlobalTimeline() {
   });
 
   return (
-    <AppShell>
-      <div className="max-w-4xl mx-auto p-4 sm:p-6 lg:p-8 space-y-8 animate-in fade-in zoom-in-95 duration-500">
-        
-        {/* Header */}
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-          <div>
-            <h1 className="text-2xl font-bold text-slate-800 tracking-tight flex items-center gap-3">
-              <div className="bg-indigo-100 p-2 rounded-xl">
-                <Activity className="h-6 w-6 text-indigo-600" />
-              </div>
-              Linha do Tempo
-            </h1>
-            <p className="text-slate-500 text-sm mt-1">
-              Acompanhe todos os eventos, atualizações e interações registradas no negócio.
-            </p>
-          </div>
-        </div>
-
-        {/* Filters Panel */}
+    <div className="w-full space-y-8 animate-in fade-in zoom-in-95 duration-500">
+      
+      {/* Filters Panel */}
         <div className="bg-white border border-slate-200 rounded-[24px] p-5 shadow-sm space-y-4">
           <div className="flex items-center gap-2 font-semibold text-sm text-slate-700 mb-2">
             <Filter className="h-4 w-4" />
@@ -218,7 +227,7 @@ export default function GlobalTimeline() {
                     <div className="mt-4 flex flex-wrap items-center gap-2 text-xs text-slate-500 font-medium">
                       <span className="flex items-center gap-1.5 bg-slate-50 px-2.5 py-1 rounded-lg border border-slate-100">
                         <Users className="w-3.5 h-3.5" />
-                        {event.actor_type}
+                        {getActorName(event)}
                       </span>
                       {event.cases && (
                         <span className="flex items-center gap-1.5 bg-slate-50 px-2.5 py-1 rounded-lg border border-slate-100">
@@ -239,8 +248,6 @@ export default function GlobalTimeline() {
             </div>
           )}
         </div>
-        
-      </div>
-    </AppShell>
+    </div>
   );
 }

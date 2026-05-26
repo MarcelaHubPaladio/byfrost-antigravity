@@ -7,7 +7,14 @@ import { Activity, Sparkles, Database, ShieldAlert, Zap, Clock, Users, Loader2 }
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { AppShell } from "@/components/AppShell";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import GlobalTimeline from "@/pages/GlobalTimeline";
 import { useToast } from "@/hooks/use-toast";
 
 type TimelineEvent = {
@@ -171,13 +178,6 @@ export function GlobalDashboardOverview() {
           </div>
           
           <div className="flex flex-col sm:flex-row items-center gap-4">
-            <Link to="/app/timeline">
-              <Button variant="outline" className="gap-2 bg-white text-indigo-600 border-indigo-200 hover:bg-indigo-50">
-                <Clock className="h-4 w-4" />
-                Ver Linha do Tempo Global
-              </Button>
-            </Link>
-
             <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm min-w-[200px]">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Tokens de IA</span>
@@ -199,9 +199,16 @@ export function GlobalDashboardOverview() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          
-          {/* Coluna 1 & 2: Top 3 Insights por Jornada */}
+        <Tabs defaultValue="overview" className="w-full">
+          <TabsList className="mb-6 grid w-full max-w-md grid-cols-2 bg-slate-100/80 p-1 rounded-xl">
+            <TabsTrigger value="overview" className="rounded-lg">Visão Geral</TabsTrigger>
+            <TabsTrigger value="timeline" className="rounded-lg">Linha do Tempo Global</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="overview" className="space-y-6 mt-0">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              
+              {/* Coluna 1 & 2: Top 3 Insights por Jornada */}
           <div className="lg:col-span-2 space-y-6">
             <h2 className="text-sm font-bold text-slate-800 uppercase tracking-wider flex items-center gap-2">
               <Sparkles className="h-4 w-4 text-amber-500" />
@@ -279,8 +286,9 @@ export function GlobalDashboardOverview() {
               </div>
             )}
           </div>
+        </div>
 
-          <Dialog open={!!generatingJourneyId} onOpenChange={(open) => !open && setGeneratingJourneyId(null)}>
+        <Dialog open={!!generatingJourneyId} onOpenChange={(open) => !open && setGeneratingJourneyId(null)}>
             <DialogContent className="sm:max-w-[425px]">
               <DialogHeader>
                 <DialogTitle>Gerar Novo Relatório</DialogTitle>
@@ -333,7 +341,13 @@ export function GlobalDashboardOverview() {
             </DialogContent>
           </Dialog>
 
-        </div>
+        </TabsContent>
+
+        <TabsContent value="timeline" className="mt-0">
+          <GlobalTimeline />
+        </TabsContent>
+
+      </Tabs>
       </div>
     </AppShell>
   );

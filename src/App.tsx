@@ -281,14 +281,7 @@ const App = () => (
                       </RequireRouteAccess>
                     }
                   />
-                  <Route
-                    path="/app/timeline"
-                    element={
-                      <RequireRouteAccess routeKey="app.dashboard">
-                        <GlobalTimeline />
-                      </RequireRouteAccess>
-                    }
-                  />
+
                   <Route
                     path="/app/trello"
                     element={
