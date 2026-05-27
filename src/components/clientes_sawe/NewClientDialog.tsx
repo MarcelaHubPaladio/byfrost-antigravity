@@ -52,11 +52,12 @@ export function NewClientDialog({
     enabled: !!activeTenantId && open,
     queryFn: async () => {
       const { data, error } = await supabase
-        .from("commercial_commitments")
-        .select("id, total_value, customer:core_entities(display_name)")
+        .from("core_entities")
+        .select("id, display_name, metadata")
         .eq("tenant_id", activeTenantId!)
-        .eq("commitment_type", "subscription")
-        .is("deleted_at", null);
+        .eq("entity_type", "offering")
+        .is("deleted_at", null)
+        .order("display_name");
       if (error) throw error;
       return data;
     },
@@ -88,17 +89,78 @@ export function NewClientDialog({
 
     setLoading(true);
     try {
-      // 1. Create Case
+      // 1. Create client as core_entity
+      const { data: customerEntity, error: entityErr } = await supabase
+        .from("core_entities")
+        .insert({
+          tenant_id: activeTenantId,
+          entity_type: "party",
+          subtype: "customer",
+          display_name: formData.name,
+          metadata: {
+            email: formData.email || null,
+            whatsapp: formData.whatsapp || null,
+            cpf: formData.cpf || null,
+          }
+        })
+        .select()
+        .single();
+      if (entityErr) throw entityErr;
+
+      // 2. Create active subscription commercial_commitment
+      let commitmentId: string | null = null;
+      if (formData.plan_id && customerEntity) {
+        const { data: comm, error: commErr } = await supabase
+          .from("commercial_commitments")
+          .insert({
+            tenant_id: activeTenantId,
+            commitment_type: "subscription",
+            customer_entity_id: customerEntity.id,
+            status: "active",
+            total_value: null,
+          })
+          .select("id")
+          .single();
+        if (commErr) throw commErr;
+        commitmentId = comm.id;
+
+        // Create commitment item
+        const { error: itemErr } = await supabase
+          .from("commitment_items")
+          .insert({
+            tenant_id: activeTenantId,
+            commitment_id: commitmentId,
+            offering_entity_id: formData.plan_id,
+            quantity: 1,
+            requires_fulfillment: true,
+            metadata: {},
+          });
+        if (itemErr) throw itemErr;
+
+        // Invoke commitment orchestrator to generate deliverables based on templates
+        try {
+          await supabase.functions.invoke("commitment-orchestrator", {
+            body: { commitment_id: commitmentId },
+          });
+        } catch (orchErr) {
+          console.error("Falha ao orquestrar entregáveis:", orchErr);
+        }
+      }
+
+      // 3. Create Case linked to customer entity and commitment
       const { data: newCase, error: caseErr } = await supabase
         .from("cases")
         .insert({
           tenant_id: activeTenantId,
           journey_id: journey.id,
           title: formData.name,
-          state: "new", // Assuming "new" is the initial state
+          state: "new",
+          customer_entity_id: customerEntity.id,
           meta_json: {
             journey_key: "clientes_sawe",
             created_via: "new_client_dialog",
+            entity_id: customerEntity.id,
+            commitment_id: commitmentId,
           },
         })
         .select()
@@ -106,7 +168,7 @@ export function NewClientDialog({
 
       if (caseErr) throw caseErr;
 
-      // 2. Save Fields
+      // 4. Save Fields
       const fieldRows = [
         { key: "name", value_text: formData.name },
         { key: "cpf", value_text: formData.cpf },
@@ -133,14 +195,14 @@ export function NewClientDialog({
         if (fieldErr) throw fieldErr;
       }
 
-      // 3. Initial Timeline Event
+      // 5. Initial Timeline Event
       await supabase.from("timeline_events").insert({
         tenant_id: activeTenantId,
         case_id: newCase.id,
         event_type: "case_created",
         actor_type: "admin",
         actor_id: user?.id ?? null,
-        message: `Cliente "${formData.name}" cadastrado na jornada SAWE.`,
+        message: `Cliente "${formData.name}" cadastrado na jornada SAWE com o plano selecionado.`,
         occurred_at: new Date().toISOString(),
       });
 
@@ -246,11 +308,14 @@ export function NewClientDialog({
                 <SelectValue placeholder="Selecione um plano..." />
               </SelectTrigger>
               <SelectContent className="rounded-2xl">
-                {plans?.map((plan) => (
-                  <SelectItem key={plan.id} value={plan.id}>
-                    {plan.customer?.display_name || "Assinatura"} - R$ {plan.total_value}
-                  </SelectItem>
-                ))}
+                {plans?.map((plan) => {
+                  const price = plan.metadata?.price || plan.metadata?.value || plan.metadata?.total_value;
+                  return (
+                    <SelectItem key={plan.id} value={plan.id}>
+                      {plan.display_name} {price ? `- R$ ${price}` : ""}
+                    </SelectItem>
+                  );
+                })}
                 {plans?.length === 0 && (
                   <SelectItem value="none" disabled>Nenhum plano disponível</SelectItem>
                 )}

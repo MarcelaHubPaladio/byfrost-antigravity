@@ -10,8 +10,21 @@ import {
   User, 
   Trash2, 
   MoreVertical,
-  Activity
+  Activity,
+  CheckCircle2,
+  PackageCheck,
+  ListTodo,
+  Calendar,
+  Layers
 } from "lucide-react";
+import { Progress } from "@/components/ui/progress";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
@@ -94,6 +107,38 @@ export default function ClientesSaweCase() {
       return data;
     },
   });
+
+  const commitmentId = caseData?.meta_json?.commitment_id;
+
+  const { data: deliverables, isLoading: isLoadingDeliverables } = useQuery({
+    queryKey: ["case_deliverables", activeTenantId, commitmentId],
+    enabled: !!activeTenantId && !!commitmentId,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("deliverables")
+        .select("*")
+        .eq("tenant_id", activeTenantId!)
+        .eq("commitment_id", commitmentId)
+        .is("deleted_at", null)
+        .order("created_at", { ascending: true });
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  const updateDeliverableStatus = async (deliverableId: string, newStatus: string) => {
+    try {
+      const { error } = await supabase
+        .from("deliverables")
+        .update({ status: newStatus })
+        .eq("id", deliverableId);
+      if (error) throw error;
+      showSuccess("Status do entregável atualizado");
+      qc.invalidateQueries({ queryKey: ["case_deliverables", activeTenantId, commitmentId] });
+    } catch (err: any) {
+      showError(err.message || "Erro ao atualizar status");
+    }
+  };
 
   const deleteCase = async () => {
     if (!caseId) return;
@@ -202,6 +247,105 @@ export default function ClientesSaweCase() {
                 {/* Central Section */}
                 <div className="col-span-12 lg:col-span-8 space-y-8">
                   <ClientDataEditorCard caseId={caseId!} fields={fieldsData} />
+
+                  {/* Entregáveis do Cliente */}
+                  <Card className="rounded-[32px] border-none bg-white p-8 shadow-sm space-y-6">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-4">
+                        <div className="h-12 w-12 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center">
+                          <PackageCheck className="h-6 w-6" />
+                        </div>
+                        <div>
+                          <h3 className="text-lg font-black text-slate-900 tracking-tight">Entregáveis do Plano</h3>
+                          <p className="text-[11px] text-slate-500 font-medium uppercase tracking-wider">Acompanhamento e Entrega de Serviços</p>
+                        </div>
+                      </div>
+                      <Badge className="bg-slate-50 text-slate-500 border border-slate-100 rounded-lg text-[10px] font-black px-3 py-1">
+                        {deliverables?.length || 0} TOTAL
+                      </Badge>
+                    </div>
+
+                    {deliverables && deliverables.length > 0 ? (
+                      <div className="space-y-6">
+                        {/* Progress */}
+                        {(() => {
+                          const completed = deliverables.filter(d => d.status === "completed" || d.status === "done" || d.status === "entregue").length;
+                          const pct = Math.round((completed / deliverables.length) * 100);
+                          return (
+                            <div className="space-y-2 bg-slate-50/50 border border-slate-100 rounded-2xl p-4">
+                              <div className="flex items-center justify-between text-xs font-bold text-slate-600">
+                                <span>PROGRESSO DE EXECUÇÃO</span>
+                                <span className="text-blue-600 font-black">{pct}%</span>
+                              </div>
+                              <Progress value={pct} className="h-2 bg-slate-100 [&>div]:bg-blue-600" />
+                              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">
+                                {completed} de {deliverables.length} entregáveis finalizados
+                              </p>
+                            </div>
+                          );
+                        })()}
+
+                        {/* List */}
+                        <div className="divide-y divide-slate-100">
+                          {deliverables.map((del) => {
+                            const isDone = del.status === "completed" || del.status === "done" || del.status === "entregue";
+                            return (
+                              <div key={del.id} className="py-4 flex items-center justify-between first:pt-0 last:pb-0 gap-4">
+                                <div className="flex items-center gap-3">
+                                  <div className={`h-8 w-8 rounded-xl flex items-center justify-center ${isDone ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-50 text-slate-400'}`}>
+                                    {isDone ? <CheckCircle2 className="h-4 w-4" /> : <ListTodo className="h-4 w-4" />}
+                                  </div>
+                                  <div>
+                                    <h4 className={`text-sm font-bold ${isDone ? 'text-slate-500 line-through' : 'text-slate-800'}`}>
+                                      {del.name}
+                                    </h4>
+                                    <div className="flex items-center gap-2 mt-0.5 text-[10px] text-slate-400 font-medium">
+                                      <Calendar className="h-3 w-3" />
+                                      <span>
+                                        {del.due_date ? `Vence em ${new Date(del.due_date).toLocaleDateString("pt-BR")}` : "Sem prazo definido"}
+                                      </span>
+                                    </div>
+                                  </div>
+                                </div>
+
+                                <div className="flex items-center gap-3">
+                                  <Select
+                                    value={del.status || "pending"}
+                                    onValueChange={(val) => updateDeliverableStatus(del.id, val)}
+                                  >
+                                    <SelectTrigger className={`h-9 w-32 rounded-xl text-[10px] font-bold uppercase transition-all ${
+                                      isDone ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 
+                                      del.status === 'in_progress' ? 'bg-blue-50 text-blue-700 border-blue-200' :
+                                      del.status === 'canceled' ? 'bg-rose-50 text-rose-700 border-rose-200' :
+                                      'bg-slate-50 text-slate-600 border-slate-200'
+                                    }`}>
+                                      <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent className="rounded-xl">
+                                      <SelectItem value="pending" className="text-[10px] font-bold uppercase">Pendente</SelectItem>
+                                      <SelectItem value="in_progress" className="text-[10px] font-bold uppercase">Em Andamento</SelectItem>
+                                      <SelectItem value="completed" className="text-[10px] font-bold uppercase">Concluído</SelectItem>
+                                      <SelectItem value="canceled" className="text-[10px] font-bold uppercase">Cancelado</SelectItem>
+                                    </SelectContent>
+                                  </Select>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ) : isLoadingDeliverables ? (
+                      <div className="py-8 text-center text-slate-400 text-xs font-semibold animate-pulse">
+                        Carregando entregáveis vinculados...
+                      </div>
+                    ) : (
+                      <div className="rounded-2xl border-2 border-dashed border-slate-100 bg-slate-50/50 p-8 text-center">
+                        <Layers className="h-8 w-8 text-slate-300 mx-auto mb-2" />
+                        <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider">Nenhum entregável ativo</h4>
+                        <p className="text-[11px] text-slate-500 font-medium mt-1">Este cliente não possui um plano configurado ou os entregáveis ainda não foram gerados.</p>
+                      </div>
+                    )}
+                  </Card>
                 </div>
 
                 {/* Sidebar */}

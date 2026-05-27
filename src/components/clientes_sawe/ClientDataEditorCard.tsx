@@ -59,11 +59,12 @@ export function ClientDataEditorCard({
     enabled: !!activeTenantId,
     queryFn: async () => {
       const { data, error } = await supabase
-        .from("commercial_commitments")
-        .select("id, total_value, customer:core_entities(display_name)")
+        .from("core_entities")
+        .select("id, display_name, metadata")
         .eq("tenant_id", activeTenantId!)
-        .eq("commitment_type", "subscription")
-        .is("deleted_at", null);
+        .eq("entity_type", "offering")
+        .is("deleted_at", null)
+        .order("display_name");
       if (error) throw error;
       return data;
     },
@@ -87,6 +88,85 @@ export function ClientDataEditorCard({
         onConflict: "case_id,key",
       });
       if (error) throw error;
+
+      // Plan changed sync
+      if (draft.plan_id && draft.plan_id !== initial.plan_id) {
+        const { data: caseObj } = await supabase
+          .from("cases")
+          .select("customer_entity_id, meta_json")
+          .eq("id", caseId)
+          .single();
+
+        let customerEntityId = caseObj?.customer_entity_id;
+        let commitmentId = caseObj?.meta_json?.commitment_id;
+
+        if (customerEntityId) {
+          if (!commitmentId) {
+            const { data: existingComm } = await supabase
+              .from("commercial_commitments")
+              .select("id")
+              .eq("customer_entity_id", customerEntityId)
+              .eq("commitment_type", "subscription")
+              .is("deleted_at", null)
+              .maybeSingle();
+
+            if (existingComm) {
+              commitmentId = existingComm.id;
+            } else {
+              const { data: newComm } = await supabase
+                .from("commercial_commitments")
+                .insert({
+                  tenant_id: activeTenantId,
+                  commitment_type: "subscription",
+                  customer_entity_id: customerEntityId,
+                  status: "active",
+                })
+                .select("id")
+                .single();
+              commitmentId = newComm?.id;
+            }
+
+            if (commitmentId) {
+              await supabase
+                .from("cases")
+                .update({
+                  meta_json: {
+                    ...(caseObj.meta_json || {}),
+                    commitment_id: commitmentId,
+                  }
+                })
+                .eq("id", caseId);
+            }
+          }
+
+          if (commitmentId) {
+            // Delete old items and insert the new one
+            await supabase
+              .from("commitment_items")
+              .delete()
+              .eq("commitment_id", commitmentId);
+
+            await supabase
+              .from("commitment_items")
+              .insert({
+                tenant_id: activeTenantId,
+                commitment_id: commitmentId,
+                offering_entity_id: draft.plan_id,
+                quantity: 1,
+                requires_fulfillment: true,
+              });
+
+            // Trigger orchestrator to generate/regenerate deliverables
+            try {
+              await supabase.functions.invoke("commitment-orchestrator", {
+                body: { commitment_id: commitmentId },
+              });
+            } catch (orchErr) {
+              console.error("Erro ao re-orquestrar entregáveis:", orchErr);
+            }
+          }
+        }
+      }
 
       // Update case title if name changed
       if (draft.name !== initial.name) {
@@ -112,6 +192,7 @@ export function ClientDataEditorCard({
       qc.invalidateQueries({ queryKey: ["case", caseId] });
       qc.invalidateQueries({ queryKey: ["case_fields", caseId] });
       qc.invalidateQueries({ queryKey: ["case_timeline", caseId] });
+      qc.invalidateQueries({ queryKey: ["case_deliverables", activeTenantId] });
     } catch (err: any) {
       showError(err.message || "Erro ao salvar");
     } finally {
@@ -219,11 +300,14 @@ export function ClientDataEditorCard({
                 <SelectValue placeholder="Selecione o plano..." />
               </SelectTrigger>
               <SelectContent className="rounded-2xl">
-                {plans?.map((plan) => (
-                  <SelectItem key={plan.id} value={plan.id}>
-                    {plan.customer?.display_name || "Assinatura"} - R$ {plan.total_value}
-                  </SelectItem>
-                ))}
+                {plans?.map((plan) => {
+                  const price = plan.metadata?.price || plan.metadata?.value || plan.metadata?.total_value;
+                  return (
+                    <SelectItem key={plan.id} value={plan.id}>
+                      {plan.display_name} {price ? `- R$ ${price}` : ""}
+                    </SelectItem>
+                  );
+                })}
               </SelectContent>
             </Select>
           </div>
