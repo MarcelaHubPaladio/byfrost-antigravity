@@ -319,7 +319,7 @@ const App = () => (
                   <Route
                     path="/app/orders"
                     element={
-                      <RequireRouteAccess routeKey="app.dashboard">
+                      <RequireRouteAccess routeKey="app.orders">
                         <Orders />
                       </RequireRouteAccess>
                     }
@@ -743,7 +743,7 @@ const App = () => (
                   <Route
                     path="/app/orders/:id"
                     element={
-                      <RequireRouteAccess routeKey="app.dashboard">
+                      <RequireRouteAccess routeKey="app.orders.detail">
                         <SalesOrderCase />
                       </RequireRouteAccess>
                     }
