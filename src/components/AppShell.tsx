@@ -614,6 +614,8 @@ export function AppShell({
         "app.trello",
         "app.content",
         "app.operacao_m30",
+        "app.orders",
+        "app.orders.detail",
         // Core
         "app.entities",
         "app.inventory",
@@ -1042,7 +1044,7 @@ export function AppShell({
                   </DesktopHoverMenu>
                 )}
                 {hasMktTecha && <NavTile to="/app/mkt-techa" icon={Star} label="MKT Técha" disabled={!can("app.dashboard")} />}
-                {hasOrders && <NavTile to="/app/orders" icon={Package} label="Pedidos" disabled={!can("app.dashboard")} />}
+                {hasOrders && <NavTile to="/app/orders" icon={Package} label="Pedidos" disabled={!can("app.orders")} />}
                 {hasClientesSawe && <NavTile to="/app/clientes-sawe" icon={Users} label="SAWE" disabled={!can("app.dashboard")} />}
                 {hasCrm && <NavTile to="/app/crm" icon={LayoutDashboard} label="CRM" disabled={!can("app.crm")} />}
                 {hasMetaContent && (
@@ -1340,6 +1342,15 @@ export function AppShell({
                                 icon={Star}
                                 label="MKT Técha"
                                 disabled={!can("app.dashboard")}
+                                onNavigate={() => setMobileNavOpen(false)}
+                              />
+                            )}
+                            {hasOrders && (
+                              <MobileNavItem
+                                to="/app/orders"
+                                icon={Package}
+                                label="Pedidos"
+                                disabled={!can("app.orders")}
                                 onNavigate={() => setMobileNavOpen(false)}
                               />
                             )}
