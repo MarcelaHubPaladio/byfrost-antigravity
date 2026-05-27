@@ -650,11 +650,14 @@ export function AppShell({
       ];
 
       try {
-        return await checkRoutesAccess({
+        console.log("[nav_access] Fetching route permissions for role:", roleKey, "keys:", keys);
+        const data = await checkRoutesAccess({
           tenantId: activeTenantId!,
           roleKey,
           routeKeys: keys,
         });
+        console.log("[nav_access] Fetched route permissions:", data);
+        return data;
       } catch (err) {
         console.error("[nav_access] Bulk check failed:", err);
         return {};
@@ -1044,7 +1047,15 @@ export function AppShell({
                   </DesktopHoverMenu>
                 )}
                 {hasMktTecha && <NavTile to="/app/mkt-techa" icon={Star} label="MKT Técha" disabled={!can("app.dashboard")} />}
-                {hasOrders && <NavTile to="/app/orders" icon={Package} label="Pedidos" disabled={!can("app.orders")} />}
+                {hasOrders && (
+                  <NavTile
+                    to="/app/orders"
+                    icon={Package}
+                    label="Pedidos"
+                    disabled={!can("app.orders")}
+                    onClick={() => console.log("[DEBUG AppShell] Clicked Pedidos. can(app.orders):", can("app.orders"))}
+                  />
+                )}
                 {hasClientesSawe && <NavTile to="/app/clientes-sawe" icon={Users} label="SAWE" disabled={!can("app.dashboard")} />}
                 {hasCrm && <NavTile to="/app/crm" icon={LayoutDashboard} label="CRM" disabled={!can("app.crm")} />}
                 {hasMetaContent && (
