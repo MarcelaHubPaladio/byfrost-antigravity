@@ -704,7 +704,7 @@ A importação vai formatar tudo direitinho!",admin,checkpoint
                     </Select>
                 </div>
 
-                <div className="space-y-2">
+                <div className="space-y-2 w-full min-w-0">
                     <div className="flex items-center justify-between px-1">
                         <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Processos a Exportar</label>
                         <Button 
@@ -723,17 +723,17 @@ A importação vai formatar tudo direitinho!",admin,checkpoint
                             {(processesQ.data || []).length === exportSelectedProcesses.length ? "Desmarcar Todos" : "Marcar Todos"}
                         </Button>
                     </div>
-                    <div className="relative mb-2">
+                    <div className="relative mb-2 w-full">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                         <Input 
                             value={exportSearch}
                             onChange={e => setExportSearch(e.target.value)}
                             placeholder="Buscar processos..."
-                            className="h-10 pl-9 rounded-xl border-slate-200 bg-slate-50 focus-visible:ring-slate-200"
+                            className="h-10 pl-9 rounded-xl border-slate-200 bg-slate-50 focus-visible:ring-slate-200 w-full"
                         />
                     </div>
-                    <div className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden flex flex-col">
-                        <div className="max-h-[240px] overflow-y-auto custom-scrollbar p-1">
+                    <div className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden flex flex-col w-full min-w-0">
+                        <div className="max-h-[240px] overflow-y-auto custom-scrollbar p-1 w-full">
                             {(() => {
                                 const list = processesQ.data || [];
                                 const filtered = exportSearch.trim() === "" ? list : list.filter(p => p.title.toLowerCase().includes(exportSearch.toLowerCase()) || p.process_type.toLowerCase().includes(exportSearch.toLowerCase()));
@@ -748,7 +748,7 @@ A importação vai formatar tudo direitinho!",admin,checkpoint
                                         <div 
                                             key={p.id} 
                                             className={cn(
-                                                "flex items-center gap-3 p-3 rounded-xl cursor-pointer transition-all border border-transparent",
+                                                "flex items-center gap-3 p-3 rounded-xl cursor-pointer transition-all border border-transparent w-full min-w-0",
                                                 isSelected ? "bg-slate-50 border-slate-200" : "hover:bg-slate-50"
                                             )}
                                             onClick={() => {
@@ -763,9 +763,9 @@ A importação vai formatar tudo direitinho!",admin,checkpoint
                                             )}>
                                                 <Check className="h-3.5 w-3.5" />
                                             </div>
-                                            <div className="flex-1 min-w-0">
-                                                <p className="text-sm font-bold text-slate-800 truncate leading-tight" title={p.title}>{p.title}</p>
-                                                <p className="text-[10px] text-slate-500 uppercase tracking-widest mt-0.5 font-medium">{p.process_type}</p>
+                                            <div className="flex-1 min-w-0 overflow-hidden">
+                                                <p className="text-sm font-bold text-slate-800 truncate leading-tight block w-full" title={p.title}>{p.title}</p>
+                                                <p className="text-[10px] text-slate-500 uppercase tracking-widest mt-0.5 font-medium truncate w-full">{p.process_type}</p>
                                             </div>
                                         </div>
                                     );
