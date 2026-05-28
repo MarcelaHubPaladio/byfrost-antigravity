@@ -662,7 +662,6 @@ A importação vai formatar tudo direitinho!",admin,checkpoint
             </DialogFooter>
         </DialogContent>
       </Dialog>
-      </Dialog>
 
       <Dialog open={exportModalOpen} onOpenChange={setExportModalOpen}>
         <DialogContent className="sm:max-w-[500px] rounded-[32px] border-none shadow-2xl p-8">
