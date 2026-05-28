@@ -19,8 +19,21 @@ import {
   BarChart3,
   FileText,
   Workflow,
-  GitFork
+  GitFork,
+  UploadCloud,
+  Download,
+  FileSpreadsheet
 } from "lucide-react";
+import Papa from "papaparse";
+import { marked } from "marked";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { showError, showSuccess } from "@/utils/toast";
 import { cn } from "@/lib/utils";
@@ -53,6 +66,8 @@ export function ProcessRepositoryPanel() {
   const [activeTab, setActiveTab] = useState("home");
   const [search, setSearch] = useState("");
   const [selectedHomeFlowId, setSelectedHomeFlowId] = useState<string | null>(null);
+  const [importModalOpen, setImportModalOpen] = useState(false);
+  const [isImporting, setIsImporting] = useState(false);
 
   const processesQ = useQuery({
     queryKey: ["processes", activeTenantId],
@@ -151,6 +166,108 @@ export function ProcessRepositoryPanel() {
 
   const canManage = isAdmin || isSuperAdmin;
 
+  const handleDownloadTemplate = () => {
+    const csvContent = `Título,Descrição,Cargo Alvo,Tipo
+Processo Exemplo,"**Exemplo com Markdown!**
+Você pode usar:
+- Listas com traços
+  - E identar com espaços
+- **Negrito** e *itálico*
+- [Links](https://exemplo.com)
+
+A importação vai formatar tudo direitinho!",admin,checkpoint
+`;
+    const blob = new Blob([new Uint8Array([0xEF, 0xBB, 0xBF]), csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', 'modelo_importacao_processos.csv');
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setIsImporting(true);
+    Papa.parse(file, {
+      header: true,
+      skipEmptyLines: true,
+      complete: async (results) => {
+        try {
+          const rows = results.data as any[];
+          if (rows.length === 0) {
+            showError("O arquivo está vazio.");
+            setIsImporting(false);
+            return;
+          }
+
+          // Use a for...of loop to handle async processing properly for all rows
+          const processesToInsert = [];
+          
+          for (const row of rows) {
+            const title = row['Título'] || row['Titulo'] || 'Processo sem título';
+            const descriptionRaw = row['Descrição'] || row['Descricao'] || null;
+            const targetRoleName = row['Cargo Alvo'] || null;
+            let targetRoleKey = null;
+
+            if (targetRoleName) {
+                // Tenta achar o role pelo nome ou key
+                const roleEntry = tenantRolesQ.data?.find(r => r.name.toLowerCase() === targetRoleName.toLowerCase().trim() || r.key.toLowerCase() === targetRoleName.toLowerCase().trim());
+                if (roleEntry) {
+                    targetRoleKey = roleEntry.key;
+                }
+            }
+
+            const tipoRaw = (row['Tipo'] || '').toLowerCase().trim();
+            const processType = tipoRaw === 'roadmap' ? 'roadmap' : 'checkpoint';
+
+            let parsedDescription = null;
+            if (descriptionRaw) {
+               // marked.parse pode ser síncrono ou assíncrono em versões novas, 'await' garante segurança.
+               parsedDescription = await marked.parse(descriptionRaw.trim(), { breaks: true });
+            }
+
+            processesToInsert.push({
+              tenant_id: activeTenantId,
+              title: title.trim(),
+              description: parsedDescription,
+              target_role: targetRoleKey,
+              process_type: processType,
+              flowchart_json: { nodes: [], edges: [] },
+              checklists: [],
+              is_home_flowchart: false,
+              deleted_at: null
+            });
+          }
+
+          const { error } = await supabase
+            .from('processes')
+            .insert(processesToInsert);
+
+          if (error) throw error;
+
+          showSuccess(`${processesToInsert.length} processos importados com sucesso!`);
+          setImportModalOpen(false);
+          processesQ.refetch();
+        } catch (err: any) {
+          console.error(err);
+          showError("Erro ao importar: " + err.message);
+        } finally {
+          setIsImporting(false);
+          event.target.value = '';
+        }
+      },
+      error: (error: any) => {
+        showError("Erro ao ler arquivo: " + error.message);
+        setIsImporting(false);
+      }
+    });
+  };
+
   return (
     <div className="flex flex-col gap-4 p-4 md:p-6 lg:p-8 animate-in fade-in duration-500">
       <div className="flex flex-col gap-1">
@@ -178,12 +295,21 @@ export function ProcessRepositoryPanel() {
           </TabsList>
 
           {canManage && (
-            <Button 
-                onClick={() => navigate("/app/processes/new")}
-                className="h-10 rounded-2xl bg-[hsl(var(--byfrost-accent))] px-4 text-white hover:bg-[hsl(var(--byfrost-accent)/0.9)]"
-            >
-              <Plus className="mr-2 h-4 w-4" /> Novo Processo
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button 
+                  variant="outline"
+                  onClick={() => setImportModalOpen(true)}
+                  className="h-10 rounded-2xl border-slate-200 bg-white px-4 hover:bg-slate-50"
+              >
+                <UploadCloud className="mr-2 h-4 w-4 text-slate-500" /> Importar
+              </Button>
+              <Button 
+                  onClick={() => navigate("/app/processes/new")}
+                  className="h-10 rounded-2xl bg-[hsl(var(--byfrost-accent))] px-4 text-white hover:bg-[hsl(var(--byfrost-accent)/0.9)]"
+              >
+                <Plus className="mr-2 h-4 w-4" /> Novo Processo
+              </Button>
+            </div>
           )}
         </div>
 
@@ -326,6 +452,71 @@ export function ProcessRepositoryPanel() {
           </TabsContent>
         )}
       </Tabs>
+
+      <Dialog open={importModalOpen} onOpenChange={setImportModalOpen}>
+        <DialogContent className="sm:max-w-[425px] rounded-[32px] border-none shadow-2xl p-8">
+            <DialogHeader className="mb-4">
+                <div className="bg-[hsl(var(--byfrost-accent)/0.12)] w-fit p-3 rounded-2xl mb-4">
+                    <FileSpreadsheet className="h-6 w-6 text-[hsl(var(--byfrost-accent))]" />
+                </div>
+                <DialogTitle className="text-2xl font-black text-slate-900 leading-tight">
+                    Importação Massiva
+                </DialogTitle>
+                <DialogDescription className="text-slate-500 font-medium mt-2">
+                    Crie processos em lote importando uma planilha.
+                </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-6 py-2">
+                <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4 space-y-3">
+                    <p className="text-xs text-slate-600 font-medium">
+                        1. Primeiro, baixe nosso modelo CSV para garantir que as colunas estejam corretas.
+                    </p>
+                    <Button 
+                        variant="outline" 
+                        size="sm" 
+                        className="w-full rounded-xl bg-white shadow-sm font-bold border-slate-200"
+                        onClick={handleDownloadTemplate}
+                    >
+                        <Download className="mr-2 h-4 w-4" /> Baixar Modelo CSV
+                    </Button>
+                </div>
+
+                <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4 space-y-3 relative overflow-hidden">
+                    <p className="text-xs text-slate-600 font-medium">
+                        2. Faça o upload da planilha preenchida (formato .csv).
+                    </p>
+                    <div className="relative">
+                        <input 
+                            type="file" 
+                            accept=".csv"
+                            onChange={handleFileUpload}
+                            disabled={isImporting}
+                            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed z-10"
+                        />
+                        <Button 
+                            className="w-full rounded-xl bg-slate-900 text-white hover:bg-slate-800 shadow-lg font-bold relative pointer-events-none"
+                            disabled={isImporting}
+                        >
+                            {isImporting ? "Importando..." : "Selecionar e Importar"}
+                            {!isImporting && <UploadCloud className="ml-2 h-4 w-4" />}
+                        </Button>
+                    </div>
+                </div>
+            </div>
+
+            <DialogFooter className="mt-4 sm:justify-start">
+                <Button 
+                    variant="ghost" 
+                    className="w-full rounded-xl font-bold text-slate-400 hover:text-slate-600"
+                    onClick={() => setImportModalOpen(false)}
+                    disabled={isImporting}
+                >
+                    Cancelar
+                </Button>
+            </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
