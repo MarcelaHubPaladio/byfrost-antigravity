@@ -30,7 +30,8 @@ import {
   Target,
   Printer,
   FilePlus,
-  FolderOpen
+  FolderOpen,
+  Download
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -427,6 +428,48 @@ const syncActivityEdges = (currentNodes: Node[], currentEdges: Edge[]) => {
     } catch (err: any) {
       console.error(err);
       showError("Erro ao gerar impressão: " + err.message);
+    }
+  };
+
+  const handleExportCSV = () => {
+    try {
+      showSuccess("Gerando CSV...");
+      
+      const userNodes = nodes.filter(n => n.type === 'userNode');
+      
+      if (userNodes.length === 0) {
+        showError("Não há colaboradores no organograma para exportar.");
+        return;
+      }
+
+      const headers = ['Colaborador', 'Cargo', 'Atividades Chaves'];
+      const csvRows = [headers.join(',')];
+
+      userNodes.forEach(node => {
+        const userName = `"${(node.data.userName || '').replace(/"/g, '""')}"`;
+        const roleName = `"${(node.data.roleName || '').replace(/"/g, '""')}"`;
+        
+        const activities = node.data.activities || [];
+        const activitiesString = activities.map((a: any) => a.label).join('; ');
+        const activitiesCSV = `"${activitiesString.replace(/"/g, '""')}"`;
+        
+        csvRows.push([userName, roleName, activitiesCSV].join(','));
+      });
+
+      const csvContent = csvRows.join('\n');
+      const blob = new Blob([new Uint8Array([0xEF, 0xBB, 0xBF]), csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `colaboradores_atividades_${new Date().toISOString().split('T')[0]}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } catch (err: any) {
+      console.error(err);
+      showError("Erro ao exportar CSV: " + err.message);
     }
   };
 
@@ -960,6 +1003,14 @@ const syncActivityEdges = (currentNodes: Node[], currentEdges: Edge[]) => {
                   <Trash2 className="h-3.5 w-3.5" />
                 </Button>
               )}
+              <Button 
+                  variant="outline" 
+                  size="sm" 
+                  className="rounded-xl h-9 border-slate-200" 
+                  onClick={handleExportCSV}
+              >
+                  <Download className="mr-2 h-3.5 w-3.5" /> CSV
+              </Button>
               <Button 
                   variant="outline" 
                   size="sm" 
