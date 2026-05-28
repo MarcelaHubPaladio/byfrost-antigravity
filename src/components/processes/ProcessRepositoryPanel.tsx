@@ -38,6 +38,13 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { showError, showSuccess } from "@/utils/toast";
 import { cn } from "@/lib/utils";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { ProcessAccordionItem } from "@/components/processes/ProcessAccordionItem";
 import { ProcessVisitDashboard } from "@/components/processes/ProcessVisitDashboard";
