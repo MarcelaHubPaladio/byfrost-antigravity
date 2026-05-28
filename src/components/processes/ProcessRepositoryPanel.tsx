@@ -23,7 +23,8 @@ import {
   UploadCloud,
   Download,
   FileSpreadsheet,
-  Printer
+  Printer,
+  Check
 } from "lucide-react";
 import Papa from "papaparse";
 import { marked } from "marked";
@@ -80,6 +81,7 @@ export function ProcessRepositoryPanel() {
   const [exportModalOpen, setExportModalOpen] = useState(false);
   const [exportSelectedUser, setExportSelectedUser] = useState("");
   const [exportSelectedProcesses, setExportSelectedProcesses] = useState<string[]>([]);
+  const [exportSearch, setExportSearch] = useState("");
 
   const processesQ = useQuery({
     queryKey: ["processes", activeTenantId],
@@ -685,13 +687,13 @@ A importação vai formatar tudo direitinho!",admin,checkpoint
             </DialogHeader>
 
             <div className="space-y-6 py-2">
-                <div className="space-y-2">
+                <div className="space-y-1">
                     <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Nome na Capa (Colaborador)</label>
                     <Select value={exportSelectedUser || "none"} onValueChange={(v) => setExportSelectedUser(v === "none" ? "" : v)}>
-                        <SelectTrigger className="h-11 rounded-xl border-slate-200">
+                        <SelectTrigger className="h-11 rounded-xl border-slate-200 bg-slate-50 focus:ring-slate-200 transition-colors">
                             <SelectValue placeholder="Sem nome na capa" />
                         </SelectTrigger>
-                        <SelectContent className="rounded-xl border-slate-100 max-h-[200px]">
+                        <SelectContent className="rounded-xl border-slate-200 shadow-xl max-h-[200px]">
                             <SelectItem value="none" className="italic text-slate-400">Sem nome na capa</SelectItem>
                             {usersQ.data?.map(u => (
                                 <SelectItem key={u.user_id} value={u.display_name || u.user_id}>
@@ -703,12 +705,12 @@ A importação vai formatar tudo direitinho!",admin,checkpoint
                 </div>
 
                 <div className="space-y-2">
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between px-1">
                         <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Processos a Exportar</label>
                         <Button 
                             variant="ghost" 
                             size="sm" 
-                            className="h-6 text-[10px] uppercase font-bold text-[hsl(var(--byfrost-accent))] hover:bg-slate-50 rounded-lg px-2"
+                            className="h-6 text-[10px] uppercase font-bold text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg px-2 transition-colors"
                             onClick={() => {
                                 const allIds = (processesQ.data || []).map(p => p.id);
                                 if (exportSelectedProcesses.length === allIds.length) {
@@ -721,38 +723,55 @@ A importação vai formatar tudo direitinho!",admin,checkpoint
                             {(processesQ.data || []).length === exportSelectedProcesses.length ? "Desmarcar Todos" : "Marcar Todos"}
                         </Button>
                     </div>
-                    <div className="border border-slate-200 rounded-2xl overflow-hidden max-h-[250px] overflow-y-auto custom-scrollbar bg-slate-50/50 p-2 space-y-1">
-                        {(processesQ.data || []).map(p => {
-                            const isSelected = exportSelectedProcesses.includes(p.id);
-                            return (
-                                <div 
-                                    key={p.id} 
-                                    className={cn(
-                                        "flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all",
-                                        isSelected ? "bg-white border-slate-200 shadow-sm" : "border-transparent hover:bg-slate-100"
-                                    )}
-                                    onClick={() => {
-                                        setExportSelectedProcesses(prev => 
-                                            isSelected ? prev.filter(id => id !== p.id) : [...prev, p.id]
-                                        );
-                                    }}
-                                >
-                                    <div className={cn(
-                                        "h-5 w-5 rounded-md border flex items-center justify-center shrink-0 transition-colors",
-                                        isSelected ? "bg-[hsl(var(--byfrost-accent))] border-[hsl(var(--byfrost-accent))]" : "bg-white border-slate-300"
-                                    )}>
-                                        {isSelected && <svg className="h-3 w-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>}
-                                    </div>
-                                    <div className="min-w-0">
-                                        <p className="text-sm font-bold text-slate-700 truncate">{p.title}</p>
-                                        <p className="text-[10px] text-slate-400 uppercase tracking-widest">{p.process_type}</p>
-                                    </div>
-                                </div>
-                            );
-                        })}
-                        {(processesQ.data || []).length === 0 && (
-                            <p className="text-xs text-slate-400 text-center py-4 italic">Nenhum processo disponível.</p>
-                        )}
+                    <div className="relative mb-2">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                        <Input 
+                            value={exportSearch}
+                            onChange={e => setExportSearch(e.target.value)}
+                            placeholder="Buscar processos..."
+                            className="h-10 pl-9 rounded-xl border-slate-200 bg-slate-50 focus-visible:ring-slate-200"
+                        />
+                    </div>
+                    <div className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden flex flex-col">
+                        <div className="max-h-[240px] overflow-y-auto custom-scrollbar p-1">
+                            {(() => {
+                                const list = processesQ.data || [];
+                                const filtered = exportSearch.trim() === "" ? list : list.filter(p => p.title.toLowerCase().includes(exportSearch.toLowerCase()) || p.process_type.toLowerCase().includes(exportSearch.toLowerCase()));
+                                
+                                if (filtered.length === 0) {
+                                    return <p className="text-xs text-slate-400 text-center py-6 italic">Nenhum processo encontrado.</p>;
+                                }
+
+                                return filtered.map(p => {
+                                    const isSelected = exportSelectedProcesses.includes(p.id);
+                                    return (
+                                        <div 
+                                            key={p.id} 
+                                            className={cn(
+                                                "flex items-center gap-3 p-3 rounded-xl cursor-pointer transition-all border border-transparent",
+                                                isSelected ? "bg-slate-50 border-slate-200" : "hover:bg-slate-50"
+                                            )}
+                                            onClick={() => {
+                                                setExportSelectedProcesses(prev => 
+                                                    isSelected ? prev.filter(id => id !== p.id) : [...prev, p.id]
+                                                );
+                                            }}
+                                        >
+                                            <div className={cn(
+                                                "h-5 w-5 rounded-[6px] border flex items-center justify-center shrink-0 transition-all",
+                                                isSelected ? "bg-[hsl(var(--byfrost-accent))] border-[hsl(var(--byfrost-accent))] text-white shadow-sm" : "bg-white border-slate-300 text-transparent"
+                                            )}>
+                                                <Check className="h-3.5 w-3.5" />
+                                            </div>
+                                            <div className="min-w-0">
+                                                <p className="text-sm font-bold text-slate-800 truncate leading-tight">{p.title}</p>
+                                                <p className="text-[10px] text-slate-500 uppercase tracking-widest mt-0.5 font-medium">{p.process_type}</p>
+                                            </div>
+                                        </div>
+                                    );
+                                });
+                            })()}
+                        </div>
                     </div>
                 </div>
             </div>
@@ -769,7 +788,12 @@ A importação vai formatar tudo direitinho!",admin,checkpoint
                     <Button 
                         onClick={handleExportManualPDF}
                         disabled={exportSelectedProcesses.length === 0}
-                        className="w-2/3 rounded-xl bg-slate-900 text-white hover:bg-slate-800 shadow-lg font-bold"
+                        className={cn(
+                            "w-2/3 rounded-xl shadow-lg font-bold transition-all",
+                            exportSelectedProcesses.length > 0 
+                                ? "bg-[hsl(var(--byfrost-accent))] text-white hover:bg-[hsl(var(--byfrost-accent)/0.9)]" 
+                                : "bg-slate-100 text-slate-400 shadow-none pointer-events-none"
+                        )}
                     >
                         Gerar PDF ({exportSelectedProcesses.length})
                     </Button>
