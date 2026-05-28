@@ -763,8 +763,8 @@ A importação vai formatar tudo direitinho!",admin,checkpoint
                                             )}>
                                                 <Check className="h-3.5 w-3.5" />
                                             </div>
-                                            <div className="min-w-0">
-                                                <p className="text-sm font-bold text-slate-800 truncate leading-tight">{p.title}</p>
+                                            <div className="flex-1 min-w-0">
+                                                <p className="text-sm font-bold text-slate-800 truncate leading-tight" title={p.title}>{p.title}</p>
                                                 <p className="text-[10px] text-slate-500 uppercase tracking-widest mt-0.5 font-medium">{p.process_type}</p>
                                             </div>
                                         </div>
