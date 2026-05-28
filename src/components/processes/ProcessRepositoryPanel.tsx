@@ -22,7 +22,8 @@ import {
   GitFork,
   UploadCloud,
   Download,
-  FileSpreadsheet
+  FileSpreadsheet,
+  Printer
 } from "lucide-react";
 import Papa from "papaparse";
 import { marked } from "marked";
@@ -166,6 +167,108 @@ export function ProcessRepositoryPanel() {
 
   const canManage = isAdmin || isSuperAdmin;
 
+  const handleExportManualPDF = () => {
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+      showError("Navegador bloqueou o pop-up. Permita pop-ups para imprimir.");
+      return;
+    }
+
+    const roleNamesMap = new Map();
+    tenantRolesQ.data?.forEach(r => roleNamesMap.set(r.key, r.name));
+
+    const allProcesses = processesQ.data || [];
+    if (allProcesses.length === 0) {
+      printWindow.close();
+      showError("Nenhum processo para exportar.");
+      return;
+    }
+
+    const content = allProcesses.map(p => `
+      <div class="process-page">
+        <h1>${p.title}</h1>
+        <span class="badge">${p.process_type === 'roadmap' ? 'ROADMAP (MACRO)' : (roleNamesMap.get(p.target_role) || 'TODOS OS CARGOS')}</span>
+        
+        <div class="meta-info">
+          Última atualização: ${new Date(p.updated_at).toLocaleDateString('pt-BR')}
+        </div>
+        
+        ${p.description ? `<div class="description">${p.description}</div>` : '<p class="empty-state">Nenhuma instrução detalhada fornecida.</p>'}
+        
+        ${Array.isArray(p.checklists) && p.checklists.length > 0 ? `
+          <div class="checklists">
+            <h3>Checklist Operacional</h3>
+            <ul>
+              ${p.checklists.map(c => `<li>${typeof c === 'string' ? c : c.label}</li>`).join('')}
+            </ul>
+          </div>
+        ` : ''}
+      </div>
+    `).join('');
+
+    printWindow.document.write(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Manual de Processos</title>
+          <meta charset="utf-8">
+          <style>
+            body { font-family: 'Inter', -apple-system, sans-serif; color: #0f172a; line-height: 1.6; padding: 40px; margin: 0; background: #fff; }
+            .cover-page { height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; page-break-after: always; }
+            .cover-page h1 { font-size: 48px; margin-bottom: 16px; font-weight: 800; letter-spacing: -0.02em; }
+            .cover-page p { font-size: 18px; color: #64748b; font-weight: 500; }
+            
+            .process-page { page-break-after: always; margin-bottom: 60px; }
+            .process-page:last-child { page-break-after: avoid; }
+            
+            h1 { font-size: 28px; font-weight: 700; margin: 0 0 12px 0; letter-spacing: -0.01em; color: #0f172a; }
+            
+            .badge { display: inline-block; padding: 6px 14px; background: #f1f5f9; border: 1px solid #e2e8f0; border-radius: 20px; font-size: 11px; font-weight: 700; color: #475569; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 16px; }
+            
+            .meta-info { font-size: 12px; color: #94a3b8; font-weight: 500; margin-bottom: 32px; display: flex; align-items: center; gap: 6px; }
+            
+            .description { margin-top: 32px; font-size: 14px; color: #334155; }
+            .description h1, .description h2, .description h3 { margin-top: 24px; margin-bottom: 12px; font-weight: 600; color: #0f172a; }
+            .description p { margin-bottom: 16px; }
+            .description ul, .description ol { padding-left: 24px; margin-bottom: 16px; }
+            .description li { margin-bottom: 6px; }
+            
+            .checklists { margin-top: 40px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 16px; padding: 24px; }
+            .checklists h3 { font-size: 16px; font-weight: 700; margin: 0 0 16px 0; color: #0f172a; display: flex; align-items: center; gap: 8px; }
+            .checklists ul { list-style-type: none; padding: 0; margin: 0; }
+            .checklists li { margin-bottom: 12px; padding-left: 32px; position: relative; font-size: 14px; color: #334155; font-weight: 500; }
+            .checklists li:last-child { margin-bottom: 0; }
+            .checklists li::before { content: "☐"; position: absolute; left: 0; top: -2px; color: #cbd5e1; font-size: 20px; font-weight: normal; }
+            
+            .empty-state { font-style: italic; color: #94a3b8; font-size: 14px; }
+            
+            @media print {
+              @page { margin: 2cm; size: A4; }
+              body { padding: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+              .checklists { break-inside: avoid; border: 1px solid #e2e8f0 !important; background: #f8fafc !important; }
+            }
+          </style>
+        </head>
+        <body>
+          <div class="cover-page">
+            <h1>Manual de Processos</h1>
+            <p>Gerado em ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR')}</p>
+          </div>
+          ${content}
+          
+          <script>
+            window.onload = () => {
+              setTimeout(() => {
+                window.print();
+              }, 800);
+            };
+          </script>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+  };
+
   const handleDownloadTemplate = () => {
     const csvContent = `Título,Descrição,Cargo Alvo,Tipo
 Processo Exemplo,"**Exemplo com Markdown!**
@@ -296,6 +399,13 @@ A importação vai formatar tudo direitinho!",admin,checkpoint
 
           {canManage && (
             <div className="flex items-center gap-2">
+              <Button 
+                  variant="outline"
+                  onClick={handleExportManualPDF}
+                  className="h-10 rounded-2xl border-slate-200 bg-white px-4 hover:bg-slate-50 text-slate-700"
+              >
+                <Printer className="mr-2 h-4 w-4 text-slate-500" /> Exportar Manual
+              </Button>
               <Button 
                   variant="outline"
                   onClick={() => setImportModalOpen(true)}
