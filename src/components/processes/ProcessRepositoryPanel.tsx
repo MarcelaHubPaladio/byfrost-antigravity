@@ -69,6 +69,10 @@ export function ProcessRepositoryPanel() {
   const [selectedHomeFlowId, setSelectedHomeFlowId] = useState<string | null>(null);
   const [importModalOpen, setImportModalOpen] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
+  
+  const [exportModalOpen, setExportModalOpen] = useState(false);
+  const [exportSelectedUser, setExportSelectedUser] = useState("");
+  const [exportSelectedProcesses, setExportSelectedProcesses] = useState<string[]>([]);
 
   const processesQ = useQuery({
     queryKey: ["processes", activeTenantId],
@@ -98,7 +102,22 @@ export function ProcessRepositoryPanel() {
       return (data ?? []).map((r: any) => ({
         key: String(r.roles?.key ?? ""),
         name: String(r.roles?.name ?? ""),
-      }));
+      })).filter((r) => Boolean(r.key));
+    },
+  });
+
+  const usersQ = useQuery({
+    queryKey: ["repo_users", activeTenantId],
+    enabled: !!activeTenantId,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("users_profile")
+        .select("user_id, display_name")
+        .eq("tenant_id", activeTenantId!)
+        .is("deleted_at", null)
+        .order("display_name", { ascending: true });
+      if (error) throw error;
+      return data ?? [];
     },
   });
 
@@ -168,6 +187,11 @@ export function ProcessRepositoryPanel() {
   const canManage = isAdmin || isSuperAdmin;
 
   const handleExportManualPDF = () => {
+    if (exportSelectedProcesses.length === 0) {
+      showError("Selecione pelo menos um processo para exportar.");
+      return;
+    }
+
     const printWindow = window.open('', '_blank');
     if (!printWindow) {
       showError("Navegador bloqueou o pop-up. Permita pop-ups para imprimir.");
@@ -178,13 +202,15 @@ export function ProcessRepositoryPanel() {
     tenantRolesQ.data?.forEach(r => roleNamesMap.set(r.key, r.name));
 
     const allProcesses = processesQ.data || [];
-    if (allProcesses.length === 0) {
+    const processesToExport = allProcesses.filter(p => exportSelectedProcesses.includes(p.id));
+
+    if (processesToExport.length === 0) {
       printWindow.close();
       showError("Nenhum processo para exportar.");
       return;
     }
 
-    const content = allProcesses.map(p => `
+    const content = processesToExport.map(p => `
       <div class="process-page">
         <h1>${p.title}</h1>
         <span class="badge">${p.process_type === 'roadmap' ? 'ROADMAP (MACRO)' : (roleNamesMap.get(p.target_role) || 'TODOS OS CARGOS')}</span>
@@ -206,6 +232,8 @@ export function ProcessRepositoryPanel() {
       </div>
     `).join('');
 
+    const coverUserText = exportSelectedUser ? `<p class="cover-user">Colaborador: <strong>${exportSelectedUser}</strong></p>` : '';
+
     printWindow.document.write(`
       <!DOCTYPE html>
       <html>
@@ -217,6 +245,7 @@ export function ProcessRepositoryPanel() {
             .cover-page { height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; page-break-after: always; }
             .cover-page h1 { font-size: 48px; margin-bottom: 16px; font-weight: 800; letter-spacing: -0.02em; }
             .cover-page p { font-size: 18px; color: #64748b; font-weight: 500; }
+            .cover-user { font-size: 24px !important; color: #0f172a !important; margin-top: 32px; padding: 16px 32px; background: #f8fafc; border-radius: 16px; border: 1px solid #e2e8f0; }
             
             .process-page { page-break-after: always; margin-bottom: 60px; }
             .process-page:last-child { page-break-after: avoid; }
@@ -246,13 +275,15 @@ export function ProcessRepositoryPanel() {
               @page { margin: 2cm; size: A4; }
               body { padding: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
               .checklists { break-inside: avoid; border: 1px solid #e2e8f0 !important; background: #f8fafc !important; }
+              .cover-user { border: 1px solid #e2e8f0 !important; background: #f8fafc !important; }
             }
           </style>
         </head>
         <body>
           <div class="cover-page">
             <h1>Manual de Processos</h1>
-            <p>Gerado em ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR')}</p>
+            ${coverUserText}
+            <p style="margin-top: auto; padding-bottom: 40px;">Gerado em ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR')}</p>
           </div>
           ${content}
           
@@ -267,6 +298,7 @@ export function ProcessRepositoryPanel() {
       </html>
     `);
     printWindow.document.close();
+    setExportModalOpen(false);
   };
 
   const handleDownloadTemplate = () => {
@@ -401,7 +433,10 @@ A importação vai formatar tudo direitinho!",admin,checkpoint
             <div className="flex items-center gap-2">
               <Button 
                   variant="outline"
-                  onClick={handleExportManualPDF}
+                  onClick={() => {
+                    setExportSelectedProcesses((processesQ.data || []).map(p => p.id));
+                    setExportModalOpen(true);
+                  }}
                   className="h-10 rounded-2xl border-slate-200 bg-white px-4 hover:bg-slate-50 text-slate-700"
               >
                 <Printer className="mr-2 h-4 w-4 text-slate-500" /> Exportar Manual
@@ -624,6 +659,115 @@ A importação vai formatar tudo direitinho!",admin,checkpoint
                 >
                     Cancelar
                 </Button>
+            </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      </Dialog>
+
+      <Dialog open={exportModalOpen} onOpenChange={setExportModalOpen}>
+        <DialogContent className="sm:max-w-[500px] rounded-[32px] border-none shadow-2xl p-8">
+            <DialogHeader className="mb-4">
+                <div className="bg-slate-100 w-fit p-3 rounded-2xl mb-4">
+                    <Printer className="h-6 w-6 text-slate-700" />
+                </div>
+                <DialogTitle className="text-2xl font-black text-slate-900 leading-tight">
+                    Configurar Manual PDF
+                </DialogTitle>
+                <DialogDescription className="text-slate-500 font-medium mt-2">
+                    Personalize a capa e os processos que farão parte deste manual.
+                </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-6 py-2">
+                <div className="space-y-2">
+                    <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Nome na Capa (Colaborador)</label>
+                    <Select value={exportSelectedUser || "none"} onValueChange={(v) => setExportSelectedUser(v === "none" ? "" : v)}>
+                        <SelectTrigger className="h-11 rounded-xl border-slate-200">
+                            <SelectValue placeholder="Sem nome na capa" />
+                        </SelectTrigger>
+                        <SelectContent className="rounded-xl border-slate-100 max-h-[200px]">
+                            <SelectItem value="none" className="italic text-slate-400">Sem nome na capa</SelectItem>
+                            {usersQ.data?.map(u => (
+                                <SelectItem key={u.user_id} value={u.display_name || u.user_id}>
+                                    {u.display_name}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                </div>
+
+                <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Processos a Exportar</label>
+                        <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            className="h-6 text-[10px] uppercase font-bold text-[hsl(var(--byfrost-accent))] hover:bg-slate-50 rounded-lg px-2"
+                            onClick={() => {
+                                const allIds = (processesQ.data || []).map(p => p.id);
+                                if (exportSelectedProcesses.length === allIds.length) {
+                                    setExportSelectedProcesses([]);
+                                } else {
+                                    setExportSelectedProcesses(allIds);
+                                }
+                            }}
+                        >
+                            {(processesQ.data || []).length === exportSelectedProcesses.length ? "Desmarcar Todos" : "Marcar Todos"}
+                        </Button>
+                    </div>
+                    <div className="border border-slate-200 rounded-2xl overflow-hidden max-h-[250px] overflow-y-auto custom-scrollbar bg-slate-50/50 p-2 space-y-1">
+                        {(processesQ.data || []).map(p => {
+                            const isSelected = exportSelectedProcesses.includes(p.id);
+                            return (
+                                <div 
+                                    key={p.id} 
+                                    className={cn(
+                                        "flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all",
+                                        isSelected ? "bg-white border-slate-200 shadow-sm" : "border-transparent hover:bg-slate-100"
+                                    )}
+                                    onClick={() => {
+                                        setExportSelectedProcesses(prev => 
+                                            isSelected ? prev.filter(id => id !== p.id) : [...prev, p.id]
+                                        );
+                                    }}
+                                >
+                                    <div className={cn(
+                                        "h-5 w-5 rounded-md border flex items-center justify-center shrink-0 transition-colors",
+                                        isSelected ? "bg-[hsl(var(--byfrost-accent))] border-[hsl(var(--byfrost-accent))]" : "bg-white border-slate-300"
+                                    )}>
+                                        {isSelected && <svg className="h-3 w-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>}
+                                    </div>
+                                    <div className="min-w-0">
+                                        <p className="text-sm font-bold text-slate-700 truncate">{p.title}</p>
+                                        <p className="text-[10px] text-slate-400 uppercase tracking-widest">{p.process_type}</p>
+                                    </div>
+                                </div>
+                            );
+                        })}
+                        {(processesQ.data || []).length === 0 && (
+                            <p className="text-xs text-slate-400 text-center py-4 italic">Nenhum processo disponível.</p>
+                        )}
+                    </div>
+                </div>
+            </div>
+
+            <DialogFooter className="mt-4 sm:justify-start">
+                <div className="flex items-center gap-2 w-full">
+                    <Button 
+                        variant="ghost" 
+                        className="w-1/3 rounded-xl font-bold text-slate-400 hover:text-slate-600"
+                        onClick={() => setExportModalOpen(false)}
+                    >
+                        Cancelar
+                    </Button>
+                    <Button 
+                        onClick={handleExportManualPDF}
+                        disabled={exportSelectedProcesses.length === 0}
+                        className="w-2/3 rounded-xl bg-slate-900 text-white hover:bg-slate-800 shadow-lg font-bold"
+                    >
+                        Gerar PDF ({exportSelectedProcesses.length})
+                    </Button>
+                </div>
             </DialogFooter>
         </DialogContent>
       </Dialog>
