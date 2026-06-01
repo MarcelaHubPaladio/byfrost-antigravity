@@ -339,6 +339,151 @@ export function DreTab() {
     document.body.removeChild(link);
   };
 
+  const handleExportPDF = () => {
+    let tableHtml = `
+      <html>
+        <head>
+          <title>DRE Caixa - ${dreStartDate} a ${dreEndDate}</title>
+          <style>
+            body { font-family: sans-serif; padding: 20px; color: #333; }
+            h2 { text-align: center; margin-bottom: 20px; color: #1e293b; }
+            table { width: 100%; border-collapse: collapse; font-size: 11px; }
+            th, td { border: 1px solid #e2e8f0; padding: 6px 8px; text-align: right; }
+            th:first-child, td:first-child { text-align: left; }
+            th { background-color: #f8fafc; color: #475569; font-weight: bold; }
+            .revenue { font-weight: bold; color: #2563eb; background-color: #eff6ff; }
+            .expense { font-weight: bold; color: #e11d48; background-color: #fff1f2; }
+            .net { font-weight: bold; color: #0f172a; background-color: #f1f5f9; }
+            .pct { color: #64748b; font-size: 10px; }
+          </style>
+        </head>
+        <body>
+          <h2>DRE Caixa (${format(parseISO(dreStartDate), 'dd/MM/yyyy')} - ${format(parseISO(dreEndDate), 'dd/MM/yyyy')})</h2>
+          <table><thead><tr><th>Categoria</th>
+    `;
+    drePeriods.forEach(p => { tableHtml += \`<th colspan="4" style="text-align: center">\${p.label}</th>\`; });
+    tableHtml += \`</tr><tr><th></th>\`;
+    drePeriods.forEach(() => { tableHtml += \`<th>Orçado</th><th>Projetado</th><th>Realizado</th><th>%</th>\`; });
+    tableHtml += \`</tr></thead><tbody>\`;
+    
+    // (=) RECEITAS
+    tableHtml += \`<tr class="revenue"><td>(=) RECEITAS</td>\`;
+    drePeriods.forEach(p => {
+      const subRows = dreData.filter(r => r.category.type === "revenue");
+      const totalB = subRows.reduce((acc, curr) => acc + curr.periods[p.key].budget, 0);
+      const totalP = subRows.reduce((acc, curr) => acc + curr.periods[p.key].projected, 0);
+      const totalR = subRows.reduce((acc, curr) => acc + curr.periods[p.key].realized, 0);
+      const pct = totalB > 0 ? (totalR / totalB) * 100 : 0;
+      tableHtml += \`<td>\${formatMoneyBRL(totalB)}</td><td>\${formatMoneyBRL(totalP)}</td><td>\${formatMoneyBRL(totalR)}</td><td class="pct">\${pct.toFixed(0)}%</td>\`;
+    });
+    tableHtml += \`</tr>\`;
+
+    dreData.filter(r => r.category.type === "revenue").forEach(r => {
+      tableHtml += \`<tr><td>&nbsp;&nbsp;&nbsp;\${r.category.name}</td>\`;
+      drePeriods.forEach(p => {
+        const val = r.periods[p.key];
+        const pct = val.budget > 0 ? (val.realized / val.budget) * 100 : 0;
+        tableHtml += \`<td>\${formatMoneyBRL(val.budget)}</td><td>\${formatMoneyBRL(val.projected)}</td><td>\${formatMoneyBRL(val.realized)}</td><td class="pct">\${pct.toFixed(0)}%</td>\`;
+      });
+      tableHtml += \`</tr>\`;
+    });
+
+    // (-) DESPESAS
+    tableHtml += \`<tr class="expense"><td>(-) DESPESAS</td>\`;
+    drePeriods.forEach(p => {
+      const subRows = dreData.filter(r => r.category.type !== "revenue" && r.category.type !== "other");
+      const totalB = subRows.reduce((acc, curr) => acc + curr.periods[p.key].budget, 0);
+      const totalP = subRows.reduce((acc, curr) => acc + curr.periods[p.key].projected, 0);
+      const totalR = subRows.reduce((acc, curr) => acc + curr.periods[p.key].realized, 0);
+      const pct = totalB > 0 ? (totalR / totalB) * 100 : 0;
+      tableHtml += \`<td>\${formatMoneyBRL(totalB)}</td><td>\${formatMoneyBRL(totalP)}</td><td>\${formatMoneyBRL(totalR)}</td><td class="pct">\${pct.toFixed(0)}%</td>\`;
+    });
+    tableHtml += \`</tr>\`;
+
+    dreData.filter(r => r.category.type !== "revenue" && r.category.type !== "other").forEach(r => {
+      tableHtml += \`<tr><td>&nbsp;&nbsp;&nbsp;\${r.category.name} <span style="font-size: 8px; color: #94a3b8">(\${CATEGORY_LABELS[r.category.type as any] || ""})</span></td>\`;
+      drePeriods.forEach(p => {
+        const val = r.periods[p.key];
+        const pct = val.budget > 0 ? (val.realized / val.budget) * 100 : 0;
+        tableHtml += \`<td>\${formatMoneyBRL(val.budget)}</td><td>\${formatMoneyBRL(val.projected)}</td><td>\${formatMoneyBRL(val.realized)}</td><td class="pct">\${pct.toFixed(0)}%</td>\`;
+      });
+      tableHtml += \`</tr>\`;
+    });
+
+    // RESULTADO LÍQUIDO
+    tableHtml += \`<tr class="net"><td>RESULTADO LÍQUIDO</td>\`;
+    drePeriods.forEach(p => {
+      const revRows = dreData.filter(r => r.category.type === "revenue");
+      const expRows = dreData.filter(r => r.category.type !== "revenue" && r.category.type !== "other");
+      const revB = revRows.reduce((acc, curr) => acc + curr.periods[p.key].budget, 0);
+      const revP = revRows.reduce((acc, curr) => acc + curr.periods[p.key].projected, 0);
+      const revR = revRows.reduce((acc, curr) => acc + curr.periods[p.key].realized, 0);
+      const expB = expRows.reduce((acc, curr) => acc + curr.periods[p.key].budget, 0);
+      const expP = expRows.reduce((acc, curr) => acc + curr.periods[p.key].projected, 0);
+      const expR = expRows.reduce((acc, curr) => acc + curr.periods[p.key].realized, 0);
+      
+      const netB = revB - expB;
+      const netP = revP - expP;
+      const netR = revR - expR;
+      const pct = netB !== 0 ? (((netR - netB) / Math.abs(netB)) * 100).toFixed(0) : "—";
+
+      tableHtml += \`<td>\${formatMoneyBRL(netB)}</td><td style="color:\${netP >= 0 ? '#16a34a' : '#dc2626'}">\${formatMoneyBRL(netP)}</td><td style="color:\${netR >= 0 ? '#16a34a' : '#dc2626'}">\${formatMoneyBRL(netR)}</td><td class="pct">\${pct !== "—" ? pct + '%' : pct}</td>\`;
+    });
+    tableHtml += \`</tr>\`;
+
+    // OUTROS
+    tableHtml += \`<tr style="background-color: #f8fafc; color: #64748b; font-weight: bold;"><td>(=) OUTROS</td>\`;
+    drePeriods.forEach(p => {
+      const subRows = dreData.filter(r => r.category.type === "other");
+      const totalB = subRows.reduce((acc, curr) => acc + curr.periods[p.key].budget, 0);
+      const totalP = subRows.reduce((acc, curr) => acc + curr.periods[p.key].projected, 0);
+      const totalR = subRows.reduce((acc, curr) => acc + curr.periods[p.key].realized, 0);
+      const pct = totalB > 0 ? (totalR / totalB) * 100 : 0;
+      tableHtml += \`<td>\${formatMoneyBRL(totalB)}</td><td>\${formatMoneyBRL(totalP)}</td><td>\${formatMoneyBRL(totalR)}</td><td class="pct">\${pct.toFixed(0)}%</td>\`;
+    });
+    tableHtml += \`</tr>\`;
+
+    dreData.filter(r => r.category.type === "other").forEach(r => {
+      tableHtml += \`<tr><td>&nbsp;&nbsp;&nbsp;\${r.category.name}</td>\`;
+      drePeriods.forEach(p => {
+        const val = r.periods[p.key];
+        const pct = val.budget > 0 ? (val.realized / val.budget) * 100 : 0;
+        tableHtml += \`<td>\${formatMoneyBRL(val.budget)}</td><td>\${formatMoneyBRL(val.projected)}</td><td>\${formatMoneyBRL(val.realized)}</td><td class="pct">\${pct.toFixed(0)}%</td>\`;
+      });
+      tableHtml += \`</tr>\`;
+    });
+
+    // RESULTADO FINAL
+    tableHtml += \`<tr style="background-color: #0f172a; color: white; font-weight: bold;"><td>RESULTADO FINAL</td>\`;
+    drePeriods.forEach(p => {
+      const revRows = dreData.filter(r => r.category.type === "revenue");
+      const restRows = dreData.filter(r => r.category.type !== "revenue");
+      const revP = revRows.reduce((acc, curr) => acc + curr.periods[p.key].projected, 0);
+      const revR = revRows.reduce((acc, curr) => acc + curr.periods[p.key].realized, 0);
+      const restP = restRows.reduce((acc, curr) => acc + curr.periods[p.key].projected, 0);
+      const restR = restRows.reduce((acc, curr) => acc + curr.periods[p.key].realized, 0);
+      
+      const finalP = revP - restP;
+      const finalR = revR - restR;
+
+      tableHtml += \`<td>—</td><td style="color:\${finalP >= 0 ? '#6ee7b7' : '#fda4af'}">\${formatMoneyBRL(finalP)}</td><td>\${formatMoneyBRL(finalR)}</td><td></td>\`;
+    });
+    tableHtml += \`</tr>\`;
+
+    tableHtml += \`</tbody></table></body></html>\`;
+    
+    const printWindow = window.open('', '_blank');
+    if (printWindow) {
+      printWindow.document.write(tableHtml);
+      printWindow.document.close();
+      printWindow.focus();
+      setTimeout(() => {
+        printWindow.print();
+        printWindow.close();
+      }, 500);
+    }
+  };
+
   return (
     <Card className="rounded-[22px] border-slate-200 bg-white/70 p-4 shadow-sm backdrop-blur dark:border-slate-800 dark:bg-slate-950/40 overflow-hidden">
       <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
@@ -473,6 +618,10 @@ export function DreTab() {
             <Button variant="ghost" size="sm" className="h-9 rounded-2xl text-[11px] gap-2" onClick={handleExportExcel}>
               <Download className="h-3.5 w-3.5 text-emerald-600" />
               Excel
+            </Button>
+            <Button variant="ghost" size="sm" className="h-9 rounded-2xl text-[11px] gap-2" onClick={handleExportPDF}>
+              <Download className="h-3.5 w-3.5 text-rose-600" />
+              PDF
             </Button>
           </div>
         </div>
