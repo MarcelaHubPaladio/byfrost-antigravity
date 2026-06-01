@@ -8,6 +8,9 @@ import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { showError } from "@/utils/toast";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
 import { Calendar as CalendarComponent } from "@/components/ui/calendar";
 import { addDays, subDays, addMonths, subMonths, format, parseISO, startOfMonth, endOfMonth, startOfDay, endOfDay } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -64,6 +67,13 @@ export function DreTab() {
   });
 
   const [editingBudget, setEditingBudget] = useState<{ categoryId: string; periodKey: string; value: string } | null>(null);
+  const [pdfDialogOpen, setPdfDialogOpen] = useState(false);
+  const [pdfColumns, setPdfColumns] = useState({
+    budget: true,
+    projected: true,
+    realized: true,
+    pct: true,
+  });
   const [dreStartDate, setDreStartDate] = useSessionState<string>("fin_dre_start", () => format(subMonths(new Date(), 2), "yyyy-MM-01"));
   const [dreEndDate, setDreEndDate] = useSessionState<string>("fin_dre_end", () => format(addMonths(new Date(), 3), "yyyy-MM-dd"));
   const [dreGranularity, setDreGranularity] = useSessionState<"monthly" | "daily">("fin_dre_granularity", "monthly");
@@ -361,9 +371,21 @@ export function DreTab() {
           <h2>DRE Caixa (${format(parseISO(dreStartDate), 'dd/MM/yyyy')} - ${format(parseISO(dreEndDate), 'dd/MM/yyyy')})</h2>
           <table><thead><tr><th>Categoria</th>
     `;
-    drePeriods.forEach(p => { tableHtml += `<th colspan="4" style="text-align: center">${p.label}</th>`; });
+    drePeriods.forEach(p => { 
+      let colCount = 0;
+      if (pdfColumns.budget) colCount++;
+      if (pdfColumns.projected) colCount++;
+      if (pdfColumns.realized) colCount++;
+      if (pdfColumns.pct) colCount++;
+      tableHtml += `<th colspan="${colCount}" style="text-align: center">${p.label}</th>`; 
+    });
     tableHtml += `</tr><tr><th></th>`;
-    drePeriods.forEach(() => { tableHtml += `<th>Orçado</th><th>Projetado</th><th>Realizado</th><th>%</th>`; });
+    drePeriods.forEach(() => { 
+      if (pdfColumns.budget) tableHtml += `<th>Orçado</th>`;
+      if (pdfColumns.projected) tableHtml += `<th>Projetado</th>`;
+      if (pdfColumns.realized) tableHtml += `<th>Realizado</th>`;
+      if (pdfColumns.pct) tableHtml += `<th>%</th>`;
+    });
     tableHtml += `</tr></thead><tbody>`;
     
     // (=) RECEITAS
@@ -374,7 +396,10 @@ export function DreTab() {
       const totalP = subRows.reduce((acc, curr) => acc + curr.periods[p.key].projected, 0);
       const totalR = subRows.reduce((acc, curr) => acc + curr.periods[p.key].realized, 0);
       const pct = totalB > 0 ? (totalR / totalB) * 100 : 0;
-      tableHtml += `<td>${formatMoneyBRL(totalB)}</td><td>${formatMoneyBRL(totalP)}</td><td>${formatMoneyBRL(totalR)}</td><td class="pct">${pct.toFixed(0)}%</td>`;
+      if (pdfColumns.budget) tableHtml += `<td>${formatMoneyBRL(totalB)}</td>`;
+      if (pdfColumns.projected) tableHtml += `<td>${formatMoneyBRL(totalP)}</td>`;
+      if (pdfColumns.realized) tableHtml += `<td>${formatMoneyBRL(totalR)}</td>`;
+      if (pdfColumns.pct) tableHtml += `<td class="pct">${pct.toFixed(0)}%</td>`;
     });
     tableHtml += `</tr>`;
 
@@ -383,7 +408,10 @@ export function DreTab() {
       drePeriods.forEach(p => {
         const val = r.periods[p.key];
         const pct = val.budget > 0 ? (val.realized / val.budget) * 100 : 0;
-        tableHtml += `<td>${formatMoneyBRL(val.budget)}</td><td>${formatMoneyBRL(val.projected)}</td><td>${formatMoneyBRL(val.realized)}</td><td class="pct">${pct.toFixed(0)}%</td>`;
+        if (pdfColumns.budget) tableHtml += `<td>${formatMoneyBRL(val.budget)}</td>`;
+        if (pdfColumns.projected) tableHtml += `<td>${formatMoneyBRL(val.projected)}</td>`;
+        if (pdfColumns.realized) tableHtml += `<td>${formatMoneyBRL(val.realized)}</td>`;
+        if (pdfColumns.pct) tableHtml += `<td class="pct">${pct.toFixed(0)}%</td>`;
       });
       tableHtml += `</tr>`;
     });
@@ -396,7 +424,10 @@ export function DreTab() {
       const totalP = subRows.reduce((acc, curr) => acc + curr.periods[p.key].projected, 0);
       const totalR = subRows.reduce((acc, curr) => acc + curr.periods[p.key].realized, 0);
       const pct = totalB > 0 ? (totalR / totalB) * 100 : 0;
-      tableHtml += `<td>${formatMoneyBRL(totalB)}</td><td>${formatMoneyBRL(totalP)}</td><td>${formatMoneyBRL(totalR)}</td><td class="pct">${pct.toFixed(0)}%</td>`;
+      if (pdfColumns.budget) tableHtml += `<td>${formatMoneyBRL(totalB)}</td>`;
+      if (pdfColumns.projected) tableHtml += `<td>${formatMoneyBRL(totalP)}</td>`;
+      if (pdfColumns.realized) tableHtml += `<td>${formatMoneyBRL(totalR)}</td>`;
+      if (pdfColumns.pct) tableHtml += `<td class="pct">${pct.toFixed(0)}%</td>`;
     });
     tableHtml += `</tr>`;
 
@@ -405,7 +436,10 @@ export function DreTab() {
       drePeriods.forEach(p => {
         const val = r.periods[p.key];
         const pct = val.budget > 0 ? (val.realized / val.budget) * 100 : 0;
-        tableHtml += `<td>${formatMoneyBRL(val.budget)}</td><td>${formatMoneyBRL(val.projected)}</td><td>${formatMoneyBRL(val.realized)}</td><td class="pct">${pct.toFixed(0)}%</td>`;
+        if (pdfColumns.budget) tableHtml += `<td>${formatMoneyBRL(val.budget)}</td>`;
+        if (pdfColumns.projected) tableHtml += `<td>${formatMoneyBRL(val.projected)}</td>`;
+        if (pdfColumns.realized) tableHtml += `<td>${formatMoneyBRL(val.realized)}</td>`;
+        if (pdfColumns.pct) tableHtml += `<td class="pct">${pct.toFixed(0)}%</td>`;
       });
       tableHtml += `</tr>`;
     });
@@ -427,7 +461,10 @@ export function DreTab() {
       const netR = revR - expR;
       const pct = netB !== 0 ? (((netR - netB) / Math.abs(netB)) * 100).toFixed(0) : "—";
 
-      tableHtml += `<td>${formatMoneyBRL(netB)}</td><td style="color:${netP >= 0 ? '#16a34a' : '#dc2626'}">${formatMoneyBRL(netP)}</td><td style="color:${netR >= 0 ? '#16a34a' : '#dc2626'}">${formatMoneyBRL(netR)}</td><td class="pct">${pct !== "—" ? pct + '%' : pct}</td>`;
+      if (pdfColumns.budget) tableHtml += `<td>${formatMoneyBRL(netB)}</td>`;
+      if (pdfColumns.projected) tableHtml += `<td style="color:${netP >= 0 ? '#16a34a' : '#dc2626'}">${formatMoneyBRL(netP)}</td>`;
+      if (pdfColumns.realized) tableHtml += `<td style="color:${netR >= 0 ? '#16a34a' : '#dc2626'}">${formatMoneyBRL(netR)}</td>`;
+      if (pdfColumns.pct) tableHtml += `<td class="pct">${pct !== "—" ? pct + '%' : pct}</td>`;
     });
     tableHtml += `</tr>`;
 
@@ -439,7 +476,10 @@ export function DreTab() {
       const totalP = subRows.reduce((acc, curr) => acc + curr.periods[p.key].projected, 0);
       const totalR = subRows.reduce((acc, curr) => acc + curr.periods[p.key].realized, 0);
       const pct = totalB > 0 ? (totalR / totalB) * 100 : 0;
-      tableHtml += `<td>${formatMoneyBRL(totalB)}</td><td>${formatMoneyBRL(totalP)}</td><td>${formatMoneyBRL(totalR)}</td><td class="pct">${pct.toFixed(0)}%</td>`;
+      if (pdfColumns.budget) tableHtml += `<td>${formatMoneyBRL(totalB)}</td>`;
+      if (pdfColumns.projected) tableHtml += `<td>${formatMoneyBRL(totalP)}</td>`;
+      if (pdfColumns.realized) tableHtml += `<td>${formatMoneyBRL(totalR)}</td>`;
+      if (pdfColumns.pct) tableHtml += `<td class="pct">${pct.toFixed(0)}%</td>`;
     });
     tableHtml += `</tr>`;
 
@@ -448,7 +488,10 @@ export function DreTab() {
       drePeriods.forEach(p => {
         const val = r.periods[p.key];
         const pct = val.budget > 0 ? (val.realized / val.budget) * 100 : 0;
-        tableHtml += `<td>${formatMoneyBRL(val.budget)}</td><td>${formatMoneyBRL(val.projected)}</td><td>${formatMoneyBRL(val.realized)}</td><td class="pct">${pct.toFixed(0)}%</td>`;
+        if (pdfColumns.budget) tableHtml += `<td>${formatMoneyBRL(val.budget)}</td>`;
+        if (pdfColumns.projected) tableHtml += `<td>${formatMoneyBRL(val.projected)}</td>`;
+        if (pdfColumns.realized) tableHtml += `<td>${formatMoneyBRL(val.realized)}</td>`;
+        if (pdfColumns.pct) tableHtml += `<td class="pct">${pct.toFixed(0)}%</td>`;
       });
       tableHtml += `</tr>`;
     });
@@ -466,7 +509,10 @@ export function DreTab() {
       const finalP = revP - restP;
       const finalR = revR - restR;
 
-      tableHtml += `<td>—</td><td style="color:${finalP >= 0 ? '#6ee7b7' : '#fda4af'}">${formatMoneyBRL(finalP)}</td><td>${formatMoneyBRL(finalR)}</td><td></td>`;
+      if (pdfColumns.budget) tableHtml += `<td>—</td>`;
+      if (pdfColumns.projected) tableHtml += `<td style="color:${finalP >= 0 ? '#6ee7b7' : '#fda4af'}">${formatMoneyBRL(finalP)}</td>`;
+      if (pdfColumns.realized) tableHtml += `<td>${formatMoneyBRL(finalR)}</td>`;
+      if (pdfColumns.pct) tableHtml += `<td></td>`;
     });
     tableHtml += `</tr>`;
 
@@ -480,6 +526,7 @@ export function DreTab() {
       setTimeout(() => {
         printWindow.print();
         printWindow.close();
+        setPdfDialogOpen(false);
       }, 500);
     }
   };
@@ -619,7 +666,7 @@ export function DreTab() {
               <Download className="h-3.5 w-3.5 text-emerald-600" />
               Excel
             </Button>
-            <Button variant="ghost" size="sm" className="h-9 rounded-2xl text-[11px] gap-2" onClick={handleExportPDF}>
+            <Button variant="ghost" size="sm" className="h-9 rounded-2xl text-[11px] gap-2" onClick={() => setPdfDialogOpen(true)}>
               <Download className="h-3.5 w-3.5 text-rose-600" />
               PDF
             </Button>
@@ -988,6 +1035,57 @@ export function DreTab() {
           </TableBody>
         </Table>
       </div>
+
+      <Dialog open={pdfDialogOpen} onOpenChange={setPdfDialogOpen}>
+        <DialogContent className="sm:max-w-[425px] rounded-3xl">
+          <DialogHeader>
+            <DialogTitle>Exportar DRE-Caixa (PDF)</DialogTitle>
+            <DialogDescription>
+              Selecione as colunas que deseja incluir no relatório.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="flex items-center space-x-2">
+              <Checkbox 
+                id="col-budget" 
+                checked={pdfColumns.budget} 
+                onCheckedChange={(checked) => setPdfColumns({ ...pdfColumns, budget: checked === true })} 
+              />
+              <Label htmlFor="col-budget">Orçado</Label>
+            </div>
+            <div className="flex items-center space-x-2">
+              <Checkbox 
+                id="col-projected" 
+                checked={pdfColumns.projected} 
+                onCheckedChange={(checked) => setPdfColumns({ ...pdfColumns, projected: checked === true })} 
+              />
+              <Label htmlFor="col-projected">Projetado</Label>
+            </div>
+            <div className="flex items-center space-x-2">
+              <Checkbox 
+                id="col-realized" 
+                checked={pdfColumns.realized} 
+                onCheckedChange={(checked) => setPdfColumns({ ...pdfColumns, realized: checked === true })} 
+              />
+              <Label htmlFor="col-realized">Realizado</Label>
+            </div>
+            <div className="flex items-center space-x-2">
+              <Checkbox 
+                id="col-pct" 
+                checked={pdfColumns.pct} 
+                onCheckedChange={(checked) => setPdfColumns({ ...pdfColumns, pct: checked === true })} 
+              />
+              <Label htmlFor="col-pct">Porcentagem (%)</Label>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPdfDialogOpen(false)} className="rounded-xl">Cancelar</Button>
+            <Button onClick={handleExportPDF} className="rounded-xl bg-rose-600 hover:bg-rose-700 text-white" disabled={!pdfColumns.budget && !pdfColumns.projected && !pdfColumns.realized && !pdfColumns.pct}>
+              Gerar PDF
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       <div className="mt-4 text-[10px] text-slate-400">
         * Realizado inclui apenas transações conciliadas (com categoria e entidade). Projetado inclui lançamentos pendentes (contas a pagar/receber).
       </div>
