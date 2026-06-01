@@ -115,6 +115,7 @@ export function TransactionsTab() {
   const [sortKey, setSortKey] = useSessionState<string | null>("fin_tx_sort_key", "transaction_date");
   const [sortDir, setSortDir] = useSessionState<"asc" | "desc">("fin_tx_sort_dir", "desc");
   const [txSearchText, setTxSearchText] = useSessionState("fin_tx_search", "");
+  const [filterType, setFilterType] = useSessionState<string>("fin_tx_type", "all");
 
   const transactionsQ = useQuery({
     queryKey: ["financial_transactions", activeTenantId, txStartDate, txEndDate],
@@ -161,6 +162,9 @@ export function TransactionsTab() {
     }
     if (filterCategoryId) {
       data = data.filter((t) => t.category_id === filterCategoryId);
+    }
+    if (filterType && filterType !== "all") {
+      data = data.filter((t) => t.type === filterType);
     }
     
     if (txSearchText) {
@@ -1077,6 +1081,16 @@ export function TransactionsTab() {
                   onChange={(e) => setTxSearchText(e.target.value)}
                 />
               </div>
+              <Select value={filterType} onValueChange={setFilterType}>
+                <SelectTrigger className="mt-1 h-9 w-[130px] rounded-2xl bg-white dark:bg-slate-950 font-medium text-xs">
+                  <SelectValue placeholder="Tipo" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos</SelectItem>
+                  <SelectItem value="credit">Entradas (Crédito)</SelectItem>
+                  <SelectItem value="debit">Saídas (Débito)</SelectItem>
+                </SelectContent>
+              </Select>
               <Popover>
                 <PopoverTrigger asChild>
                   <Button 
