@@ -9,6 +9,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar as CalendarComponent } from "@/components/ui/calendar";
 import {
   Dialog,
   DialogContent,
@@ -33,7 +35,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { showError, showSuccess } from "@/utils/toast";
 import { Checkbox } from "@/components/ui/checkbox";
-import { addDays, addMonths, subMonths, format, parseISO, startOfMonth, endOfMonth, startOfDay, endOfDay } from "date-fns";
+import { addDays, subDays, addMonths, subMonths, format, parseISO, startOfMonth, endOfMonth, startOfDay, endOfDay } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import {
   Download, Landmark, Pencil, Plus, Upload, Link2, CheckCircle2, Search, Info, Trash2, X, ChevronRight } from "lucide-react";
@@ -1075,35 +1077,78 @@ export function TransactionsTab() {
                   onChange={(e) => setTxSearchText(e.target.value)}
                 />
               </div>
-              <div>
-                <Label className="text-[11px]">De</Label>
-                <Input
-                  className="mt-1 h-9 w-[160px] rounded-2xl"
-                  type="date"
-                  value={txStartDate}
-                  onChange={(e) => setTxStartDate(e.target.value)}
-                />
-              </div>
-              <div>
-                <Label className="text-[11px]">Até</Label>
-                <Input
-                  className="mt-1 h-9 w-[160px] rounded-2xl"
-                  type="date"
-                  value={txEndDate}
-                  onChange={(e) => setTxEndDate(e.target.value)}
-                />
-              </div>
-              <Button
-                variant="secondary"
-                className="h-9 rounded-2xl"
-                onClick={() => {
-                  const r = currentMonthRangeIso();
-                  setTxStartDate(r.start);
-                  setTxEndDate(r.end);
-                }}
-              >
-                Mês atual
-              </Button>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button 
+                    variant="outline" 
+                    className="h-9 px-4 border border-slate-200/60 hover:border-slate-300 rounded-2xl text-xs font-bold text-slate-600 flex items-center gap-2 transition-all shadow-sm bg-slate-50 dark:bg-slate-900/50 dark:border-slate-800 dark:text-slate-300"
+                  >
+                    <CalendarIcon className="h-4 w-4 text-indigo-500" />
+                    {txStartDate ? (
+                      txEndDate ? (
+                        `${format(parseISO(txStartDate), "dd/MM/yyyy")} - ${format(parseISO(txEndDate), "dd/MM/yyyy")}`
+                      ) : (
+                        format(parseISO(txStartDate), "dd/MM/yyyy")
+                      )
+                    ) : (
+                      "Todo Período"
+                    )}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0 rounded-3xl border-slate-200 shadow-2xl overflow-hidden bg-white dark:bg-slate-950 dark:border-slate-800" align="end">
+                  <div className="flex flex-col md:flex-row">
+                    <div className="w-full md:w-48 border-b md:border-b-0 md:border-r border-slate-100 dark:border-slate-800 p-3 flex flex-col gap-1 bg-slate-50/50 dark:bg-slate-900/30">
+                      {[
+                        { label: "Hoje", get: () => ({ from: startOfDay(new Date()), to: endOfDay(new Date()) }) },
+                        { label: "Ontem", get: () => ({ from: startOfDay(subDays(new Date(), 1)), to: endOfDay(subDays(new Date(), 1)) }) },
+                        { label: "Últimos 7 dias", get: () => ({ from: startOfDay(subDays(new Date(), 7)), to: endOfDay(new Date()) }) },
+                        { label: "Últimos 30 dias", get: () => ({ from: startOfDay(subDays(new Date(), 30)), to: endOfDay(new Date()) }) },
+                        { label: "Mês Atual", get: () => ({ from: startOfMonth(new Date()), to: endOfMonth(new Date()) }) },
+                        { label: "Mês Passado", get: () => ({ from: startOfMonth(subMonths(new Date(), 1)), to: endOfMonth(subMonths(new Date(), 1)) }) },
+                        { label: "Todo Período", get: () => ({ from: undefined, to: undefined }) },
+                      ].map((btn) => {
+                        const range = btn.get();
+                        const isMatch = (range.from ? format(range.from, "yyyy-MM-dd") : "") === txStartDate && 
+                                        (range.to ? format(range.to, "yyyy-MM-dd") : "") === txEndDate;
+                        return (
+                          <Button
+                            key={btn.label}
+                            variant="ghost"
+                            className={cn(
+                              "h-10 justify-start rounded-full text-[10px] font-black uppercase tracking-widest transition-all text-left px-4",
+                              isMatch ? "bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 border-2 border-slate-900 dark:border-slate-100 shadow-sm" : "text-slate-500 hover:bg-white dark:hover:bg-slate-800 hover:text-indigo-600 border-2 border-transparent"
+                            )}
+                            onClick={() => {
+                              setTxStartDate(range.from ? format(range.from, "yyyy-MM-dd") : "");
+                              setTxEndDate(range.to ? format(range.to, "yyyy-MM-dd") : "");
+                            }}
+                          >
+                            {btn.label}
+                          </Button>
+                        );
+                      })}
+                    </div>
+                    <div className="p-2">
+                      <CalendarComponent
+                        initialFocus
+                        mode="range"
+                        defaultMonth={txStartDate ? parseISO(txStartDate) : new Date()}
+                        selected={{ 
+                          from: txStartDate ? parseISO(txStartDate) : undefined, 
+                          to: txEndDate ? parseISO(txEndDate) : undefined 
+                        }}
+                        onSelect={(range: any) => {
+                          if (range?.from) setTxStartDate(format(range.from, "yyyy-MM-dd"));
+                          if (range?.to) setTxEndDate(format(range.to, "yyyy-MM-dd"));
+                        }}
+                        numberOfMonths={2}
+                        locale={ptBR}
+                        className="rounded-2xl"
+                      />
+                    </div>
+                  </div>
+                </PopoverContent>
+              </Popover>
               <Button variant="secondary" className="h-9 rounded-2xl" onClick={() => transactionsQ.refetch()}>
                 Atualizar
               </Button>

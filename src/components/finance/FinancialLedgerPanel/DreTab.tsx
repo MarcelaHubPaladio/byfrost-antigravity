@@ -7,9 +7,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { showError } from "@/utils/toast";
-import { addDays, addMonths, subMonths, format, parseISO, startOfMonth, endOfMonth, startOfDay, endOfDay } from "date-fns";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar as CalendarComponent } from "@/components/ui/calendar";
+import { addDays, subDays, addMonths, subMonths, format, parseISO, startOfMonth, endOfMonth, startOfDay, endOfDay } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { Download, Search, Pencil } from "lucide-react";
+import { Download, Search, Pencil, Calendar as CalendarIcon } from "lucide-react";
 import { Link } from "react-router-dom";
 import { cn, formatMoneyBRL } from "@/lib/utils";
 import { CATEGORY_LABELS } from "@/lib/financial-utils";
@@ -355,21 +357,78 @@ export function DreTab() {
             />
           </div>
 
-          <div className="flex items-center gap-2">
-            <Input 
-              type="date" 
-              className="h-9 w-[130px] rounded-2xl text-xs" 
-              value={dreStartDate} 
-              onChange={(e) => setDreStartDate(e.target.value)} 
-            />
-            <span className="text-slate-400">até</span>
-            <Input 
-              type="date" 
-              className="h-9 w-[130px] rounded-2xl text-xs" 
-              value={dreEndDate} 
-              onChange={(e) => setDreEndDate(e.target.value)} 
-            />
-          </div>
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button 
+                variant="outline" 
+                className="h-9 px-4 border border-slate-200/60 hover:border-slate-300 rounded-2xl text-xs font-bold text-slate-600 flex items-center gap-2 transition-all shadow-sm bg-slate-50 dark:bg-slate-900/50 dark:border-slate-800 dark:text-slate-300"
+              >
+                <CalendarIcon className="h-4 w-4 text-indigo-500" />
+                {dreStartDate ? (
+                  dreEndDate ? (
+                    `${format(parseISO(dreStartDate), "dd/MM/yyyy")} - ${format(parseISO(dreEndDate), "dd/MM/yyyy")}`
+                  ) : (
+                    format(parseISO(dreStartDate), "dd/MM/yyyy")
+                  )
+                ) : (
+                  "Todo Período"
+                )}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0 rounded-3xl border-slate-200 shadow-2xl overflow-hidden bg-white dark:bg-slate-950 dark:border-slate-800" align="end">
+              <div className="flex flex-col md:flex-row">
+                <div className="w-full md:w-48 border-b md:border-b-0 md:border-r border-slate-100 dark:border-slate-800 p-3 flex flex-col gap-1 bg-slate-50/50 dark:bg-slate-900/30">
+                  {[
+                    { label: "Hoje", get: () => ({ from: startOfDay(new Date()), to: endOfDay(new Date()) }) },
+                    { label: "Ontem", get: () => ({ from: startOfDay(subDays(new Date(), 1)), to: endOfDay(subDays(new Date(), 1)) }) },
+                    { label: "Últimos 7 dias", get: () => ({ from: startOfDay(subDays(new Date(), 7)), to: endOfDay(new Date()) }) },
+                    { label: "Últimos 30 dias", get: () => ({ from: startOfDay(subDays(new Date(), 30)), to: endOfDay(new Date()) }) },
+                    { label: "Mês Atual", get: () => ({ from: startOfMonth(new Date()), to: endOfMonth(new Date()) }) },
+                    { label: "Mês Passado", get: () => ({ from: startOfMonth(subMonths(new Date(), 1)), to: endOfMonth(subMonths(new Date(), 1)) }) },
+                    { label: "Todo Período", get: () => ({ from: undefined, to: undefined }) },
+                  ].map((btn) => {
+                    const range = btn.get();
+                    const isMatch = (range.from ? format(range.from, "yyyy-MM-dd") : "") === dreStartDate && 
+                                    (range.to ? format(range.to, "yyyy-MM-dd") : "") === dreEndDate;
+                    return (
+                      <Button
+                        key={btn.label}
+                        variant="ghost"
+                        className={cn(
+                          "h-10 justify-start rounded-full text-[10px] font-black uppercase tracking-widest transition-all text-left px-4",
+                          isMatch ? "bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 border-2 border-slate-900 dark:border-slate-100 shadow-sm" : "text-slate-500 hover:bg-white dark:hover:bg-slate-800 hover:text-indigo-600 border-2 border-transparent"
+                        )}
+                        onClick={() => {
+                          setDreStartDate(range.from ? format(range.from, "yyyy-MM-dd") : "");
+                          setDreEndDate(range.to ? format(range.to, "yyyy-MM-dd") : "");
+                        }}
+                      >
+                        {btn.label}
+                      </Button>
+                    );
+                  })}
+                </div>
+                <div className="p-2">
+                  <CalendarComponent
+                    initialFocus
+                    mode="range"
+                    defaultMonth={dreStartDate ? parseISO(dreStartDate) : new Date()}
+                    selected={{ 
+                      from: dreStartDate ? parseISO(dreStartDate) : undefined, 
+                      to: dreEndDate ? parseISO(dreEndDate) : undefined 
+                    }}
+                    onSelect={(range: any) => {
+                      if (range?.from) setDreStartDate(format(range.from, "yyyy-MM-dd"));
+                      if (range?.to) setDreEndDate(format(range.to, "yyyy-MM-dd"));
+                    }}
+                    numberOfMonths={2}
+                    locale={ptBR}
+                    className="rounded-2xl"
+                  />
+                </div>
+              </div>
+            </PopoverContent>
+          </Popover>
 
           <Button 
             variant="outline" 
