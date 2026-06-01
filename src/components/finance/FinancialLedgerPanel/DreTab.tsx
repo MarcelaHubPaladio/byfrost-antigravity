@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { useTenant } from "@/providers/TenantProvider";
@@ -22,6 +22,28 @@ type CategoryRow = {
   type: string;
 };
 
+function useSessionState<T>(key: string, initialValue: T | (() => T)) {
+  const [state, setState] = useState<T>(() => {
+    try {
+      const item = window.sessionStorage.getItem(key);
+      if (item !== null) return JSON.parse(item);
+    } catch {
+      // ignore
+    }
+    return typeof initialValue === "function" ? (initialValue as any)() : initialValue;
+  });
+
+  useEffect(() => {
+    try {
+      window.sessionStorage.setItem(key, JSON.stringify(state));
+    } catch {
+      // ignore
+    }
+  }, [key, state]);
+
+  return [state, setState] as const;
+}
+
 export function DreTab() {
   const { activeTenantId } = useTenant();
   const qc = useQueryClient();
@@ -42,9 +64,9 @@ export function DreTab() {
   });
 
   const [editingBudget, setEditingBudget] = useState<{ categoryId: string; periodKey: string; value: string } | null>(null);
-  const [dreStartDate, setDreStartDate] = useState<string>(() => format(subMonths(new Date(), 2), "yyyy-MM-01"));
-  const [dreEndDate, setDreEndDate] = useState<string>(() => format(addMonths(new Date(), 3), "yyyy-MM-dd"));
-  const [dreGranularity, setDreGranularity] = useState<"monthly" | "daily">("monthly");
+  const [dreStartDate, setDreStartDate] = useSessionState<string>("fin_dre_start", () => format(subMonths(new Date(), 2), "yyyy-MM-01"));
+  const [dreEndDate, setDreEndDate] = useSessionState<string>("fin_dre_end", () => format(addMonths(new Date(), 3), "yyyy-MM-dd"));
+  const [dreGranularity, setDreGranularity] = useSessionState<"monthly" | "daily">("fin_dre_granularity", "monthly");
   const [dreSearch, setDreSearch] = useState("");
 
   const drePeriods = useMemo(() => {
