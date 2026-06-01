@@ -555,6 +555,13 @@ export function TransactionsTab() {
         .eq("tenant_id", activeTenantId)
         .eq("id", id);
       if (error) throw error;
+      
+      await supabase.from("financial_logs").insert({
+        tenant_id: activeTenantId,
+        action_type: "DELETE_TRANSACTION",
+        description: `Excluiu a transação manualmente.`,
+        metadata: { id }
+      });
     },
     onSuccess: async () => {
       showSuccess("Lançamento excluído.");
@@ -574,6 +581,13 @@ export function TransactionsTab() {
         .eq("tenant_id", activeTenantId)
         .eq("id", id);
       if (error) throw error;
+
+      await supabase.from("financial_logs").insert({
+        tenant_id: activeTenantId,
+        action_type: "UPDATE_CATEGORY",
+        description: `Alterou manualmente a categoria da transação para "${description}".`,
+        metadata: { id, category_id: categoryId }
+      });
     },
     onSuccess: async (_, vars) => {
       await qc.invalidateQueries({ queryKey: ["financial_transactions", activeTenantId] });
@@ -618,6 +632,14 @@ export function TransactionsTab() {
             .update({ category_id: categoryId })
             .in("id", ids)
             .eq("tenant_id", activeTenantId);
+          
+          await supabase.from("financial_logs").insert({
+            tenant_id: activeTenantId,
+            action_type: "LEARN_CATEGORY",
+            description: `Criou uma regra de aprendizado para "${description}". Atualizou ${toUpdate.length} transações pendentes.`,
+            metadata: { category_id: categoryId, pattern: descN, updated_count: toUpdate.length }
+          });
+          
           return toUpdate.length;
         }
       }

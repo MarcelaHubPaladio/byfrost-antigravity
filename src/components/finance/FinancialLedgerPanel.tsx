@@ -10,6 +10,8 @@ import { FinancialTensionsPanel } from "./FinancialTensionsPanel";
 import { FinancialPlanningPanel } from "./FinancialPlanningPanel";
 import { FinanceControlTowerPanel } from "./FinanceControlTowerPanel";
 import { FinancialDecisionBoard } from "./FinancialDecisionBoard";
+import { FinancialLogsPanel } from "./FinancialLogsPanel";
+import { ClipboardList } from "lucide-react";
 
 export function FinancialLedgerPanel() {
   const [activeTab, setActiveTab] = useState("transactions");
@@ -18,7 +20,7 @@ export function FinancialLedgerPanel() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const t = params.get("tab");
-    if (t && ["overview", "transactions", "categories", "banks", "dre", "ingestion", "tensions", "planning", "control_tower", "decisions"].includes(t)) {
+    if (t && ["overview", "transactions", "categories", "banks", "dre", "ingestion", "tensions", "planning", "control_tower", "decisions", "logs"].includes(t)) {
       setActiveTab(t);
     }
   }, []);
@@ -82,7 +84,14 @@ export function FinancialLedgerPanel() {
             Importar
           </TabsTrigger>
           <TabsTrigger 
-            value="categories" 
+            value="logs" 
+            className="rounded-xl flex-1 whitespace-nowrap data-[state=active]:bg-indigo-600 data-[state=active]:text-white data-[state=active]:shadow-md transition-all duration-300 px-4 flex items-center gap-2"
+          >
+            <ClipboardList className="h-4 w-4" />
+            Auditoria
+          </TabsTrigger>
+          <TabsTrigger 
+            value="categories"  
             className="rounded-xl flex-1 whitespace-nowrap data-[state=active]:bg-indigo-600 data-[state=active]:text-white data-[state=active]:shadow-md transition-all duration-300 px-4"
           >
             Categorias
@@ -129,6 +138,10 @@ export function FinancialLedgerPanel() {
 
         <TabsContent value="decisions" className="grid gap-4 min-w-0 mt-6 overflow-hidden outline-none">
           <FinancialDecisionBoard />
+        </TabsContent>
+
+        <TabsContent value="logs" className="grid gap-4 min-w-0 mt-6 overflow-hidden outline-none">
+          <FinancialLogsPanel />
         </TabsContent>
       </Tabs>
     </div>
