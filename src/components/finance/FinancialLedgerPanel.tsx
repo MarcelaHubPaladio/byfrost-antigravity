@@ -7,6 +7,9 @@ import { BanksTab } from "./FinancialLedgerPanel/BanksTab";
 import { DreTab } from "./FinancialLedgerPanel/DreTab";
 import { FinancialIngestionPanel } from "./FinancialIngestionPanel";
 import { FinancialTensionsPanel } from "./FinancialTensionsPanel";
+import { FinancialPlanningPanel } from "./FinancialPlanningPanel";
+import { FinanceControlTowerPanel } from "./FinanceControlTowerPanel";
+import { FinancialDecisionBoard } from "./FinancialDecisionBoard";
 
 export function FinancialLedgerPanel() {
   const [activeTab, setActiveTab] = useState("transactions");
@@ -15,7 +18,7 @@ export function FinancialLedgerPanel() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const t = params.get("tab");
-    if (t && ["overview", "transactions", "categories", "banks", "dre", "ingestion", "tensions"].includes(t)) {
+    if (t && ["overview", "transactions", "categories", "banks", "dre", "ingestion", "tensions", "planning", "control_tower", "decisions"].includes(t)) {
       setActiveTab(t);
     }
   }, []);
@@ -33,7 +36,7 @@ export function FinancialLedgerPanel() {
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="h-11 rounded-2xl bg-white/50 p-1 shadow-sm border border-slate-200/60 dark:bg-slate-900/50 dark:border-slate-800/60 flex w-full max-w-[800px] flex-wrap sm:flex-nowrap mb-8 overflow-x-auto">
+        <TabsList className="h-11 rounded-2xl bg-white/50 p-1 shadow-sm border border-slate-200/60 dark:bg-slate-900/50 dark:border-slate-800/60 flex w-full max-w-full flex-wrap sm:flex-nowrap mb-8 overflow-x-auto justify-start no-scrollbar">
           <TabsTrigger 
             value="transactions" 
             className="rounded-xl flex-1 whitespace-nowrap data-[state=active]:bg-indigo-600 data-[state=active]:text-white data-[state=active]:shadow-md transition-all duration-300 px-4"
@@ -52,6 +55,24 @@ export function FinancialLedgerPanel() {
           >
             <AlertTriangle className="h-4 w-4" />
             Tensões
+          </TabsTrigger>
+          <TabsTrigger 
+            value="planning" 
+            className="rounded-xl flex-1 whitespace-nowrap data-[state=active]:bg-indigo-600 data-[state=active]:text-white data-[state=active]:shadow-md transition-all duration-300 px-4"
+          >
+            Planejamento
+          </TabsTrigger>
+          <TabsTrigger 
+            value="control_tower" 
+            className="rounded-xl flex-1 whitespace-nowrap data-[state=active]:bg-indigo-600 data-[state=active]:text-white data-[state=active]:shadow-md transition-all duration-300 px-4"
+          >
+            Control Tower
+          </TabsTrigger>
+          <TabsTrigger 
+            value="decisions" 
+            className="rounded-xl flex-1 whitespace-nowrap data-[state=active]:bg-indigo-600 data-[state=active]:text-white data-[state=active]:shadow-md transition-all duration-300 px-4"
+          >
+            Decisões
           </TabsTrigger>
           <TabsTrigger 
             value="ingestion" 
@@ -96,6 +117,18 @@ export function FinancialLedgerPanel() {
 
         <TabsContent value="ingestion" className="grid gap-4 min-w-0 mt-6 overflow-hidden outline-none">
           <FinancialIngestionPanel />
+        </TabsContent>
+
+        <TabsContent value="planning" className="grid gap-4 min-w-0 mt-6 overflow-hidden outline-none">
+          <FinancialPlanningPanel />
+        </TabsContent>
+
+        <TabsContent value="control_tower" className="grid gap-4 min-w-0 mt-6 overflow-hidden outline-none">
+          <FinanceControlTowerPanel />
+        </TabsContent>
+
+        <TabsContent value="decisions" className="grid gap-4 min-w-0 mt-6 overflow-hidden outline-none">
+          <FinancialDecisionBoard />
         </TabsContent>
       </Tabs>
     </div>
