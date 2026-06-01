@@ -164,7 +164,7 @@ export function TransactionsTab() {
       data = data.filter((t) => t.category_id === filterCategoryId);
     }
     if (filterType && filterType !== "all") {
-      data = data.filter((t) => t.type === filterType);
+      data = data.filter((t) => (t.type || "").toLowerCase().trim() === filterType);
     }
     
     if (txSearchText) {
@@ -1275,7 +1275,9 @@ export function TransactionsTab() {
                             {acc ? acc.account_name : String(t.account_id).slice(0, 8)}
                           </div>
                         </TableCell>
-                        <TableCell className="w-[80px] text-[11px] font-medium text-slate-900 dark:text-slate-100">{t.type}</TableCell>
+                        <TableCell className="w-[80px] text-[11px] font-medium text-slate-900 dark:text-slate-100">
+                          {(t.type || "").toLowerCase().trim() === 'credit' ? 'Entrada' : (t.type || "").toLowerCase().trim() === 'debit' ? 'Saída' : t.type}
+                        </TableCell>
                         <TableCell className="w-[110px] text-right font-bold text-slate-900 dark:text-slate-100">
                           {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(t.amount)}
                         </TableCell>
