@@ -117,6 +117,9 @@ export function TransactionsTab() {
   const [txSearchText, setTxSearchText] = useSessionState("fin_tx_search", "");
   const [filterType, setFilterType] = useSessionState<string>("fin_tx_type", "all");
 
+  const [learningModalOpen, setLearningModalOpen] = useState(false);
+  const [learningData, setLearningData] = useState<{ id: string; description: string; categoryId: string; categoryName: string } | null>(null);
+
   const transactionsQ = useQuery({
     queryKey: ["financial_transactions", activeTenantId, txStartDate, txEndDate],
     enabled: Boolean(activeTenantId && txStartDate && txEndDate),
@@ -564,7 +567,6 @@ export function TransactionsTab() {
   const updateTxCategoryM = useMutation({
     mutationFn: async ({ id, description, categoryId }: { id: string; description: string; categoryId: string }) => {
       if (!activeTenantId) throw new Error("Tenant inválido");
-      const descN = normalizeDescription(description);
 
       const { error } = await supabase
         .from("financial_transactions")
@@ -572,21 +574,64 @@ export function TransactionsTab() {
         .eq("tenant_id", activeTenantId)
         .eq("id", id);
       if (error) throw error;
-
-      if (categoryId) {
-        await supabase.rpc("financial_upsert_classification_rule", {
-          p_tenant_id: activeTenantId,
-          p_pattern: descN,
-          p_category_id: categoryId,
-          p_used_increment: 1,
-        });
+    },
+    onSuccess: async (_, vars) => {
+      await qc.invalidateQueries({ queryKey: ["financial_transactions", activeTenantId] });
+      if (vars.categoryId) {
+        const cat = categoryById.get(vars.categoryId);
+        if (cat) {
+          setLearningData({ id: vars.id, description: vars.description, categoryId: vars.categoryId, categoryName: cat.name });
+          setLearningModalOpen(true);
+        }
       }
     },
-    onSuccess: async () => {
-      await qc.invalidateQueries({ queryKey: ["financial_transactions", activeTenantId] });
-      showSuccess("Categoria atualizada (regra aprendida).");
-    },
     onError: (e: any) => showError(e?.message ?? "Falha ao atualizar categoria"),
+  });
+
+  const applyLearningRuleM = useMutation({
+    mutationFn: async ({ description, categoryId }: { description: string; categoryId: string }) => {
+      if (!activeTenantId) throw new Error("Tenant inválido");
+      const descN = normalizeDescription(description);
+      
+      // 1. Insert Rule
+      const { error: ruleErr } = await supabase.from("financial_category_rules").insert({
+        tenant_id: activeTenantId,
+        pattern: descN,
+        category_id: categoryId,
+        is_regex: false,
+      });
+      if (ruleErr) throw ruleErr;
+
+      // 2. Apply to existing uncategorized
+      const { data: uncategorized } = await supabase
+        .from("financial_transactions")
+        .select("id, description")
+        .eq("tenant_id", activeTenantId)
+        .is("category_id", null);
+
+      if (uncategorized && uncategorized.length > 0) {
+        const toUpdate = uncategorized.filter(u => normalizeDescription(u.description).includes(descN));
+        if (toUpdate.length > 0) {
+          const ids = toUpdate.map(u => u.id);
+          await supabase
+            .from("financial_transactions")
+            .update({ category_id: categoryId })
+            .in("id", ids)
+            .eq("tenant_id", activeTenantId);
+          return toUpdate.length;
+        }
+      }
+      return 0;
+    },
+    onSuccess: async (updatedCount) => {
+      showSuccess(`Regra aprendida! ${updatedCount} transações antigas foram categorizadas automaticamente.`);
+      await qc.invalidateQueries({ queryKey: ["financial_transactions", activeTenantId] });
+      setLearningModalOpen(false);
+    },
+    onError: (e: any) => {
+      showError(e?.message ?? "Erro ao salvar a regra");
+      setLearningModalOpen(false);
+    }
   });
 
   const updateTxEntityM = useMutation({
@@ -1429,6 +1474,28 @@ export function TransactionsTab() {
               </TableBody>
             </Table>
           </div>
+
+          <Dialog open={learningModalOpen} onOpenChange={setLearningModalOpen}>
+            <DialogContent className="sm:max-w-[425px] rounded-3xl">
+              <DialogHeader>
+                <DialogTitle>Aprender Categorização</DialogTitle>
+                <DialogDescription>
+                  Você acabou de categorizar a transação "{learningData?.description}" como "{learningData?.categoryName}".
+                  Deseja criar uma regra para que o sistema categorize automaticamente transações semelhantes no futuro e aplique aos lançamentos pendentes?
+                </DialogDescription>
+              </DialogHeader>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setLearningModalOpen(false)} className="rounded-xl">Não, apenas desta vez</Button>
+                <Button 
+                  className="rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white" 
+                  onClick={() => learningData && applyLearningRuleM.mutate({ description: learningData.description, categoryId: learningData.categoryId })}
+                  disabled={applyLearningRuleM.isPending}
+                >
+                  {applyLearningRuleM.isPending ? "Aplicando..." : "Sim, criar regra"}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
         </Card>
       </div>
 

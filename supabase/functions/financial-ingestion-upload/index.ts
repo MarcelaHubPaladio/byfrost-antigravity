@@ -330,6 +330,15 @@ async function processFinancialIngestion(opts: {
   const descKeys = ["description", "descricao", "historico", "memo", "narrativa", "desc", "lancamento"];
   const amountKeys = ["amount", "valor", "montante", "value", "vlr"];
 
+  // Fetch classification rules
+  const { data: rulesData } = await supabase
+    .from("financial_category_rules")
+    .select("pattern, category_id, is_regex")
+    .eq("tenant_id", tenantId)
+    .order("priority", { ascending: false });
+
+  const rules = (rulesData ?? []) as any[];
+
   const occurrenceMap = new Map<string, number>();
   const inserts: any[] = [];
   const errors: string[] = [];
@@ -398,6 +407,27 @@ async function processFinancialIngestion(opts: {
       })
     );
 
+    // Apply classification rules
+    let categoryId: string | null = null;
+    for (const rule of rules) {
+      if (rule.is_regex) {
+        try {
+          const re = new RegExp(rule.pattern, "i");
+          if (re.test(descNorm)) {
+            categoryId = rule.category_id;
+            break;
+          }
+        } catch {
+          // ignore invalid regex
+        }
+      } else {
+        if (descNorm.includes(rule.pattern)) {
+          categoryId = rule.category_id;
+          break;
+        }
+      }
+    }
+
     inserts.push({
       tenant_id: tenantId,
       account_id: accountId,
@@ -406,6 +436,7 @@ async function processFinancialIngestion(opts: {
       description: descRaw,
       transaction_date: txDate,
       competence_date: txDate,
+      category_id: categoryId,
       status: "posted",
       fingerprint,
       source: "import",

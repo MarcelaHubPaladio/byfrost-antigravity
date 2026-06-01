@@ -5,6 +5,9 @@ import { useTenant } from "@/providers/TenantProvider";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { runTensionEngine } from "@/lib/tension-engine";
+import { useState } from "react";
+import { showSuccess } from "@/utils/toast";
 
 function formatMoneyBRL(n: number | null | undefined) {
   const x = Number(n ?? 0);
@@ -63,18 +66,46 @@ export function FinancialTensionsPanel() {
     return m;
   }, [scoresQ.data]);
 
+  const [isGenerating, setIsGenerating] = useState(false);
+
+  const handleGenerateTensions = async () => {
+    if (!activeTenantId) return;
+    setIsGenerating(true);
+    try {
+      const generatedCount = await runTensionEngine(activeTenantId);
+      await eventsQ.refetch();
+      await scoresQ.refetch();
+      if (generatedCount > 0) {
+        showSuccess(`${generatedCount} novas tensões detectadas!`);
+      } else {
+        showSuccess("O DRE está saudável. Nenhuma nova tensão no momento.");
+      }
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
   return (
     <Card className="rounded-[22px] border-slate-200 bg-white/70 p-4 shadow-sm backdrop-blur dark:border-slate-800 dark:bg-slate-950/40">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">Tensões detectadas</div>
           <div className="mt-1 text-xs text-slate-600 dark:text-slate-400">
-            Geradas por varreduras assíncronas (cron + job queue). Apenas tensões com impacto financeiro real são registradas.
+            Geradas por análise do DRE Realizado vs Orçado. Apenas tensões com impacto financeiro real são registradas.
           </div>
         </div>
-        <Button variant="secondary" className="h-9 rounded-2xl" onClick={() => eventsQ.refetch()}>
-          Atualizar
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" className="h-9 rounded-2xl" onClick={() => eventsQ.refetch()}>
+            Atualizar Lista
+          </Button>
+          <Button 
+            className="h-9 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white" 
+            onClick={handleGenerateTensions}
+            disabled={isGenerating}
+          >
+            {isGenerating ? "Analisando DRE..." : "Analisar Tensões Agora"}
+          </Button>
+        </div>
       </div>
 
       <div className="mt-3 overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-800">

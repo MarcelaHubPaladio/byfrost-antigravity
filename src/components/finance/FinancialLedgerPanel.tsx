@@ -1,19 +1,21 @@
 import React, { useState, useEffect } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Landmark } from "lucide-react";
+import { Landmark, PieChart, UploadCloud, AlertTriangle } from "lucide-react";
 import { TransactionsTab } from "./FinancialLedgerPanel/TransactionsTab";
 import { CategoriesTab } from "./FinancialLedgerPanel/CategoriesTab";
 import { BanksTab } from "./FinancialLedgerPanel/BanksTab";
 import { DreTab } from "./FinancialLedgerPanel/DreTab";
+import { FinancialIngestionPanel } from "./FinancialIngestionPanel";
+import { FinancialTensionsPanel } from "./FinancialTensionsPanel";
 
 export function FinancialLedgerPanel() {
   const [activeTab, setActiveTab] = useState("transactions");
 
-  // Handle ?tab=dre in URL
+  // Handle ?tab=xxx in URL
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const t = params.get("tab");
-    if (t === "dre" || t === "categories" || t === "banks") {
+    if (t && ["overview", "transactions", "categories", "banks", "dre", "ingestion", "tensions"].includes(t)) {
       setActiveTab(t);
     }
   }, []);
@@ -31,30 +33,44 @@ export function FinancialLedgerPanel() {
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="h-11 rounded-2xl bg-white/50 p-1 shadow-sm border border-slate-200/60 dark:bg-slate-900/50 dark:border-slate-800/60 flex w-full max-w-[500px]">
+        <TabsList className="h-11 rounded-2xl bg-white/50 p-1 shadow-sm border border-slate-200/60 dark:bg-slate-900/50 dark:border-slate-800/60 flex w-full max-w-[800px] flex-wrap sm:flex-nowrap mb-8 overflow-x-auto">
           <TabsTrigger 
             value="transactions" 
-            className="rounded-xl flex-1 data-[state=active]:bg-indigo-600 data-[state=active]:text-white data-[state=active]:shadow-md transition-all duration-300"
+            className="rounded-xl flex-1 whitespace-nowrap data-[state=active]:bg-indigo-600 data-[state=active]:text-white data-[state=active]:shadow-md transition-all duration-300 px-4"
           >
             Lançamentos
           </TabsTrigger>
           <TabsTrigger 
+            value="dre" 
+            className="rounded-xl flex-1 whitespace-nowrap data-[state=active]:bg-indigo-600 data-[state=active]:text-white data-[state=active]:shadow-md transition-all duration-300 px-4"
+          >
+            DRE-Caixa
+          </TabsTrigger>
+          <TabsTrigger 
+            value="tensions" 
+            className="rounded-xl flex-1 whitespace-nowrap data-[state=active]:bg-indigo-600 data-[state=active]:text-white data-[state=active]:shadow-md transition-all duration-300 px-4 flex items-center gap-2"
+          >
+            <AlertTriangle className="h-4 w-4" />
+            Tensões
+          </TabsTrigger>
+          <TabsTrigger 
+            value="ingestion" 
+            className="rounded-xl flex-1 whitespace-nowrap data-[state=active]:bg-indigo-600 data-[state=active]:text-white data-[state=active]:shadow-md transition-all duration-300 px-4 flex items-center gap-2"
+          >
+            <UploadCloud className="h-4 w-4" />
+            Importar
+          </TabsTrigger>
+          <TabsTrigger 
             value="categories" 
-            className="rounded-xl flex-1 data-[state=active]:bg-indigo-600 data-[state=active]:text-white data-[state=active]:shadow-md transition-all duration-300"
+            className="rounded-xl flex-1 whitespace-nowrap data-[state=active]:bg-indigo-600 data-[state=active]:text-white data-[state=active]:shadow-md transition-all duration-300 px-4"
           >
             Categorias
           </TabsTrigger>
           <TabsTrigger 
             value="banks" 
-            className="rounded-xl flex-1 data-[state=active]:bg-indigo-600 data-[state=active]:text-white data-[state=active]:shadow-md transition-all duration-300"
+            className="rounded-xl flex-1 whitespace-nowrap data-[state=active]:bg-indigo-600 data-[state=active]:text-white data-[state=active]:shadow-md transition-all duration-300 px-4"
           >
             Bancos
-          </TabsTrigger>
-          <TabsTrigger 
-            value="dre" 
-            className="rounded-xl flex-1 data-[state=active]:bg-indigo-600 data-[state=active]:text-white data-[state=active]:shadow-md transition-all duration-300"
-          >
-            DRE-Caixa
           </TabsTrigger>
         </TabsList>
 
@@ -72,6 +88,14 @@ export function FinancialLedgerPanel() {
 
         <TabsContent value="dre" className="grid gap-4 min-w-0 mt-6 overflow-hidden outline-none">
           <DreTab />
+        </TabsContent>
+
+        <TabsContent value="tensions" className="grid gap-4 min-w-0 mt-6 overflow-hidden outline-none">
+          <FinancialTensionsPanel />
+        </TabsContent>
+
+        <TabsContent value="ingestion" className="grid gap-4 min-w-0 mt-6 overflow-hidden outline-none">
+          <FinancialIngestionPanel />
         </TabsContent>
       </Tabs>
     </div>
