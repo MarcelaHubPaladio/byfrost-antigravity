@@ -208,7 +208,7 @@ export function TransactionsTab() {
     });
 
     return data;
-  }, [transactionsQ.data, filterEntityId, filterCategoryId, sortKey, sortDir, txSearchText, accountById, categoryById]);
+  }, [transactionsQ.data, filterEntityId, filterCategoryId, filterType, sortKey, sortDir, txSearchText, accountById, categoryById]);
 
   const toggleSort = (key: string) => {
     if (sortKey === key) {
