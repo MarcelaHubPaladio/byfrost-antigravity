@@ -44,6 +44,8 @@ import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Link } from "react-router-dom";
 
+import { FinancialIngestionPanel } from "../FinancialIngestionPanel";
+
 import { CategoryType, CATEGORY_LABELS, normalizeDescription, stripOuterQuotes, splitCsvLine, parseCategoryType, ParsedCategory, parseCategoryCsv, sha256Hex, parseMoneyInput, formatMoneyInput, prettyAccountType, currentMonthRangeIso } from "@/lib/financial-utils";
 type BankAccountRow = {
   id: string;
@@ -123,6 +125,7 @@ export function TransactionsTab() {
   const [selectedTxIds, setSelectedTxIds] = useState<Set<string>>(new Set());
   const [bulkAction, setBulkAction] = useState<"category" | "entity" | "type" | null>(null);
   const [bulkActionValue, setBulkActionValue] = useState<string | null>(null);
+  const [showIngestion, setShowIngestion] = useState(false);
 
   const transactionsQ = useQuery({
     queryKey: ["financial_transactions", activeTenantId, txStartDate, txEndDate],
@@ -965,6 +968,23 @@ export function TransactionsTab() {
     onError: (e: any) => showError(e?.message ?? "Falha ao criar")
   });
 
+  if (showIngestion) {
+    return (
+      <div className="flex flex-col gap-4 animate-in fade-in duration-300">
+        <div>
+          <Button 
+            variant="outline" 
+            onClick={() => setShowIngestion(false)} 
+            className="rounded-2xl flex items-center gap-2 text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100 shadow-sm"
+          >
+            <ChevronLeft className="h-4 w-4" /> Voltar para Lançamentos
+          </Button>
+        </div>
+        <FinancialIngestionPanel />
+      </div>
+    );
+  }
+
   return (
     <>
       <div className="grid gap-4">
@@ -976,6 +996,16 @@ export function TransactionsTab() {
                 Lançamentos manuais com sugestão automática de categoria e aprendizado por correções.
               </div>
             </div>
+            
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                className="h-9 rounded-2xl border border-slate-200/60 shadow-sm bg-white dark:bg-slate-950 dark:border-slate-800"
+                onClick={() => setShowIngestion(true)}
+              >
+                <UploadCloud className="mr-2 h-4 w-4 text-indigo-500" />
+                Importar Extratos
+              </Button>
 
             <Dialog 
               open={txDialogOpen} 
@@ -1195,6 +1225,7 @@ export function TransactionsTab() {
                 </div>
               </DialogContent>
             </Dialog>
+            </div>
           </div>
 
           {!(accountsQ.data ?? []).length && !accountsQ.isLoading ? (

@@ -424,9 +424,7 @@ type FinanceNavChild = {
 
 const FINANCE_NAV_CHILDREN: FinanceNavChild[] = [
   { to: "/app/finance/ledger", label: "Lançamentos", icon: Wallet, routeKey: "app.finance.ledger" },
-  { to: "/app/finance/ingestion", label: "Ingestão", icon: ArrowDownUp, routeKey: "app.finance.ingestion" },
-  { to: "/app/finance/decisions", label: "Decisões", icon: ClipboardList, routeKey: "app.finance.decisions" },
-  { to: "/app/finance/tensions", label: "Tensões", icon: AlertTriangle, routeKey: "app.finance.tensions" },
+  { to: "/app/finance/decisions", label: "Estratégia", icon: ClipboardList, routeKey: "app.finance.decisions" },
   { to: "/app/finance/planning", label: "Planejamento", icon: CalendarRange, routeKey: "app.finance.planning" },
   { to: "/app/finance/board", label: "Quadro", icon: KanbanSquare, routeKey: "app.finance.board" },
   { to: "/app/finance/ledger?tab=dre", label: "DRE-Caixa", icon: LineChart, routeKey: "app.finance.ledger" },
