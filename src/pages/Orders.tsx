@@ -935,6 +935,10 @@ export default function Orders() {
                   <RefreshCw className="h-4 w-4" />
                 </Button>
 
+                <Button variant="secondary" className="h-10 rounded-2xl bg-indigo-600 text-white hover:bg-indigo-700 border-none shadow-sm" onClick={() => setIsCommissionDialogOpen(true)}>
+                  <FileText className="mr-2 h-4 w-4" /> Relatório de Comissão
+                </Button>
+
                 <Button variant="secondary" className="h-10 rounded-2xl bg-slate-900 text-white hover:bg-slate-800 border-none shadow-sm" onClick={exportOrdersCsv} disabled={exportingCsv}>
                   <Download className="mr-2 h-4 w-4" /> CSV ({filteredRows.length})
                 </Button>
