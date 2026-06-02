@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { useTenant } from "@/providers/TenantProvider";
@@ -96,6 +97,8 @@ export function CommissionsTab({
 }) {
   const { activeTenantId } = useTenant();
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
+  const location = useLocation();
   const [q, setQ] = useState("");
   const [selectedReport, setSelectedReport] = useState<any>(null);
 
@@ -192,146 +195,7 @@ export function CommissionsTab({
     return list;
   }, [reportsQ.data, q]);
 
-  if (selectedReport) {
-    const meta = selectedReport.metadata;
-    return (
-      <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4">
-        <div className="flex items-center justify-between">
-          <Button variant="outline" onClick={() => setSelectedReport(null)}>
-            Voltar para lista
-          </Button>
-          <div className="flex gap-2">
-            {(allowEdit || allowDelete) && (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="outline" size="icon">
-                    <MoreVertical className="w-4 h-4" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-48">
-                  {allowEdit && (
-                    <DropdownMenuItem onClick={(e) => handleEditClick(e, selectedReport)}>
-                      <Edit2 className="w-4 h-4 mr-2" /> Editar Nome
-                    </DropdownMenuItem>
-                  )}
-                  {allowDelete && (
-                    <DropdownMenuItem onClick={(e) => handleDelete(e, selectedReport.id)} className="text-rose-600 focus:text-rose-600">
-                      <Trash2 className="w-4 h-4 mr-2" /> Excluir
-                    </DropdownMenuItem>
-                  )}
-                </DropdownMenuContent>
-              </DropdownMenu>
-            )}
-            <Button 
-              className="bg-indigo-600 hover:bg-indigo-700"
-              onClick={() => generatePDF(meta)}
-            >
-              <Download className="w-4 h-4 mr-2" />
-              Gerar PDF
-            </Button>
-          </div>
-        </div>
-
-        <Card className="border-0 shadow-sm rounded-3xl overflow-hidden">
-          <CardHeader className="bg-slate-50 border-b pb-8 pt-8">
-            <CardTitle className="text-2xl flex items-center gap-2">
-              <FileText className="w-6 h-6 text-indigo-500" />
-              {selectedReport.display_name}
-            </CardTitle>
-            <div className="flex gap-6 mt-4">
-              <div className="flex items-center gap-2 text-slate-600">
-                <Calendar className="w-4 h-4" />
-                <span className="text-sm font-medium">
-                  {format(new Date(meta.period.from), "dd/MM/yyyy")} até {format(new Date(meta.period.to), "dd/MM/yyyy")}
-                </span>
-              </div>
-              <div className="flex items-center gap-2 text-slate-600">
-                <DollarSign className="w-4 h-4" />
-                <span className="text-sm font-medium">{meta.orders.length} pedidos faturados</span>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent className="p-8">
-            <div className="grid grid-cols-2 gap-6 mb-8">
-              <div className="bg-emerald-50 rounded-2xl p-6 border border-emerald-100">
-                <p className="text-xs font-bold uppercase tracking-widest text-emerald-600 mb-1">Total de Vendas</p>
-                <p className="text-3xl font-black text-emerald-900">
-                  {meta.total_sales.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
-                </p>
-              </div>
-              <div className="bg-indigo-50 rounded-2xl p-6 border border-indigo-100">
-                <p className="text-xs font-bold uppercase tracking-widest text-indigo-600 mb-1">Total de Comissões</p>
-                <p className="text-3xl font-black text-indigo-900">
-                  {meta.total_commission.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
-                </p>
-              </div>
-            </div>
-
-            <h3 className="font-bold text-lg mb-4">Pedidos do Fechamento</h3>
-            <div className="rounded-2xl border overflow-hidden">
-              <table className="w-full text-sm text-left">
-                <thead className="bg-slate-50 border-b">
-                  <tr>
-                    <th className="px-6 py-4 font-bold text-slate-600">Pedido</th>
-                    <th className="px-6 py-4 font-bold text-slate-600">Data</th>
-                    <th className="px-6 py-4 font-bold text-slate-600">Cliente</th>
-                    <th className="px-6 py-4 font-bold text-slate-600 text-right">Valor Venda</th>
-                    <th className="px-6 py-4 font-bold text-slate-600 text-right">Comissão</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y">
-                  {meta.orders.map((o: any, idx: number) => (
-                    <tr key={idx} className="hover:bg-slate-50 transition-colors">
-                      <td className="px-6 py-4 font-medium text-slate-900">
-                        {o.title || o.case_id.slice(0, 8)}
-                      </td>
-                      <td className="px-6 py-4 text-slate-600">
-                        {format(new Date(o.date), "dd/MM/yyyy")}
-                      </td>
-                      <td className="px-6 py-4 text-slate-600">{o.customer_name || "—"}</td>
-                      <td className="px-6 py-4 font-medium text-slate-900 text-right">
-                        {o.total_value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
-                      </td>
-                      <td className="px-6 py-4 font-medium text-indigo-600 text-right bg-indigo-50/30">
-                        {o.commission_value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
-                      </td>
-                    </tr>
-                  ))}
-                  {meta.orders.length === 0 && (
-                    <tr>
-                      <td colSpan={5} className="px-6 py-8 text-center text-slate-500 italic">
-                        Nenhum pedido atrelado a este fechamento.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Edit Dialog for Single View */}
-        <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Editar Nome do Fechamento</DialogTitle>
-            </DialogHeader>
-            <div className="py-4">
-              <Label>Nome</Label>
-              <Input value={editName} onChange={e => setEditName(e.target.value)} className="mt-2" />
-            </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setEditDialogOpen(false)}>Cancelar</Button>
-              <Button onClick={saveEdit} disabled={updateMutation.isPending}>
-                {updateMutation.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-                Salvar
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-      </div>
-    );
-  }
+  const basePath = location.pathname.includes("finance") ? "/app/finance/commissions" : "/app/orders/commissions";
 
   return (
     <div className="space-y-6">
@@ -357,7 +221,7 @@ export function CommissionsTab({
             <Card 
               key={report.id} 
               className="border-slate-200 shadow-sm hover:shadow-md transition-all cursor-pointer rounded-2xl group overflow-hidden relative"
-              onClick={() => setSelectedReport(report)}
+              onClick={() => navigate(`${basePath}/${report.id}`)}
             >
               <CardHeader className="bg-slate-50 border-b group-hover:bg-indigo-50/50 transition-colors pb-4 pr-12">
                 <CardTitle className="text-base font-bold text-slate-900 flex items-start gap-2">

@@ -934,7 +934,7 @@ export default function Orders() {
                 </Button>
 
                 <Button variant="secondary" className="h-10 rounded-2xl bg-indigo-600 text-white hover:bg-indigo-700 border-none shadow-sm" asChild>
-                  <Link to="/app/orders/comissoes">
+                  <Link to="/app/orders/commissions">
                     <FileText className="mr-2 h-4 w-4" /> Relatório de Comissão
                   </Link>
                 </Button>

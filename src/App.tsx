@@ -50,6 +50,7 @@ const Crm = lazyWithRetry(() => import("@/pages/Crm"));
 const CrmCaseDetail = lazyWithRetry(() => import("@/pages/CrmCaseDetail"));
 const Orders = lazyWithRetry(() => import("@/pages/Orders"));
 const OrdersCommissions = lazyWithRetry(() => import("@/pages/OrdersCommissions"));
+const CommissionReportDetail = lazyWithRetry(() => import("@/pages/CommissionReportDetail"));
 const SalesOrderCase = lazyWithRetry(() => import("@/pages/SalesOrderCase"));
 const OperacaoM30 = lazyWithRetry(() => import("@/pages/OperacaoM30"));
 const MktTecha = lazyWithRetry(() => import("@/pages/MktTecha"));
@@ -742,10 +743,28 @@ const App = () => (
                   />
 
                   <Route
-                    path="/app/orders/comissoes"
+                    path="/app/orders/commissions"
                     element={
                       <RequireRouteAccess routeKey="app.orders">
                         <OrdersCommissions />
+                      </RequireRouteAccess>
+                    }
+                  />
+
+                  <Route
+                    path="/app/orders/commissions/:id"
+                    element={
+                      <RequireRouteAccess routeKey="app.orders">
+                        <CommissionReportDetail />
+                      </RequireRouteAccess>
+                    }
+                  />
+
+                  <Route
+                    path="/app/finance/commissions/:id"
+                    element={
+                      <RequireRouteAccess routeKey="app.finance.ledger">
+                        <CommissionReportDetail />
                       </RequireRouteAccess>
                     }
                   />

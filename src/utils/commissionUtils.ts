@@ -67,24 +67,37 @@ export async function calculateCommissionForOrders(
     // Get case items to calculate exact discount if possible
     const { data: items } = await supabase
       .from("case_items")
-      .select("qty, price, discount_percent, total, commission_value")
+      .select("qty, price, discount_percent, total, commission_value, description, custom_price, product_id, products(name)")
       .eq("case_id", order.id);
 
     let orderTotalValue = caseDataTotals.get(order.id) || 0;
     let orderCommission = 0;
+    const enrichedItems: any[] = [];
 
     if (items && items.length > 0) {
       for (const item of items) {
+        let rowCommission = 0;
         if (item.commission_value != null) {
-          orderCommission += Number(item.commission_value);
+          rowCommission = Number(item.commission_value);
         } else {
           // Fallback calculation
           const rowTotal = Number(item.total || 0);
           const discountPct = Number(item.discount_percent || 0);
           const applicableTier = tiers.find((t: any) => t.max_discount_pct >= discountPct);
           const pct = applicableTier ? applicableTier.commission_pct : basePercent;
-          orderCommission += rowTotal * (pct / 100);
+          rowCommission = rowTotal * (pct / 100);
         }
+        orderCommission += rowCommission;
+
+        const prodName = item.products?.name || item.description || "Item";
+        enrichedItems.push({
+          name: prodName,
+          qty: item.qty || 1,
+          price: item.custom_price || item.price || 0,
+          discount_percent: item.discount_percent || 0,
+          total: item.total || 0,
+          commission_value: rowCommission
+        });
       }
     } else {
       // Fallback: no items, use base percent
@@ -95,6 +108,8 @@ export async function calculateCommissionForOrders(
     grandTotalCommission += orderCommission;
 
     const f = caseDataFields.get(order.id);
+    // Find billing date if stored in caseDataFields, or fallback to updated_at / current date
+    const billingDate = f?.billing_date || f?.data_faturamento || order.updated_at || order.created_at;
 
     calculatedOrders.push({
       case_id: order.id,
@@ -102,8 +117,10 @@ export async function calculateCommissionForOrders(
       customer_name: "Cliente", // To be filled from map if passed
       total_value: orderTotalValue,
       commission_value: orderCommission,
-      date: order.created_at,
+      sale_date: order.created_at,
+      billing_date: billingDate,
       billing_status: f?.billing_status || "Pendente",
+      items: enrichedItems,
     });
   }
 
