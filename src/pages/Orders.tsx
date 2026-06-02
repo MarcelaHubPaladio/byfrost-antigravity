@@ -69,6 +69,7 @@ import { DateRange } from "react-day-picker";
 import { cn } from "@/lib/utils";
 import { NewSalesOrderDialog } from "@/components/case/NewSalesOrderDialog";
 import { ImportOrdersDialog } from "@/components/case/ImportOrdersDialog";
+import { CommissionReportDialog } from "@/components/case/CommissionReportDialog";
 import { Link, useNavigate } from "react-router-dom";
 import { 
   Select, 
@@ -267,6 +268,7 @@ export default function Orders() {
   const [partialPaidCaseId, setPartialPaidCaseId] = useState<string | null>(null);
   const [partialPaidValue, setPartialPaidValue] = useState("");
   const [isNewOrderDialogOpen, setIsNewOrderDialogOpen] = useState(false);
+  const [isCommissionDialogOpen, setIsCommissionDialogOpen] = useState(false);
 
   const [transitionBlock, setTransitionBlock] = useState<{
     open: boolean;

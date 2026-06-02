@@ -11,7 +11,8 @@ import { FinancialPlanningPanel } from "./FinancialPlanningPanel";
 import { FinanceControlTowerPanel } from "./FinanceControlTowerPanel";
 import { FinancialDecisionBoard } from "./FinancialDecisionBoard";
 import { FinancialLogsPanel } from "./FinancialLogsPanel";
-import { ClipboardList, KanbanSquare } from "lucide-react";
+import { CommissionsTab } from "./FinancialLedgerPanel/CommissionsTab";
+import { ClipboardList, KanbanSquare, HandCoins } from "lucide-react";
 
 export function FinancialLedgerPanel() {
   const [activeTab, setActiveTab] = useState("transactions");
@@ -80,6 +81,13 @@ export function FinancialLedgerPanel() {
             Auditoria
           </TabsTrigger>
           <TabsTrigger 
+            value="commissions" 
+            className="rounded-xl flex-1 whitespace-nowrap data-[state=active]:bg-indigo-600 data-[state=active]:text-white data-[state=active]:shadow-md transition-all duration-300 px-4 flex items-center gap-2"
+          >
+            <HandCoins className="h-4 w-4" />
+            Comissões
+          </TabsTrigger>
+          <TabsTrigger 
             value="categories"  
             className="rounded-xl flex-1 whitespace-nowrap data-[state=active]:bg-indigo-600 data-[state=active]:text-white data-[state=active]:shadow-md transition-all duration-300 px-4"
           >
@@ -136,6 +144,10 @@ export function FinancialLedgerPanel() {
 
         <TabsContent value="logs" className="grid gap-4 min-w-0 overflow-hidden outline-none">
           <FinancialLogsPanel />
+        </TabsContent>
+
+        <TabsContent value="commissions" className="grid gap-4 min-w-0 overflow-hidden outline-none">
+          <CommissionsTab />
         </TabsContent>
       </Tabs>
     </div>
