@@ -1580,6 +1580,16 @@ export default function Orders() {
               </DialogFooter>
             </DialogContent>
           </Dialog>
+          <CommissionReportDialog
+            open={isCommissionDialogOpen}
+            onOpenChange={setIsCommissionDialogOpen}
+            vendors={vendorsQ.data || []}
+            users={usersQ.data || []}
+            cases={journeyRows}
+            caseDataFields={caseDataQ.data?.fields || new Map()}
+            caseDataTotals={caseDataQ.data?.totals || new Map()}
+            customers={customersQ.data || new Map()}
+          />
         </div>
       </AppShell>
     </RequireAuth>
