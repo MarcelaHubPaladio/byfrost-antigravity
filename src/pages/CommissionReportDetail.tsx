@@ -8,6 +8,7 @@ import { ArrowLeft, Calendar, DollarSign, FileText, Download, ChevronDown, Chevr
 import { Button } from "@/components/ui/button";
 import { AppShell } from "@/components/AppShell";
 import { Loader2 } from "lucide-react";
+import { generatePDF } from "@/utils/commissionUtils";
 
 export default function CommissionReportDetail() {
   const { id } = useParams<{ id: string }>();
@@ -87,6 +88,15 @@ export default function CommissionReportDetail() {
                 </p>
               </div>
             </div>
+            
+            <Button 
+              onClick={() => generatePDF(meta)}
+              variant="outline" 
+              className="bg-white border-slate-200 text-slate-700 hover:bg-slate-50 hover:text-indigo-600 rounded-xl"
+            >
+              <Download className="w-4 h-4 mr-2" />
+              Baixar PDF
+            </Button>
           </div>
 
           <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-200/60">

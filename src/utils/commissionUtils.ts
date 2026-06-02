@@ -138,6 +138,79 @@ export async function calculateCommissionForOrders(
   };
 }
 
+export function generatePDF(report: any) {
+  const newWin = window.open("", "_blank");
+  if (!newWin) return;
+
+  const html = `
+    <html>
+      <head>
+        <title>Relatório de Comissões - ${report.seller_name}</title>
+        <style>
+          body { font-family: sans-serif; color: #333; margin: 40px; }
+          h1 { color: #4338ca; }
+          table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+          th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+          th { background-color: #f8fafc; font-weight: bold; }
+          .summary { display: flex; gap: 40px; margin-top: 20px; background: #f8fafc; padding: 20px; border-radius: 8px; }
+          .summary div { display: flex; flex-direction: column; }
+          .summary span.label { font-size: 12px; font-weight: bold; color: #64748b; text-transform: uppercase; }
+          .summary span.value { font-size: 24px; font-weight: bold; color: #0f172a; }
+          .right { text-align: right; }
+        </style>
+      </head>
+      <body>
+        <h1>Relatório de Comissões</h1>
+        <div><strong>Vendedor:</strong> ${report.seller_name}</div>
+        <div><strong>Período:</strong> ${new Date(report.period.from).toLocaleDateString("pt-BR")} a ${new Date(report.period.to).toLocaleDateString("pt-BR")}</div>
+        
+        <div class="summary">
+          <div>
+            <span class="label">Total de Vendas Faturadas</span>
+            <span class="value">${(report.total_sales || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</span>
+          </div>
+          <div>
+            <span class="label">Total de Comissões</span>
+            <span class="value">${(report.total_commission || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</span>
+          </div>
+        </div>
+
+        <h2>Pedidos</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>ID Pedido</th>
+              <th>Data</th>
+              <th>Cliente</th>
+              <th class="right">Valor Total</th>
+              <th class="right">Comissão Calculada</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${report.orders?.map((o: any) => `
+              <tr>
+                <td>${o.case_id.slice(0, 8)}...</td>
+                <td>${new Date(o.sale_date || o.date).toLocaleDateString("pt-BR")}</td>
+                <td>${o.customer_name || o.title}</td>
+                <td class="right">${(o.total_value || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</td>
+                <td class="right">${(o.commission_value || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</td>
+              </tr>
+            `).join("") || ""}
+          </tbody>
+        </table>
+        
+        <p style="margin-top: 40px; font-size: 12px; color: #94a3b8; text-align: center;">Gerado pelo Byfrost</p>
+      </body>
+    </html>
+  `;
+
+  newWin.document.write(html);
+  newWin.document.close();
+  setTimeout(() => {
+    newWin.print();
+  }, 500);
+}
+
 export async function saveCommissionReport(tenantId: string, reportData: any) {
   const { data, error } = await supabase.from("core_entities").insert({
     tenant_id: tenantId,

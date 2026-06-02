@@ -164,7 +164,7 @@ export function CommissionReportDialog({
                 </Button>
               </PopoverTrigger>
               <PopoverContent className="w-[300px] p-2" align="start">
-                <ScrollArea className="h-[200px] w-full">
+                <div className="max-h-[250px] w-full overflow-y-auto overflow-x-hidden pr-2">
                   <div className="flex flex-col gap-2 p-1">
                     <Button 
                       variant="ghost" 
@@ -188,14 +188,14 @@ export function CommissionReportDialog({
                         />
                         <label 
                           htmlFor={`seller-${s.id}`} 
-                          className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                          className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer flex-1 py-1"
                         >
                           {s.name}
                         </label>
                       </div>
                     ))}
                   </div>
-                </ScrollArea>
+                </div>
               </PopoverContent>
             </Popover>
           </div>
