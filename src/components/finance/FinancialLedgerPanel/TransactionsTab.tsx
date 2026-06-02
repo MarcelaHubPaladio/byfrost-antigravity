@@ -43,6 +43,7 @@ import { AsyncSelect } from "@/components/ui/async-select";
 import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Link } from "react-router-dom";
+import { useSession } from "@/providers/SessionProvider";
 
 import { FinancialIngestionPanel } from "../FinancialIngestionPanel";
 
@@ -78,6 +79,7 @@ export function TransactionsTab() {
   
   // Handle ?tab=dre in URL
   const { activeTenantId } = useTenant();
+  const { user } = useSession();
   const qc = useQueryClient();
 
   const [txStartDate, setTxStartDate] = useSessionState("fin_tx_start", () => currentMonthRangeIso().start);
@@ -578,7 +580,8 @@ export function TransactionsTab() {
         tenant_id: activeTenantId,
         action_type: "DELETE_TRANSACTION",
         description: `Excluiu a transação manualmente.`,
-        metadata: { id }
+        metadata: { id },
+        created_by: user?.id || null
       });
     },
     onSuccess: async () => {
@@ -604,7 +607,8 @@ export function TransactionsTab() {
         tenant_id: activeTenantId,
         action_type: "BULK_DELETE",
         description: `Excluiu em massa ${ids.length} transações.`,
-        metadata: { ids }
+        metadata: { ids },
+        created_by: user?.id || null
       });
     },
     onSuccess: async () => {
@@ -634,7 +638,8 @@ export function TransactionsTab() {
         tenant_id: activeTenantId,
         action_type: "BULK_UPDATE",
         description: `Atualizou o campo ${field} de ${ids.length} transações.`,
-        metadata: { ids, field, value }
+        metadata: { ids, field, value },
+        created_by: user?.id || null
       });
     },
     onSuccess: async () => {
@@ -663,7 +668,8 @@ export function TransactionsTab() {
         tenant_id: activeTenantId,
         action_type: "UPDATE_CATEGORY",
         description: `Alterou manualmente a categoria da transação para "${description}".`,
-        metadata: { id, category_id: categoryId }
+        metadata: { id, category_id: categoryId },
+        created_by: user?.id || null
       });
     },
     onSuccess: async (_, vars) => {
@@ -714,7 +720,8 @@ export function TransactionsTab() {
             tenant_id: activeTenantId,
             action_type: "LEARN_CATEGORY",
             description: `Criou uma regra de aprendizado para "${description}". Atualizou ${toUpdate.length} transações pendentes.`,
-            metadata: { category_id: categoryId, pattern: descN, updated_count: toUpdate.length }
+            metadata: { category_id: categoryId, pattern: descN, updated_count: toUpdate.length },
+            created_by: user?.id || null
           });
           
           return toUpdate.length;
