@@ -106,6 +106,7 @@ export function GlobalDashboardOverview() {
       setGeneratingJourneyId(null);
       // Força o refetch dos insights imediatamente
       queryClient.invalidateQueries({ queryKey: ["guardiao_insights", activeTenantId] });
+      queryClient.invalidateQueries({ queryKey: ["usage_events_ai", activeTenantId] });
     },
     onError: (err: any) => {
       toast({ variant: "destructive", title: "Erro ao gerar", description: err.message });

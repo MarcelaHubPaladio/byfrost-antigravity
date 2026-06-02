@@ -313,18 +313,22 @@ ${contextText}
     // Update usage counters (similar to jobs-processor)
     if (tokensUsed > 0) {
       const costUsd = tokensUsed * 0.0000003;
-      await supabase.from("usage_events").insert({
+      const { error: usageErr } = await supabase.from("usage_events").insert({
         tenant_id: tenantId,
         type: "ai_token",
         qty: tokensUsed,
         ref_type: "oracle_chat",
         ref_id: chatId,
+        occurred_at: new Date().toISOString(),
         meta_json: {
           description: "Oráculo Chat: " + (message.length > 50 ? message.slice(0, 50) + "..." : message),
           cost_usd: costUsd,
           model: "gpt-4o-mini"
         }
       });
+      if (usageErr) {
+        console.error("[Oracle Chat] Failed to insert usage_event:", usageErr);
+      }
 
       const periodStart = new Date();
       periodStart.setDate(1);

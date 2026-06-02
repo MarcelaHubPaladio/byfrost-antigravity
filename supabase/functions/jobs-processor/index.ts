@@ -1526,18 +1526,22 @@ ${contextText}`;
   // Update usage_counters for the current month
   if (tokensUsed > 0) {
     const costUsd = tokensUsed * 0.0000003;
-    await supabase.from("usage_events").insert({
+    const { error: usageErr } = await supabase.from("usage_events").insert({
       tenant_id: tenantId,
       type: "ai_token",
       qty: tokensUsed,
       ref_type: "guardiao_insight",
       ref_id: null,
+      occurred_at: new Date().toISOString(),
       meta_json: {
         description: journeyId === "GLOBAL" ? "Guardião: Análise Global (Financeiro e Tarefas)" : `Guardião: Insights da Jornada (ID: ${journeyId})`,
         cost_usd: costUsd,
         model: model
       }
     });
+    if (usageErr) {
+      console.error("[processGuardiaoInsightsGenerateJob] Failed to insert usage_event:", usageErr);
+    }
 
     const periodStart = new Date();
     periodStart.setDate(1);
