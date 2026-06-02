@@ -157,6 +157,10 @@ export function generatePDF(report: any) {
           .summary span.label { font-size: 12px; font-weight: bold; color: #64748b; text-transform: uppercase; }
           .summary span.value { font-size: 24px; font-weight: bold; color: #0f172a; }
           .right { text-align: right; }
+          .items-table { margin: 10px 0 10px 20px; width: calc(100% - 20px); font-size: 12px; }
+          .items-table th { background-color: #f1f5f9; color: #475569; }
+          .items-table td { color: #475569; }
+          .no-items { font-size: 12px; font-style: italic; color: #94a3b8; padding-left: 20px; }
         </style>
       </head>
       <body>
@@ -189,11 +193,39 @@ export function generatePDF(report: any) {
           <tbody>
             ${report.orders?.map((o: any) => `
               <tr>
-                <td>${o.case_id.slice(0, 8)}...</td>
-                <td>${new Date(o.sale_date || o.date).toLocaleDateString("pt-BR")}</td>
-                <td>${o.customer_name || o.title}</td>
-                <td class="right">${(o.total_value || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</td>
-                <td class="right">${(o.commission_value || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</td>
+                <td><strong>${o.case_id.slice(0, 8)}...</strong></td>
+                <td><strong>${new Date(o.sale_date || o.date).toLocaleDateString("pt-BR")}</strong></td>
+                <td><strong>${o.customer_name || o.title}</strong></td>
+                <td class="right"><strong>${(o.total_value || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</strong></td>
+                <td class="right"><strong>${(o.commission_value || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</strong></td>
+              </tr>
+              <tr>
+                <td colspan="5" style="padding: 0; border-top: none;">
+                  ${o.items && o.items.length > 0 ? `
+                    <table class="items-table">
+                      <thead>
+                        <tr>
+                          <th>Produto/Serviço</th>
+                          <th>Qtd</th>
+                          <th class="right">Preço Unit.</th>
+                          <th class="right">Total Item</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        ${o.items.map((it: any) => `
+                          <tr>
+                            <td>${it.name}</td>
+                            <td>${it.qty}</td>
+                            <td class="right">${(it.price || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</td>
+                            <td class="right">${(it.total || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</td>
+                          </tr>
+                        `).join("")}
+                      </tbody>
+                    </table>
+                  ` : `
+                    <p class="no-items">Sem detalhamento de itens no pedido.</p>
+                  `}
+                </td>
               </tr>
             `).join("") || ""}
           </tbody>
