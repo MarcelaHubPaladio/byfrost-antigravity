@@ -69,7 +69,6 @@ import { DateRange } from "react-day-picker";
 import { cn } from "@/lib/utils";
 import { NewSalesOrderDialog } from "@/components/case/NewSalesOrderDialog";
 import { ImportOrdersDialog } from "@/components/case/ImportOrdersDialog";
-import { CommissionReportDialog } from "@/components/case/CommissionReportDialog";
 import { Link, useNavigate } from "react-router-dom";
 import { 
   Select, 
@@ -268,7 +267,6 @@ export default function Orders() {
   const [partialPaidCaseId, setPartialPaidCaseId] = useState<string | null>(null);
   const [partialPaidValue, setPartialPaidValue] = useState("");
   const [isNewOrderDialogOpen, setIsNewOrderDialogOpen] = useState(false);
-  const [isCommissionDialogOpen, setIsCommissionDialogOpen] = useState(false);
 
   const [transitionBlock, setTransitionBlock] = useState<{
     open: boolean;
@@ -935,8 +933,10 @@ export default function Orders() {
                   <RefreshCw className="h-4 w-4" />
                 </Button>
 
-                <Button variant="secondary" className="h-10 rounded-2xl bg-indigo-600 text-white hover:bg-indigo-700 border-none shadow-sm" onClick={() => setIsCommissionDialogOpen(true)}>
-                  <FileText className="mr-2 h-4 w-4" /> Relatório de Comissão
+                <Button variant="secondary" className="h-10 rounded-2xl bg-indigo-600 text-white hover:bg-indigo-700 border-none shadow-sm" asChild>
+                  <Link to="/app/orders/comissoes">
+                    <FileText className="mr-2 h-4 w-4" /> Relatório de Comissão
+                  </Link>
                 </Button>
 
                 <Button variant="secondary" className="h-10 rounded-2xl bg-slate-900 text-white hover:bg-slate-800 border-none shadow-sm" onClick={exportOrdersCsv} disabled={exportingCsv}>
@@ -1580,16 +1580,6 @@ export default function Orders() {
               </DialogFooter>
             </DialogContent>
           </Dialog>
-          <CommissionReportDialog
-            open={isCommissionDialogOpen}
-            onOpenChange={setIsCommissionDialogOpen}
-            vendors={vendorsQ.data || []}
-            users={usersQ.data || []}
-            cases={journeyRows}
-            caseDataFields={caseDataQ.data?.fields || new Map()}
-            caseDataTotals={caseDataQ.data?.totals || new Map()}
-            customers={customersQ.data || new Map()}
-          />
         </div>
       </AppShell>
     </RequireAuth>

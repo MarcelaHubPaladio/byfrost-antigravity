@@ -1,17 +1,19 @@
-import React, { useState, useRef } from "react";
+import React, { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { useTenant } from "@/providers/TenantProvider";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { FileText, Download, Calendar, DollarSign, Search, Loader2 } from "lucide-react";
+import { FileText, Download, Calendar, DollarSign, Search, Loader2, MoreVertical, Edit2, Trash2 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { showError } from "@/utils/toast";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { showError, showSuccess } from "@/utils/toast";
 
 // Simulating pdf generation to avoid adding extra heavy libraries directly
-// Realistically, you could use jspdf or html2pdf.js here
 function generatePDF(report: any) {
   const newWin = window.open("", "_blank");
   if (!newWin) return;
@@ -80,16 +82,27 @@ function generatePDF(report: any) {
 
   newWin.document.write(html);
   newWin.document.close();
-  // Wait for resources to load before printing
   setTimeout(() => {
     newWin.print();
   }, 500);
 }
 
-export function CommissionsTab() {
+export function CommissionsTab({
+  allowEdit = false,
+  allowDelete = false
+}: {
+  allowEdit?: boolean;
+  allowDelete?: boolean;
+}) {
   const { activeTenantId } = useTenant();
+  const queryClient = useQueryClient();
   const [q, setQ] = useState("");
   const [selectedReport, setSelectedReport] = useState<any>(null);
+
+  // Edit State
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [editName, setEditName] = useState("");
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   const reportsQ = useQuery({
     queryKey: ["commission_reports", activeTenantId],
@@ -100,12 +113,72 @@ export function CommissionsTab() {
         .select("*")
         .eq("tenant_id", activeTenantId!)
         .eq("entity_type", "commission_report")
+        .is("deleted_at", null)
         .order("created_at", { ascending: false });
 
       if (error) throw error;
       return data ?? [];
     },
   });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase
+        .from("core_entities")
+        .update({ deleted_at: new Date().toISOString() })
+        .eq("id", id)
+        .eq("tenant_id", activeTenantId!);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      showSuccess("Fechamento removido com sucesso.");
+      if (selectedReport) setSelectedReport(null);
+      queryClient.invalidateQueries({ queryKey: ["commission_reports", activeTenantId] });
+    },
+    onError: (err: any) => showError(err.message),
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: async ({ id, name }: { id: string, name: string }) => {
+      const { error } = await supabase
+        .from("core_entities")
+        .update({ display_name: name, updated_at: new Date().toISOString() })
+        .eq("id", id)
+        .eq("tenant_id", activeTenantId!);
+      if (error) throw error;
+    },
+    onSuccess: (_, variables) => {
+      showSuccess("Fechamento atualizado com sucesso.");
+      setEditDialogOpen(false);
+      queryClient.invalidateQueries({ queryKey: ["commission_reports", activeTenantId] });
+      if (selectedReport && selectedReport.id === variables.id) {
+        setSelectedReport({ ...selectedReport, display_name: variables.name });
+      }
+    },
+    onError: (err: any) => showError(err.message),
+  });
+
+  const handleDelete = (e: React.MouseEvent, id: string) => {
+    e.stopPropagation();
+    if (confirm("Tem certeza que deseja excluir este fechamento permanentemente?")) {
+      deleteMutation.mutate(id);
+    }
+  };
+
+  const handleEditClick = (e: React.MouseEvent, report: any) => {
+    e.stopPropagation();
+    setEditName(report.display_name);
+    setEditingId(report.id);
+    setEditDialogOpen(true);
+  };
+
+  const saveEdit = () => {
+    if (!editName.trim()) {
+      showError("Nome não pode ser vazio.");
+      return;
+    }
+    updateMutation.mutate({ id: editingId!, name: editName });
+  };
 
   const filteredReports = React.useMemo(() => {
     let list = reportsQ.data || [];
@@ -127,13 +200,36 @@ export function CommissionsTab() {
           <Button variant="outline" onClick={() => setSelectedReport(null)}>
             Voltar para lista
           </Button>
-          <Button 
-            className="bg-indigo-600 hover:bg-indigo-700"
-            onClick={() => generatePDF(meta)}
-          >
-            <Download className="w-4 h-4 mr-2" />
-            Gerar PDF
-          </Button>
+          <div className="flex gap-2">
+            {(allowEdit || allowDelete) && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="icon">
+                    <MoreVertical className="w-4 h-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-48">
+                  {allowEdit && (
+                    <DropdownMenuItem onClick={(e) => handleEditClick(e, selectedReport)}>
+                      <Edit2 className="w-4 h-4 mr-2" /> Editar Nome
+                    </DropdownMenuItem>
+                  )}
+                  {allowDelete && (
+                    <DropdownMenuItem onClick={(e) => handleDelete(e, selectedReport.id)} className="text-rose-600 focus:text-rose-600">
+                      <Trash2 className="w-4 h-4 mr-2" /> Excluir
+                    </DropdownMenuItem>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
+            <Button 
+              className="bg-indigo-600 hover:bg-indigo-700"
+              onClick={() => generatePDF(meta)}
+            >
+              <Download className="w-4 h-4 mr-2" />
+              Gerar PDF
+            </Button>
+          </div>
         </div>
 
         <Card className="border-0 shadow-sm rounded-3xl overflow-hidden">
@@ -213,6 +309,26 @@ export function CommissionsTab() {
             </div>
           </CardContent>
         </Card>
+
+        {/* Edit Dialog for Single View */}
+        <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Editar Nome do Fechamento</DialogTitle>
+            </DialogHeader>
+            <div className="py-4">
+              <Label>Nome</Label>
+              <Input value={editName} onChange={e => setEditName(e.target.value)} className="mt-2" />
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setEditDialogOpen(false)}>Cancelar</Button>
+              <Button onClick={saveEdit} disabled={updateMutation.isPending}>
+                {updateMutation.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                Salvar
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     );
   }
@@ -240,13 +356,13 @@ export function CommissionsTab() {
           {filteredReports.map((report) => (
             <Card 
               key={report.id} 
-              className="border-slate-200 shadow-sm hover:shadow-md transition-all cursor-pointer rounded-2xl group overflow-hidden"
+              className="border-slate-200 shadow-sm hover:shadow-md transition-all cursor-pointer rounded-2xl group overflow-hidden relative"
               onClick={() => setSelectedReport(report)}
             >
-              <CardHeader className="bg-slate-50 border-b group-hover:bg-indigo-50/50 transition-colors pb-4">
-                <CardTitle className="text-base font-bold text-slate-900 flex items-start justify-between">
-                  <span>{report.display_name}</span>
-                  <FileText className="w-4 h-4 text-slate-400 group-hover:text-indigo-500" />
+              <CardHeader className="bg-slate-50 border-b group-hover:bg-indigo-50/50 transition-colors pb-4 pr-12">
+                <CardTitle className="text-base font-bold text-slate-900 flex items-start gap-2">
+                  <FileText className="w-4 h-4 text-slate-400 group-hover:text-indigo-500 shrink-0 mt-0.5" />
+                  <span className="line-clamp-2">{report.display_name}</span>
                 </CardTitle>
                 <div className="text-xs text-slate-500 mt-1">
                   Gerado em {format(new Date(report.created_at), "dd/MM/yyyy 'às' HH:mm")}
@@ -266,6 +382,31 @@ export function CommissionsTab() {
                   </p>
                 </div>
               </CardContent>
+
+              {/* Actions Dropdown on Hover */}
+              {(allowEdit || allowDelete) && (
+                <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-slate-200/50" onClick={e => e.stopPropagation()}>
+                        <MoreVertical className="w-4 h-4 text-slate-500" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      {allowEdit && (
+                        <DropdownMenuItem onClick={(e) => handleEditClick(e, report)}>
+                          <Edit2 className="w-4 h-4 mr-2" /> Editar Nome
+                        </DropdownMenuItem>
+                      )}
+                      {allowDelete && (
+                        <DropdownMenuItem onClick={(e) => handleDelete(e, report.id)} className="text-rose-600 focus:text-rose-600">
+                          <Trash2 className="w-4 h-4 mr-2" /> Excluir
+                        </DropdownMenuItem>
+                      )}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+              )}
             </Card>
           ))}
           {filteredReports.length === 0 && (
@@ -274,6 +415,28 @@ export function CommissionsTab() {
             </div>
           )}
         </div>
+      )}
+
+      {/* Edit Dialog for List View */}
+      {!selectedReport && (
+        <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Editar Nome do Fechamento</DialogTitle>
+            </DialogHeader>
+            <div className="py-4">
+              <Label>Nome</Label>
+              <Input value={editName} onChange={e => setEditName(e.target.value)} className="mt-2" />
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setEditDialogOpen(false)}>Cancelar</Button>
+              <Button onClick={saveEdit} disabled={updateMutation.isPending}>
+                {updateMutation.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                Salvar
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       )}
     </div>
   );
