@@ -36,7 +36,11 @@ export default function OrdersCommissions() {
     queryKey: ["cases", activeTenantId],
     enabled: Boolean(activeTenantId),
     queryFn: async () => {
-      const { data } = await supabase.from("cases").select("*, assigned_vendor(*), users_profile(*)").eq("tenant_id", activeTenantId!).is("deleted_at", null);
+      const { data } = await supabase
+        .from("cases")
+        .select("*, assigned_vendor:vendors!cases_assigned_vendor_id_fkey(*), users_profile:users_profile!fk_cases_users_profile(*)")
+        .eq("tenant_id", activeTenantId!)
+        .is("deleted_at", null);
       return data ?? [];
     },
   });
@@ -56,25 +60,40 @@ export default function OrdersCommissions() {
   // But ideally the Dialog should compute that or we provide the raw data.
   // We'll simplify and fetch case_custom_field_values here.
   const caseDataQ = useQuery({
-    queryKey: ["cases_data_for_commissions", activeTenantId],
-    enabled: Boolean(activeTenantId),
+    queryKey: ["cases_data_for_commissions", activeTenantId, casesQ.data?.length],
+    enabled: Boolean(activeTenantId && casesQ.data && casesQ.data.length > 0),
     queryFn: async () => {
-      const { data } = await supabase.from("case_custom_field_values").select("*").eq("tenant_id", activeTenantId!).is("deleted_at", null);
+      const caseIds = casesQ.data!.map(c => c.id);
+      const CHUNK_SIZE = 200;
+      const chunks = [];
+      for (let i = 0; i < caseIds.length; i += CHUNK_SIZE) chunks.push(caseIds.slice(i, i + CHUNK_SIZE));
+
       const fields = new Map();
       const totals = new Map();
-      if (data) {
-        data.forEach(d => {
-          if (!fields.has(d.case_id)) fields.set(d.case_id, {});
-          const obj = fields.get(d.case_id);
-          
-          if (d.field_name === "status_faturamento" || d.field_name === "billing_status") {
-            obj.billing_status = d.value_text;
-          }
-          if (d.field_name === "valor_total" || d.field_name === "total_value") {
-            totals.set(d.case_id, d.value_number || 0);
-          }
-        });
-      }
+
+      await Promise.all(chunks.map(async (chunk) => {
+        const [fRes, iRes] = await Promise.all([
+          supabase.from("case_fields").select("case_id,key,value_text").in("case_id", chunk),
+          supabase.from("case_items").select("case_id,total").in("case_id", chunk)
+        ]);
+        
+        if (fRes.data) {
+          fRes.data.forEach(d => {
+            if (!fields.has(d.case_id)) fields.set(d.case_id, {});
+            const obj = fields.get(d.case_id);
+            if (d.key === "billing_status") obj.billing_status = d.value_text;
+            if (d.key === "billing_date" || d.key === "data_faturamento") obj.billing_date = d.value_text;
+          });
+        }
+        
+        if (iRes.data) {
+          iRes.data.forEach(d => {
+            const current = totals.get(d.case_id) || 0;
+            totals.set(d.case_id, current + (Number(d.total) || 0));
+          });
+        }
+      }));
+
       return { fields, totals };
     },
   });
