@@ -39,6 +39,7 @@ export function CommissionReportDialog({
   caseDataTotals: Map<string, number>;
   customers: Map<string, any>;
 }) {
+  const queryClient = useQueryClient();
   const { activeTenantId } = useTenant();
   const [selectedSeller, setSelectedSeller] = useState<string>("");
   const [dateRange, setDateRange] = useState<{ from: Date; to: Date | undefined }>({
@@ -126,6 +127,7 @@ export function CommissionReportDialog({
       // Save
       await saveCommissionReport(activeTenantId!, reportData);
 
+      queryClient.invalidateQueries({ queryKey: ["commission_reports", activeTenantId] });
       showSuccess(`Relatório de ${reportData.seller_name} gerado com sucesso! Disponível em Financeiro > Comissões.`);
       onOpenChange(false);
 
