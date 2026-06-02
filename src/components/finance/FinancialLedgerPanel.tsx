@@ -26,7 +26,7 @@ export function FinancialLedgerPanel() {
   }, []);
 
   return (
-    <div className="mx-auto w-full max-w-[1600px] p-6 pb-24">
+    <div className="mx-auto w-full p-6 pb-24">
       <div className="mb-6">
         <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100 flex items-center gap-2">
           <Landmark className="h-6 w-6 text-indigo-500" />

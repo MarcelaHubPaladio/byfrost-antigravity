@@ -196,7 +196,7 @@ const App = () => (
                     element={
                       <RequireFinanceEnabled>
                         <RequireRouteAccess routeKey="app.finance.cockpit">
-                          <FinanceControlTower />
+                          <Navigate to="/app/finance/ledger?tab=transactions" replace />
                         </RequireRouteAccess>
                       </RequireFinanceEnabled>
                     }

@@ -1123,7 +1123,7 @@ export function AppShell({
                 {financeHasAnyAccess && (
                   <DesktopHoverMenu
                     title="Financeiro"
-                    trigger={<div className="w-full"><NavTile to="/app/finance" icon={Gauge} label="Cockpit" disabled={!can("app.finance.cockpit")} /></div>}
+                    trigger={<div className="w-full"><NavTile to="/app/finance/ledger?tab=transactions" icon={Gauge} label="Cockpit" disabled={!can("app.finance.cockpit")} /></div>}
                   >
                     {FINANCE_NAV_CHILDREN.map(({ to, label, icon, routeKey }) => (
                       <DesktopHoverMenuLink
@@ -1528,6 +1528,10 @@ export function AppShell({
                                     )
                                     }
                                     title="Financeiro"
+                                    onClick={() => {
+                                      setMobileFinanceOpen(!mobileFinanceOpen);
+                                      nav("/app/finance/ledger?tab=transactions");
+                                    }}
                                   >
                                     <div className="flex items-center gap-3">
                                       <Gauge className="h-5 w-5" />
