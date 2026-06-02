@@ -38,7 +38,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { addDays, subDays, addMonths, subMonths, format, parseISO, startOfMonth, endOfMonth, startOfDay, endOfDay } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import {
-  Download, Landmark, Pencil, Plus, Upload, Link2, CheckCircle2, Search, Info, Trash2, X, ChevronRight, Calendar as CalendarIcon } from "lucide-react";
+  Download, Landmark, Pencil, Plus, Upload, Link2, CheckCircle2, Search, Info, Trash2, X, ChevronRight, ChevronLeft, Calendar as CalendarIcon, UploadCloud } from "lucide-react";
 import { AsyncSelect } from "@/components/ui/async-select";
 import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
