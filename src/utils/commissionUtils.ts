@@ -67,7 +67,7 @@ export async function calculateCommissionForOrders(
     // Get case items to calculate exact discount if possible
     const { data: items } = await supabase
       .from("case_items")
-      .select("qty, price, discount_percent, total, commission_value, description, custom_price, product_id, products(name)")
+      .select("qty, price, discount_percent, total, commission_value, description, code")
       .eq("case_id", order.id);
 
     let orderTotalValue = caseDataTotals.get(order.id) || 0;
@@ -89,11 +89,11 @@ export async function calculateCommissionForOrders(
         }
         orderCommission += rowCommission;
 
-        const prodName = item.products?.name || item.description || "Item";
+        const prodName = item.description || item.code || "Item";
         enrichedItems.push({
           name: prodName,
           qty: item.qty || 1,
-          price: item.custom_price || item.price || 0,
+          price: item.price || 0,
           discount_percent: item.discount_percent || 0,
           total: item.total || 0,
           commission_value: rowCommission
