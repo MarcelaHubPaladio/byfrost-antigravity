@@ -120,6 +120,10 @@ export function TransactionsTab() {
   const [learningModalOpen, setLearningModalOpen] = useState(false);
   const [learningData, setLearningData] = useState<{ id: string; description: string; categoryId: string; categoryName: string } | null>(null);
 
+  const [selectedTxIds, setSelectedTxIds] = useState<Set<string>>(new Set());
+  const [bulkAction, setBulkAction] = useState<"category" | "entity" | "type" | null>(null);
+  const [bulkActionValue, setBulkActionValue] = useState<string | null>(null);
+
   const transactionsQ = useQuery({
     queryKey: ["financial_transactions", activeTenantId, txStartDate, txEndDate],
     enabled: Boolean(activeTenantId && txStartDate && txEndDate),
@@ -212,6 +216,17 @@ export function TransactionsTab() {
 
     return data;
   }, [transactionsQ.data, filterEntityId, filterCategoryId, filterType, sortKey, sortDir, txSearchText, accountById, categoryById]);
+
+  const selectedTxs = useMemo(() => {
+    return sortedTransactions.filter((t) => selectedTxIds.has(t.id));
+  }, [sortedTransactions, selectedTxIds]);
+
+  const sumSelected = useMemo(() => {
+    return selectedTxs.reduce((acc, t) => {
+      const v = Number(t.amount) || 0;
+      return (t.type || "").toLowerCase().trim() === "credit" ? acc + v : acc - v;
+    }, 0);
+  }, [selectedTxs]);
 
   const toggleSort = (key: string) => {
     if (sortKey === key) {
@@ -569,6 +584,65 @@ export function TransactionsTab() {
       await qc.invalidateQueries({ queryKey: ["financial_cash_projection", activeTenantId] });
     },
     onError: (e: any) => showError(e?.message ?? "Falha ao excluir lançamento"),
+  });
+
+  const bulkDeleteM = useMutation({
+    mutationFn: async () => {
+      if (!activeTenantId || selectedTxIds.size === 0) return;
+      const ids = Array.from(selectedTxIds);
+      const { error } = await supabase
+        .from("financial_transactions")
+        .delete()
+        .in("id", ids)
+        .eq("tenant_id", activeTenantId);
+      if (error) throw error;
+      
+      await supabase.from("financial_logs").insert({
+        tenant_id: activeTenantId,
+        action_type: "BULK_DELETE",
+        description: `Excluiu em massa ${ids.length} transações.`,
+        metadata: { ids }
+      });
+    },
+    onSuccess: async () => {
+      showSuccess("Lançamentos excluídos.");
+      setSelectedTxIds(new Set());
+      await qc.invalidateQueries({ queryKey: ["financial_transactions", activeTenantId] });
+      await qc.invalidateQueries({ queryKey: ["financial_cash_projection", activeTenantId] });
+    },
+    onError: (e: any) => showError(e?.message ?? "Falha ao excluir em massa"),
+  });
+
+  const bulkUpdateM = useMutation({
+    mutationFn: async ({ field, value }: { field: "category_id" | "entity_id" | "type"; value: string | null }) => {
+      if (!activeTenantId || selectedTxIds.size === 0) return;
+      const ids = Array.from(selectedTxIds);
+      const payload: any = {};
+      payload[field] = value;
+      
+      const { error } = await supabase
+        .from("financial_transactions")
+        .update(payload)
+        .in("id", ids)
+        .eq("tenant_id", activeTenantId);
+      if (error) throw error;
+
+      await supabase.from("financial_logs").insert({
+        tenant_id: activeTenantId,
+        action_type: "BULK_UPDATE",
+        description: `Atualizou o campo ${field} de ${ids.length} transações.`,
+        metadata: { ids, field, value }
+      });
+    },
+    onSuccess: async () => {
+      showSuccess("Lançamentos atualizados.");
+      setBulkAction(null);
+      setBulkActionValue(null);
+      setSelectedTxIds(new Set());
+      await qc.invalidateQueries({ queryKey: ["financial_transactions", activeTenantId] });
+      await qc.invalidateQueries({ queryKey: ["financial_cash_projection", activeTenantId] });
+    },
+    onError: (e: any) => showError(e?.message ?? "Falha ao atualizar em massa"),
   });
 
   const updateTxCategoryM = useMutation({
@@ -1248,6 +1322,18 @@ export function TransactionsTab() {
             <Table>
               <TableHeader>
                 <TableRow className="bg-slate-50/50 dark:bg-slate-900/20">
+                  <TableHead className="w-[40px] px-3">
+                    <Checkbox 
+                      checked={sortedTransactions.length > 0 && selectedTxIds.size === sortedTransactions.length}
+                      onCheckedChange={(val) => {
+                        if (val) {
+                          setSelectedTxIds(new Set(sortedTransactions.map(t => t.id)));
+                        } else {
+                          setSelectedTxIds(new Set());
+                        }
+                      }}
+                    />
+                  </TableHead>
                   <TableHead className="w-[110px] cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800" onClick={() => toggleSort("transaction_date")}>
                     Data {sortKey === "transaction_date" && (sortDir === "asc" ? "↑" : "↓")}
                   </TableHead>
@@ -1283,7 +1369,7 @@ export function TransactionsTab() {
               <TableBody>
                 {transactionsQ.isLoading ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-slate-600 dark:text-slate-400">
+                    <TableCell colSpan={8} className="text-slate-600 dark:text-slate-400">
                       Carregando...
                     </TableCell>
                   </TableRow>
@@ -1293,6 +1379,17 @@ export function TransactionsTab() {
                     const cat = t.category_id ? categoryById.get(t.category_id) : null;
                     return (
                       <TableRow key={t.id} className="group">
+                        <TableCell className="w-[40px] px-3">
+                          <Checkbox
+                            checked={selectedTxIds.has(t.id)}
+                            onCheckedChange={(val) => {
+                              const s = new Set(selectedTxIds);
+                              if (val) s.add(t.id);
+                              else s.delete(t.id);
+                              setSelectedTxIds(s);
+                            }}
+                          />
+                        </TableCell>
                         <TableCell className="w-[110px] whitespace-nowrap">{t.transaction_date}</TableCell>
                         <TableCell className="max-w-[300px]">
                           <div className="truncate font-medium text-slate-900 dark:text-slate-100" title={t.description}>{t.description ?? "—"}</div>
@@ -1932,6 +2029,118 @@ export function TransactionsTab() {
               className="rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white"
             >
               {quickCreateCategoryM.isPending ? "Criando..." : "Cadastrar Categoria"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Bulk Action Bar */}
+      {selectedTxIds.size > 0 && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-slate-900/95 dark:bg-slate-100/95 text-slate-100 dark:text-slate-900 rounded-2xl p-3 shadow-2xl flex items-center gap-3 md:gap-5 backdrop-blur animate-in slide-in-from-bottom-5 border border-slate-700 dark:border-slate-300">
+          <div className="text-sm whitespace-nowrap px-2">
+            <span className="font-bold">{selectedTxIds.size}</span> selecionadas
+            <span className="mx-3 text-slate-600 dark:text-slate-400">|</span>
+            Soma: <span className="font-bold text-emerald-400 dark:text-emerald-600">{new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(sumSelected)}</span>
+          </div>
+          <div className="w-[1px] h-6 bg-slate-700 dark:bg-slate-300" />
+          <div className="flex items-center gap-1">
+            <Button variant="ghost" size="sm" className="hover:bg-slate-800 dark:hover:bg-slate-200 text-xs rounded-xl" onClick={() => setBulkAction("category")}>Categoria</Button>
+            <Button variant="ghost" size="sm" className="hover:bg-slate-800 dark:hover:bg-slate-200 text-xs rounded-xl" onClick={() => setBulkAction("entity")}>Entidade</Button>
+            <Button variant="ghost" size="sm" className="hover:bg-slate-800 dark:hover:bg-slate-200 text-xs rounded-xl" onClick={() => setBulkAction("type")}>Tipo</Button>
+            <div className="w-[1px] h-4 mx-1 bg-slate-700 dark:bg-slate-300" />
+            <Button variant="ghost" size="sm" className="text-rose-400 hover:text-rose-300 hover:bg-rose-950/30 dark:text-rose-600 dark:hover:text-rose-700 dark:hover:bg-rose-100 text-xs rounded-xl" onClick={() => bulkDeleteM.mutate()}>Excluir</Button>
+            <Button variant="ghost" size="sm" className="ml-2 h-7 w-7 p-0 rounded-full hover:bg-slate-800 dark:hover:bg-slate-200" onClick={() => setSelectedTxIds(new Set())}>
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* Bulk Action Dialog */}
+      <Dialog open={bulkAction !== null} onOpenChange={(val) => { if (!val) { setBulkAction(null); setBulkActionValue(null); } }}>
+        <DialogContent className="sm:max-w-[400px] rounded-3xl">
+          <DialogHeader>
+            <DialogTitle>Alteração em Massa</DialogTitle>
+            <DialogDescription>
+              Atualizando {selectedTxIds.size} lançamentos selecionados.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            {bulkAction === "category" && (
+              <div className="grid gap-2">
+                <Label>Nova Categoria</Label>
+                <AsyncSelect
+                  className="h-11 rounded-xl"
+                  value={bulkActionValue}
+                  onChange={setBulkActionValue}
+                  placeholder="Selecione a categoria"
+                  loadOptions={async (val) => {
+                    if (!activeTenantId) return [];
+                    const query = supabase
+                      .from("financial_categories")
+                      .select("id, name, type")
+                      .eq("tenant_id", activeTenantId)
+                      .order("name", { ascending: true })
+                      .limit(20);
+                    if (val.trim()) query.ilike("name", `%${val}%`);
+                    const { data } = await query;
+                    return (data || []).map((c) => ({ value: c.id, label: `${c.name} (${c.type})` }));
+                  }}
+                />
+              </div>
+            )}
+            {bulkAction === "entity" && (
+              <div className="grid gap-2">
+                <Label>Nova Entidade</Label>
+                <AsyncSelect
+                  className="h-11 rounded-xl"
+                  value={bulkActionValue}
+                  onChange={setBulkActionValue}
+                  placeholder="Selecione a entidade"
+                  loadOptions={async (val) => {
+                    if (!activeTenantId || val.length < 2) return [];
+                    const { data } = await supabase
+                      .from("core_entities")
+                      .select("id, display_name")
+                      .eq("tenant_id", activeTenantId)
+                      .ilike("display_name", `%${val}%`)
+                      .is("deleted_at", null)
+                      .limit(10);
+                    return (data || []).map((d) => ({ value: d.id, label: d.display_name }));
+                  }}
+                />
+              </div>
+            )}
+            {bulkAction === "type" && (
+              <div className="grid gap-2">
+                <Label>Novo Tipo</Label>
+                <Select value={bulkActionValue || undefined} onValueChange={setBulkActionValue}>
+                  <SelectTrigger className="h-11 rounded-xl">
+                    <SelectValue placeholder="Selecione o tipo" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="credit">Entrada (Crédito)</SelectItem>
+                    <SelectItem value="debit">Saída (Débito)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setBulkAction(null)} className="rounded-xl">
+              Cancelar
+            </Button>
+            <Button
+              className="rounded-xl bg-indigo-600 hover:bg-indigo-700"
+              disabled={!bulkActionValue || bulkUpdateM.isPending}
+              onClick={() => {
+                if (bulkAction && bulkActionValue) {
+                  const field = bulkAction === "category" ? "category_id" : bulkAction === "entity" ? "entity_id" : "type";
+                  bulkUpdateM.mutate({ field, value: bulkActionValue });
+                }
+              }}
+            >
+              {bulkUpdateM.isPending ? "Atualizando..." : "Aplicar a Todos"}
             </Button>
           </DialogFooter>
         </DialogContent>

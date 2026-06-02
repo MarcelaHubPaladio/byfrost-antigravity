@@ -104,43 +104,43 @@ export function FinancialLedgerPanel() {
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="transactions" className="mt-6 outline-none">
+        <TabsContent value="transactions" className="outline-none">
           <TransactionsTab />
         </TabsContent>
 
-        <TabsContent value="categories" className="grid gap-4 mt-6 outline-none">
+        <TabsContent value="categories" className="grid gap-4 outline-none">
           <CategoriesTab />
         </TabsContent>
 
-        <TabsContent value="banks" className="grid gap-4 mt-6 outline-none">
+        <TabsContent value="banks" className="grid gap-4 outline-none">
           <BanksTab />
         </TabsContent>
 
-        <TabsContent value="dre" className="grid gap-4 min-w-0 mt-6 overflow-hidden outline-none">
+        <TabsContent value="dre" className="grid gap-4 min-w-0 overflow-hidden outline-none">
           <DreTab />
         </TabsContent>
 
-        <TabsContent value="tensions" className="grid gap-4 min-w-0 mt-6 overflow-hidden outline-none">
+        <TabsContent value="tensions" className="grid gap-4 min-w-0 overflow-hidden outline-none">
           <FinancialTensionsPanel />
         </TabsContent>
 
-        <TabsContent value="ingestion" className="grid gap-4 min-w-0 mt-6 overflow-hidden outline-none">
+        <TabsContent value="ingestion" className="grid gap-4 min-w-0 overflow-hidden outline-none">
           <FinancialIngestionPanel />
         </TabsContent>
 
-        <TabsContent value="planning" className="grid gap-4 min-w-0 mt-6 overflow-hidden outline-none">
+        <TabsContent value="planning" className="grid gap-4 min-w-0 overflow-hidden outline-none">
           <FinancialPlanningPanel />
         </TabsContent>
 
-        <TabsContent value="control_tower" className="grid gap-4 min-w-0 mt-6 overflow-hidden outline-none">
+        <TabsContent value="control_tower" className="grid gap-4 min-w-0 overflow-hidden outline-none">
           <FinanceControlTowerPanel />
         </TabsContent>
 
-        <TabsContent value="decisions" className="grid gap-4 min-w-0 mt-6 overflow-hidden outline-none">
+        <TabsContent value="decisions" className="grid gap-4 min-w-0 overflow-hidden outline-none">
           <FinancialDecisionBoard />
         </TabsContent>
 
-        <TabsContent value="logs" className="grid gap-4 min-w-0 mt-6 overflow-hidden outline-none">
+        <TabsContent value="logs" className="grid gap-4 min-w-0 overflow-hidden outline-none">
           <FinancialLogsPanel />
         </TabsContent>
       </Tabs>

@@ -430,6 +430,7 @@ const FINANCE_NAV_CHILDREN: FinanceNavChild[] = [
   { to: "/app/finance/planning", label: "Planejamento", icon: CalendarRange, routeKey: "app.finance.planning" },
   { to: "/app/finance/board", label: "Quadro", icon: KanbanSquare, routeKey: "app.finance.board" },
   { to: "/app/finance/ledger?tab=dre", label: "DRE-Caixa", icon: LineChart, routeKey: "app.finance.ledger" },
+  { to: "/app/finance/ledger?tab=logs", label: "Auditoria", icon: ClipboardList, routeKey: "app.finance.ledger" },
 ];
 
 type PresenceNavChild = {
