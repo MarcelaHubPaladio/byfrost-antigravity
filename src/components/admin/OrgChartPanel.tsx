@@ -156,6 +156,26 @@ export function OrgChartPanel() {
       if (!pid || !parentExists) roots.push(n.user_id);
     }
 
+    // Fix cycles: if there are nodes not reachable from current roots, they are stuck in cycles.
+    const visited = new Set<string>();
+    const markReachable = (id: string) => {
+      if (visited.has(id)) return;
+      visited.add(id);
+      const kids = children.get(id) ?? [];
+      for (const k of kids) markReachable(k);
+    };
+
+    for (const r of roots) markReachable(r);
+
+    for (const n of nodesQ.data ?? []) {
+      if (!visited.has(n.user_id)) {
+        // This node is part of a cycle (or a path leading to one) that wasn't reached.
+        // We artificially make it a root so it renders and the user can fix it.
+        roots.push(n.user_id);
+        markReachable(n.user_id);
+      }
+    }
+
     const sortByName = (ids: string[]) => {
       ids.sort((a, b) => {
         const ua = usersById.get(a);
@@ -271,7 +291,15 @@ export function OrgChartPanel() {
     }
   };
 
-  const renderNode = (userId: string, depth: number) => {
+  const renderNode = (userId: string, depth: number, visited = new Set<string>()) => {
+    if (visited.has(userId)) {
+      return (
+        <div key={`${userId}-cycle`} className={cn("text-xs text-rose-500 font-medium py-2", depth ? "pl-4" : "")}>
+          Ciclo detectado! (Recursão interrompida)
+        </div>
+      );
+    }
+    
     const u = usersById.get(userId);
     const n = nodeByUserId.get(userId);
     if (!u || !n) return null;
@@ -343,7 +371,7 @@ export function OrgChartPanel() {
 
         {kids.length ? (
           <div className="grid gap-2">
-            {kids.map((k) => renderNode(k, depth + 1))}
+            {kids.map((k) => renderNode(k, depth + 1, new Set([...visited, userId])))}
           </div>
         ) : null}
       </div>
@@ -420,7 +448,7 @@ export function OrgChartPanel() {
                 <div className="p-3">
                   {tree.roots.length ? (
                     <div className="grid gap-2">
-                      {tree.roots.map((rid) => renderNode(rid, 0))}
+                      {tree.roots.map((rid) => renderNode(rid, 0, new Set()))}
                     </div>
                   ) : (
                     <div className="rounded-2xl border border-dashed border-slate-200 bg-white/60 p-4 text-sm text-slate-600">
