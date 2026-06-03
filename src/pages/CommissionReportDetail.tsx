@@ -3,8 +3,9 @@ import { useParams, Link, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { useTenant } from "@/providers/TenantProvider";
-import { format } from "date-fns";
-import { ArrowLeft, Calendar, DollarSign, FileText, Download, ChevronDown, ChevronRight, AlertCircle, Plus, Edit2, Trash2, Search } from "lucide-react";
+import { format, startOfMonth, endOfMonth, startOfDay, endOfDay } from "date-fns";
+import { ptBR } from "date-fns/locale";
+import { ArrowLeft, Calendar as CalendarIcon, DollarSign, FileText, Download, ChevronDown, ChevronRight, AlertCircle, Plus, Edit2, Trash2, Search, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { AppShell } from "@/components/AppShell";
 import { Loader2 } from "lucide-react";
@@ -14,6 +15,11 @@ import { showError, showSuccess } from "@/utils/toast";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
+import { Checkbox } from "@/components/ui/checkbox";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { cn } from "@/lib/utils";
 
 export default function CommissionReportDetail() {
   const { id } = useParams<{ id: string }>();
@@ -25,7 +31,13 @@ export default function CommissionReportDetail() {
   
   // States for CRUD
   const [isAddOrderOpen, setIsAddOrderOpen] = useState(false);
-  const [orderSearchId, setOrderSearchId] = useState("");
+  const [searchDateRange, setSearchDateRange] = useState<{ from: Date; to: Date | undefined }>({
+    from: startOfMonth(new Date()),
+    to: endOfMonth(new Date()),
+  });
+  const [availableOrders, setAvailableOrders] = useState<any[]>([]);
+  const [selectedOrderIds, setSelectedOrderIds] = useState<Set<string>>(new Set());
+  const [isSearching, setIsSearching] = useState(false);
   const [isAdding, setIsAdding] = useState(false);
 
   const [editingOrder, setEditingOrder] = useState<any>(null);
@@ -46,25 +58,70 @@ export default function CommissionReportDetail() {
     queryClient.invalidateQueries({ queryKey: ["commission_reports", activeTenantId] });
   };
 
+  const handleSearchOrders = async () => {
+    if (!searchDateRange.from) return;
+    setIsSearching(true);
+    setAvailableOrders([]);
+    setSelectedOrderIds(new Set());
+    
+    try {
+      const report = reportQ.data;
+      const meta = report.metadata;
+      
+      const start = startOfDay(searchDateRange.from).toISOString();
+      const end = endOfDay(searchDateRange.to || searchDateRange.from).toISOString();
+      
+      // Fetch cases in the date range for this seller
+      const { data, error } = await supabase
+        .from("cases")
+        .select("id, title, created_at, assigned_vendor_id, assigned_user_id, customer_accounts(name)")
+        .eq("tenant_id", activeTenantId!)
+        .gte("created_at", start)
+        .lte("created_at", end)
+        .is("deleted_at", null);
+        
+      if (error) throw error;
+      
+      // Filter by seller id
+      const sellerId = meta.seller_id;
+      const filtered = data.filter(c => c.assigned_vendor_id === sellerId || c.assigned_user_id === sellerId);
+      
+      // Exclude orders already in the report
+      const existingIds = new Set(meta.orders?.map((o: any) => o.case_id) || []);
+      const newOrders = filtered.filter(c => !existingIds.has(c.id));
+      
+      setAvailableOrders(newOrders);
+      
+      if (newOrders.length === 0) {
+        showSuccess("Nenhum novo pedido encontrado para este período.");
+      }
+    } catch (e: any) {
+      showError(e.message);
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
   const handleAddOrder = async () => {
-    if (!orderSearchId.trim()) return;
+    if (selectedOrderIds.size === 0) return;
     setIsAdding(true);
     try {
       const report = reportQ.data;
       const meta = report.metadata;
       
-      // Check if order is already in report
-      if (meta.orders?.some((o: any) => o.case_id === orderSearchId || o.title === orderSearchId)) {
-        showError("Pedido já está neste extrato.");
-        setIsAdding(false);
-        return;
-      }
+      let updatedTotalSales = meta.total_sales || 0;
+      let updatedTotalCommission = meta.total_commission || 0;
+      const newOrdersList = [];
 
-      const newOrderData = await calculateCommissionForSingleOrder(orderSearchId.trim(), meta.rules_applied);
+      // Calculate commission for each selected order
+      for (const orderId of selectedOrderIds) {
+        const newOrderData = await calculateCommissionForSingleOrder(orderId, meta.rules_applied);
+        newOrdersList.push(newOrderData);
+        updatedTotalSales += newOrderData.total_value;
+        updatedTotalCommission += newOrderData.commission_value;
+      }
       
-      const updatedOrders = [...(meta.orders || []), newOrderData];
-      const updatedTotalSales = (meta.total_sales || 0) + newOrderData.total_value;
-      const updatedTotalCommission = (meta.total_commission || 0) + newOrderData.commission_value;
+      const updatedOrders = [...(meta.orders || []), ...newOrdersList];
 
       const updatedMeta = {
         ...meta,
@@ -80,12 +137,13 @@ export default function CommissionReportDetail() {
 
       if (error) throw error;
       
-      showSuccess("Pedido adicionado com sucesso.");
+      showSuccess(`${selectedOrderIds.size} pedido(s) adicionado(s) com sucesso.`);
       setIsAddOrderOpen(false);
-      setOrderSearchId("");
+      setAvailableOrders([]);
+      setSelectedOrderIds(new Set());
       invalidateReport();
     } catch (e: any) {
-      showError(e.message || "Erro ao adicionar pedido. Verifique o ID.");
+      showError(e.message || "Erro ao adicionar pedidos.");
     } finally {
       setIsAdding(false);
     }
@@ -275,7 +333,7 @@ export default function CommissionReportDetail() {
               
               <div className="bg-slate-50 rounded-2xl p-6 border border-slate-100 flex-1 flex flex-col justify-center space-y-3">
                 <div className="flex items-center gap-3 text-slate-700">
-                  <Calendar className="w-5 h-5 text-slate-400" />
+                  <CalendarIcon className="w-5 h-5 text-slate-400" />
                   <div>
                     <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Período de Faturamento</p>
                     <p className="font-semibold text-sm">
@@ -426,29 +484,118 @@ export default function CommissionReportDetail() {
         </div>
       </div>
 
-      <Dialog open={isAddOrderOpen} onOpenChange={setIsAddOrderOpen}>
-        <DialogContent>
+      <Dialog open={isAddOrderOpen} onOpenChange={(v) => { setIsAddOrderOpen(v); if(!v) { setAvailableOrders([]); setSelectedOrderIds(new Set()); } }}>
+        <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>Adicionar Pedido ao Extrato</DialogTitle>
             <DialogDescription>
-              Informe o ID do pedido que deseja incluir neste extrato. O sistema irá calcular a comissão baseada nas regras vigentes no momento do fechamento.
+              Busque por pedidos do vendedor no período desejado para adicioná-los. O sistema irá calcular a comissão baseada nas regras vigentes no momento do fechamento.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label>ID do Pedido (UUID)</Label>
-              <Input 
-                placeholder="Ex: 550e8400-e29b-41d4-a716-446655440000" 
-                value={orderSearchId}
-                onChange={(e) => setOrderSearchId(e.target.value)}
-              />
+            <div className="flex items-end gap-2">
+              <div className="flex-1 space-y-2">
+                <Label>Período (Data de Criação do Pedido)</Label>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      id="date"
+                      variant="outline"
+                      className={cn(
+                        "w-full justify-start text-left font-normal h-10 rounded-xl",
+                        !searchDateRange.from && "text-muted-foreground"
+                      )}
+                    >
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {searchDateRange.from ? (
+                        searchDateRange.to ? (
+                          <>
+                            {format(searchDateRange.from, "dd/MM/yyyy")} -{" "}
+                            {format(searchDateRange.to, "dd/MM/yyyy")}
+                          </>
+                        ) : (
+                          format(searchDateRange.from, "dd/MM/yyyy")
+                        )
+                      ) : (
+                        <span>Selecione o período</span>
+                      )}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar
+                      initialFocus
+                      mode="range"
+                      defaultMonth={searchDateRange.from}
+                      selected={{ from: searchDateRange.from, to: searchDateRange.to }}
+                      onSelect={(v: any) => setSearchDateRange(v || { from: undefined, to: undefined })}
+                      numberOfMonths={2}
+                      locale={ptBR}
+                    />
+                  </PopoverContent>
+                </Popover>
+              </div>
+              <Button onClick={handleSearchOrders} disabled={isSearching} className="bg-slate-900 hover:bg-slate-800 h-10 rounded-xl">
+                {isSearching ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Search className="w-4 h-4 mr-2" />}
+                Buscar
+              </Button>
             </div>
+
+            {availableOrders.length > 0 && (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label>Pedidos Encontrados ({availableOrders.length})</Label>
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    className="h-8 text-xs underline"
+                    onClick={() => {
+                      if (selectedOrderIds.size === availableOrders.length) setSelectedOrderIds(new Set());
+                      else setSelectedOrderIds(new Set(availableOrders.map(o => o.id)));
+                    }}
+                  >
+                    {selectedOrderIds.size === availableOrders.length ? "Desmarcar todos" : "Selecionar todos"}
+                  </Button>
+                </div>
+                <div className="rounded-xl border shadow-sm max-h-[250px] overflow-y-auto">
+                  <table className="w-full text-sm text-left">
+                    <thead className="bg-slate-50 border-b sticky top-0 z-10">
+                      <tr>
+                        <th className="px-4 py-2 w-10"></th>
+                        <th className="px-4 py-2 font-semibold text-slate-600">Pedido</th>
+                        <th className="px-4 py-2 font-semibold text-slate-600">Cliente</th>
+                        <th className="px-4 py-2 font-semibold text-slate-600">Data</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y">
+                      {availableOrders.map((o) => (
+                        <tr key={o.id} className="hover:bg-slate-50">
+                          <td className="px-4 py-2">
+                            <Checkbox 
+                              checked={selectedOrderIds.has(o.id)}
+                              onCheckedChange={(checked) => {
+                                const newSet = new Set(selectedOrderIds);
+                                if (checked) newSet.add(o.id);
+                                else newSet.delete(o.id);
+                                setSelectedOrderIds(newSet);
+                              }}
+                            />
+                          </td>
+                          <td className="px-4 py-2 font-medium text-slate-900">{o.title || o.id.slice(0,8)}</td>
+                          <td className="px-4 py-2 text-slate-600">{o.customer_accounts?.name || "—"}</td>
+                          <td className="px-4 py-2 text-slate-600">{format(new Date(o.created_at), "dd/MM/yyyy")}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsAddOrderOpen(false)}>Cancelar</Button>
-            <Button onClick={handleAddOrder} disabled={isAdding || !orderSearchId.trim()} className="bg-indigo-600 hover:bg-indigo-700">
+            <Button onClick={handleAddOrder} disabled={isAdding || selectedOrderIds.size === 0} className="bg-indigo-600 hover:bg-indigo-700">
               {isAdding && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-              Adicionar
+              Adicionar {selectedOrderIds.size > 0 ? `(${selectedOrderIds.size})` : ""}
             </Button>
           </DialogFooter>
         </DialogContent>
