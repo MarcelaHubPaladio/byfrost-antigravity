@@ -4,18 +4,33 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { useTenant } from "@/providers/TenantProvider";
 import { format } from "date-fns";
-import { ArrowLeft, Calendar, DollarSign, FileText, Download, ChevronDown, ChevronRight, AlertCircle } from "lucide-react";
+import { ArrowLeft, Calendar, DollarSign, FileText, Download, ChevronDown, ChevronRight, AlertCircle, Plus, Edit2, Trash2, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { AppShell } from "@/components/AppShell";
 import { Loader2 } from "lucide-react";
-import { generatePDF } from "@/utils/commissionUtils";
+import { generatePDF, calculateCommissionForSingleOrder } from "@/utils/commissionUtils";
+import { useQueryClient } from "@tanstack/react-query";
+import { showError, showSuccess } from "@/utils/toast";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
 export default function CommissionReportDetail() {
   const { id } = useParams<{ id: string }>();
   const { activeTenantId } = useTenant();
   const navigate = useNavigate();
   
+  const queryClient = useQueryClient();
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
+  
+  // States for CRUD
+  const [isAddOrderOpen, setIsAddOrderOpen] = useState(false);
+  const [orderSearchId, setOrderSearchId] = useState("");
+  const [isAdding, setIsAdding] = useState(false);
+
+  const [editingOrder, setEditingOrder] = useState<any>(null);
+  const [newCommissionValue, setNewCommissionValue] = useState("");
+  const [isEditing, setIsEditing] = useState(false);
 
   const toggleRow = (caseId: string) => {
     setExpandedRows(prev => {
@@ -24,6 +39,136 @@ export default function CommissionReportDetail() {
       else next.add(caseId);
       return next;
     });
+  };
+
+  const invalidateReport = () => {
+    queryClient.invalidateQueries({ queryKey: ["commission_report", activeTenantId, id] });
+    queryClient.invalidateQueries({ queryKey: ["commission_reports", activeTenantId] });
+  };
+
+  const handleAddOrder = async () => {
+    if (!orderSearchId.trim()) return;
+    setIsAdding(true);
+    try {
+      const report = reportQ.data;
+      const meta = report.metadata;
+      
+      // Check if order is already in report
+      if (meta.orders?.some((o: any) => o.case_id === orderSearchId || o.title === orderSearchId)) {
+        showError("Pedido já está neste extrato.");
+        setIsAdding(false);
+        return;
+      }
+
+      const newOrderData = await calculateCommissionForSingleOrder(orderSearchId.trim(), meta.rules_applied);
+      
+      const updatedOrders = [...(meta.orders || []), newOrderData];
+      const updatedTotalSales = (meta.total_sales || 0) + newOrderData.total_value;
+      const updatedTotalCommission = (meta.total_commission || 0) + newOrderData.commission_value;
+
+      const updatedMeta = {
+        ...meta,
+        orders: updatedOrders,
+        total_sales: updatedTotalSales,
+        total_commission: updatedTotalCommission
+      };
+
+      const { error } = await supabase
+        .from("core_entities")
+        .update({ metadata: updatedMeta })
+        .eq("id", id!);
+
+      if (error) throw error;
+      
+      showSuccess("Pedido adicionado com sucesso.");
+      setIsAddOrderOpen(false);
+      setOrderSearchId("");
+      invalidateReport();
+    } catch (e: any) {
+      showError(e.message || "Erro ao adicionar pedido. Verifique o ID.");
+    } finally {
+      setIsAdding(false);
+    }
+  };
+
+  const handleEditCommission = async () => {
+    if (!editingOrder) return;
+    setIsEditing(true);
+    try {
+      const report = reportQ.data;
+      const meta = report.metadata;
+      
+      const numValue = parseFloat(newCommissionValue.replace(",", "."));
+      if (isNaN(numValue)) throw new Error("Valor inválido.");
+
+      let commissionDiff = 0;
+
+      const updatedOrders = meta.orders.map((o: any) => {
+        if (o.case_id === editingOrder.case_id) {
+          commissionDiff = numValue - o.commission_value;
+          return { ...o, commission_value: numValue };
+        }
+        return o;
+      });
+
+      const updatedTotalCommission = (meta.total_commission || 0) + commissionDiff;
+
+      const updatedMeta = {
+        ...meta,
+        orders: updatedOrders,
+        total_commission: updatedTotalCommission
+      };
+
+      const { error } = await supabase
+        .from("core_entities")
+        .update({ metadata: updatedMeta })
+        .eq("id", id!);
+
+      if (error) throw error;
+      
+      showSuccess("Comissão atualizada.");
+      setEditingOrder(null);
+      invalidateReport();
+    } catch (e: any) {
+      showError(e.message);
+    } finally {
+      setIsEditing(false);
+    }
+  };
+
+  const handleRemoveOrder = async (orderIdToRemove: string) => {
+    if (!confirm("Tem certeza que deseja remover este pedido do extrato?")) return;
+    
+    try {
+      const report = reportQ.data;
+      const meta = report.metadata;
+      
+      const orderToRemove = meta.orders.find((o: any) => o.case_id === orderIdToRemove);
+      if (!orderToRemove) return;
+
+      const updatedOrders = meta.orders.filter((o: any) => o.case_id !== orderIdToRemove);
+      const updatedTotalSales = (meta.total_sales || 0) - orderToRemove.total_value;
+      const updatedTotalCommission = (meta.total_commission || 0) - orderToRemove.commission_value;
+
+      const updatedMeta = {
+        ...meta,
+        orders: updatedOrders,
+        total_sales: Math.max(0, updatedTotalSales),
+        total_commission: Math.max(0, updatedTotalCommission)
+      };
+
+      const { error } = await supabase
+        .from("core_entities")
+        .update({ metadata: updatedMeta })
+        .eq("id", id!);
+
+      if (error) throw error;
+      
+      showSuccess("Pedido removido.");
+      invalidateReport();
+    } catch (e: any) {
+      showError("Erro ao remover: " + e.message);
+    }
   };
 
   const reportQ = useQuery({
@@ -89,14 +234,23 @@ export default function CommissionReportDetail() {
               </div>
             </div>
             
-            <Button 
-              onClick={() => generatePDF(meta)}
-              variant="outline" 
-              className="bg-white border-slate-200 text-slate-700 hover:bg-slate-50 hover:text-indigo-600 rounded-xl"
-            >
-              <Download className="w-4 h-4 mr-2" />
-              Baixar PDF
-            </Button>
+            <div className="flex gap-2">
+              <Button 
+                onClick={() => setIsAddOrderOpen(true)}
+                className="bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl"
+              >
+                <Plus className="w-4 h-4 mr-2" />
+                Adicionar Pedido
+              </Button>
+              <Button 
+                onClick={() => generatePDF(meta)}
+                variant="outline" 
+                className="bg-white border-slate-200 text-slate-700 hover:bg-slate-50 hover:text-indigo-600 rounded-xl"
+              >
+                <Download className="w-4 h-4 mr-2" />
+                Baixar PDF
+              </Button>
+            </div>
           </div>
 
           <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-200/60">
@@ -151,6 +305,7 @@ export default function CommissionReportDetail() {
                     <th className="px-6 py-4 font-bold text-slate-600">Faturado em</th>
                     <th className="px-6 py-4 font-bold text-slate-600 text-right">Valor Total</th>
                     <th className="px-6 py-4 font-bold text-slate-600 text-right">Comissão</th>
+                    <th className="px-6 py-4 font-bold text-slate-600 text-right w-20">Ações</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y">
@@ -184,10 +339,33 @@ export default function CommissionReportDetail() {
                           <td className="px-6 py-4 font-bold text-indigo-600 text-right bg-indigo-50/20">
                             {(o.commission_value || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
                           </td>
+                          <td className="px-6 py-4 text-right">
+                            <div className="flex justify-end gap-1">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 text-slate-400 hover:text-indigo-600"
+                                onClick={() => {
+                                  setEditingOrder(o);
+                                  setNewCommissionValue((o.commission_value || 0).toString());
+                                }}
+                              >
+                                <Edit2 className="w-4 h-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 text-slate-400 hover:text-rose-600"
+                                onClick={() => handleRemoveOrder(o.case_id)}
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            </div>
+                          </td>
                         </tr>
                         {isExpanded && (
                           <tr className="bg-slate-50/50">
-                            <td colSpan={7} className="px-6 py-4 p-0">
+                            <td colSpan={8} className="px-6 py-4 p-0">
                               <div className="pl-16 pr-6 py-4">
                                 {o.items && o.items.length > 0 ? (
                                   <div className="rounded-xl border border-slate-200 bg-white overflow-hidden shadow-sm">
@@ -235,7 +413,7 @@ export default function CommissionReportDetail() {
                   })}
                   {(!meta.orders || meta.orders.length === 0) && (
                     <tr>
-                      <td colSpan={7} className="px-6 py-8 text-center text-slate-500 italic">
+                      <td colSpan={8} className="px-6 py-8 text-center text-slate-500 italic">
                         Nenhum pedido faturado para listar neste fechamento.
                       </td>
                     </tr>
@@ -247,6 +425,70 @@ export default function CommissionReportDetail() {
           </div>
         </div>
       </div>
+
+      <Dialog open={isAddOrderOpen} onOpenChange={setIsAddOrderOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Adicionar Pedido ao Extrato</DialogTitle>
+            <DialogDescription>
+              Informe o ID do pedido que deseja incluir neste extrato. O sistema irá calcular a comissão baseada nas regras vigentes no momento do fechamento.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>ID do Pedido (UUID)</Label>
+              <Input 
+                placeholder="Ex: 550e8400-e29b-41d4-a716-446655440000" 
+                value={orderSearchId}
+                onChange={(e) => setOrderSearchId(e.target.value)}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsAddOrderOpen(false)}>Cancelar</Button>
+            <Button onClick={handleAddOrder} disabled={isAdding || !orderSearchId.trim()} className="bg-indigo-600 hover:bg-indigo-700">
+              {isAdding && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+              Adicionar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!editingOrder} onOpenChange={(open) => !open && setEditingOrder(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Editar Comissão</DialogTitle>
+            <DialogDescription>
+              Ajuste manualmente o valor da comissão deste pedido no extrato atual.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>Pedido</Label>
+              <div className="p-3 bg-slate-50 border rounded-lg text-sm font-medium text-slate-700">
+                {editingOrder?.title || editingOrder?.case_id}
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label>Valor da Comissão (R$)</Label>
+              <Input 
+                type="number"
+                step="0.01"
+                placeholder="0.00" 
+                value={newCommissionValue}
+                onChange={(e) => setNewCommissionValue(e.target.value)}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditingOrder(null)}>Cancelar</Button>
+            <Button onClick={handleEditCommission} disabled={isEditing} className="bg-indigo-600 hover:bg-indigo-700">
+              {isEditing && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+              Salvar Alteração
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </AppShell>
   );
 }

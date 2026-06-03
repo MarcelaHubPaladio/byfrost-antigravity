@@ -21,6 +21,7 @@ import { cn } from "@/lib/utils";
 import { showError, showSuccess } from "@/utils/toast";
 import { calculateCommissionForOrders, saveCommissionReport } from "@/utils/commissionUtils";
 import { useTenant } from "@/providers/TenantProvider";
+import { supabase } from "@/lib/supabase";
 
 export function CommissionReportDialog({
   open,
@@ -74,8 +75,31 @@ export function CommissionReportDialog({
       const end = endOfDay(dateRange.to || dateRange.from);
       let successCount = 0;
 
+      // Fetch existing reports to check for duplicates
+      const { data: existingReports } = await supabase
+        .from("core_entities")
+        .select("metadata")
+        .eq("tenant_id", activeTenantId!)
+        .eq("entity_type", "commission_report");
+
+      const startIso = dateRange.from.toISOString();
+      const endIso = (dateRange.to || dateRange.from).toISOString();
+
       for (const sellerId of selectedSellers) {
         const targetSeller = uniqueSellers.find(s => s.id === sellerId);
+        
+        // Check for duplicate
+        const isDuplicate = existingReports?.some(r => {
+          return r.metadata?.seller_id === sellerId &&
+                 r.metadata?.period?.from === startIso &&
+                 r.metadata?.period?.to === endIso;
+        });
+
+        if (isDuplicate) {
+          showError(`Extrato já existe para ${targetSeller?.name} neste mesmo período.`);
+          continue;
+        }
+
         const targetSellerName = targetSeller?.name?.toLowerCase();
 
         const validOrders = cases.filter(r => {

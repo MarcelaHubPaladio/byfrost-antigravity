@@ -138,6 +138,89 @@ export async function calculateCommissionForOrders(
   };
 }
 
+export async function calculateCommissionForSingleOrder(
+  orderId: string,
+  commissionRules: any
+) {
+  // Fetch order
+  const { data: order } = await supabase
+    .from("cases")
+    .select("*, customer_accounts(*)")
+    .eq("id", orderId)
+    .single();
+
+  if (!order) throw new Error("Pedido não encontrado");
+
+  // Fetch items
+  const { data: items } = await supabase
+    .from("case_items")
+    .select("qty, price, discount_percent, total, commission_value, description, code")
+    .eq("case_id", orderId);
+
+  // Fetch fields
+  const { data: fields } = await supabase
+    .from("case_fields")
+    .select("key, value_text")
+    .eq("case_id", orderId);
+
+  const basePercent = commissionRules?.base_percent || 0;
+  const tiers = commissionRules?.discount_tiers || [];
+
+  let orderTotalValue = 0;
+  let orderCommission = 0;
+  const enrichedItems: any[] = [];
+
+  if (items && items.length > 0) {
+    for (const item of items) {
+      const rowTotal = Number(item.total || 0);
+      orderTotalValue += rowTotal;
+
+      let rowCommission = 0;
+      if (item.commission_value != null) {
+        rowCommission = Number(item.commission_value);
+      } else {
+        const discountPct = Number(item.discount_percent || 0);
+        const applicableTier = tiers.find((t: any) => t.max_discount_pct >= discountPct);
+        const pct = applicableTier ? applicableTier.commission_pct : basePercent;
+        rowCommission = rowTotal * (pct / 100);
+      }
+      orderCommission += rowCommission;
+
+      const prodName = item.description || item.code || "Item";
+      enrichedItems.push({
+        name: prodName,
+        qty: item.qty || 1,
+        price: item.price || 0,
+        discount_percent: item.discount_percent || 0,
+        total: item.total || 0,
+        commission_value: rowCommission
+      });
+    }
+  } else {
+    // try to get from total if no items
+    const totalField = fields?.find(f => f.key === "valor_total" || f.key === "total");
+    orderTotalValue = totalField ? Number(totalField.value_text) : 0;
+    orderCommission = orderTotalValue * (basePercent / 100);
+  }
+
+  const billingStatus = fields?.find(f => f.key === "billing_status")?.value_text || "Pendente";
+  const billingDateStr = fields?.find(f => f.key === "billing_date" || f.key === "data_faturamento")?.value_text;
+  const billingDate = billingDateStr || order.updated_at || order.created_at;
+  const customerName = order.customer_accounts?.name || "Cliente";
+
+  return {
+    case_id: order.id,
+    title: order.title,
+    customer_name: customerName,
+    total_value: orderTotalValue,
+    commission_value: orderCommission,
+    sale_date: order.created_at,
+    billing_date: billingDate,
+    billing_status: billingStatus,
+    items: enrichedItems,
+  };
+}
+
 export function generatePDF(report: any) {
   const newWin = window.open("", "_blank");
   if (!newWin) return;
