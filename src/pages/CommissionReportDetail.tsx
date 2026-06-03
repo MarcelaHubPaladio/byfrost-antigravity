@@ -74,7 +74,7 @@ export default function CommissionReportDetail() {
       // Fetch cases in the date range for this seller
       const { data, error } = await supabase
         .from("cases")
-        .select("id, title, created_at, assigned_vendor_id, assigned_user_id, customer_accounts(name)")
+        .select("id, title, created_at, assigned_vendor_id, assigned_user_id, customer_accounts(name), case_items(description, code, qty, total)")
         .eq("tenant_id", activeTenantId!)
         .gte("created_at", start)
         .lte("created_at", end)
@@ -485,7 +485,7 @@ export default function CommissionReportDetail() {
       </div>
 
       <Dialog open={isAddOrderOpen} onOpenChange={(v) => { setIsAddOrderOpen(v); if(!v) { setAvailableOrders([]); setSelectedOrderIds(new Set()); } }}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col">
           <DialogHeader>
             <DialogTitle>Adicionar Pedido ao Extrato</DialogTitle>
             <DialogDescription>
@@ -556,42 +556,64 @@ export default function CommissionReportDetail() {
                     {selectedOrderIds.size === availableOrders.length ? "Desmarcar todos" : "Selecionar todos"}
                   </Button>
                 </div>
-                <div className="rounded-xl border shadow-sm max-h-[250px] overflow-y-auto">
+                <div className="rounded-xl border shadow-sm flex-1 min-h-[250px] overflow-y-auto">
                   <table className="w-full text-sm text-left">
                     <thead className="bg-slate-50 border-b sticky top-0 z-10">
                       <tr>
                         <th className="px-4 py-2 w-10"></th>
                         <th className="px-4 py-2 font-semibold text-slate-600">Pedido</th>
                         <th className="px-4 py-2 font-semibold text-slate-600">Cliente</th>
+                        <th className="px-4 py-2 font-semibold text-slate-600 text-right">Valor Total</th>
                         <th className="px-4 py-2 font-semibold text-slate-600">Data</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y">
-                      {availableOrders.map((o) => (
-                        <tr key={o.id} className="hover:bg-slate-50">
-                          <td className="px-4 py-2">
-                            <Checkbox 
-                              checked={selectedOrderIds.has(o.id)}
-                              onCheckedChange={(checked) => {
-                                const newSet = new Set(selectedOrderIds);
-                                if (checked) newSet.add(o.id);
-                                else newSet.delete(o.id);
-                                setSelectedOrderIds(newSet);
-                              }}
-                            />
-                          </td>
-                          <td className="px-4 py-2 font-medium text-slate-900">{o.title || o.id.slice(0,8)}</td>
-                          <td className="px-4 py-2 text-slate-600">{o.customer_accounts?.name || "—"}</td>
-                          <td className="px-4 py-2 text-slate-600">{format(new Date(o.created_at), "dd/MM/yyyy")}</td>
-                        </tr>
-                      ))}
+                      {availableOrders.map((o) => {
+                        const totalOrder = (o.case_items || []).reduce((acc: number, item: any) => acc + (Number(item.total) || 0), 0);
+                        return (
+                          <React.Fragment key={o.id}>
+                            <tr className="hover:bg-slate-50">
+                              <td className="px-4 py-2">
+                                <Checkbox 
+                                  checked={selectedOrderIds.has(o.id)}
+                                  onCheckedChange={(checked) => {
+                                    const newSet = new Set(selectedOrderIds);
+                                    if (checked) newSet.add(o.id);
+                                    else newSet.delete(o.id);
+                                    setSelectedOrderIds(newSet);
+                                  }}
+                                />
+                              </td>
+                              <td className="px-4 py-2 font-medium text-slate-900">{o.title || o.id.slice(0,8)}</td>
+                              <td className="px-4 py-2 text-slate-600">{o.customer_accounts?.name || "—"}</td>
+                              <td className="px-4 py-2 text-slate-900 font-semibold text-right">
+                                {totalOrder.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
+                              </td>
+                              <td className="px-4 py-2 text-slate-600">{format(new Date(o.created_at), "dd/MM/yyyy")}</td>
+                            </tr>
+                            {o.case_items && o.case_items.length > 0 && (
+                              <tr className="bg-slate-50/30">
+                                <td colSpan={5} className="px-4 py-2 text-xs text-slate-500">
+                                  <div className="pl-8 flex flex-wrap gap-2">
+                                    {o.case_items.map((item: any, idx: number) => (
+                                      <span key={idx} className="bg-white border border-slate-200 rounded px-2 py-1 shadow-sm font-medium text-slate-600">
+                                        {item.qty}x {item.description || item.code || "Item"}
+                                      </span>
+                                    ))}
+                                  </div>
+                                </td>
+                              </tr>
+                            )}
+                          </React.Fragment>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
               </div>
             )}
           </div>
-          <DialogFooter>
+          <DialogFooter className="mt-auto pt-4">
             <Button variant="outline" onClick={() => setIsAddOrderOpen(false)}>Cancelar</Button>
             <Button onClick={handleAddOrder} disabled={isAdding || selectedOrderIds.size === 0} className="bg-indigo-600 hover:bg-indigo-700">
               {isAdding && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
