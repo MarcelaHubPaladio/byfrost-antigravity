@@ -277,7 +277,7 @@ export function GlobalDashboardOverview() {
 
   return (
     <AppShell title="Dashboard Global (Guardião)">
-      <div className="mx-auto max-w-7xl px-4 py-8">
+      <div className="w-full h-full px-4 py-8">
         
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
           <div>
