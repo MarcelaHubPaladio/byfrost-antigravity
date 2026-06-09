@@ -184,10 +184,31 @@ export function useSuperTasks(tenantId?: string | null) {
         .single();
 
       if (error) throw error;
+
+      // Registra na timeline do case vinculado quando a tarefa é concluída
+      if (is_completed && data?.entity_id && data?.tenant_id) {
+        try {
+          await supabase.from("timeline_events").insert({
+            tenant_id: data.tenant_id,
+            case_id: data.entity_id,
+            event_type: "task_completed",
+            actor_type: "admin",
+            actor_id: user?.id ?? null,
+            message: `Atividade concluída: "${data.title}".`,
+            meta_json: { task_id: id, task_title: data.title, assigned_to: data.assigned_to },
+            occurred_at: new Date().toISOString(),
+          });
+        } catch (tlErr) {
+          // Não interrompe o fluxo principal se a timeline falhar
+          console.warn("[timeline] Falha ao registrar conclusão de tarefa:", tlErr);
+        }
+      }
+
       return data;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["super_tasks"] });
+      qc.invalidateQueries({ queryKey: ["case_timeline"] });
     },
   });
 

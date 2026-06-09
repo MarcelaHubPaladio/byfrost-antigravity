@@ -32,6 +32,7 @@ function fmt(ts: string) {
 function iconFor(e: CaseTimelineEvent) {
   const t = String(e.event_type ?? "").toLowerCase();
 
+  if (t.includes("task_completed") || t.includes("task")) return CheckCircle2;
   if (t.includes("approved") || t.includes("approval") || t.includes("confirmed")) return UserCheck;
   if (t.includes("doc") || t.includes("contract") || t.includes("attachment")) return FileText;
   if (t.includes("image") || t.includes("photo") || t.includes("ocr")) return ImageIcon;
