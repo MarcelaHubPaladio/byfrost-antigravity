@@ -185,21 +185,25 @@ export function useSuperTasks(tenantId?: string | null) {
 
       if (error) throw error;
 
-      // Registra na timeline do case vinculado quando a tarefa é concluída
-      if (is_completed && data?.entity_id && data?.tenant_id) {
+      // Registra na timeline sempre que a tarefa é concluída
+      // case_id = entity_id (pode ser null — aparece na Linha do Tempo Global)
+      if (is_completed && data?.tenant_id) {
         try {
           await supabase.from("timeline_events").insert({
             tenant_id: data.tenant_id,
-            case_id: data.entity_id,
+            case_id: data.entity_id ?? null,
             event_type: "task_completed",
             actor_type: "admin",
             actor_id: user?.id ?? null,
             message: `Atividade concluída: "${data.title}".`,
-            meta_json: { task_id: id, task_title: data.title, assigned_to: data.assigned_to },
+            meta_json: {
+              task_id: id,
+              task_title: data.title,
+              assigned_to: data.assigned_to,
+            },
             occurred_at: new Date().toISOString(),
           });
         } catch (tlErr) {
-          // Não interrompe o fluxo principal se a timeline falhar
           console.warn("[timeline] Falha ao registrar conclusão de tarefa:", tlErr);
         }
       }
