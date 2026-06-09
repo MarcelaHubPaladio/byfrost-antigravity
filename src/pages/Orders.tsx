@@ -253,7 +253,18 @@ export default function Orders() {
   const [selectedPaymentMethods, setSelectedPaymentMethods] = useState<Set<string>>(new Set());
   const [selectedCities, setSelectedCities] = useState<Set<string>>(new Set());
   const [selectedInventoryIds, setSelectedInventoryIds] = useState<Set<string>>(new Set());
-  const [selectedStates, setSelectedStates] = useState<Set<string>>(new Set());
+  const [selectedStates, setSelectedStates] = useState<Set<string>>(() => {
+    const saved = localStorage.getItem(ORDERS_FILTERS_V2_KEY);
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed.states) && parsed.states.length > 0) {
+          return new Set<string>(parsed.states);
+        }
+      } catch (e) {}
+    }
+    return new Set<string>();
+  });
   
   const [exportingCsv, setExportingCsv] = useState(false);
   const [exportingPdf, setExportingPdf] = useState(false);
@@ -291,13 +302,14 @@ export default function Orders() {
   useEffect(() => {
     const filters = {
       sellerId: selectedSellerId,
+      states: Array.from(selectedStates),
       dateRange: {
         from: dateRange.from?.toISOString(),
         to: dateRange.to?.toISOString()
       }
     };
     localStorage.setItem(ORDERS_FILTERS_V2_KEY, JSON.stringify(filters));
-  }, [selectedSellerId, dateRange]);
+  }, [selectedSellerId, selectedStates, dateRange]);
 
   // Force fresh build - query cleaned v5
   const journeyQ = useQuery({
