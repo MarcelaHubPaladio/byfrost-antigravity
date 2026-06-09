@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Dialog,
   DialogContent,
@@ -58,6 +58,7 @@ function parseDateInput(v: string): string | null {
 
 export function NewOperacaoM30CardDialog(props: { tenantId: string; journeyId: string }) {
   const { user } = useSession();
+  const qc = useQueryClient();
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState("");
   const [descriptionHtml, setDescriptionHtml] = useState("");
@@ -260,6 +261,9 @@ export function NewOperacaoM30CardDialog(props: { tenantId: string; journeyId: s
         meta_json: { kind: "trello", assigned_user_id },
         occurred_at: new Date().toISOString(),
       });
+
+      qc.invalidateQueries({ queryKey: ["cases_by_tenant_journey", props.tenantId] });
+      qc.invalidateQueries({ queryKey: ["cases_by_tenant", props.tenantId] });
 
       showSuccess("Card criado.");
       setOpen(false);

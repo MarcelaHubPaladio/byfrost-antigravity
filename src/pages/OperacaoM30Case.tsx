@@ -167,6 +167,8 @@ function SubtaskItemContent({
 
             setLastSaved(new Date());
             onRefetch();
+            qc.invalidateQueries({ queryKey: ["cases_by_tenant_journey", caseData.tenant_id] });
+            qc.invalidateQueries({ queryKey: ["cases_by_tenant", caseData.tenant_id] });
             showSuccess("Alterações salvas.");
         } catch (e: any) {
             showError("Erro ao salvar.");
@@ -958,6 +960,7 @@ export default function OperacaoM30Case() {
             // Invalida cache para sumir do board imediatamente
             await Promise.all([
                 qc.invalidateQueries({ queryKey: ["cases_by_tenant", activeTenantId] }),
+                qc.invalidateQueries({ queryKey: ["cases_by_tenant_journey", activeTenantId] }),
                 qc.invalidateQueries({ queryKey: ["crm_cases_by_tenant", activeTenantId] }),
                 qc.invalidateQueries({ queryKey: ["debug_cases_for_tenant_journey", activeTenantId] })
             ]);
@@ -1155,6 +1158,8 @@ export default function OperacaoM30Case() {
             
             showSuccess("Tarefas de produção criadas com sucesso!");
             caseQ.refetch();
+            qc.invalidateQueries({ queryKey: ["cases_by_tenant_journey", activeTenantId] });
+            qc.invalidateQueries({ queryKey: ["cases_by_tenant", activeTenantId] });
         } catch (e: any) {
             showError(`Erro ao criar: ${e?.message}`);
         } finally {
@@ -1173,6 +1178,8 @@ export default function OperacaoM30Case() {
             if (error) throw error;
             showSuccess("Tipo de caso atualizado.");
             caseQ.refetch();
+            qc.invalidateQueries({ queryKey: ["cases_by_tenant_journey", activeTenantId] });
+            qc.invalidateQueries({ queryKey: ["cases_by_tenant", activeTenantId] });
         } catch (e: any) {
             showError(`Erro ao atualizar tipo: ${e?.message}`);
         } finally {
@@ -1201,6 +1208,8 @@ export default function OperacaoM30Case() {
             if (error) throw error;
             showSuccess("Card atualizado com sucesso.");
             caseQ.refetch();
+            qc.invalidateQueries({ queryKey: ["cases_by_tenant_journey", activeTenantId] });
+            qc.invalidateQueries({ queryKey: ["cases_by_tenant", activeTenantId] });
         } catch (e: any) {
             showError(`Erro ao salvar: ${e?.message}`);
         } finally {

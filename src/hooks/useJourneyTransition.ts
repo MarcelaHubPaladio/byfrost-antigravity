@@ -53,6 +53,7 @@ export function useJourneyTransition() {
 
             // 2. Invalidação imediata (para mover o card visualmente de coluna sem lag)
             qc.invalidateQueries({ queryKey: ["cases_by_tenant", activeTenantId] });
+            qc.invalidateQueries({ queryKey: ["cases_by_tenant_journey", activeTenantId] });
             qc.invalidateQueries({ queryKey: ["crm_cases_by_tenant", activeTenantId] });
             qc.invalidateQueries({ queryKey: ["cases_orders", activeTenantId] });
 
@@ -64,6 +65,7 @@ export function useJourneyTransition() {
                 qc.invalidateQueries({ queryKey: ["case", activeTenantId, caseId] }),
                 qc.invalidateQueries({ queryKey: ["timeline", activeTenantId, caseId] }), 
                 qc.invalidateQueries({ queryKey: ["cases_by_tenant", activeTenantId] }),
+                qc.invalidateQueries({ queryKey: ["cases_by_tenant_journey", activeTenantId] }),
                 qc.invalidateQueries({ queryKey: ["crm_cases_by_tenant", activeTenantId] }),
                 qc.invalidateQueries({ queryKey: ["cases_orders", activeTenantId] }),
                 qc.invalidateQueries({ queryKey: ["pendencies", activeTenantId, caseId] }), 
