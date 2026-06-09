@@ -306,7 +306,7 @@ export default function Orders() {
       console.log("[DEBUG v5] Starting journey fetch for key 'sales_order'...");
       const { data, error } = await supabase
         .from("journeys")
-        .select("id,key,name,is_crm")
+        .select("id,key,name,is_crm,default_state_machine_json")
         .eq("key", "sales_order")
         .single();
       if (error) {
@@ -320,7 +320,7 @@ export default function Orders() {
         key: j.key,
         name: j.name,
         is_crm: Boolean(j.is_crm),
-        default_state_machine_json: {},
+        default_state_machine_json: j.default_state_machine_json || {},
       } as JourneyOpt;
     },
   });
