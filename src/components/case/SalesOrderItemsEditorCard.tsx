@@ -110,28 +110,43 @@ export function SalesOrderItemsEditorCard(props: { caseId: string; className?: s
   }, [searchOffering]);
 
   const offeringsQ = useQuery({
-    queryKey: ["offerings_search", activeTenantId, debouncedSearch],
+    queryKey: ["offerings_search_all", activeTenantId],
     enabled: Boolean(activeTenantId),
     queryFn: async () => {
       let q = supabase
         .from("core_entities")
-        .select("id,display_name,metadata,status")
+        .select("id,display_name,internal_code,metadata,status")
         .eq("tenant_id", activeTenantId!)
         .in("entity_type", ["offering", "product"])
         .is("deleted_at", null)
         .order("display_name", { ascending: true })
-        .limit(30);
+        .limit(1000);
 
-      const term = debouncedSearch.trim();
-      if (term) {
-        q = q.ilike("display_name", `%${term}%`);
-      }
       const { data, error } = await q;
       if (error) throw error;
       return data ?? [];
     },
-    placeholderData: (prev) => prev,
   });
+
+  const filteredOfferings = useMemo(() => {
+    const all = offeringsQ.data ?? [];
+    const term = debouncedSearch.toLowerCase().trim();
+    if (!term) return all.slice(0, 30);
+
+    return all.filter((off: any) => {
+      if (off.display_name?.toLowerCase().includes(term)) return true;
+      if (off.internal_code?.toLowerCase().includes(term)) return true;
+      if (off.metadata?.internal_code?.toLowerCase().includes(term)) return true;
+      
+      if (Array.isArray(off.metadata?.configurations)) {
+        return off.metadata.configurations.some((cfg: any) => 
+          cfg.name?.toLowerCase().includes(term) ||
+          cfg.internal_code?.toLowerCase().includes(term)
+        );
+      }
+      return false;
+    }).slice(0, 30);
+  }, [offeringsQ.data, debouncedSearch]);
 
   const initialDraft = useMemo<DraftRow[]>(() => {
     return (itemsQ.data ?? []).map((r) => ({
@@ -597,32 +612,48 @@ export function SalesOrderItemsEditorCard(props: { caseId: string; className?: s
                       
                       {openOfferingPerLine[`mob-${row.line_no}`] && (
                         <div className="absolute left-0 right-0 top-full z-[100] mt-1 max-h-[220px] overflow-y-auto rounded-2xl border border-slate-200 bg-white shadow-2xl">
-                          {offeringsQ.isFetching && !offeringsQ.data?.length && (
+                          {offeringsQ.isFetching && !filteredOfferings.length && (
                             <div className="p-4 text-center text-xs text-slate-500 flex items-center justify-center gap-2">
                               <Loader2 className="h-3 w-3 animate-spin" /> Procurando...
                             </div>
                           )}
                           <div className="flex flex-col">
-                            {offeringsQ.data?.map((off: any) => (
+                            {filteredOfferings.map((off: any) => (
                               <button
                                 key={off.id}
                                 type="button"
                                 className="w-full text-left rounded-none h-auto min-h-12 py-2 px-3 hover:bg-slate-50 transition-colors border-b border-slate-50 last:border-0"
                                 onClick={() => {
+                                  const term = debouncedSearch.toLowerCase().trim();
+                                  let matchedConfigId = null;
+                                  if (term && Array.isArray(off.metadata?.configurations)) {
+                                    const matchingCfg = off.metadata.configurations.find((cfg: any) => 
+                                      cfg.name?.toLowerCase().includes(term) ||
+                                      cfg.internal_code?.toLowerCase().includes(term)
+                                    );
+                                    if (matchingCfg) {
+                                      matchedConfigId = matchingCfg.id;
+                                    }
+                                  }
+
                                   setDraft((prev) =>
                                     prev.map((x) =>
                                       x.line_no === row.line_no
                                         ? {
                                             ...x,
-                                            code: off.metadata?.short_name || off.metadata?.code || x.code,
+                                            code: matchedConfigId
+                                              ? (off.metadata.configurations.find((c: any) => c.id === matchedConfigId)?.internal_code || x.code)
+                                              : (off.metadata?.short_name || off.metadata?.code || x.code),
                                             description: off.display_name,
                                             offering_entity_id: off.id,
-                                            config_id: null,
-                                            price: off.metadata?.price_sale != null 
-                                              ? String(off.metadata.price_sale).replace(/\./g, ",") 
-                                              : off.metadata?.price != null 
-                                                ? String(off.metadata.price).replace(/\./g, ",") 
-                                                : x.price
+                                            config_id: matchedConfigId,
+                                            price: matchedConfigId 
+                                              ? String(off.metadata.configurations.find((c: any) => c.id === matchedConfigId)?.price_sale || off.metadata?.price_sale || x.price).replace(/\./g, ",")
+                                              : (off.metadata?.price_sale != null 
+                                                ? String(off.metadata.price_sale).replace(/\./g, ",") 
+                                                : off.metadata?.price != null 
+                                                  ? String(off.metadata.price).replace(/\./g, ",") 
+                                                  : x.price)
                                           }
                                         : x
                                     )
@@ -648,7 +679,7 @@ export function SalesOrderItemsEditorCard(props: { caseId: string; className?: s
                                 </div>
                               </button>
                             ))}
-                            {!offeringsQ.isFetching && offeringsQ.data?.length === 0 && (
+                            {!offeringsQ.isFetching && filteredOfferings.length === 0 && (
                               <div className="p-4 flex flex-col items-center gap-3 text-center">
                                 <div className="text-xs text-slate-500">
                                   Nenhum produto encontrado para "{searchOffering}".
@@ -790,32 +821,48 @@ export function SalesOrderItemsEditorCard(props: { caseId: string; className?: s
 
                     {openOfferingPerLine[`desk-${row.line_no}`] && (
                       <div className="absolute left-0 right-0 top-full z-[100] mt-1 max-h-[260px] overflow-y-auto rounded-2xl border border-slate-200 bg-white shadow-2xl">
-                        {offeringsQ.isFetching && !offeringsQ.data?.length && (
+                        {offeringsQ.isFetching && !filteredOfferings.length && (
                           <div className="p-4 text-center text-xs text-slate-500 flex items-center justify-center gap-2">
                             <Loader2 className="h-3 w-3 animate-spin" /> Procurando...
                           </div>
                         )}
                         <div className="flex flex-col">
-                          {offeringsQ.data?.map((off: any) => (
+                          {filteredOfferings.map((off: any) => (
                             <button
                               key={off.id}
                               type="button"
                               className="w-full text-left rounded-none h-auto min-h-12 py-2 px-3 hover:bg-slate-50 transition-colors border-b border-slate-50 last:border-0"
                               onClick={() => {
+                                const term = debouncedSearch.toLowerCase().trim();
+                                let matchedConfigId = null;
+                                if (term && Array.isArray(off.metadata?.configurations)) {
+                                  const matchingCfg = off.metadata.configurations.find((cfg: any) => 
+                                    cfg.name?.toLowerCase().includes(term) ||
+                                    cfg.internal_code?.toLowerCase().includes(term)
+                                  );
+                                  if (matchingCfg) {
+                                    matchedConfigId = matchingCfg.id;
+                                  }
+                                }
+
                                 setDraft((prev) =>
                                   prev.map((x) =>
                                     x.line_no === row.line_no
                                       ? {
                                           ...x,
-                                          code: off.metadata?.short_name || off.metadata?.code || x.code,
+                                          code: matchedConfigId
+                                            ? (off.metadata.configurations.find((c: any) => c.id === matchedConfigId)?.internal_code || x.code)
+                                            : (off.metadata?.short_name || off.metadata?.code || x.code),
                                           description: off.display_name,
                                           offering_entity_id: off.id,
-                                          config_id: null,
-                                          price: off.metadata?.price_sale != null 
-                                            ? String(off.metadata.price_sale).replace(/\./g, ",") 
-                                            : off.metadata?.price != null 
-                                              ? String(off.metadata.price).replace(/\./g, ",") 
-                                              : x.price
+                                          config_id: matchedConfigId,
+                                          price: matchedConfigId 
+                                            ? String(off.metadata.configurations.find((c: any) => c.id === matchedConfigId)?.price_sale || off.metadata?.price_sale || x.price).replace(/\./g, ",")
+                                            : (off.metadata?.price_sale != null 
+                                              ? String(off.metadata.price_sale).replace(/\./g, ",") 
+                                              : off.metadata?.price != null 
+                                                ? String(off.metadata.price).replace(/\./g, ",") 
+                                                : x.price)
                                         }
                                       : x
                                   )
@@ -841,7 +888,7 @@ export function SalesOrderItemsEditorCard(props: { caseId: string; className?: s
                               </div>
                             </button>
                           ))}
-                          {!offeringsQ.isFetching && offeringsQ.data?.length === 0 && (
+                          {!offeringsQ.isFetching && filteredOfferings.length === 0 && (
                             <div className="p-4 flex flex-col items-center gap-3 text-center">
                               <div className="text-xs text-slate-500">
                                 Nenhum produto encontrado para "{searchOffering}".
