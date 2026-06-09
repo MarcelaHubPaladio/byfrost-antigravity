@@ -128,25 +128,61 @@ export function SalesOrderItemsEditorCard(props: { caseId: string; className?: s
     },
   });
 
-  const filteredOfferings = useMemo(() => {
-    const all = offeringsQ.data ?? [];
-    const term = debouncedSearch.toLowerCase().trim();
-    if (!term) return all.slice(0, 30);
+interface SearchOption {
+  key: string;
+  offering: any;
+  configId: string | null;
+  display_name: string;
+  code: string;
+  price: string;
+}
 
-    return all.filter((off: any) => {
-      if (off.display_name?.toLowerCase().includes(term)) return true;
-      if (off.internal_code?.toLowerCase().includes(term)) return true;
-      if (off.metadata?.internal_code?.toLowerCase().includes(term)) return true;
-      
-      if (Array.isArray(off.metadata?.configurations)) {
-        return off.metadata.configurations.some((cfg: any) => 
-          cfg.name?.toLowerCase().includes(term) ||
-          cfg.internal_code?.toLowerCase().includes(term)
-        );
+  const searchableOptions = useMemo<SearchOption[]>(() => {
+    const all = offeringsQ.data ?? [];
+    const options: SearchOption[] = [];
+    
+    for (const off of all) {
+      const configs = off.metadata?.configurations;
+      if (Array.isArray(configs) && configs.length > 0) {
+        for (const cfg of configs) {
+          options.push({
+            key: `${off.id}:${cfg.id}`,
+            offering: off,
+            configId: cfg.id,
+            display_name: `${off.display_name} - ${cfg.name}`,
+            code: cfg.internal_code || cfg.sku || off.metadata?.internal_code || off.metadata?.code || "",
+            price: cfg.price_sale != null 
+              ? String(cfg.price_sale)
+              : (off.metadata?.price_sale != null ? String(off.metadata.price_sale) : "")
+          });
+        }
+      } else {
+        options.push({
+          key: off.id,
+          offering: off,
+          configId: null,
+          display_name: off.display_name,
+          code: off.metadata?.short_name || off.metadata?.code || off.internal_code || "",
+          price: off.metadata?.price_sale != null 
+            ? String(off.metadata.price_sale) 
+            : (off.metadata?.price != null ? String(off.metadata.price) : "")
+        });
       }
-      return false;
+    }
+    return options;
+  }, [offeringsQ.data]);
+
+  const filteredOfferings = useMemo<SearchOption[]>(() => {
+    const term = debouncedSearch.toLowerCase().trim();
+    if (!term) return searchableOptions.slice(0, 30);
+
+    return searchableOptions.filter((opt) => {
+      return (
+        opt.display_name.toLowerCase().includes(term) ||
+        opt.code.toLowerCase().includes(term)
+      );
     }).slice(0, 30);
-  }, [offeringsQ.data, debouncedSearch]);
+  }, [searchableOptions, debouncedSearch]);
 
   const initialDraft = useMemo<DraftRow[]>(() => {
     return (itemsQ.data ?? []).map((r) => ({
@@ -617,43 +653,23 @@ export function SalesOrderItemsEditorCard(props: { caseId: string; className?: s
                               <Loader2 className="h-3 w-3 animate-spin" /> Procurando...
                             </div>
                           )}
-                          <div className="flex flex-col">
-                            {filteredOfferings.map((off: any) => (
+                          <div>
+                            {filteredOfferings.map((opt: SearchOption) => (
                               <button
-                                key={off.id}
+                                key={opt.key}
                                 type="button"
                                 className="w-full text-left rounded-none h-auto min-h-12 py-2 px-3 hover:bg-slate-50 transition-colors border-b border-slate-50 last:border-0"
                                 onClick={() => {
-                                  const term = debouncedSearch.toLowerCase().trim();
-                                  let matchedConfigId = null;
-                                  if (term && Array.isArray(off.metadata?.configurations)) {
-                                    const matchingCfg = off.metadata.configurations.find((cfg: any) => 
-                                      cfg.name?.toLowerCase().includes(term) ||
-                                      cfg.internal_code?.toLowerCase().includes(term)
-                                    );
-                                    if (matchingCfg) {
-                                      matchedConfigId = matchingCfg.id;
-                                    }
-                                  }
-
                                   setDraft((prev) =>
                                     prev.map((x) =>
                                       x.line_no === row.line_no
                                         ? {
                                             ...x,
-                                            code: matchedConfigId
-                                              ? (off.metadata.configurations.find((c: any) => c.id === matchedConfigId)?.internal_code || x.code)
-                                              : (off.metadata?.short_name || off.metadata?.code || x.code),
-                                            description: off.display_name,
-                                            offering_entity_id: off.id,
-                                            config_id: matchedConfigId,
-                                            price: matchedConfigId 
-                                              ? String(off.metadata.configurations.find((c: any) => c.id === matchedConfigId)?.price_sale || off.metadata?.price_sale || x.price).replace(/\./g, ",")
-                                              : (off.metadata?.price_sale != null 
-                                                ? String(off.metadata.price_sale).replace(/\./g, ",") 
-                                                : off.metadata?.price != null 
-                                                  ? String(off.metadata.price).replace(/\./g, ",") 
-                                                  : x.price)
+                                            code: opt.code || x.code,
+                                            description: opt.display_name,
+                                            offering_entity_id: opt.offering.id,
+                                            config_id: opt.configId,
+                                            price: opt.price ? opt.price.replace(/\./g, ",") : x.price
                                           }
                                         : x
                                     )
@@ -665,15 +681,15 @@ export function SalesOrderItemsEditorCard(props: { caseId: string; className?: s
                                 <div className="flex items-center justify-between gap-3">
                                   <div className="flex flex-col gap-0.5">
                                     <div className="text-sm font-medium text-slate-900 leading-snug">
-                                      {off.display_name}
+                                      {opt.display_name}
                                     </div>
-                                    {(off.metadata?.short_name || off.metadata?.code) && (
+                                    {opt.code && (
                                       <div className="text-[11px] text-slate-500 font-mono">
-                                        {off.metadata?.short_name || off.metadata?.code}
+                                        {opt.code}
                                       </div>
                                     )}
                                   </div>
-                                  {row.offering_entity_id === off.id && (
+                                  {row.offering_entity_id === opt.offering.id && row.config_id === opt.configId && (
                                     <Check className="h-4 w-4 text-emerald-600 shrink-0" />
                                   )}
                                 </div>
@@ -826,43 +842,23 @@ export function SalesOrderItemsEditorCard(props: { caseId: string; className?: s
                             <Loader2 className="h-3 w-3 animate-spin" /> Procurando...
                           </div>
                         )}
-                        <div className="flex flex-col">
-                          {filteredOfferings.map((off: any) => (
+                        <div>
+                          {filteredOfferings.map((opt: SearchOption) => (
                             <button
-                              key={off.id}
+                              key={opt.key}
                               type="button"
                               className="w-full text-left rounded-none h-auto min-h-12 py-2 px-3 hover:bg-slate-50 transition-colors border-b border-slate-50 last:border-0"
                               onClick={() => {
-                                const term = debouncedSearch.toLowerCase().trim();
-                                let matchedConfigId = null;
-                                if (term && Array.isArray(off.metadata?.configurations)) {
-                                  const matchingCfg = off.metadata.configurations.find((cfg: any) => 
-                                    cfg.name?.toLowerCase().includes(term) ||
-                                    cfg.internal_code?.toLowerCase().includes(term)
-                                  );
-                                  if (matchingCfg) {
-                                    matchedConfigId = matchingCfg.id;
-                                  }
-                                }
-
                                 setDraft((prev) =>
                                   prev.map((x) =>
                                     x.line_no === row.line_no
                                       ? {
                                           ...x,
-                                          code: matchedConfigId
-                                            ? (off.metadata.configurations.find((c: any) => c.id === matchedConfigId)?.internal_code || x.code)
-                                            : (off.metadata?.short_name || off.metadata?.code || x.code),
-                                          description: off.display_name,
-                                          offering_entity_id: off.id,
-                                          config_id: matchedConfigId,
-                                          price: matchedConfigId 
-                                            ? String(off.metadata.configurations.find((c: any) => c.id === matchedConfigId)?.price_sale || off.metadata?.price_sale || x.price).replace(/\./g, ",")
-                                            : (off.metadata?.price_sale != null 
-                                              ? String(off.metadata.price_sale).replace(/\./g, ",") 
-                                              : off.metadata?.price != null 
-                                                ? String(off.metadata.price).replace(/\./g, ",") 
-                                                : x.price)
+                                          code: opt.code || x.code,
+                                          description: opt.display_name,
+                                          offering_entity_id: opt.offering.id,
+                                          config_id: opt.configId,
+                                          price: opt.price ? opt.price.replace(/\./g, ",") : x.price
                                         }
                                       : x
                                   )
@@ -874,15 +870,15 @@ export function SalesOrderItemsEditorCard(props: { caseId: string; className?: s
                               <div className="flex items-center justify-between gap-3">
                                 <div className="flex flex-col gap-0.5">
                                   <div className="text-sm font-medium text-slate-900 leading-snug">
-                                    {off.display_name}
+                                    {opt.display_name}
                                   </div>
-                                  {(off.metadata?.short_name || off.metadata?.code) && (
+                                  {opt.code && (
                                     <div className="text-[11px] text-slate-500 font-mono">
-                                      {off.metadata?.short_name || off.metadata?.code}
+                                      {opt.code}
                                     </div>
                                   )}
                                 </div>
-                                {row.offering_entity_id === off.id && (
+                                {row.offering_entity_id === opt.offering.id && row.config_id === opt.configId && (
                                   <Check className="h-4 w-4 text-emerald-600 shrink-0" />
                                 )}
                               </div>

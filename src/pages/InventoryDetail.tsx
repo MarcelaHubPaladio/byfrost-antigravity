@@ -401,6 +401,13 @@ export default function InventoryDetail() {
 
             let offeringId = id!;
             if (isEdit) {
+                const prevLoja = Number(itemQ.data?.metadata?.estoque_loja || 0);
+                const prevConsignado = Number(itemQ.data?.metadata?.estoque_consignado || 0);
+                const prevTotal = Number(itemQ.data?.metadata?.estoque_total || 0);
+
+                const newLoja = values.has_configurations ? 0 : Number(values.estoque_loja || 0);
+                const newConsignado = values.has_configurations ? 0 : Number(values.estoque_consignado || 0);
+
                 const { error } = await supabase
                     .from("core_entities")
                     .update({
@@ -411,6 +418,34 @@ export default function InventoryDetail() {
                     .eq("id", id!)
                     .eq("tenant_id", activeTenantId);
                 if (error) throw error;
+
+                if (!values.has_configurations) {
+                    const diffLoja = newLoja - prevLoja;
+                    const diffConsignado = newConsignado - prevConsignado;
+                    if (diffLoja !== 0 || diffConsignado !== 0) {
+                        await supabase.from("core_entity_events").insert({
+                            tenant_id: activeTenantId,
+                            entity_id: id!,
+                            event_type: "stock_change",
+                            before: {
+                                estoque_loja: prevLoja,
+                                estoque_consignado: prevConsignado,
+                                estoque_total: prevTotal,
+                                consignments: itemQ.data?.metadata?.consignments || []
+                            },
+                            after: {
+                                estoque_loja: newLoja,
+                                estoque_consignado: newConsignado,
+                                estoque_total: stock_quantity,
+                                change_qty: diffLoja + diffConsignado,
+                                reason: "Ajuste manual de estoque",
+                                consignments: productConsignments
+                            },
+                            actor_user_id: user?.id || null,
+                            created_at: new Date().toISOString()
+                        });
+                    }
+                }
 
                 if (values.photo_url) {
                     await supabase.from("core_entity_photos").upsert({
@@ -455,13 +490,14 @@ export default function InventoryDetail() {
                     tenant_id: activeTenantId,
                     entity_id: offeringId,
                     event_type: "stock_change",
-                    before: { estoque_loja: 0, estoque_consignado: 0, estoque_total: 0 },
+                    before: { estoque_loja: 0, estoque_consignado: 0, estoque_total: 0, consignments: [] },
                     after: {
                         estoque_loja: values.has_configurations ? 0 : values.estoque_loja,
                         estoque_consignado: values.has_configurations ? 0 : values.estoque_consignado,
                         estoque_total: stock_quantity,
                         change_qty: stock_quantity,
-                        reason: "Cadastro inicial de produto"
+                        reason: "Cadastro inicial de produto",
+                        consignments: values.has_configurations ? [] : productConsignments
                     },
                     actor_user_id: user?.id || null,
                     created_at: new Date().toISOString()
@@ -584,7 +620,8 @@ export default function InventoryDetail() {
                         estoque_consignado: editingConfig.estoque_consignado,
                         estoque_total: editingConfig.estoque_total,
                         config_id: editingConfig.id,
-                        config_name: editingConfig.name
+                        config_name: editingConfig.name,
+                        consignments: editingConfig.consignments || []
                     },
                     after: {
                         estoque_loja: eLoja,
@@ -593,7 +630,8 @@ export default function InventoryDetail() {
                         config_id: editingConfig.id,
                         config_name: configName,
                         change_qty: diffLoja + diffConsignado,
-                        reason: "Ajuste manual da configuração"
+                        reason: "Ajuste manual da configuração",
+                        consignments: activeConfigConsignments
                     },
                     actor_user_id: user?.id || null,
                     created_at: new Date().toISOString()
@@ -1047,6 +1085,16 @@ export default function InventoryDetail() {
                                                                 <span>| Saldo Loja: {e.after?.estoque_loja ?? 0}</span>
                                                                 <span>| Total: {e.after?.estoque_total ?? 0}</span>
                                                             </div>
+                                                            {Array.isArray(e.after?.consignments) && e.after.consignments.length > 0 && (
+                                                                <div className="text-[10px] text-slate-500 bg-slate-50 p-2 rounded-xl border border-slate-100 flex flex-wrap items-center gap-1.5 mt-1.5">
+                                                                    <span className="font-bold text-slate-600">Distribuição:</span>
+                                                                    {e.after.consignments.map((c: any) => (
+                                                                        <span key={c.user_id} className="bg-white px-1.5 py-0.5 rounded-md border border-slate-200 shadow-sm shrink-0 font-medium">
+                                                                            {c.user_name}: <strong className="text-indigo-600 font-bold">{c.qty} un</strong>
+                                                                        </span>
+                                                                    ))}
+                                                                </div>
+                                                            )}
                                                             {e.after?.case_id && (
                                                                 <Link to={`/app/orders/${e.after.case_id}`} className="text-indigo-600 font-bold hover:underline flex items-center gap-1 mt-1 text-[10px]">
                                                                     Ir para o pedido comercial #{e.after.case_id.slice(0, 8)}
