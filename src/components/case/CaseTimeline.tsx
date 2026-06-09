@@ -113,16 +113,16 @@ export function CaseTimeline({ events }: { events: CaseTimelineEvent[] }) {
                       <div className="mt-1 text-sm font-semibold text-slate-900">
                         {e.message ?? "(sem mensagem)"}
                       </div>
-                      <div className="mt-1 flex items-center gap-1.5 text-[11px] text-slate-500">
+                      <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] text-slate-500">
                         {e.actor_name && (
-                          <span className="inline-flex items-center gap-1 rounded-md bg-slate-100 px-1.5 py-0.5 font-semibold text-slate-600">
-                            <User className="h-2.5 w-2.5" />
+                          <span className="inline-flex items-center gap-1 rounded-md bg-slate-100 px-1.5 py-0.5 font-semibold text-slate-600 whitespace-nowrap shrink-0">
+                            <User className="h-2.5 w-2.5 shrink-0" />
                             {e.actor_name}
                           </span>
                         )}
-                        <span>{actorSource}</span>
-                        <span>•</span>
-                        <span>{e.event_type}</span>
+                        <span className="whitespace-nowrap shrink-0">{actorSource}</span>
+                        <span className="text-slate-300">•</span>
+                        <span className="break-all">{e.event_type}</span>
                       </div>
                     </div>
                   </div>

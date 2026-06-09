@@ -401,7 +401,7 @@ export default function Orders() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("core_entities")
-        .select("id, display_name")
+        .select("id, display_name, metadata")
         .eq("tenant_id", activeTenantId!)
         .eq("entity_type", "offering")
         .is("deleted_at", null)
@@ -410,6 +410,29 @@ export default function Orders() {
       return data ?? [];
     },
   });
+
+  const inventoryOptions = useMemo(() => {
+    if (!inventoryQ.data) return [];
+    const options: { id: string; display_name: string }[] = [];
+    for (const item of inventoryQ.data) {
+      options.push({
+        id: item.id,
+        display_name: item.display_name,
+      });
+      const metadata = item.metadata as any;
+      if (metadata && Array.isArray(metadata.configurations)) {
+        for (const config of metadata.configurations) {
+          if (config.name) {
+            options.push({
+              id: `${item.id}:${config.id}`,
+              display_name: `${item.display_name} - ${config.name}`,
+            });
+          }
+        }
+      }
+    }
+    return options;
+  }, [inventoryQ.data]);
 
   const formatRelativeUpdate = (iso: string) => {
     if (!iso) return "—";
@@ -516,6 +539,10 @@ export default function Orders() {
         if (invId) {
           if (!inventoryIdsMap.has(cid)) inventoryIdsMap.set(cid, new Set());
           inventoryIdsMap.get(cid)!.add(invId);
+          const configId = itm.confidence_json?.config_id;
+          if (configId) {
+            inventoryIdsMap.get(cid)!.add(`${invId}:${configId}`);
+          }
         }
       }
 
@@ -1156,7 +1183,7 @@ export default function Orders() {
                     )}
                   </div>
                   <div className="max-h-[300px] overflow-y-auto space-y-0.5">
-                    {(inventoryQ.data ?? []).map((opt) => (
+                    {inventoryOptions.map((opt) => (
                       <label key={opt.id} className="flex items-center gap-2.5 px-2 py-1.5 rounded-xl cursor-pointer hover:bg-slate-50 transition-colors">
                         <input
                           type="checkbox"
