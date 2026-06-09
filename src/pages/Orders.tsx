@@ -826,10 +826,12 @@ export default function Orders() {
 
   const states = useMemo(() => {
     const configStates = selectedJourney?.default_state_machine_json?.states || [];
-    if (configStates.length > 0) return configStates;
+    const base = configStates.length > 0 ? configStates : SALES_ORDER_STAGES;
     
-    // Default stages for Sales Order if config is missing
-    return SALES_ORDER_STAGES;
+    // "cancelled" é um estado terminal especial — garante que sempre apareça ao final,
+    // independente do que está configurado na state machine.
+    const hasCancelled = base.some(s => s.toLowerCase() === "cancelled" || s.toLowerCase() === "cancelado");
+    return hasCancelled ? base : [...base, "cancelled"];
   }, [selectedJourney]);
 
   const updateState = async (caseId: string, nextState: string) => {
