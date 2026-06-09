@@ -213,7 +213,14 @@ export default function Orders() {
     if (!over) return;
     
     const caseId = active.id as string;
-    const nextState = over.id as string;
+    let nextState = over.id as string;
+
+    // Se o target for outro card, o id dele será um UUID de um caso.
+    // Nesse caso, precisamos descobrir a qual coluna (estado) esse caso pertence.
+    const targetCase = journeyRows.find(c => c.id === nextState);
+    if (targetCase) {
+      nextState = targetCase.state;
+    }
 
     const caseRow = journeyRows.find(c => c.id === caseId);
     if (caseRow && (caseRow.state || "").toUpperCase() !== (nextState || "").toUpperCase()) {
