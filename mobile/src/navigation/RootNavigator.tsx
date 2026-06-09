@@ -7,7 +7,7 @@ import { Home, Package } from 'lucide-react-native';
 import { useSession } from '../providers/SessionProvider';
 import { useTenant } from '../providers/TenantProvider';
 
-import { Login } from '../screens/Login';
+import Login from '../screens/Login';
 import { TenantSelectScreen } from '../screens/tenant/TenantSelectScreen';
 import { HomeScreen } from '../screens/HomeScreen';
 import { CrmScreen } from '../screens/crm/CrmScreen';
