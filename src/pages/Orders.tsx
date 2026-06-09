@@ -699,6 +699,7 @@ export default function Orders() {
     let invoicedValue = 0;
     let pendingValue = 0;
     let cancelledValue = 0;
+    let invoicedCount = 0;
 
     filteredRows.forEach(r => {
       const f = caseDataQ.data?.fields.get(r.id);
@@ -710,11 +711,13 @@ export default function Orders() {
 
       if (billingStatus.includes("pago") || billingStatus.includes("faturado")) {
         invoicedValue += caseTotal;
+        invoicedCount += 1;
       } else if (billingStatus.includes("cancel")) {
         cancelledValue += caseTotal;
       } else if (billingStatus.includes("parcial")) {
         invoicedValue += partialVal;
         pendingValue += (caseTotal - partialVal);
+        invoicedCount += 1;
       } else {
         pendingValue += caseTotal;
       }
@@ -723,7 +726,7 @@ export default function Orders() {
     const invoicedPct = totalValue > 0 ? (invoicedValue / totalValue) * 100 : 0;
     const pendingPct = totalValue > 0 ? (pendingValue / totalValue) * 100 : 0;
     const cancelledPct = totalValue > 0 ? (cancelledValue / totalValue) * 100 : 0;
-    const avgTicket = filteredRows.length > 0 ? totalValue / filteredRows.length : 0;
+    const avgTicket = invoicedCount > 0 ? invoicedValue / invoicedCount : 0;
 
     return { totalValue, invoicedValue, pendingValue, cancelledValue, invoicedPct, pendingPct, cancelledPct, avgTicket };
   }, [filteredRows, caseDataQ.data]);
