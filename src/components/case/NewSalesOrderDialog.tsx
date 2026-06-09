@@ -79,20 +79,6 @@ export function NewSalesOrderDialog(props: {
     }
   });
 
-  const usersQ = useQuery({
-    queryKey: ["tenant_users_profiles", tenantId],
-    enabled: Boolean(open && tenantId),
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("users_profile")
-        .select("user_id, display_name, email, meta_json, phone_e164")
-        .eq("tenant_id", tenantId)
-        .is("deleted_at", null);
-      if (error) throw error;
-      return data ?? [];
-    }
-  });
-
   const resetForm = () => {
     setCustomerName("");
     setCity("");
@@ -119,18 +105,6 @@ export function NewSalesOrderDialog(props: {
 
     setSaving(true);
     try {
-      // 1. Resolve matching user if any
-      const selectedVendor = vendorsQ.data?.find(v => v.id === sellerId);
-      let matchedUserId = null;
-      if (selectedVendor && usersQ.data) {
-        // Match by display_name or phone
-        const uMatch = usersQ.data.find(u => 
-          (u.display_name && u.display_name === selectedVendor.display_name) ||
-          (u.phone_e164 && u.phone_e164 === selectedVendor.phone_e164)
-        );
-        if (uMatch) matchedUserId = uMatch.user_id;
-      }
-
       // 2. Create Case
       const { data: caseRow, error: caseErr } = await supabase
         .from("cases")
@@ -142,7 +116,7 @@ export function NewSalesOrderDialog(props: {
           state: "new",
           title: customerName,
           assigned_vendor_id: sellerId || null,
-          assigned_user_id: matchedUserId || null,
+          assigned_user_id: null, // Responsável deve ser atribuído manualmente após a criação
           created_by_channel: "panel",
           meta_json: { created_from: "simplified_modal" }
         })
