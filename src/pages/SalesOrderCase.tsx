@@ -102,7 +102,7 @@ export default function SalesOrderCase() {
     enabled: !!caseId,
   });
 
-  const { data: timelineQ } = useQuery({
+  const { data: timelineQ, refetch: refetchTimeline } = useQuery({
     queryKey: ["case_timeline", caseId],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -111,10 +111,11 @@ export default function SalesOrderCase() {
         .eq("case_id", caseId)
         .order("occurred_at", { ascending: false });
       if (error) throw error;
-      return data;
+      return data ?? [];
     },
     enabled: !!caseId,
   });
+
 
   const { data: fieldsData, isLoading: isLoadingFields } = useQuery({
     queryKey: ["case_fields", caseId],
@@ -143,6 +144,18 @@ export default function SalesOrderCase() {
       return data;
     },
   });
+
+  // Enriquece os eventos da timeline com o nome do ator resolvido via tenantUsers
+  const timelineEvents = useMemo(() => {
+    if (!timelineQ) return [];
+    return timelineQ.map((e: any) => {
+      const actorUser = tenantUsers?.find(u => u.user_id === e.actor_id);
+      return {
+        ...e,
+        actor_name: actorUser?.display_name || actorUser?.email || null,
+      };
+    });
+  }, [timelineQ, tenantUsers]);
 
   const { data: vendors } = useQuery({
     queryKey: ["vendors", tenantId],
@@ -855,7 +868,7 @@ export default function SalesOrderCase() {
                   </div>
                   <ScrollArea className="h-[450px]">
                     <div className="p-8">
-                      <CaseTimeline events={timelineQ || []} />
+                      <CaseTimeline events={timelineEvents} />
                     </div>
                   </ScrollArea>
                 </Card>

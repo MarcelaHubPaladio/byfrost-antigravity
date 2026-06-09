@@ -8,12 +8,15 @@ import {
   ShieldCheck,
   Sparkles,
   UserCheck,
+  User,
 } from "lucide-react";
 
 export type CaseTimelineEvent = {
   id: string;
   event_type: string;
   actor_type: string;
+  actor_id?: string | null;
+  actor_name?: string | null;
   message: string | null;
   occurred_at: string;
 };
@@ -85,6 +88,11 @@ export function CaseTimeline({ events }: { events: CaseTimelineEvent[] }) {
                     ? "border-amber-200 bg-amber-50 text-amber-700"
                     : "border-rose-200 bg-rose-50 text-rose-700";
 
+              const actorSource = actorLabel(e.actor_type);
+              const actorDisplay = e.actor_name
+                ? `${actorSource} · ${e.actor_name}`
+                : actorSource;
+
               return (
                 <li key={e.id} className="relative">
                   {!isLast && <div className="absolute left-[14px] top-7 bottom-[-22px] w-px bg-slate-200" />}
@@ -104,8 +112,16 @@ export function CaseTimeline({ events }: { events: CaseTimelineEvent[] }) {
                       <div className="mt-1 text-sm font-semibold text-slate-900">
                         {e.message ?? "(sem mensagem)"}
                       </div>
-                      <div className="mt-1 text-[11px] text-slate-500">
-                        {actorLabel(e.actor_type)} • {e.event_type}
+                      <div className="mt-1 flex items-center gap-1.5 text-[11px] text-slate-500">
+                        {e.actor_name && (
+                          <span className="inline-flex items-center gap-1 rounded-md bg-slate-100 px-1.5 py-0.5 font-semibold text-slate-600">
+                            <User className="h-2.5 w-2.5" />
+                            {e.actor_name}
+                          </span>
+                        )}
+                        <span>{actorSource}</span>
+                        <span>•</span>
+                        <span>{e.event_type}</span>
                       </div>
                     </div>
                   </div>
