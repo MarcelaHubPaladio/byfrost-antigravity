@@ -95,6 +95,7 @@ import { GlobalJourneyLogsDialog } from "@/components/case/GlobalJourneyLogsDial
 import { checkTransitionBlocks } from "@/lib/journeys/validation";
 import { TransitionBlockDialog } from "@/components/case/TransitionBlockDialog";
 import { showError, showSuccess } from "@/utils/toast";
+import { handleOrderStateTransition } from "@/utils/inventorySync";
 import { AppShell } from "@/components/AppShell";
 import { RequireAuth } from "@/components/RequireAuth";
 import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianGrid } from "recharts";
@@ -484,7 +485,7 @@ export default function Orders() {
             .limit(1000),
           supabase
             .from("case_items")
-            .select("case_id,total,offering_entity_id")
+            .select("case_id,total,offering_entity_id,qty,confidence_json")
             .in("case_id", chunk)
         ]);
 
@@ -518,7 +519,56 @@ export default function Orders() {
         }
       }
 
-      return { fields: fieldMap, totals: totalsMap, itemCounts: itemCountsMap, inventory: inventoryIdsMap };
+      // Resolve product configurations & stock levels for each item
+      const offeringIds = Array.from(new Set(allItems.map(item => item.offering_entity_id).filter(Boolean))) as string[];
+      const productsMap = new Map<string, any>();
+
+      if (offeringIds.length > 0) {
+        const { data: prodData } = await supabase
+          .from("core_entities")
+          .select("id, display_name, metadata")
+          .in("id", offeringIds);
+
+        if (prodData) {
+          for (const p of prodData) {
+            productsMap.set(p.id, p);
+          }
+        }
+      }
+
+      const casesWithNegativeStock = new Set<string>();
+      for (const itm of allItems) {
+        const cid = itm.case_id;
+        const prodId = itm.offering_entity_id;
+        if (prodId) {
+          const prod = productsMap.get(prodId);
+          if (prod) {
+            const configId = itm.confidence_json?.config_id;
+            let isNeg = false;
+            if (configId && Array.isArray(prod.metadata?.configurations)) {
+              const cfg = prod.metadata.configurations.find((c: any) => c.id === configId);
+              if (cfg && (Number(cfg.estoque_total || 0) < 0)) {
+                isNeg = true;
+              }
+            } else {
+              if (Number(prod.metadata?.estoque_total || 0) < 0) {
+                isNeg = true;
+              }
+            }
+            if (isNeg) {
+              casesWithNegativeStock.add(cid);
+            }
+          }
+        }
+      }
+
+      return { 
+        fields: fieldMap, 
+        totals: totalsMap, 
+        itemCounts: itemCountsMap, 
+        inventory: inventoryIdsMap,
+        negativeStockCases: casesWithNegativeStock
+      };
     },
   });
 
@@ -867,6 +917,9 @@ export default function Orders() {
     }
 
     try {
+      // Sincroniza o estoque na transição de etapa (reserva/devolve estoque)
+      await handleOrderStateTransition(caseId, currentState, nextState, user?.id || "");
+
       const { error } = await supabase
         .from("cases")
         .update({ state: nextState, updated_at: new Date().toISOString() })
@@ -1475,6 +1528,11 @@ export default function Orders() {
                                 <span className="text-sm font-bold text-slate-900 uppercase">
                                   {customersQ.data instanceof Map ? (customersQ.data.get(c.customer_id!)?.name || c.title || "Pedido") : (c.title || "Pedido")}
                                 </span>
+                                {caseDataQ.data?.negativeStockCases?.has(c.id) && (
+                                  <Badge className="bg-rose-100 text-rose-700 hover:bg-rose-100 border-none font-bold text-[10px]">
+                                    Sem Estoque
+                                  </Badge>
+                                )}
                                 <Badge variant="secondary" className="rounded-md bg-blue-50 text-[10px] font-black text-blue-600 border-none">
                                   #{c.id.slice(0, 8)}
                                 </Badge>
@@ -1688,9 +1746,16 @@ function SortableOrderCard({ c, customersQ, caseDataQ, navigate, formatRelativeU
     >
       <div className="mb-3 flex items-start justify-between">
         <div className="flex flex-col gap-1">
-          <span className="text-sm font-black text-slate-900 uppercase line-clamp-1">
-            {customersQ.data instanceof Map ? (customersQ.data.get(c.customer_id!)?.name || c.title || "Pedido") : (c.title || "Pedido")}
-          </span>
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-black text-slate-900 uppercase line-clamp-1">
+              {customersQ.data instanceof Map ? (customersQ.data.get(c.customer_id!)?.name || c.title || "Pedido") : (c.title || "Pedido")}
+            </span>
+            {caseDataQ.data?.negativeStockCases?.has(c.id) && (
+              <Badge className="bg-rose-100 text-rose-700 hover:bg-rose-100 border-none font-bold text-[9px] px-1.5 h-4 flex items-center shrink-0">
+                Sem Estoque
+              </Badge>
+            )}
+          </div>
           <span className="text-[10px] font-bold text-slate-400">#{c.id.slice(0, 8)}</span>
         </div>
         <div className={cn(

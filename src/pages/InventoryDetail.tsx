@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useEffect, useState, useMemo } from "react";
+import { useNavigate, useParams, Link } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -8,6 +8,7 @@ import { AppShell } from "@/components/AppShell";
 import { RequireAuth } from "@/components/RequireAuth";
 import { RequireRouteAccess } from "@/components/RequireRouteAccess";
 import { useTenant } from "@/providers/TenantProvider";
+import { useSession } from "@/providers/SessionProvider";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { showError, showSuccess } from "@/utils/toast";
@@ -17,11 +18,11 @@ import { Textarea } from "@/components/ui/textarea";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/form";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Loader2, Package, Image as ImageIcon, Upload, Trash2, Info, CloudUpload, Plus, Pencil, ClipboardList } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
+import { ArrowLeft, Loader2, Package, Image as ImageIcon, Upload, Trash2, Info, CloudUpload, Plus, Pencil, ClipboardList, Sliders, MapPin, CheckCircle, RefreshCw, Calendar, User } from "lucide-react";
 import { DeliverableTemplateUpsertDialog } from "@/components/core/DeliverableTemplateUpsertDialog";
 import { Separator } from "@/components/ui/separator";
-
-const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB limit REMOVED from original, handled by compression.
 
 const formSchema = z.object({
     display_name: z.string().min(2, "O nome deve ter pelo menos 2 caracteres"),
@@ -29,19 +30,36 @@ const formSchema = z.object({
     description: z.string().optional(),
     photo_url: z.string().optional(),
     internal_code: z.string().optional(),
-    stock_quantity: z.coerce.number().min(0, "Estoque não pode ser negativo"),
     price_sale: z.coerce.number().min(0, "Preço não pode ser negativo"),
     price_cost: z.coerce.number().min(0, "Custo não pode ser negativo"),
     price_consult: z.boolean().optional().default(false),
+    supplier_id: z.string().optional().nullable(),
+    local_prateleira: z.string().optional(),
+    allow_out_of_stock_sales: z.boolean().optional().default(false),
+    has_configurations: z.boolean().optional().default(false),
+    estoque_loja: z.coerce.number().min(0, "Estoque não pode ser negativo"),
+    estoque_consignado: z.coerce.number().min(0, "Estoque não pode ser negativo"),
 });
 
 type FormValues = z.infer<typeof formSchema>;
+
+interface ConfigurationItem {
+    id: string;
+    name: string;
+    internal_code: string;
+    estoque_loja: number;
+    estoque_consignado: number;
+    estoque_total: number;
+    local_prateleira: string;
+    price_sale?: number;
+}
 
 export default function InventoryDetail() {
     const { id } = useParams();
     const nav = useNavigate();
     const qc = useQueryClient();
     const { activeTenantId } = useTenant();
+    const { user } = useSession();
     const [loading, setLoading] = useState(false);
     const [uploading, setUploading] = useState(false);
     const [uploadProgress, setUploadProgress] = useState(0);
@@ -49,6 +67,19 @@ export default function InventoryDetail() {
     const [upsertOpen, setUpsertOpen] = useState(false);
     const [editingTemplate, setEditingTemplate] = useState<any>(null);
     const isEdit = Boolean(id && id !== "new");
+
+    // Configurations State
+    const [configurations, setConfigurations] = useState<ConfigurationItem[]>([]);
+    const [configDialogOpen, setConfigDialogOpen] = useState(false);
+    const [editingConfig, setEditingConfig] = useState<ConfigurationItem | null>(null);
+
+    // Configuration Form Fields
+    const [configName, setConfigName] = useState("");
+    const [configSku, setConfigSku] = useState("");
+    const [configEstoqueLoja, setConfigEstoqueLoja] = useState("0");
+    const [configEstoqueConsignado, setConfigEstoqueConsignado] = useState("0");
+    const [configPrateleira, setConfigPrateleira] = useState("");
+    const [configPriceSale, setConfigPriceSale] = useState("");
 
     const itemQ = useQuery({
         queryKey: ["inventory_item", activeTenantId, id],
@@ -64,6 +95,63 @@ export default function InventoryDetail() {
             return data;
         },
     });
+
+    const suppliersQ = useQuery({
+        queryKey: ["suppliers", activeTenantId],
+        enabled: !!activeTenantId,
+        queryFn: async () => {
+            const { data, error } = await supabase
+                .from("core_entities")
+                .select("id, display_name")
+                .eq("tenant_id", activeTenantId!)
+                .eq("entity_type", "party")
+                .eq("subtype", "fornecedor")
+                .is("deleted_at", null)
+                .order("display_name", { ascending: true });
+            if (error) throw error;
+            return data || [];
+        }
+    });
+
+    const tenantUsersQ = useQuery({
+        queryKey: ["tenant_users_list", activeTenantId],
+        enabled: !!activeTenantId,
+        queryFn: async () => {
+            const { data, error } = await supabase
+                .from("users_profile")
+                .select("user_id, display_name, email")
+                .eq("tenant_id", activeTenantId!)
+                .is("deleted_at", null);
+            if (error) throw error;
+            return data || [];
+        }
+    });
+
+    const stockHistoryQ = useQuery({
+        queryKey: ["stock_history", id],
+        enabled: isEdit,
+        queryFn: async () => {
+            const { data, error } = await supabase
+                .from("core_entity_events")
+                .select("*")
+                .eq("entity_id", id!)
+                .eq("event_type", "stock_change")
+                .order("created_at", { ascending: false });
+            if (error) throw error;
+            return data || [];
+        }
+    });
+
+    const stockHistoryEvents = useMemo(() => {
+        if (!stockHistoryQ.data) return [];
+        return stockHistoryQ.data.map((e: any) => {
+            const actor = tenantUsersQ.data?.find(u => u.user_id === e.actor_user_id);
+            return {
+                ...e,
+                actor_name: actor?.display_name || actor?.email || "Sistema"
+            };
+        });
+    }, [stockHistoryQ.data, tenantUsersQ.data]);
 
     const templatesQ = useQuery({
         queryKey: ["deliverable_templates", activeTenantId, id],
@@ -89,10 +177,15 @@ export default function InventoryDetail() {
             description: "",
             photo_url: "",
             internal_code: "",
-            stock_quantity: 0,
             price_sale: 0,
             price_cost: 0,
             price_consult: false,
+            supplier_id: "",
+            local_prateleira: "",
+            allow_out_of_stock_sales: false,
+            has_configurations: false,
+            estoque_loja: 0,
+            estoque_consignado: 0,
         },
     });
 
@@ -104,11 +197,17 @@ export default function InventoryDetail() {
                 description: itemQ.data.metadata?.description || "",
                 photo_url: itemQ.data.metadata?.photo_url || "",
                 internal_code: itemQ.data.metadata?.internal_code || "",
-                stock_quantity: itemQ.data.metadata?.stock_quantity || 0,
                 price_sale: itemQ.data.metadata?.price_sale || 0,
                 price_cost: itemQ.data.metadata?.price_cost || 0,
                 price_consult: !!itemQ.data.metadata?.price_consult,
+                supplier_id: itemQ.data.metadata?.supplier_id || "",
+                local_prateleira: itemQ.data.metadata?.local_prateleira || "",
+                allow_out_of_stock_sales: !!itemQ.data.metadata?.allow_out_of_stock_sales,
+                has_configurations: !!itemQ.data.metadata?.has_configurations,
+                estoque_loja: itemQ.data.metadata?.estoque_loja || 0,
+                estoque_consignado: itemQ.data.metadata?.estoque_consignado || 0,
             });
+            setConfigurations(itemQ.data.metadata?.configurations || []);
         }
     }, [itemQ.data, form]);
 
@@ -121,13 +220,12 @@ export default function InventoryDetail() {
         setUploadPhase("compressing");
 
         try {
-            // Simulated progress for compression
             const compInterval = setInterval(() => {
                 setUploadProgress(p => p >= 30 ? 30 : p + 5);
             }, 200);
 
             const options = {
-                maxSizeMB: 1, // Compress to max 1MB
+                maxSizeMB: 1,
                 maxWidthOrHeight: 1920,
                 useWebWorker: true,
                 initialQuality: 0.8,
@@ -142,7 +240,6 @@ export default function InventoryDetail() {
             const fileExt = file.name.split('.').pop();
             const fileName = `${activeTenantId}/${crypto.randomUUID()}.${fileExt}`;
 
-            // Simulated quick progress for the actual network upload since it's < 1MB
             const upInterval = setInterval(() => {
                 setUploadProgress(p => p >= 90 ? 90 : p + 10);
             }, 100);
@@ -179,16 +276,32 @@ export default function InventoryDetail() {
         setLoading(true);
 
         try {
+            const stock_quantity = values.has_configurations
+                ? configurations.reduce((sum, c) => sum + Number(c.estoque_total || 0), 0)
+                : (Number(values.estoque_loja || 0) + Number(values.estoque_consignado || 0));
+
             const metadata = {
                 description: values.description,
                 photo_url: values.photo_url,
                 internal_code: values.internal_code,
-                stock_quantity: values.stock_quantity,
                 price_sale: values.price_sale,
                 price_cost: values.price_cost,
                 price_consult: values.price_consult,
+                supplier_id: values.supplier_id || null,
+                local_prateleira: values.local_prateleira || "",
+                allow_out_of_stock_sales: values.allow_out_of_stock_sales,
+                has_configurations: values.has_configurations,
+                estoque_loja: values.has_configurations ? 0 : values.estoque_loja,
+                estoque_consignado: values.has_configurations ? 0 : values.estoque_consignado,
+                estoque_total: stock_quantity,
+                stock_quantity: stock_quantity,
+                configurations: values.has_configurations ? configurations : []
             };
 
+            // Se for novo produto, vamos registrar a entrada inicial no estoque se for maior que zero
+            const isNew = !isEdit;
+
+            let offeringId = id!;
             if (isEdit) {
                 const { error } = await supabase
                     .from("core_entities")
@@ -201,7 +314,6 @@ export default function InventoryDetail() {
                     .eq("tenant_id", activeTenantId);
                 if (error) throw error;
 
-                // Sync to core_entity_photos if photo_url is present
                 if (values.photo_url) {
                     await supabase.from("core_entity_photos").upsert({
                         tenant_id: activeTenantId,
@@ -224,8 +336,8 @@ export default function InventoryDetail() {
                 }).select("id").single();
                 
                 if (error) throw error;
+                offeringId = data.id;
 
-                // Sync to core_entity_photos if photo_url is present
                 if (values.photo_url && data?.id) {
                     await supabase.from("core_entity_photos").upsert({
                         tenant_id: activeTenantId,
@@ -237,6 +349,25 @@ export default function InventoryDetail() {
                 }
 
                 showSuccess("Produto criado!");
+            }
+
+            // Registrar evento de inicialização de estoque para produtos novos
+            if (isNew && stock_quantity > 0) {
+                await supabase.from("core_entity_events").insert({
+                    tenant_id: activeTenantId,
+                    entity_id: offeringId,
+                    event_type: "stock_change",
+                    before: { estoque_loja: 0, estoque_consignado: 0, estoque_total: 0 },
+                    after: {
+                        estoque_loja: values.has_configurations ? 0 : values.estoque_loja,
+                        estoque_consignado: values.has_configurations ? 0 : values.estoque_consignado,
+                        estoque_total: stock_quantity,
+                        change_qty: stock_quantity,
+                        reason: "Cadastro inicial de produto"
+                    },
+                    actor_user_id: user?.id || null,
+                    created_at: new Date().toISOString()
+                });
             }
 
             await qc.invalidateQueries({ queryKey: ["inventory"] });
@@ -283,10 +414,111 @@ export default function InventoryDetail() {
         }
     };
 
+    // Configuration Helpers
+    const openConfigModal = (config: ConfigurationItem | null = null) => {
+        if (config) {
+            setEditingConfig(config);
+            setConfigName(config.name);
+            setConfigSku(config.internal_code);
+            setConfigEstoqueLoja(String(config.estoque_loja));
+            setConfigEstoqueConsignado(String(config.estoque_consignado));
+            setConfigPrateleira(config.local_prateleira);
+            setConfigPriceSale(config.price_sale ? String(config.price_sale) : "");
+        } else {
+            setEditingConfig(null);
+            setConfigName("");
+            setConfigSku("");
+            setConfigEstoqueLoja("0");
+            setConfigEstoqueConsignado("0");
+            setConfigPrateleira("");
+            setConfigPriceSale("");
+        }
+        setConfigDialogOpen(true);
+    };
+
+    const saveConfig = () => {
+        if (!configName.trim()) {
+            showError("Nome da configuração é obrigatório.");
+            return;
+        }
+
+        const eLoja = Number(configEstoqueLoja) || 0;
+        const eConsignado = Number(configEstoqueConsignado) || 0;
+        const total = eLoja + eConsignado;
+
+        const configPayload: ConfigurationItem = {
+            id: editingConfig?.id || crypto.randomUUID(),
+            name: configName.trim(),
+            internal_code: configSku.trim(),
+            estoque_loja: eLoja,
+            estoque_consignado: eConsignado,
+            estoque_total: total,
+            local_prateleira: configPrateleira.trim(),
+            price_sale: configPriceSale ? Number(configPriceSale) : undefined
+        };
+
+        let updatedConfigs: ConfigurationItem[] = [];
+        if (editingConfig) {
+            updatedConfigs = configurations.map(c => c.id === editingConfig.id ? configPayload : c);
+            showSuccess("Configuração atualizada!");
+        } else {
+            updatedConfigs = [...configurations, configPayload];
+            showSuccess("Configuração adicionada!");
+        }
+
+        setConfigurations(updatedConfigs);
+        setConfigDialogOpen(false);
+
+        // Se estiver em modo edição, vamos logar a mudança no histórico diretamente (opcional)
+        if (isEdit && editingConfig) {
+            const diffLoja = eLoja - editingConfig.estoque_loja;
+            const diffConsignado = eConsignado - editingConfig.estoque_consignado;
+            if (diffLoja !== 0 || diffConsignado !== 0) {
+                supabase.from("core_entity_events").insert({
+                    tenant_id: activeTenantId,
+                    entity_id: id!,
+                    event_type: "stock_change",
+                    before: {
+                        estoque_loja: editingConfig.estoque_loja,
+                        estoque_consignado: editingConfig.estoque_consignado,
+                        estoque_total: editingConfig.estoque_total,
+                        config_id: editingConfig.id,
+                        config_name: editingConfig.name
+                    },
+                    after: {
+                        estoque_loja: eLoja,
+                        estoque_consignado: eConsignado,
+                        estoque_total: total,
+                        config_id: editingConfig.id,
+                        config_name: configName,
+                        change_qty: diffLoja + diffConsignado,
+                        reason: "Ajuste manual da configuração"
+                    },
+                    actor_user_id: user?.id || null,
+                    created_at: new Date().toISOString()
+                }).then(() => stockHistoryQ.refetch());
+            }
+        }
+    };
+
+    const deleteConfig = (configId: string) => {
+        if (!confirm("Deseja realmente remover esta variação?")) return;
+        setConfigurations(prev => prev.filter(c => c.id !== configId));
+        showSuccess("Configuração removida. Lembre-se de salvar o produto para persistir.");
+    };
+
+    const hasConfigurations = form.watch("has_configurations");
+    const overallTotalStock = useMemo(() => {
+        if (hasConfigurations) {
+            return configurations.reduce((sum, c) => sum + Number(c.estoque_total || 0), 0);
+        }
+        return Number(form.watch("estoque_loja") || 0) + Number(form.watch("estoque_consignado") || 0);
+    }, [hasConfigurations, configurations, form.watch("estoque_loja"), form.watch("estoque_consignado")]);
+
     return (
         <AppShell>
             <div className="max-w-4xl mx-auto space-y-6">
-                <div className="flex items-center gap-4">
+                <div className="flex items-center gap-4 bg-white p-6 rounded-3xl border shadow-sm">
                     <Button variant="outline" size="icon" onClick={() => nav("/app/inventory")} className="rounded-xl">
                         <ArrowLeft className="w-4 h-4" />
                     </Button>
@@ -305,9 +537,9 @@ export default function InventoryDetail() {
                         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                             {/* Sidebar: Image and Pricing */}
                             <div className="lg:col-span-1 space-y-6">
-                                <Card className="p-4 rounded-3xl border-slate-200 overflow-hidden text-center">
-                                    <FormLabel className="text-xs font-bold text-slate-400 uppercase mb-4 block">Foto do Produto</FormLabel>
-                                    <div className="aspect-square rounded-2xl bg-slate-50 border-2 border-dashed border-slate-200 flex flex-col items-center justify-center relative overflow-hidden mb-4 group">
+                                <Card className="p-4 rounded-3xl border shadow-sm text-center bg-white">
+                                    <FormLabel className="text-xs font-black text-slate-400 uppercase mb-4 block tracking-wider">Foto do Produto</FormLabel>
+                                    <div className="aspect-square rounded-2xl bg-slate-50 border-2 border-dashed border-slate-200 flex flex-col items-center justify-center relative overflow-hidden mb-2 group">
                                         {uploading ? (
                                             <div className="absolute inset-0 bg-white/90 backdrop-blur-sm z-10 flex flex-col items-center justify-center p-6 text-center">
                                                 {uploadPhase === "compressing" ? (
@@ -350,11 +582,11 @@ export default function InventoryDetail() {
                                     </div>
                                 </Card>
 
-                                <Card className="p-6 rounded-3xl border-slate-200 bg-indigo-50/30">
+                                <Card className="p-6 rounded-3xl border shadow-sm bg-white">
                                     <div className="flex items-center justify-between mb-4">
-                                        <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                                        <h3 className="text-sm font-black text-slate-800 flex items-center gap-2">
                                             <Package className="w-4 h-4 text-indigo-600" />
-                                            Valores e Estoque
+                                            Valores
                                         </h3>
                                         <FormField
                                             control={form.control}
@@ -385,7 +617,7 @@ export default function InventoryDetail() {
                                                             <FormControl>
                                                                 <div className="relative">
                                                                     <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm font-bold">R$</span>
-                                                                    <Input type="number" step="0.01" {...field} className="pl-10 h-11 rounded-xl bg-white border-indigo-200 focus:ring-indigo-500 font-bold text-indigo-700" />
+                                                                    <Input type="number" step="0.01" {...field} className="pl-10 h-11 rounded-xl bg-white border-slate-200 font-bold text-indigo-700 focus:ring-indigo-500" />
                                                                 </div>
                                                             </FormControl>
                                                             <FormMessage />
@@ -413,36 +645,23 @@ export default function InventoryDetail() {
                                             <div className="py-8 px-4 rounded-2xl bg-indigo-50/50 border border-indigo-100 flex flex-col items-center justify-center text-center">
                                                 <Info className="w-5 h-5 text-indigo-400 mb-2" />
                                                 <p className="text-xs font-bold text-indigo-700 uppercase tracking-wider">Preço sob consulta</p>
-                                                <p className="text-[10px] text-indigo-400 mt-1">Os valores numéricos estão ocultos para os clientes</p>
+                                                <p className="text-[10px] text-indigo-400 mt-1">Os valores estão ocultos para os clientes</p>
                                             </div>
                                         )}
-                                        <FormField
-                                            control={form.control}
-                                            name="stock_quantity"
-                                            render={({ field }) => (
-                                                <FormItem>
-                                                    <FormLabel className="text-[10px] font-bold text-slate-400 uppercase">Estoque Atual</FormLabel>
-                                                    <FormControl>
-                                                        <Input type="number" {...field} className="h-11 rounded-xl bg-white border-slate-200 font-mono" />
-                                                    </FormControl>
-                                                    <FormMessage />
-                                                </FormItem>
-                                            )}
-                                        />
                                     </div>
                                 </Card>
                             </div>
 
                             {/* Main Content: Info and Details */}
                             <div className="lg:col-span-2 space-y-6">
-                                <Card className="p-6 rounded-3xl border-slate-200">
+                                <Card className="p-6 rounded-3xl border shadow-sm bg-white">
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                         <FormField
                                             control={form.control}
                                             name="display_name"
                                             render={({ field }) => (
                                                 <FormItem className="md:col-span-2">
-                                                    <FormLabel className="text-xs font-bold text-slate-400 uppercase tracking-widest">Nome do Produto</FormLabel>
+                                                    <FormLabel className="text-xs font-black text-slate-400 uppercase tracking-wider">Nome do Produto</FormLabel>
                                                     <FormControl>
                                                         <Input placeholder="Ex: Cerveja IPA 500ml" {...field} className="h-12 rounded-xl text-lg font-bold border-slate-200" />
                                                     </FormControl>
@@ -456,7 +675,7 @@ export default function InventoryDetail() {
                                             name="subtype"
                                             render={({ field }) => (
                                                 <FormItem>
-                                                    <FormLabel className="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1">
+                                                    <FormLabel className="text-xs font-black text-slate-400 uppercase tracking-wider flex items-center gap-1">
                                                         Categoria
                                                         <Info className="w-3 h-3 cursor-help text-slate-300" />
                                                     </FormLabel>
@@ -473,7 +692,7 @@ export default function InventoryDetail() {
                                             name="internal_code"
                                             render={({ field }) => (
                                                 <FormItem>
-                                                    <FormLabel className="text-xs font-bold text-slate-400 uppercase tracking-widest">Código Interno (SKU)</FormLabel>
+                                                    <FormLabel className="text-xs font-black text-slate-400 uppercase tracking-wider">Código Interno (SKU)</FormLabel>
                                                     <FormControl>
                                                         <Input placeholder="Ex: BEB-001" {...field} className="h-11 rounded-xl font-mono uppercase" />
                                                     </FormControl>
@@ -484,12 +703,92 @@ export default function InventoryDetail() {
 
                                         <FormField
                                             control={form.control}
+                                            name="supplier_id"
+                                            render={({ field }) => (
+                                                <FormItem>
+                                                    <FormLabel className="text-xs font-black text-slate-400 uppercase tracking-wider">Fornecedor</FormLabel>
+                                                    <Select onValueChange={field.onChange} value={field.value || ""}>
+                                                        <FormControl>
+                                                            <SelectTrigger className="h-11 rounded-xl">
+                                                                <SelectValue placeholder="Selecione um fornecedor..." />
+                                                            </SelectTrigger>
+                                                        </FormControl>
+                                                        <SelectContent className="rounded-xl">
+                                                            <SelectItem value="none" className="rounded-lg">Nenhum fornecedor</SelectItem>
+                                                            {suppliersQ.data?.map(s => (
+                                                                <SelectItem key={s.id} value={s.id} className="rounded-lg">{s.display_name}</SelectItem>
+                                                            ))}
+                                                        </SelectContent>
+                                                    </Select>
+                                                    <FormMessage />
+                                                </FormItem>
+                                            )}
+                                        />
+
+                                        <FormField
+                                            control={form.control}
+                                            name="local_prateleira"
+                                            render={({ field }) => (
+                                                <FormItem>
+                                                    <FormLabel className="text-xs font-black text-slate-400 uppercase tracking-wider">Local da Prateleira</FormLabel>
+                                                    <FormControl>
+                                                        <Input placeholder="Ex: A1-B3" {...field} className="h-11 rounded-xl font-mono" />
+                                                    </FormControl>
+                                                    <FormMessage />
+                                                </FormItem>
+                                            )}
+                                        />
+
+                                        <div className="md:col-span-2 flex flex-col gap-4 p-4 rounded-2xl bg-slate-50 border border-slate-100">
+                                            <FormField
+                                                control={form.control}
+                                                name="allow_out_of_stock_sales"
+                                                render={({ field }) => (
+                                                    <div className="flex items-center gap-3">
+                                                        <input
+                                                            type="checkbox"
+                                                            id="allowOutOfStock"
+                                                            checked={field.value}
+                                                            onChange={field.onChange}
+                                                            className="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                                                        />
+                                                        <div>
+                                                            <label htmlFor="allowOutOfStock" className="text-xs font-black text-slate-700 uppercase cursor-pointer">Permitir venda sem estoque</label>
+                                                            <p className="text-[10px] text-slate-400">Ative para permitir que pedidos sejam fechados mesmo sem saldo em loja.</p>
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            />
+
+                                            <FormField
+                                                control={form.control}
+                                                name="has_configurations"
+                                                render={({ field }) => (
+                                                    <div className="flex items-center gap-3">
+                                                        <input
+                                                            type="checkbox"
+                                                            id="hasConfigurations"
+                                                            checked={field.value}
+                                                            onChange={field.onChange}
+                                                            className="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                                                        />
+                                                        <div>
+                                                            <label htmlFor="hasConfigurations" className="text-xs font-black text-slate-700 uppercase cursor-pointer">Este produto possui variações/configurações</label>
+                                                            <p className="text-[10px] text-slate-400">Controle o estoque e SKU individualmente por variação (ex: tamanho, voltagem, cor).</p>
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            />
+                                        </div>
+
+                                        <FormField
+                                            control={form.control}
                                             name="description"
                                             render={({ field }) => (
                                                 <FormItem className="md:col-span-2">
-                                                    <FormLabel className="text-xs font-bold text-slate-400 uppercase tracking-widest">Descrição Detalhada</FormLabel>
+                                                    <FormLabel className="text-xs font-black text-slate-400 uppercase tracking-wider">Descrição Detalhada</FormLabel>
                                                     <FormControl>
-                                                        <Textarea placeholder="Informações adicionais sobre o produto..." {...field} className="min-h-[150px] rounded-2xl p-4" />
+                                                        <Textarea placeholder="Informações adicionais sobre o produto..." {...field} className="min-h-[120px] rounded-2xl p-4" />
                                                     </FormControl>
                                                     <FormMessage />
                                                 </FormItem>
@@ -497,6 +796,161 @@ export default function InventoryDetail() {
                                         />
                                     </div>
                                 </Card>
+
+                                {/* Stock Levels Section */}
+                                {!hasConfigurations ? (
+                                    <Card className="p-6 rounded-3xl border shadow-sm bg-white space-y-4">
+                                        <h3 className="text-sm font-black text-slate-800 flex items-center gap-2">
+                                            <Sliders className="w-4 h-4 text-indigo-600" />
+                                            Níveis de Estoque do Produto
+                                        </h3>
+                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                            <FormField
+                                                control={form.control}
+                                                name="estoque_loja"
+                                                render={({ field }) => (
+                                                    <FormItem>
+                                                        <FormLabel className="text-[10px] font-bold text-slate-400 uppercase">Estoque na Loja</FormLabel>
+                                                        <FormControl>
+                                                            <Input type="number" {...field} className="h-11 rounded-xl bg-white border-slate-200 font-mono" />
+                                                        </FormControl>
+                                                        <FormMessage />
+                                                    </FormItem>
+                                                )}
+                                            />
+                                            <FormField
+                                                control={form.control}
+                                                name="estoque_consignado"
+                                                render={({ field }) => (
+                                                    <FormItem>
+                                                        <FormLabel className="text-[10px] font-bold text-slate-400 uppercase">Estoque Consignado</FormLabel>
+                                                        <FormControl>
+                                                            <Input type="number" {...field} className="h-11 rounded-xl bg-white border-slate-200 font-mono" />
+                                                        </FormControl>
+                                                        <FormMessage />
+                                                    </FormItem>
+                                                )}
+                                            />
+                                            <FormItem>
+                                                <FormLabel className="text-[10px] font-bold text-slate-400 uppercase">Estoque Total</FormLabel>
+                                                <div className="h-11 rounded-xl bg-slate-50 border border-slate-100 flex items-center px-4 font-mono font-bold text-slate-800">
+                                                    {overallTotalStock}
+                                                </div>
+                                            </FormItem>
+                                        </div>
+                                    </Card>
+                                ) : (
+                                    <Card className="p-6 rounded-3xl border shadow-sm bg-white space-y-4">
+                                        <div className="flex items-center justify-between">
+                                            <div>
+                                                <h3 className="text-sm font-black text-slate-800 flex items-center gap-2">
+                                                    <Sliders className="w-4 h-4 text-indigo-600" />
+                                                    Configurações / Variações
+                                                </h3>
+                                                <p className="text-xs text-slate-500">Total geral em estoque: <span className="font-bold">{overallTotalStock}</span></p>
+                                            </div>
+                                            <Button type="button" size="sm" variant="outline" onClick={() => openConfigModal()} className="rounded-xl h-9">
+                                                <Plus className="w-4 h-4 mr-2" /> Nova Variação
+                                            </Button>
+                                        </div>
+
+                                        <div className="border rounded-2xl overflow-hidden">
+                                            <table className="w-full border-collapse text-left text-xs">
+                                                <thead>
+                                                    <tr className="bg-slate-50 border-b border-slate-100 font-bold text-slate-500">
+                                                        <th className="p-3">Variação</th>
+                                                        <th className="p-3">SKU</th>
+                                                        <th className="p-3">Local</th>
+                                                        <th className="p-3 text-right">Loja</th>
+                                                        <th className="p-3 text-right">Consig.</th>
+                                                        <th className="p-3 text-right">Total</th>
+                                                        <th className="p-3 text-right">Ações</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
+                                                    {configurations.map(c => (
+                                                        <tr key={c.id} className="hover:bg-slate-50/50">
+                                                            <td className="p-3 font-bold">{c.name}</td>
+                                                            <td className="p-3 font-mono">{c.internal_code || "—"}</td>
+                                                            <td className="p-3 font-mono">{c.local_prateleira || "—"}</td>
+                                                            <td className="p-3 text-right font-mono">{c.estoque_loja}</td>
+                                                            <td className="p-3 text-right font-mono">{c.estoque_consignado}</td>
+                                                            <td className="p-3 text-right font-mono font-bold text-slate-900">{c.estoque_total}</td>
+                                                            <td className="p-3 text-right space-x-1">
+                                                                <Button type="button" variant="ghost" size="icon" className="w-7 h-7 rounded-lg" onClick={() => openConfigModal(c)}>
+                                                                    <Pencil className="w-3.5 h-3.5" />
+                                                                </Button>
+                                                                <Button type="button" variant="ghost" size="icon" className="w-7 h-7 text-red-500 rounded-lg hover:text-red-600 hover:bg-red-50" onClick={() => deleteConfig(c.id)}>
+                                                                    <Trash2 className="w-3.5 h-3.5" />
+                                                                </Button>
+                                                            </td>
+                                                        </tr>
+                                                    ))}
+                                                    {configurations.length === 0 && (
+                                                        <tr>
+                                                            <td colSpan={7} className="p-8 text-center text-slate-400 italic">Nenhuma variação cadastrada. Clique em "Nova Variação" para adicionar.</td>
+                                                        </tr>
+                                                    )}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </Card>
+                                )}
+
+                                {/* Stock History Timeline */}
+                                {isEdit && (
+                                    <Card className="p-6 rounded-3xl border shadow-sm bg-white space-y-4">
+                                        <h3 className="text-sm font-black text-slate-800 flex items-center gap-2">
+                                            <RefreshCw className="w-4 h-4 text-indigo-600" />
+                                            Histórico de Consumo de Estoque
+                                        </h3>
+                                        <div className="space-y-4 max-h-[300px] overflow-y-auto pr-2">
+                                            {stockHistoryEvents.map((e: any) => {
+                                                const change = Number(e.after?.change_qty || 0);
+                                                const isDeduction = change < 0;
+
+                                                return (
+                                                    <div key={e.id} className="flex gap-3 border-l-2 border-indigo-100 pl-4 py-1 relative">
+                                                        <div className="absolute w-2 h-2 rounded-full bg-indigo-500 -left-[5px] top-2" />
+                                                        <div className="flex-1 space-y-1">
+                                                            <div className="flex items-center justify-between text-[11px] text-slate-500 font-medium">
+                                                                <span className="flex items-center gap-1">
+                                                                    <Calendar className="w-3 h-3" />
+                                                                    {new Date(e.created_at).toLocaleString("pt-BR")}
+                                                                </span>
+                                                                <span className="flex items-center gap-1">
+                                                                    <User className="w-3 h-3" />
+                                                                    {e.actor_name}
+                                                                </span>
+                                                            </div>
+                                                            <div className="text-xs font-bold text-slate-800 flex flex-wrap items-center gap-x-2">
+                                                                <span>{e.after?.reason || "Ajuste de estoque"}</span>
+                                                                {e.after?.config_name && (
+                                                                    <Badge variant="secondary" className="px-1.5 py-0 rounded text-[9px] uppercase font-bold">{e.after.config_name}</Badge>
+                                                                )}
+                                                            </div>
+                                                            <div className="text-[11px] text-slate-600 flex items-center gap-3">
+                                                                <span className={isDeduction ? "text-red-600 font-bold" : "text-emerald-600 font-bold"}>
+                                                                    {isDeduction ? "" : "+"}{change} un
+                                                                </span>
+                                                                <span>| Saldo Loja: {e.after?.estoque_loja ?? 0}</span>
+                                                                <span>| Total: {e.after?.estoque_total ?? 0}</span>
+                                                            </div>
+                                                            {e.after?.case_id && (
+                                                                <Link to={`/app/orders/${e.after.case_id}`} className="text-indigo-600 font-bold hover:underline flex items-center gap-1 mt-1 text-[10px]">
+                                                                    Ir para o pedido comercial #{e.after.case_id.slice(0, 8)}
+                                                                </Link>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                            {stockHistoryEvents.length === 0 && (
+                                                <p className="text-xs text-slate-400 italic text-center py-6">Nenhuma movimentação registrada.</p>
+                                            )}
+                                        </div>
+                                    </Card>
+                                )}
 
                                 <div className="flex flex-col sm:flex-row gap-3">
                                     <Button type="submit" disabled={loading || uploading} className="flex-1 h-12 rounded-2xl bg-indigo-600 hover:bg-indigo-700 font-black text-lg shadow-xl shadow-indigo-100">
@@ -512,7 +966,7 @@ export default function InventoryDetail() {
                                 </div>
 
                                 {isEdit && (
-                                    <Card className="p-6 rounded-3xl border-slate-200">
+                                    <Card className="p-6 rounded-3xl border shadow-sm bg-white">
                                         <div className="flex items-center justify-between mb-6">
                                             <div className="flex items-center gap-3">
                                                 <div className="bg-indigo-50 p-2 rounded-xl text-indigo-600">
@@ -604,6 +1058,97 @@ export default function InventoryDetail() {
                         </div>
                     </form>
                 </Form>
+
+                {/* Configuration Edit/Create Dialog */}
+                <Dialog open={configDialogOpen} onOpenChange={setConfigDialogOpen}>
+                    <DialogContent className="rounded-3xl sm:max-w-[500px]">
+                        <DialogHeader>
+                            <DialogTitle className="flex items-center gap-2 font-black">
+                                <Sliders className="w-5 h-5 text-indigo-600" />
+                                {editingConfig ? "Editar Variação" : "Nova Variação"}
+                            </DialogTitle>
+                            <DialogDescription className="text-xs">
+                                Insira os dados específicos para esta configuração do produto.
+                            </DialogDescription>
+                        </DialogHeader>
+
+                        <div className="space-y-4 py-4">
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-1">
+                                    <FormLabel className="text-xs font-black text-slate-500 uppercase">Nome da Variação *</FormLabel>
+                                    <Input
+                                        value={configName}
+                                        onChange={e => setConfigName(e.target.value)}
+                                        placeholder="Ex: Voltagem 110v, Tamanho G, Azul"
+                                        className="h-10 rounded-xl"
+                                    />
+                                </div>
+                                <div className="space-y-1">
+                                    <FormLabel className="text-xs font-black text-slate-500 uppercase">SKU / Código Interno</FormLabel>
+                                    <Input
+                                        value={configSku}
+                                        onChange={e => setConfigSku(e.target.value)}
+                                        placeholder="Ex: BEB-001-110"
+                                        className="h-10 rounded-xl font-mono uppercase"
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-1">
+                                    <FormLabel className="text-xs font-black text-slate-500 uppercase">Estoque na Loja</FormLabel>
+                                    <Input
+                                        type="number"
+                                        value={configEstoqueLoja}
+                                        onChange={e => setConfigEstoqueLoja(e.target.value)}
+                                        className="h-10 rounded-xl font-mono"
+                                    />
+                                </div>
+                                <div className="space-y-1">
+                                    <FormLabel className="text-xs font-black text-slate-500 uppercase">Estoque Consignado</FormLabel>
+                                    <Input
+                                        type="number"
+                                        value={configEstoqueConsignado}
+                                        onChange={e => setConfigEstoqueConsignado(e.target.value)}
+                                        className="h-10 rounded-xl font-mono"
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-1">
+                                    <FormLabel className="text-xs font-black text-slate-500 uppercase">Local da Prateleira</FormLabel>
+                                    <Input
+                                        value={configPrateleira}
+                                        onChange={e => setConfigPrateleira(e.target.value)}
+                                        placeholder="Ex: A2-D1"
+                                        className="h-10 rounded-xl font-mono"
+                                    />
+                                </div>
+                                <div className="space-y-1">
+                                    <FormLabel className="text-xs font-black text-slate-500 uppercase">Preço Específico (R$)</FormLabel>
+                                    <Input
+                                        type="number"
+                                        step="0.01"
+                                        value={configPriceSale}
+                                        onChange={e => setConfigPriceSale(e.target.value)}
+                                        placeholder="Opcional - ex: 49.90"
+                                        className="h-10 rounded-xl font-mono"
+                                    />
+                                </div>
+                            </div>
+                        </div>
+
+                        <DialogFooter className="bg-slate-50 p-4 border-t rounded-b-3xl">
+                            <Button type="button" variant="ghost" onClick={() => setConfigDialogOpen(false)} className="rounded-xl">
+                                Cancelar
+                            </Button>
+                            <Button type="button" onClick={saveConfig} className="rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-6">
+                                Salvar
+                            </Button>
+                        </DialogFooter>
+                    </DialogContent>
+                </Dialog>
 
                 {isEdit && activeTenantId && (
                     <DeliverableTemplateUpsertDialog

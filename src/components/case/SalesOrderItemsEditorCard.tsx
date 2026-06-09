@@ -3,15 +3,15 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { showError, showSuccess } from "@/utils/toast";
 import { cn } from "@/lib/utils";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Plus, ReceiptText, Save, Trash2, Check, ChevronsUpDown, Loader2, DollarSign } from "lucide-react";
+import { Plus, ReceiptText, Save, Trash2, Check, Loader2, DollarSign } from "lucide-react";
 import { useTenant } from "@/providers/TenantProvider";
 import { useSession } from "@/providers/SessionProvider";
 import { QuickCreateProductDialog } from "@/components/case/QuickCreateProductDialog";
+import { adjustInventoryForOrderItems } from "@/utils/inventorySync";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 type CaseItemRow = {
   id: string;
@@ -25,6 +25,7 @@ type CaseItemRow = {
   discount_percent: number | null;
   discount_value: number | null;
   offering_entity_id: string | null;
+  confidence_json: any;
   updated_at: string;
 };
 
@@ -37,6 +38,7 @@ type DraftRow = {
   price: string;
   discount_percent: string;
   offering_entity_id: string | null;
+  config_id: string | null;
 };
 
 function parsePtBrNumber(input: string) {
@@ -72,7 +74,6 @@ export function SalesOrderItemsEditorCard(props: { caseId: string; className?: s
   const { user } = useSession();
   const [saving, setSaving] = useState(false);
 
-  // Helps when dev HMR keeps stale react-query error cache from previous schema.
   useEffect(() => {
     if (!caseId) return;
     qc.invalidateQueries({ queryKey: ["case_items", caseId] });
@@ -84,7 +85,7 @@ export function SalesOrderItemsEditorCard(props: { caseId: string; className?: s
     queryFn: async () => {
       const { data, error } = await supabase
         .from("case_items")
-        .select("id,case_id,line_no,code,description,qty,price,total,discount_percent,discount_value,offering_entity_id,updated_at")
+        .select("id,case_id,line_no,code,description,qty,price,total,discount_percent,discount_value,offering_entity_id,confidence_json,updated_at")
         .eq("case_id", caseId)
         .order("line_no", { ascending: true })
         .limit(200);
@@ -97,7 +98,6 @@ export function SalesOrderItemsEditorCard(props: { caseId: string; className?: s
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [openOfferingPerLine, setOpenOfferingPerLine] = useState<Record<string, boolean>>({});
 
-  // Quick Create State
   const [quickCreate, setQuickCreate] = useState<{ open: boolean; name: string; lineNo: number | null }>({
     open: false,
     name: "",
@@ -143,6 +143,7 @@ export function SalesOrderItemsEditorCard(props: { caseId: string; className?: s
       price: r.price == null ? "" : String(r.price).replace(/\./g, ","),
       discount_percent: r.discount_percent == null ? "0" : String(r.discount_percent).replace(/\./g, ","),
       offering_entity_id: r.offering_entity_id,
+      config_id: r.confidence_json?.config_id || null,
     }));
   }, [itemsQ.data]);
 
@@ -152,57 +153,80 @@ export function SalesOrderItemsEditorCard(props: { caseId: string; className?: s
     setDraft(initialDraft);
   }, [initialDraft]);
 
-    const { data: caseInfo } = useQuery({
-        queryKey: ["case_info_commission", caseId],
-        enabled: !!caseId,
-        queryFn: async () => {
-            const { data, error } = await supabase
-                .from("cases")
-                .select("assigned_user_id, assigned_vendor_id, users_profile:users_profile!fk_cases_users_profile(meta_json), assigned_vendor:vendors!cases_assigned_vendor_id_fkey(display_name)")
-                .eq("id", caseId)
-                .single();
-            if (error) throw error;
-            return data;
-        }
-    });
+  const referencedProductIds = useMemo(() => {
+    return Array.from(new Set(draft.map(d => d.offering_entity_id).filter(Boolean))) as string[];
+  }, [draft]);
 
-    const { data: vendorUserProfile } = useQuery({
-        queryKey: ["vendor_user_profile", caseInfo?.assigned_vendor?.display_name],
-        enabled: !!caseInfo?.assigned_vendor?.display_name && !caseInfo?.users_profile,
-        queryFn: async () => {
-            const { data, error } = await supabase
-                .from("users_profile")
-                .select("meta_json")
-                .eq("display_name", caseInfo!.assigned_vendor!.display_name!)
-                .limit(1)
-                .maybeSingle();
-            if (error) return null;
-            return data;
-        }
-    });
+  const productsQ = useQuery({
+    queryKey: ["products_details_lookup", activeTenantId, referencedProductIds],
+    enabled: Boolean(activeTenantId && referencedProductIds.length > 0),
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("core_entities")
+        .select("id,display_name,metadata")
+        .in("id", referencedProductIds);
+      if (error) throw error;
+      return data ?? [];
+    }
+  });
 
-    const commissionRules = useMemo(() => {
-      const up = caseInfo?.users_profile;
-      const directRules = Array.isArray(up) ? (up[0] as any)?.meta_json?.commission_rules : (up as any)?.meta_json?.commission_rules;
-      if (directRules) return directRules;
-      return (vendorUserProfile as any)?.meta_json?.commission_rules;
-    }, [caseInfo, vendorUserProfile]);
+  const productsMap = useMemo(() => {
+    const map = new Map<string, any>();
+    if (productsQ.data) {
+      for (const p of productsQ.data) {
+        map.set(p.id, p);
+      }
+    }
+    return map;
+  }, [productsQ.data]);
+
+  const { data: caseInfo } = useQuery({
+    queryKey: ["case_info_commission", caseId],
+    enabled: !!caseId,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("cases")
+        .select("assigned_user_id, assigned_vendor_id, users_profile:users_profile!fk_cases_users_profile(meta_json), assigned_vendor:vendors!cases_assigned_vendor_id_fkey(display_name)")
+        .eq("id", caseId)
+        .single();
+      if (error) throw error;
+      return data;
+    }
+  });
+
+  const { data: vendorUserProfile } = useQuery({
+    queryKey: ["vendor_user_profile", caseInfo?.assigned_vendor?.display_name],
+    enabled: !!caseInfo?.assigned_vendor?.display_name && !caseInfo?.users_profile,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("users_profile")
+        .select("meta_json")
+        .eq("display_name", caseInfo!.assigned_vendor!.display_name!)
+        .limit(1)
+        .maybeSingle();
+      if (error) return null;
+      return data;
+    }
+  });
+
+  const commissionRules = useMemo(() => {
+    const up = caseInfo?.users_profile;
+    const directRules = Array.isArray(up) ? (up[0] as any)?.meta_json?.commission_rules : (up as any)?.meta_json?.commission_rules;
+    if (directRules) return directRules;
+    return (vendorUserProfile as any)?.meta_json?.commission_rules;
+  }, [caseInfo, vendorUserProfile]);
 
   const nextLineNo = useMemo(() => {
     const max = Math.max(0, ...draft.map((d) => Number(d.line_no) || 0));
     return max + 1;
   }, [draft]);
 
-
   function calculateRowCommission(rowTotal: number, discountPct: number) {
     if (!commissionRules) return 0;
     const base = commissionRules.base_percent || 0;
     const tiers = commissionRules.discount_tiers || [];
-    
-    // Find the applicable tier (first tier where max_discount_pct >= discountPct)
     const applicableTier = tiers.find((t: any) => t.max_discount_pct >= discountPct);
     const pct = applicableTier ? applicableTier.commission_pct : base;
-    
     return rowTotal * (pct / 100);
   }
 
@@ -254,6 +278,7 @@ export function SalesOrderItemsEditorCard(props: { caseId: string; className?: s
         price: "0",
         discount_percent: "0",
         offering_entity_id: null,
+        config_id: null
       },
     ]);
   };
@@ -265,10 +290,20 @@ export function SalesOrderItemsEditorCard(props: { caseId: string; className?: s
     }
 
     try {
+      // Ajusta o estoque liberando o saldo
+      const itemsList = [{ ...row, qty: 0 }]; // Define quantidade zero para devolver tudo
+      const syncItems = itemsList.map(r => ({
+        id: r.id,
+        offering_entity_id: r.offering_entity_id,
+        qty: 0,
+        config_id: r.config_id || null
+      }));
+
+      await adjustInventoryForOrderItems(caseId, syncItems, user?.id || "");
+
       const { error } = await supabase.from("case_items").delete().eq("id", row.id);
       if (error) throw error;
 
-      // Audit trail
       if (activeTenantId) {
         await supabase.from("timeline_events").insert({
           tenant_id: activeTenantId,
@@ -284,6 +319,9 @@ export function SalesOrderItemsEditorCard(props: { caseId: string; className?: s
 
       showSuccess("Item removido.");
       await qc.invalidateQueries({ queryKey: ["case_items", caseId] });
+      await qc.invalidateQueries({ queryKey: ["inventory_item"] });
+      await qc.invalidateQueries({ queryKey: ["inventory"] });
+      await qc.invalidateQueries({ queryKey: ["products_details_lookup"] });
       await qc.invalidateQueries({ queryKey: ["timeline", activeTenantId, caseId] });
     } catch (e: any) {
       showError(`Falha ao remover item: ${e?.message ?? "erro"}`);
@@ -309,10 +347,31 @@ export function SalesOrderItemsEditorCard(props: { caseId: string; className?: s
         showError(`Informe um Valor Unitário válido no item #${r.line_no}.`);
         return;
       }
+
+      // Valida se variação foi selecionada se o produto as contiver
+      if (r.offering_entity_id) {
+        const product = productsMap.get(r.offering_entity_id);
+        const hasConfigs = Array.isArray(product?.metadata?.configurations) && product.metadata.configurations.length > 0;
+        if (hasConfigs && !r.config_id) {
+          showError(`Selecione a variação para o produto "${r.description}" no item #${r.line_no}.`);
+          return;
+        }
+      }
     }
 
     setSaving(true);
     try {
+      // 1. Ajusta/valida estoque no inventário antes de salvar
+      const syncItems = draft.map(r => ({
+        id: r.id,
+        offering_entity_id: r.offering_entity_id,
+        qty: parsePtBrNumber(r.qty) ?? 0,
+        config_id: r.config_id || null
+      }));
+
+      await adjustInventoryForOrderItems(caseId, syncItems, user?.id || "");
+
+      // 2. Salva os registros em case_items
       const touchedIds: string[] = [];
       const insertedCount = { n: 0 };
       const updatedCount = { n: 0 };
@@ -324,7 +383,6 @@ export function SalesOrderItemsEditorCard(props: { caseId: string; className?: s
         const rowTotalBruto = qty * price;
         const discountValue = rowTotalBruto * (discountPct / 100);
         const total = rowTotalBruto - discountValue;
-        
         const commissionValue = calculateRowCommission(total, discountPct);
 
         const payload = {
@@ -339,7 +397,7 @@ export function SalesOrderItemsEditorCard(props: { caseId: string; className?: s
           discount_value: discountValue,
           commission_value: commissionValue,
           offering_entity_id: r.offering_entity_id || null,
-          confidence_json: {},
+          confidence_json: { config_id: r.config_id || null },
         };
 
         if (r.id) {
@@ -355,7 +413,6 @@ export function SalesOrderItemsEditorCard(props: { caseId: string; className?: s
         }
       }
 
-      // Audit trail: timeline event with user + timestamp
       if (activeTenantId) {
         await supabase.from("timeline_events").insert({
           tenant_id: activeTenantId,
@@ -363,7 +420,7 @@ export function SalesOrderItemsEditorCard(props: { caseId: string; className?: s
           event_type: "case_items_manual_saved",
           actor_type: "admin",
           actor_id: user?.id ?? null,
-          message: "Itens do pedido preenchidos/ajustados manualmente.",
+          message: "Itens do pedido salvos e estoque movimentado.",
           meta_json: {
             inserted: insertedCount.n,
             updated: updatedCount.n,
@@ -375,9 +432,15 @@ export function SalesOrderItemsEditorCard(props: { caseId: string; className?: s
         });
       }
 
-      showSuccess("Itens do pedido salvos.");
-      await qc.invalidateQueries({ queryKey: ["case_items", caseId] });
-      await qc.invalidateQueries({ queryKey: ["timeline", activeTenantId, caseId] });
+      showSuccess("Itens do pedido salvos com sucesso.");
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ["case_items", caseId] }),
+        qc.invalidateQueries({ queryKey: ["inventory_item"] }),
+        qc.invalidateQueries({ queryKey: ["inventory"] }),
+        qc.invalidateQueries({ queryKey: ["products_details_lookup"] }),
+        qc.invalidateQueries({ queryKey: ["timeline", activeTenantId, caseId] }),
+        qc.invalidateQueries({ queryKey: ["orders_case_data"] }),
+      ]);
     } catch (e: any) {
       showError(`Falha ao salvar itens: ${e?.message ?? "erro"}`);
     } finally {
@@ -393,7 +456,7 @@ export function SalesOrderItemsEditorCard(props: { caseId: string; className?: s
             <ReceiptText className="h-4 w-4 text-slate-500" /> Itens do pedido
           </div>
           <div className="mt-1 text-xs text-slate-600">
-            Edite a tabela do pedido (ID, Quantidade, Valor Unitário).
+            Edite a tabela do pedido. As variações e estoques serão reservados ao salvar.
           </div>
           <div className="mt-1 text-[11px] text-slate-500">
             Carregados: <span className="font-semibold text-slate-700">{itemsQ.data?.length ?? 0}</span>
@@ -434,7 +497,6 @@ export function SalesOrderItemsEditorCard(props: { caseId: string; className?: s
       )}
 
       <div className="mt-4 rounded-2xl border border-slate-200">
-        {/* Header (desktop) */}
         <div className="hidden grid-cols-[90px_1fr_70px_110px_80px_110px_40px] gap-2 bg-slate-50 px-3 py-3 text-[10px] font-black uppercase tracking-[0.1em] text-slate-500 sm:grid border-b border-slate-200">
           <div>ID / Ref</div>
           <div>Descrição do Produto / Serviço</div>
@@ -451,6 +513,9 @@ export function SalesOrderItemsEditorCard(props: { caseId: string; className?: s
             const parsedPrice = parsePtBrNumber(row.price) ?? 0;
             const parsedDiscount = parsePtBrNumber(row.discount_percent) ?? 0;
             const total = computeRowTotal(parsedQty, parsedPrice, parsedDiscount);
+
+            const product = row.offering_entity_id ? productsMap.get(row.offering_entity_id) : null;
+            const hasConfigs = Array.isArray(product?.metadata?.configurations) && product.metadata.configurations.length > 0;
 
             return (
               <div key={`${row.id ?? "new"}:${row.line_no}`} className="px-3 py-3 relative z-auto">
@@ -510,7 +575,7 @@ export function SalesOrderItemsEditorCard(props: { caseId: string; className?: s
                           setDraft((prev) =>
                             prev.map((x) =>
                               x.line_no === row.line_no
-                                ? { ...x, description: val, offering_entity_id: null }
+                                ? { ...x, description: val, offering_entity_id: null, config_id: null }
                                 : x
                             )
                           );
@@ -552,9 +617,12 @@ export function SalesOrderItemsEditorCard(props: { caseId: string; className?: s
                                             code: off.metadata?.short_name || off.metadata?.code || x.code,
                                             description: off.display_name,
                                             offering_entity_id: off.id,
-                                            price: off.metadata?.price != null 
-                                              ? String(off.metadata.price).replace(/\./g, ",") 
-                                              : x.price
+                                            config_id: null,
+                                            price: off.metadata?.price_sale != null 
+                                              ? String(off.metadata.price_sale).replace(/\./g, ",") 
+                                              : off.metadata?.price != null 
+                                                ? String(off.metadata.price).replace(/\./g, ",") 
+                                                : x.price
                                           }
                                         : x
                                     )
@@ -602,6 +670,43 @@ export function SalesOrderItemsEditorCard(props: { caseId: string; className?: s
                         </div>
                       )}
                     </div>
+
+                    {hasConfigs && (
+                      <div className="mt-2">
+                        <Label className="text-[11px] text-slate-600 font-bold uppercase tracking-tighter">Variação/Configuração</Label>
+                        <Select
+                          value={row.config_id || "unselected"}
+                          onValueChange={(val) => {
+                            const cfgId = val === "unselected" ? null : val;
+                            const selectedConfig = product.metadata.configurations.find((c: any) => c.id === cfgId);
+                            setDraft((prev) =>
+                              prev.map((x) =>
+                                x.line_no === row.line_no
+                                  ? {
+                                      ...x,
+                                      config_id: cfgId,
+                                      price: selectedConfig?.price_sale != null ? String(selectedConfig.price_sale).replace(/\./g, ",") : x.price,
+                                      code: selectedConfig?.internal_code || x.code
+                                    }
+                                  : x
+                              )
+                            );
+                          }}
+                        >
+                          <SelectTrigger className="h-10 w-full rounded-2xl text-xs bg-slate-50 border-slate-200 mt-1">
+                            <SelectValue placeholder="Selecione a variação..." />
+                          </SelectTrigger>
+                          <SelectContent className="rounded-xl">
+                            <SelectItem value="unselected" disabled className="text-xs">Selecione a variação...</SelectItem>
+                            {product.metadata.configurations.map((cfg: any) => (
+                              <SelectItem key={cfg.id} value={cfg.id} className="text-xs rounded-lg">
+                                {cfg.name} (Loja: {cfg.estoque_loja || 0}) {cfg.price_sale ? `- R$ ${cfg.price_sale}` : ""}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
                   </div>
 
                   <div className="grid grid-cols-2 gap-3">
@@ -663,7 +768,7 @@ export function SalesOrderItemsEditorCard(props: { caseId: string; className?: s
                         setDraft((prev) =>
                           prev.map((x) =>
                             x.line_no === row.line_no
-                              ? { ...x, description: val, offering_entity_id: null }
+                              ? { ...x, description: val, offering_entity_id: null, config_id: null }
                               : x
                           )
                         );
@@ -705,9 +810,12 @@ export function SalesOrderItemsEditorCard(props: { caseId: string; className?: s
                                           code: off.metadata?.short_name || off.metadata?.code || x.code,
                                           description: off.display_name,
                                           offering_entity_id: off.id,
-                                          price: off.metadata?.price != null 
-                                            ? String(off.metadata.price).replace(/\./g, ",") 
-                                            : x.price
+                                          config_id: null,
+                                          price: off.metadata?.price_sale != null 
+                                            ? String(off.metadata.price_sale).replace(/\./g, ",") 
+                                            : off.metadata?.price != null 
+                                              ? String(off.metadata.price).replace(/\./g, ",") 
+                                              : x.price
                                         }
                                       : x
                                   )
@@ -752,6 +860,42 @@ export function SalesOrderItemsEditorCard(props: { caseId: string; className?: s
                             </div>
                           )}
                         </div>
+                      </div>
+                    )}
+
+                    {hasConfigs && (
+                      <div className="mt-1.5">
+                        <Select
+                          value={row.config_id || "unselected"}
+                          onValueChange={(val) => {
+                            const cfgId = val === "unselected" ? null : val;
+                            const selectedConfig = product.metadata.configurations.find((c: any) => c.id === cfgId);
+                            setDraft((prev) =>
+                              prev.map((x) =>
+                                x.line_no === row.line_no
+                                  ? {
+                                      ...x,
+                                      config_id: cfgId,
+                                      price: selectedConfig?.price_sale != null ? String(selectedConfig.price_sale).replace(/\./g, ",") : x.price,
+                                      code: selectedConfig?.internal_code || x.code
+                                    }
+                                  : x
+                              )
+                            );
+                          }}
+                        >
+                          <SelectTrigger className="h-8 w-full rounded-xl text-xs bg-slate-50 border-slate-200">
+                            <SelectValue placeholder="Selecione a variação..." />
+                          </SelectTrigger>
+                          <SelectContent className="rounded-xl">
+                            <SelectItem value="unselected" disabled className="text-xs">Selecione a variação...</SelectItem>
+                            {product.metadata.configurations.map((cfg: any) => (
+                              <SelectItem key={cfg.id} value={cfg.id} className="text-xs rounded-lg">
+                                {cfg.name} (Loja: {cfg.estoque_loja || 0}) {cfg.price_sale ? `- R$ ${cfg.price_sale}` : ""}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                       </div>
                     )}
                   </div>
@@ -852,7 +996,6 @@ export function SalesOrderItemsEditorCard(props: { caseId: string; className?: s
         </div>
       )}
 
-
       <QuickCreateProductDialog
         open={quickCreate.open}
         onOpenChange={(v) => setQuickCreate((p) => ({ ...p, open: v }))}
@@ -868,9 +1011,12 @@ export function SalesOrderItemsEditorCard(props: { caseId: string; className?: s
                       code: entity.metadata?.code || x.code,
                       description: entity.display_name,
                       offering_entity_id: entity.id,
-                      price: entity.metadata?.price != null 
-                        ? String(entity.metadata.price).replace(/\./g, ",") 
-                        : x.price
+                      config_id: null,
+                      price: entity.metadata?.price_sale != null 
+                        ? String(entity.metadata.price_sale).replace(/\./g, ",") 
+                        : entity.metadata?.price != null 
+                          ? String(entity.metadata.price).replace(/\./g, ",") 
+                          : x.price
                     }
                   : x
               )
