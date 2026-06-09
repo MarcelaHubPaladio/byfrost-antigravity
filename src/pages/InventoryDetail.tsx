@@ -23,6 +23,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { ArrowLeft, Loader2, Package, Image as ImageIcon, Upload, Trash2, Info, CloudUpload, Plus, Pencil, ClipboardList, Sliders, MapPin, CheckCircle, RefreshCw, Calendar, User } from "lucide-react";
 import { DeliverableTemplateUpsertDialog } from "@/components/core/DeliverableTemplateUpsertDialog";
 import { Separator } from "@/components/ui/separator";
+import { Label } from "@/components/ui/label";
 
 const formSchema = z.object({
     display_name: z.string().min(2, "O nome deve ter pelo menos 2 caracteres"),
@@ -1075,7 +1076,7 @@ export default function InventoryDetail() {
                         <div className="space-y-4 py-4">
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="space-y-1">
-                                    <FormLabel className="text-xs font-black text-slate-500 uppercase">Nome da Variação *</FormLabel>
+                                    <Label className="text-xs font-black text-slate-500 uppercase">Nome da Variação *</Label>
                                     <Input
                                         value={configName}
                                         onChange={e => setConfigName(e.target.value)}
@@ -1084,7 +1085,7 @@ export default function InventoryDetail() {
                                     />
                                 </div>
                                 <div className="space-y-1">
-                                    <FormLabel className="text-xs font-black text-slate-500 uppercase">SKU / Código Interno</FormLabel>
+                                    <Label className="text-xs font-black text-slate-500 uppercase">SKU / Código Interno</Label>
                                     <Input
                                         value={configSku}
                                         onChange={e => setConfigSku(e.target.value)}
@@ -1096,7 +1097,7 @@ export default function InventoryDetail() {
 
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="space-y-1">
-                                    <FormLabel className="text-xs font-black text-slate-500 uppercase">Estoque na Loja</FormLabel>
+                                    <Label className="text-xs font-black text-slate-500 uppercase">Estoque na Loja</Label>
                                     <Input
                                         type="number"
                                         value={configEstoqueLoja}
@@ -1105,7 +1106,7 @@ export default function InventoryDetail() {
                                     />
                                 </div>
                                 <div className="space-y-1">
-                                    <FormLabel className="text-xs font-black text-slate-500 uppercase">Estoque Consignado</FormLabel>
+                                    <Label className="text-xs font-black text-slate-500 uppercase">Estoque Consignado</Label>
                                     <Input
                                         type="number"
                                         value={configEstoqueConsignado}
@@ -1117,7 +1118,7 @@ export default function InventoryDetail() {
 
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="space-y-1">
-                                    <FormLabel className="text-xs font-black text-slate-500 uppercase">Local da Prateleira</FormLabel>
+                                    <Label className="text-xs font-black text-slate-500 uppercase">Local da Prateleira</Label>
                                     <Input
                                         value={configPrateleira}
                                         onChange={e => setConfigPrateleira(e.target.value)}
@@ -1126,7 +1127,7 @@ export default function InventoryDetail() {
                                     />
                                 </div>
                                 <div className="space-y-1">
-                                    <FormLabel className="text-xs font-black text-slate-500 uppercase">Preço Específico (R$)</FormLabel>
+                                    <Label className="text-xs font-black text-slate-500 uppercase">Preço Específico (R$)</Label>
                                     <Input
                                         type="number"
                                         step="0.01"
