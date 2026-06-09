@@ -194,7 +194,7 @@ function normalizeBillingStatus(raw: string): string {
 }
 
 const billingStatusOptions = ["Pendente", "Faturado", "Faturado Parcial", "Cancelado"];
-const allBillingStatusOptions = ["Pendente", "Faturado", "Faturado Parcial", "Cancelado", "Pago", "Aguardando Banco"];
+const allBillingStatusOptions = ["Pendente", "Faturado", "Faturado Parcial", "Cancelado", "Boleto", "Aguardando Banco"];
 
 export default function Orders() {
   const { activeTenantId } = useTenant();
@@ -253,6 +253,7 @@ export default function Orders() {
   const [selectedPaymentMethods, setSelectedPaymentMethods] = useState<Set<string>>(new Set());
   const [selectedCities, setSelectedCities] = useState<Set<string>>(new Set());
   const [selectedInventoryIds, setSelectedInventoryIds] = useState<Set<string>>(new Set());
+  const [selectedStates, setSelectedStates] = useState<Set<string>>(new Set());
   
   const [exportingCsv, setExportingCsv] = useState(false);
   const [exportingPdf, setExportingPdf] = useState(false);
@@ -656,6 +657,10 @@ export default function Orders() {
       });
     }
 
+    if (selectedStates.size > 0) {
+      rows = rows.filter(r => selectedStates.has((r.state || "").toLowerCase()));
+    }
+
     if (qq) {
       rows = rows.filter((r) => {
         const cust = customersQ.data?.get(r.customer_id!);
@@ -668,7 +673,7 @@ export default function Orders() {
     }
 
     return rows;
-  }, [journeyRows, q, dateRange, selectedSellerId, selectedPaymentMethods, selectedCities, selectedInventoryIds, caseDataQ.data, caseDataQ.isLoading, vendorsQ.data]);
+  }, [journeyRows, q, dateRange, selectedSellerId, selectedPaymentMethods, selectedCities, selectedInventoryIds, selectedStates, caseDataQ.data, caseDataQ.isLoading, vendorsQ.data]);
 
   const paymentOptions = useMemo(() => {
     const opts = new Set<string>();
@@ -1103,6 +1108,47 @@ export default function Orders() {
                 </PopoverContent>
               </Popover>
 
+              {/* Etapa Multi-Select */}
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className={cn(
+                      "h-10 rounded-2xl border-slate-200 bg-white/70 text-xs font-bold text-slate-700 min-w-[150px] justify-start hover:bg-white transition-all shadow-sm gap-2",
+                      selectedStates.size > 0 && "border-blue-400 bg-blue-50 text-blue-700"
+                    )}
+                  >
+                    <LayoutList className="h-4 w-4 text-slate-400 flex-shrink-0" />
+                    {selectedStates.size === 0 ? "Etapa: Todas" : `${selectedStates.size} etapas`}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[200px] rounded-2xl p-2 shadow-xl border-slate-200" align="start">
+                  <div className="flex items-center justify-between px-2 py-1 mb-1">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Etapa</p>
+                    {selectedStates.size > 0 && (
+                      <button onClick={() => setSelectedStates(new Set())} className="text-[10px] text-blue-600 font-bold hover:underline">Limpar</button>
+                    )}
+                  </div>
+                  <div className="max-h-[240px] overflow-y-auto space-y-0.5">
+                    {states.map((opt) => (
+                      <label key={opt} className="flex items-center gap-2.5 px-2 py-1.5 rounded-xl cursor-pointer hover:bg-slate-50 transition-colors">
+                        <input
+                          type="checkbox"
+                          className="accent-blue-600 h-3.5 w-3.5 rounded"
+                          checked={selectedStates.has(opt.toLowerCase())}
+                          onChange={() => {
+                            const next = new Set(selectedStates);
+                            next.has(opt.toLowerCase()) ? next.delete(opt.toLowerCase()) : next.add(opt.toLowerCase());
+                            setSelectedStates(next);
+                          }}
+                        />
+                        <span className="text-xs font-semibold text-slate-700 truncate uppercase">{getStageLabel(opt)}</span>
+                      </label>
+                    ))}
+                  </div>
+                </PopoverContent>
+              </Popover>
+
               {/* Data Filter */}
               <Popover>
                 <PopoverTrigger asChild>
@@ -1469,6 +1515,7 @@ export default function Orders() {
                                 <SelectTrigger 
                                   className={cn(
                                     "h-8 w-[140px] rounded-xl text-[10px] font-black uppercase border-none",
+                                    billingStatus === "Boleto" ? "bg-indigo-100 text-indigo-700" :
                                     billingStatus === "Pago" ? "bg-emerald-100 text-emerald-700" :
                                     billingStatus === "Faturado Parcial" ? "bg-blue-100 text-blue-700" :
                                     billingStatus === "Cancelado" ? "bg-rose-100 text-rose-700" :
