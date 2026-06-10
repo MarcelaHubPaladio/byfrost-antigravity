@@ -704,7 +704,7 @@ export default function SalesOrderCase() {
                           </div>
                         </AccordionTrigger>
                         <AccordionContent className="p-8 border-t border-slate-100 pt-8">
-                          <SalesOrderItemsEditorCard caseId={caseId!} />
+                          <SalesOrderItemsEditorCard caseId={caseId!} fields={fieldsData} />
 
                           <div className="mt-8 pt-8 border-t border-slate-100">
                             <div className="flex items-center justify-between gap-2 mb-4">

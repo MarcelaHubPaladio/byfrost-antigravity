@@ -67,12 +67,23 @@ function computeRowTotal(qty: number | null, price: number | null, discountPct: 
   return subtotal - discount;
 }
 
-export function SalesOrderItemsEditorCard(props: { caseId: string; className?: string }) {
-  const { caseId, className } = props;
+export function SalesOrderItemsEditorCard(props: { caseId: string; fields?: any[]; className?: string }) {
+  const { caseId, fields, className } = props;
   const qc = useQueryClient();
   const { activeTenantId } = useTenant();
   const { user } = useSession();
   const [saving, setSaving] = useState(false);
+
+  const initialExtraFields = useMemo(() => ({
+    proposal_validity_date_text: fields?.find(f => f.key === "proposal_validity_date_text" || f.key === "proposal_valid_until_text")?.value_text || "",
+    delivery_forecast_text: fields?.find(f => f.key === "delivery_forecast_text" || f.key === "expected_delivery_date_text")?.value_text || ""
+  }), [fields]);
+
+  const [extraFields, setExtraFields] = useState(initialExtraFields);
+
+  useEffect(() => {
+    setExtraFields(initialExtraFields);
+  }, [initialExtraFields]);
 
   useEffect(() => {
     if (!caseId) return;
@@ -483,6 +494,51 @@ interface SearchOption {
         });
       }
 
+      // 3. Save extra fields to case_fields
+      const extraFieldsPayload = [
+        {
+          case_id: caseId,
+          key: "proposal_validity_date_text",
+          value_text: extraFields.proposal_validity_date_text.trim() || null,
+          confidence: 1,
+          source: "admin",
+          last_updated_by: "panel"
+        },
+        {
+          case_id: caseId,
+          key: "delivery_forecast_text",
+          value_text: extraFields.delivery_forecast_text.trim() || null,
+          confidence: 1,
+          source: "admin",
+          last_updated_by: "panel"
+        }
+      ].filter((r) => r.value_text !== null);
+
+      if (extraFieldsPayload.length > 0) {
+        await supabase.from("case_fields").upsert(extraFieldsPayload as any, { onConflict: "case_id,key" });
+      }
+
+      const clearedFields = [
+        "proposal_validity_date_text",
+        "delivery_forecast_text"
+      ].filter(k => {
+        if (k === "proposal_validity_date_text") return !extraFields.proposal_validity_date_text.trim();
+        if (k === "delivery_forecast_text") return !extraFields.delivery_forecast_text.trim();
+        return false;
+      }).map(k => ({
+        tenant_id: activeTenantId,
+        case_id: caseId,
+        key: k,
+        value_text: null,
+        confidence: 1,
+        source: "admin",
+        last_updated_by: "panel"
+      }));
+
+      if (clearedFields.length > 0) {
+        await supabase.from("case_fields").upsert(clearedFields as any, { onConflict: "case_id,key" });
+      }
+
       showSuccess("Itens do pedido salvos com sucesso.");
       await Promise.all([
         qc.invalidateQueries({ queryKey: ["case_items", caseId] }),
@@ -546,6 +602,27 @@ interface SearchOption {
           Erro ao carregar itens: {(itemsQ.error as any)?.message ?? ""}
         </div>
       )}
+
+      <div className="mt-4 grid gap-3 sm:grid-cols-2">
+        <div>
+          <Label className="text-xs">Validade da proposta</Label>
+          <Input
+            value={extraFields.proposal_validity_date_text}
+            onChange={(e) => setExtraFields(p => ({ ...p, proposal_validity_date_text: e.target.value }))}
+            className="mt-1 h-10 rounded-2xl"
+            placeholder="dd/mm/aaaa"
+          />
+        </div>
+        <div>
+          <Label className="text-xs">Data prevista para entrega</Label>
+          <Input
+            value={extraFields.delivery_forecast_text}
+            onChange={(e) => setExtraFields(p => ({ ...p, delivery_forecast_text: e.target.value }))}
+            className="mt-1 h-10 rounded-2xl"
+            placeholder="dd/mm/aaaa"
+          />
+        </div>
+      </div>
 
       <div className="mt-4 rounded-2xl border border-slate-200">
         <div className="hidden grid-cols-[90px_1fr_70px_110px_80px_110px_40px] gap-2 bg-slate-50 px-3 py-3 text-[10px] font-black uppercase tracking-[0.1em] text-slate-500 sm:grid border-b border-slate-200">

@@ -425,28 +425,6 @@ export function CaseCustomerDataEditorCard(props: {
               placeholder="00000-000"
             />
           </div>
-          <div>
-            <Label className="text-xs">Estado (texto)</Label>
-            <Input
-              value={draft.state}
-              onChange={(e) => setDraft((p) => ({ ...p, state: e.target.value }))}
-              className="mt-1 h-10 rounded-2xl"
-              placeholder="Paraná"
-            />
-          </div>
-        </div>
-
-        <div>
-          <Label className="text-xs font-semibold text-blue-600">Local (Obrigatório para transição)</Label>
-          <Input
-            value={draft.local}
-            onChange={(e) => setDraft((p) => ({ ...p, local: e.target.value }))}
-            className="mt-1 h-10 rounded-2xl border-blue-100 bg-blue-50/30"
-            placeholder="Cidade ou ponto de referência"
-          />
-          <div className="mt-1 text-[10px] text-blue-500">
-            Este campo satisfaz a exigência de "local" para mover o caso de coluna.
-          </div>
         </div>
 
         <div className="rounded-2xl border border-slate-100 bg-slate-50/50 p-3">
@@ -515,6 +493,11 @@ export function CaseCustomerDataEditorCard(props: {
                 <SelectItem value="Cartão de Débito">Cartão de Débito</SelectItem>
                 <SelectItem value="Dinheiro">Dinheiro</SelectItem>
                 <SelectItem value="Transferência">Transferência</SelectItem>
+                <SelectItem value="Pronaf">Pronaf</SelectItem>
+                <SelectItem value="Pronamp">Pronamp</SelectItem>
+                <SelectItem value="Direto pelo banco">Direto pelo banco</SelectItem>
+                <SelectItem value="Moderfrota">Moderfrota</SelectItem>
+                <SelectItem value="Banco da família">Banco da família</SelectItem>
                 <SelectItem value="Outros">Outros</SelectItem>
               </SelectContent>
             </Select>
@@ -579,57 +562,7 @@ export function CaseCustomerDataEditorCard(props: {
           </div>
         </div>
 
-        <div className="grid gap-3 sm:grid-cols-2">
-          <div>
-            <Label className="text-xs">Origem financeira</Label>
-            <Input
-              value={draft.payment_origin}
-              onChange={(e) => setDraft((p) => ({ ...p, payment_origin: e.target.value }))}
-              className="mt-1 h-10 rounded-2xl"
-              placeholder="Ex: banco / próprio / cooperativa"
-            />
-          </div>
-          <div>
-            <Label className="text-xs">Local (financeiro)</Label>
-            <Input
-              value={draft.payment_local}
-              onChange={(e) => setDraft((p) => ({ ...p, payment_local: e.target.value }))}
-              className="mt-1 h-10 rounded-2xl"
-              placeholder="Cidade/loja"
-            />
-          </div>
-        </div>
 
-        <div className="grid gap-3 sm:grid-cols-2">
-          <div>
-            <Label className="text-xs">Com vencimento em</Label>
-            <Input
-              value={draft.payment_due_date_text}
-              onChange={(e) => setDraft((p) => ({ ...p, payment_due_date_text: e.target.value }))}
-              className="mt-1 h-10 rounded-2xl"
-              placeholder="dd/mm/aaaa"
-            />
-          </div>
-          <div>
-            <Label className="text-xs">Validade da proposta</Label>
-            <Input
-              value={draft.proposal_validity_date_text}
-              onChange={(e) => setDraft((p) => ({ ...p, proposal_validity_date_text: e.target.value }))}
-              className="mt-1 h-10 rounded-2xl"
-              placeholder="dd/mm/aaaa"
-            />
-          </div>
-        </div>
-
-        <div>
-          <Label className="text-xs">Data prevista para entrega</Label>
-          <Input
-            value={draft.delivery_forecast_text}
-            onChange={(e) => setDraft((p) => ({ ...p, delivery_forecast_text: e.target.value }))}
-            className="mt-1 h-10 rounded-2xl"
-            placeholder="dd/mm/aaaa"
-          />
-        </div>
 
         <div>
           <Label className="text-xs">Obs.</Label>
