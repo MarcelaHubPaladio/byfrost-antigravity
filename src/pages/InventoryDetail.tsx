@@ -5,6 +5,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import imageCompression from "browser-image-compression";
 import { AppShell } from "@/components/AppShell";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { RequireAuth } from "@/components/RequireAuth";
 import { RequireRouteAccess } from "@/components/RequireRouteAccess";
 import { useTenant } from "@/providers/TenantProvider";
@@ -73,6 +74,8 @@ export default function InventoryDetail() {
     const [uploadProgress, setUploadProgress] = useState(0);
     const [uploadPhase, setUploadPhase] = useState<"compressing" | "uploading" | "idle">("idle");
     const [upsertOpen, setUpsertOpen] = useState(false);
+    const [activeTab, setActiveTab] = useState("geral");
+    const [selectedConfigForConsignment, setSelectedConfigForConsignment] = useState<string>("product");
     const [editingTemplate, setEditingTemplate] = useState<any>(null);
     const isEdit = Boolean(id && id !== "new");
 
@@ -121,6 +124,72 @@ export default function InventoryDetail() {
         setSelectedSellerId("");
         setConsignmentQty("1");
         setConsignmentDialogOpen(true);
+    };
+
+    
+    const handleAddConsignmentTab = () => {
+        if (!selectedSellerId) {
+            showError("Selecione um vendedor.");
+            return;
+        }
+        const qty = Number(consignmentQty) || 0;
+        if (qty <= 0) {
+            showError("A quantidade deve ser maior que zero.");
+            return;
+        }
+        const seller = tenantUsersQ.data?.find(u => u.user_id === selectedSellerId);
+        if (!seller) return;
+
+        const sellerName = seller.display_name || seller.email || "Vendedor";
+        
+        if (hasConfigurations && selectedConfigForConsignment !== "product") {
+            setConfigurations(prev => prev.map(c => {
+                if (c.id === selectedConfigForConsignment) {
+                    const currentConsignments = c.consignments || [];
+                    const exists = currentConsignments.find(item => item.user_id === selectedSellerId);
+                    let newConsignments;
+                    if (exists) {
+                        newConsignments = currentConsignments.map(item => 
+                            item.user_id === selectedSellerId ? { ...item, qty: item.qty + qty } : item
+                        );
+                    } else {
+                        newConsignments = [...currentConsignments, { user_id: selectedSellerId, user_name: sellerName, qty }];
+                    }
+                    const sum = newConsignments.reduce((acc, x) => acc + x.qty, 0);
+                    return { ...c, consignments: newConsignments, estoque_consignado: sum, estoque_total: c.estoque_loja + sum };
+                }
+                return c;
+            }));
+        } else {
+            setProductConsignments(prev => {
+                const exists = prev.find(item => item.user_id === selectedSellerId);
+                if (exists) {
+                    return prev.map(item => 
+                        item.user_id === selectedSellerId ? { ...item, qty: item.qty + qty } : item
+                    );
+                }
+                return [...prev, { user_id: selectedSellerId, user_name: sellerName, qty }];
+            });
+        }
+
+        setSelectedSellerId("");
+        setConsignmentQty("1");
+        showSuccess("Consignação adicionada! Salve o produto para persistir.");
+    };
+
+    const handleRemoveConsignmentTab = (userId: string, configId?: string) => {
+        if (hasConfigurations && configId && configId !== "product") {
+            setConfigurations(prev => prev.map(c => {
+                if (c.id === configId) {
+                    const newConsignments = (c.consignments || []).filter(item => item.user_id !== userId);
+                    const sum = newConsignments.reduce((acc, x) => acc + x.qty, 0);
+                    return { ...c, consignments: newConsignments, estoque_consignado: sum, estoque_total: c.estoque_loja + sum };
+                }
+                return c;
+            }));
+        } else {
+            setProductConsignments(prev => prev.filter(item => item.user_id !== userId));
+        }
     };
 
     const handleAddConsignment = () => {
@@ -657,23 +726,36 @@ export default function InventoryDetail() {
     return (
         <AppShell>
             <div className="max-w-4xl mx-auto space-y-6">
-                <div className="flex items-center gap-4 bg-white p-6 rounded-3xl border shadow-sm">
-                    <Button variant="outline" size="icon" onClick={() => nav("/app/inventory")} className="rounded-xl">
-                        <ArrowLeft className="w-4 h-4" />
-                    </Button>
-                    <div>
-                        <h1 className="text-2xl font-black text-slate-800">
-                            {isEdit ? "Editar Produto" : "Novo Produto"}
-                        </h1>
-                        <p className="text-sm text-slate-500">
-                            {isEdit ? `Editando ${itemQ.data?.display_name}` : "Preencha os dados do novo item do inventário."}
-                        </p>
+                <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-3xl border shadow-sm">
+                        <div className="flex items-center gap-4">
+                            <Button variant="outline" size="icon" type="button" onClick={() => nav("/app/inventory")} className="rounded-xl shrink-0">
+                                <ArrowLeft className="w-4 h-4" />
+                            </Button>
+                            <div>
+                                <h1 className="text-2xl font-black text-slate-800">
+                                    {isEdit ? "Editar Produto" : "Novo Produto"}
+                                </h1>
+                                <p className="text-sm text-slate-500">
+                                    {isEdit ? `Editando ${itemQ.data?.display_name}` : "Preencha os dados do novo item do inventário."}
+                                </p>
+                            </div>
+                        </div>
+                        <TabsList className="bg-slate-100 p-1 rounded-xl shrink-0">
+                            <TabsTrigger value="geral" className="rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm px-4">
+                                Detalhes Gerais
+                            </TabsTrigger>
+                            <TabsTrigger value="vendedores" className="rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm px-4">
+                                <ClipboardList className="w-4 h-4 mr-2" />
+                                Vendedores (Consignado)
+                            </TabsTrigger>
+                        </TabsList>
                     </div>
-                </div>
 
-                <Form {...form}>
-                    <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6 pb-20">
-                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <Form {...form}>
+                        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6 pb-20">
+                            <TabsContent value="geral" className="m-0 focus-visible:outline-none space-y-6">
+                                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                             {/* Sidebar: Image and Pricing */}
                             <div className="lg:col-span-1 space-y-6">
                                 <Card className="p-4 rounded-3xl border shadow-sm text-center bg-white">
@@ -964,17 +1046,7 @@ export default function InventoryDetail() {
                                                     <FormItem>
                                                         <FormLabel className="text-[10px] font-bold text-slate-400 uppercase">Estoque Consignado</FormLabel>
                                                         <FormControl>
-                                                            <div className="relative flex items-center">
-                                                                <Input type="number" {...field} className="h-11 rounded-xl bg-white border-slate-200 font-mono pr-24" disabled />
-                                                                <Button
-                                                                    type="button"
-                                                                    variant="secondary"
-                                                                    onClick={openProductConsignment}
-                                                                    className="absolute right-1.5 h-8 rounded-lg text-[10px] font-black bg-slate-100 hover:bg-slate-200 text-slate-600 px-3 uppercase"
-                                                                >
-                                                                    Gerenciar
-                                                                </Button>
-                                                            </div>
+                                                            <Input type="number" {...field} className="h-11 rounded-xl bg-white border-slate-200 font-mono bg-slate-50" disabled />
                                                         </FormControl>
                                                         <FormMessage />
                                                     </FormItem>
@@ -1111,18 +1183,7 @@ export default function InventoryDetail() {
                                     </Card>
                                 )}
 
-                                <div className="flex flex-col sm:flex-row gap-3">
-                                    <Button type="submit" disabled={loading || uploading} className="flex-1 h-12 rounded-2xl bg-indigo-600 hover:bg-indigo-700 font-black text-lg shadow-xl shadow-indigo-100">
-                                        {loading && <Loader2 className="w-5 h-5 animate-spin mr-2" />}
-                                        {isEdit ? "Salvar Alterações" : "Criar Produto"}
-                                    </Button>
-                                    {isEdit && (
-                                        <Button type="button" variant="outline" onClick={handleDelete} className="h-12 rounded-2xl border-red-200 text-red-600 hover:bg-red-50">
-                                            <Trash2 className="w-5 h-5 mr-2" />
-                                            Excluir
-                                        </Button>
-                                    )}
-                                </div>
+
 
                                 {isEdit && (
                                     <Card className="p-6 rounded-3xl border shadow-sm bg-white">
@@ -1214,9 +1275,166 @@ export default function InventoryDetail() {
                                     </Card>
                                 )}
                             </div>
-                        </div>
-                    </form>
-                </Form>
+                            </TabsContent>
+
+                            <TabsContent value="vendedores" className="m-0 focus-visible:outline-none space-y-6">
+                                <Card className="p-6 rounded-3xl border shadow-sm bg-white space-y-6">
+                                    <div className="flex items-center justify-between">
+                                        <div>
+                                            <h3 className="text-base font-black text-slate-800 flex items-center gap-2">
+                                                <ClipboardList className="w-5 h-5 text-indigo-600" />
+                                                Gerenciar Estoque Consignado
+                                            </h3>
+                                            <p className="text-xs text-slate-500 mt-1">
+                                                Transfira estoque deste produto (ou variações) para vendedores.
+                                            </p>
+                                        </div>
+                                    </div>
+                                    
+                                    <div className="flex flex-wrap md:flex-nowrap gap-3 items-end bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                                        {hasConfigurations && (
+                                            <div className="flex-1 min-w-[200px] space-y-1.5">
+                                                <Label className="text-[10px] font-black text-slate-500 uppercase">Variação *</Label>
+                                                <Select value={selectedConfigForConsignment} onValueChange={setSelectedConfigForConsignment}>
+                                                    <SelectTrigger className="h-11 rounded-xl bg-white border-slate-200">
+                                                        <SelectValue placeholder="Selecione a variação..." />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        <SelectItem value="product" disabled>Selecione uma variação...</SelectItem>
+                                                        {configurations.map(c => (
+                                                            <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                                                        ))}
+                                                    </SelectContent>
+                                                </Select>
+                                            </div>
+                                        )}
+                                        <div className="flex-1 min-w-[200px] space-y-1.5">
+                                            <Label className="text-[10px] font-black text-slate-500 uppercase">Vendedor *</Label>
+                                            <Select value={selectedSellerId} onValueChange={setSelectedSellerId}>
+                                                <SelectTrigger className="h-11 rounded-xl bg-white border-slate-200">
+                                                    <SelectValue placeholder="Selecione o vendedor..." />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    {(tenantUsersQ.data || []).map(u => (
+                                                        <SelectItem key={u.user_id} value={u.user_id}>
+                                                            {u.display_name || u.email}
+                                                        </SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+                                        <div className="w-32 space-y-1.5">
+                                            <Label className="text-[10px] font-black text-slate-500 uppercase">Qtd *</Label>
+                                            <Input
+                                                type="number"
+                                                min="1"
+                                                value={consignmentQty}
+                                                onChange={e => setConsignmentQty(e.target.value)}
+                                                className="h-11 rounded-xl bg-white border-slate-200 font-mono text-center"
+                                            />
+                                        </div>
+                                        <Button
+                                            type="button"
+                                            onClick={handleAddConsignmentTab}
+                                            className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold h-11 px-6 rounded-xl flex items-center gap-2 shrink-0"
+                                        >
+                                            <Plus className="w-4 h-4" /> Adicionar
+                                        </Button>
+                                    </div>
+
+                                    <div className="border border-slate-200 rounded-2xl overflow-hidden">
+                                        <table className="w-full border-collapse text-left text-sm">
+                                            <thead>
+                                                <tr className="bg-slate-50/50 border-b border-slate-100 text-xs font-black uppercase text-slate-500 tracking-wider">
+                                                    {hasConfigurations && <th className="p-4">Variação</th>}
+                                                    <th className="p-4">Vendedor</th>
+                                                    <th className="p-4 text-right">Quantidade</th>
+                                                    <th className="p-4 text-right w-[100px]">Ações</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {!hasConfigurations ? (
+                                                    productConsignments.map(item => (
+                                                        <tr key={item.user_id} className="border-b border-slate-100 hover:bg-slate-50/40">
+                                                            <td className="p-4 font-bold text-slate-800">
+                                                                <div className="flex items-center gap-2">
+                                                                    <User className="w-4 h-4 text-slate-400" />
+                                                                    {item.user_name}
+                                                                </div>
+                                                            </td>
+                                                            <td className="p-4 text-right font-mono font-bold text-indigo-600">{item.qty} un</td>
+                                                            <td className="p-4 text-right">
+                                                                <Button 
+                                                                    type="button" 
+                                                                    variant="ghost" 
+                                                                    size="icon" 
+                                                                    className="h-8 w-8 text-red-500 hover:text-red-600 hover:bg-red-50 rounded-lg"
+                                                                    onClick={() => handleRemoveConsignmentTab(item.user_id, "product")}
+                                                                >
+                                                                    <Trash2 className="w-4 h-4" />
+                                                                </Button>
+                                                            </td>
+                                                        </tr>
+                                                    ))
+                                                ) : (
+                                                    configurations.flatMap(c => 
+                                                        (c.consignments || []).map(item => (
+                                                            <tr key={`${c.id}-${item.user_id}`} className="border-b border-slate-100 hover:bg-slate-50/40">
+                                                                <td className="p-4 font-bold text-slate-800">{c.name}</td>
+                                                                <td className="p-4 font-bold text-slate-800">
+                                                                    <div className="flex items-center gap-2">
+                                                                        <User className="w-4 h-4 text-slate-400" />
+                                                                        {item.user_name}
+                                                                    </div>
+                                                                </td>
+                                                                <td className="p-4 text-right font-mono font-bold text-indigo-600">{item.qty} un</td>
+                                                                <td className="p-4 text-right">
+                                                                    <Button 
+                                                                        type="button" 
+                                                                        variant="ghost" 
+                                                                        size="icon" 
+                                                                        className="h-8 w-8 text-red-500 hover:text-red-600 hover:bg-red-50 rounded-lg"
+                                                                        onClick={() => handleRemoveConsignmentTab(item.user_id, c.id)}
+                                                                    >
+                                                                        <Trash2 className="w-4 h-4" />
+                                                                    </Button>
+                                                                </td>
+                                                            </tr>
+                                                        ))
+                                                    )
+                                                )}
+
+                                                {((!hasConfigurations && productConsignments.length === 0) || 
+                                                  (hasConfigurations && configurations.every(c => !c.consignments || c.consignments.length === 0))) && (
+                                                    <tr>
+                                                        <td colSpan={hasConfigurations ? 4 : 3} className="p-8 text-center text-slate-400 italic">
+                                                            Nenhuma consignação ativa.
+                                                        </td>
+                                                    </tr>
+                                                )}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </Card>
+                            </TabsContent>
+
+                            {/* Botoes de Salvar agora fora do TabsContent para ficarem visiveis no final da rolagem de ambas as abas */}
+                            <div className="flex flex-col sm:flex-row gap-3 mt-8">
+                                <Button type="submit" disabled={loading || uploading} className="flex-1 h-12 rounded-2xl bg-indigo-600 hover:bg-indigo-700 font-black text-lg shadow-xl shadow-indigo-100">
+                                    {loading && <Loader2 className="w-5 h-5 animate-spin mr-2" />}
+                                    {isEdit ? "Salvar Alterações" : "Criar Produto"}
+                                </Button>
+                                {isEdit && (
+                                    <Button type="button" variant="outline" onClick={handleDelete} className="h-12 rounded-2xl border-red-200 text-red-600 hover:bg-red-50">
+                                        <Trash2 className="w-5 h-5 mr-2" />
+                                        Excluir
+                                    </Button>
+                                )}
+                            </div>
+
+                        </form>
+                    </Form>
+                </Tabs>
 
                 {/* Configuration Edit/Create Dialog */}
                 <Dialog open={configDialogOpen} onOpenChange={setConfigDialogOpen}>
@@ -1265,22 +1483,12 @@ export default function InventoryDetail() {
                                 </div>
                                 <div className="space-y-1">
                                     <Label className="text-xs font-black text-slate-500 uppercase">Estoque Consignado</Label>
-                                    <div className="relative flex items-center">
-                                        <Input
-                                            type="number"
-                                            value={configEstoqueConsignado}
-                                            className="h-10 rounded-xl font-mono pr-20 w-full"
-                                            disabled
-                                        />
-                                        <Button
-                                            type="button"
-                                            variant="secondary"
-                                            onClick={openConfigConsignment}
-                                            className="absolute right-1 h-8 rounded-lg text-[10px] font-black bg-slate-100 hover:bg-slate-200 text-slate-600 px-3 uppercase"
-                                        >
-                                            Gerenciar
-                                        </Button>
-                                    </div>
+                                    <Input
+                                        type="number"
+                                        value={configEstoqueConsignado}
+                                        className="h-10 rounded-xl font-mono bg-slate-50 w-full"
+                                        disabled
+                                    />
                                 </div>
                             </div>
 
@@ -1319,106 +1527,7 @@ export default function InventoryDetail() {
                     </DialogContent>
                 </Dialog>
 
-                {/* Consignment Manage Dialog */}
-                <Dialog open={consignmentDialogOpen} onOpenChange={setConsignmentDialogOpen}>
-                    <DialogContent className="rounded-3xl sm:max-w-[500px]">
-                        <DialogHeader>
-                            <DialogTitle className="flex items-center gap-2 font-black">
-                                <ClipboardList className="w-5 h-5 text-indigo-600" />
-                                Gerenciar Estoque Consignado
-                            </DialogTitle>
-                            <DialogDescription className="text-xs">
-                                Vincule vendedores e as quantidades consignadas para <strong>{consignmentTarget?.name}</strong>.
-                            </DialogDescription>
-                        </DialogHeader>
-
-                        <div className="space-y-4 py-4">
-                            {/* Add Consignment Form */}
-                            <div className="flex gap-2 items-end bg-slate-50 p-3 rounded-2xl border border-slate-100">
-                                <div className="flex-1 space-y-1">
-                                    <Label className="text-[10px] font-black text-slate-500 uppercase">Vendedor *</Label>
-                                    <Select value={selectedSellerId} onValueChange={setSelectedSellerId}>
-                                        <SelectTrigger className="h-10 rounded-xl bg-white border-slate-200 text-xs">
-                                            <SelectValue placeholder="Selecione o vendedor..." />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            {(tenantUsersQ.data || []).map(u => (
-                                                <SelectItem key={u.user_id} value={u.user_id} className="text-xs">
-                                                    {u.display_name || u.email}
-                                                </SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
-                                </div>
-                                <div className="w-24 space-y-1">
-                                    <Label className="text-[10px] font-black text-slate-500 uppercase">Quantidade *</Label>
-                                    <Input
-                                        type="number"
-                                        min="1"
-                                        value={consignmentQty}
-                                        onChange={e => setConsignmentQty(e.target.value)}
-                                        className="h-10 rounded-xl bg-white border-slate-200 font-mono text-xs text-center"
-                                    />
-                                </div>
-                                <Button
-                                    type="button"
-                                    onClick={handleAddConsignment}
-                                    className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold h-10 px-4 rounded-xl flex items-center gap-1.5 text-xs shrink-0"
-                                >
-                                    <Plus className="w-3.5 h-3.5" /> Adicionar
-                                </Button>
-                            </div>
-
-                            {/* Consignments List Table */}
-                            <div className="border border-slate-200 rounded-2xl overflow-hidden max-h-[200px] overflow-y-auto">
-                                <table className="w-full border-collapse text-left text-xs">
-                                    <thead>
-                                        <tr className="bg-slate-50/50 border-b border-slate-100 text-[10px] font-black uppercase text-slate-400">
-                                            <th className="p-3">Vendedor</th>
-                                            <th className="p-3 text-right">Quantidade</th>
-                                            <th className="p-3 text-center w-[60px]">Ações</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {activeConsignments.map((item) => (
-                                            <tr key={item.user_id} className="border-b border-slate-100 hover:bg-slate-50/40 transition-colors">
-                                                <td className="p-3 font-semibold text-slate-700">{item.user_name}</td>
-                                                <td className="p-3 text-right font-mono font-bold text-slate-800">{item.qty} un</td>
-                                                <td className="p-3 text-center">
-                                                    <Button
-                                                        type="button"
-                                                        variant="ghost"
-                                                        size="icon"
-                                                        className="h-7 w-7 text-rose-500 hover:text-rose-700 rounded-lg hover:bg-rose-50/50"
-                                                        onClick={() => handleRemoveConsignment(item.user_id)}
-                                                    >
-                                                        <Trash2 className="w-3.5 h-3.5" />
-                                                    </Button>
-                                                </td>
-                                            </tr>
-                                        ))}
-                                        {activeConsignments.length === 0 && (
-                                            <tr>
-                                                <td colSpan={3} className="p-8 text-center text-slate-400 italic text-[11px]">
-                                                    Nenhuma consignação registrada para este item.
-                                                </td>
-                                            </tr>
-                                        )}
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-
-                        <DialogFooter className="bg-slate-50 p-4 border-t rounded-b-3xl">
-                            <Button type="button" variant="ghost" onClick={() => setConsignmentDialogOpen(false)} className="rounded-xl">
-                                Cancelar
-                            </Button>
-                            <Button type="button" onClick={saveConsignment} className="rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-6">
-                                Confirmar
-                            </Button>
-                        </DialogFooter>
-                    </DialogContent>
-                </Dialog>
+                
 
                 {isEdit && activeTenantId && (
                     <DeliverableTemplateUpsertDialog
