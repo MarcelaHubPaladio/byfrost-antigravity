@@ -943,6 +943,10 @@ export default function OperacaoM30() {
     const all = [...baseStates, ...(extras.length ? ["__other__"] : [])];
 
     const sortCases = (a: CaseRow, b: CaseRow) => {
+      const ap = Boolean((a.meta_json as any)?.priority);
+      const bp = Boolean((b.meta_json as any)?.priority);
+      if (ap !== bp) return ap ? -1 : 1;
+
       const au = unreadByCase.has(a.id);
       const bu = unreadByCase.has(b.id);
       if (au !== bu) return au ? -1 : 1;
