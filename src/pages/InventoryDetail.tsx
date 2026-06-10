@@ -1275,6 +1275,7 @@ export default function InventoryDetail() {
                                     </Card>
                                 )}
                             </div>
+                        </div>
                             </TabsContent>
 
                             <TabsContent value="vendedores" className="m-0 focus-visible:outline-none space-y-6">
