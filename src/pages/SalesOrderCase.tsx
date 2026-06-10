@@ -181,7 +181,8 @@ export default function SalesOrderCase() {
         .from("core_entities")
         .select("id, display_name")
         .eq("tenant_id", tenantId!)
-        .eq("entity_type", "projetista")
+        .eq("entity_type", "party")
+        .eq("subtype", "projetista")
         .is("deleted_at", null)
         .order("display_name");
       if (error) throw error;

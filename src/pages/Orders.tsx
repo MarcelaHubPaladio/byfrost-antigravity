@@ -452,7 +452,8 @@ export default function Orders() {
         .from("core_entities")
         .select("id, display_name")
         .eq("tenant_id", activeTenantId!)
-        .eq("entity_type", "projetista")
+        .eq("entity_type", "party")
+        .eq("subtype", "projetista")
         .is("deleted_at", null)
         .order("display_name", { ascending: true });
       if (error) throw error;

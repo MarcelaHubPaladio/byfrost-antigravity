@@ -33,7 +33,8 @@ export function ProjetistasManagerDialog({ open, onOpenChange }: { open: boolean
         .from("core_entities")
         .select("id, display_name, metadata")
         .eq("tenant_id", activeTenantId!)
-        .eq("entity_type", "projetista")
+        .eq("entity_type", "party")
+        .eq("subtype", "projetista")
         .is("deleted_at", null)
         .order("display_name", { ascending: true });
       if (error) throw error;
@@ -47,7 +48,8 @@ export function ProjetistasManagerDialog({ open, onOpenChange }: { open: boolean
       
       const payload = {
         tenant_id: activeTenantId!,
-        entity_type: "projetista",
+        entity_type: "party",
+        subtype: "projetista",
         display_name: name.trim(),
         metadata: { whatsapp: whatsapp.trim() }
       };
