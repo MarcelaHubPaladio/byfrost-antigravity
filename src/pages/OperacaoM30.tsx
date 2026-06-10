@@ -44,6 +44,7 @@ import { checkTransitionBlocks, TransitionBlockReason } from "@/lib/journeys/val
 import { TransitionBlockDialog } from "@/components/case/TransitionBlockDialog";
 
 import { NewOperacaoM30CardDialog } from "@/components/operacao_m30/NewOperacaoM30CardDialog";
+import { DateRangePickerCustom } from "@/components/ui/date-range-picker-custom";
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, getDay, isSameMonth, isToday, addMonths, subMonths } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, ClipboardList } from "lucide-react";
@@ -283,11 +284,34 @@ export default function OperacaoM30() {
   const [calendarDate, setCalendarDate] = useState(new Date());
 
   // Filtros jornada Auditoria e Responsável
-  const [instanceFilterId, setInstanceFilterId] = useState<string>("all");
-  const [assigneeFilterId, setAssigneeFilterId] = useState<string>("all");
-  const [entityFilterId, setEntityFilterId] = useState("all");
-  const [startDate, setStartDate] = useState("");
-  const [endDate, setEndDate] = useState("");
+  const [instanceFilterId, setInstanceFilterId] = useState<string>(() => { try { return JSON.parse(localStorage.getItem("operacao_m30_filters") || "{}").instanceFilterId || "all"; } catch { return "all"; } });
+  const [assigneeFilterId, setAssigneeFilterId] = useState<string>(() => { try { return JSON.parse(localStorage.getItem("operacao_m30_filters") || "{}").assigneeFilterId || "all"; } catch { return "all"; } });
+  const [entityFilterId, setEntityFilterId] = useState(() => { try { return JSON.parse(localStorage.getItem("operacao_m30_filters") || "{}").entityFilterId || "all"; } catch { return "all"; } });
+  const [dateRange, setDateRange] = useState<{ from?: Date; to?: Date } | undefined>(() => {
+    try {
+      const f = JSON.parse(localStorage.getItem("operacao_m30_filters") || "{}");
+      if (f.startDate || f.endDate) {
+        return {
+          from: f.startDate ? new Date(f.startDate) : undefined,
+          to: f.endDate ? new Date(f.endDate) : undefined,
+        };
+      }
+    } catch {}
+    return undefined;
+  });
+
+  const startDate = dateRange?.from ? dateRange.from.toISOString() : "";
+  const endDate = dateRange?.to ? dateRange.to.toISOString() : "";
+
+  useEffect(() => {
+    localStorage.setItem("operacao_m30_filters", JSON.stringify({
+      instanceFilterId,
+      assigneeFilterId,
+      entityFilterId,
+      startDate,
+      endDate
+    }));
+  }, [instanceFilterId, assigneeFilterId, entityFilterId, startDate, endDate]);
 
   const entitiesQ = useQuery({
     queryKey: ["active_client_entities", activeTenantId],
@@ -724,14 +748,7 @@ export default function OperacaoM30() {
       });
     }
 
-    // Filtro do Organograma Hierárquico (se não for Admin só vê os seus ou subordinados)
-    if (tenantUsersQ.data) {
-      const allowedSet = new Set(tenantUsersQ.data.map(u => u.user_id));
-      base = base.filter(r => {
-        if (!r.assigned_user_id) return true; // Mostra tarefas sem dono no quadro
-        return allowedSet.has(r.assigned_user_id);
-      });
-    }
+
 
     // Filtro de Entidade (Cliente)
     if (entityFilterId !== "all") {
@@ -765,7 +782,7 @@ export default function OperacaoM30() {
 
       return t.includes(qq);
     });
-  }, [journeyRows, q, isCrm, customersQ.data, caseEntitiesQ.data, casePhoneQ.data, instanceFilterId, assigneeFilterId, entityFilterId, startDate, endDate, tenantUsersQ.data]);
+  }, [journeyRows, q, isCrm, customersQ.data, caseEntitiesQ.data, casePhoneQ.data, instanceFilterId, assigneeFilterId, entityFilterId, startDate, endDate]);
 
   const visibleCaseIds = useMemo(() => filteredRows.map((r) => r.id), [filteredRows]);
 
@@ -1211,21 +1228,10 @@ export default function OperacaoM30() {
             </div>
 
             <div className="relative">
-              <div className="mb-1 text-[11px] font-semibold text-slate-700">Data Inicial</div>
-              <Input
-                type="date"
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-                className="h-11 rounded-2xl w-full sm:w-[150px]"
-              />
-            </div>
-            <div className="relative">
-              <div className="mb-1 text-[11px] font-semibold text-slate-700">Data Final</div>
-              <Input
-                type="date"
-                value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
-                className="h-11 rounded-2xl w-full sm:w-[150px]"
+              <div className="mb-1 text-[11px] font-semibold text-slate-700">Data</div>
+              <DateRangePickerCustom
+                date={dateRange}
+                onDateChange={setDateRange}
               />
             </div>
 
