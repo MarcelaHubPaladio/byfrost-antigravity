@@ -177,6 +177,7 @@ function SubtaskItemContent({
         }
     };
 
+
     const sensors = useSensors(
         useSensor(PointerSensor, {
             activationConstraint: {

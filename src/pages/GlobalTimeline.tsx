@@ -44,6 +44,7 @@ const EVENT_TYPE_LABELS: Record<string, string> = {
   status_changed: "Status Alterado",
   user_assigned: "Usuário Atribuído",
   user_unassigned: "Usuário Removido",
+  subtask_updated: "Subtarefa Atualizada",
 };
 
 const getEventLabel = (type: string) => EVENT_TYPE_LABELS[type] || type;

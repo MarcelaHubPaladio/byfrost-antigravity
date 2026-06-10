@@ -548,6 +548,27 @@ export default function OperacaoM30() {
   // Para debug e confiabilidade pós-reset:
   // - buscamos os casos do tenant (respeita RLS)
   // - filtramos por key (preferência: journeys.key; fallback: meta_json.journey_key)
+  const togglePriority = async (c: CaseRow) => {
+    const isPriority = Boolean((c.meta_json as any)?.priority);
+    await supabase.from("cases").update({
+      meta_json: { ...c.meta_json, priority: !isPriority }
+    }).eq("id", c.id);
+
+    if (activeTenantId && user) {
+      await supabase.from("timeline_events").insert({
+        tenant_id: activeTenantId,
+        case_id: c.id,
+        event_type: "case_updated",
+        actor_type: "admin",
+        actor_id: user.id,
+        message: !isPriority ? "Card marcado como Prioridade." : "Card desmarcado como Prioridade.",
+        meta_json: { priority: !isPriority },
+        occurred_at: new Date().toISOString(),
+      });
+    }
+
+    qc.invalidateQueries({ queryKey: ["cases_by_tenant_journey", activeTenantId, selectedJourney?.id] });
+  };
   const casesQ = useQuery({
     queryKey: ["cases_by_tenant_journey", activeTenantId, selectedJourney?.id],
     enabled: Boolean(activeTenantId && selectedJourney?.id),
