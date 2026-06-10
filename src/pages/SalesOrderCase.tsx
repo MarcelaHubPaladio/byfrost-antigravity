@@ -172,6 +172,22 @@ export default function SalesOrderCase() {
       return data;
     },
   });
+
+  const projetistasQ = useQuery({
+    queryKey: ["projetistas", tenantId],
+    enabled: !!tenantId,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("core_entities")
+        .select("id, display_name")
+        .eq("tenant_id", tenantId!)
+        .eq("entity_type", "projetista")
+        .is("deleted_at", null)
+        .order("display_name");
+      if (error) throw error;
+      return data;
+    },
+  });
   
   const { data: pendenciesData, isLoading: isLoadingPendencies } = useQuery({
     queryKey: ["case_pendencies", caseId],
@@ -345,7 +361,29 @@ export default function SalesOrderCase() {
       await qc.invalidateQueries({ queryKey: ["case_timeline", caseId] });
       await qc.refetchQueries({ queryKey: ["case", caseId] });
     } catch (err: any) {
-      showError(err.message);
+      showError(err.message || "Erro ao atualizar responsável");
+    }
+  };
+
+  const assignProjetista = async (projetistaId: string) => {
+    if (!caseId || !tenantId) return;
+    try {
+      const { error } = await supabase
+        .from("case_fields")
+        .upsert({
+          case_id: caseId,
+          key: "projetista_entity_id",
+          value_text: projetistaId === "unassigned" ? "" : projetistaId,
+          confidence: 1,
+          source: "admin",
+          last_updated_by: sessionUser?.id || "admin"
+        }, { onConflict: "case_id,key" });
+      
+      if (error) throw error;
+      showSuccess("Projetista atualizado!");
+      qc.invalidateQueries({ queryKey: ["case_fields", caseId] });
+    } catch (err: any) {
+      showError(err.message || "Erro ao atualizar projetista");
     }
   };
 
@@ -548,6 +586,24 @@ export default function SalesOrderCase() {
                       {vendors?.map((v) => (
                         <SelectItem key={v.id} value={v.id} className="font-bold text-xs">
                           {v.display_name || v.phone_e164}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="flex flex-col gap-1">
+                  <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 ml-1">Projetista</span>
+                  <Select value={getField("projetista_entity_id") || "unassigned"} onValueChange={assignProjetista}>
+                    <SelectTrigger className="h-10 w-[180px] rounded-2xl bg-white border-slate-200 shadow-sm font-bold text-xs">
+                      <div className="flex h-4 w-4 mr-2 items-center justify-center rounded bg-indigo-100 text-[9px] font-black text-indigo-700">P</div>
+                      <SelectValue placeholder="Projetista..." />
+                    </SelectTrigger>
+                    <SelectContent className="rounded-2xl border-slate-200">
+                      <SelectItem value="unassigned" className="font-bold text-xs">Sem projetista</SelectItem>
+                      {projetistasQ.data?.map((p) => (
+                        <SelectItem key={p.id} value={p.id} className="font-bold text-xs">
+                          {p.display_name}
                         </SelectItem>
                       ))}
                     </SelectContent>

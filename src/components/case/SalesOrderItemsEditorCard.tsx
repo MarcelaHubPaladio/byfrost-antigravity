@@ -575,24 +575,7 @@ interface SearchOption {
             {itemsQ.isFetching ? <span className="ml-2">(atualizando…)</span> : null}
           </div>
         </div>
-        <div className="shrink-0 text-right">
-          <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Total</div>
-          <div className="text-lg font-semibold tabular-nums text-slate-900 whitespace-nowrap">
-            {moneyPtBr(grandTotal)}
-          </div>
-        </div>
-        <div className="flex flex-col items-end gap-2">
 
-            <Button
-                onClick={saveAll}
-                disabled={saving || draft.length === 0}
-                size="sm"
-                className="h-9 rounded-xl bg-[hsl(var(--byfrost-accent))] text-white shadow-sm hover:bg-[hsl(var(--byfrost-accent)/0.92)] font-bold px-4 shrink-0 mt-1"
-            >
-                {saving ? "Salvando…" : "Salvar"}
-                <Save className="ml-2 h-3.5 w-3.5" />
-            </Button>
-        </div>
       </div>
 
       {itemsQ.isError && (
@@ -1214,15 +1197,23 @@ interface SearchOption {
           <Plus className="mr-2 h-4 w-4" /> Adicionar item
         </Button>
 
-        <Button
-          type="button"
-          onClick={saveAll}
-          disabled={saving || draft.length === 0}
-          className="h-11 rounded-2xl bg-[hsl(var(--byfrost-accent))] px-8 text-white shadow-sm hover:bg-[hsl(var(--byfrost-accent)/0.92)] font-bold"
-        >
-          {saving ? "Salvando…" : "Salvar itens"}
-          <Save className="ml-2 h-4 w-4" />
-        </Button>
+        <div className="flex items-center gap-6">
+          <div className="text-right">
+            <div className="text-[10px] font-semibold uppercase tracking-widest text-slate-400 mb-0.5">Total Geral</div>
+            <div className="text-xl font-black tabular-nums text-slate-900 tracking-tight whitespace-nowrap">
+              {moneyPtBr(grandTotal)}
+            </div>
+          </div>
+          <Button
+            type="button"
+            onClick={saveAll}
+            disabled={saving || draft.length === 0}
+            className="h-11 rounded-2xl bg-[hsl(var(--byfrost-accent))] px-8 text-white shadow-sm hover:bg-[hsl(var(--byfrost-accent)/0.92)] font-bold"
+          >
+            {saving ? "Salvando…" : "Salvar itens"}
+            <Save className="ml-2 h-4 w-4" />
+          </Button>
+        </div>
       </div>
     </div>
   );

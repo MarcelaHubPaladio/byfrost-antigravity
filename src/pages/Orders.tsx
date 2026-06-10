@@ -100,6 +100,7 @@ import { AppShell } from "@/components/AppShell";
 import { RequireAuth } from "@/components/RequireAuth";
 import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianGrid } from "recharts";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { ProjetistasManagerDialog } from "@/components/case/ProjetistasManagerDialog";
 
 type CaseRow = {
   id: string;
@@ -261,6 +262,7 @@ export default function Orders() {
   const [selectedPaymentMethods, setSelectedPaymentMethods] = useState<Set<string>>(new Set());
   const [selectedCities, setSelectedCities] = useState<Set<string>>(new Set());
   const [selectedInventoryIds, setSelectedInventoryIds] = useState<Set<string>>(new Set());
+  const [selectedProjetistasIds, setSelectedProjetistasIds] = useState<Set<string>>(new Set());
   const [selectedStates, setSelectedStates] = useState<Set<string>>(() => {
     const saved = localStorage.getItem(ORDERS_FILTERS_V2_KEY);
     if (saved) {
@@ -287,6 +289,7 @@ export default function Orders() {
   const [partialPaidCaseId, setPartialPaidCaseId] = useState<string | null>(null);
   const [partialPaidValue, setPartialPaidValue] = useState("");
   const [isNewOrderDialogOpen, setIsNewOrderDialogOpen] = useState(false);
+  const [isProjetistasManagerOpen, setIsProjetistasManagerOpen] = useState(false);
 
   const [transitionBlock, setTransitionBlock] = useState<{
     open: boolean;
@@ -441,6 +444,22 @@ export default function Orders() {
     return options;
   }, [inventoryQ.data]);
 
+  const projetistasQ = useQuery({
+    queryKey: ["projetistas_for_filter", activeTenantId],
+    enabled: Boolean(activeTenantId),
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("core_entities")
+        .select("id, display_name")
+        .eq("tenant_id", activeTenantId!)
+        .eq("entity_type", "projetista")
+        .is("deleted_at", null)
+        .order("display_name", { ascending: true });
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+
   const formatRelativeUpdate = (iso: string) => {
     if (!iso) return "—";
     const d = new Date(iso);
@@ -511,7 +530,7 @@ export default function Orders() {
             .from("case_fields")
             .select("case_id,key,value_text")
             .in("case_id", chunk)
-            .in("key", ["whatsapp", "phone", "customer_phone", "sale_date_text", "billing_status", "partial_paid_value", "total_value_raw", "obs", "payment_method", "city"])
+            .in("key", ["whatsapp", "phone", "customer_phone", "sale_date_text", "billing_status", "partial_paid_value", "total_value_raw", "obs", "payment_method", "city", "projetista_entity_id"])
             .limit(1000),
           supabase
             .from("case_items")
@@ -750,6 +769,13 @@ export default function Orders() {
         const orderInvIds = caseDataQ.data?.inventory.get(r.id);
         if (!orderInvIds) return false;
         return Array.from(selectedInventoryIds).some(id => orderInvIds.has(id));
+      });
+    }
+
+    if (selectedProjetistasIds.size > 0) {
+      rows = rows.filter(r => {
+        const f = caseDataQ.data?.fields.get(r.id);
+        return selectedProjetistasIds.has(String(f?.projetista_entity_id ?? "").trim());
       });
     }
 
@@ -1205,6 +1231,56 @@ export default function Orders() {
                         <span className="text-xs font-semibold text-slate-700 truncate">{opt.display_name}</span>
                       </label>
                     ))}
+                  </div>
+                </PopoverContent>
+              </Popover>
+
+              {/* Projetista Multi-Select */}
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className={cn(
+                      "h-10 rounded-2xl border-slate-200 bg-white/70 text-xs font-bold text-slate-700 min-w-[150px] justify-start hover:bg-white transition-all shadow-sm gap-2",
+                      selectedProjetistasIds.size > 0 && "border-blue-400 bg-blue-50 text-blue-700"
+                    )}
+                  >
+                    <Users2 className="h-4 w-4 text-slate-400 flex-shrink-0" />
+                    {selectedProjetistasIds.size === 0 ? "Projetista: Todos" : `${selectedProjetistasIds.size} projetistas`}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[220px] rounded-2xl p-2 shadow-xl border-slate-200" align="start">
+                  <div className="flex items-center justify-between px-2 py-1 mb-1">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Projetistas</p>
+                    {selectedProjetistasIds.size > 0 && (
+                      <button onClick={() => setSelectedProjetistasIds(new Set())} className="text-[10px] text-blue-600 font-bold hover:underline">Limpar</button>
+                    )}
+                  </div>
+                  <div className="max-h-[300px] overflow-y-auto space-y-0.5">
+                    {projetistasQ.data?.map((opt) => (
+                      <label key={opt.id} className="flex items-center gap-2.5 px-2 py-1.5 rounded-xl cursor-pointer hover:bg-slate-50 transition-colors">
+                        <input
+                          type="checkbox"
+                          className="accent-blue-600 h-3.5 w-3.5 rounded"
+                          checked={selectedProjetistasIds.has(opt.id)}
+                          onChange={() => {
+                            const next = new Set(selectedProjetistasIds);
+                            next.has(opt.id) ? next.delete(opt.id) : next.add(opt.id);
+                            setSelectedProjetistasIds(next);
+                          }}
+                        />
+                        <span className="text-xs font-semibold text-slate-700 truncate">{opt.display_name}</span>
+                      </label>
+                    ))}
+                  </div>
+                  <div className="pt-2 mt-2 border-t border-slate-100">
+                    <Button 
+                      variant="ghost" 
+                      className="w-full text-xs font-bold text-indigo-600 hover:bg-indigo-50 justify-start"
+                      onClick={() => setIsProjetistasManagerOpen(true)}
+                    >
+                      <Plus className="mr-2 h-3.5 w-3.5" /> Gerenciar Projetistas
+                    </Button>
                   </div>
                 </PopoverContent>
               </Popover>
@@ -1737,6 +1813,10 @@ export default function Orders() {
             </DialogContent>
           </Dialog>
         </div>
+        <ProjetistasManagerDialog 
+          open={isProjetistasManagerOpen} 
+          onOpenChange={setIsProjetistasManagerOpen} 
+        />
       </AppShell>
     </RequireAuth>
   );
