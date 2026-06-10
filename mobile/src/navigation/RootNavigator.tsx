@@ -1,4 +1,5 @@
 import React from 'react';
+import { View, Image, TouchableOpacity, Platform } from 'react-native';
 import { NavigationContainer, DarkTheme } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
@@ -83,6 +84,69 @@ function AppTabs() {
           options={{
             tabBarLabel: 'CRM',
             tabBarIcon: ({ color, size }) => <Package color={color} size={size} />,
+          }}
+        />
+      )}
+
+      {activeTenant && (
+        <Tab.Screen
+          name="TenantLogo"
+          component={View} // Dummy component
+          options={{
+            tabBarButton: (props) => {
+              const primaryColor = activeTenant.primary_color || '#A3FF47';
+              console.log("[DEBUG] activeTenant logo_url:", activeTenant.logo_url);
+              // Filter out delayLongPress which has a TS mismatch, and destructure style
+              const { delayLongPress, style, ...restProps } = props as any;
+              
+              return (
+                <TouchableOpacity 
+                  {...restProps} 
+                  activeOpacity={0.8}
+                  style={[style, {
+                    flex: 0,
+                    width: 70, // Fixed width prevents squishing other tabs
+                    top: Platform.OS === 'ios' ? -15 : -20,
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    ...Platform.select({
+                      ios: {
+                        shadowColor: primaryColor,
+                        shadowOffset: { width: 0, height: 4 },
+                        shadowOpacity: 0.6,
+                        shadowRadius: 10,
+                      },
+                      android: {
+                        elevation: 10,
+                        shadowColor: primaryColor,
+                      }
+                    })
+                  }]}
+                >
+                  <View style={{
+                    width: 52,
+                    height: 52,
+                    borderRadius: 26,
+                    backgroundColor: '#FFFFFF',
+                    borderWidth: 2,
+                    borderColor: primaryColor,
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    overflow: 'hidden',
+                    padding: 4,
+                  }}>
+                    {activeTenant.logo_url ? (
+                      <Image 
+                        source={{ uri: activeTenant.logo_url }} 
+                        style={{ width: '100%', height: '100%', resizeMode: 'contain' }} 
+                      />
+                    ) : (
+                      <View style={{ width: 30, height: 30, backgroundColor: primaryColor, borderRadius: 15 }} />
+                    )}
+                  </View>
+                </TouchableOpacity>
+              );
+            }
           }}
         />
       )}

@@ -11,6 +11,8 @@ export type TenantInfo = {
   slug: string;
   branding_json?: any;
   modules_json?: any;
+  primary_color?: string;
+  logo_url?: string;
   role: TenantRole;
 };
 
@@ -77,12 +79,22 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
 
         if (error) throw error;
 
-        const mapped: TenantInfo[] = (data ?? []).map((t: any) => ({
-          ...t,
-          branding_json: t.branding_json ?? {},
-          modules_json: t.modules_json ?? {},
-          role: "admin",
-        }));
+        const mapped: TenantInfo[] = (data ?? []).map((t: any) => {
+          const bj = t.branding_json ?? {};
+          const logoObj = bj.logo;
+          let publicLogoUrl = t.logo_url;
+          if (logoObj?.bucket && logoObj?.path) {
+            publicLogoUrl = supabase.storage.from(logoObj.bucket).getPublicUrl(logoObj.path).data.publicUrl;
+          }
+          return {
+            ...t,
+            branding_json: bj,
+            modules_json: t.modules_json ?? {},
+            primary_color: bj.palette?.primary?.hex || t.primary_color,
+            logo_url: publicLogoUrl,
+            role: "admin",
+          };
+        });
 
         setTenants(mapped);
         
@@ -108,14 +120,25 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
       if (error) throw error;
 
       const mapped: TenantInfo[] = (data ?? [])
-        .map((row: any) => ({
-          id: row.tenants?.id ?? row.tenant_id,
-          name: row.tenants?.name ?? "Tenant",
-          slug: row.tenants?.slug ?? "tenant",
-          branding_json: row.tenants?.branding_json ?? {},
-          modules_json: row.tenants?.modules_json ?? {},
-          role: String(row.role ?? "vendor"),
-        }))
+        .map((row: any) => {
+          const t = row.tenants || {};
+          const bj = t.branding_json ?? {};
+          const logoObj = bj.logo;
+          let publicLogoUrl = t.logo_url;
+          if (logoObj?.bucket && logoObj?.path) {
+            publicLogoUrl = supabase.storage.from(logoObj.bucket).getPublicUrl(logoObj.path).data.publicUrl;
+          }
+          return {
+            id: t.id ?? row.tenant_id,
+            name: t.name ?? "Tenant",
+            slug: t.slug ?? "tenant",
+            branding_json: bj,
+            modules_json: t.modules_json ?? {},
+            primary_color: bj.palette?.primary?.hex || t.primary_color,
+            logo_url: publicLogoUrl,
+            role: String(row.role ?? "vendor"),
+          };
+        })
         .filter((t: any) => Boolean(t.id));
 
       setTenants(mapped);
