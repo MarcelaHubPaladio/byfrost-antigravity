@@ -12,6 +12,11 @@ import { useSession } from "@/providers/SessionProvider";
 import { QuickCreateProductDialog } from "@/components/case/QuickCreateProductDialog";
 import { adjustInventoryForOrderItems } from "@/utils/inventorySync";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
+import { CalendarIcon } from "lucide-react";
+import { format, parse } from "date-fns";
+import { ptBR } from "date-fns/locale";
 
 type CaseItemRow = {
   id: string;
@@ -57,6 +62,13 @@ function moneyPtBr(v: number) {
   }
 }
 
+function parseDateString(dateString: string) {
+  if (!dateString) return undefined;
+  const parsed = parse(dateString, "dd/MM/yyyy", new Date());
+  if (!isNaN(parsed.getTime())) return parsed;
+  return undefined;
+}
+
 function computeRowTotal(qty: number | null, price: number | null, discountPct: number | null = 0) {
   const q = Number(qty ?? 0);
   const p = Number(price ?? 0);
@@ -73,6 +85,7 @@ export function SalesOrderItemsEditorCard(props: { caseId: string; fields?: any[
   const { activeTenantId } = useTenant();
   const { user } = useSession();
   const [saving, setSaving] = useState(false);
+  const [globalDiscountInput, setGlobalDiscountInput] = useState("");
 
   const initialExtraFields = useMemo(() => ({
     proposal_validity_date_text: fields?.find(f => f.key === "proposal_validity_date_text" || f.key === "proposal_valid_until_text")?.value_text || "",
@@ -311,15 +324,7 @@ interface SearchOption {
     }, 0);
   }, [draft, commissionRules]);
 
-  const applyGlobalDiscount = () => {
-    const val = prompt("Informe a porcentagem de desconto para aplicar em TODOS os itens (0-100):", "0");
-    if (val === null) return;
-    const pct = parsePtBrNumber(val);
-    if (pct === null || pct < 0 || pct > 100) {
-      showError("Desconto inválido. Use um número entre 0 e 100.");
-      return;
-    }
-    
+  const applyGlobalDiscount = (pct: number) => {
     setDraft((prev) =>
       prev.map((x) => ({
         ...x,
@@ -577,14 +582,7 @@ interface SearchOption {
           </div>
         </div>
         <div className="flex flex-col items-end gap-2">
-            <Button
-                onClick={applyGlobalDiscount}
-                variant="outline"
-                size="sm"
-                className="h-8 rounded-xl border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100 font-bold px-3 transition-all"
-            >
-                Desconto Geral %
-            </Button>
+
             <Button
                 onClick={saveAll}
                 disabled={saving || draft.length === 0}
@@ -603,26 +601,7 @@ interface SearchOption {
         </div>
       )}
 
-      <div className="mt-4 grid gap-3 sm:grid-cols-2">
-        <div>
-          <Label className="text-xs">Validade da proposta</Label>
-          <Input
-            value={extraFields.proposal_validity_date_text}
-            onChange={(e) => setExtraFields(p => ({ ...p, proposal_validity_date_text: e.target.value }))}
-            className="mt-1 h-10 rounded-2xl"
-            placeholder="dd/mm/aaaa"
-          />
-        </div>
-        <div>
-          <Label className="text-xs">Data prevista para entrega</Label>
-          <Input
-            value={extraFields.delivery_forecast_text}
-            onChange={(e) => setExtraFields(p => ({ ...p, delivery_forecast_text: e.target.value }))}
-            className="mt-1 h-10 rounded-2xl"
-            placeholder="dd/mm/aaaa"
-          />
-        </div>
-      </div>
+
 
       <div className="mt-4 rounded-2xl border border-slate-200">
         <div className="hidden grid-cols-[90px_1fr_70px_110px_80px_110px_40px] gap-2 bg-slate-50 px-3 py-3 text-[10px] font-black uppercase tracking-[0.1em] text-slate-500 sm:grid border-b border-slate-200">
@@ -1144,6 +1123,91 @@ interface SearchOption {
           }
         }}
       />
+
+      <div className="mt-8 pt-6 border-t border-slate-100 grid gap-4 sm:grid-cols-3 items-end relative z-20">
+        <div>
+          <Label className="text-xs font-semibold text-slate-700">Validade da proposta</Label>
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button
+                variant={"outline"}
+                className={cn(
+                  "w-full mt-1 h-11 rounded-2xl justify-start text-left font-medium bg-white border-slate-200 hover:bg-slate-50 transition-colors shadow-sm",
+                  !extraFields.proposal_validity_date_text && "text-slate-400"
+                )}
+              >
+                <CalendarIcon className="mr-3 h-4 w-4 text-slate-400" />
+                {extraFields.proposal_validity_date_text || <span>Selecionar data</span>}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0 rounded-[24px] border-slate-200 shadow-xl" align="start">
+              <Calendar
+                mode="single"
+                selected={parseDateString(extraFields.proposal_validity_date_text)}
+                onSelect={(date) => setExtraFields(p => ({ ...p, proposal_validity_date_text: date ? format(date, "dd/MM/yyyy") : "" }))}
+                initialFocus
+                locale={ptBR}
+              />
+            </PopoverContent>
+          </Popover>
+        </div>
+        <div>
+          <Label className="text-xs font-semibold text-slate-700">Data prevista para entrega</Label>
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button
+                variant={"outline"}
+                className={cn(
+                  "w-full mt-1 h-11 rounded-2xl justify-start text-left font-medium bg-white border-slate-200 hover:bg-slate-50 transition-colors shadow-sm",
+                  !extraFields.delivery_forecast_text && "text-slate-400"
+                )}
+              >
+                <CalendarIcon className="mr-3 h-4 w-4 text-slate-400" />
+                {extraFields.delivery_forecast_text || <span>Selecionar data</span>}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0 rounded-[24px] border-slate-200 shadow-xl" align="start">
+              <Calendar
+                mode="single"
+                selected={parseDateString(extraFields.delivery_forecast_text)}
+                onSelect={(date) => setExtraFields(p => ({ ...p, delivery_forecast_text: date ? format(date, "dd/MM/yyyy") : "" }))}
+                initialFocus
+                locale={ptBR}
+              />
+            </PopoverContent>
+          </Popover>
+        </div>
+        <div>
+          <Label className="text-xs font-semibold text-amber-700">Desconto Geral (%)</Label>
+          <div className="flex items-center mt-1 shadow-sm rounded-2xl">
+            <Input
+              type="number"
+              min="0"
+              max="100"
+              value={globalDiscountInput}
+              onChange={(e) => setGlobalDiscountInput(e.target.value)}
+              className="h-11 rounded-l-2xl rounded-r-none border-r-0 border-amber-200 bg-amber-50/30 text-amber-900 font-bold focus-visible:ring-amber-500"
+              placeholder="0 a 100"
+            />
+            <Button
+              onClick={() => {
+                const pct = parsePtBrNumber(globalDiscountInput);
+                if (pct === null || pct < 0 || pct > 100) {
+                  showError("Desconto inválido. Use um número entre 0 e 100.");
+                  return;
+                }
+                setDraft((prev) => prev.map((x) => ({ ...x, discount_percent: String(pct).replace(/\./g, ",") })));
+                showSuccess(`Desconto de ${pct}% aplicado a todos os itens.`);
+                setGlobalDiscountInput("");
+              }}
+              variant="outline"
+              className="h-11 rounded-r-2xl rounded-l-none border border-l-0 border-amber-200 bg-amber-100 text-amber-700 hover:bg-amber-200 font-black px-5 transition-all"
+            >
+              Aplicar
+            </Button>
+          </div>
+        </div>
+      </div>
 
       <div className="sticky bottom-0 bg-white pt-5 border-t border-slate-100 z-10 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mt-6">
         <Button type="button" variant="secondary" className="h-11 rounded-2xl" onClick={addRow}>
