@@ -385,8 +385,8 @@ export function HomeScreen({ navigation }: any) {
   const { user } = useSession();
   const { activeTenant, activeTenantId, isSuperAdmin, tenants, clearActiveTenant } = useTenant();
   const qc = useQueryClient();
-  const [statusFilter, setStatusFilter] = useState<FilterType>('all');
-  const [personFilterId, setPersonFilterId] = useState<string | null>(null);
+  const [statusFilter, setStatusFilter] = useState<FilterType>('pending');
+  const [personFilterId, setPersonFilterId] = useState<string | null>(user?.id || null);
   const [showNewTask, setShowNewTask] = useState(false);
   const [showPersonFilter, setShowPersonFilter] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -542,8 +542,9 @@ export function HomeScreen({ navigation }: any) {
       </View>
 
       {/* ── Filters Row ── */}
-      <View style={styles.filtersRow}>
-        {/* Status chips */}
+      <View>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filtersRowScroll}>
+          {/* Status chips */}
         {(['all', 'pending', 'done'] as FilterType[]).map(f => (
           <TouchableOpacity
             key={f}
@@ -553,6 +554,7 @@ export function HomeScreen({ navigation }: any) {
             <Text style={[styles.filterChipText, statusFilter === f && styles.filterChipTextActive]}>
               {f === 'all' ? 'Todas' : f === 'pending' ? 'Pendentes' : 'Concluídas'}
             </Text>
+            {statusFilter === f && <Check size={11} color="#000" />}
           </TouchableOpacity>
         ))}
 
@@ -573,6 +575,7 @@ export function HomeScreen({ navigation }: any) {
             )}
           </TouchableOpacity>
         )}
+        </ScrollView>
       </View>
 
       {/* ── Task List ── */}
@@ -661,13 +664,13 @@ const styles = StyleSheet.create({
   statValue: { fontSize: 22, fontWeight: '800', color: '#F9FAFB' },
   statLabel: { fontSize: 11, color: '#6B7280', fontWeight: '600' },
 
-  filtersRow: { flexDirection: 'row', paddingHorizontal: 16, paddingTop: 14, paddingBottom: 8, gap: 8, flexWrap: 'wrap' },
-  filterChip: { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20, backgroundColor: '#141414', borderWidth: 1, borderColor: '#2A2A2A' },
+  filtersRowScroll: { flexDirection: 'row', paddingHorizontal: 16, paddingTop: 14, paddingBottom: 8, gap: 8, alignItems: 'center' },
+  filterChip: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 20, backgroundColor: '#141414', borderWidth: 1, borderColor: '#2A2A2A' },
   filterChipActive: { backgroundColor: '#A3FF47', borderColor: '#A3FF47' },
   filterChipPerson: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 20, backgroundColor: '#141414', borderWidth: 1, borderColor: '#2A2A2A' },
   filterChipPersonActive: { backgroundColor: '#A3FF47', borderColor: '#A3FF47' },
-  filterChipText: { fontSize: 13, fontWeight: '600', color: '#6B7280' },
-  filterChipTextActive: { color: '#000000' },
+  filterChipText: { fontSize: 12, fontWeight: '600', color: '#9CA3AF' },
+  filterChipTextActive: { color: '#000000', fontWeight: '700' },
 
   listContent: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 110, gap: 10 },
 

@@ -381,7 +381,7 @@ export function OrdersScreen({ navigation }: any) {
   const [refreshing, setRefreshing] = useState(false);
   const [filterPanel, setFilterPanel] = useState<FilterPanelType>(null);
   const [adminFilters, setAdminFilters] = useState<AdminFilters>({ 
-    sellerIds: [], states: [], paymentMethods: [], dateRange: 'all', customDateStart: '', customDateEnd: '', productSearch: '', projetistaIds: [], cities: [] 
+    sellerIds: [], states: [], paymentMethods: [], dateRange: 'current_month', customDateStart: '', customDateEnd: '', productSearch: '', projetistaIds: [], cities: [] 
   });
 
   const isAdmin =

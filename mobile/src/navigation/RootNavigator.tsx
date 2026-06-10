@@ -2,7 +2,7 @@ import React from 'react';
 import { NavigationContainer, DarkTheme } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { Home, ShoppingBag, Package } from 'lucide-react-native';
+import { Home, ShoppingBag, Package, ShieldAlert } from 'lucide-react-native';
 
 import { useSession } from '../providers/SessionProvider';
 import { useTenant } from '../providers/TenantProvider';
@@ -10,6 +10,7 @@ import { useTenant } from '../providers/TenantProvider';
 import Login from '../screens/Login';
 import { TenantSelectScreen } from '../screens/tenant/TenantSelectScreen';
 import { HomeScreen } from '../screens/HomeScreen';
+import { GuardiaoScreen } from '../screens/GuardiaoScreen';
 import { CrmScreen } from '../screens/crm/CrmScreen';
 import { CaseDetailScreen } from '../screens/crm/CaseDetailScreen';
 import { NewLeadScreen } from '../screens/crm/NewLeadScreen';
@@ -34,7 +35,13 @@ function isAgroforteTenant(tenant: any): boolean {
 }
 
 function AppTabs() {
-  const { activeTenant } = useTenant();
+  const { activeTenant, isSuperAdmin } = useTenant();
+  
+  const isAdmin =
+    isSuperAdmin ||
+    activeTenant?.role === 'admin' ||
+    activeTenant?.role === 'manager' ||
+    activeTenant?.role === 'owner';
 
   const hasCrm = activeTenant?.modules_json?.crm !== false;
   const hasOrders = isAgroforteTenant(activeTenant);
@@ -58,14 +65,16 @@ function AppTabs() {
         },
       }}
     >
-      <Tab.Screen
-        name="Home"
-        component={HomeScreen}
-        options={{
-          tabBarLabel: 'Tarefas',
-          tabBarIcon: ({ color, size }) => <Home color={color} size={size} />,
-        }}
-      />
+      {isAdmin && (
+        <Tab.Screen
+          name="Guardiao"
+          component={GuardiaoScreen}
+          options={{
+            tabBarLabel: 'Guardião',
+            tabBarIcon: ({ color, size }) => <ShieldAlert color={color} size={size} />,
+          }}
+        />
+      )}
 
       {hasCrm && (
         <Tab.Screen
@@ -88,6 +97,15 @@ function AppTabs() {
           }}
         />
       )}
+
+      <Tab.Screen
+        name="Home"
+        component={HomeScreen}
+        options={{
+          tabBarLabel: 'Tarefas',
+          tabBarIcon: ({ color, size }) => <Home color={color} size={size} />,
+        }}
+      />
     </Tab.Navigator>
   );
 }
