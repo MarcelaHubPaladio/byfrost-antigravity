@@ -243,14 +243,14 @@ export default function Orders() {
     return "all";
   });
 
-  const [dateRange, setDateRange] = useState<{ from: Date; to: Date | undefined }>(() => {
+  const [dateRange, setDateRange] = useState<{ from: Date | undefined; to: Date | undefined }>(() => {
     const saved = localStorage.getItem(ORDERS_FILTERS_V2_KEY);
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        if (parsed.dateRange?.from) {
+        if (parsed.dateRange) {
           return {
-            from: new Date(parsed.dateRange.from),
+            from: parsed.dateRange.from ? new Date(parsed.dateRange.from) : undefined,
             to: parsed.dateRange.to ? new Date(parsed.dateRange.to) : undefined
           };
         }
@@ -259,10 +259,34 @@ export default function Orders() {
     return { from: startOfMonth(new Date()), to: endOfMonth(new Date()) };
   });
 
-  const [selectedPaymentMethods, setSelectedPaymentMethods] = useState<Set<string>>(new Set());
-  const [selectedCities, setSelectedCities] = useState<Set<string>>(new Set());
-  const [selectedInventoryIds, setSelectedInventoryIds] = useState<Set<string>>(new Set());
-  const [selectedProjetistasIds, setSelectedProjetistasIds] = useState<Set<string>>(new Set());
+  const [selectedPaymentMethods, setSelectedPaymentMethods] = useState<Set<string>>(() => {
+    const saved = localStorage.getItem(ORDERS_FILTERS_V2_KEY);
+    if (saved) {
+      try { const parsed = JSON.parse(saved); if (Array.isArray(parsed.paymentMethods)) return new Set<string>(parsed.paymentMethods); } catch (e) {}
+    }
+    return new Set();
+  });
+  const [selectedCities, setSelectedCities] = useState<Set<string>>(() => {
+    const saved = localStorage.getItem(ORDERS_FILTERS_V2_KEY);
+    if (saved) {
+      try { const parsed = JSON.parse(saved); if (Array.isArray(parsed.cities)) return new Set<string>(parsed.cities); } catch (e) {}
+    }
+    return new Set();
+  });
+  const [selectedInventoryIds, setSelectedInventoryIds] = useState<Set<string>>(() => {
+    const saved = localStorage.getItem(ORDERS_FILTERS_V2_KEY);
+    if (saved) {
+      try { const parsed = JSON.parse(saved); if (Array.isArray(parsed.inventoryIds)) return new Set<string>(parsed.inventoryIds); } catch (e) {}
+    }
+    return new Set();
+  });
+  const [selectedProjetistasIds, setSelectedProjetistasIds] = useState<Set<string>>(() => {
+    const saved = localStorage.getItem(ORDERS_FILTERS_V2_KEY);
+    if (saved) {
+      try { const parsed = JSON.parse(saved); if (Array.isArray(parsed.projetistasIds)) return new Set<string>(parsed.projetistasIds); } catch (e) {}
+    }
+    return new Set();
+  });
   const [selectedStates, setSelectedStates] = useState<Set<string>>(() => {
     const saved = localStorage.getItem(ORDERS_FILTERS_V2_KEY);
     if (saved) {
@@ -314,13 +338,17 @@ export default function Orders() {
     const filters = {
       sellerId: selectedSellerId,
       states: Array.from(selectedStates),
+      paymentMethods: Array.from(selectedPaymentMethods),
+      cities: Array.from(selectedCities),
+      inventoryIds: Array.from(selectedInventoryIds),
+      projetistasIds: Array.from(selectedProjetistasIds),
       dateRange: {
-        from: dateRange.from?.toISOString(),
-        to: dateRange.to?.toISOString()
+        from: dateRange.from ? dateRange.from.toISOString() : null,
+        to: dateRange.to ? dateRange.to.toISOString() : null
       }
     };
     localStorage.setItem(ORDERS_FILTERS_V2_KEY, JSON.stringify(filters));
-  }, [selectedSellerId, selectedStates, dateRange]);
+  }, [selectedSellerId, selectedStates, dateRange, selectedPaymentMethods, selectedCities, selectedInventoryIds, selectedProjetistasIds]);
 
   // Force fresh build - query cleaned v5
   const journeyQ = useQuery({
