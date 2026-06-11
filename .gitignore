@@ -26,3 +26,4 @@ dist-ssr
 supabase/.temp/
 query_*.js
 scratch/
+mobile/byfrost-1-firebase-adminsdk-fbsvc-*.json

@@ -12,12 +12,12 @@ serve(async (req) => {
     }
 
     const authHeader = req.headers.get("Authorization");
-    const adminKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-    if (!adminKey || authHeader !== `Bearer ${adminKey}`) {
+    if (!authHeader) {
       return new Response("Unauthorized", { status: 401 });
     }
 
-    const supabase = createSupabaseAdmin();
+    const token = authHeader.replace("Bearer ", "");
+    const supabase = createSupabaseAdmin(token);
 
     // Calculate dates: 06:00 yesterday to 05:59 today
     const now = new Date();
@@ -51,7 +51,7 @@ serve(async (req) => {
     for (const [tenantId, tokens] of tenantsMap.entries()) {
       // Fetch timeline events for this tenant in the last 24h
       const { data: events, error: eventsErr } = await supabase
-        .from("tenant_events")
+        .from("timeline_events")
         .select("event_type, actor_type, message, occurred_at")
         .eq("tenant_id", tenantId)
         .gte("occurred_at", startDate.toISOString())

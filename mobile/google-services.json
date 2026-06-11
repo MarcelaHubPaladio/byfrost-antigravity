@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "254490106377",
+    "project_id": "byfrost-1",
+    "storage_bucket": "byfrost-1.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:254490106377:android:6b31c7ff46bde87c0036d8",
+        "android_client_info": {
+          "package_name": "com.byfrost.mobile"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBnAvlyFcfKBaWqCHbpN4zfU9A9SbYTmX0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -19,8 +19,8 @@ async function openAIChat({
   model: string;
   temperature: number;
 }): Promise<string> {
-  const apiKey = Deno.env.get("AI_API_KEY") ?? "";
-  if (!apiKey) throw new Error("Missing AI_API_KEY");
+  const apiKey = Deno.env.get("OPENAI_API_KEY") ?? "";
+  if (!apiKey) throw new Error("Missing OPENAI_API_KEY");
 
   const res = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",

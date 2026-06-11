@@ -24,13 +24,20 @@
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "com.anonymous.mobile"
+      "package": "com.byfrost.mobile"
     },
     "web": {
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      "expo-web-browser"
-    ]
+      "expo-web-browser",
+      "expo-notifications"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "5842e02d-67ab-4051-bcee-a7600031ad01"
+      }
+    },
+    "owner": "felipe.otelakoski"
   }
 }

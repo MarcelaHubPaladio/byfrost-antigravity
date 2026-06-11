@@ -38,10 +38,12 @@ export function PushNotificationProvider({ children }: { children: React.ReactNo
     });
 
     return () => {
-      // @ts-ignore
-      if (notificationListener.current) notificationListener.current.remove();
-      // @ts-ignore
-      if (responseListener.current) responseListener.current.remove();
+      if (notificationListener.current && typeof notificationListener.current.remove === 'function') {
+        notificationListener.current.remove();
+      }
+      if (responseListener.current && typeof responseListener.current.remove === 'function') {
+        responseListener.current.remove();
+      }
     };
   }, []);
 
