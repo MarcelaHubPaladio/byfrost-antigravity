@@ -41,44 +41,63 @@ export function EntityFilesTab({ tenantId, entityId }: EntityFilesTabProps) {
   });
 
   const onFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
 
     // Validate type (png, jpg, pdf)
     const allowedTypes = ['image/png', 'image/jpeg', 'application/pdf'];
-    if (!allowedTypes.includes(file.type)) {
-      showError("Apenas arquivos PNG, JPG e PDF são permitidos.");
+    const filesToUpload = Array.from(files).filter(file => allowedTypes.includes(file.type));
+
+    if (filesToUpload.length !== files.length) {
+      showError("Apenas arquivos PNG, JPG e PDF são permitidos. Arquivos inválidos foram ignorados.");
+    }
+    
+    if (filesToUpload.length === 0) {
+      e.target.value = '';
       return;
     }
 
     setUploading(true);
+    let successCount = 0;
+
     try {
-      const fileExt = file.name.split('.').pop();
-      const fileName = `${Math.random().toString(36).substring(2, 15)}_${Date.now()}.${fileExt}`;
-      const storagePath = `${tenantId}/${entityId}/${fileName}`;
+      for (const file of filesToUpload) {
+        const fileExt = file.name.split('.').pop();
+        const fileName = `${Math.random().toString(36).substring(2, 15)}_${Date.now()}.${fileExt}`;
+        const storagePath = `${tenantId}/${entityId}/${fileName}`;
 
-      const { error: uploadError } = await supabase.storage
-        .from("entity-files")
-        .upload(storagePath, file, { upsert: true });
+        const { error: uploadError } = await supabase.storage
+          .from("entity-files")
+          .upload(storagePath, file, { upsert: true });
 
-      if (uploadError) throw uploadError;
+        if (uploadError) {
+          console.error("Upload error:", uploadError);
+          throw new Error(`Falha no upload do arquivo ${file.name}`);
+        }
 
-      const { error: dbError } = await supabase.from("core_entity_files").insert({
-        tenant_id: tenantId,
-        entity_id: entityId,
-        file_type: selectedType,
-        status: "pending",
-        storage_path: storagePath,
-        original_filename: file.name,
-        content_type: file.type,
-      });
+        const { error: dbError } = await supabase.from("core_entity_files").insert({
+          tenant_id: tenantId,
+          entity_id: entityId,
+          file_type: selectedType,
+          status: "pending",
+          storage_path: storagePath,
+          original_filename: file.name,
+          content_type: file.type,
+        });
 
-      if (dbError) throw dbError;
+        if (dbError) {
+          console.error("Database insert error:", dbError);
+          throw new Error(`Falha ao registrar o arquivo ${file.name} no banco.`);
+        }
+        successCount++;
+      }
 
-      showSuccess("Arquivo enviado com sucesso!");
-      await qc.invalidateQueries({ queryKey: ["entity_files", tenantId, entityId] });
+      if (successCount > 0) {
+        showSuccess(`${successCount} arquivo(s) enviado(s) com sucesso!`);
+        await qc.invalidateQueries({ queryKey: ["entity_files", tenantId, entityId] });
+      }
     } catch (err: any) {
-      showError(err?.message || "Erro ao fazer upload do arquivo.");
+      showError(err?.message || "Erro ao fazer upload dos arquivos.");
     } finally {
       setUploading(false);
       // Reset file input
@@ -160,6 +179,7 @@ export function EntityFilesTab({ tenantId, entityId }: EntityFilesTabProps) {
             <div className="relative w-full sm:w-auto">
               <Input 
                 type="file" 
+                multiple
                 className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" 
                 onChange={onFileUpload}
                 accept="image/png, image/jpeg, application/pdf"
