@@ -80,8 +80,10 @@ export default function SalesOrderCase() {
     reasons: TransitionBlockReason[];
   }>({ open: false, nextStateName: "", reasons: [] });
 
-  const { activeTenantId } = useTenant();
+  const { activeTenantId, activeTenant, isSuperAdmin } = useTenant();
   const tenantId = activeTenantId;
+
+  const canDelete = isSuperAdmin || ["admin", "financeiro", "lider", "leader"].includes(activeTenant?.role || "");
 
   const { data: caseData, isLoading: isLoadingCase } = useQuery({
     queryKey: ["case", caseId],
@@ -629,36 +631,38 @@ export default function SalesOrderCase() {
 
                 <div className="h-8 w-px bg-slate-100 mx-1" />
 
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="icon" className="h-10 w-10 rounded-2xl hover:bg-slate-100">
-                      <MoreVertical className="h-5 w-5 text-slate-400" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="rounded-2xl border-slate-200 w-48 p-2">
-                    <AlertDialog>
-                      <AlertDialogTrigger asChild>
-                        <DropdownMenuItem onSelect={(e) => e.preventDefault()} className="rounded-xl font-bold text-xs h-10 gap-3 cursor-pointer text-red-600 hover:text-red-700 !bg-red-50/0 hover:!bg-red-50 transition-colors">
-                          <Trash2 className="w-4 h-4" /> Excluir Pedido
-                        </DropdownMenuItem>
-                      </AlertDialogTrigger>
-                      <AlertDialogContent className="rounded-[32px]">
-                        <AlertDialogHeader>
-                          <AlertDialogTitle>Excluir este pedido?</AlertDialogTitle>
-                          <AlertDialogDescription>
-                            Esta ação não pode ser desfeita. Todos os dados deste pedido, incluindo itens e histórico, serão removidos permanentemente.
-                          </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                          <AlertDialogCancel className="rounded-2xl">Cancelar</AlertDialogCancel>
-                          <AlertDialogAction onClick={deleteCase} className="rounded-2xl bg-red-600 hover:bg-red-700">
-                            Excluir Definitivamente
-                          </AlertDialogAction>
-                        </AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
-                  </DropdownMenuContent>
-                </DropdownMenu>
+                {canDelete && (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="icon" className="h-10 w-10 rounded-2xl hover:bg-slate-100">
+                        <MoreVertical className="h-5 w-5 text-slate-400" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="rounded-2xl border-slate-200 w-48 p-2">
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <DropdownMenuItem onSelect={(e) => e.preventDefault()} className="rounded-xl font-bold text-xs h-10 gap-3 cursor-pointer text-red-600 hover:text-red-700 !bg-red-50/0 hover:!bg-red-50 transition-colors">
+                            <Trash2 className="w-4 h-4" /> Excluir Pedido
+                          </DropdownMenuItem>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent className="rounded-[32px]">
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Excluir este pedido?</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              Esta ação não pode ser desfeita. Todos os dados deste pedido, incluindo itens e histórico, serão removidos permanentemente.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel className="rounded-2xl">Cancelar</AlertDialogCancel>
+                            <AlertDialogAction onClick={deleteCase} className="rounded-2xl bg-red-600 hover:bg-red-700">
+                              Excluir Definitivamente
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                )}
               </div>
             </div>
           </div>
