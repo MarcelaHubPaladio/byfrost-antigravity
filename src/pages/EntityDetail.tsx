@@ -58,7 +58,8 @@ export default function EntityDetail() {
   const nav = useNavigate();
   const qc = useQueryClient();
   const entityId = String(id ?? "");
-  const { activeTenantId, activeTenant } = useTenant();
+  const { activeTenantId, activeTenant, isSuperAdmin } = useTenant();
+  const isFinanceViewer = isSuperAdmin || activeTenant?.role === "admin" || activeTenant?.role === "super-admin";
 
   const [searchParams] = useSearchParams();
   const [activeTab, setActiveTab] = useState("overview");
@@ -210,7 +211,7 @@ export default function EntityDetail() {
                     {entityQ.data?.subtype === "imovel" ? <TabsTrigger value="photos" className="rounded-xl px-4 py-2 text-xs font-semibold data-[state=active]:bg-white data-[state=active]:shadow-sm">Fotos</TabsTrigger> : null}
                     {entityQ.data?.entity_type === "party" ? <TabsTrigger value="receipts" className="rounded-xl px-4 py-2 text-xs font-semibold data-[state=active]:bg-white data-[state=active]:shadow-sm">Recibos</TabsTrigger> : null}
                     <TabsTrigger value="files" className="rounded-xl px-4 py-2 text-xs font-semibold data-[state=active]:bg-white data-[state=active]:shadow-sm">Arquivos</TabsTrigger>
-                    <TabsTrigger value="finance" className="rounded-xl px-4 py-2 text-xs font-semibold data-[state=active]:bg-white data-[state=active]:shadow-sm">Financeiro</TabsTrigger>
+                    {isFinanceViewer ? <TabsTrigger value="finance" className="rounded-xl px-4 py-2 text-xs font-semibold data-[state=active]:bg-white data-[state=active]:shadow-sm">Financeiro</TabsTrigger> : null}
                     <TabsTrigger value="timeline" className="rounded-xl px-4 py-2 text-xs font-semibold data-[state=active]:bg-white data-[state=active]:shadow-sm">Linha do tempo</TabsTrigger>
                   </TabsList>
                 </div>
@@ -393,9 +394,11 @@ export default function EntityDetail() {
                   {activeTenantId ? <EntityFilesTab tenantId={activeTenantId} entityId={entityId} /> : null}
                 </TabsContent>
 
-                <TabsContent value="finance">
-                  {activeTenantId ? <EntityFinanceTab tenantId={activeTenantId} entityId={entityId} /> : null}
-                </TabsContent>
+                {isFinanceViewer ? (
+                  <TabsContent value="finance">
+                    {activeTenantId ? <EntityFinanceTab tenantId={activeTenantId} entityId={entityId} /> : null}
+                  </TabsContent>
+                ) : null}
 
                 <TabsContent value="timeline">
                   {activeTenantId ? <EntityHistory tenantId={activeTenantId} entityId={entityId} /> : null}
