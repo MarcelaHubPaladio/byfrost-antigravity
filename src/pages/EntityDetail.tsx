@@ -25,6 +25,7 @@ import { EntityReceiptsTab } from "@/components/entities/EntityReceiptsTab";
 import { EntityMediaKitTab } from "@/components/entities/EntityMediaKitTab";
 import { RoomPhotoManager } from "@/components/entities/RoomPhotoManager";
 import { EntityEditTab } from "@/components/entities/EntityEditTab";
+import { EntityFilesTab } from "@/components/entities/EntityFilesTab";
 import { MapContainer, TileLayer, Marker } from "react-leaflet";
 import { divIcon } from "leaflet";
 
@@ -208,6 +209,7 @@ export default function EntityDetail() {
                     {mediaKitEnabled ? <TabsTrigger value="media_kit" className="rounded-xl px-4 py-2 text-xs font-semibold data-[state=active]:bg-white data-[state=active]:shadow-sm">Mídia Kit</TabsTrigger> : null}
                     {entityQ.data?.subtype === "imovel" ? <TabsTrigger value="photos" className="rounded-xl px-4 py-2 text-xs font-semibold data-[state=active]:bg-white data-[state=active]:shadow-sm">Fotos</TabsTrigger> : null}
                     {entityQ.data?.entity_type === "party" ? <TabsTrigger value="receipts" className="rounded-xl px-4 py-2 text-xs font-semibold data-[state=active]:bg-white data-[state=active]:shadow-sm">Recibos</TabsTrigger> : null}
+                    <TabsTrigger value="files" className="rounded-xl px-4 py-2 text-xs font-semibold data-[state=active]:bg-white data-[state=active]:shadow-sm">Arquivos</TabsTrigger>
                     <TabsTrigger value="finance" className="rounded-xl px-4 py-2 text-xs font-semibold data-[state=active]:bg-white data-[state=active]:shadow-sm">Financeiro</TabsTrigger>
                     <TabsTrigger value="timeline" className="rounded-xl px-4 py-2 text-xs font-semibold data-[state=active]:bg-white data-[state=active]:shadow-sm">Linha do tempo</TabsTrigger>
                   </TabsList>
@@ -386,6 +388,10 @@ export default function EntityDetail() {
                     ) : null}
                   </TabsContent>
                 ) : null}
+
+                <TabsContent value="files">
+                  {activeTenantId ? <EntityFilesTab tenantId={activeTenantId} entityId={entityId} /> : null}
+                </TabsContent>
 
                 <TabsContent value="finance">
                   {activeTenantId ? <EntityFinanceTab tenantId={activeTenantId} entityId={entityId} /> : null}
