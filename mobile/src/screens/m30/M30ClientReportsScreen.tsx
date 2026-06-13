@@ -30,34 +30,33 @@ export function M30ClientReportsScreen() {
 
   const neonColor = activeTenant?.neon_primary || '#A3FF47';
 
-  // Fetch the M30 Client profile to get commitment_id
+  // Fetch the M30 Client contracts — same query pattern as M30ClientHomeScreen
   const profileQ = useQuery({
     queryKey: ['m30_client_profile_reports', user?.id, activeTenantId],
     enabled: Boolean(user?.id && activeTenantId),
     queryFn: async () => {
       const { data, error } = await supabase
         .from('m30_client_users')
-        .select('commitment_id, connection:core_connections!inner(tenant_id)')
-        .eq('user_id', user!.id)
-        .eq('connection.tenant_id', activeTenantId!)
-        .maybeSingle();
+        .select('commitment_id')
+        .eq('tenant_id', activeTenantId!)
+        .eq('user_id', user!.id);
       if (error) throw error;
-      return data;
+      return data; // returns array of { commitment_id }
     },
     staleTime: 60_000,
   });
 
-  const commitmentId = profileQ.data?.commitment_id;
+  const commitmentIds = (profileQ.data || []).map(r => r.commitment_id).filter(Boolean);
 
-  // Fetch the reports for this commitment
+  // Fetch all entity_reports for all commitments of this client
   const reportsQ = useQuery({
-    queryKey: ['entity_reports', commitmentId],
-    enabled: Boolean(commitmentId),
+    queryKey: ['entity_reports_mobile', commitmentIds],
+    enabled: commitmentIds.length > 0,
     queryFn: async () => {
       const { data, error } = await supabase
         .from('entity_reports')
         .select('*')
-        .eq('contract_id', commitmentId!)
+        .in('contract_id', commitmentIds)
         .is('deleted_at', null)
         .order('start_date', { ascending: true });
       if (error) throw error;
