@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, FlatList, ActivityIndicator, RefreshControl, TouchableOpacity, ScrollView } from 'react-native';
+import { View, Text, FlatList, ActivityIndicator, RefreshControl, TouchableOpacity, StyleSheet } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '../../lib/supabase';
 import { useTenant } from '../../providers/TenantProvider';
@@ -14,7 +14,6 @@ export function M30ClientHomeScreen() {
     queryKey: ['m30_client_deliverables', activeTenantId, user?.id],
     enabled: Boolean(activeTenantId && user?.id),
     queryFn: async () => {
-      // 1. Acha os contratos do usuário
       const { data: contracts, error: errC } = await supabase
         .from('m30_client_users')
         .select('commitment_id')
@@ -26,8 +25,6 @@ export function M30ClientHomeScreen() {
 
       const commitmentIds = contracts.map(c => c.commitment_id);
 
-      // 2. Acha os cases (entregáveis) da jornada operacao_m30 ligados a esses contratos
-      // Vamos buscar a jornada M30 primeiro
       const { data: journey, error: errJ } = await supabase
         .from('journeys')
         .select('id')
@@ -37,7 +34,6 @@ export function M30ClientHomeScreen() {
 
       if (errJ || !journey) throw errJ || new Error('Jornada M30 não encontrada');
 
-      // Buscar os cases
       const { data: cases, error: errCases } = await supabase
         .from('cases')
         .select(`
@@ -56,60 +52,58 @@ export function M30ClientHomeScreen() {
 
   const getStatusColor = (state: string) => {
     const s = state?.toLowerCase() || '';
-    if (s.includes('conclui') || s.includes('finaliz')) return 'bg-emerald-500';
-    if (s.includes('aprov')) return 'bg-blue-500';
-    if (s.includes('grav')) return 'bg-purple-500';
-    if (s.includes('edi')) return 'bg-orange-500';
-    if (s.includes('cancel')) return 'bg-red-500';
-    return 'bg-slate-400';
+    if (s.includes('conclui') || s.includes('finaliz')) return '#10b981'; // emerald-500
+    if (s.includes('aprov')) return '#3b82f6'; // blue-500
+    if (s.includes('grav')) return '#a855f7'; // purple-500
+    if (s.includes('edi')) return '#f97316'; // orange-500
+    if (s.includes('cancel')) return '#ef4444'; // red-500
+    return '#94a3b8'; // slate-400
   };
 
   if (m30DeliverablesQ.isLoading && !m30DeliverablesQ.data) {
     return (
-      <View className="flex-1 bg-slate-50 items-center justify-center">
+      <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#3b82f6" />
-        <Text className="text-slate-500 mt-4 font-medium">Carregando entregáveis...</Text>
+        <Text style={styles.loadingText}>Carregando entregáveis...</Text>
       </View>
     );
   }
 
   return (
-    <View className="flex-1 bg-slate-50">
-      <View className="bg-slate-900 px-6 pt-12 pb-6 rounded-b-3xl shadow-sm">
-        <Text className="text-white text-xl font-bold">Olá!</Text>
-        <Text className="text-slate-400 text-sm mt-1">Acompanhe o andamento dos seus entregáveis.</Text>
+    <View style={styles.container}>
+      <View style={styles.header}>
+        <Text style={styles.headerTitle}>Olá!</Text>
+        <Text style={styles.headerSubtitle}>Acompanhe o andamento dos seus entregáveis.</Text>
       </View>
 
       <FlatList
-        className="flex-1 px-4 mt-2"
+        style={styles.list}
         data={m30DeliverablesQ.data}
         keyExtractor={item => item.id}
         refreshControl={<RefreshControl refreshing={m30DeliverablesQ.isFetching} onRefresh={() => m30DeliverablesQ.refetch()} />}
+        contentContainerStyle={(!m30DeliverablesQ.data || m30DeliverablesQ.data.length === 0) ? styles.emptyContainer : styles.listContent}
         ListEmptyComponent={
-          <View className="flex-1 items-center justify-center py-16 px-6">
+          <View style={styles.emptyView}>
             <FileText size={64} color="#cbd5e1" />
-            <Text className="text-slate-500 text-center font-medium mt-4">
+            <Text style={styles.emptyText}>
               Nenhum entregável encontrado para os seus contratos.
             </Text>
           </View>
         }
         renderItem={({ item }) => (
-          <TouchableOpacity 
-            className="bg-white rounded-2xl p-4 mb-3 shadow-sm border border-slate-100 flex-row items-center"
-            activeOpacity={0.7}
-          >
-            <View className={`w-3 h-full absolute left-0 rounded-l-2xl ${getStatusColor(item.state)}`} />
+          <TouchableOpacity style={styles.card} activeOpacity={0.7}>
+            <View style={[styles.cardIndicator, { backgroundColor: getStatusColor(item.state) }]} />
             
-            <View className="flex-1 pl-4">
-              <Text className="text-slate-900 font-bold text-base" numberOfLines={2}>
+            <View style={styles.cardBody}>
+              <Text style={styles.cardTitle} numberOfLines={2}>
                 {item.title || 'Entregável sem título'}
               </Text>
               
-              <View className="flex-row items-center mt-2">
-                <View className="bg-slate-100 rounded-lg px-2 py-1 mr-2">
-                  <Text className="text-xs font-semibold text-slate-700 uppercase tracking-wider">{item.state || 'Pendente'}</Text>
+              <View style={styles.cardFooter}>
+                <View style={styles.badge}>
+                  <Text style={styles.badgeText}>{item.state || 'Pendente'}</Text>
                 </View>
-                <Text className="text-xs text-slate-400 font-medium">
+                <Text style={styles.dateText}>
                   {new Date(item.updated_at).toLocaleDateString()}
                 </Text>
               </View>
@@ -122,3 +116,124 @@ export function M30ClientHomeScreen() {
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  loadingContainer: {
+    flex: 1,
+    backgroundColor: '#f8fafc', // slate-50
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  loadingText: {
+    color: '#64748b', // slate-500
+    marginTop: 16,
+    fontWeight: '500',
+  },
+  container: {
+    flex: 1,
+    backgroundColor: '#f8fafc', // slate-50
+  },
+  header: {
+    backgroundColor: '#0f172a', // slate-900
+    paddingHorizontal: 24,
+    paddingTop: 48,
+    paddingBottom: 24,
+    borderBottomLeftRadius: 24,
+    borderBottomRightRadius: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  headerTitle: {
+    color: '#ffffff',
+    fontSize: 20,
+    fontWeight: 'bold',
+  },
+  headerSubtitle: {
+    color: '#94a3b8', // slate-400
+    fontSize: 14,
+    marginTop: 4,
+  },
+  list: {
+    flex: 1,
+    marginTop: 8,
+  },
+  listContent: {
+    paddingHorizontal: 16,
+    paddingBottom: 20,
+  },
+  emptyContainer: {
+    flexGrow: 1,
+    justifyContent: 'center',
+  },
+  emptyView: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 64,
+    paddingHorizontal: 24,
+  },
+  emptyText: {
+    color: '#64748b', // slate-500
+    textAlign: 'center',
+    fontWeight: '500',
+    marginTop: 16,
+  },
+  card: {
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
+    borderWidth: 1,
+    borderColor: '#f1f5f9', // slate-100
+    overflow: 'hidden',
+  },
+  cardIndicator: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    bottom: 0,
+    width: 4,
+  },
+  cardBody: {
+    flex: 1,
+    paddingLeft: 4,
+  },
+  cardTitle: {
+    color: '#0f172a', // slate-900
+    fontWeight: 'bold',
+    fontSize: 16,
+  },
+  cardFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  badge: {
+    backgroundColor: '#f1f5f9', // slate-100
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    marginRight: 8,
+  },
+  badgeText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#334155', // slate-700
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  dateText: {
+    fontSize: 12,
+    color: '#94a3b8', // slate-400
+    fontWeight: '500',
+  },
+});

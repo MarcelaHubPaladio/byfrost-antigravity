@@ -27,7 +27,7 @@ export function M30ClientNavigator() {
         headerTintColor: '#fff',
         headerTitleStyle: { fontWeight: '600' },
         headerRight: () => (
-          <TouchableOpacity onPress={handleLogout} className="mr-4 p-2">
+          <TouchableOpacity onPress={handleLogout} style={{ marginRight: 16, padding: 8 }}>
             <LogOut size={24} color="#ef4444" />
           </TouchableOpacity>
         )
