@@ -6,10 +6,6 @@ import { useTenant } from '../../providers/TenantProvider';
 import { Package, CheckCircle2, ChevronDown, ChevronUp, KanbanSquare, Circle } from 'lucide-react-native';
 import { useSession } from '../../providers/SessionProvider';
 
-if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
-  UIManager.setLayoutAnimationEnabledExperimental(true);
-}
-
 export function M30ClientHomeScreen() {
   const { activeTenantId, activeTenant } = useTenant();
   const { user } = useSession();
