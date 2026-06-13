@@ -23,12 +23,12 @@ export function M30ClientNavigator() {
   return (
     <Stack.Navigator
       screenOptions={{
-        headerStyle: { backgroundColor: '#1e293b' },
-        headerTintColor: '#fff',
+        headerStyle: { backgroundColor: '#0A0A0A' },
+        headerTintColor: '#F9FAFB',
         headerTitleStyle: { fontWeight: '600' },
         headerRight: () => (
           <TouchableOpacity onPress={handleLogout} style={{ marginRight: 16, padding: 8 }}>
-            <LogOut size={24} color="#ef4444" />
+            <LogOut size={24} color="#EF4444" />
           </TouchableOpacity>
         )
       }}

@@ -133,8 +133,8 @@ export function M30ClientHomeScreen() {
                 onPress={() => toggleGroup(item.name)}
                 style={styles.cardHeader}
               >
-                <View style={[styles.iconBox, isFullyDone ? { backgroundColor: neon + '20' } : {}]}>
-                  <Package size={20} color={isFullyDone ? neon : "#64748b"} />
+                <View style={[styles.iconBox, isFullyDone ? { backgroundColor: neon + '20', borderColor: neon } : {}]}>
+                  <Package size={20} color={isFullyDone ? neon : "#6B7280"} />
                 </View>
                 <View style={styles.cardHeaderText}>
                   <Text style={styles.cardTitle}>{item.name}</Text>
@@ -147,11 +147,11 @@ export function M30ClientHomeScreen() {
                     {completed}/{total}
                   </Text>
                   <View style={styles.progressBarBg}>
-                    <View style={[styles.progressBarFill, isFullyDone ? { backgroundColor: neon } : { backgroundColor: '#3b82f6' }, { width: `${progressPct}%` }]} />
+                    <View style={[styles.progressBarFill, isFullyDone ? { backgroundColor: neon } : { backgroundColor: '#F9FAFB' }, { width: `${progressPct}%` }]} />
                   </View>
                 </View>
                 <View style={styles.expandIcon}>
-                  {isExpanded ? <ChevronUp size={20} color="#64748b" /> : <ChevronDown size={20} color="#64748b" />}
+                  {isExpanded ? <ChevronUp size={20} color="#6B7280" /> : <ChevronDown size={20} color="#6B7280" />}
                 </View>
               </TouchableOpacity>
 
@@ -202,34 +202,36 @@ export function M30ClientHomeScreen() {
 const styles = StyleSheet.create({
   loadingContainer: {
     flex: 1,
-    backgroundColor: '#0f172a', // dark bg
+    backgroundColor: '#0A0A0A',
     alignItems: 'center',
     justifyContent: 'center',
   },
   loadingText: {
-    color: '#94a3b8',
+    color: '#9CA3AF',
     marginTop: 16,
     fontWeight: '500',
   },
   container: {
     flex: 1,
-    backgroundColor: '#0f172a',
+    backgroundColor: '#0A0A0A',
   },
   header: {
-    backgroundColor: '#1e293b',
+    backgroundColor: '#141414',
     paddingHorizontal: 24,
     paddingTop: 48,
     paddingBottom: 24,
     borderBottomLeftRadius: 24,
     borderBottomRightRadius: 24,
+    borderBottomWidth: 1,
+    borderBottomColor: '#2A2A2A',
   },
   headerTitle: {
-    color: '#ffffff',
+    color: '#F9FAFB',
     fontSize: 22,
     fontWeight: 'bold',
   },
   headerSubtitle: {
-    color: '#94a3b8',
+    color: '#9CA3AF',
     fontSize: 14,
     marginTop: 4,
   },
@@ -253,21 +255,21 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
   },
   emptyText: {
-    color: '#64748b',
+    color: '#6B7280',
     textAlign: 'center',
     fontWeight: '500',
     marginTop: 16,
   },
   card: {
-    backgroundColor: '#1e293b',
+    backgroundColor: '#141414',
     borderRadius: 16,
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: '#2A2A2A',
     overflow: 'hidden',
   },
   cardExpanded: {
-    borderColor: '#475569',
+    borderColor: '#3A3A3A',
   },
   cardHeader: {
     flexDirection: 'row',
@@ -278,22 +280,24 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 10,
-    backgroundColor: '#0f172a',
+    backgroundColor: '#1E1E1E',
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 12,
+    borderWidth: 1,
+    borderColor: '#2A2A2A',
   },
   cardHeaderText: {
     flex: 1,
     justifyContent: 'center',
   },
   cardTitle: {
-    color: '#f8fafc',
+    color: '#F9FAFB',
     fontWeight: 'bold',
     fontSize: 15,
   },
   cardSubtitle: {
-    color: '#94a3b8',
+    color: '#9CA3AF',
     fontSize: 10,
     fontWeight: '700',
     marginTop: 2,
@@ -306,12 +310,12 @@ const styles = StyleSheet.create({
   progressText: {
     fontSize: 14,
     fontWeight: '800',
-    color: '#cbd5e1',
+    color: '#F9FAFB',
   },
   progressBarBg: {
     width: 60,
     height: 6,
-    backgroundColor: '#334155',
+    backgroundColor: '#2A2A2A',
     borderRadius: 3,
     marginTop: 4,
     overflow: 'hidden',
@@ -327,14 +331,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingBottom: 16,
     borderTopWidth: 1,
-    borderTopColor: '#334155',
+    borderTopColor: '#2A2A2A',
     paddingTop: 12,
   },
   deliverableItem: {
-    backgroundColor: '#0f172a',
+    backgroundColor: '#0A0A0A',
     borderRadius: 12,
     padding: 12,
     marginBottom: 8,
+    borderWidth: 1,
+    borderColor: '#1E1E1E',
   },
   deliverableTop: {
     flexDirection: 'row',
@@ -347,19 +353,21 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   deliverableTitle: {
-    color: '#f1f5f9',
+    color: '#F9FAFB',
     fontSize: 13,
     fontWeight: '600',
     marginLeft: 8,
   },
   statusBadge: {
-    backgroundColor: '#334155',
+    backgroundColor: '#1E1E1E',
     paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#2A2A2A',
   },
   statusBadgeText: {
-    color: '#cbd5e1',
+    color: '#F9FAFB',
     fontSize: 9,
     fontWeight: 'bold',
     textTransform: 'uppercase',
@@ -371,29 +379,33 @@ const styles = StyleSheet.create({
   caseItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#1e293b',
+    backgroundColor: '#141414',
     padding: 8,
     borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#1E1E1E',
   },
   caseTitle: {
-    color: '#94a3b8',
+    color: '#9CA3AF',
     fontSize: 12,
     marginLeft: 8,
     flex: 1,
   },
   caseStateBadge: {
-    backgroundColor: '#0f172a',
+    backgroundColor: '#0A0A0A',
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 4,
+    borderWidth: 1,
+    borderColor: '#1E1E1E',
   },
   caseStateText: {
-    color: '#94a3b8',
+    color: '#9CA3AF',
     fontSize: 9,
     fontWeight: '600',
   },
   noCasesText: {
-    color: '#475569',
+    color: '#6B7280',
     fontSize: 11,
     fontStyle: 'italic',
     marginTop: 4,
