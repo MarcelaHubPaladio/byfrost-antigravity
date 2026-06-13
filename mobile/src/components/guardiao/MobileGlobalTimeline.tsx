@@ -43,7 +43,8 @@ const EVENT_TYPE_LABELS: Record<string, string> = {
 const getEventLabel = (type: string) => EVENT_TYPE_LABELS[type] || type;
 
 export function MobileGlobalTimeline() {
-  const { activeTenantId } = useTenant();
+  const { activeTenantId, activeTenant } = useTenant();
+  const neon = activeTenant?.neon_primary || '#A3FF47';
 
   const [filterText, setFilterText] = useState("");
   const [selectedEventTypes, setSelectedEventTypes] = useState<Set<string>>(new Set());
@@ -188,7 +189,7 @@ export function MobileGlobalTimeline() {
           style={{ padding: 4 }}
         >
           {timelineQ.isFetching ? (
-            <ActivityIndicator size="small" color="#A3FF47" />
+            <ActivityIndicator size="small" color={neon} />
           ) : (
             <RefreshCw size={16} color="#9CA3AF" />
           )}
@@ -204,13 +205,13 @@ export function MobileGlobalTimeline() {
           </TouchableOpacity>
         )}
 
-        <TouchableOpacity style={[styles.filterChip, dateRangeFilter !== 'all' && styles.filterChipActive]} onPress={() => setShowDateFilter(true)}>
+        <TouchableOpacity style={[styles.filterChip, dateRangeFilter !== 'all' && [styles.filterChipActive, { backgroundColor: neon, borderColor: neon }]]} onPress={() => setShowDateFilter(true)}>
           <Calendar size={13} color={dateRangeFilter !== 'all' ? '#000' : '#9CA3AF'} />
           <Text style={[styles.filterChipText, dateRangeFilter !== 'all' && styles.filterChipTextActive]}>Data: {getDateFilterLabel()}</Text>
           <ChevronDown size={12} color={dateRangeFilter !== 'all' ? '#000' : '#6B7280'} />
         </TouchableOpacity>
 
-        <TouchableOpacity style={[styles.filterChip, selectedEventTypes.size > 0 && styles.filterChipActive]} onPress={() => setShowTypeFilter(true)}>
+        <TouchableOpacity style={[styles.filterChip, selectedEventTypes.size > 0 && [styles.filterChipActive, { backgroundColor: neon, borderColor: neon }]]} onPress={() => setShowTypeFilter(true)}>
           <Zap size={13} color={selectedEventTypes.size > 0 ? '#000' : '#9CA3AF'} />
           <Text style={[styles.filterChipText, selectedEventTypes.size > 0 && styles.filterChipTextActive]}>
             Funcionalidade: {selectedEventTypes.size === 0 ? 'Todas' : `${selectedEventTypes.size}`}
@@ -218,7 +219,7 @@ export function MobileGlobalTimeline() {
           <ChevronDown size={12} color={selectedEventTypes.size > 0 ? '#000' : '#6B7280'} />
         </TouchableOpacity>
 
-        <TouchableOpacity style={[styles.filterChip, selectedActors.size > 0 && styles.filterChipActive]} onPress={() => setShowActorFilter(true)}>
+        <TouchableOpacity style={[styles.filterChip, selectedActors.size > 0 && [styles.filterChipActive, { backgroundColor: neon, borderColor: neon }]]} onPress={() => setShowActorFilter(true)}>
           <Users size={13} color={selectedActors.size > 0 ? '#000' : '#9CA3AF'} />
           <Text style={[styles.filterChipText, selectedActors.size > 0 && styles.filterChipTextActive]}>
             Pessoa: {selectedActors.size === 0 ? 'Todas' : `${selectedActors.size}`}
@@ -234,7 +235,7 @@ export function MobileGlobalTimeline() {
       {renderHeader()}
       {timelineQ.isLoading ? (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#A3FF47" />
+        <ActivityIndicator size="large" color={neon} />
         <Text style={styles.loadingText}>Carregando linha do tempo...</Text>
         </View>
       ) : (!filteredData || filteredData.length === 0) ? (
@@ -252,8 +253,8 @@ export function MobileGlobalTimeline() {
             <RefreshControl 
               refreshing={timelineQ.isRefetching} 
               onRefresh={() => timelineQ.refetch()} 
-              tintColor="#A3FF47" 
-              colors={["#A3FF47"]} 
+              tintColor={neon} 
+              colors={[neon]} 
             />
           }
           renderItem={({ item, index }) => (
@@ -262,7 +263,7 @@ export function MobileGlobalTimeline() {
               <View style={styles.timelineLineContainer}>
                 <View style={[styles.line, index === filteredData.length - 1 && styles.lineHidden]} />
             <View style={styles.iconContainer}>
-              <Clock size={12} color="#A3FF47" />
+              <Clock size={12} color={neon} />
             </View>
           </View>
 
@@ -312,7 +313,7 @@ export function MobileGlobalTimeline() {
               { id: 'month', label: 'Mês Atual' },
             ].map(opt => (
               <TouchableOpacity key={opt.id} style={styles.modalOpt} onPress={() => { setDateRangeFilter(opt.id as any); setShowDateFilter(false); }}>
-                <Text style={[styles.modalOptText, dateRangeFilter === opt.id && styles.modalOptTextActive]}>{opt.label}</Text>
+                <Text style={[styles.modalOptText, dateRangeFilter === opt.id && [styles.modalOptTextActive, { color: neon }]]}>{opt.label}</Text>
               </TouchableOpacity>
             ))}
           </View>
@@ -334,7 +335,7 @@ export function MobileGlobalTimeline() {
                   n.has(opt) ? n.delete(opt) : n.add(opt);
                   setSelectedEventTypes(n);
                 }}>
-                  <View style={[styles.checkbox, selectedEventTypes.has(opt) && styles.checkboxActive]} />
+                  <View style={[styles.checkbox, selectedEventTypes.has(opt) && [styles.checkboxActive, { backgroundColor: neon, borderColor: neon }]]} />
                   <Text style={styles.modalOptText}>{getEventLabel(opt)}</Text>
                 </TouchableOpacity>
               ))}
@@ -358,7 +359,7 @@ export function MobileGlobalTimeline() {
                   n.has(id) ? n.delete(id) : n.add(id);
                   setSelectedActors(n);
                 }}>
-                  <View style={[styles.checkbox, selectedActors.has(id) && styles.checkboxActive]} />
+                  <View style={[styles.checkbox, selectedActors.has(id) && [styles.checkboxActive, { backgroundColor: neon, borderColor: neon }]]} />
                   <Text style={styles.modalOptText}>{label}</Text>
                 </TouchableOpacity>
               ))}
@@ -415,8 +416,8 @@ const styles = StyleSheet.create({
     gap: 5,
   },
   filterChipActive: {
-    backgroundColor: '#A3FF47',
-    borderColor: '#A3FF47',
+    // dynamic bg
+    // dynamic border
   },
   filterChipText: {
     color: '#9CA3AF',
@@ -595,7 +596,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   modalOptTextActive: {
-    color: '#A3FF47',
+    // dynamic color
     fontWeight: 'bold',
   },
   checkbox: {
@@ -606,7 +607,6 @@ const styles = StyleSheet.create({
     borderColor: '#6B7280',
   },
   checkboxActive: {
-    backgroundColor: '#A3FF47',
-    borderColor: '#A3FF47',
+    // dynamic bg
   },
 });

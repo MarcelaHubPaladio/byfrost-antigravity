@@ -6,7 +6,7 @@ import {
   FlatList,
   TouchableOpacity,
   ActivityIndicator,
-  SafeAreaView,
+  
   ScrollView,
   Modal,
   Pressable,
@@ -16,6 +16,7 @@ import {
   Platform,
   RefreshControl,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useSession } from '../providers/SessionProvider';
 import { useTenant } from '../providers/TenantProvider';
 import { supabase } from '../lib/supabase';

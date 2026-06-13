@@ -4,7 +4,7 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  SafeAreaView,
+  
   ActivityIndicator,
   TextInput,
   ScrollView,
@@ -12,6 +12,7 @@ import {
   Modal,
   Pressable,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRoute, useNavigation } from '@react-navigation/native';
 import {
   ArrowLeft,
@@ -29,7 +30,14 @@ import {
   Truck,
   ClipboardList,
   CheckCircle2,
-  Smartphone
+  Smartphone,
+  UserCheck,
+  FileText,
+  Image as ImageIcon,
+  MessageSquareText,
+  Sparkles,
+  ShieldCheck,
+  User
 } from 'lucide-react-native';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../../lib/supabase';
@@ -37,6 +45,37 @@ import { useTenant } from '../../providers/TenantProvider';
 import { useSession } from '../../providers/SessionProvider';
 
 // ─── Helpers & Components ───────────────────────────────────────────────────
+
+function iconFor(e: any) {
+  const t = String(e.event_type ?? "").toLowerCase();
+  if (t.includes("task_completed") || t.includes("task")) return CheckCircle2;
+  if (t.includes("approved") || t.includes("approval") || t.includes("confirmed")) return UserCheck;
+  if (t.includes("doc") || t.includes("contract") || t.includes("attachment")) return FileText;
+  if (t.includes("image") || t.includes("photo") || t.includes("ocr")) return ImageIcon;
+  if (t.includes("location")) return MapPin;
+  if (t.includes("message") || t.includes("reply") || t.includes("whatsapp")) return MessageSquareText;
+  if (t.includes("decision") || t.includes("ai") || t.includes("why")) return Sparkles;
+  if (t.includes("govern") || t.includes("audit")) return ShieldCheck;
+  return CheckCircle2;
+}
+
+function toneFor(e: any) {
+  const t = String(e.event_type ?? "").toLowerCase();
+  if (t.includes("fail") || t.includes("error")) return "rose";
+  if (t.includes("pending") || t.includes("pendency")) return "amber";
+  return "emerald";
+}
+
+function actorLabel(actorType: string) {
+  const t = String(actorType ?? "").toLowerCase();
+  if (t === "admin") return "Painel";
+  if (t === "vendor") return "Vendedor";
+  if (t === "customer") return "Cliente";
+  if (t === "leader") return "Líder";
+  if (t === "ai") return "IA";
+  if (t === "system") return "Sistema";
+  return actorType;
+}
 
 function BottomSheet({ visible, title, onClose, children }: { visible: boolean; title: string; onClose: () => void; children: React.ReactNode; }) {
   return (
@@ -98,6 +137,7 @@ export function OrderDetailScreen() {
   const { activeTenantId, activeTenant } = useTenant();
   const neon = activeTenant?.neon_primary || '#A3FF47';
   const orderId = route.params?.id;
+  const { user } = useSession();
 
   const [localState, setLocalState] = useState('');
   const [showStateModal, setShowStateModal] = useState(false);
@@ -160,9 +200,9 @@ export function OrderDetailScreen() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('core_entities')
-        .select('id, display_name, meta_json')
+        .select('id, display_name, metadata')
         .eq('tenant_id', activeTenantId!)
-        .eq('entity_type', 'offering')
+        .in('entity_type', ['offering', 'product'])
         .is('deleted_at', null)
         .ilike('display_name', `%${productDesc}%`)
         .order('display_name', { ascending: true })
@@ -218,6 +258,17 @@ export function OrderDetailScreen() {
     mutationFn: async (newState: string) => {
       const { error } = await supabase.from('cases').update({ state: newState }).eq('id', orderId);
       if (error) throw error;
+      
+      // Gerar evento de timeline
+      await supabase.from('timeline_events').insert({
+        tenant_id: activeTenantId,
+        case_id: orderId,
+        event_type: 'case_state_changed',
+        actor_type: 'vendor',
+        actor_id: user?.id ?? null,
+        message: `Status do pedido alterado para "${newState.replace(/[_-]+/g, ' ')}" via App.`,
+        occurred_at: new Date().toISOString()
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['orders_mobile'] });
@@ -227,21 +278,49 @@ export function OrderDetailScreen() {
 
   const addProduct = useMutation({
     mutationFn: async () => {
-      const price = parseFloat(productPrice.replace(',', '.')) || 0;
-      const qty = parseInt(productQty, 10) || 1;
-      const { error } = await supabase.from('case_items').insert({
-        tenant_id: activeTenantId,
-        case_id: orderId,
+      try {
+        let priceStr = String(productPrice).replace(/\./g, '').replace(',', '.');
+        const price = parseFloat(priceStr) || 0;
+        const qty = parseInt(productQty, 10) || 1;
+        const lineNo = (itemsQ?.length || 0) + 1;
+        
+        const { error } = await supabase.from('case_items').insert({
+          tenant_id: activeTenantId,
+          case_id: orderId,
+          line_no: lineNo,
         description: productDesc,
         price,
         qty,
         total: price * qty,
         offering_entity_id: productEntityId,
       });
-      if (error) throw error;
+        if (error) throw error;
+        
+        // Also update case meta_json for total_value
+        const currentMeta = orderData?.meta_json || {};
+        const newTotal = (itemsQ ?? []).reduce((acc: number, it: any) => acc + (it.total || 0), 0) + (price * qty);
+        await supabase.from('cases').update({
+          meta_json: { ...currentMeta, total_value: newTotal }
+        }).eq('id', orderId);
+
+        // Gerar evento de timeline
+        await supabase.from('timeline_events').insert({
+          tenant_id: activeTenantId,
+          case_id: orderId,
+          event_type: 'case_items_manual_saved',
+          actor_type: 'vendor',
+          actor_id: user?.id ?? null,
+          message: `Produto "${productDesc}" adicionado via App.`,
+          occurred_at: new Date().toISOString()
+        });
+      } catch (err: any) {
+        Alert.alert("Erro ao adicionar produto", err.message);
+        throw err;
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['case_items', orderId] });
+      queryClient.invalidateQueries({ queryKey: ['orders_mobile'] });
       setShowProductModal(false);
       setProductDesc(''); setProductPrice(''); setProductQty('1'); setProductEntityId(null);
     },
@@ -249,10 +328,34 @@ export function OrderDetailScreen() {
 
   const deleteProduct = useMutation({
     mutationFn: async (id: string) => {
+      const deletedItem = itemsQ?.find((it: any) => it.id === id);
       const { error } = await supabase.from('case_items').delete().eq('id', id);
       if (error) throw error;
+      
+      // Update case total
+      if (deletedItem) {
+        const currentMeta = orderData?.meta_json || {};
+        const newTotal = (itemsQ ?? []).reduce((acc: number, it: any) => acc + (it.total || 0), 0) - (deletedItem.total || 0);
+        await supabase.from('cases').update({
+          meta_json: { ...currentMeta, total_value: newTotal > 0 ? newTotal : 0 }
+        }).eq('id', orderId);
+
+        // Gerar evento de timeline
+        await supabase.from('timeline_events').insert({
+          tenant_id: activeTenantId,
+          case_id: orderId,
+          event_type: 'case_items_manual_saved',
+          actor_type: 'vendor',
+          actor_id: user?.id ?? null,
+          message: `Produto "${deletedItem.description}" removido via App.`,
+          occurred_at: new Date().toISOString()
+        });
+      }
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['case_items', orderId] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['case_items', orderId] });
+      queryClient.invalidateQueries({ queryKey: ['orders_mobile'] });
+    },
   });
 
   const deleteOrder = useMutation({
@@ -474,18 +577,43 @@ export function OrderDetailScreen() {
             {(!timelineQ || timelineQ.length === 0) ? (
               <Text style={styles.emptyText}>Nenhuma atividade registrada.</Text>
             ) : (
-              timelineQ.map((ev, i) => (
-                <View key={ev.id} style={styles.timelineItem}>
-                  <View style={styles.timelineLine} />
-                  <View style={[styles.timelineDot, { backgroundColor: neon }]} />
-                  <View style={styles.timelineContent}>
-                    <Text style={styles.timelineText}>{ev.message}</Text>
-                    <Text style={styles.timelineDate}>
-                      {getUserName(ev.actor_id)} • {new Date(ev.occurred_at).toLocaleDateString('pt-BR')} às {new Date(ev.occurred_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
-                    </Text>
+              timelineQ.map((ev, i) => {
+                const Icon = iconFor(ev);
+                const tone = toneFor(ev);
+                const isLast = i === timelineQ.length - 1;
+                
+                const ringColor = tone === 'emerald' ? '#047857' : tone === 'amber' ? '#B45309' : '#BE123C';
+                const ringBg = tone === 'emerald' ? '#ECFDF5' : tone === 'amber' ? '#FFFBEB' : '#FFF1F2';
+                
+                const actorSource = actorLabel(ev.actor_type);
+                const actorName = getUserName(ev.actor_id);
+
+                return (
+                  <View key={ev.id} style={styles.timelineItem}>
+                    {!isLast && <View style={styles.timelineLine} />}
+                    <View style={[styles.timelineDotContainer, { backgroundColor: ringBg, borderColor: ringColor }]}>
+                      <Icon size={14} color={ringColor} />
+                    </View>
+                    <View style={styles.timelineContent}>
+                      <Text style={styles.timelineDate}>
+                        {new Date(ev.occurred_at).toLocaleDateString('pt-BR')} às {new Date(ev.occurred_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                      </Text>
+                      <Text style={styles.timelineText}>{ev.message}</Text>
+                      <View style={styles.timelineMeta}>
+                        {actorName && (
+                          <View style={styles.timelineActorBadge}>
+                            <User size={10} color="#64748B" />
+                            <Text style={styles.timelineActorBadgeText}>{actorName}</Text>
+                          </View>
+                        )}
+                        <Text style={styles.timelineMetaText}>{actorSource}</Text>
+                        <Text style={styles.timelineMetaDot}>•</Text>
+                        <Text style={styles.timelineMetaText}>{ev.event_type}</Text>
+                      </View>
+                    </View>
                   </View>
-                </View>
-              ))
+                );
+              })
             )}
           </View>
         )}
@@ -523,7 +651,7 @@ export function OrderDetailScreen() {
                     onPress={() => {
                       setProductDesc(o.display_name);
                       setProductEntityId(o.id);
-                      if (o.meta_json?.base_price) setProductPrice(String(o.meta_json.base_price));
+                      if (o.metadata?.base_price) setProductPrice(String(o.metadata.base_price));
                     }}
                   >
                     <Text style={[styles.suggestionText, { color: neon }]}>{o.display_name}</Text>
@@ -631,11 +759,16 @@ const styles = StyleSheet.create({
   tabBtnTextActive: { color: '#F9FAFB' },
   tabIndicator: { position: 'absolute', bottom: -1, width: 40, height: 2, backgroundColor: '#A3FF47', borderRadius: 2 },
 
-  timelineContainer: { paddingLeft: 8 },
-  timelineItem: { flexDirection: 'row', paddingBottom: 24, position: 'relative' },
-  timelineLine: { position: 'absolute', left: 5, top: 20, bottom: -4, width: 1, backgroundColor: '#2A2A2A' },
-  timelineDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: '#A3FF47', marginTop: 5, marginRight: 12, zIndex: 2, borderWidth: 2, borderColor: '#141414' },
-  timelineContent: { flex: 1, backgroundColor: '#141414', borderRadius: 12, padding: 12, borderWidth: 1, borderColor: '#2A2A2A' },
-  timelineText: { fontSize: 13, color: '#F9FAFB', fontWeight: '500', lineHeight: 18 },
-  timelineDate: { fontSize: 11, color: '#6B7280', marginTop: 4 },
+  timelineContainer: { marginTop: 8 },
+  timelineItem: { flexDirection: 'row', marginBottom: 24, position: 'relative' },
+  timelineLine: { position: 'absolute', left: 13, top: 28, bottom: -28, width: 2, backgroundColor: '#2A2A2A' },
+  timelineDotContainer: { width: 28, height: 28, borderRadius: 14, borderWidth: 1, alignItems: 'center', justifyContent: 'center', zIndex: 10 },
+  timelineContent: { flex: 1, marginLeft: 12 },
+  timelineDate: { fontSize: 11, color: '#6B7280', marginBottom: 4 },
+  timelineText: { fontSize: 14, color: '#F9FAFB', fontWeight: '600' },
+  timelineMeta: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', marginTop: 6, gap: 6 },
+  timelineActorBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#1E293B', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, gap: 4 },
+  timelineActorBadgeText: { fontSize: 10, fontWeight: '700', color: '#94A3B8' },
+  timelineMetaText: { fontSize: 10, color: '#64748B' },
+  timelineMetaDot: { fontSize: 10, color: '#334155' },
 });

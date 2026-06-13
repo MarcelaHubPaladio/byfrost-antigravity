@@ -30,6 +30,9 @@ import {
   Plus,
   ChevronDown,
   ChevronRight,
+  Video,
+  Link as LinkIcon,
+  ListChecks,
 } from 'lucide-react-native';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../../lib/supabase';
@@ -106,7 +109,7 @@ function SectionCard({
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
-export function CaseDetailScreen() {
+export function OperacaoM30CaseScreen({ route: _route, navigation: _navigation }: any) {
   const route = useRoute<any>();
   const navigation = useNavigation();
   const queryClient = useQueryClient();
@@ -126,47 +129,17 @@ export function CaseDetailScreen() {
   // Modals
   const [showStateModal, setShowStateModal] = useState(false);
   const [showOwnerModal, setShowOwnerModal] = useState(false);
-  const [showProductModal, setShowProductModal] = useState(false);
 
-  // Product form
-  const [productDesc, setProductDesc] = useState('');
-  const [productEntityId, setProductEntityId] = useState<string | null>(null);
-  const [productPrice, setProductPrice] = useState('');
-  const [productQty, setProductQty] = useState('1');
+  // M30 Specific State
+  const [videoUrl, setVideoUrl] = useState('');
+  const [importantLinks, setImportantLinks] = useState<any[]>([]);
+  const [pendingSubtasks, setPendingSubtasks] = useState<any[]>([]);
 
   // Task / note
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [newNoteBody, setNewNoteBody] = useState('');
 
   // ── Queries ────────────────────────────────────────────────────────────────
-
-  const { data: offeringsQ } = useQuery({
-    queryKey: ['crm_offerings_search', activeTenantId, productDesc],
-    enabled: Boolean(activeTenantId && productDesc.length > 1),
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('core_entities')
-        .select('id, display_name, meta_json')
-        .eq('tenant_id', activeTenantId!)
-        .eq('entity_type', 'offering')
-        .is('deleted_at', null)
-        .ilike('display_name', `%${productDesc}%`)
-        .order('display_name', { ascending: true })
-        .limit(5);
-      if (error) throw error;
-      return data ?? [];
-    },
-  });
-
-  const { data: itemsQ } = useQuery({
-    queryKey: ['case_items', caseId],
-    enabled: Boolean(caseId),
-    queryFn: async () => {
-      const { data, error } = await supabase.from('case_items').select('*').eq('case_id', caseId);
-      if (error) throw error;
-      return data ?? [];
-    },
-  });
 
   const { data: tasksQ } = useQuery({
     queryKey: ['case_tasks', caseId],
@@ -235,6 +208,12 @@ export function CaseDetailScreen() {
         setCustomerEmail(caseData.customer_accounts.email || '');
         setCustomerPhone(caseData.customer_accounts.phone_e164 || '');
       }
+      
+      // Parse M30 Meta
+      const meta = typeof caseData.meta_json === 'string' ? JSON.parse(caseData.meta_json || '{}') : (caseData.meta_json || {});
+      setVideoUrl(meta.video_url || '');
+      setImportantLinks(meta.important_links || []);
+      setPendingSubtasks(meta.pending_subtasks || []);
     }
   }, [caseData]);
 
@@ -270,36 +249,6 @@ export function CaseDetailScreen() {
       queryClient.invalidateQueries({ queryKey: ['case_detail', caseId] });
       Alert.alert('Salvo!', 'Dados do cliente atualizados.');
     },
-  });
-
-  const addProduct = useMutation({
-    mutationFn: async () => {
-      const price = parseFloat(productPrice.replace(',', '.')) || 0;
-      const qty = parseInt(productQty, 10) || 1;
-      const { error } = await supabase.from('case_items').insert({
-        tenant_id: activeTenantId,
-        case_id: caseId,
-        description: productDesc,
-        price,
-        qty,
-        total: price * qty,
-        offering_entity_id: productEntityId,
-      });
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['case_items', caseId] });
-      setShowProductModal(false);
-      setProductDesc(''); setProductPrice(''); setProductQty('1'); setProductEntityId(null);
-    },
-  });
-
-  const deleteProduct = useMutation({
-    mutationFn: async (id: string) => {
-      const { error } = await supabase.from('case_items').delete().eq('id', id);
-      if (error) throw error;
-    },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['case_items', caseId] }),
   });
 
   const addTask = useMutation({
@@ -388,7 +337,6 @@ export function CaseDetailScreen() {
   const ownerName = localOwnerId
     ? usersQ?.find((u: any) => u.user_id === localOwnerId)?.display_name || 'Usuário'
     : 'Não atribuído';
-  const totalItems = (itemsQ ?? []).reduce((acc, it) => acc + (it.total || 0), 0);
 
   // ── Loading / Not Found ────────────────────────────────────────────────────
 
@@ -509,70 +457,63 @@ export function CaseDetailScreen() {
             </View>
           </SectionCard>
 
-          {/* ── Produtos ── */}
+          {/* ── Entrega & Links ── */}
           <SectionCard
-            icon={<PackagePlus size={14} color={neon} />}
-            title="Produtos & Valores"
-            action={
-              <TouchableOpacity style={styles.iconRoundBtn} onPress={() => setShowProductModal(true)}>
-                <Plus size={16} color={neon} />
-              </TouchableOpacity>
-            }
+            icon={<Video size={14} color={neon} />}
+            title="Entrega & Links Importantes"
           >
-            {(itemsQ ?? []).length === 0 ? (
-              <Text style={styles.emptyText}>Nenhum produto adicionado.</Text>
+            {videoUrl ? (
+              <View style={styles.inputGroup}>
+                <Video size={15} color="#6B7280" />
+                <Text style={styles.input} numberOfLines={1}>{videoUrl}</Text>
+              </View>
             ) : (
-              (itemsQ ?? []).map(it => (
-                <View key={it.id} style={styles.listRow}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.listRowTitle}>{it.description}</Text>
-                    <Text style={styles.listRowSub}>{it.qty}x · R$ {Number(it.price).toFixed(2)}</Text>
-                  </View>
-                  <Text style={[styles.listRowValue, { color: neon }]}>R$ {Number(it.total).toFixed(2)}</Text>
-                  <TouchableOpacity onPress={() => deleteProduct.mutate(it.id)} style={styles.trashBtn}>
-                    <Trash2 size={15} color="#EF4444" />
-                  </TouchableOpacity>
-                </View>
-              ))
+              <Text style={styles.emptyText}>Nenhum vídeo entregue.</Text>
             )}
-            {totalItems > 0 && (
-              <View style={styles.totalRow}>
-                <Text style={styles.totalLabel}>Total</Text>
-                <Text style={[styles.totalValue, { color: neon }]}>R$ {totalItems.toFixed(2)}</Text>
+
+            {importantLinks.length > 0 && (
+              <View style={{ marginTop: 12 }}>
+                <Text style={styles.fieldLabel}>LINKS ADICIONAIS</Text>
+                {importantLinks.map((link, idx) => (
+                  <View key={idx} style={styles.listRow}>
+                    <LinkIcon size={14} color="#6B7280" />
+                    <Text style={styles.listRowTitle}>{link.title || 'Link'}</Text>
+                    <Text style={styles.listRowSub} numberOfLines={1}>{link.url}</Text>
+                  </View>
+                ))}
               </View>
             )}
           </SectionCard>
 
-          {/* ── Tarefas ── */}
+          {/* ── Subtarefas M30 ── */}
           <SectionCard
-            icon={<CheckSquare size={14} color={neon} />}
-            title="Checklist"
+            icon={<ListChecks size={14} color={neon} />}
+            title="Subtarefas de Produção"
           >
-            <View style={styles.quickRow}>
-              <TextInput
-                style={styles.quickInput}
-                placeholder="Nova tarefa..."
-                placeholderTextColor="#4B5563"
-                value={newTaskTitle}
-                onChangeText={setNewTaskTitle}
-                onSubmitEditing={() => addTask.mutate()}
-                returnKeyType="done"
-              />
-              <TouchableOpacity style={[styles.quickBtn, { backgroundColor: neon }]} onPress={() => addTask.mutate()} disabled={!newTaskTitle.trim()}>
-                <Plus size={18} color="#000" />
-              </TouchableOpacity>
-            </View>
-            {(tasksQ ?? []).map(t => (
-              <View key={t.id} style={styles.listRow}>
-                <TouchableOpacity style={[styles.checkbox, t.status === 'done' && { backgroundColor: neon, borderColor: neon }]} onPress={() => toggleTask.mutate({ id: t.id, status: t.status })}>
-                  {t.status === 'done' && <Check size={12} color="#000" />}
-                </TouchableOpacity>
-                <Text style={[styles.listRowTitle, { flex: 1 }, t.status === 'done' && styles.textDone]}>{t.title}</Text>
-                <TouchableOpacity onPress={() => deleteTask.mutate(t.id)} style={styles.trashBtn}>
-                  <Trash2 size={15} color="#EF4444" />
-                </TouchableOpacity>
-              </View>
-            ))}
+            {pendingSubtasks.length === 0 ? (
+              <Text style={styles.emptyText}>Nenhuma subtarefa pendente.</Text>
+            ) : (
+              pendingSubtasks.map((st, idx) => (
+                <View key={idx} style={{ marginBottom: 16, paddingBottom: 16, borderBottomWidth: 1, borderBottomColor: '#1A1A1A' }}>
+                  <Text style={[styles.listRowTitle, { color: neon, fontWeight: '700' }]}>{st.title || `Subtarefa ${idx + 1}`}</Text>
+                  <Text style={styles.listRowSub}>Tipo: {st.type || 'Edição'}</Text>
+
+                  {st.script_items && st.script_items.length > 0 && (
+                    <View style={{ marginTop: 12, gap: 8 }}>
+                      <Text style={styles.fieldLabel}>CHECKLIST DE ROTEIRO</Text>
+                      {st.script_items.map((it: any) => (
+                        <View key={it.id} style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                          <View style={[styles.checkbox, it.checked && { backgroundColor: neon, borderColor: neon }]}>
+                            {it.checked && <Check size={12} color="#000" />}
+                          </View>
+                          <Text style={[styles.listRowTitle, { flex: 1 }, it.checked && styles.textDone]}>{it.text}</Text>
+                        </View>
+                      ))}
+                    </View>
+                  )}
+                </View>
+              ))
+            )}
           </SectionCard>
 
           {/* ── Notas ── */}
@@ -659,58 +600,6 @@ export function CaseDetailScreen() {
             {localOwnerId === u.user_id && <Check size={16} color={neon} />}
           </TouchableOpacity>
         ))}
-      </BottomSheet>
-
-      {/* ── Product Modal ── */}
-      <BottomSheet visible={showProductModal} title="Adicionar Produto" onClose={() => setShowProductModal(false)}>
-        <View style={{ padding: 8, gap: 16 }}>
-          <View>
-            <Text style={styles.fieldLabel}>DESCRIÇÃO</Text>
-            <TextInput
-              style={styles.modalInput}
-              value={productDesc}
-              onChangeText={t => { setProductDesc(t); setProductEntityId(null); }}
-              placeholder="Ex: Semente de Milho"
-              placeholderTextColor="#4B5563"
-            />
-            {productDesc.length > 0 && !productEntityId && (offeringsQ ?? []).length > 0 && (
-              <View style={styles.suggestions}>
-                {(offeringsQ ?? []).map(o => (
-                  <TouchableOpacity
-                    key={o.id}
-                    style={styles.suggestionRow}
-                    onPress={() => {
-                      setProductDesc(o.display_name);
-                      setProductEntityId(o.id);
-                      if (o.meta_json?.base_price) setProductPrice(String(o.meta_json.base_price));
-                    }}
-                  >
-                    <Text style={[styles.suggestionText, { color: neon }]}>{o.display_name}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            )}
-          </View>
-          <View style={{ flexDirection: 'row', gap: 12 }}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.fieldLabel}>PREÇO (R$)</Text>
-              <TextInput style={styles.modalInput} value={productPrice} onChangeText={setProductPrice} placeholder="0,00" placeholderTextColor="#4B5563" keyboardType="numeric" />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.fieldLabel}>QTDE</Text>
-              <TextInput style={styles.modalInput} value={productQty} onChangeText={setProductQty} placeholder="1" placeholderTextColor="#4B5563" keyboardType="numeric" />
-            </View>
-          </View>
-          <TouchableOpacity
-            style={[styles.submitChip, { backgroundColor: neon }, (!productDesc.trim() || addProduct.isPending) && styles.submitChipDisabled]}
-            onPress={() => addProduct.mutate()}
-            disabled={!productDesc.trim() || addProduct.isPending}
-          >
-            {addProduct.isPending
-              ? <ActivityIndicator size="small" color="#000" />
-              : <Text style={styles.submitChipText}>Adicionar Produto</Text>}
-          </TouchableOpacity>
-        </View>
       </BottomSheet>
 
     </SafeAreaView>

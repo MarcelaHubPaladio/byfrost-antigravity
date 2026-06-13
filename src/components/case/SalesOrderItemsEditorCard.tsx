@@ -10,7 +10,6 @@ import { Plus, ReceiptText, Save, Trash2, Check, Loader2, DollarSign } from "luc
 import { useTenant } from "@/providers/TenantProvider";
 import { useSession } from "@/providers/SessionProvider";
 import { QuickCreateProductDialog } from "@/components/case/QuickCreateProductDialog";
-import { adjustInventoryForOrderItems } from "@/utils/inventorySync";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
@@ -357,17 +356,6 @@ interface SearchOption {
     }
 
     try {
-      // Ajusta o estoque liberando o saldo
-      const itemsList = [{ ...row, qty: 0 }]; // Define quantidade zero para devolver tudo
-      const syncItems = itemsList.map(r => ({
-        id: r.id,
-        offering_entity_id: r.offering_entity_id,
-        qty: 0,
-        config_id: r.config_id || null
-      }));
-
-      await adjustInventoryForOrderItems(caseId, syncItems, user?.id || "");
-
       const { error } = await supabase.from("case_items").delete().eq("id", row.id);
       if (error) throw error;
 
@@ -428,16 +416,6 @@ interface SearchOption {
 
     setSaving(true);
     try {
-      // 1. Ajusta/valida estoque no inventário antes de salvar
-      const syncItems = draft.map(r => ({
-        id: r.id,
-        offering_entity_id: r.offering_entity_id,
-        qty: parsePtBrNumber(r.qty) ?? 0,
-        config_id: r.config_id || null
-      }));
-
-      await adjustInventoryForOrderItems(caseId, syncItems, user?.id || "");
-
       // 2. Salva os registros em case_items
       const touchedIds: string[] = [];
       const insertedCount = { n: 0 };

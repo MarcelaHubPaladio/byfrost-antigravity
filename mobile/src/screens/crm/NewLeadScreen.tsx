@@ -6,10 +6,11 @@ import {
   TouchableOpacity, 
   TextInput,
   ScrollView,
-  SafeAreaView,
+  
   ActivityIndicator,
   Alert
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { X, MapPin, LocateFixed } from 'lucide-react-native';
 import * as Location from 'expo-location';

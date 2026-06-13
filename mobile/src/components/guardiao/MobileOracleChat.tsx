@@ -13,7 +13,8 @@ type Message = {
 };
 
 export function MobileOracleChat() {
-  const { activeTenantId } = useTenant();
+  const { activeTenantId, activeTenant } = useTenant();
+  const neon = activeTenant?.neon_primary || '#A3FF47';
   const queryClient = useQueryClient();
   const [activeChatId, setActiveChatId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -164,11 +165,11 @@ export function MobileOracleChat() {
     return (
       <View style={[styles.messageRow, isUser ? styles.messageRowUser : styles.messageRowAssistant]}>
         {!isUser && (
-          <View style={styles.assistantAvatar}>
-            <Sparkles size={12} color="#A3FF47" />
+          <View style={[styles.assistantAvatar, { borderColor: neon }]}>
+            <Sparkles size={12} color={neon} />
           </View>
         )}
-        <View style={[styles.messageBubble, isUser ? styles.bubbleUser : styles.bubbleAssistant]}>
+        <View style={[styles.messageBubble, isUser ? [styles.bubbleUser, { backgroundColor: neon }] : styles.bubbleAssistant]}>
           <Text style={[styles.messageText, isUser ? styles.textUser : styles.textAssistant]}>
             {item.content}
           </Text>
@@ -180,7 +181,7 @@ export function MobileOracleChat() {
   if (loadingInitial) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#A3FF47" />
+        <ActivityIndicator size="large" color={neon} />
         <Text style={styles.loadingText}>Conectando ao Oráculo...</Text>
       </View>
     );
@@ -197,7 +198,7 @@ export function MobileOracleChat() {
           <History size={16} color="#9CA3AF" />
           <Text style={styles.headerButtonText}>Histórico</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.headerButtonPrimary} onPress={handleNewChat}>
+        <TouchableOpacity style={[styles.headerButtonPrimary, { backgroundColor: neon }]} onPress={handleNewChat}>
           <Plus size={16} color="#000" />
           <Text style={styles.headerButtonTextPrimary}>Nova Conversa</Text>
         </TouchableOpacity>
@@ -213,7 +214,7 @@ export function MobileOracleChat() {
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
             <View style={styles.emptyIconCircle}>
-              <Sparkles size={32} color="#A3FF47" />
+              <Sparkles size={32} color={neon} />
             </View>
             <Text style={styles.emptyTitle}>Olá! Eu sou o Oráculo.</Text>
             <Text style={styles.emptyText}>Estou pronto para analisar toda a operação do seu negócio. O que você gostaria de saber hoje?</Text>
@@ -222,8 +223,8 @@ export function MobileOracleChat() {
         ListFooterComponent={
           sending ? (
             <View style={styles.typingContainer}>
-              <ActivityIndicator size="small" color="#A3FF47" />
-              <Text style={styles.typingText}>Pensando...</Text>
+              <ActivityIndicator size="small" color={neon} />
+              <Text style={[styles.typingText, { color: neon }]}>Pensando...</Text>
             </View>
           ) : null
         }
@@ -242,7 +243,7 @@ export function MobileOracleChat() {
           maxLength={500}
         />
         <TouchableOpacity 
-          style={[styles.sendButton, (!inputMessage.trim() || sending) && styles.sendButtonDisabled]}
+          style={[styles.sendButton, { backgroundColor: neon }, (!inputMessage.trim() || sending) && styles.sendButtonDisabled]}
           onPress={handleSend}
           disabled={!inputMessage.trim() || sending}
         >
@@ -269,8 +270,8 @@ export function MobileOracleChat() {
                   style={[styles.historyItem, activeChatId === item.id && styles.historyItemActive]}
                   onPress={() => handleSelectChat(item.id)}
                 >
-                  <MessageSquare size={16} color={activeChatId === item.id ? "#A3FF47" : "#9CA3AF"} />
-                  <Text style={[styles.historyItemText, activeChatId === item.id && styles.historyItemTextActive]} numberOfLines={1}>
+                  <MessageSquare size={16} color={activeChatId === item.id ? neon : "#9CA3AF"} />
+                  <Text style={[styles.historyItemText, activeChatId === item.id && styles.historyItemTextActive, activeChatId === item.id && { color: neon }]} numberOfLines={1}>
                     {item.title || "Conversa"}
                   </Text>
                 </TouchableOpacity>
@@ -330,7 +331,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: '#A3FF47',
+    // dynamic background color
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 8,
@@ -392,7 +393,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     backgroundColor: '#1E1E1E',
     borderWidth: 1,
-    borderColor: '#A3FF47',
+    // dynamic border color
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 8,
@@ -403,7 +404,7 @@ const styles = StyleSheet.create({
     padding: 12,
   },
   bubbleUser: {
-    backgroundColor: '#A3FF47',
+    // dynamic background color
     borderBottomRightRadius: 4,
   },
   bubbleAssistant: {
@@ -436,7 +437,7 @@ const styles = StyleSheet.create({
     marginLeft: 32,
   },
   typingText: {
-    color: '#A3FF47',
+    // dynamic text color
     fontSize: 12,
     marginLeft: 8,
     fontWeight: '600',
@@ -467,7 +468,7 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: '#A3FF47',
+    // dynamic background color
     justifyContent: 'center',
     alignItems: 'center',
     marginLeft: 8,
@@ -526,7 +527,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   historyItemTextActive: {
-    color: '#A3FF47',
+    // dynamic color
     fontWeight: '700',
   },
   emptyHistoryText: {

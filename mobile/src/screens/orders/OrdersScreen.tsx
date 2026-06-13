@@ -6,13 +6,14 @@ import {
   FlatList,
   TouchableOpacity,
   ActivityIndicator,
-  SafeAreaView,
+  
   TextInput,
   RefreshControl,
   ScrollView,
   Modal,
   Pressable,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useSession } from '../../providers/SessionProvider';
 import { useTenant } from '../../providers/TenantProvider';
 import { supabase } from '../../lib/supabase';
@@ -76,7 +77,7 @@ const STATE_COLORS: Record<string, { bg: string; text: string }> = {
 };
 
 // Roles that get the admin-level filter panel
-const ADMIN_ROLES = ['admin', 'manager', 'owner', 'financeiro', 'expedicao', 'expedition'];
+const ADMIN_ROLES = ['admin', 'manager', 'owner', 'financeiro', 'expedicao', 'expedition', 'leader', 'lider', 'logistica'];
 
 const ALL_STATES = [
   { key: 'new', label: 'Pedido' },

@@ -58,7 +58,6 @@ import { RequireAuth } from "@/components/RequireAuth";
 import { useTenant } from "@/providers/TenantProvider";
 import { showError, showSuccess } from "@/utils/toast";
 import { useJourneyTransition } from "@/hooks/useJourneyTransition";
-import { handleOrderStateTransition } from "@/utils/inventorySync";
 import { UsersRound, RefreshCw } from "lucide-react";
 import { CaseUpdatesCard } from "@/components/case/CaseUpdatesCard";
 
@@ -278,9 +277,6 @@ export default function SalesOrderCase() {
         return;
       }
       
-      // Sincroniza o estoque na transição de etapa (reserva/devolve estoque)
-      await handleOrderStateTransition(caseId, caseData?.state || "", nextState, sessionUser?.id || "");
-
       await transitionState(caseId, caseData?.state, nextState, journey?.default_state_machine_json);
       
       await qc.invalidateQueries({ queryKey: ["case", caseId] });

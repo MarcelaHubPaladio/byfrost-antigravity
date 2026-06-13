@@ -95,7 +95,6 @@ import { GlobalJourneyLogsDialog } from "@/components/case/GlobalJourneyLogsDial
 import { checkTransitionBlocks } from "@/lib/journeys/validation";
 import { TransitionBlockDialog } from "@/components/case/TransitionBlockDialog";
 import { showError, showSuccess } from "@/utils/toast";
-import { handleOrderStateTransition } from "@/utils/inventorySync";
 import { AppShell } from "@/components/AppShell";
 import { RequireAuth } from "@/components/RequireAuth";
 import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianGrid } from "recharts";
@@ -1006,9 +1005,6 @@ export default function Orders() {
     }
 
     try {
-      // Sincroniza o estoque na transição de etapa (reserva/devolve estoque)
-      await handleOrderStateTransition(caseId, currentState, nextState, user?.id || "");
-
       const { error } = await supabase
         .from("cases")
         .update({ state: nextState, updated_at: new Date().toISOString() })

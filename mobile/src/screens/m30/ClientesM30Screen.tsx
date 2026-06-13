@@ -6,6 +6,7 @@ import {
   FlatList,
   TouchableOpacity,
   ActivityIndicator,
+  
   ScrollView,
   TextInput,
   Modal,
@@ -71,7 +72,7 @@ function stringToColor(str: string) {
 
 // ─── CRM Screen ───────────────────────────────────────────────────────────────
 
-export function CrmScreen({ navigation }: any) {
+export function ClientesM30Screen({ navigation }: any) {
   const { activeTenantId, isSuperAdmin, activeTenant, tenants, clearActiveTenant } = useTenant();
   const { user } = useSession();
   const neon = activeTenant?.neon_primary || '#A3FF47';
@@ -80,21 +81,19 @@ export function CrmScreen({ navigation }: any) {
   const isAdminOrSuper = isSuperAdmin || activeTenant?.role === 'admin';
   const canSwitchTenant = isSuperAdmin || tenants.length > 1;
 
-  const [activeFilterModal, setActiveFilterModal] = useState<'users' | 'tags' | 'instances' | 'products' | null>(null);
+  const [activeFilterModal, setActiveFilterModal] = useState<'users' | 'entities' | 'instances' | null>(null);
   const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
-  const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  const [selectedEntities, setSelectedEntities] = useState<string[]>([]);
   const [instanceFilterId, setInstanceFilterId] = useState<string>('all');
-  const [productFilterId, setProductFilterId] = useState<string>('all');
 
   const activeFiltersCount =
-    selectedUserIds.length +
-    selectedTags.length +
-    (instanceFilterId !== 'all' ? 1 : 0) +
-    (productFilterId !== 'all' ? 1 : 0);
+    (selectedUserIds.length > 0 ? 1 : 0) +
+    (selectedEntities.length > 0 ? 1 : 0) +
+    (instanceFilterId !== 'all' ? 1 : 0);
 
   // ── Journeys ────────────────────────────────────────────────────────────────
   const { data: journeys } = useQuery({
-    queryKey: ['tenant_crm_journeys_enabled', activeTenantId],
+    queryKey: ['tenant_m30_journey', activeTenantId],
     enabled: Boolean(activeTenantId),
     queryFn: async () => {
       const { data, error } = await supabase
@@ -105,7 +104,7 @@ export function CrmScreen({ navigation }: any) {
       if (error) throw error;
       return (data ?? [])
         .map((r: any) => r.journeys)
-        .filter((j: any) => j && j.is_crm);
+        .filter((j: any) => j && j.key === 'operacao_m30');
     },
   });
 
@@ -122,7 +121,7 @@ export function CrmScreen({ navigation }: any) {
     queryFn: async () => {
       let q = supabase
         .from('cases')
-        .select(`id,customer_id,title,status,state,created_at,updated_at,assigned_user_id,is_chat,users_profile!fk_cases_users_profile(display_name,email),journeys!cases_journey_id_fkey(key,name,is_crm),meta_json`)
+        .select(`id,customer_entity_id,title,status,state,created_at,updated_at,assigned_user_id,is_chat,users_profile!fk_cases_users_profile(display_name,email),journeys!cases_journey_id_fkey(key,name,is_crm),meta_json`)
         .eq('tenant_id', activeTenantId!)
         .is('deleted_at', null)
         .eq('is_chat', false);
@@ -145,18 +144,18 @@ export function CrmScreen({ navigation }: any) {
   }, [cases, selectedJourney]);
 
   const caseIds = useMemo(() => journeyRows.map((c: any) => c.id), [journeyRows]);
-  const customerIds = useMemo(() => {
+  const entityIds = useMemo(() => {
     const ids = new Set<string>();
-    journeyRows.forEach((c: any) => { if (c.customer_id) ids.add(c.customer_id); });
+    journeyRows.forEach((c: any) => { if (c.customer_entity_id) ids.add(c.customer_entity_id); });
     return Array.from(ids);
   }, [journeyRows]);
 
-  // ── Customers ───────────────────────────────────────────────────────────────
-  const { data: customersMap } = useQuery({
-    queryKey: ['crm_customers', activeTenantId, customerIds.join(',')],
-    enabled: Boolean(activeTenantId && customerIds.length > 0),
+  // ── Entities ───────────────────────────────────────────────────────────────
+  const { data: entitiesMap } = useQuery({
+    queryKey: ['m30_entities', activeTenantId, entityIds.join(',')],
+    enabled: Boolean(activeTenantId && entityIds.length > 0),
     queryFn: async () => {
-      const { data, error } = await supabase.from('customer_accounts').select('id,phone_e164,name,email').eq('tenant_id', activeTenantId!).in('id', customerIds);
+      const { data, error } = await supabase.from('core_entities').select('id,display_name').eq('tenant_id', activeTenantId!).in('id', entityIds);
       if (error) throw error;
       const m = new Map<string, any>();
       data?.forEach((c) => m.set(c.id, c));
@@ -185,101 +184,54 @@ export function CrmScreen({ navigation }: any) {
     },
   });
 
-  const { data: tagsQ } = useQuery({
-    queryKey: ['crm_case_tags', activeTenantId, caseIds.join(',')],
-    enabled: Boolean(activeTenantId && caseIds.length > 0),
+  const { data: availableEntities = [] } = useQuery({
+    queryKey: ['m30_active_entities_filter', activeTenantId],
+    enabled: Boolean(activeTenantId),
     queryFn: async () => {
-      const { data, error } = await supabase.from('case_tags').select('case_id,tag').eq('tenant_id', activeTenantId!).in('case_id', caseIds);
+      const { data, error } = await supabase
+        .from('core_entities')
+        .select('id, display_name, commercial_commitments!inner(id, status)')
+        .eq('tenant_id', activeTenantId!)
+        .in('commercial_commitments.status', ['active', 'pending'])
+        .is('deleted_at', null)
+        .order('display_name');
       if (error) throw error;
-      return data ?? [];
+      
+      const unique = new Map<string, any>();
+      for (const e of (data ?? [])) {
+        if (!unique.has(e.id)) unique.set(e.id, { id: e.id, display_name: e.display_name });
+      }
+      const arr = Array.from(unique.values());
+      arr.sort((a, b) => (a.display_name || '').localeCompare(b.display_name || ''));
+      return arr;
     },
   });
-
-  const { data: caseItemsQ } = useQuery({
-    queryKey: ['crm_case_items_batch', activeTenantId, caseIds.join(',')],
-    enabled: Boolean(activeTenantId && caseIds.length > 0),
-    queryFn: async () => {
-      const { data, error } = await supabase.from('case_items').select('case_id,description,qty,price,total,offering_entity_id').eq('tenant_id', activeTenantId!).in('case_id', caseIds);
-      if (error) throw error;
-      return data ?? [];
-    },
-  });
-
-  const allTags = useMemo(() => {
-    const s = new Set<string>();
-    tagsQ?.forEach((t) => { if (t.tag) s.add(t.tag); });
-    return Array.from(s).sort();
-  }, [tagsQ]);
-
-  const tagsByCase = useMemo(() => {
-    const m = new Map<string, string[]>();
-    tagsQ?.forEach((r) => {
-      const cid = String(r.case_id);
-      const t = String(r.tag);
-      const cur = m.get(cid) ?? [];
-      if (!cur.includes(t)) cur.push(t);
-      m.set(cid, cur);
-    });
-    return m;
-  }, [tagsQ]);
-
-  const itemsByCase = useMemo(() => {
-    const m = new Map<string, { total: number; items: any[] }>();
-    caseItemsQ?.forEach((r) => {
-      const cid = String(r.case_id);
-      const cur = m.get(cid) ?? { total: 0, items: [] };
-      const t = r.total ?? ((r.qty ?? 1) * (r.price ?? 0));
-      cur.total += Number(t) || 0;
-      cur.items.push(r);
-      m.set(cid, cur);
-    });
-    return m;
-  }, [caseItemsQ]);
-
-  const availableProducts = useMemo(() => {
-    const map = new Map<string, { id: string; name: string }>();
-    caseItemsQ?.forEach((r) => {
-      const id = r.offering_entity_id || r.description;
-      const name = r.description || 'Produto Desconhecido';
-      if (id && !map.has(id)) map.set(id, { id, name });
-    });
-    return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name));
-  }, [caseItemsQ]);
 
   const filteredRows = useMemo(() => {
     return journeyRows.filter((r: any) => {
       if (selectedUserIds.length > 0) {
         if (!r.assigned_user_id || !selectedUserIds.includes(r.assigned_user_id)) return false;
       }
-      if (selectedTags.length > 0) {
-        const cTags = tagsByCase.get(r.id) ?? [];
-        if (!selectedTags.every((t) => cTags.includes(t))) return false;
+      if (selectedEntities.length > 0) {
+        if (!r.customer_entity_id || !selectedEntities.includes(r.customer_entity_id)) return false;
       }
       if (instanceFilterId !== 'all') {
         const metaInst = r.meta_json?.instance_id || r.meta_json?.wa_instance_id;
         if (metaInst !== instanceFilterId) return false;
       }
-      if (productFilterId !== 'all') {
-        const cData = itemsByCase.get(r.id);
-        if (!cData) return false;
-        const hasProd = cData.items.some(
-          (it) => it.offering_entity_id === productFilterId || it.description === productFilterId
-        );
-        if (!hasProd) return false;
-      }
       return true;
     });
-  }, [journeyRows, selectedUserIds, selectedTags, instanceFilterId, productFilterId, tagsByCase, itemsByCase]);
+  }, [journeyRows, selectedUserIds, selectedEntities, instanceFilterId]);
 
   const searchResults = useMemo(() => {
     if (!searchQuery.trim()) return [];
     const sq = searchQuery.toLowerCase().trim();
     return filteredRows.filter((c: any) => {
-      const cust = customersMap?.get(c.customer_id);
-      const text = `${c.title} ${c.state} ${cust?.name} ${cust?.email}`.toLowerCase();
+      const cust = entitiesMap?.get(c.customer_entity_id);
+      const text = `${c.title} ${c.state} ${cust?.display_name || ''}`.toLowerCase();
       return text.includes(sq);
     });
-  }, [filteredRows, searchQuery, customersMap]);
+  }, [filteredRows, searchQuery, entitiesMap]);
 
   const casesByState = useMemo(() => {
     const map = new Map<string, any[]>();
@@ -294,18 +246,19 @@ export function CrmScreen({ navigation }: any) {
 
   // ── Card ─────────────────────────────────────────────────────────────────────
   const renderCard = ({ item }: { item: any }) => {
-    const caseData = itemsByCase.get(item.id);
-    const val = caseData?.total ?? 0;
-    const cust = customersMap?.get(item.customer_id);
-    const title = cust?.name || item.title || 'Sem título';
+    const cust = entitiesMap?.get(item.customer_entity_id);
+    const title = cust?.display_name || item.title || 'Sem título';
     const assignedUser = Array.isArray(item.users_profile) ? item.users_profile[0] : item.users_profile;
     const ownerName = assignedUser?.display_name || 'Não atribuído';
+    const handleCasePress = (item: any) => {
+      navigation.navigate('OperacaoM30Case', { id: item.id });
+    };
 
     return (
       <TouchableOpacity
         style={styles.card}
         activeOpacity={0.75}
-        onPress={() => navigation.navigate('CaseDetail', { id: item.id })}
+        onPress={() => handleCasePress(item)}
       >
         <View style={styles.cardHeader}>
           <Text style={styles.cardTitle} numberOfLines={1}>{title}</Text>
@@ -324,7 +277,6 @@ export function CrmScreen({ navigation }: any) {
             <Clock color="#6B7280" size={13} />
             <Text style={styles.cardDate}>{formatDate(item.updated_at)}</Text>
           </View>
-          {val > 0 && <Text style={[styles.cardValue, { color: neon }]}>{toMoney(val)}</Text>}
         </View>
       </TouchableOpacity>
     );
@@ -333,7 +285,6 @@ export function CrmScreen({ navigation }: any) {
   // ── Column ───────────────────────────────────────────────────────────────────
   const renderColumn = ({ item: state }: { item: string }) => {
     const stateCases = casesByState.get(state) || [];
-    const stateTotalValue = stateCases.reduce((acc, c) => acc + (itemsByCase.get(c.id)?.total ?? 0), 0);
     const dotColor = stringToColor(state);
 
     return (
@@ -346,7 +297,6 @@ export function CrmScreen({ navigation }: any) {
               <Text style={styles.colCountText}>{stateCases.length}</Text>
             </View>
           </View>
-          {stateTotalValue > 0 && <Text style={[styles.colTotalValue, { color: neon }]}>{toMoney(stateTotalValue)}</Text>}
         </View>
 
         <FlatList
@@ -389,23 +339,23 @@ export function CrmScreen({ navigation }: any) {
         </ScrollView>
       );
     }
-    if (activeFilterModal === 'tags') {
+    if (activeFilterModal === 'entities') {
       return (
         <ScrollView style={styles.modalScroll}>
-          {allTags.map((tag) => {
-            const isSelected = selectedTags.includes(tag);
+          {availableEntities.map((cust) => {
+            const isSelected = selectedEntities.includes(cust.id);
             return (
               <TouchableOpacity
-                key={tag}
+                key={cust.id}
                 style={styles.modalRow}
                 onPress={() => {
-                  setSelectedTags((prev) =>
-                    isSelected ? prev.filter((t) => t !== tag) : [...prev, tag]
+                  setSelectedEntities((prev) =>
+                    isSelected ? prev.filter((id) => id !== cust.id) : [...prev, cust.id]
                   );
                   setActiveFilterModal(null);
                 }}
               >
-                <Text style={[styles.modalRowText, isSelected && { color: neon, fontWeight: '700' }]}>{tag}</Text>
+                <Text style={[styles.modalRowText, isSelected && { color: neon, fontWeight: '700' }]}>{cust.display_name}</Text>
                 {isSelected && <Check color={neon} size={18} />}
               </TouchableOpacity>
             );
@@ -432,33 +382,13 @@ export function CrmScreen({ navigation }: any) {
         </ScrollView>
       );
     }
-    if (activeFilterModal === 'products') {
-      return (
-        <ScrollView style={styles.modalScroll}>
-          <TouchableOpacity style={styles.modalRow} onPress={() => { setProductFilterId('all'); setActiveFilterModal(null); }}>
-            <Text style={[styles.modalRowText, productFilterId === 'all' && { color: neon, fontWeight: '700' }]}>Todos</Text>
-            {productFilterId === 'all' && <Check color={neon} size={18} />}
-          </TouchableOpacity>
-          {availableProducts.map((prod) => {
-            const isSelected = productFilterId === prod.id;
-            return (
-              <TouchableOpacity key={prod.id} style={styles.modalRow} onPress={() => { setProductFilterId(prod.id); setActiveFilterModal(null); }}>
-                <Text style={[styles.modalRowText, isSelected && { color: neon, fontWeight: '700' }]}>{prod.name}</Text>
-                {isSelected && <Check color={neon} size={18} />}
-              </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
-      );
-    }
     return null;
   };
 
   const clearFilters = () => {
     setSelectedUserIds([]);
-    setSelectedTags([]);
+    setSelectedEntities([]);
     setInstanceFilterId('all');
-    setProductFilterId('all');
   };
 
   if (!selectedJourney && !casesLoading) {
@@ -466,11 +396,11 @@ export function CrmScreen({ navigation }: any) {
       <SafeAreaView style={styles.safeArea}>
         <View style={styles.container}>
           <View style={styles.topBar}>
-            <Text style={styles.mainTitle}>CRM</Text>
+            <Text style={styles.mainTitle}>Clientes M30</Text>
           </View>
           <View style={styles.emptyStateContainer}>
-            <Text style={styles.emptyStateTitle}>CRM não habilitado</Text>
-            <Text style={styles.emptyStateSubtitle}>Este workspace não possui uma jornada CRM ativa.</Text>
+            <Text style={styles.emptyStateTitle}>Gestão não habilitada</Text>
+            <Text style={styles.emptyStateSubtitle}>A jornada "operacao_m30" não está ativa ou não existe neste workspace.</Text>
           </View>
         </View>
       </SafeAreaView>
@@ -484,7 +414,7 @@ export function CrmScreen({ navigation }: any) {
         {/* ── Header ── */}
         <View style={styles.topBar}>
           <View style={styles.topLeft}>
-            <Text style={styles.mainTitle}>{activeTenant?.name || 'CRM'}</Text>
+            <Text style={styles.mainTitle}>Clientes M30</Text>
           </View>
           <View style={styles.topRight}>
             {canSwitchTenant && (
@@ -501,7 +431,7 @@ export function CrmScreen({ navigation }: any) {
           <Search color="#6B7280" size={16} />
           <TextInput
             style={styles.searchInput}
-            placeholder="Buscar leads..."
+            placeholder="Buscar casos..."
             placeholderTextColor="#4B5563"
             value={searchQuery}
             onChangeText={setSearchQuery}
@@ -531,22 +461,16 @@ export function CrmScreen({ navigation }: any) {
               onPress={() => setActiveFilterModal('users')}
             />
             <FilterChip
-              icon={<Tag size={13} color={selectedTags.length > 0 ? '#000' : '#9CA3AF'} />}
-              label={`Tags${selectedTags.length > 0 ? ` (${selectedTags.length})` : ''}`}
-              active={selectedTags.length > 0}
-              onPress={() => setActiveFilterModal('tags')}
+              icon={<UserIcon size={13} color={selectedEntities.length > 0 ? '#000' : '#9CA3AF'} />}
+              label={`Clientes${selectedEntities.length > 0 ? ` (${selectedEntities.length})` : ''}`}
+              active={selectedEntities.length > 0}
+              onPress={() => setActiveFilterModal('entities')}
             />
             <FilterChip
               icon={<MapPin size={13} color={instanceFilterId !== 'all' ? '#000' : '#9CA3AF'} />}
               label="Instância"
               active={instanceFilterId !== 'all'}
               onPress={() => setActiveFilterModal('instances')}
-            />
-            <FilterChip
-              icon={<Package size={13} color={productFilterId !== 'all' ? '#000' : '#9CA3AF'} />}
-              label="Produto"
-              active={productFilterId !== 'all'}
-              onPress={() => setActiveFilterModal('products')}
             />
           </ScrollView>
         </View>
@@ -577,7 +501,7 @@ export function CrmScreen({ navigation }: any) {
       </View>
 
       {/* FAB */}
-      <TouchableOpacity style={[styles.fab, { backgroundColor: neon, shadowColor: neon }]} onPress={() => navigation.navigate('NewLead')}>
+      <TouchableOpacity style={[styles.fab, { backgroundColor: neon, shadowColor: neon }]} onPress={() => navigation.navigate('NewOperacaoM30Case')}>
         <Plus size={24} color="#000000" />
       </TouchableOpacity>
 

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, ScrollView } from 'react-native';
+import { View, Text, StyleSheet,  TouchableOpacity, ScrollView } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Activity, Sparkles, FileText, DollarSign } from 'lucide-react-native';
 
 import { MobileGlobalTimeline } from '../components/guardiao/MobileGlobalTimeline';

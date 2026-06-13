@@ -16,7 +16,7 @@ type Journey = {
   name: string;
 };
 
-function InsightCard({ row, journeyName }: { row: any; journeyName: string }) {
+function InsightCard({ row, journeyName, neon }: { row: any; journeyName: string; neon: string }) {
   const rawJson = row.insights_json;
   let insights: GuardiaoInsight[] = [];
   let eventsCount: number | null = null;
@@ -36,11 +36,11 @@ function InsightCard({ row, journeyName }: { row: any; journeyName: string }) {
     <View style={styles.cardContainer}>
       <View style={styles.cardHeader}>
         <View style={styles.headerLeft}>
-          {isGlobal ? <ShieldAlert size={18} color="#A3FF47" /> : <MapIcon size={18} color="#00E5FF" />}
+          {isGlobal ? <ShieldAlert size={18} color={neon} /> : <MapIcon size={18} color="#00E5FF" />}
           <Text style={styles.title} numberOfLines={1}>{isGlobal ? 'Guardião Global' : `Jornada: ${journeyName}`}</Text>
         </View>
         <View style={[styles.badge, isGlobal ? styles.badgeGlobal : styles.badgeJourney]}>
-          <Text style={[styles.badgeText, isGlobal ? styles.badgeTextGlobal : styles.badgeTextJourney]}>
+          <Text style={[styles.badgeText, isGlobal ? [styles.badgeTextGlobal, { color: neon }] : styles.badgeTextJourney]}>
             {isGlobal ? 'GLOBAL' : 'ESPECÍFICO'}
           </Text>
         </View>
@@ -51,8 +51,8 @@ function InsightCard({ row, journeyName }: { row: any; journeyName: string }) {
           <View style={styles.summaryBox}>
             {eventsCount !== null && (
               <View style={styles.eventsBadge}>
-                <Database size={10} color="#A3FF47" />
-                <Text style={styles.eventsText}>{eventsCount} eventos analisados</Text>
+                <Database size={10} color={neon} />
+                <Text style={[styles.eventsText, { color: neon }]}>{eventsCount} eventos analisados</Text>
               </View>
             )}
             <Text style={styles.summaryLabel}>PADRÃO DE COMPORTAMENTO</Text>
@@ -95,7 +95,8 @@ function InsightCard({ row, journeyName }: { row: any; journeyName: string }) {
 }
 
 export function MobileGuardiaoReports() {
-  const { activeTenantId } = useTenant();
+  const { activeTenantId, activeTenant } = useTenant();
+  const neon = activeTenant?.neon_primary || '#A3FF47';
   const queryClient = useQueryClient();
   const [generating, setGenerating] = useState(false);
 
@@ -200,7 +201,7 @@ export function MobileGuardiaoReports() {
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#A3FF47" />
+        <ActivityIndicator size="large" color={neon} />
         <Text style={styles.loadingText}>Carregando relatórios...</Text>
       </View>
     );
@@ -233,7 +234,7 @@ export function MobileGuardiaoReports() {
     <View style={styles.container}>
       <View style={styles.headerBar}>
         <Text style={styles.headerText}>Análise por Jornada</Text>
-        <TouchableOpacity style={styles.generateBtn} onPress={handleGenerate} disabled={generating}>
+        <TouchableOpacity style={[styles.generateBtn, { backgroundColor: neon }]} onPress={handleGenerate} disabled={generating}>
           {generating ? <ActivityIndicator size="small" color="#000" /> : <RefreshCw size={14} color="#000" />}
           <Text style={styles.generateBtnText}>{generating ? "Gerando..." : "Novo Relatório"}</Text>
         </TouchableOpacity>
@@ -244,6 +245,7 @@ export function MobileGuardiaoReports() {
             key={row.journey_id || `global-${idx}`} 
             row={row} 
             journeyName={getJourneyName(row.journey_id)} 
+            neon={neon}
           />
         ))}
       </ScrollView>
@@ -272,7 +274,7 @@ const styles = StyleSheet.create({
   generateBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#A3FF47',
+    // dynamic background
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 8,
@@ -346,6 +348,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   badgeGlobal: {
+    // We can inject inline styles or keep the hardcoded transparent green for the badge
     backgroundColor: 'rgba(163, 255, 71, 0.1)',
     borderColor: 'rgba(163, 255, 71, 0.2)',
   },
@@ -359,7 +362,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   badgeTextGlobal: {
-    color: '#A3FF47',
+    // dynamic color
   },
   badgeTextJourney: {
     color: '#00E5FF',
@@ -387,7 +390,7 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   eventsText: {
-    color: '#A3FF47',
+    // dynamic color
     fontSize: 10,
     fontWeight: '600',
   },

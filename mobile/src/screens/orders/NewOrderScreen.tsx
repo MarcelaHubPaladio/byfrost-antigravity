@@ -6,12 +6,15 @@ import {
   TouchableOpacity,
   TextInput,
   ScrollView,
-  SafeAreaView,
+  
   ActivityIndicator,
   Alert,
   KeyboardAvoidingView,
   Platform,
+  Modal,
+  Pressable,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { useSession } from '../../providers/SessionProvider';
 import { useTenant } from '../../providers/TenantProvider';
@@ -27,7 +30,40 @@ import {
   ChevronDown,
   Check,
   AlertCircle,
+  Plus,
+  Trash2,
 } from 'lucide-react-native';
+
+// ─── Helpers & Components ───────────────────────────────────────────────────
+
+function BottomSheet({ visible, title, onClose, children }: { visible: boolean; title: string; onClose: () => void; children: React.ReactNode; }) {
+  return (
+    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
+      <Pressable style={bs.overlay} onPress={onClose}>
+        <Pressable style={bs.sheet}>
+          <View style={bs.handle} />
+          <View style={bs.header}>
+            <Text style={bs.title}>{title}</Text>
+            <TouchableOpacity style={bs.closeBtn} onPress={onClose}>
+              <X size={18} color="#9CA3AF" />
+            </TouchableOpacity>
+          </View>
+          <ScrollView style={bs.scroll}>{children}</ScrollView>
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
+}
+
+const bs = StyleSheet.create({
+  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.75)', justifyContent: 'flex-end' },
+  sheet: { backgroundColor: '#141414', borderTopLeftRadius: 24, borderTopRightRadius: 24, borderWidth: 1, borderColor: '#2A2A2A', maxHeight: '75%', paddingBottom: 24 },
+  handle: { width: 36, height: 4, backgroundColor: '#2A2A2A', borderRadius: 2, alignSelf: 'center', marginTop: 12, marginBottom: 4 },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: '#2A2A2A' },
+  title: { fontSize: 16, fontWeight: '700', color: '#F9FAFB' },
+  closeBtn: { width: 32, height: 32, borderRadius: 10, backgroundColor: '#1A1A1A', alignItems: 'center', justifyContent: 'center' },
+  scroll: { paddingHorizontal: 12, paddingTop: 4 },
+});
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -149,6 +185,60 @@ export function NewOrderScreen() {
   const [obs, setObs] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
+  // Product state
+  const [selectedProducts, setSelectedProducts] = useState<any[]>([]);
+  const [showProductModal, setShowProductModal] = useState(false);
+  const [productDesc, setProductDesc] = useState('');
+  const [productPrice, setProductPrice] = useState('');
+  const [productQty, setProductQty] = useState('1');
+  const [productEntityId, setProductEntityId] = useState<string | null>(null);
+
+  const totalItemsValue = selectedProducts.reduce((acc, p) => acc + p.total, 0);
+
+  const offeringsQ = useQuery({
+    queryKey: ['crm_offerings_search_new_order', activeTenantId, productDesc],
+    enabled: Boolean(activeTenantId && productDesc.length > 1),
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('core_entities')
+        .select('id, display_name, metadata')
+        .eq('tenant_id', activeTenantId!)
+        .in('entity_type', ['offering', 'product'])
+        .is('deleted_at', null)
+        .ilike('display_name', `%${productDesc}%`)
+        .order('display_name', { ascending: true })
+        .limit(5);
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+
+  const handleAddProduct = () => {
+    let priceStr = String(productPrice).replace(/\./g, '').replace(',', '.');
+    let price = parseFloat(priceStr) || 0;
+    const qty = parseInt(productQty, 10) || 1;
+    
+    if (!productDesc.trim()) {
+      Alert.alert("Atenção", "Preencha a descrição do produto.");
+      return;
+    }
+    
+    setSelectedProducts(prev => [
+      ...prev,
+      {
+        id: Math.random().toString(36).substr(2, 9),
+        description: productDesc,
+        price,
+        qty,
+        total: price * qty,
+        offering_entity_id: productEntityId,
+      }
+    ]);
+    
+    setShowProductModal(false);
+    setProductDesc(''); setProductPrice(''); setProductQty('1'); setProductEntityId(null);
+  };
+
   // Fetch journey ID
   const journeyQ = useQuery({
     queryKey: ['journey_sales_order_mobile', activeTenantId],
@@ -185,12 +275,8 @@ export function NewOrderScreen() {
 
     setSubmitting(true);
     try {
-      // Parse value
-      const rawValue = totalValue
-        .replace(/[R$\s]/g, '')
-        .replace(',', '.')
-        .trim();
-      const numericValue = parseFloat(rawValue) || 0;
+      // Parse value (removed since we use totalItemsValue)
+      const numericValue = totalItemsValue;
 
       // Build title
       const title = customerName.trim();
@@ -209,7 +295,7 @@ export function NewOrderScreen() {
           meta_json: {
             customer_name: customerName.trim(),
             customer_phone: customerPhone.trim(),
-            total_value: numericValue > 0 ? numericValue : null,
+            total_value: totalItemsValue > 0 ? totalItemsValue : null,
             payment_method: paymentMethod || null,
             obs: obs.trim() || null,
             created_via: 'mobile',
@@ -267,6 +353,32 @@ export function NewOrderScreen() {
       if (fieldInserts.length > 0) {
         await supabase.from('case_fields').insert(fieldInserts);
       }
+
+      // Insert case_items
+      if (selectedProducts.length > 0) {
+        const itemsToInsert = selectedProducts.map((p, index) => ({
+          tenant_id: activeTenantId,
+          case_id: caseId,
+          line_no: index + 1,
+          description: p.description,
+          price: p.price,
+          qty: p.qty,
+          total: p.total,
+          offering_entity_id: p.offering_entity_id,
+        }));
+        await supabase.from('case_items').insert(itemsToInsert);
+      }
+
+      // Generate timeline event
+      await supabase.from('timeline_events').insert({
+        tenant_id: activeTenantId,
+        case_id: caseId,
+        event_type: 'case_created',
+        actor_type: 'vendor',
+        actor_id: user?.id ?? null,
+        message: 'Pedido criado via App.',
+        occurred_at: new Date().toISOString()
+      });
 
       // Set sale date
       await supabase.from('case_fields').insert({
@@ -344,18 +456,40 @@ export function NewOrderScreen() {
             />
           </View>
 
-          {/* ── Valor ── */}
-          <View style={styles.fieldGroup}>
-            <View style={styles.fieldLabelRow}>
-              <DollarSign size={14} color="#6B7280" />
-              <FieldLabel label="VALOR TOTAL" />
+          {/* ── Itens do Pedido ── */}
+          <View style={styles.card}>
+            <View style={styles.cardHeaderRow}>
+              <View style={styles.cardHeaderLeft}>
+                <ShoppingBag size={14} color={neon} />
+                <Text style={styles.cardTitle}>Itens do Pedido</Text>
+              </View>
+              <TouchableOpacity style={styles.iconRoundBtn} onPress={() => setShowProductModal(true)}>
+                <Plus size={16} color={neon} />
+              </TouchableOpacity>
             </View>
-            <TextFieldInput
-              value={totalValue}
-              onChangeText={setTotalValue}
-              placeholder="0,00"
-              keyboardType="numeric"
-            />
+            
+            {selectedProducts.length === 0 ? (
+              <Text style={styles.emptyText}>Nenhum produto adicionado.</Text>
+            ) : (
+              selectedProducts.map(it => (
+                <View key={it.id} style={styles.listRow}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.listRowTitle}>{it.description}</Text>
+                    <Text style={styles.listRowSub}>{it.qty}x · R$ {Number(it.price).toFixed(2)}</Text>
+                  </View>
+                  <Text style={[styles.listRowValue, { color: neon }]}>R$ {Number(it.total).toFixed(2)}</Text>
+                  <TouchableOpacity onPress={() => setSelectedProducts(prev => prev.filter(p => p.id !== it.id))} style={styles.trashBtn}>
+                    <Trash2 size={15} color="#EF4444" />
+                  </TouchableOpacity>
+                </View>
+              ))
+            )}
+            {totalItemsValue > 0 && (
+              <View style={styles.totalRow}>
+                <Text style={styles.totalLabel}>Total do Pedido</Text>
+                <Text style={[styles.totalValue, { color: neon }]}>R$ {totalItemsValue.toFixed(2)}</Text>
+              </View>
+            )}
           </View>
 
           {/* ── Pagamento ── */}
@@ -410,6 +544,50 @@ export function NewOrderScreen() {
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
+
+      {/* ── Product Modal ── */}
+      <BottomSheet visible={showProductModal} title="Adicionar Produto" onClose={() => setShowProductModal(false)}>
+        <View style={{ padding: 8, gap: 16 }}>
+          <View>
+            <Text style={styles.fieldLabel}>DESCRIÇÃO</Text>
+            <TextInput style={styles.modalInput} value={productDesc} onChangeText={t => { setProductDesc(t); setProductEntityId(null); }} placeholder="Ex: Semente de Milho" placeholderTextColor="#4B5563" />
+            {productDesc.length > 0 && !productEntityId && (offeringsQ.data ?? []).length > 0 && (
+              <View style={styles.suggestions}>
+                {(offeringsQ.data ?? []).map(o => (
+                  <TouchableOpacity
+                    key={o.id}
+                    style={styles.suggestionRow}
+                    onPress={() => {
+                      setProductDesc(o.display_name);
+                      setProductEntityId(o.id);
+                      if (o.metadata?.base_price) setProductPrice(String(o.metadata.base_price));
+                    }}
+                  >
+                    <Text style={[styles.suggestionText, { color: neon }]}>{o.display_name}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
+          </View>
+          <View style={{ flexDirection: 'row', gap: 12 }}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.fieldLabel}>PREÇO (R$)</Text>
+              <TextInput style={styles.modalInput} value={productPrice} onChangeText={setProductPrice} placeholder="0,00" placeholderTextColor="#4B5563" keyboardType="numeric" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.fieldLabel}>QTDE</Text>
+              <TextInput style={styles.modalInput} value={productQty} onChangeText={setProductQty} placeholder="1" placeholderTextColor="#4B5563" keyboardType="numeric" />
+            </View>
+          </View>
+          <TouchableOpacity
+            style={[styles.submitChip, { backgroundColor: neon }, (!productDesc.trim()) && styles.submitChipDisabled]}
+            onPress={handleAddProduct}
+            disabled={!productDesc.trim()}
+          >
+            <Text style={styles.submitChipText}>Adicionar Produto</Text>
+          </TouchableOpacity>
+        </View>
+      </BottomSheet>
     </SafeAreaView>
   );
 }
@@ -611,4 +789,29 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: '#000000',
   },
+
+  // Products Section
+  card: { backgroundColor: '#141414', borderRadius: 16, padding: 14, marginTop: 12, borderWidth: 1, borderColor: '#2A2A2A' },
+  cardHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
+  cardHeaderLeft: { flexDirection: 'row', alignItems: 'center', gap: 7 },
+  cardTitle: { fontSize: 12, fontWeight: '700', color: '#6B7280', textTransform: 'uppercase', letterSpacing: 0.8 },
+  iconRoundBtn: { width: 32, height: 32, borderRadius: 16, backgroundColor: '#1A1A1A', borderWidth: 1, borderColor: '#2A2A2A', alignItems: 'center', justifyContent: 'center' },
+  emptyText: { fontSize: 13, color: '#4B5563', fontStyle: 'italic', textAlign: 'center', marginVertical: 10 },
+  listRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#1A1A1A' },
+  listRowTitle: { fontSize: 14, fontWeight: '600', color: '#F9FAFB' },
+  listRowSub: { fontSize: 12, color: '#6B7280', marginTop: 2 },
+  listRowValue: { fontSize: 14, fontWeight: '700' },
+  trashBtn: { padding: 6, backgroundColor: '#1A0A0A', borderRadius: 8, borderWidth: 1, borderColor: '#7F1D1D' },
+  totalRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: '#2A2A2A' },
+  totalLabel: { fontSize: 13, fontWeight: '700', color: '#9CA3AF', textTransform: 'uppercase' },
+  totalValue: { fontSize: 18, fontWeight: '800' },
+
+  // Modal Product
+  modalInput: { backgroundColor: '#1A1A1A', borderWidth: 1, borderColor: '#2A2A2A', borderRadius: 12, height: 48, paddingHorizontal: 14, fontSize: 15, color: '#F9FAFB', marginTop: 6 },
+  suggestions: { backgroundColor: '#1A1A1A', borderRadius: 12, borderWidth: 1, borderColor: '#2A2A2A', marginTop: 4, maxHeight: 150 },
+  suggestionRow: { paddingHorizontal: 14, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#2A2A2A' },
+  suggestionText: { fontSize: 14, fontWeight: '600' },
+  submitChip: { paddingVertical: 14, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginTop: 12 },
+  submitChipDisabled: { backgroundColor: '#2A3A1A', opacity: 0.7 },
+  submitChipText: { color: '#000', fontSize: 15, fontWeight: '800' },
 });

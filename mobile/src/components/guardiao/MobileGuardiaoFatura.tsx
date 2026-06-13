@@ -6,7 +6,8 @@ import { useTenant } from '../../providers/TenantProvider';
 import { DollarSign, Cpu, Calendar as CalendarIcon, Hash } from 'lucide-react-native';
 
 export function MobileGuardiaoFatura() {
-  const { activeTenantId } = useTenant();
+  const { activeTenantId, activeTenant } = useTenant();
+  const neon = activeTenant?.neon_primary || '#A3FF47';
 
   const usageEventsQ = useQuery({
     queryKey: ["usage_events_ai_mobile", activeTenantId],
@@ -33,7 +34,7 @@ export function MobileGuardiaoFatura() {
   if (usageEventsQ.isLoading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#A3FF47" />
+        <ActivityIndicator size="large" color={neon} />
         <Text style={styles.loadingText}>Buscando fatura...</Text>
       </View>
     );
@@ -41,8 +42,8 @@ export function MobileGuardiaoFatura() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.summaryCard}>
-        <Text style={styles.summaryLabel}>VALOR FINAL FATURADO</Text>
+      <View style={[styles.summaryCard, { backgroundColor: `${neon}0D`, borderColor: `${neon}4D` }]}>
+        <Text style={[styles.summaryLabel, { color: neon }]}>VALOR FINAL FATURADO</Text>
         <Text style={styles.summaryValue}>
           {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalCostBrl)}
         </Text>
@@ -66,14 +67,14 @@ export function MobileGuardiaoFatura() {
               <View style={styles.itemCard}>
                 <View style={styles.itemHeader}>
                   <View style={styles.itemIcon}>
-                    <Cpu size={14} color="#A3FF47" />
+                    <Cpu size={14} color={neon} />
                   </View>
                   <View style={{ flex: 1 }}>
                     <Text style={styles.itemService}>{meta?.service || 'Inteligência Artificial'}</Text>
                     <Text style={styles.itemModel}>{meta?.model || 'Desconhecido'}</Text>
                   </View>
                   <View style={styles.itemTokens}>
-                    <Text style={styles.itemTokensValue}>{item.qty}</Text>
+                    <Text style={[styles.itemTokensValue, { color: neon }]}>{item.qty}</Text>
                     <Text style={styles.itemTokensLabel}>tokens</Text>
                   </View>
                 </View>
@@ -114,16 +115,16 @@ const styles = StyleSheet.create({
     marginTop: 12,
   },
   summaryCard: {
-    backgroundColor: 'rgba(163, 255, 71, 0.05)',
+    // dynamic bg
     borderWidth: 1,
-    borderColor: 'rgba(163, 255, 71, 0.3)',
+    // dynamic border
     borderRadius: 16,
     padding: 20,
     alignItems: 'center',
     marginBottom: 20,
   },
   summaryLabel: {
-    color: '#A3FF47',
+    // dynamic color
     fontSize: 10,
     fontWeight: '800',
     letterSpacing: 1,
@@ -186,7 +187,7 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
   },
   itemTokensValue: {
-    color: '#A3FF47',
+    // dynamic color
     fontSize: 14,
     fontWeight: '700',
   },
