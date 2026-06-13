@@ -129,8 +129,8 @@ export function M30ClientHomeScreen() {
                 onPress={() => toggleGroup(item.name)}
                 style={styles.cardHeader}
               >
-                <View style={[styles.iconBox, isFullyDone ? { backgroundColor: neon + '20', borderColor: neon } : {}]}>
-                  <Package size={20} color={isFullyDone ? neon : "#6B7280"} />
+                <View style={[styles.iconBox, { backgroundColor: isFullyDone ? neon + '20' : neon + '15', borderColor: neon + '40' }]}>
+                  <Package size={20} color={neon} />
                 </View>
                 <View style={styles.cardHeaderText}>
                   <Text style={styles.cardTitle}>{item.name}</Text>
@@ -139,11 +139,11 @@ export function M30ClientHomeScreen() {
                   </Text>
                 </View>
                 <View style={styles.progressCounter}>
-                  <Text style={[styles.progressText, isFullyDone ? { color: neon } : {}]}>
+                  <Text style={[styles.progressText, { color: isFullyDone ? neon : '#F9FAFB' }]}>
                     {completed}/{total}
                   </Text>
                   <View style={styles.progressBarBg}>
-                    <View style={[styles.progressBarFill, isFullyDone ? { backgroundColor: neon } : { backgroundColor: '#F9FAFB' }, { width: `${progressPct}%` }]} />
+                    <View style={[styles.progressBarFill, { backgroundColor: neon, width: `${progressPct}%`, opacity: isFullyDone ? 1 : 0.8 }]} />
                   </View>
                 </View>
                 <View style={styles.expandIcon}>
@@ -171,10 +171,10 @@ export function M30ClientHomeScreen() {
                           <View style={styles.casesList}>
                             {deliverable.cases.map((c: any) => (
                               <View key={c.id} style={styles.caseItem}>
-                                <KanbanSquare size={14} color="#3b82f6" />
+                                <KanbanSquare size={14} color={neon} />
                                 <Text style={styles.caseTitle} numberOfLines={1}>{c.title || 'Tarefa'}</Text>
-                                <View style={styles.caseStateBadge}>
-                                  <Text style={styles.caseStateText}>{c.state}</Text>
+                                <View style={[styles.caseStateBadge, { borderColor: neon + '40' }]}>
+                                  <Text style={[styles.caseStateText, { color: neon }]}>{c.state}</Text>
                                 </View>
                               </View>
                             ))}
