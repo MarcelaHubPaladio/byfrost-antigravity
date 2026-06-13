@@ -66,13 +66,18 @@ export function CustomTabBar({ state, descriptors, navigation }: BottomTabBarPro
     }
   };
 
-  // Define all possible items
-  const allItems = [];
-  if (isAdmin) allItems.push({ name: 'Guardiao', label: 'Guardião', icon: ShieldAlert });
-  if (hasCrm) allItems.push({ name: 'CRM', label: 'CRM', icon: Package });
-  if (isM30) allItems.push({ name: 'ClientesM30', label: 'Clientes M30', icon: Users });
-  if (isAgroforte) allItems.push({ name: 'Orders', label: 'Pedidos', icon: ShoppingBag });
-  allItems.push({ name: 'Home', label: 'Tarefas', icon: Home });
+  // Define all possible items from navigation state
+  const allItems = state.routes.map(route => {
+    const { options } = descriptors[route.key];
+    const Icon = options.tabBarIcon ? (props: any) => options.tabBarIcon!(props) : Home;
+    return { 
+      name: route.name, 
+      label: options.title !== undefined ? options.title : route.name, 
+      icon: Icon,
+      isAction: false
+    };
+  });
+  
   allItems.push({ name: 'UserMenu', label: 'Perfil', icon: User, isAction: true });
 
   const primaryColor = activeTenant?.primary_color || '#A3FF47';
@@ -159,7 +164,10 @@ export function CustomTabBar({ state, descriptors, navigation }: BottomTabBarPro
 
       <TouchableOpacity 
         activeOpacity={0.8}
-        onPress={() => navigation.navigate('Home')}
+        onPress={() => {
+          const defaultRoute = state.routes.find(r => r.name === 'Home')?.name || state.routes[0].name;
+          navigation.navigate(defaultRoute);
+        }}
         style={{
           width: 70,
           top: Platform.OS === 'ios' ? -15 : -20,

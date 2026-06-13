@@ -122,11 +122,11 @@ function AppTabs() {
       tabBar={props => <CustomTabBar {...props} />}
       screenOptions={{ headerShown: false }}
     >
-      {isAdmin && <Tab.Screen name="Guardiao" component={GuardiaoScreen} />}
-      {hasCrm && <Tab.Screen name="CRM" component={CrmScreen} />}
-      {hasM30 && <Tab.Screen name="ClientesM30" component={ClientesM30Screen} />}
-      {hasOrders && <Tab.Screen name="Orders" component={OrdersScreen} />}
-      <Tab.Screen name="Home" component={HomeScreen} />
+      {isAdmin && <Tab.Screen name="Guardiao" component={GuardiaoScreen} options={{ title: 'Guardião', tabBarIcon: ({ color, size }) => <ShieldAlert color={color} size={size || 24} /> }} />}
+      {hasCrm && <Tab.Screen name="CRM" component={CrmScreen} options={{ title: 'CRM', tabBarIcon: ({ color, size }) => <Package color={color} size={size || 24} /> }} />}
+      {hasM30 && <Tab.Screen name="ClientesM30" component={ClientesM30Screen} options={{ title: 'Clientes M30', tabBarIcon: ({ color, size }) => <Users color={color} size={size || 24} /> }} />}
+      {hasOrders && <Tab.Screen name="Orders" component={OrdersScreen} options={{ title: 'Pedidos', tabBarIcon: ({ color, size }) => <ShoppingBag color={color} size={size || 24} /> }} />}
+      <Tab.Screen name="Home" component={HomeScreen} options={{ title: 'Tarefas', tabBarIcon: ({ color, size }) => <Home color={color} size={size || 24} /> }} />
     </Tab.Navigator>
   );
 }
