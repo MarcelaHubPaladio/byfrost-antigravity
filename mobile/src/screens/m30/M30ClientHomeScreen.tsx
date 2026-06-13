@@ -6,7 +6,10 @@ import { useTenant } from '../../providers/TenantProvider';
 import { Package, CheckCircle2, ChevronDown, ChevronUp, KanbanSquare, Circle } from 'lucide-react-native';
 import { useSession } from '../../providers/SessionProvider';
 
-export function M30ClientHomeScreen() {
+export function M30ClientHomeScreen({ navigation }: any) {
+  React.useLayoutEffect(() => {
+    navigation?.setOptions({ headerShown: false });
+  }, [navigation]);
   const { activeTenantId, activeTenant } = useTenant();
   const { user } = useSession();
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
@@ -97,7 +100,8 @@ export function M30ClientHomeScreen() {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Olá!</Text>
+        <Text style={styles.headerLabel}>ENTREGÁVEIS</Text>
+        <Text style={styles.headerTitle}>Olá! 👋</Text>
         <Text style={styles.headerSubtitle}>Acompanhe o andamento da sua operação.</Text>
       </View>
 
@@ -214,16 +218,24 @@ const styles = StyleSheet.create({
   header: {
     backgroundColor: '#141414',
     paddingHorizontal: 24,
-    paddingTop: 48,
+    paddingTop: 64,
     paddingBottom: 24,
     borderBottomLeftRadius: 24,
     borderBottomRightRadius: 24,
     borderBottomWidth: 1,
     borderBottomColor: '#2A2A2A',
   },
+  headerLabel: {
+    color: '#6B7280',
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 2,
+    textTransform: 'uppercase',
+    marginBottom: 4,
+  },
   headerTitle: {
     color: '#F9FAFB',
-    fontSize: 22,
+    fontSize: 26,
     fontWeight: 'bold',
   },
   headerSubtitle: {
