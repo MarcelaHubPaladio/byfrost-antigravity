@@ -3,7 +3,7 @@ import { View, Text, FlatList, ActivityIndicator, RefreshControl, TouchableOpaci
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '../../lib/supabase';
 import { useTenant } from '../../providers/TenantProvider';
-import { Ionicons } from '@expo/vector-icons';
+import { FileText, ChevronRight } from 'lucide-react-native';
 import { useSession } from '../../providers/SessionProvider';
 
 export function M30ClientHomeScreen() {
@@ -87,7 +87,7 @@ export function M30ClientHomeScreen() {
         refreshControl={<RefreshControl refreshing={m30DeliverablesQ.isFetching} onRefresh={() => m30DeliverablesQ.refetch()} />}
         ListEmptyComponent={
           <View className="flex-1 items-center justify-center py-16 px-6">
-            <Ionicons name="documents-outline" size={64} color="#cbd5e1" />
+            <FileText size={64} color="#cbd5e1" />
             <Text className="text-slate-500 text-center font-medium mt-4">
               Nenhum entregável encontrado para os seus contratos.
             </Text>
@@ -115,7 +115,7 @@ export function M30ClientHomeScreen() {
               </View>
             </View>
             
-            <Ionicons name="chevron-forward" size={20} color="#94a3b8" />
+            <ChevronRight size={20} color="#94a3b8" />
           </TouchableOpacity>
         )}
       />

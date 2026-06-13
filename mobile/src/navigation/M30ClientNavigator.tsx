@@ -2,7 +2,7 @@ import React from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { M30ClientHomeScreen } from '../screens/m30/M30ClientHomeScreen';
 import { Alert, TouchableOpacity } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { LogOut } from 'lucide-react-native';
 import { supabase } from '../lib/supabase';
 import { useNavigation } from '@react-navigation/native';
 
@@ -28,7 +28,7 @@ export function M30ClientNavigator() {
         headerTitleStyle: { fontWeight: '600' },
         headerRight: () => (
           <TouchableOpacity onPress={handleLogout} className="mr-4 p-2">
-            <Ionicons name="log-out-outline" size={24} color="#ef4444" />
+            <LogOut size={24} color="#ef4444" />
           </TouchableOpacity>
         )
       }}
