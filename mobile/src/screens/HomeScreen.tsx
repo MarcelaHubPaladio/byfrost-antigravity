@@ -38,6 +38,7 @@ import {
   SlidersHorizontal,
   Calendar,
 } from 'lucide-react-native';
+import { UserMenuButton } from '../components/UserMenuButton';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -115,7 +116,7 @@ function TaskCard({ task, onToggle }: { task: SuperTask; onToggle: (id: string, 
     <View style={[styles.card, task.is_completed && styles.cardCompleted]}>
       <View style={styles.cardMain}>
         <TouchableOpacity style={styles.checkBtn} onPress={() => onToggle(task.id, !task.is_completed)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-          {task.is_completed ? <CheckCircle2 size={22} color="#A3FF47" /> : <Circle size={22} color="#3A3A3A" />}
+          {task.is_completed ? <CheckCircle2 size={22} color={activeTenant?.neon_primary || "#A3FF47"} /> : <Circle size={22} color="#3A3A3A" />}
         </TouchableOpacity>
 
         <View style={styles.cardContent}>
@@ -160,7 +161,7 @@ function TaskCard({ task, onToggle }: { task: SuperTask; onToggle: (id: string, 
         <View style={styles.subtasksContainer}>
           {task.subtasks!.map(sub => (
             <TouchableOpacity key={sub.id} style={styles.subtaskRow} onPress={() => onToggle(sub.id, !sub.is_completed)}>
-              {sub.is_completed ? <Check size={14} color="#A3FF47" /> : <View style={styles.subtaskCircle} />}
+              {sub.is_completed ? <Check size={14} color={activeTenant?.neon_primary || "#A3FF47"} /> : <View style={styles.subtaskCircle} />}
               <Text style={[styles.subtaskText, sub.is_completed && styles.subtaskTextDone]}>{sub.title}</Text>
             </TouchableOpacity>
           ))}
@@ -384,6 +385,7 @@ function PersonFilterModal({
 export function HomeScreen({ navigation }: any) {
   const { user } = useSession();
   const { activeTenant, activeTenantId, isSuperAdmin, tenants, clearActiveTenant } = useTenant();
+  const neon = activeTenant?.neon_primary || '#A3FF47';
   const qc = useQueryClient();
   const [statusFilter, setStatusFilter] = useState<FilterType>('pending');
   const [personFilterId, setPersonFilterId] = useState<string | null>(user?.id || null);
@@ -508,8 +510,8 @@ export function HomeScreen({ navigation }: any) {
       {/* ── Top Bar ── */}
       <View style={styles.topBar}>
         <View style={styles.topLeft}>
-          <View style={styles.avatar}>
-            <Text style={styles.avatarText}>{initials}</Text>
+          <View style={[styles.avatar, { borderColor: neon }]}>
+            <Text style={[styles.avatarText, { color: neon }]}>{initials}</Text>
           </View>
           <View>
             <Text style={styles.tenantName} numberOfLines={1}>{activeTenant?.name || 'Workspace'}</Text>
@@ -522,19 +524,20 @@ export function HomeScreen({ navigation }: any) {
               <Building2 size={18} color="#6B7280" />
             </TouchableOpacity>
           )}
+          <UserMenuButton />
         </View>
       </View>
 
       {/* ── Page Title ── */}
       <View style={styles.pageTitleRow}>
-        <ListChecks size={20} color="#A3FF47" />
+        <ListChecks size={20} color={neon} />
         <Text style={styles.pageTitle}>Tarefas</Text>
       </View>
 
       {/* ── Stats ── */}
       <View style={styles.statsContainer}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.statsScroll}>
-          <StatCard label="Total" value={totalCount} accent="#A3FF47" />
+          <StatCard label="Total" value={totalCount} accent={neon} />
           <StatCard label="Pendentes" value={pendingCount} accent="#00E5FF" />
           <StatCard label="Concluídas" value={doneCount} accent="#10B981" />
           {overdueCount > 0 && <StatCard label="Atrasadas" value={overdueCount} accent="#EF4444" />}
@@ -548,7 +551,7 @@ export function HomeScreen({ navigation }: any) {
         {(['all', 'pending', 'done'] as FilterType[]).map(f => (
           <TouchableOpacity
             key={f}
-            style={[styles.filterChip, statusFilter === f && styles.filterChipActive]}
+            style={[styles.filterChip, statusFilter === f && { backgroundColor: neon, borderColor: neon }]}
             onPress={() => setStatusFilter(f)}
           >
             <Text style={[styles.filterChipText, statusFilter === f && styles.filterChipTextActive]}>
@@ -561,7 +564,7 @@ export function HomeScreen({ navigation }: any) {
         {/* Person filter - always visible if there are users */}
         {(usersQ.data?.length ?? 0) > 0 && (
           <TouchableOpacity
-            style={[styles.filterChipPerson, personFilterId && styles.filterChipPersonActive]}
+            style={[styles.filterChipPerson, personFilterId && { backgroundColor: neon, borderColor: neon }]}
             onPress={() => setShowPersonFilter(true)}
           >
             <UserIcon size={13} color={personFilterId ? '#000' : '#9CA3AF'} />
@@ -580,7 +583,7 @@ export function HomeScreen({ navigation }: any) {
 
       {/* ── Task List ── */}
       {tasksQ.isLoading ? (
-        <ActivityIndicator size="large" color="#A3FF47" style={{ marginTop: 60 }} />
+        <ActivityIndicator size="large" color={neon} style={{ marginTop: 60 }} />
       ) : filteredTasks.length === 0 ? (
         <View style={styles.emptyState}>
           <Zap size={40} color="#2A2A2A" />
@@ -598,12 +601,12 @@ export function HomeScreen({ navigation }: any) {
           )}
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#A3FF47" />}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={neon} />}
         />
       )}
 
       {/* ── FAB ── */}
-      <TouchableOpacity style={styles.fab} onPress={() => setShowNewTask(true)}>
+      <TouchableOpacity style={[styles.fab, { backgroundColor: neon, shadowColor: neon }]} onPress={() => setShowNewTask(true)}>
         <Plus size={24} color="#000000" />
       </TouchableOpacity>
 

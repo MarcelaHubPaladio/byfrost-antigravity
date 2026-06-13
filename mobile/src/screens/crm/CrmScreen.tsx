@@ -34,6 +34,7 @@ import {
   SlidersHorizontal,
   ChevronDown,
 } from 'lucide-react-native';
+import { UserMenuButton } from '../../components/UserMenuButton';
 
 const { width: SCREEN_WIDTH } = require('react-native').Dimensions.get('window');
 const COLUMN_WIDTH = SCREEN_WIDTH * 0.85;
@@ -73,6 +74,7 @@ function stringToColor(str: string) {
 export function CrmScreen({ navigation }: any) {
   const { activeTenantId, isSuperAdmin, activeTenant, tenants, clearActiveTenant } = useTenant();
   const { user } = useSession();
+  const neon = activeTenant?.neon_primary || '#A3FF47';
 
   const [searchQuery, setSearchQuery] = useState('');
   const isAdminOrSuper = isSuperAdmin || activeTenant?.role === 'admin';
@@ -308,7 +310,7 @@ export function CrmScreen({ navigation }: any) {
         <View style={styles.cardHeader}>
           <Text style={styles.cardTitle} numberOfLines={1}>{title}</Text>
           <View style={[styles.statusPill, { backgroundColor: '#1A2A1A' }]}>
-            <Text style={[styles.statusPillText, { color: '#A3FF47' }]}>{item.status || 'ok'}</Text>
+            <Text style={[styles.statusPillText, { color: neon }]}>{item.status || 'ok'}</Text>
           </View>
         </View>
 
@@ -322,7 +324,7 @@ export function CrmScreen({ navigation }: any) {
             <Clock color="#6B7280" size={13} />
             <Text style={styles.cardDate}>{formatDate(item.updated_at)}</Text>
           </View>
-          {val > 0 && <Text style={styles.cardValue}>{toMoney(val)}</Text>}
+          {val > 0 && <Text style={[styles.cardValue, { color: neon }]}>{toMoney(val)}</Text>}
         </View>
       </TouchableOpacity>
     );
@@ -344,7 +346,7 @@ export function CrmScreen({ navigation }: any) {
               <Text style={styles.colCountText}>{stateCases.length}</Text>
             </View>
           </View>
-          {stateTotalValue > 0 && <Text style={styles.colTotalValue}>{toMoney(stateTotalValue)}</Text>}
+          {stateTotalValue > 0 && <Text style={[styles.colTotalValue, { color: neon }]}>{toMoney(stateTotalValue)}</Text>}
         </View>
 
         <FlatList
@@ -377,10 +379,10 @@ export function CrmScreen({ navigation }: any) {
                   setActiveFilterModal(null);
                 }}
               >
-                <Text style={[styles.modalRowText, isSelected && styles.modalRowTextSelected]}>
+                <Text style={[styles.modalRowText, isSelected && { color: neon, fontWeight: '700' }]}>
                   {u.display_name || u.email || 'Usuário'}
                 </Text>
-                {isSelected && <Check color="#A3FF47" size={18} />}
+                {isSelected && <Check color={neon} size={18} />}
               </TouchableOpacity>
             );
           })}
@@ -403,8 +405,8 @@ export function CrmScreen({ navigation }: any) {
                   setActiveFilterModal(null);
                 }}
               >
-                <Text style={[styles.modalRowText, isSelected && styles.modalRowTextSelected]}>{tag}</Text>
-                {isSelected && <Check color="#A3FF47" size={18} />}
+                <Text style={[styles.modalRowText, isSelected && { color: neon, fontWeight: '700' }]}>{tag}</Text>
+                {isSelected && <Check color={neon} size={18} />}
               </TouchableOpacity>
             );
           })}
@@ -415,15 +417,15 @@ export function CrmScreen({ navigation }: any) {
       return (
         <ScrollView style={styles.modalScroll}>
           <TouchableOpacity style={styles.modalRow} onPress={() => { setInstanceFilterId('all'); setActiveFilterModal(null); }}>
-            <Text style={[styles.modalRowText, instanceFilterId === 'all' && styles.modalRowTextSelected]}>Todas</Text>
-            {instanceFilterId === 'all' && <Check color="#A3FF47" size={18} />}
+            <Text style={[styles.modalRowText, instanceFilterId === 'all' && { color: neon, fontWeight: '700' }]}>Todas</Text>
+            {instanceFilterId === 'all' && <Check color={neon} size={18} />}
           </TouchableOpacity>
           {allInstancesQ?.map((inst: any) => {
             const isSelected = instanceFilterId === inst.id;
             return (
               <TouchableOpacity key={inst.id} style={styles.modalRow} onPress={() => { setInstanceFilterId(inst.id); setActiveFilterModal(null); }}>
-                <Text style={[styles.modalRowText, isSelected && styles.modalRowTextSelected]}>{inst.name}</Text>
-                {isSelected && <Check color="#A3FF47" size={18} />}
+                <Text style={[styles.modalRowText, isSelected && { color: neon, fontWeight: '700' }]}>{inst.name}</Text>
+                {isSelected && <Check color={neon} size={18} />}
               </TouchableOpacity>
             );
           })}
@@ -434,15 +436,15 @@ export function CrmScreen({ navigation }: any) {
       return (
         <ScrollView style={styles.modalScroll}>
           <TouchableOpacity style={styles.modalRow} onPress={() => { setProductFilterId('all'); setActiveFilterModal(null); }}>
-            <Text style={[styles.modalRowText, productFilterId === 'all' && styles.modalRowTextSelected]}>Todos</Text>
-            {productFilterId === 'all' && <Check color="#A3FF47" size={18} />}
+            <Text style={[styles.modalRowText, productFilterId === 'all' && { color: neon, fontWeight: '700' }]}>Todos</Text>
+            {productFilterId === 'all' && <Check color={neon} size={18} />}
           </TouchableOpacity>
           {availableProducts.map((prod) => {
             const isSelected = productFilterId === prod.id;
             return (
               <TouchableOpacity key={prod.id} style={styles.modalRow} onPress={() => { setProductFilterId(prod.id); setActiveFilterModal(null); }}>
-                <Text style={[styles.modalRowText, isSelected && styles.modalRowTextSelected]}>{prod.name}</Text>
-                {isSelected && <Check color="#A3FF47" size={18} />}
+                <Text style={[styles.modalRowText, isSelected && { color: neon, fontWeight: '700' }]}>{prod.name}</Text>
+                {isSelected && <Check color={neon} size={18} />}
               </TouchableOpacity>
             );
           })}
@@ -490,6 +492,7 @@ export function CrmScreen({ navigation }: any) {
                 <Building2 color="#6B7280" size={18} />
               </TouchableOpacity>
             )}
+            <UserMenuButton />
           </View>
         </View>
 
@@ -550,7 +553,7 @@ export function CrmScreen({ navigation }: any) {
 
         {/* ── Content ── */}
         {casesLoading ? (
-          <ActivityIndicator size="large" color="#A3FF47" style={styles.loader} />
+          <ActivityIndicator size="large" color={neon} style={styles.loader} />
         ) : searchQuery.trim().length > 0 ? (
           <FlatList
             data={searchResults}
@@ -574,7 +577,7 @@ export function CrmScreen({ navigation }: any) {
       </View>
 
       {/* FAB */}
-      <TouchableOpacity style={styles.fab} onPress={() => navigation.navigate('NewLead')}>
+      <TouchableOpacity style={[styles.fab, { backgroundColor: neon, shadowColor: neon }]} onPress={() => navigation.navigate('NewLead')}>
         <Plus size={24} color="#000000" />
       </TouchableOpacity>
 
@@ -622,7 +625,7 @@ function FilterChip({
 }) {
   return (
     <TouchableOpacity
-      style={[styles.filterPill, active && styles.filterPillActive]}
+      style={[styles.filterPill, active && { backgroundColor: neon, borderColor: neon }]}
       onPress={onPress}
     >
       {icon}

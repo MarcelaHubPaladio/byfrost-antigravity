@@ -32,6 +32,7 @@ import {
   X,
   Check,
 } from 'lucide-react-native';
+import { UserMenuButton } from '../../components/UserMenuButton';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -192,6 +193,8 @@ const bs = StyleSheet.create({
 // ─── Order Card ───────────────────────────────────────────────────────────────
 
 function OrderCard({ item, onPress }: { item: OrderRow; onPress: () => void }) {
+  const { activeTenant } = useTenant();
+  const neon = activeTenant?.neon_primary || '#A3FF47';
   const stateColor = getStateColor(item.state);
   const customerName = item.meta_json?.customer_name || item.title || 'Pedido';
   const totalValue = item.meta_json?.total_value
@@ -205,7 +208,7 @@ function OrderCard({ item, onPress }: { item: OrderRow; onPress: () => void }) {
       <View style={styles.cardHeader}>
         <View style={styles.cardHeaderLeft}>
           <View style={styles.orderIcon}>
-            <Package size={17} color="#A3FF47" />
+            <Package size={17} color={neon} />
           </View>
           <View>
             <Text style={styles.orderRef}>{orderRef}</Text>
@@ -227,7 +230,7 @@ function OrderCard({ item, onPress }: { item: OrderRow; onPress: () => void }) {
             </View>
           )}
         </View>
-        {totalValue && <Text style={styles.orderValue}>{totalValue}</Text>}
+        {totalValue && <Text style={[styles.orderValue, { color: neon }]}>{totalValue}</Text>}
       </View>
 
       {item.meta_json?.payment_method && (
@@ -279,6 +282,8 @@ function normalizeBillingStatus(raw: string): string {
 }
 
 function AdminDashboard({ orders, totalsMap, fieldsMap }: { orders: OrderRow[], totalsMap?: Map<string, number>, fieldsMap?: Map<string, any> }) {
+  const { activeTenant } = useTenant();
+  const neon = activeTenant?.neon_primary || '#A3FF47';
   const stats = useMemo(() => {
     let total = 0, faturado = 0, pendente = 0, cancelado = 0;
     let countFaturado = 0;
@@ -328,7 +333,7 @@ function AdminDashboard({ orders, totalsMap, fieldsMap }: { orders: OrderRow[], 
     <View style={ds.container}>
       {/* Top metrics */}
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={ds.metricsScroll}>
-        <View style={ds.metricCard}>
+        <View style={[ds.metricCard, { borderTopColor: neon }]}>
           <Text style={ds.metricLabel}>TOTAL VENDAS</Text>
           <Text style={ds.metricValue}>{toMoney(stats.total)}</Text>
           <Text style={ds.metricSub}>{stats.count} pedidos</Text>
@@ -376,6 +381,7 @@ const ds = StyleSheet.create({
 export function OrdersScreen({ navigation }: any) {
   const { user } = useSession();
   const { activeTenantId, activeTenant, isSuperAdmin, tenants, clearActiveTenant } = useTenant();
+  const neon = activeTenant?.neon_primary || '#A3FF47';
   const qc = useQueryClient();
   const [search, setSearch] = useState('');
   const [refreshing, setRefreshing] = useState(false);
@@ -640,7 +646,7 @@ export function OrdersScreen({ navigation }: any) {
       <View style={styles.header}>
         <View style={styles.headerLeft}>
           <View style={styles.headerIcon}>
-            <ShoppingBag size={19} color="#A3FF47" />
+            <ShoppingBag size={19} color={neon} />
           </View>
           <View>
             <Text style={styles.headerTitle}>Pedidos</Text>
@@ -653,6 +659,7 @@ export function OrdersScreen({ navigation }: any) {
               <Building2 size={16} color="#6B7280" />
             </TouchableOpacity>
           )}
+          <UserMenuButton />
         </View>
       </View>
 
@@ -749,7 +756,7 @@ export function OrdersScreen({ navigation }: any) {
 
       {/* ── Orders List ── */}
       {ordersQ.isLoading || journeyQ.isLoading ? (
-        <ActivityIndicator size="large" color="#A3FF47" style={{ marginTop: 60 }} />
+        <ActivityIndicator size="large" color={neon} style={{ marginTop: 60 }} />
       ) : (
         <FlatList
           data={filteredOrders}
@@ -759,7 +766,7 @@ export function OrdersScreen({ navigation }: any) {
           )}
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#A3FF47" />}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={neon} />}
           ListEmptyComponent={
             <View style={styles.emptyState}>
               <ShoppingBag size={48} color="#2A2A2A" />
@@ -771,7 +778,7 @@ export function OrdersScreen({ navigation }: any) {
       )}
 
       {/* ── FAB ── */}
-      <TouchableOpacity style={styles.fab} onPress={() => navigation.navigate('NewOrder')}>
+      <TouchableOpacity style={[styles.fab, { backgroundColor: neon, shadowColor: neon }]} onPress={() => navigation.navigate('NewOrder')}>
         <Plus size={24} color="#000000" />
       </TouchableOpacity>
 
@@ -782,7 +789,7 @@ export function OrdersScreen({ navigation }: any) {
           return (
             <TouchableOpacity key={u.user_id} style={[styles.modalOption, isActive && styles.modalOptionActive]} onPress={() => toggleFilter('sellerIds', u.user_id)}>
               <Text style={[styles.modalOptionText, isActive && styles.modalOptionTextActive]}>{u.display_name || u.email}</Text>
-              {isActive && <Check size={16} color="#A3FF47" />}
+              {isActive && <Check size={16} color={neon} />}
             </TouchableOpacity>
           );
         })}
@@ -794,7 +801,7 @@ export function OrdersScreen({ navigation }: any) {
           return (
             <TouchableOpacity key={st} style={[styles.modalOption, isActive && styles.modalOptionActive]} onPress={() => toggleFilter('states', st)}>
               <Text style={[styles.modalOptionText, isActive && styles.modalOptionTextActive]}>{label}</Text>
-              {isActive && <Check size={16} color="#A3FF47" />}
+              {isActive && <Check size={16} color={neon} />}
             </TouchableOpacity>
           );
         })}
@@ -806,7 +813,7 @@ export function OrdersScreen({ navigation }: any) {
           return (
             <TouchableOpacity key={pm} style={[styles.modalOption, isActive && styles.modalOptionActive]} onPress={() => toggleFilter('paymentMethods', pm)}>
               <Text style={[styles.modalOptionText, isActive && styles.modalOptionTextActive]}>{pm}</Text>
-              {isActive && <Check size={16} color="#A3FF47" />}
+              {isActive && <Check size={16} color={neon} />}
             </TouchableOpacity>
           );
         })}
@@ -825,7 +832,7 @@ export function OrdersScreen({ navigation }: any) {
           return (
             <TouchableOpacity key={range.id} style={[styles.modalOption, isActive && styles.modalOptionActive]} onPress={() => { setAdminFilters(f => ({ ...f, dateRange: range.id as any })); if (range.id !== 'custom') setFilterPanel(null); }}>
               <Text style={[styles.modalOptionText, isActive && styles.modalOptionTextActive]}>{range.label}</Text>
-              {isActive && <Check size={16} color="#A3FF47" />}
+              {isActive && <Check size={16} color={neon} />}
             </TouchableOpacity>
           );
         })}
@@ -858,7 +865,7 @@ export function OrdersScreen({ navigation }: any) {
                 />
               </View>
             </View>
-            <TouchableOpacity style={[styles.modalOption, { marginTop: 8, backgroundColor: '#A3FF47', justifyContent: 'center', borderRadius: 12 }]} onPress={() => setFilterPanel(null)}>
+            <TouchableOpacity style={[styles.modalOption, { marginTop: 8, backgroundColor: neon, justifyContent: 'center', borderRadius: 12 }]} onPress={() => setFilterPanel(null)}>
               <Text style={{ color: '#000', fontWeight: 'bold' }}>Aplicar Filtro</Text>
             </TouchableOpacity>
           </View>
@@ -874,7 +881,7 @@ export function OrdersScreen({ navigation }: any) {
             value={adminFilters.productSearch}
             onChangeText={t => setAdminFilters(f => ({ ...f, productSearch: t }))}
           />
-          <TouchableOpacity style={[styles.modalOption, { marginTop: 16, backgroundColor: '#A3FF47', justifyContent: 'center' }]} onPress={() => setFilterPanel(null)}>
+          <TouchableOpacity style={[styles.modalOption, { marginTop: 16, backgroundColor: neon, justifyContent: 'center' }]} onPress={() => setFilterPanel(null)}>
             <Text style={{ color: '#000', fontWeight: 'bold' }}>Aplicar</Text>
           </TouchableOpacity>
         </View>
@@ -886,7 +893,7 @@ export function OrdersScreen({ navigation }: any) {
           return (
             <TouchableOpacity key={p.id} style={[styles.modalOption, isActive && styles.modalOptionActive]} onPress={() => toggleFilter('projetistaIds', p.id)}>
               <Text style={[styles.modalOptionText, isActive && styles.modalOptionTextActive]}>{p.display_name}</Text>
-              {isActive && <Check size={16} color="#A3FF47" />}
+              {isActive && <Check size={16} color={neon} />}
             </TouchableOpacity>
           );
         })}
@@ -898,7 +905,7 @@ export function OrdersScreen({ navigation }: any) {
           return (
             <TouchableOpacity key={city} style={[styles.modalOption, isActive && styles.modalOptionActive]} onPress={() => toggleFilter('cities', city)}>
               <Text style={[styles.modalOptionText, isActive && styles.modalOptionTextActive]}>{city}</Text>
-              {isActive && <Check size={16} color="#A3FF47" />}
+              {isActive && <Check size={16} color={neon} />}
             </TouchableOpacity>
           );
         })}

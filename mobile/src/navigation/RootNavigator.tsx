@@ -58,7 +58,7 @@ function AppTabs() {
           paddingBottom: 10,
           paddingTop: 8,
         },
-        tabBarActiveTintColor: '#A3FF47',
+        tabBarActiveTintColor: activeTenant?.neon_primary || '#A3FF47',
         tabBarInactiveTintColor: '#4B5563',
         tabBarLabelStyle: {
           fontSize: 11,

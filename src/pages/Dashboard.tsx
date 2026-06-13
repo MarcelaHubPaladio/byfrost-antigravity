@@ -169,10 +169,13 @@ export default function Dashboard() {
   useEffect(() => {
     // Só redireciona se estiver na rota BASE do dashboard (/app) 
     // e se o usuário tiver uma tela inicial configurada diferente dessa.
+    // Previne loop infinito se a rota de destino devolveu o usuário por falta de acesso
+    if (loc.state?.fromAccessRedirect) return;
+
     if (!journeyKey && loc.pathname === "/app" && prefs.startRoute && prefs.startRoute !== "/app") {
       nav(prefs.startRoute, { replace: true });
     }
-  }, [journeyKey, loc.pathname, prefs.startRoute, nav]);
+  }, [journeyKey, loc.pathname, prefs.startRoute, nav, loc.state]);
   const [startDate, setStartDate] = useState<string>("");
   const [endDate, setEndDate] = useState<string>("");
 

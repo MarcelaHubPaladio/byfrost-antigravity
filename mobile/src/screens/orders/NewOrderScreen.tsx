@@ -92,6 +92,8 @@ function PaymentPicker({
   value: string;
   onSelect: (v: string) => void;
 }) {
+  const { activeTenant } = useTenant();
+  const neon = activeTenant?.neon_primary || '#A3FF47';
   const [open, setOpen] = useState(false);
 
   return (
@@ -118,10 +120,10 @@ function PaymentPicker({
                 setOpen(false);
               }}
             >
-              <Text style={[styles.pickerOptionText, value === pm && styles.pickerOptionSelected]}>
+              <Text style={[styles.pickerOptionText, value === pm && { color: neon, fontWeight: '600' }]}>
                 {pm}
               </Text>
-              {value === pm && <Check size={16} color="#A3FF47" />}
+              {value === pm && <Check size={16} color={neon} />}
             </TouchableOpacity>
           ))}
         </View>
@@ -135,7 +137,8 @@ function PaymentPicker({
 export function NewOrderScreen() {
   const navigation = useNavigation();
   const { user } = useSession();
-  const { activeTenantId } = useTenant();
+  const { activeTenantId, activeTenant } = useTenant();
+  const neon = activeTenant?.neon_primary || '#A3FF47';
   const qc = useQueryClient();
 
   // Form state
@@ -296,7 +299,7 @@ export function NewOrderScreen() {
         <View style={styles.header}>
           <View style={styles.headerLeft}>
             <View style={styles.headerIcon}>
-              <ShoppingBag size={18} color="#A3FF47" />
+              <ShoppingBag size={18} color={neon} />
             </View>
             <View>
               <Text style={styles.headerTitle}>Novo Pedido</Text>
@@ -317,7 +320,7 @@ export function NewOrderScreen() {
           {/* ── Cliente ── */}
           <View style={styles.fieldGroup}>
             <View style={styles.fieldLabelRow}>
-              <UserIcon size={14} color="#A3FF47" />
+              <UserIcon size={14} color={neon} />
               <FieldLabel label="CLIENTE" required />
             </View>
             <TextFieldInput
@@ -395,7 +398,7 @@ export function NewOrderScreen() {
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={[styles.submitBtn, (!isValid || submitting) && styles.submitBtnDisabled]}
+            style={[styles.submitBtn, { backgroundColor: neon }, (!isValid || submitting) && styles.submitBtnDisabled]}
             onPress={handleSubmit}
             disabled={!isValid || submitting}
           >

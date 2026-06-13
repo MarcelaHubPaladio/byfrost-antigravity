@@ -11,7 +11,7 @@ const BUCKET = "tenant-assets";
 const BRANDING_URL = `${SUPABASE_URL_IN_USE}/functions/v1/branding-extract-palette`;
 const UPLOAD_URL = `${SUPABASE_URL_IN_USE}/functions/v1/branding-upload-logo`;
 
-type PaletteKey = "primary" | "secondary" | "tertiary" | "quaternary";
+type PaletteKey = "primary" | "secondary" | "tertiary" | "quaternary" | "neonPrimary";
 
 function publicUrl(bucket: string, path: string) {
   try {
@@ -157,6 +157,7 @@ export function TenantBrandingPanel() {
     secondary: "#0ea5e9",
     tertiary: "#22c55e",
     quaternary: "#f97316",
+    neonPrimary: "#A3FF47",
   });
 
   useEffect(() => {
@@ -165,6 +166,7 @@ export function TenantBrandingPanel() {
       secondary: (palette?.secondary?.hex as string | undefined) ?? "#0ea5e9",
       tertiary: (palette?.tertiary?.hex as string | undefined) ?? "#22c55e",
       quaternary: (palette?.quaternary?.hex as string | undefined) ?? "#f97316",
+      neonPrimary: (palette?.neonPrimary?.hex as string | undefined) ?? "#A3FF47",
     };
     setDraft(next);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -276,6 +278,7 @@ export function TenantBrandingPanel() {
         secondary: { hex: draft.secondary, text: bestTextOnHex(draft.secondary) },
         tertiary: { hex: draft.tertiary, text: bestTextOnHex(draft.tertiary) },
         quaternary: { hex: draft.quaternary, text: bestTextOnHex(draft.quaternary) },
+        neonPrimary: { hex: draft.neonPrimary, text: bestTextOnHex(draft.neonPrimary) },
         source: "manual",
       };
 
@@ -415,6 +418,12 @@ export function TenantBrandingPanel() {
                   onChange={(v) => setDraftColor("quaternary", v)}
                   disabled={savingPalette}
                 />
+                <ColorRow
+                  label="Primária Neon"
+                  value={draft.neonPrimary}
+                  onChange={(v) => setDraftColor("neonPrimary", v)}
+                  disabled={savingPalette}
+                />
               </div>
 
               <div className="mt-3 flex items-center justify-end gap-2">
@@ -427,6 +436,7 @@ export function TenantBrandingPanel() {
                       secondary: (palette?.secondary?.hex as string | undefined) ?? "#0ea5e9",
                       tertiary: (palette?.tertiary?.hex as string | undefined) ?? "#22c55e",
                       quaternary: (palette?.quaternary?.hex as string | undefined) ?? "#f97316",
+                      neonPrimary: (palette?.neonPrimary?.hex as string | undefined) ?? "#A3FF47",
                     };
                     setDraft(next);
                   }}
@@ -450,8 +460,9 @@ export function TenantBrandingPanel() {
                 {(palette?.primary?.hex ||
                   palette?.secondary?.hex ||
                   palette?.tertiary?.hex ||
-                  palette?.quaternary?.hex
-                  ? [palette?.primary, palette?.secondary, palette?.tertiary, palette?.quaternary]
+                  palette?.quaternary?.hex ||
+                  palette?.neonPrimary?.hex
+                  ? [palette?.primary, palette?.secondary, palette?.tertiary, palette?.quaternary, palette?.neonPrimary]
                   : [])
                   .filter(Boolean)
                   .map((c: any, idx: number) => (

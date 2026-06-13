@@ -277,7 +277,7 @@ export default function Login() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8fafc',
+    backgroundColor: '#0A0A0A',
   },
   content: {
     flex: 1,
@@ -287,46 +287,46 @@ const styles = StyleSheet.create({
   badge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.7)',
+    backgroundColor: '#1A1A1A',
     alignSelf: 'flex-start',
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: '#e2e8f0',
+    borderColor: '#333',
     marginBottom: 24,
   },
   badgeDot: {
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: '#3b82f6', // Accent fallback
+    backgroundColor: '#A3FF47', // Accent fallback
     marginRight: 8,
   },
   badgeText: {
     fontSize: 12,
-    color: '#475569',
+    color: '#9CA3AF',
     fontWeight: '500',
   },
   title: {
     fontSize: 36,
     fontWeight: '600',
-    color: '#0f172a',
+    color: '#FFF',
     letterSpacing: -1,
     marginBottom: 8,
   },
   subtitle: {
     fontSize: 16,
-    color: '#475569',
+    color: '#9CA3AF',
     lineHeight: 24,
     marginBottom: 32,
   },
   card: {
-    backgroundColor: 'rgba(255,255,255,0.8)',
+    backgroundColor: '#111',
     borderRadius: 28,
     padding: 24,
     borderWidth: 1,
-    borderColor: '#e2e8f0',
+    borderColor: '#222',
   },
   cardHeader: {
     flexDirection: 'row',
@@ -337,7 +337,7 @@ const styles = StyleSheet.create({
   cardTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#0f172a',
+    color: '#FFF',
   },
   toggleGroup: {
     flexDirection: 'row',
@@ -346,13 +346,13 @@ const styles = StyleSheet.create({
   toggleText: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#64748b',
+    color: '#6B7280',
     paddingHorizontal: 8,
     paddingVertical: 4,
   },
   toggleTextActive: {
-    color: '#3b82f6',
-    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+    color: '#A3FF47',
+    backgroundColor: 'rgba(163, 255, 71, 0.1)',
     borderRadius: 999,
     overflow: 'hidden',
   },
@@ -361,19 +361,19 @@ const styles = StyleSheet.create({
   },
   label: {
     fontSize: 12,
-    color: '#334155',
+    color: '#D1D5DB',
     marginBottom: 8,
     fontWeight: '500',
   },
   input: {
-    backgroundColor: '#fff',
+    backgroundColor: '#1A1A1A',
     borderWidth: 1,
-    borderColor: '#e2e8f0',
+    borderColor: '#333',
     borderRadius: 16,
     paddingHorizontal: 16,
     paddingVertical: 12,
     fontSize: 14,
-    color: '#0f172a',
+    color: '#FFF',
   },
   forgotButton: {
     marginTop: 8,
@@ -381,18 +381,18 @@ const styles = StyleSheet.create({
   },
   forgotText: {
     fontSize: 12,
-    color: '#3b82f6',
+    color: '#A3FF47',
     fontWeight: '600',
   },
   button: {
-    backgroundColor: '#0f172a',
+    backgroundColor: '#FFF',
     borderRadius: 16,
     paddingVertical: 14,
     alignItems: 'center',
     marginTop: 8,
   },
   buttonText: {
-    color: '#fff',
+    color: '#0A0A0A',
     fontSize: 14,
     fontWeight: '600',
   },
@@ -404,24 +404,24 @@ const styles = StyleSheet.create({
   dividerLine: {
     flex: 1,
     height: 1,
-    backgroundColor: '#e2e8f0',
+    backgroundColor: '#222',
   },
   dividerText: {
     paddingHorizontal: 12,
     fontSize: 12,
     fontWeight: '600',
-    color: '#64748b',
+    color: '#6B7280',
   },
   googleButton: {
-    backgroundColor: '#fff',
+    backgroundColor: '#111',
     borderWidth: 1,
-    borderColor: '#e2e8f0',
+    borderColor: '#333',
     borderRadius: 16,
     paddingVertical: 14,
     alignItems: 'center',
   },
   googleButtonText: {
-    color: '#0f172a',
+    color: '#FFF',
     fontSize: 14,
     fontWeight: '600',
   },

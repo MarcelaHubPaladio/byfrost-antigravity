@@ -4,6 +4,8 @@ import { Activity, Sparkles, FileText, DollarSign } from 'lucide-react-native';
 
 import { MobileGlobalTimeline } from '../components/guardiao/MobileGlobalTimeline';
 import { MobileOracleChat } from '../components/guardiao/MobileOracleChat';
+import { useTenant } from '../providers/TenantProvider';
+import { UserMenuButton } from '../components/UserMenuButton';
 import { MobileGuardiaoReports } from '../components/guardiao/MobileGuardiaoReports';
 import { MobileGuardiaoFatura } from '../components/guardiao/MobileGuardiaoFatura';
 
@@ -11,45 +13,50 @@ type Tab = 'timeline' | 'oracle' | 'reports' | 'fatura';
 
 export function GuardiaoScreen() {
   const [activeTab, setActiveTab] = useState<Tab>('timeline');
+  const { activeTenant } = useTenant();
+  const neon = activeTenant?.neon_primary || '#A3FF47';
+  const neon10 = `${neon}1A`;
+  const neon30 = `${neon}4D`;
 
   return (
     <SafeAreaView style={styles.safe}>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Guardião do Negócio</Text>
+        <UserMenuButton />
       </View>
       
       <View style={styles.tabBar}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabScrollContent}>
           <TouchableOpacity 
-            style={[styles.tab, activeTab === 'timeline' && styles.tabActive]}
+            style={[styles.tab, activeTab === 'timeline' && { backgroundColor: neon10, borderColor: neon30 }]}
             onPress={() => setActiveTab('timeline')}
           >
-          <Activity size={16} color={activeTab === 'timeline' ? '#A3FF47' : '#6B7280'} />
-          <Text style={[styles.tabText, activeTab === 'timeline' && styles.tabTextActive]}>Produtividade</Text>
+          <Activity size={16} color={activeTab === 'timeline' ? neon : '#6B7280'} />
+          <Text style={[styles.tabText, activeTab === 'timeline' && { color: neon }]}>Produtividade</Text>
         </TouchableOpacity>
 
         <TouchableOpacity 
-          style={[styles.tab, activeTab === 'oracle' && styles.tabActive]}
+          style={[styles.tab, activeTab === 'oracle' && { backgroundColor: neon10, borderColor: neon30 }]}
           onPress={() => setActiveTab('oracle')}
         >
-          <Sparkles size={16} color={activeTab === 'oracle' ? '#A3FF47' : '#6B7280'} />
-          <Text style={[styles.tabText, activeTab === 'oracle' && styles.tabTextActive]}>Oráculo</Text>
+          <Sparkles size={16} color={activeTab === 'oracle' ? neon : '#6B7280'} />
+          <Text style={[styles.tabText, activeTab === 'oracle' && { color: neon }]}>Oráculo</Text>
         </TouchableOpacity>
 
         <TouchableOpacity 
-          style={[styles.tab, activeTab === 'reports' && styles.tabActive]}
+          style={[styles.tab, activeTab === 'reports' && { backgroundColor: neon10, borderColor: neon30 }]}
           onPress={() => setActiveTab('reports')}
         >
-          <FileText size={16} color={activeTab === 'reports' ? '#A3FF47' : '#6B7280'} />
-          <Text style={[styles.tabText, activeTab === 'reports' && styles.tabTextActive]}>Relatórios</Text>
+          <FileText size={16} color={activeTab === 'reports' ? neon : '#6B7280'} />
+          <Text style={[styles.tabText, activeTab === 'reports' && { color: neon }]}>Relatórios</Text>
         </TouchableOpacity>
 
         <TouchableOpacity 
-          style={[styles.tab, activeTab === 'fatura' && styles.tabActive]}
+          style={[styles.tab, activeTab === 'fatura' && { backgroundColor: neon10, borderColor: neon30 }]}
           onPress={() => setActiveTab('fatura')}
         >
-          <DollarSign size={16} color={activeTab === 'fatura' ? '#A3FF47' : '#6B7280'} />
-          <Text style={[styles.tabText, activeTab === 'fatura' && styles.tabTextActive]}>Fatura</Text>
+          <DollarSign size={16} color={activeTab === 'fatura' ? neon : '#6B7280'} />
+          <Text style={[styles.tabText, activeTab === 'fatura' && { color: neon }]}>Fatura</Text>
         </TouchableOpacity>
         </ScrollView>
       </View>
@@ -72,6 +79,9 @@ const styles = StyleSheet.create({
   header: {
     paddingHorizontal: 16,
     paddingVertical: 12,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
   },
   headerTitle: {
     color: '#FFF',
@@ -100,17 +110,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#222',
   },
-  tabActive: {
-    backgroundColor: 'rgba(163, 255, 71, 0.1)',
-    borderColor: 'rgba(163, 255, 71, 0.3)',
-  },
   tabText: {
     color: '#6B7280',
     fontSize: 11,
     fontWeight: '600',
-  },
-  tabTextActive: {
-    color: '#A3FF47',
   },
   content: {
     flex: 1,

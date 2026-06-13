@@ -95,7 +95,8 @@ export function OrderDetailScreen() {
   const route = useRoute<any>();
   const navigation = useNavigation();
   const queryClient = useQueryClient();
-  const { activeTenantId } = useTenant();
+  const { activeTenantId, activeTenant } = useTenant();
+  const neon = activeTenant?.neon_primary || '#A3FF47';
   const orderId = route.params?.id;
 
   const [localState, setLocalState] = useState('');
@@ -315,7 +316,7 @@ export function OrderDetailScreen() {
           </TouchableOpacity>
         </View>
         <View style={styles.center}>
-          {isLoading ? <ActivityIndicator size="large" color="#A3FF47" /> : <Text style={{color: '#6B7280'}}>Pedido não encontrado.</Text>}
+          {isLoading ? <ActivityIndicator size="large" color={neon} /> : <Text style={{color: '#6B7280'}}>Pedido não encontrado.</Text>}
         </View>
       </SafeAreaView>
     );
@@ -382,11 +383,11 @@ export function OrderDetailScreen() {
         <View style={styles.tabsContainer}>
           <TouchableOpacity style={styles.tabBtn} onPress={() => setActiveTab('detalhes')}>
             <Text style={[styles.tabBtnText, activeTab === 'detalhes' && styles.tabBtnTextActive]}>Detalhes</Text>
-            {activeTab === 'detalhes' && <View style={styles.tabIndicator} />}
+            {activeTab === 'detalhes' && <View style={[styles.tabIndicator, { backgroundColor: neon }]} />}
           </TouchableOpacity>
           <TouchableOpacity style={styles.tabBtn} onPress={() => setActiveTab('timeline')}>
             <Text style={[styles.tabBtnText, activeTab === 'timeline' && styles.tabBtnTextActive]}>Timeline</Text>
-            {activeTab === 'timeline' && <View style={styles.tabIndicator} />}
+            {activeTab === 'timeline' && <View style={[styles.tabIndicator, { backgroundColor: neon }]} />}
           </TouchableOpacity>
         </View>
 
@@ -395,14 +396,14 @@ export function OrderDetailScreen() {
             {/* ── Status Dropdown ── */}
             <SectionCard title="Status do Pedido">
               <TouchableOpacity style={styles.selectRow} onPress={() => setShowStateModal(true)}>
-                <View style={[styles.stateDot, { backgroundColor: '#A3FF47' }]} />
+                <View style={[styles.stateDot, { backgroundColor: neon }]} />
                 <Text style={styles.selectRowText}>{localState.replace(/[_-]+/g, ' ')}</Text>
                 <ChevronDown size={16} color="#6B7280" />
               </TouchableOpacity>
             </SectionCard>
 
             {/* ── Cliente ── */}
-            <SectionCard icon={<UserIcon size={14} color="#A3FF47" />} title="Dados do Cliente">
+            <SectionCard icon={<UserIcon size={14} color={neon} />} title="Dados do Cliente">
               <View style={styles.infoRow}>
                 <Text style={styles.infoLabel}>Nome</Text>
                 <Text style={styles.infoValue}>{customerName}</Text>
@@ -422,7 +423,7 @@ export function OrderDetailScreen() {
             </SectionCard>
 
             {/* ── Faturamento ── */}
-            <SectionCard icon={<CreditCard size={14} color="#A3FF47" />} title="Faturamento">
+            <SectionCard icon={<CreditCard size={14} color={neon} />} title="Faturamento">
               <View style={styles.infoRow}>
                 <Text style={styles.infoLabel}>Forma de Pagamento</Text>
                 <Text style={styles.infoValue}>{paymentMethod}</Text>
@@ -435,11 +436,11 @@ export function OrderDetailScreen() {
 
             {/* ── Produtos ── */}
             <SectionCard
-              icon={<ShoppingBag size={14} color="#A3FF47" />}
+              icon={<ShoppingBag size={14} color={neon} />}
               title="Itens do Pedido"
               action={
                 <TouchableOpacity style={styles.iconRoundBtn} onPress={() => setShowProductModal(true)}>
-                  <Plus size={16} color="#A3FF47" />
+                  <Plus size={16} color={neon} />
                 </TouchableOpacity>
               }
             >
@@ -452,7 +453,7 @@ export function OrderDetailScreen() {
                       <Text style={styles.listRowTitle}>{it.description}</Text>
                       <Text style={styles.listRowSub}>{it.qty}x · R$ {Number(it.price).toFixed(2)}</Text>
                     </View>
-                    <Text style={styles.listRowValue}>R$ {Number(it.total).toFixed(2)}</Text>
+                    <Text style={[styles.listRowValue, { color: neon }]}>R$ {Number(it.total).toFixed(2)}</Text>
                     <TouchableOpacity onPress={() => deleteProduct.mutate(it.id)} style={styles.trashBtn}>
                       <Trash2 size={15} color="#EF4444" />
                     </TouchableOpacity>
@@ -462,7 +463,7 @@ export function OrderDetailScreen() {
               {totalItems > 0 && (
                 <View style={styles.totalRow}>
                   <Text style={styles.totalLabel}>Total do Pedido</Text>
-                  <Text style={styles.totalValue}>R$ {totalItems.toFixed(2)}</Text>
+                  <Text style={[styles.totalValue, { color: neon }]}>R$ {totalItems.toFixed(2)}</Text>
                 </View>
               )}
             </SectionCard>
@@ -476,7 +477,7 @@ export function OrderDetailScreen() {
               timelineQ.map((ev, i) => (
                 <View key={ev.id} style={styles.timelineItem}>
                   <View style={styles.timelineLine} />
-                  <View style={styles.timelineDot} />
+                  <View style={[styles.timelineDot, { backgroundColor: neon }]} />
                   <View style={styles.timelineContent}>
                     <Text style={styles.timelineText}>{ev.message}</Text>
                     <Text style={styles.timelineDate}>
@@ -499,10 +500,10 @@ export function OrderDetailScreen() {
             style={[bs_row.row, localState === st && bs_row.rowActive]}
             onPress={() => { setLocalState(st); setShowStateModal(false); updateOrderState.mutate(st); }}
           >
-            <Text style={[bs_row.rowText, localState === st && bs_row.rowTextActive]}>
+            <Text style={[bs_row.rowText, localState === st && { color: neon, fontWeight: '700' }]}>
               {st.replace(/[_-]+/g, ' ')}
             </Text>
-            {localState === st && <Check size={16} color="#A3FF47" />}
+            {localState === st && <Check size={16} color={neon} />}
           </TouchableOpacity>
         ))}
       </BottomSheet>
@@ -525,7 +526,7 @@ export function OrderDetailScreen() {
                       if (o.meta_json?.base_price) setProductPrice(String(o.meta_json.base_price));
                     }}
                   >
-                    <Text style={styles.suggestionText}>{o.display_name}</Text>
+                    <Text style={[styles.suggestionText, { color: neon }]}>{o.display_name}</Text>
                   </TouchableOpacity>
                 ))}
               </View>
@@ -542,7 +543,7 @@ export function OrderDetailScreen() {
             </View>
           </View>
           <TouchableOpacity
-            style={[styles.submitChip, (!productDesc.trim() || addProduct.isPending) && styles.submitChipDisabled]}
+            style={[styles.submitChip, { backgroundColor: neon }, (!productDesc.trim() || addProduct.isPending) && styles.submitChipDisabled]}
             onPress={() => addProduct.mutate()}
             disabled={!productDesc.trim() || addProduct.isPending}
           >

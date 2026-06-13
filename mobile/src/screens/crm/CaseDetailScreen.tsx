@@ -109,7 +109,8 @@ export function CaseDetailScreen() {
   const route = useRoute<any>();
   const navigation = useNavigation();
   const queryClient = useQueryClient();
-  const { activeTenantId } = useTenant();
+  const { activeTenantId, activeTenant } = useTenant();
+  const neon = activeTenant?.neon_primary || '#A3FF47';
   const { user } = useSession();
   const caseId = route.params?.id;
 
@@ -399,7 +400,7 @@ export function CaseDetailScreen() {
           </TouchableOpacity>
         </View>
         <View style={styles.center}>
-          <ActivityIndicator size="large" color="#A3FF47" />
+          <ActivityIndicator size="large" color={neon} />
         </View>
       </SafeAreaView>
     );
@@ -441,10 +442,10 @@ export function CaseDetailScreen() {
         {(['dados', 'chat'] as const).map(tab => (
           <TouchableOpacity
             key={tab}
-            style={[styles.tab, activeTab === tab && styles.tabActive]}
+            style={[styles.tab, activeTab === tab && { borderBottomColor: neon }]}
             onPress={() => setActiveTab(tab)}
           >
-            <Text style={[styles.tabText, activeTab === tab && styles.tabTextActive]}>
+            <Text style={[styles.tabText, activeTab === tab && { color: neon }]}>
               {tab === 'dados' ? 'Dados' : 'Chat'}
             </Text>
           </TouchableOpacity>
@@ -466,7 +467,7 @@ export function CaseDetailScreen() {
           {/* ── Fase ── */}
           <SectionCard title="Fase Atual">
             <TouchableOpacity style={styles.selectRow} onPress={() => setShowStateModal(true)}>
-              <View style={[styles.stateDot, { backgroundColor: '#A3FF47' }]} />
+              <View style={[styles.stateDot, { backgroundColor: neon }]} />
               <Text style={styles.selectRowText}>{stateLabel || 'Selecionar fase...'}</Text>
               <ChevronDown size={16} color="#6B7280" />
             </TouchableOpacity>
@@ -483,10 +484,10 @@ export function CaseDetailScreen() {
 
           {/* ── Cliente ── */}
           <SectionCard
-            icon={<UserIcon size={14} color="#A3FF47" />}
+            icon={<UserIcon size={14} color={neon} />}
             title="Dados do Cliente"
             action={
-              <TouchableOpacity style={styles.saveChip} onPress={() => updateCustomer.mutate()}>
+              <TouchableOpacity style={[styles.saveChip, { backgroundColor: neon }]} onPress={() => updateCustomer.mutate()}>
                 {updateCustomer.isPending
                   ? <ActivityIndicator size="small" color="#000" />
                   : <Text style={styles.saveChipText}>Salvar</Text>}
@@ -509,11 +510,11 @@ export function CaseDetailScreen() {
 
           {/* ── Produtos ── */}
           <SectionCard
-            icon={<PackagePlus size={14} color="#A3FF47" />}
+            icon={<PackagePlus size={14} color={neon} />}
             title="Produtos & Valores"
             action={
               <TouchableOpacity style={styles.iconRoundBtn} onPress={() => setShowProductModal(true)}>
-                <Plus size={16} color="#A3FF47" />
+                <Plus size={16} color={neon} />
               </TouchableOpacity>
             }
           >
@@ -526,7 +527,7 @@ export function CaseDetailScreen() {
                     <Text style={styles.listRowTitle}>{it.description}</Text>
                     <Text style={styles.listRowSub}>{it.qty}x · R$ {Number(it.price).toFixed(2)}</Text>
                   </View>
-                  <Text style={styles.listRowValue}>R$ {Number(it.total).toFixed(2)}</Text>
+                  <Text style={[styles.listRowValue, { color: neon }]}>R$ {Number(it.total).toFixed(2)}</Text>
                   <TouchableOpacity onPress={() => deleteProduct.mutate(it.id)} style={styles.trashBtn}>
                     <Trash2 size={15} color="#EF4444" />
                   </TouchableOpacity>
@@ -536,14 +537,14 @@ export function CaseDetailScreen() {
             {totalItems > 0 && (
               <View style={styles.totalRow}>
                 <Text style={styles.totalLabel}>Total</Text>
-                <Text style={styles.totalValue}>R$ {totalItems.toFixed(2)}</Text>
+                <Text style={[styles.totalValue, { color: neon }]}>R$ {totalItems.toFixed(2)}</Text>
               </View>
             )}
           </SectionCard>
 
           {/* ── Tarefas ── */}
           <SectionCard
-            icon={<CheckSquare size={14} color="#A3FF47" />}
+            icon={<CheckSquare size={14} color={neon} />}
             title="Checklist"
           >
             <View style={styles.quickRow}>
@@ -556,13 +557,13 @@ export function CaseDetailScreen() {
                 onSubmitEditing={() => addTask.mutate()}
                 returnKeyType="done"
               />
-              <TouchableOpacity style={styles.quickBtn} onPress={() => addTask.mutate()} disabled={!newTaskTitle.trim()}>
+              <TouchableOpacity style={[styles.quickBtn, { backgroundColor: neon }]} onPress={() => addTask.mutate()} disabled={!newTaskTitle.trim()}>
                 <Plus size={18} color="#000" />
               </TouchableOpacity>
             </View>
             {(tasksQ ?? []).map(t => (
               <View key={t.id} style={styles.listRow}>
-                <TouchableOpacity style={[styles.checkbox, t.status === 'done' && styles.checkboxDone]} onPress={() => toggleTask.mutate({ id: t.id, status: t.status })}>
+                <TouchableOpacity style={[styles.checkbox, t.status === 'done' && { backgroundColor: neon, borderColor: neon }]} onPress={() => toggleTask.mutate({ id: t.id, status: t.status })}>
                   {t.status === 'done' && <Check size={12} color="#000" />}
                 </TouchableOpacity>
                 <Text style={[styles.listRowTitle, { flex: 1 }, t.status === 'done' && styles.textDone]}>{t.title}</Text>
@@ -575,7 +576,7 @@ export function CaseDetailScreen() {
 
           {/* ── Notas ── */}
           <SectionCard
-            icon={<NotebookPen size={14} color="#A3FF47" />}
+            icon={<NotebookPen size={14} color={neon} />}
             title="Observações"
           >
             <TextInput
@@ -588,7 +589,7 @@ export function CaseDetailScreen() {
               onChangeText={setNewNoteBody}
             />
             <TouchableOpacity
-              style={[styles.saveChip, { alignSelf: 'flex-end', marginTop: 8 }]}
+              style={[styles.saveChip, { backgroundColor: neon, alignSelf: 'flex-end', marginTop: 8 }]}
               onPress={() => addNote.mutate()}
               disabled={!newNoteBody.trim()}
             >
@@ -628,10 +629,10 @@ export function CaseDetailScreen() {
             style={[bs_row.row, localState === st && bs_row.rowActive]}
             onPress={() => { setLocalState(st); setShowStateModal(false); updateCase.mutate({ state: st }); }}
           >
-            <Text style={[bs_row.rowText, localState === st && bs_row.rowTextActive]}>
+            <Text style={[bs_row.rowText, localState === st && { color: neon, fontWeight: '700' }]}>
               {st.replace(/[_-]+/g, ' ')}
             </Text>
-            {localState === st && <Check size={16} color="#A3FF47" />}
+            {localState === st && <Check size={16} color={neon} />}
           </TouchableOpacity>
         ))}
       </BottomSheet>
@@ -642,8 +643,8 @@ export function CaseDetailScreen() {
           style={[bs_row.row, !localOwnerId && bs_row.rowActive]}
           onPress={() => { setLocalOwnerId(null); setShowOwnerModal(false); updateCase.mutate({ assigned_user_id: null }); }}
         >
-          <Text style={[bs_row.rowText, !localOwnerId && bs_row.rowTextActive]}>Não atribuído</Text>
-          {!localOwnerId && <Check size={16} color="#A3FF47" />}
+          <Text style={[bs_row.rowText, !localOwnerId && { color: neon, fontWeight: '700' }]}>Não atribuído</Text>
+          {!localOwnerId && <Check size={16} color={neon} />}
         </TouchableOpacity>
         {usersQ?.map((u: any) => (
           <TouchableOpacity
@@ -651,10 +652,10 @@ export function CaseDetailScreen() {
             style={[bs_row.row, localOwnerId === u.user_id && bs_row.rowActive]}
             onPress={() => { setLocalOwnerId(u.user_id); setShowOwnerModal(false); updateCase.mutate({ assigned_user_id: u.user_id }); }}
           >
-            <Text style={[bs_row.rowText, localOwnerId === u.user_id && bs_row.rowTextActive]}>
+            <Text style={[bs_row.rowText, localOwnerId === u.user_id && { color: neon, fontWeight: '700' }]}>
               {u.display_name || u.email}
             </Text>
-            {localOwnerId === u.user_id && <Check size={16} color="#A3FF47" />}
+            {localOwnerId === u.user_id && <Check size={16} color={neon} />}
           </TouchableOpacity>
         ))}
       </BottomSheet>
@@ -683,7 +684,7 @@ export function CaseDetailScreen() {
                       if (o.meta_json?.base_price) setProductPrice(String(o.meta_json.base_price));
                     }}
                   >
-                    <Text style={styles.suggestionText}>{o.display_name}</Text>
+                    <Text style={[styles.suggestionText, { color: neon }]}>{o.display_name}</Text>
                   </TouchableOpacity>
                 ))}
               </View>
@@ -700,7 +701,7 @@ export function CaseDetailScreen() {
             </View>
           </View>
           <TouchableOpacity
-            style={[styles.submitChip, (!productDesc.trim() || addProduct.isPending) && styles.submitChipDisabled]}
+            style={[styles.submitChip, { backgroundColor: neon }, (!productDesc.trim() || addProduct.isPending) && styles.submitChipDisabled]}
             onPress={() => addProduct.mutate()}
             disabled={!productDesc.trim() || addProduct.isPending}
           >

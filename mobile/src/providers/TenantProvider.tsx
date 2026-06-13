@@ -12,6 +12,7 @@ export type TenantInfo = {
   branding_json?: any;
   modules_json?: any;
   primary_color?: string;
+  neon_primary?: string;
   logo_url?: string;
   role: TenantRole;
 };
@@ -91,6 +92,7 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
             branding_json: bj,
             modules_json: t.modules_json ?? {},
             primary_color: bj.palette?.primary?.hex || t.primary_color,
+            neon_primary: bj.palette?.neonPrimary?.hex || bj.palette?.primary?.hex || "#A3FF47",
             logo_url: publicLogoUrl,
             role: "admin",
           };
@@ -135,6 +137,7 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
             branding_json: bj,
             modules_json: t.modules_json ?? {},
             primary_color: bj.palette?.primary?.hex || t.primary_color,
+            neon_primary: bj.palette?.neonPrimary?.hex || bj.palette?.primary?.hex || "#A3FF47",
             logo_url: publicLogoUrl,
             role: String(row.role ?? "vendor"),
           };

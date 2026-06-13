@@ -20,7 +20,7 @@ export function AccessRedirect({ title, description, to, toLabel, details = [], 
   useEffect(() => {
     const t = window.setTimeout(() => {
       const target = to === "/tenants" ? "/tenants?error=no_access" : to;
-      nav(target, { replace: true });
+      nav(target, { replace: true, state: { fromAccessRedirect: true } });
     }, autoMs);
     return () => window.clearTimeout(t);
   }, [to, autoMs, nav]);

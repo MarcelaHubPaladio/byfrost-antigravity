@@ -13,9 +13,12 @@ import {
 import { useNavigation } from '@react-navigation/native';
 import { X, MapPin, LocateFixed } from 'lucide-react-native';
 import * as Location from 'expo-location';
+import { useTenant } from '../../providers/TenantProvider';
 
 export function NewLeadScreen() {
   const navigation = useNavigation();
+  const { activeTenant } = useTenant();
+  const neon = activeTenant?.neon_primary || '#A3FF47';
   const [name, setName] = useState('');
   const [whatsapp, setWhatsapp] = useState('+55');
   const [email, setEmail] = useState('');
@@ -140,7 +143,7 @@ export function NewLeadScreen() {
           <TouchableOpacity style={styles.cancelBtn} onPress={() => navigation.goBack()}>
             <Text style={styles.cancelBtnText}>Cancelar</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.createBtn} onPress={() => {
+          <TouchableOpacity style={[styles.createBtn, { backgroundColor: neon }]} onPress={() => {
             console.log('Create lead', { name, whatsapp, email, location });
             navigation.goBack();
           }}>
