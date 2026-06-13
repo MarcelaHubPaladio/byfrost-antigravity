@@ -73,40 +73,41 @@ function ColorRow({
   disabled?: boolean;
 }) {
   return (
-    <div className="grid grid-cols-[1fr_140px] items-end gap-3">
+    <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-slate-100 bg-slate-50 p-3">
       <div>
-        <Label className="text-xs">{label}</Label>
-        <div className="mt-1 flex items-center gap-2">
-          <input
-            type="color"
-            value={value}
-            onChange={(e) => onChange(e.target.value)}
-            disabled={disabled}
-            className="h-10 w-12 cursor-pointer rounded-xl border border-slate-200 bg-white p-1 disabled:cursor-not-allowed disabled:opacity-60"
-            aria-label={`${label} (color picker)`}
-          />
+        <Label className="text-xs font-semibold text-slate-700">{label}</Label>
+        <div className="mt-1.5 flex items-center gap-2">
+          <div className="overflow-hidden rounded-xl border border-slate-200 bg-white p-0.5 shadow-sm">
+            <input
+              type="color"
+              value={value}
+              onChange={(e) => onChange(e.target.value)}
+              disabled={disabled}
+              className="h-8 w-10 cursor-pointer border-0 bg-transparent p-0 disabled:cursor-not-allowed disabled:opacity-60"
+              aria-label={`${label} (color picker)`}
+            />
+          </div>
           <Input
             value={value}
             onChange={(e) => {
               const raw = e.target.value.trim();
-              // Keep it permissive while typing; only apply when it becomes a valid hex.
               if (raw === "" || raw === "#") return;
               const next = raw.startsWith("#") ? raw : `#${raw}`;
               if (isValidHex(next)) onChange(next);
             }}
             disabled={disabled}
-            className="h-10 rounded-2xl font-mono text-xs"
+            className="h-9 w-24 rounded-xl font-mono text-xs shadow-sm"
             placeholder="#RRGGBB"
           />
         </div>
       </div>
 
-      <div className="rounded-2xl border border-slate-200 bg-white p-3">
+      <div className="flex flex-col items-center rounded-xl bg-white p-2 shadow-sm border border-slate-100">
         <div
-          className="h-8 w-full rounded-xl border border-slate-200"
+          className="h-6 w-24 rounded-lg border border-slate-200"
           style={{ background: value }}
         />
-        <div className="mt-1 text-[11px] text-slate-500">texto: {bestTextOnHex(value)}</div>
+        <div className="mt-1.5 text-[10px] font-medium text-slate-500">texto: {bestTextOnHex(value)}</div>
       </div>
     </div>
   );
@@ -456,7 +457,7 @@ export function TenantBrandingPanel() {
 
             <div>
               <div className="text-xs font-semibold text-slate-800">Atual no banco</div>
-              <div className="mt-2 grid grid-cols-2 gap-3">
+              <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
                 {(palette?.primary?.hex ||
                   palette?.secondary?.hex ||
                   palette?.tertiary?.hex ||
@@ -468,23 +469,23 @@ export function TenantBrandingPanel() {
                   .map((c: any, idx: number) => (
                     <div
                       key={idx}
-                      className="rounded-2xl border border-slate-200 bg-white p-3"
+                      className="flex flex-col rounded-2xl border border-slate-200 bg-white p-3 shadow-sm"
                     >
                       <div
-                        className="h-12 w-full rounded-xl border border-slate-200"
+                        className="h-10 w-full rounded-xl border border-slate-100 shadow-inner"
                         style={{ background: c.hex }}
                       />
-                      <div className="mt-2 text-[11px] font-semibold text-slate-700">
+                      <div className="mt-2 text-[11px] font-bold tracking-wider text-slate-700">
                         {c.hex}
                       </div>
-                      <div className="mt-0.5 text-[11px] text-slate-500">
-                        texto sugerido: {c.text}
+                      <div className="mt-0.5 text-[10px] text-slate-500">
+                        texto sugerido: <span className="font-medium">{c.text}</span>
                       </div>
                     </div>
                   ))}
 
                 {!palette && (
-                  <div className="col-span-2 rounded-2xl border border-dashed border-slate-200 bg-white/60 p-4 text-xs text-slate-500">
+                  <div className="col-span-full rounded-2xl border border-dashed border-slate-300 bg-slate-50/50 p-6 text-center text-xs text-slate-500">
                     Sem paleta ainda. Suba um logo e clique em "Extrair paleta".
                   </div>
                 )}
