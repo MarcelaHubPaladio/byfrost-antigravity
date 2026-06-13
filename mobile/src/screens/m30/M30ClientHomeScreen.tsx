@@ -1,19 +1,22 @@
 import React from 'react';
-import { View, Text, FlatList, ActivityIndicator, RefreshControl, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, FlatList, ActivityIndicator, RefreshControl, StyleSheet, Dimensions } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '../../lib/supabase';
 import { useTenant } from '../../providers/TenantProvider';
-import { FileText, ChevronRight } from 'lucide-react-native';
+import { Package, CheckCircle2 } from 'lucide-react-native';
 import { useSession } from '../../providers/SessionProvider';
+
+const { width } = Dimensions.get('window');
 
 export function M30ClientHomeScreen() {
   const { activeTenantId } = useTenant();
   const { user } = useSession();
 
   const m30DeliverablesQ = useQuery({
-    queryKey: ['m30_client_deliverables', activeTenantId, user?.id],
+    queryKey: ['m30_client_deliverables_grouped', activeTenantId, user?.id],
     enabled: Boolean(activeTenantId && user?.id),
     queryFn: async () => {
+      // 1. Encontra os contratos
       const { data: contracts, error: errC } = await supabase
         .from('m30_client_users')
         .select('commitment_id')
@@ -25,40 +28,33 @@ export function M30ClientHomeScreen() {
 
       const commitmentIds = contracts.map(c => c.commitment_id);
 
-      const { data: journey, error: errJ } = await supabase
-        .from('journeys')
-        .select('id')
-        .eq('key', 'operacao_m30')
+      // 2. Busca os entregáveis macros (deliverables) 
+      const { data: deliverables, error: errD } = await supabase
+        .from('deliverables')
+        .select('id, name, status, created_at, updated_at')
         .eq('tenant_id', activeTenantId!)
-        .maybeSingle();
+        .in('commitment_id', commitmentIds)
+        .is('deleted_at', null)
+        .order('created_at', { ascending: true });
 
-      if (errJ || !journey) throw errJ || new Error('Jornada M30 não encontrada');
+      if (errD) throw errD;
+      
+      const items = deliverables || [];
+      
+      // 3. Agrupa por "name"
+      const groups: Record<string, typeof items> = {};
+      items.forEach(d => {
+        const key = d.name || 'Outros';
+        if (!groups[key]) groups[key] = [];
+        groups[key].push(d);
+      });
 
-      const { data: cases, error: errCases } = await supabase
-        .from('cases')
-        .select(`
-          id, title, state, created_at, updated_at, meta_json,
-          customer:core_entities!cases_customer_id_fkey(display_name)
-        `)
-        .eq('tenant_id', activeTenantId!)
-        .eq('journey_id', journey.id)
-        .in('meta_json->>commitment_id', commitmentIds)
-        .order('updated_at', { ascending: false });
-
-      if (errCases) throw errCases;
-      return cases || [];
+      // Transforma em array e ordena por nome
+      return Object.entries(groups)
+        .map(([name, groupItems]) => ({ name, items: groupItems }))
+        .sort((a, b) => a.name.localeCompare(b.name));
     }
   });
-
-  const getStatusColor = (state: string) => {
-    const s = state?.toLowerCase() || '';
-    if (s.includes('conclui') || s.includes('finaliz')) return '#10b981'; // emerald-500
-    if (s.includes('aprov')) return '#3b82f6'; // blue-500
-    if (s.includes('grav')) return '#a855f7'; // purple-500
-    if (s.includes('edi')) return '#f97316'; // orange-500
-    if (s.includes('cancel')) return '#ef4444'; // red-500
-    return '#94a3b8'; // slate-400
-  };
 
   if (m30DeliverablesQ.isLoading && !m30DeliverablesQ.data) {
     return (
@@ -69,49 +65,59 @@ export function M30ClientHomeScreen() {
     );
   }
 
+  const groupedData = m30DeliverablesQ.data || [];
+
   return (
     <View style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Olá!</Text>
-        <Text style={styles.headerSubtitle}>Acompanhe o andamento dos seus entregáveis.</Text>
+        <Text style={styles.headerSubtitle}>Acompanhe o andamento da sua operação.</Text>
       </View>
 
       <FlatList
         style={styles.list}
-        data={m30DeliverablesQ.data}
-        keyExtractor={item => item.id}
+        data={groupedData}
+        keyExtractor={item => item.name}
         refreshControl={<RefreshControl refreshing={m30DeliverablesQ.isFetching} onRefresh={() => m30DeliverablesQ.refetch()} />}
-        contentContainerStyle={(!m30DeliverablesQ.data || m30DeliverablesQ.data.length === 0) ? styles.emptyContainer : styles.listContent}
+        contentContainerStyle={groupedData.length === 0 ? styles.emptyContainer : styles.listContent}
         ListEmptyComponent={
           <View style={styles.emptyView}>
-            <FileText size={64} color="#cbd5e1" />
+            <Package size={64} color="#cbd5e1" />
             <Text style={styles.emptyText}>
               Nenhum entregável encontrado para os seus contratos.
             </Text>
           </View>
         }
-        renderItem={({ item }) => (
-          <TouchableOpacity style={styles.card} activeOpacity={0.7}>
-            <View style={[styles.cardIndicator, { backgroundColor: getStatusColor(item.state) }]} />
-            
-            <View style={styles.cardBody}>
-              <Text style={styles.cardTitle} numberOfLines={2}>
-                {item.title || 'Entregável sem título'}
-              </Text>
-              
-              <View style={styles.cardFooter}>
-                <View style={styles.badge}>
-                  <Text style={styles.badgeText}>{item.state || 'Pendente'}</Text>
+        renderItem={({ item }) => {
+          const total = item.items.length;
+          const completed = item.items.filter(d => d.status === 'completed').length;
+          const isFullyDone = completed === total && total > 0;
+          const progressPct = total > 0 ? (completed / total) * 100 : 0;
+
+          return (
+            <View style={styles.card}>
+              <View style={styles.cardHeader}>
+                <View style={[styles.iconBox, isFullyDone ? styles.iconBoxDone : {}]}>
+                  <Package size={20} color={isFullyDone ? "#059669" : "#3b82f6"} />
                 </View>
-                <Text style={styles.dateText}>
-                  {new Date(item.updated_at).toLocaleDateString()}
-                </Text>
+                <View style={styles.cardHeaderText}>
+                  <Text style={styles.cardTitle}>{item.name}</Text>
+                  <Text style={styles.cardSubtitle}>
+                    {total} {total === 1 ? 'INSTÂNCIA' : 'INSTÂNCIAS'}
+                  </Text>
+                </View>
+                <View style={styles.progressCounter}>
+                  <Text style={[styles.progressText, isFullyDone ? styles.textDone : {}]}>
+                    {completed}/{total}
+                  </Text>
+                  <View style={styles.progressBarBg}>
+                    <View style={[styles.progressBarFill, isFullyDone ? styles.bgDone : {}, { width: `${progressPct}%` }]} />
+                  </View>
+                </View>
               </View>
             </View>
-            
-            <ChevronRight size={20} color="#94a3b8" />
-          </TouchableOpacity>
-        )}
+          );
+        }}
       />
     </View>
   );
@@ -120,21 +126,21 @@ export function M30ClientHomeScreen() {
 const styles = StyleSheet.create({
   loadingContainer: {
     flex: 1,
-    backgroundColor: '#f8fafc', // slate-50
+    backgroundColor: '#f8fafc',
     alignItems: 'center',
     justifyContent: 'center',
   },
   loadingText: {
-    color: '#64748b', // slate-500
+    color: '#64748b',
     marginTop: 16,
     fontWeight: '500',
   },
   container: {
     flex: 1,
-    backgroundColor: '#f8fafc', // slate-50
+    backgroundColor: '#f8fafc',
   },
   header: {
-    backgroundColor: '#0f172a', // slate-900
+    backgroundColor: '#0f172a',
     paddingHorizontal: 24,
     paddingTop: 48,
     paddingBottom: 24,
@@ -148,11 +154,11 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     color: '#ffffff',
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: 'bold',
   },
   headerSubtitle: {
-    color: '#94a3b8', // slate-400
+    color: '#94a3b8',
     fontSize: 14,
     marginTop: 4,
   },
@@ -162,7 +168,8 @@ const styles = StyleSheet.create({
   },
   listContent: {
     paddingHorizontal: 16,
-    paddingBottom: 20,
+    paddingBottom: 24,
+    paddingTop: 8,
   },
   emptyContainer: {
     flexGrow: 1,
@@ -175,7 +182,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
   },
   emptyText: {
-    color: '#64748b', // slate-500
+    color: '#64748b',
     textAlign: 'center',
     fontWeight: '500',
     marginTop: 16,
@@ -185,55 +192,72 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 16,
     marginBottom: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
-    shadowRadius: 2,
+    shadowRadius: 3,
     elevation: 1,
     borderWidth: 1,
-    borderColor: '#f1f5f9', // slate-100
-    overflow: 'hidden',
+    borderColor: '#f1f5f9',
   },
-  cardIndicator: {
-    position: 'absolute',
-    left: 0,
-    top: 0,
-    bottom: 0,
-    width: 4,
-  },
-  cardBody: {
-    flex: 1,
-    paddingLeft: 4,
-  },
-  cardTitle: {
-    color: '#0f172a', // slate-900
-    fontWeight: 'bold',
-    fontSize: 16,
-  },
-  cardFooter: {
+  cardHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 8,
   },
-  badge: {
-    backgroundColor: '#f1f5f9', // slate-100
-    borderRadius: 8,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    marginRight: 8,
+  iconBox: {
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+    backgroundColor: '#eff6ff', // blue-50
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
   },
-  badgeText: {
+  iconBoxDone: {
+    backgroundColor: '#d1fae5', // emerald-100
+  },
+  cardHeaderText: {
+    flex: 1,
+    justifyContent: 'center',
+  },
+  cardTitle: {
+    color: '#0f172a',
+    fontWeight: 'bold',
+    fontSize: 15,
+  },
+  cardSubtitle: {
+    color: '#64748b',
     fontSize: 10,
-    fontWeight: '600',
-    color: '#334155', // slate-700
-    textTransform: 'uppercase',
+    fontWeight: '700',
+    marginTop: 2,
     letterSpacing: 0.5,
   },
-  dateText: {
-    fontSize: 12,
-    color: '#94a3b8', // slate-400
-    fontWeight: '500',
+  progressCounter: {
+    alignItems: 'flex-end',
+    marginLeft: 12,
+  },
+  progressText: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#475569',
+  },
+  textDone: {
+    color: '#059669',
+  },
+  progressBarBg: {
+    width: 64,
+    height: 6,
+    backgroundColor: '#f1f5f9',
+    borderRadius: 3,
+    marginTop: 4,
+    overflow: 'hidden',
+  },
+  progressBarFill: {
+    height: '100%',
+    backgroundColor: '#3b82f6',
+    borderRadius: 3,
+  },
+  bgDone: {
+    backgroundColor: '#10b981',
   },
 });

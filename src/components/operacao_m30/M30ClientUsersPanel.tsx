@@ -36,17 +36,26 @@ export function M30ClientUsersPanel({ commitmentId }: Props) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("m30_client_users")
-        .select(`
-          id,
-          user_id,
-          created_at,
-          users_profile!m30_client_users_user_id_fkey(display_name, email)
-        `)
+        .select(`id, user_id, created_at`)
         .eq("tenant_id", activeTenantId!)
         .eq("commitment_id", commitmentId);
       
       if (error) throw error;
-      return data;
+      if (!data || data.length === 0) return [];
+
+      const userIds = data.map(d => d.user_id);
+      const { data: profiles, error: profErr } = await supabase
+        .from("users_profile")
+        .select("user_id, display_name, email")
+        .eq("tenant_id", activeTenantId!)
+        .in("user_id", userIds);
+
+      if (profErr) throw profErr;
+
+      return data.map(d => ({
+        ...d,
+        users_profile: profiles?.find(p => p.user_id === d.user_id) || null
+      }));
     }
   });
 
