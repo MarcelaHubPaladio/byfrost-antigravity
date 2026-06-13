@@ -23,6 +23,7 @@ import { OrdersScreen } from '../screens/orders/OrdersScreen';
 import { NewOrderScreen } from '../screens/orders/NewOrderScreen';
 import { OrderDetailScreen } from '../screens/orders/OrderDetailScreen';
 import { ClientesM30Screen } from '../screens/m30/ClientesM30Screen';
+import { M30ClientNavigator } from './M30ClientNavigator';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -132,7 +133,7 @@ function AppTabs() {
 
 export function RootNavigator() {
   const { session, loading: sessionLoading } = useSession();
-  const { activeTenantId, loading: tenantLoading } = useTenant();
+  const { activeTenant, activeTenantId, loading: tenantLoading } = useTenant();
 
   if (sessionLoading || (session && tenantLoading)) {
     return null; // Return splash screen or loading spinner
@@ -147,12 +148,16 @@ export function RootNavigator() {
           <Stack.Screen name="TenantSelect" component={TenantSelectScreen} />
         ) : (
           <>
-            <Stack.Group>
-              <Stack.Screen name="App" component={AppTabs} />
-              <Stack.Screen name="CaseDetail" component={CaseDetailScreen} />
-              <Stack.Screen name="OperacaoM30Case" component={OperacaoM30CaseScreen} />
-              <Stack.Screen name="OrderDetail" component={OrderDetailScreen} />
-            </Stack.Group>
+            {activeTenant?.role === 'm30_client' ? (
+              <Stack.Screen name="M30ClientFlow" component={M30ClientNavigator} />
+            ) : (
+              <Stack.Group>
+                <Stack.Screen name="App" component={AppTabs} />
+                <Stack.Screen name="CaseDetail" component={CaseDetailScreen} />
+                <Stack.Screen name="OperacaoM30Case" component={OperacaoM30CaseScreen} />
+                <Stack.Screen name="OrderDetail" component={OrderDetailScreen} />
+              </Stack.Group>
+            )}
             <Stack.Group screenOptions={{ presentation: 'modal' }}>
               <Stack.Screen name="NewLead" component={NewLeadScreen} />
               <Stack.Screen name="NewOperacaoM30Case" component={NewOperacaoM30CaseScreen} />

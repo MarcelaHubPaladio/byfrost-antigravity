@@ -3,6 +3,8 @@ import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom"
 import { useQuery } from "@tanstack/react-query";
 import { AppShell } from "@/components/AppShell";
 import { RequireAuth } from "@/components/RequireAuth";
+import { DeliverablesPipelineChart } from "@/components/case/DeliverablesPipelineChart";
+import { M30ClientUsersPanel } from "@/components/operacao_m30/M30ClientUsersPanel";
 import { RequireRouteAccess } from "@/components/RequireRouteAccess";
 import { RequireTenantRole } from "@/components/RequireTenantRole";
 import { useTenant } from "@/providers/TenantProvider";
@@ -275,6 +277,8 @@ export default function CommitmentDetail() {
     },
     staleTime: 60_000,
   });
+
+  const isM30Journey = Boolean(m30JourneyQ.data?.id);
 
   const m30CasesQ = useQuery({
     queryKey: ["m30_cases_for_commitment_comprehensive", activeTenantId, commitmentId, commitmentQ.data?.customer_entity_id, m30JourneyQ.data?.id, deliverablesQ.data?.length],
@@ -1000,6 +1004,13 @@ export default function CommitmentDetail() {
                   </div>
                 )}
               </Card>
+            )}
+
+            {/* PAINEL DE CLIENTES M30 */}
+            {isM30Journey && commitmentId && (
+              <div className="mt-6">
+                <M30ClientUsersPanel commitmentId={commitmentId} />
+              </div>
             )}
 
             <Dialog open={journeyOpen} onOpenChange={setJourneyOpen}>
