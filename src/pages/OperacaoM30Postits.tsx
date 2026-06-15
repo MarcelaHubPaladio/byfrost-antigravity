@@ -379,7 +379,7 @@ export default function OperacaoM30Postits() {
         <div className="flex-1 flex flex-row overflow-hidden relative z-10 w-full">
           
           {/* Main Area - Masonry Layout and Intelligent Zoom */}
-          <div className="flex-1 w-[calc(100vw-150px)] overflow-visible flex items-start justify-center">
+          <div className="flex-1 w-[calc(100vw-100px)] overflow-visible flex items-start justify-center">
             <div 
               ref={containerRef}
               className="p-3 lg:p-4 w-full"
@@ -493,7 +493,7 @@ export default function OperacaoM30Postits() {
           </div>
 
           {/* Ranking Sidebar (Right) */}
-          <div className="w-[150px] shrink-0 border-l border-slate-800/60 bg-slate-900/40 backdrop-blur-md flex flex-col items-center py-4 relative z-10">
+          <div className="w-[100px] shrink-0 border-l border-slate-800/60 bg-slate-900/40 backdrop-blur-md flex flex-col items-center py-4 relative z-10">
             <div className="flex items-center gap-1.5 mb-5 text-slate-400">
               <Trophy className="h-4 w-4" style={{ color: primaryColorHex }} />
               <span className="text-[10px] font-black tracking-[0.2em] uppercase">Ranking</span>
