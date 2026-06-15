@@ -33,6 +33,19 @@ import { CaseTimeline, type CaseTimelineEvent } from "@/components/case/CaseTime
 import { TrelloCardDetails } from "@/components/trello/TrelloCardDetails";
 import { Card } from "@/components/ui/card";
 import {
+    Command,
+    CommandEmpty,
+    CommandGroup,
+    CommandInput,
+    CommandItem,
+    CommandList,
+} from "@/components/ui/command";
+import {
+    Popover,
+    PopoverContent,
+    PopoverTrigger,
+} from "@/components/ui/popover";
+import {
     AlertCircle,
     AlertTriangle,
     ArrowLeft,
@@ -40,12 +53,14 @@ import {
     Calendar,
     Check,
     CheckCircle2,
+    ChevronsUpDown,
     Clock,
     ExternalLink,
     FileText,
     GripVertical,
     Link as LinkIcon,
     ListChecks,
+    Loader2,
     PackageCheck,
     Pencil,
     Plus,
@@ -696,6 +711,8 @@ export default function OperacaoM30Case() {
     const [mainTitle, setMainTitle] = useState("");
     const [mainSummary, setMainSummary] = useState("");
     const [mainScript, setMainScript] = useState("");
+    const [entityComboOpen, setEntityComboOpen] = useState(false);
+    const [entitySearch, setEntitySearch] = useState("");
 
     useEffect(() => {
         if (caseQ.data) {
@@ -932,6 +949,46 @@ export default function OperacaoM30Case() {
             return data;
         },
     });
+
+    const allEntitiesQ = useQuery({
+        queryKey: ["m30_all_entities", activeTenantId],
+        enabled: Boolean(activeTenantId),
+        queryFn: async () => {
+            const { data, error } = await supabase
+                .from("core_entities")
+                .select("id, display_name")
+                .eq("tenant_id", activeTenantId!)
+                .is("deleted_at", null)
+                .order("display_name");
+            if (error) throw error;
+            return data;
+        },
+    });
+
+    const linkEntity = async (newEntityId: string, entityName: string) => {
+        if (!activeTenantId || !id) return;
+        setSaving(true);
+        try {
+            const currentMeta = (caseQ.data?.meta_json as any) || {};
+            const { error } = await supabase
+                .from("cases")
+                .update({ 
+                    customer_entity_id: newEntityId,
+                    meta_json: { ...currentMeta, entity_id: newEntityId, customer_entity_name: entityName },
+                })
+                .eq("id", id);
+            
+            if (error) throw error;
+            showSuccess("Cliente vinculado com sucesso.");
+            caseQ.refetch();
+            entityQ.refetch();
+        } catch (e: any) {
+            showError("Falha ao vincular cliente: " + e.message);
+        } finally {
+            setSaving(false);
+            setEntityComboOpen(false);
+        }
+    };
 
     const deleteCase = async () => {
         if (!activeTenantId || !id) return;
@@ -1676,10 +1733,74 @@ export default function OperacaoM30Case() {
                                     </div>
 
                                     {!commitmentQ.data ? (
-                                        <div className="text-center py-4 bg-slate-50 rounded-2xl border border-dashed border-slate-200 px-4">
-                                            <p className="text-[10px] text-slate-500 font-medium leading-relaxed">
-                                                Este card nasceu sem DNA de contrato. Use o modo diagnóstico no CRM para resgatá-lo.
-                                            </p>
+                                        <div className="space-y-4">
+                                            <div className="text-center py-4 bg-slate-50 rounded-2xl border border-dashed border-slate-200 px-4">
+                                                <p className="text-[10px] text-slate-500 font-medium leading-relaxed">
+                                                    Este card não possui DNA de contrato vinculado.
+                                                </p>
+                                            </div>
+
+                                            {(!caseQ.data?.customer_entity_id && !(caseQ.data?.meta_json as any)?.entity_id) && (
+                                                <div className="space-y-2">
+                                                    <Label className="text-[10px] font-bold text-slate-500 uppercase">Vincular a um Cliente</Label>
+                                                    <Popover open={entityComboOpen} onOpenChange={setEntityComboOpen}>
+                                                        <PopoverTrigger asChild>
+                                                            <Button
+                                                                variant="outline"
+                                                                role="combobox"
+                                                                aria-expanded={entityComboOpen}
+                                                                className="h-10 w-full justify-between rounded-xl bg-white px-3 text-xs font-normal"
+                                                            >
+                                                                <span>Escolher cliente...</span>
+                                                                <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                                            </Button>
+                                                        </PopoverTrigger>
+                                                        <PopoverContent className="w-[300px] p-0 rounded-2xl shadow-xl" align="start">
+                                                            <Command shouldFilter={true}>
+                                                                <CommandInput 
+                                                                    placeholder="Buscar cliente..." 
+                                                                    value={entitySearch}
+                                                                    onValueChange={setEntitySearch}
+                                                                />
+                                                                <CommandList>
+                                                                    {allEntitiesQ.isLoading && (
+                                                                        <div className="flex items-center justify-center p-4">
+                                                                            <Loader2 className="h-4 w-4 animate-spin text-slate-400" />
+                                                                        </div>
+                                                                    )}
+                                                                    <CommandEmpty>Nenhum cliente encontrado.</CommandEmpty>
+                                                                    <CommandGroup>
+                                                                        {(allEntitiesQ.data ?? []).map((e) => (
+                                                                            <CommandItem
+                                                                                key={e.id}
+                                                                                value={e.display_name}
+                                                                                onSelect={() => linkEntity(e.id, e.display_name)}
+                                                                                className="rounded-lg"
+                                                                            >
+                                                                                {e.display_name}
+                                                                            </CommandItem>
+                                                                        ))}
+                                                                    </CommandGroup>
+                                                                </CommandList>
+                                                            </Command>
+                                                        </PopoverContent>
+                                                    </Popover>
+                                                </div>
+                                            )}
+
+                                            <Button 
+                                                variant="outline" 
+                                                size="sm" 
+                                                className="w-full h-9 rounded-xl text-[10px] font-bold border-indigo-200 text-indigo-700 hover:bg-indigo-50 hover:text-indigo-800"
+                                                onClick={() => {
+                                                    const target = window.prompt("Cole o UUID do contrato correto:", commitmentQ.data?.id);
+                                                    if (target && target.length > 20) repairDna(target);
+                                                }}
+                                                disabled={saving}
+                                            >
+                                                <RefreshCw className={cn("h-3 w-3 mr-1", saving && "animate-spin")} />
+                                                Vincular Contrato Manualmente
+                                            </Button>
                                         </div>
                                     ) : (
                                         <div className="space-y-3">
