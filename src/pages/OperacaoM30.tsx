@@ -1176,6 +1176,12 @@ export default function OperacaoM30() {
                 >
                   Contratos
                 </button>
+                <Link
+                  to="/app/operacao-m30/postits"
+                  className="px-4 py-1.5 text-sm font-medium rounded-xl transition-all text-slate-600 hover:text-slate-800 flex items-center justify-center"
+                >
+                  Post-its
+                </Link>
               </div>
             </div>
 
