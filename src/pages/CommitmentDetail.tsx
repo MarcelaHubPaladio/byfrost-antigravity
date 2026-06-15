@@ -109,18 +109,6 @@ export default function CommitmentDetail() {
   const [targetPriority, setTargetPriority] = useState(false);
   const [targetState, setTargetState] = useState<string>("");
 
-  useEffect(() => {
-    if (targetJourneyId && journeysQ.data) {
-      const j = journeysQ.data.find(x => x.id === targetJourneyId);
-      if (j && (j.default_state_machine_json as any)?.states?.length > 0) {
-        const states = (j.default_state_machine_json as any).states;
-        if (!targetState || !states.includes(targetState)) {
-          setTargetState(states[0]);
-        }
-      }
-    }
-  }, [targetJourneyId, journeysQ.data]);
-
   const [createDeliverableOpen, setCreateDeliverableOpen] = useState(false);
   const [newDeliverableName, setNewDeliverableName] = useState("");
   const [selectedOfferingId, setSelectedOfferingId] = useState("");
