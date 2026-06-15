@@ -1149,7 +1149,7 @@ export default function OperacaoM30Case() {
                 summary_text: st.description || st.summary_text || null, // MAP BRIEFING
                 customer_entity_id: caseQ.data.customer_entity_id,
                 deliverable_id: deliverableId,
-                state: "decupagem__upload",
+                state: "gravao",
                 meta_json: {
                     parent_case_id: id,
                     customer_entity_name: (caseQ.data.meta_json as any)?.customer_entity_name,

@@ -107,6 +107,19 @@ export default function CommitmentDetail() {
   const [targetJourneyId, setTargetJourneyId] = useState<string>("");
   const [targetCaseType, setTargetCaseType] = useState<string>("order");
   const [targetPriority, setTargetPriority] = useState(false);
+  const [targetState, setTargetState] = useState<string>("");
+
+  useEffect(() => {
+    if (targetJourneyId && journeysQ.data) {
+      const j = journeysQ.data.find(x => x.id === targetJourneyId);
+      if (j && (j.default_state_machine_json as any)?.states?.length > 0) {
+        const states = (j.default_state_machine_json as any).states;
+        if (!targetState || !states.includes(targetState)) {
+          setTargetState(states[0]);
+        }
+      }
+    }
+  }, [targetJourneyId, journeysQ.data]);
 
   const [createDeliverableOpen, setCreateDeliverableOpen] = useState(false);
   const [newDeliverableName, setNewDeliverableName] = useState("");
@@ -499,7 +512,7 @@ export default function CommitmentDetail() {
     setSaving(true);
     try {
       const journey = journeysQ.data?.find(j => j.id === targetJourneyId);
-      const initialState = (journey?.default_state_machine_json as any)?.initial_state || "FILA";
+      const initialState = targetState || (journey?.default_state_machine_json as any)?.initial_state || "FILA";
 
       const casesToInsert = selectedIds.map(dId => {
         const d = deliverablesQ.data?.find(item => item.id === dId);
@@ -1100,6 +1113,22 @@ export default function CommitmentDetail() {
                       </SelectContent>
                     </Select>
                   </div>
+
+                  {targetJourneyId && (
+                    <div className="space-y-2">
+                      <Label className="text-xs font-bold uppercase tracking-wider text-slate-500">Etapa Inicial</Label>
+                      <Select value={targetState} onValueChange={setTargetState}>
+                        <SelectTrigger className="w-full">
+                          <SelectValue placeholder="Escolha a etapa..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {((journeysQ.data ?? []).find(j => j.id === targetJourneyId)?.default_state_machine_json as any)?.states?.map((s: string) => (
+                            <SelectItem key={s} value={s}>{s}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
 
                   <div className="space-y-2">
                     <Label className="text-xs font-bold uppercase tracking-wider text-slate-500">Tipo de Caso</Label>
