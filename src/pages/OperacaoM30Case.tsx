@@ -2056,7 +2056,7 @@ export default function OperacaoM30Case() {
 
                 <LinkDnaModal 
                     tenantId={activeTenantId!}
-                    customerEntityId={caseQ.data?.customer_entity_id ?? null}
+                    customerEntityId={caseQ.data?.customer_entity_id || (caseQ.data?.meta_json as any)?.entity_id || null}
                     open={linkModalOpen}
                     onOpenChange={setLinkModalOpen}
                     onSave={repairDna}

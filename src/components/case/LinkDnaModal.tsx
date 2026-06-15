@@ -29,11 +29,17 @@ export function LinkDnaModal(props: {
     queryKey: ["modal_commitments", props.tenantId, props.customerEntityId],
     enabled: Boolean(props.tenantId && props.open),
     queryFn: async () => {
-      const { data, error } = await supabase
+      let q = supabase
         .from("commercial_commitments")
         .select("id, status, commitment_type, core_entities(display_name)")
         .eq("tenant_id", props.tenantId)
         .not("status", "eq", "draft");
+
+      if (props.customerEntityId) {
+          q = q.eq("customer_entity_id", props.customerEntityId);
+      }
+
+      const { data, error } = await q;
       if (error) throw error;
       return (data ?? []) as any[];
     }
