@@ -243,16 +243,15 @@ export default function OperacaoM30Postits() {
           </div>
         </div>
 
-        {/* Body - Flexibly spans the remaining height */}
-        <div className="relative flex-1 w-full p-4 sm:p-6 lg:p-8 overflow-hidden z-10">
+        {/* Body - Masonry Layout e Page Scroll escondido */}
+        <div className="relative flex-1 w-full p-4 sm:p-6 lg:p-8 overflow-y-auto z-10 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
           <div className={cn(
-            "grid gap-4 lg:gap-8 w-full h-full",
-            "grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5"
+            "columns-1 sm:columns-2 md:columns-3 xl:columns-4 2xl:columns-5 gap-4 lg:gap-8 w-full"
           )}>
             {userGroups.map((group) => (
               <div 
                 key={group.responsibleName} 
-                className="flex flex-col h-full bg-slate-900/60 rounded-[24px] lg:rounded-[32px] border border-slate-800/80 shadow-2xl overflow-hidden backdrop-blur-md"
+                className="flex flex-col bg-slate-900/60 rounded-[24px] lg:rounded-[32px] border border-slate-800/80 shadow-2xl overflow-hidden backdrop-blur-md break-inside-avoid mb-4 lg:mb-8"
               >
                 {/* User Header Compacto */}
                 <div className="flex flex-row items-center justify-between bg-gradient-to-r from-indigo-900/40 to-transparent p-3 lg:p-4 border-b border-slate-800/80 relative z-10 shrink-0">
@@ -275,7 +274,7 @@ export default function OperacaoM30Postits() {
                 </div>
 
                 {/* Cards List 2 Colunas */}
-                <div className="flex-1 overflow-y-auto p-2 lg:p-3 custom-scrollbar">
+                <div className="p-2 lg:p-3">
                   {group.items.length === 0 && (
                     <div className="flex flex-col items-center justify-center h-full opacity-30 py-10 w-full">
                       <Monitor className="h-10 w-10 text-slate-500 mb-2" />
@@ -343,22 +342,6 @@ export default function OperacaoM30Postits() {
           </div>
         </div>
       </div>
-      <style>{`
-        .custom-scrollbar::-webkit-scrollbar {
-          width: 6px;
-        }
-        .custom-scrollbar::-webkit-scrollbar-track {
-          background: rgba(15, 23, 42, 0.3);
-          border-radius: 10px;
-        }
-        .custom-scrollbar::-webkit-scrollbar-thumb {
-          background: rgba(99, 102, 241, 0.4);
-          border-radius: 10px;
-        }
-        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-          background: rgba(99, 102, 241, 0.8);
-        }
-      `}</style>
     </RequireAuth>
   );
 }
