@@ -254,32 +254,35 @@ export default function OperacaoM30Postits() {
                 key={group.responsibleName} 
                 className="flex flex-col h-full bg-slate-900/60 rounded-[24px] lg:rounded-[32px] border border-slate-800/80 shadow-2xl overflow-hidden backdrop-blur-md"
               >
-                {/* User Header */}
-                <div className="flex flex-col items-center bg-gradient-to-b from-indigo-900/40 to-transparent p-6 lg:p-8 relative">
-                  <div className="absolute inset-0 bg-indigo-500/5 blur-3xl rounded-full" />
-                  <div className="relative h-24 w-24 lg:h-32 lg:w-32 rounded-full border-2 lg:border-4 border-indigo-500/50 shadow-[0_0_30px_rgba(79,70,229,0.2)] bg-slate-800 overflow-hidden flex items-center justify-center shrink-0">
-                    {group.avatarUrl ? (
-                      <img src={group.avatarUrl} alt={group.responsibleName} className="h-full w-full object-cover" />
-                    ) : (
-                      <span className="text-4xl lg:text-6xl font-black text-slate-500 uppercase">{group.responsibleName.charAt(0)}</span>
-                    )}
+                {/* User Header Compacto */}
+                <div className="flex flex-row items-center justify-between bg-gradient-to-r from-indigo-900/40 to-transparent p-3 lg:p-4 border-b border-slate-800/80 relative z-10 shrink-0">
+                  <div className="absolute inset-0 bg-indigo-500/5 blur-xl rounded-full" />
+                  <div className="flex flex-row items-center gap-3 relative z-10">
+                    <div className="h-10 w-10 lg:h-12 lg:w-12 rounded-full border lg:border-2 border-indigo-500/50 shadow-md bg-slate-800 overflow-hidden flex items-center justify-center shrink-0">
+                      {group.avatarUrl ? (
+                        <img src={group.avatarUrl} alt={group.responsibleName} className="h-full w-full object-cover" />
+                      ) : (
+                        <span className="text-lg lg:text-xl font-black text-slate-500 uppercase">{group.responsibleName.charAt(0)}</span>
+                      )}
+                    </div>
+                    <h2 className="text-lg lg:text-2xl font-black text-white tracking-tight line-clamp-1 drop-shadow-md uppercase">
+                      {group.responsibleName.split(' ')[0]}
+                    </h2>
                   </div>
-                  <h2 className="text-xl lg:text-3xl font-black text-white mt-4 tracking-tight text-center line-clamp-1 break-all drop-shadow-md">
-                    {group.responsibleName.split(' ')[0]}
-                  </h2>
-                  <span className="bg-slate-800/80 text-indigo-300 font-bold px-4 py-1.5 rounded-full text-xs lg:text-sm mt-3 border border-indigo-500/30">
-                    {group.items.length} pendentes
+                  <span className="bg-slate-800 text-indigo-300 font-bold px-3 py-1 rounded text-[10px] lg:text-xs border border-indigo-500/30 shadow-sm whitespace-nowrap z-10 relative">
+                    {group.items.length} cards
                   </span>
                 </div>
 
-                {/* Cards List with Custom Scrollbar */}
-                <div className="flex-1 overflow-y-auto p-4 lg:p-6 flex flex-col gap-3 lg:gap-4 custom-scrollbar">
+                {/* Cards List 2 Colunas */}
+                <div className="flex-1 overflow-y-auto p-2 lg:p-3 custom-scrollbar">
                   {group.items.length === 0 && (
-                    <div className="flex flex-col items-center justify-center h-full opacity-30 py-10">
-                      <Monitor className="h-12 w-12 lg:h-16 lg:w-16 text-slate-500 mb-4" />
-                      <span className="text-lg lg:text-xl font-bold text-slate-400">Nenhum card</span>
+                    <div className="flex flex-col items-center justify-center h-full opacity-30 py-10 w-full">
+                      <Monitor className="h-10 w-10 text-slate-500 mb-2" />
+                      <span className="text-sm font-bold text-slate-400">Nenhum card</span>
                     </div>
                   )}
+                  <div className="grid grid-cols-2 gap-2 lg:gap-3 auto-rows-max">
                   {group.items.map((item) => (
                     <div 
                       key={item.id} 
@@ -326,6 +329,7 @@ export default function OperacaoM30Postits() {
                       </div>
                     </div>
                   ))}
+                  </div>
                 </div>
               </div>
             ))}
