@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useState, useRef } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { RequireAuth } from "@/components/RequireAuth";
 import { useTenant } from "@/providers/TenantProvider";
@@ -44,38 +44,7 @@ export default function OperacaoM30Postits() {
   const { activeTenantId } = useTenant();
   const qc = useQueryClient();
 
-  // Screen sizing
-  const [isPortrait, setIsPortrait] = useState(false);
-  const containerRef = useRef<HTMLDivElement>(null);
-  const wrapperRef = useRef<HTMLDivElement>(null);
-  const [scale, setScale] = useState(1);
   const [isRefreshing, setIsRefreshing] = useState(false);
-
-  useEffect(() => {
-    const handleResize = () => {
-      setIsPortrait(window.innerHeight > window.innerWidth);
-    };
-    handleResize();
-    window.addEventListener("resize", handleResize);
-    return () => window.removeEventListener("resize", handleResize);
-  }, []);
-
-  useLayoutEffect(() => {
-    const handleScale = () => {
-      if (!containerRef.current || !wrapperRef.current) return;
-      const targetW = isPortrait ? 1080 : 1920;
-      const targetH = isPortrait ? 1920 : 1080;
-      const windowW = window.innerWidth;
-      const windowH = window.innerHeight;
-
-      const scaleW = windowW / targetW;
-      const scaleH = windowH / targetH;
-      setScale(Math.min(scaleW, scaleH));
-    };
-    handleScale();
-    window.addEventListener("resize", handleScale);
-    return () => window.removeEventListener("resize", handleScale);
-  }, [isPortrait]);
 
   const journeyQ = useQuery({
     queryKey: ["tenant_journeys_enabled", activeTenantId],
@@ -224,6 +193,10 @@ export default function OperacaoM30Postits() {
 
     for (const g of groupsArray) {
       g.items.sort((a, b) => {
+        // Prioridade primeiro
+        if (a.isPriority && !b.isPriority) return -1;
+        if (!a.isPriority && b.isPriority) return 1;
+
         if (!a.dateObj) return 1;
         if (!b.dateObj) return -1;
         return a.dateObj.getTime() - b.dateObj.getTime();
@@ -233,142 +206,160 @@ export default function OperacaoM30Postits() {
     return groupsArray;
   }, [casesQ.data, caseEntitiesQ.data]);
 
-  const layoutW = isPortrait ? 1080 : 1920;
-  const layoutH = isPortrait ? 1920 : 1080;
-
   return (
     <RequireAuth>
-      <div 
-        ref={wrapperRef}
-        className="w-screen h-screen bg-slate-950 overflow-hidden flex items-center justify-center font-sans"
-      >
-        <div 
-          ref={containerRef}
-          style={{ width: layoutW, height: layoutH, transform: `scale(${scale})` }}
-          className="bg-gradient-to-br from-slate-100 via-slate-50 to-slate-200 relative shadow-2xl flex flex-col"
-        >
-          {/* Header */}
-          <div className="flex items-center justify-between p-8 border-b-2 border-slate-200/60 bg-white/70 backdrop-blur-md shadow-sm shrink-0">
-            <div className="flex items-center gap-6">
-              <Button asChild variant="outline" size="icon" className="h-16 w-16 rounded-full bg-white shadow-sm hover:bg-slate-100 border-slate-200">
-                <Link to="/app/operacao-m30">
-                  <ArrowLeft className="h-8 w-8 text-slate-600" />
-                </Link>
-              </Button>
-              <div>
-                <h1 className="text-5xl font-black tracking-tight text-slate-800 flex items-center gap-4">
-                  <Monitor className="h-12 w-12 text-indigo-500" />
-                  Painel de Operações M30
-                </h1>
-                <p className="text-2xl text-slate-500 font-bold mt-1">
-                  Jornada de Entregáveis por Responsável
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center gap-4">
-              <Button 
-                onClick={handleRefresh} 
-                className="h-16 px-8 rounded-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-2xl shadow-lg flex items-center gap-3 transition-all active:scale-95"
-              >
-                <RefreshCw className={cn("h-7 w-7", isRefreshing && "animate-spin")} />
-                Atualizar
-              </Button>
-              <div className="flex items-center gap-4 px-8 py-4 bg-indigo-50 text-indigo-700 rounded-full font-black text-2xl border border-indigo-100 shadow-inner">
-                {isPortrait ? "TV Vertical" : "TV Horizontal"}
-              </div>
+      {/* 100% viewport width and height, dark premium aesthetic */}
+      <div className="w-screen h-screen bg-slate-950 flex flex-col overflow-hidden font-sans text-slate-100">
+        
+        {/* Glowing background orb for aesthetics */}
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[300px] bg-indigo-600/20 blur-[120px] rounded-full pointer-events-none" />
+
+        {/* Header */}
+        <div className="relative flex items-center justify-between p-4 sm:p-6 lg:p-8 border-b border-slate-800/60 bg-slate-900/50 backdrop-blur-xl shrink-0 z-10">
+          <div className="flex items-center gap-4 lg:gap-6">
+            <Button asChild variant="outline" size="icon" className="h-12 w-12 lg:h-16 lg:w-16 rounded-full bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700 hover:text-white transition-colors">
+              <Link to="/app/operacao-m30">
+                <ArrowLeft className="h-6 w-6 lg:h-8 lg:w-8" />
+              </Link>
+            </Button>
+            <div>
+              <h1 className="text-2xl sm:text-3xl lg:text-5xl font-black tracking-tight text-white flex items-center gap-3 lg:gap-4">
+                <Monitor className="h-8 w-8 lg:h-12 lg:w-12 text-indigo-400" />
+                Painel M30
+              </h1>
+              <p className="text-sm sm:text-base lg:text-xl text-slate-400 font-medium mt-1">
+                Jornada de Entregáveis
+              </p>
             </div>
           </div>
+          <div className="flex items-center gap-4">
+            <Button 
+              onClick={handleRefresh} 
+              className="h-12 lg:h-16 px-6 lg:px-8 rounded-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-sm lg:text-xl shadow-[0_0_20px_rgba(79,70,229,0.3)] transition-all active:scale-95 flex items-center gap-2 lg:gap-3 border border-indigo-500"
+            >
+              <RefreshCw className={cn("h-5 w-5 lg:h-7 lg:w-7", isRefreshing && "animate-spin")} />
+              <span className="hidden sm:inline">Atualizar</span>
+            </Button>
+          </div>
+        </div>
 
-          {/* Body */}
-          <div className="flex-1 w-full p-8 overflow-hidden">
-            <div className={cn(
-              "grid gap-6 w-full h-full auto-rows-[min-content]",
-              isPortrait ? "grid-cols-2" : "grid-cols-4"
-            )}>
-              {userGroups.map((group) => (
-                <div key={group.responsibleName} className="flex flex-col h-full bg-white/80 rounded-[32px] border border-slate-200 shadow-xl overflow-hidden backdrop-blur-sm">
-                  {/* User Header */}
-                  <div className="flex flex-col items-center bg-gradient-to-br from-indigo-600 to-blue-500 p-6 shadow-md relative z-10">
-                    <div className="h-32 w-32 rounded-full border-4 border-white shadow-xl bg-white overflow-hidden flex items-center justify-center shrink-0">
-                      {group.avatarUrl ? (
-                        <img src={group.avatarUrl} alt={group.responsibleName} className="h-full w-full object-cover" />
-                      ) : (
-                        <span className="text-6xl font-black text-slate-400 uppercase">{group.responsibleName.charAt(0)}</span>
-                      )}
-                    </div>
-                    <h2 className="text-3xl font-black text-white mt-4 tracking-tight text-center line-clamp-1 break-all">
-                      {group.responsibleName.split(' ')[0]}
-                    </h2>
-                    <span className="bg-white/20 text-white font-bold px-4 py-1 rounded-full text-lg mt-2 backdrop-blur-md">
-                      {group.items.length} cards pendentes
-                    </span>
-                  </div>
-
-                  {/* Cards List */}
-                  <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-4">
-                    {group.items.length === 0 && (
-                      <div className="flex flex-col items-center justify-center h-full opacity-50 py-10">
-                        <Monitor className="h-16 w-16 text-slate-400 mb-4" />
-                        <span className="text-2xl font-bold text-slate-500">Nenhum card</span>
-                      </div>
+        {/* Body - Flexibly spans the remaining height */}
+        <div className="relative flex-1 w-full p-4 sm:p-6 lg:p-8 overflow-hidden z-10">
+          <div className={cn(
+            "grid gap-4 lg:gap-8 w-full h-full",
+            "grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5"
+          )}>
+            {userGroups.map((group) => (
+              <div 
+                key={group.responsibleName} 
+                className="flex flex-col h-full bg-slate-900/60 rounded-[24px] lg:rounded-[32px] border border-slate-800/80 shadow-2xl overflow-hidden backdrop-blur-md"
+              >
+                {/* User Header */}
+                <div className="flex flex-col items-center bg-gradient-to-b from-indigo-900/40 to-transparent p-6 lg:p-8 relative">
+                  <div className="absolute inset-0 bg-indigo-500/5 blur-3xl rounded-full" />
+                  <div className="relative h-24 w-24 lg:h-32 lg:w-32 rounded-full border-2 lg:border-4 border-indigo-500/50 shadow-[0_0_30px_rgba(79,70,229,0.2)] bg-slate-800 overflow-hidden flex items-center justify-center shrink-0">
+                    {group.avatarUrl ? (
+                      <img src={group.avatarUrl} alt={group.responsibleName} className="h-full w-full object-cover" />
+                    ) : (
+                      <span className="text-4xl lg:text-6xl font-black text-slate-500 uppercase">{group.responsibleName.charAt(0)}</span>
                     )}
-                    {group.items.map((item) => (
-                      <div 
-                        key={item.id} 
-                        className={cn(
-                          "relative p-5 rounded-[20px] bg-slate-50 border-2 shadow-sm transition-all",
-                          item.isPriority ? "border-yellow-400 shadow-[0_0_15px_rgba(250,204,21,0.4)]" : "border-slate-100",
-                          item.isOverdue && !item.isPriority ? "border-red-300 bg-red-50/50" : ""
-                        )}
-                      >
-                        {item.isPriority && (
-                          <div className="absolute -top-3 -right-3 h-8 w-8 bg-yellow-400 rounded-full flex items-center justify-center shadow-md animate-pulse">
-                            <Star className="h-5 w-5 text-yellow-900 fill-current" />
+                  </div>
+                  <h2 className="text-xl lg:text-3xl font-black text-white mt-4 tracking-tight text-center line-clamp-1 break-all drop-shadow-md">
+                    {group.responsibleName.split(' ')[0]}
+                  </h2>
+                  <span className="bg-slate-800/80 text-indigo-300 font-bold px-4 py-1.5 rounded-full text-xs lg:text-sm mt-3 border border-indigo-500/30">
+                    {group.items.length} pendentes
+                  </span>
+                </div>
+
+                {/* Cards List with Custom Scrollbar */}
+                <div className="flex-1 overflow-y-auto p-4 lg:p-6 flex flex-col gap-3 lg:gap-4 custom-scrollbar">
+                  {group.items.length === 0 && (
+                    <div className="flex flex-col items-center justify-center h-full opacity-30 py-10">
+                      <Monitor className="h-12 w-12 lg:h-16 lg:w-16 text-slate-500 mb-4" />
+                      <span className="text-lg lg:text-xl font-bold text-slate-400">Nenhum card</span>
+                    </div>
+                  )}
+                  {group.items.map((item) => (
+                    <div 
+                      key={item.id} 
+                      className={cn(
+                        "relative p-4 lg:p-5 rounded-[16px] lg:rounded-[20px] transition-all",
+                        "bg-slate-800/50 border backdrop-blur-sm",
+                        item.isPriority 
+                          ? "border-yellow-500/50 shadow-[0_0_15px_rgba(234,179,8,0.15)] bg-yellow-950/20" 
+                          : "border-slate-700/50 hover:bg-slate-800",
+                        item.isOverdue && !item.isPriority 
+                          ? "border-red-500/40 bg-red-950/20 shadow-[0_0_15px_rgba(239,68,68,0.1)]" 
+                          : ""
+                      )}
+                    >
+                      {item.isPriority && (
+                        <div className="absolute -top-2 -right-2 h-6 w-6 lg:h-8 lg:w-8 bg-yellow-500 rounded-full flex items-center justify-center shadow-[0_0_10px_rgba(234,179,8,0.5)]">
+                          <Star className="h-3 w-3 lg:h-4 lg:w-4 text-yellow-950 fill-current" />
+                        </div>
+                      )}
+                      
+                      <div className={cn(
+                        "text-xs lg:text-sm font-bold tracking-tight leading-tight line-clamp-1 mb-1",
+                        item.isPriority ? "text-yellow-400" : "text-indigo-400"
+                      )}>
+                        {item.entityName}
+                      </div>
+                      
+                      <div className="text-base lg:text-xl font-bold text-slate-200 leading-snug mb-3 break-words">
+                        {item.title}
+                      </div>
+                      
+                      <div className="flex items-center justify-between mt-auto pt-3 border-t border-slate-700/50">
+                        <span className="text-xs lg:text-sm font-semibold text-slate-400 uppercase tracking-wider">
+                          {item.state}
+                        </span>
+                        
+                        {item.formattedDate && (
+                          <div className={cn(
+                            "flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs lg:text-sm font-bold shadow-sm",
+                            item.isOverdue 
+                              ? "bg-red-500/20 text-red-400 border border-red-500/30" 
+                              : "bg-slate-700/50 text-slate-300 border border-slate-600/50"
+                          )}>
+                            {item.isOverdue && <AlertCircle className="h-3 w-3 lg:h-4 lg:w-4" />}
+                            {item.formattedDate}
+                            {item.isOverdue && <span className="ml-1 uppercase text-[10px] lg:text-xs tracking-wider">Atraso</span>}
                           </div>
                         )}
-                        
-                        <div className="text-xl font-bold text-indigo-700 tracking-tight leading-tight line-clamp-1 mb-1">
-                          {item.entityName}
-                        </div>
-                        
-                        <div className="text-2xl font-black text-slate-800 leading-tight mb-3 break-words">
-                          {item.title}
-                        </div>
-                        
-                        <div className="flex items-center justify-between mt-auto pt-3 border-t border-slate-200/60">
-                          <span className="text-lg font-semibold text-slate-500 uppercase tracking-wider">
-                            {item.state}
-                          </span>
-                          
-                          {item.formattedDate && (
-                            <div className={cn(
-                              "flex items-center gap-1.5 px-3 py-1 rounded-lg text-lg font-bold shadow-sm",
-                              item.isOverdue 
-                                ? "bg-red-500 text-white" 
-                                : "bg-slate-200 text-slate-700"
-                            )}>
-                              {item.isOverdue && <AlertCircle className="h-5 w-5" />}
-                              {item.formattedDate}
-                              {item.isOverdue && <span className="ml-1 uppercase text-sm">Atraso</span>}
-                            </div>
-                          )}
-                        </div>
                       </div>
-                    ))}
-                  </div>
+                    </div>
+                  ))}
                 </div>
-              ))}
+              </div>
+            ))}
 
-              {userGroups.length === 0 && (
-                <div className="col-span-full flex flex-col items-center justify-center h-full opacity-60">
-                  <Monitor className="h-32 w-32 text-slate-300 mb-6" />
-                  <p className="text-5xl text-slate-400 font-black">Nenhuma pendência</p>
-                </div>
-              )}
-            </div>
+            {userGroups.length === 0 && (
+              <div className="col-span-full flex flex-col items-center justify-center h-full opacity-40">
+                <Monitor className="h-24 w-24 lg:h-32 lg:w-32 text-slate-500 mb-6" />
+                <p className="text-3xl lg:text-5xl text-slate-500 font-black">Nenhuma pendência</p>
+              </div>
+            )}
           </div>
         </div>
       </div>
+      <style>{`
+        .custom-scrollbar::-webkit-scrollbar {
+          width: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+          background: rgba(15, 23, 42, 0.3);
+          border-radius: 10px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+          background: rgba(99, 102, 241, 0.4);
+          border-radius: 10px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+          background: rgba(99, 102, 241, 0.8);
+        }
+      `}</style>
     </RequireAuth>
   );
 }
