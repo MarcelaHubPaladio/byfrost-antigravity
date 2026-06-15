@@ -284,7 +284,7 @@ export default function OperacaoM30Postits() {
                     <div 
                       key={item.id} 
                       className={cn(
-                        "relative p-4 lg:p-5 rounded-[16px] lg:rounded-[20px] transition-all",
+                        "relative p-2.5 lg:p-3 rounded-[12px] lg:rounded-[14px] transition-all flex flex-col gap-1",
                         "bg-slate-800/50 border backdrop-blur-sm",
                         item.isPriority 
                           ? "border-yellow-500/50 shadow-[0_0_15px_rgba(234,179,8,0.15)] bg-yellow-950/20" 
@@ -295,37 +295,32 @@ export default function OperacaoM30Postits() {
                       )}
                     >
                       {item.isPriority && (
-                        <div className="absolute -top-2 -right-2 h-6 w-6 lg:h-8 lg:w-8 bg-yellow-500 rounded-full flex items-center justify-center shadow-[0_0_10px_rgba(234,179,8,0.5)]">
-                          <Star className="h-3 w-3 lg:h-4 lg:w-4 text-yellow-950 fill-current" />
+                        <div className="absolute -top-1.5 -right-1.5 h-4 w-4 lg:h-5 lg:w-5 bg-yellow-500 rounded-full flex items-center justify-center shadow-[0_0_10px_rgba(234,179,8,0.5)]">
+                          <Star className="h-2.5 w-2.5 text-yellow-950 fill-current" />
                         </div>
                       )}
                       
                       <div className={cn(
-                        "text-xs lg:text-sm font-bold tracking-tight leading-tight line-clamp-1 mb-1",
-                        item.isPriority ? "text-yellow-400" : "text-indigo-400"
+                        "text-sm lg:text-base font-bold tracking-tight leading-tight line-clamp-1",
+                        item.isPriority ? "text-yellow-400" : "text-slate-100"
                       )}>
                         {item.entityName}
                       </div>
                       
-                      <div className="text-base lg:text-xl font-bold text-slate-200 leading-snug mb-3 break-words">
-                        {item.title}
-                      </div>
-                      
-                      <div className="flex items-center justify-between mt-auto pt-3 border-t border-slate-700/50">
-                        <span className="text-xs lg:text-sm font-semibold text-slate-400 uppercase tracking-wider">
+                      <div className="flex items-center justify-between pt-1 border-t border-slate-700/50 mt-1">
+                        <span className="text-[10px] lg:text-xs font-semibold text-slate-400 uppercase tracking-wider line-clamp-1">
                           {item.state}
                         </span>
                         
                         {item.formattedDate && (
                           <div className={cn(
-                            "flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs lg:text-sm font-bold shadow-sm",
+                            "flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] lg:text-[11px] font-bold shadow-sm shrink-0",
                             item.isOverdue 
                               ? "bg-red-500/20 text-red-400 border border-red-500/30" 
                               : "bg-slate-700/50 text-slate-300 border border-slate-600/50"
                           )}>
-                            {item.isOverdue && <AlertCircle className="h-3 w-3 lg:h-4 lg:w-4" />}
+                            {item.isOverdue && <AlertCircle className="h-2.5 w-2.5 lg:h-3 lg:w-3" />}
                             {item.formattedDate}
-                            {item.isOverdue && <span className="ml-1 uppercase text-[10px] lg:text-xs tracking-wider">Atraso</span>}
                           </div>
                         )}
                       </div>
