@@ -1,13 +1,13 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useState, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { RequireAuth } from "@/components/RequireAuth";
 import { useTenant } from "@/providers/TenantProvider";
 import { supabase } from "@/lib/supabase";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Monitor } from "lucide-react";
+import { ArrowLeft, Monitor, RefreshCw, AlertCircle, Star } from "lucide-react";
 import { Link } from "react-router-dom";
-import { format, isValid } from "date-fns";
+import { format, isValid, isBefore, startOfDay } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
 type CaseRow = {
@@ -20,31 +20,36 @@ type CaseRow = {
   customer_id: string | null;
   meta_json: any;
   updated_at: string;
-  users_profile?: { display_name: string | null; email: string | null } | null;
+  users_profile?: { display_name: string | null; email: string | null; avatar_url: string | null } | null;
 };
 
-// Types for grouping
-type EntityGroup = {
+type ItemData = {
+  id: string;
+  title: string;
   entityName: string;
-  items: Array<{
-    id: string;
-    title: string;
-    dateObj: Date | null;
-    formattedDate: string;
-  }>;
+  state: string;
+  dateObj: Date | null;
+  formattedDate: string;
+  isOverdue: boolean;
+  isPriority: boolean;
 };
 
-type ResponsibleGroup = {
+type UserGroup = {
   responsibleName: string;
-  entities: Record<string, EntityGroup>;
+  avatarUrl: string | null;
+  items: ItemData[];
 };
 
 export default function OperacaoM30Postits() {
   const { activeTenantId } = useTenant();
   const qc = useQueryClient();
 
-  // Detecta se a TV está na vertical ou horizontal para ajustar as colunas
+  // Screen sizing
   const [isPortrait, setIsPortrait] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const wrapperRef = useRef<HTMLDivElement>(null);
+  const [scale, setScale] = useState(1);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   useEffect(() => {
     const handleResize = () => {
@@ -54,6 +59,23 @@ export default function OperacaoM30Postits() {
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
   }, []);
+
+  useLayoutEffect(() => {
+    const handleScale = () => {
+      if (!containerRef.current || !wrapperRef.current) return;
+      const targetW = isPortrait ? 1080 : 1920;
+      const targetH = isPortrait ? 1920 : 1080;
+      const windowW = window.innerWidth;
+      const windowH = window.innerHeight;
+
+      const scaleW = windowW / targetW;
+      const scaleH = windowH / targetH;
+      setScale(Math.min(scaleW, scaleH));
+    };
+    handleScale();
+    window.addEventListener("resize", handleScale);
+    return () => window.removeEventListener("resize", handleScale);
+  }, [isPortrait]);
 
   const journeyQ = useQuery({
     queryKey: ["tenant_journeys_enabled", activeTenantId],
@@ -66,9 +88,7 @@ export default function OperacaoM30Postits() {
         .eq("tenant_id", activeTenantId!)
         .eq("enabled", true);
       if (error) throw error;
-      return (data ?? [])
-        .map((r: any) => r.journeys)
-        .filter(Boolean);
+      return (data ?? []).map((r: any) => r.journeys).filter(Boolean);
     },
   });
 
@@ -79,12 +99,12 @@ export default function OperacaoM30Postits() {
   const casesQ = useQuery({
     queryKey: ["cases_by_tenant_journey_postits", activeTenantId, selectedJourney?.id],
     enabled: Boolean(activeTenantId && selectedJourney?.id),
-    staleTime: 30_000,
+    staleTime: 10_000,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("cases")
         .select(
-          "id,title,status,state,updated_at,assigned_user_id,customer_entity_id,customer_id,users_profile(display_name,email),meta_json"
+          "id,title,status,state,updated_at,assigned_user_id,customer_entity_id,customer_id,users_profile(display_name,email,avatar_url),meta_json"
         )
         .eq("tenant_id", activeTenantId!)
         .eq("journey_id", selectedJourney!.id)
@@ -96,6 +116,20 @@ export default function OperacaoM30Postits() {
     },
   });
 
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    await casesQ.refetch();
+    setTimeout(() => setIsRefreshing(false), 500);
+  };
+
+  // Polling secundário a cada 30 segundos
+  useEffect(() => {
+    const interval = setInterval(() => {
+      casesQ.refetch();
+    }, 30000);
+    return () => clearInterval(interval);
+  }, [casesQ]);
+
   // Supabase Real-time
   useEffect(() => {
     if (!activeTenantId) return;
@@ -103,21 +137,12 @@ export default function OperacaoM30Postits() {
       .channel("m30-postits-tv")
       .on(
         "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "cases",
-          filter: `tenant_id=eq.${activeTenantId}`,
-        },
-        () => {
-          qc.invalidateQueries({ queryKey: ["cases_by_tenant_journey_postits"] });
-        }
+        { event: "*", schema: "public", table: "cases", filter: `tenant_id=eq.${activeTenantId}` },
+        () => qc.invalidateQueries({ queryKey: ["cases_by_tenant_journey_postits"] })
       )
       .subscribe();
 
-    return () => {
-      supabase.removeChannel(channel);
-    };
+    return () => { supabase.removeChannel(channel); };
   }, [activeTenantId, qc]);
 
   const caseEntityIds = useMemo(() => {
@@ -147,190 +172,201 @@ export default function OperacaoM30Postits() {
     },
   });
 
-  const parentGroups = useMemo(() => {
+  const userGroups = useMemo(() => {
     if (!casesQ.data) return [];
+    const todayStart = startOfDay(new Date());
 
-    const respMap = new Map<string, ResponsibleGroup>();
+    const respMap = new Map<string, UserGroup>();
 
     for (const c of casesQ.data) {
-      // Filtrar concluídos (não listam)
       const isFinal = (s: string) => {
         const up = s.toUpperCase();
         return up.includes("CONCLU") || up.includes("FINAL") || up.includes("ENTREG");
       };
       if (isFinal(c.state)) continue;
 
-      // Responsável (Pai)
       const respId = c.assigned_user_id || "unassigned";
       const respName = c.users_profile?.display_name || c.users_profile?.email || "Sem Responsável";
-      const firstName = respName.split(" ")[0].toUpperCase();
+      const avatarUrl = c.users_profile?.avatar_url || null;
 
-      // Entidade (Filho / Post-it)
       const eid = c.customer_entity_id || (c.meta_json as any)?.entity_id || c.customer_id;
       const metaName = (c.meta_json as any)?.customer_entity_name || (c.meta_json as any)?.entity_name;
       const entityName = metaName || (eid ? caseEntitiesQ.data?.get(eid) : null) || "Sem Cliente";
 
       if (!respMap.has(respId)) {
         respMap.set(respId, {
-          responsibleName: firstName,
-          entities: {},
+          responsibleName: respName,
+          avatarUrl,
+          items: [],
         });
       }
 
       const group = respMap.get(respId)!;
-
-      if (!group.entities[entityName]) {
-        group.entities[entityName] = {
-          entityName,
-          items: [],
-        };
-      }
-
-      // Definir a data do item
       const rawDate = (c.meta_json as any)?.due_at;
       const d = rawDate ? new Date(rawDate) : null;
+      const isOverdue = d && isValid(d) ? isBefore(startOfDay(d), todayStart) : false;
+      const isPriority = Boolean((c.meta_json as any)?.priority || (c.meta_json as any)?.is_priority);
 
-      group.entities[entityName].items.push({
+      group.items.push({
         id: c.id,
         title: c.title || "Sem título",
+        entityName,
+        state: c.state,
         dateObj: d && isValid(d) ? d : null,
         formattedDate: d && isValid(d) ? format(d, "dd/MM", { locale: ptBR }) : "",
+        isOverdue,
+        isPriority
       });
     }
 
-    // Converter para array e ordenar alfabeticamente
     const groupsArray = Array.from(respMap.values());
     groupsArray.sort((a, b) => a.responsibleName.localeCompare(b.responsibleName));
 
-    // Ordenar as entidades e seus itens (por data)
     for (const g of groupsArray) {
-      for (const eKey of Object.keys(g.entities)) {
-        g.entities[eKey].items.sort((a, b) => {
-          if (!a.dateObj) return 1;
-          if (!b.dateObj) return -1;
-          return a.dateObj.getTime() - b.dateObj.getTime();
-        });
-      }
+      g.items.sort((a, b) => {
+        if (!a.dateObj) return 1;
+        if (!b.dateObj) return -1;
+        return a.dateObj.getTime() - b.dateObj.getTime();
+      });
     }
 
     return groupsArray;
   }, [casesQ.data, caseEntitiesQ.data]);
 
+  const layoutW = isPortrait ? 1080 : 1920;
+  const layoutH = isPortrait ? 1920 : 1080;
+
   return (
     <RequireAuth>
-      {/* Wrapper principal: 100% da tela sempre, com scroll flexível se precisar, sem barras pretas */}
-      <div className="min-h-screen w-full bg-gradient-to-br from-slate-100 via-slate-50 to-slate-200 overflow-x-hidden font-sans">
-        
-        {/* Cabeçalho */}
-        <div className="w-full flex items-center justify-between p-6 sm:p-8 border-b-2 border-slate-200/60 bg-white/50 backdrop-blur-md shadow-sm sticky top-0 z-50">
-          <div className="flex items-center gap-6">
-            <Button asChild variant="outline" size="icon" className="h-14 w-14 rounded-full bg-white shadow-sm hover:bg-slate-100 border-slate-200">
-              <Link to="/app/operacao-m30">
-                <ArrowLeft className="h-7 w-7 text-slate-600" />
-              </Link>
-            </Button>
-            <div>
-              <h1 className="text-3xl sm:text-5xl font-black tracking-tight text-slate-800 flex items-center gap-3">
-                <Monitor className="h-8 w-8 sm:h-12 sm:w-12 text-indigo-500" />
-                Painel de Operações (M30)
-              </h1>
-              <p className="text-lg sm:text-2xl text-slate-500 font-bold mt-1">
-                Responsáveis e seus Clientes
-              </p>
+      <div 
+        ref={wrapperRef}
+        className="w-screen h-screen bg-slate-950 overflow-hidden flex items-center justify-center font-sans"
+      >
+        <div 
+          ref={containerRef}
+          style={{ width: layoutW, height: layoutH, transform: `scale(${scale})` }}
+          className="bg-gradient-to-br from-slate-100 via-slate-50 to-slate-200 relative shadow-2xl flex flex-col"
+        >
+          {/* Header */}
+          <div className="flex items-center justify-between p-8 border-b-2 border-slate-200/60 bg-white/70 backdrop-blur-md shadow-sm shrink-0">
+            <div className="flex items-center gap-6">
+              <Button asChild variant="outline" size="icon" className="h-16 w-16 rounded-full bg-white shadow-sm hover:bg-slate-100 border-slate-200">
+                <Link to="/app/operacao-m30">
+                  <ArrowLeft className="h-8 w-8 text-slate-600" />
+                </Link>
+              </Button>
+              <div>
+                <h1 className="text-5xl font-black tracking-tight text-slate-800 flex items-center gap-4">
+                  <Monitor className="h-12 w-12 text-indigo-500" />
+                  Painel de Operações M30
+                </h1>
+                <p className="text-2xl text-slate-500 font-bold mt-1">
+                  Jornada de Entregáveis por Responsável
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-4">
+              <Button 
+                onClick={handleRefresh} 
+                className="h-16 px-8 rounded-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-2xl shadow-lg flex items-center gap-3 transition-all active:scale-95"
+              >
+                <RefreshCw className={cn("h-7 w-7", isRefreshing && "animate-spin")} />
+                Atualizar
+              </Button>
+              <div className="flex items-center gap-4 px-8 py-4 bg-indigo-50 text-indigo-700 rounded-full font-black text-2xl border border-indigo-100 shadow-inner">
+                {isPortrait ? "TV Vertical" : "TV Horizontal"}
+              </div>
             </div>
           </div>
-          <div className="hidden sm:flex items-center gap-4 px-6 py-3 bg-indigo-50 text-indigo-700 rounded-full font-black text-xl border border-indigo-100">
-            {isPortrait ? "Modo Vertical (Lousa)" : "Modo Horizontal (Painel)"}
-          </div>
-        </div>
 
-        {/* Quadro Principal */}
-        <div className="w-full p-6 sm:p-10 flex flex-col gap-12 sm:gap-20">
-          {parentGroups.map((parent) => (
-            <div key={parent.responsibleName} className="flex flex-col gap-8 w-full">
-              
-              {/* Título do Grupo Pai (Responsável) em Linha Completa */}
-              <div className="flex items-center gap-4 border-b-4 border-indigo-500/20 pb-4 w-full">
-                <div className="h-16 w-16 bg-gradient-to-tr from-indigo-600 to-blue-500 text-white rounded-2xl shadow-md flex items-center justify-center text-4xl font-black">
-                  {parent.responsibleName.charAt(0)}
-                </div>
-                <h2 className="text-5xl sm:text-6xl font-black tracking-tighter text-slate-800 uppercase">
-                  {parent.responsibleName}
-                </h2>
-                <span className="ml-4 bg-slate-800 text-white font-bold px-5 py-2 rounded-full text-xl sm:text-2xl shadow-sm whitespace-nowrap">
-                  {Object.keys(parent.entities).length} Entidades
-                </span>
-              </div>
-
-              {/* Grid Flexível e Responsivo para os Post-its */}
-              <div className={cn(
-                "grid gap-8 sm:gap-10",
-                // Se for retrato na TV, usa 2 colunas. Se for horizontal, usa 4 ou mais dependendo da largura.
-                isPortrait ? "grid-cols-2" : "grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5"
-              )}>
-                {Object.values(parent.entities).map((entityGroup, i) => {
-                  const rotations = ["-rotate-1", "rotate-1", "rotate-0", "-rotate-2", "rotate-2"];
-                  const rot = rotations[i % rotations.length];
-
-                  return (
-                    <div
-                      key={entityGroup.entityName}
-                      className={cn(
-                        "relative flex flex-col rounded-sm bg-[#FFFAB3] p-8 transition-transform hover:scale-[1.03] hover:z-10",
-                        rot
+          {/* Body */}
+          <div className="flex-1 w-full p-8 overflow-hidden">
+            <div className={cn(
+              "grid gap-6 w-full h-full auto-rows-[min-content]",
+              isPortrait ? "grid-cols-2" : "grid-cols-4"
+            )}>
+              {userGroups.map((group) => (
+                <div key={group.responsibleName} className="flex flex-col h-full bg-white/80 rounded-[32px] border border-slate-200 shadow-xl overflow-hidden backdrop-blur-sm">
+                  {/* User Header */}
+                  <div className="flex flex-col items-center bg-gradient-to-br from-indigo-600 to-blue-500 p-6 shadow-md relative z-10">
+                    <div className="h-32 w-32 rounded-full border-4 border-white shadow-xl bg-white overflow-hidden flex items-center justify-center shrink-0">
+                      {group.avatarUrl ? (
+                        <img src={group.avatarUrl} alt={group.responsibleName} className="h-full w-full object-cover" />
+                      ) : (
+                        <span className="text-6xl font-black text-slate-400 uppercase">{group.responsibleName.charAt(0)}</span>
                       )}
-                      style={{
-                        boxShadow: "4px 8px 24px rgba(0,0,0,0.12), inset 0 0 40px rgba(255,255,180,0.3)",
-                        borderRight: "1px solid rgba(0,0,0,0.05)",
-                        borderBottom: "2px solid rgba(0,0,0,0.1)",
-                      }}
-                    >
-                      {/* Efeito de Fita Adesiva */}
-                      <div className="absolute top-[-15px] left-1/2 -translate-x-1/2 w-24 h-8 bg-white/40 shadow-sm rotate-2 backdrop-blur-sm z-10" />
-
-                      {/* Título do Post-it (ENTIDADE) */}
-                      <div className="border-b-2 border-yellow-500/20 pb-4 mb-6 pt-2">
-                        <h3 
-                          className="text-3xl sm:text-4xl font-black text-slate-800 uppercase leading-snug"
-                          style={{ fontFamily: "'Caveat', 'Comic Sans MS', cursive, sans-serif" }}
-                        >
-                          {entityGroup.entityName}
-                        </h3>
-                      </div>
-
-                      {/* Lista de itens (entregáveis) da entidade */}
-                      <div className="flex flex-col gap-5">
-                        {entityGroup.items.map((item) => (
-                          <div key={item.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 group border-b border-yellow-500/10 pb-3 last:border-0 last:pb-0">
-                            <span 
-                              className="text-2xl sm:text-[1.7rem] font-bold text-slate-800 leading-tight"
-                              style={{ fontFamily: "'Caveat', 'Comic Sans MS', cursive, sans-serif" }}
-                            >
-                              {item.title}
-                            </span>
-                            
-                            {item.formattedDate && (
-                              <span className="text-xl sm:text-2xl font-black text-red-600 bg-red-100/60 px-3 py-1 rounded shadow-sm shrink-0 mt-1 sm:mt-0">
-                                {item.formattedDate}
-                              </span>
-                            )}
-                          </div>
-                        ))}
-                      </div>
                     </div>
-                  );
-                })}
-              </div>
-            </div>
-          ))}
+                    <h2 className="text-3xl font-black text-white mt-4 tracking-tight text-center line-clamp-1 break-all">
+                      {group.responsibleName.split(' ')[0]}
+                    </h2>
+                    <span className="bg-white/20 text-white font-bold px-4 py-1 rounded-full text-lg mt-2 backdrop-blur-md">
+                      {group.items.length} cards pendentes
+                    </span>
+                  </div>
 
-          {parentGroups.length === 0 && (
-            <div className="w-full py-40 flex flex-col items-center justify-center col-span-full opacity-60">
-              <Monitor className="h-32 w-32 text-slate-300 mb-6" />
-              <p className="text-5xl text-slate-400 font-black">Quadro limpo!</p>
-              <p className="text-3xl text-slate-400 font-bold mt-2">Nenhuma entrega pendente.</p>
+                  {/* Cards List */}
+                  <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-4">
+                    {group.items.length === 0 && (
+                      <div className="flex flex-col items-center justify-center h-full opacity-50 py-10">
+                        <Monitor className="h-16 w-16 text-slate-400 mb-4" />
+                        <span className="text-2xl font-bold text-slate-500">Nenhum card</span>
+                      </div>
+                    )}
+                    {group.items.map((item) => (
+                      <div 
+                        key={item.id} 
+                        className={cn(
+                          "relative p-5 rounded-[20px] bg-slate-50 border-2 shadow-sm transition-all",
+                          item.isPriority ? "border-yellow-400 shadow-[0_0_15px_rgba(250,204,21,0.4)]" : "border-slate-100",
+                          item.isOverdue && !item.isPriority ? "border-red-300 bg-red-50/50" : ""
+                        )}
+                      >
+                        {item.isPriority && (
+                          <div className="absolute -top-3 -right-3 h-8 w-8 bg-yellow-400 rounded-full flex items-center justify-center shadow-md animate-pulse">
+                            <Star className="h-5 w-5 text-yellow-900 fill-current" />
+                          </div>
+                        )}
+                        
+                        <div className="text-xl font-bold text-indigo-700 tracking-tight leading-tight line-clamp-1 mb-1">
+                          {item.entityName}
+                        </div>
+                        
+                        <div className="text-2xl font-black text-slate-800 leading-tight mb-3 break-words">
+                          {item.title}
+                        </div>
+                        
+                        <div className="flex items-center justify-between mt-auto pt-3 border-t border-slate-200/60">
+                          <span className="text-lg font-semibold text-slate-500 uppercase tracking-wider">
+                            {item.state}
+                          </span>
+                          
+                          {item.formattedDate && (
+                            <div className={cn(
+                              "flex items-center gap-1.5 px-3 py-1 rounded-lg text-lg font-bold shadow-sm",
+                              item.isOverdue 
+                                ? "bg-red-500 text-white" 
+                                : "bg-slate-200 text-slate-700"
+                            )}>
+                              {item.isOverdue && <AlertCircle className="h-5 w-5" />}
+                              {item.formattedDate}
+                              {item.isOverdue && <span className="ml-1 uppercase text-sm">Atraso</span>}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+
+              {userGroups.length === 0 && (
+                <div className="col-span-full flex flex-col items-center justify-center h-full opacity-60">
+                  <Monitor className="h-32 w-32 text-slate-300 mb-6" />
+                  <p className="text-5xl text-slate-400 font-black">Nenhuma pendência</p>
+                </div>
+              )}
             </div>
-          )}
+          </div>
         </div>
       </div>
     </RequireAuth>

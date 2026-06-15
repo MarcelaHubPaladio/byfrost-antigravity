@@ -3,7 +3,7 @@ import { RequireAuth } from "@/components/RequireAuth";
 import { AppShell } from "@/components/AppShell";
 import { useSession } from "@/providers/SessionProvider";
 import { useTenant } from "@/providers/TenantProvider";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTheme } from "@/providers/ThemeProvider";
 import { showError, showSuccess } from "@/utils/toast";
 import { cn } from "@/lib/utils";
@@ -13,7 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Link2, LayoutGrid } from "lucide-react";
+import { Link2, LayoutGrid, Camera, Loader2 } from "lucide-react";
 import { CANDIDATE_ROUTES } from "@/lib/access";
 import {
   Select,
@@ -74,6 +74,7 @@ function getUserDisplayName(user: any) {
 }
 
 export default function Me() {
+  const qc = useQueryClient();
   const { user } = useSession();
   const { activeTenantId, isSuperAdmin, activeTenant } = useTenant();
   const { prefs, setMode, setCustom, setStartRoute, isLoading } = useTheme();
@@ -82,6 +83,45 @@ export default function Me() {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [changingPassword, setChangingPassword] = useState(false);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+
+  const userProfileQ = useQuery({
+    queryKey: ["users_profile_me", user?.id],
+    enabled: Boolean(user?.id),
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("users_profile")
+        .select("id, avatar_url")
+        .eq("id", user!.id)
+        .maybeSingle();
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  const uploadAvatar = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !user?.id) return;
+    setUploadingAvatar(true);
+    try {
+      const ext = file.name.split('.').pop() || 'jpg';
+      const path = `avatars/${user.id}-${Date.now()}.${ext}`;
+      const { error: uploadError } = await supabase.storage.from("inventory").upload(path, file, { upsert: true });
+      if (uploadError) throw uploadError;
+
+      const { data: publicData } = supabase.storage.from("inventory").getPublicUrl(path);
+
+      const { error: updateError } = await supabase.from("users_profile").update({ avatar_url: publicData.publicUrl }).eq("id", user.id);
+      if (updateError) throw updateError;
+      
+      qc.invalidateQueries({ queryKey: ["users_profile_me", user.id] });
+      showSuccess("Foto de perfil atualizada!");
+    } catch (err: any) {
+      showError("Erro ao enviar foto: " + err.message);
+    } finally {
+      setUploadingAvatar(false);
+    }
+  };
 
   const journeysEnabledQ = useQuery({
     queryKey: ["tenant_journeys_enabled", activeTenantId],
@@ -259,13 +299,40 @@ export default function Me() {
                 </div>
 
                 <div className="mt-3 grid gap-3">
-                  <div>
-                    <Label className="text-xs text-slate-700 dark:text-slate-200">Nome</Label>
-                    <Input
-                      value={userName}
-                      readOnly
-                      className="mt-1 h-11 rounded-2xl border-slate-200 bg-white text-sm text-slate-800 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-100"
-                    />
+                  <div className="flex flex-col sm:flex-row items-center gap-4 sm:gap-6 mb-2">
+                    <div className="relative group">
+                      <div className="h-20 w-20 rounded-full border-2 border-slate-200 bg-slate-100 overflow-hidden shadow-sm dark:border-slate-700 dark:bg-slate-800 flex flex-col items-center justify-center">
+                        {userProfileQ.data?.avatar_url ? (
+                          <img src={userProfileQ.data.avatar_url} alt="Avatar" className="h-full w-full object-cover" />
+                        ) : (
+                          <div className="text-2xl font-bold text-slate-400">
+                            {userName.charAt(0).toUpperCase()}
+                          </div>
+                        )}
+                      </div>
+                      <label className="absolute inset-0 flex flex-col items-center justify-center rounded-full bg-black/50 opacity-0 group-hover:opacity-100 cursor-pointer transition-opacity">
+                        {uploadingAvatar ? (
+                          <Loader2 className="h-6 w-6 text-white animate-spin" />
+                        ) : (
+                          <Camera className="h-6 w-6 text-white" />
+                        )}
+                        <input 
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={uploadAvatar}
+                          disabled={uploadingAvatar}
+                        />
+                      </label>
+                    </div>
+                    <div className="flex-1 w-full">
+                      <Label className="text-xs text-slate-700 dark:text-slate-200">Nome</Label>
+                      <Input
+                        value={userName}
+                        readOnly
+                        className="mt-1 h-11 rounded-2xl border-slate-200 bg-white text-sm text-slate-800 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-100"
+                      />
+                    </div>
                   </div>
                   <div>
                     <Label className="text-xs text-slate-700 dark:text-slate-200">Email</Label>
