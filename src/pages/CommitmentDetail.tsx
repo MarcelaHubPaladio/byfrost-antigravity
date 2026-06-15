@@ -107,6 +107,9 @@ export default function CommitmentDetail() {
   const [targetJourneyId, setTargetJourneyId] = useState<string>("");
   const [targetCaseType, setTargetCaseType] = useState<string>("order");
   const [targetPriority, setTargetPriority] = useState(false);
+
+  const [createDeliverableOpen, setCreateDeliverableOpen] = useState(false);
+  const [newDeliverableName, setNewDeliverableName] = useState("");
   const qc = useQueryClient();
 
   const refreshAll = () => {
@@ -517,6 +520,30 @@ export default function CommitmentDetail() {
     }
   };
 
+  const handleCreateManualDeliverable = async () => {
+    if (!activeTenantId || !commitmentId || !newDeliverableName.trim()) return;
+    setSaving(true);
+    try {
+      const { error } = await supabase.from("deliverables").insert({
+        tenant_id: activeTenantId,
+        commitment_id: commitmentId,
+        entity_id: commitmentQ.data?.customer_entity_id,
+        name: newDeliverableName.trim(),
+        status: "pending",
+        schedule_type: "manual",
+      });
+      if (error) throw error;
+      showSuccess("Entregável adicionado com sucesso.");
+      setNewDeliverableName("");
+      setCreateDeliverableOpen(false);
+      deliverablesQ.refetch();
+    } catch (err: any) {
+      showError(err.message ?? "Erro ao adicionar entregável");
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const toggleSelect = (id: string) => {
     setSelectedIds(prev => 
       prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
@@ -762,6 +789,16 @@ export default function CommitmentDetail() {
                     Deliverables & Operação
                   </div>
                   <div className="flex items-center gap-2">
+                    <Button 
+                      size="sm" 
+                      variant="outline" 
+                      className="h-6 px-2 gap-1.5 text-[9px] font-bold uppercase"
+                      onClick={() => setCreateDeliverableOpen(true)}
+                      disabled={saving}
+                    >
+                      <Plus className="w-3 h-3" />
+                      Adicionar Entregável
+                    </Button>
                     {selectedIds.length > 0 && (
                       <Button 
                         size="sm" 
@@ -1093,6 +1130,38 @@ export default function CommitmentDetail() {
                 <pre className="max-h-[70vh] overflow-auto rounded-xl border bg-slate-50 p-3 text-xs text-slate-800">
                   {JSON.stringify(payload, null, 2)}
                 </pre>
+              </DialogContent>
+            </Dialog>
+
+            <Dialog open={createDeliverableOpen} onOpenChange={setCreateDeliverableOpen}>
+              <DialogContent className="max-w-md">
+                <DialogHeader>
+                  <DialogTitle>Adicionar Entregável Manual</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4 py-4">
+                  <div className="space-y-2">
+                    <Label className="text-xs font-bold uppercase tracking-wider text-slate-500">Nome do Entregável</Label>
+                    <input 
+                      className="flex h-10 w-full rounded-md border border-slate-300 bg-transparent px-3 py-2 text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      placeholder="Ex: Arte de Anúncio Especial"
+                      value={newDeliverableName}
+                      onChange={(e) => setNewDeliverableName(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") handleCreateManualDeliverable();
+                      }}
+                    />
+                  </div>
+                  <div className="flex justify-end gap-2 pt-2">
+                    <Button variant="ghost" onClick={() => setCreateDeliverableOpen(false)}>Cancelar</Button>
+                    <Button 
+                      className="bg-blue-600 hover:bg-blue-700" 
+                      onClick={handleCreateManualDeliverable}
+                      disabled={saving || !newDeliverableName.trim()}
+                    >
+                      {saving ? "Salvando..." : "Adicionar"}
+                    </Button>
+                  </div>
+                </div>
               </DialogContent>
             </Dialog>
 
