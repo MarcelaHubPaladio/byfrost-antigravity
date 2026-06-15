@@ -29,6 +29,8 @@ import {
 import { WhatsAppConversation } from "@/components/case/WhatsAppConversation";
 import { checkTransitionBlocks, TransitionBlockReason } from "@/lib/journeys/validation";
 import { TransitionBlockDialog } from "@/components/case/TransitionBlockDialog";
+import { CaseTimeline, type CaseTimelineEvent } from "@/components/case/CaseTimeline";
+import { TrelloCardDetails } from "@/components/trello/TrelloCardDetails";
 import { VideoDeliverySection } from "@/components/case/VideoDeliverySection";
 import { LinkDnaModal } from "@/components/case/LinkDnaModal";
 import { Card } from "@/components/ui/card";
