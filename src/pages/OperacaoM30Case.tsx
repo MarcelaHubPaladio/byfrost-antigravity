@@ -956,12 +956,19 @@ export default function OperacaoM30Case() {
         queryFn: async () => {
             const { data, error } = await supabase
                 .from("core_entities")
-                .select("id, display_name")
+                .select("id, display_name, commercial_commitments!inner(id, status)")
                 .eq("tenant_id", activeTenantId!)
+                .in("commercial_commitments.status", ["active", "pending"])
                 .is("deleted_at", null)
                 .order("display_name");
             if (error) throw error;
-            return data;
+            
+            // Remove duplicatas se houver múltiplos contratos para a mesma entidade (devido ao join)
+            const unique = new Map<string, any>();
+            for (const e of (data ?? [])) {
+                if (!unique.has(e.id)) unique.set(e.id, { id: e.id, display_name: e.display_name });
+            }
+            return Array.from(unique.values());
         },
     });
 
