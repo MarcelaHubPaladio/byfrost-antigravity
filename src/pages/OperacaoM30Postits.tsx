@@ -206,8 +206,17 @@ export default function OperacaoM30Postits() {
 
   const caseEntityIds = useMemo(() => {
     const s = new Set<string>();
-    for (const r of casesQ.data ?? []) {
-      const eid = r.customer_entity_id || (r.meta_json as any)?.entity_id || r.customer_id;
+    const casesData = casesQ.data ?? [];
+    const casesMap = new Map(casesData.map(c => [c.id, c]));
+
+    for (const r of casesData) {
+      let eid = r.customer_entity_id || (r.meta_json as any)?.entity_id || r.customer_id;
+      if (!eid && (r.meta_json as any)?.parent_case_id) {
+        const parent = casesMap.get((r.meta_json as any).parent_case_id);
+        if (parent) {
+          eid = parent.customer_entity_id || (parent.meta_json as any)?.entity_id || parent.customer_id;
+        }
+      }
       if (eid && typeof eid === "string") s.add(eid);
     }
     return Array.from(s);
@@ -253,7 +262,14 @@ export default function OperacaoM30Postits() {
       const respName = c.users_profile?.display_name || c.users_profile?.email || "Sem Responsável";
       const avatarUrl = c.users_profile?.avatar_url || null;
 
-      const eid = c.customer_entity_id || (c.meta_json as any)?.entity_id || c.customer_id;
+      let eid = c.customer_entity_id || (c.meta_json as any)?.entity_id || c.customer_id;
+      if (!eid && (c.meta_json as any)?.parent_case_id) {
+          const parentCase = casesQ.data?.find(pc => pc.id === (c.meta_json as any).parent_case_id);
+          if (parentCase) {
+              eid = parentCase.customer_entity_id || (parentCase.meta_json as any)?.entity_id || parentCase.customer_id;
+          }
+      }
+
       let finalEntityName = "Sem Cliente";
       if (eid && caseEntitiesQ.data?.has(eid)) {
           const entityData = caseEntitiesQ.data.get(eid)!;
