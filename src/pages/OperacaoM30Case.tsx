@@ -1932,6 +1932,7 @@ export default function OperacaoM30Case() {
                                             </Button>
                                         </div>
                                     )}
+                                </div>
                             </div>
                         </div>
                     </Card>
