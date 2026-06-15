@@ -229,7 +229,7 @@ export default function OperacaoM30Postits() {
       for (const d of data ?? []) {
         m.set(d.id, {
           display_name: d.display_name,
-          label: (d.metadata as any)?.label
+          label: (d.metadata as any)?.internal_label || (d.metadata as any)?.label
         });
       }
       return m;
