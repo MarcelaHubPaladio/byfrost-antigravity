@@ -468,33 +468,33 @@ export default function OperacaoM30Postits() {
                           )}
                           
                           <div className={cn(
-                            "text-xs lg:text-sm font-bold tracking-tight leading-tight line-clamp-2 mb-1.5",
+                            "text-[10.5px] lg:text-xs font-bold tracking-tight leading-snug line-clamp-3 mb-2",
                             item.isPriority ? "text-yellow-400" : "text-slate-100"
                           )}>
                             {item.title}
                           </div>
                           
-                          <div className="flex items-center justify-between mt-auto gap-1">
-                            <div className="flex items-center gap-1.5 min-w-0 flex-1">
-                              <span className="text-[8.5px] lg:text-[9.5px] font-bold px-1.5 py-0.5 rounded-sm bg-slate-700/60 text-slate-300 border border-slate-600/50 truncate shrink">
+                          <div className="mt-auto flex flex-col items-start gap-1 w-full">
+                            <div className="flex items-center justify-between w-full gap-1">
+                              <span className="text-[8.5px] lg:text-[9.5px] font-bold px-1.5 py-0.5 rounded-sm bg-slate-700/80 text-slate-200 border border-slate-600/50 truncate max-w-[65%] shrink">
                                 {item.entityName}
                               </span>
-                              <span className="text-[9px] lg:text-[10px] font-semibold text-slate-400 uppercase tracking-wider shrink-0">
-                                {item.state}
-                              </span>
+                              
+                              {item.formattedDate && (
+                                <div className={cn(
+                                  "flex items-center gap-0.5 px-1 py-0.5 rounded-sm text-[8.5px] font-bold shadow-sm shrink-0",
+                                  item.isOverdue 
+                                    ? "bg-red-500/20 text-red-400 border border-red-500/30" 
+                                    : "bg-slate-700/50 text-slate-300 border border-slate-600/50"
+                                )}>
+                                  {item.isOverdue && <AlertCircle className="h-2.5 w-2.5" />}
+                                  {item.formattedDate}
+                                </div>
+                              )}
                             </div>
-                            
-                            {item.formattedDate && (
-                              <div className={cn(
-                                "flex items-center gap-0.5 px-1 rounded text-[9px] font-bold shadow-sm shrink-0",
-                                item.isOverdue 
-                                  ? "bg-red-500/20 text-red-400 border border-red-500/30" 
-                                  : "bg-slate-700/50 text-slate-300 border border-slate-600/50"
-                              )}>
-                                {item.isOverdue && <AlertCircle className="h-2.5 w-2.5" />}
-                                {item.formattedDate}
-                              </div>
-                            )}
+                            <span className="text-[8.5px] lg:text-[9.5px] font-semibold text-slate-400/90 uppercase tracking-wider line-clamp-1">
+                              {item.state}
+                            </span>
                           </div>
                         </div>
                       ))}
