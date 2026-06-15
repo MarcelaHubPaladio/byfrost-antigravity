@@ -171,7 +171,8 @@ export default function OperacaoM30Postits() {
     setIsRefreshing(true);
     await Promise.all([
       casesQ.refetch(),
-      rankingQ.refetch()
+      rankingQ.refetch(),
+      caseEntitiesQ.refetch()
     ]);
     setTimeout(() => setIsRefreshing(false), 500);
   };
@@ -256,8 +257,9 @@ export default function OperacaoM30Postits() {
       let finalEntityName = "Sem Cliente";
       if (eid && caseEntitiesQ.data?.has(eid)) {
           const entityData = caseEntitiesQ.data.get(eid)!;
+          // Se tiver label, usa APENAS a label (nome interno curtinho), senão usa o display_name
           finalEntityName = entityData.label 
-              ? `${entityData.display_name} - ${entityData.label}` 
+              ? entityData.label 
               : entityData.display_name;
       } else {
           const metaName = (c.meta_json as any)?.customer_entity_name || (c.meta_json as any)?.entity_name;
