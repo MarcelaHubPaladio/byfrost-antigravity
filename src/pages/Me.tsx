@@ -91,8 +91,9 @@ export default function Me() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("users_profile")
-        .select("id, avatar_url")
-        .eq("id", user!.id)
+        .select("user_id, avatar_url")
+        .eq("user_id", user!.id)
+        .limit(1)
         .maybeSingle();
       if (error) throw error;
       return data;
