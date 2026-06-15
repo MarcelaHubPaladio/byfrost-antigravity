@@ -21,6 +21,25 @@ import {
 } from "@/components/ui/dialog";
 import { ZoomableImage } from "@/components/case/ZoomableImage";
 import { TrelloAddImageDialog } from "@/components/trello/TrelloAddImageDialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+
+type UserRow = {
+  user_id: string;
+  email: string | null;
+  display_name: string | null;
+};
+
+function labelForUser(u: UserRow) {
+  const name = (u.display_name ?? "").trim();
+  if (name) return u.email ? `${name} • ${u.email}` : name;
+  return u.email ?? "(Sem nome)";
+}
 
 function fmtDateInput(iso: string | null) {
   if (!iso) return "";
@@ -104,12 +123,31 @@ export function TrelloCardDetails(props: { tenantId: string; caseId: string }) {
     },
   });
 
+  const usersQ = useQuery({
+    queryKey: ["trello_users", props.tenantId],
+    enabled: Boolean(props.tenantId),
+    staleTime: 30_000,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("users_profile")
+        .select("user_id,email,display_name")
+        .eq("tenant_id", props.tenantId)
+        .is("deleted_at", null)
+        .limit(5000);
+      if (error) throw error;
+      const list = (data ?? []) as UserRow[];
+      list.sort((a, b) => labelForUser(a).localeCompare(labelForUser(b)));
+      return list;
+    },
+  });
+
   const draft = useMemo(() => {
     const c = caseQ.data;
     return {
       title: c?.title ?? "",
       descriptionHtml: c?.summary_text ?? "",
       dueDate: fmtDateInput((c?.meta_json as any)?.due_at ?? null),
+      assignedUserId: c?.assigned_user_id ?? "__unassigned__",
     };
   }, [caseQ.data]);
 
@@ -129,6 +167,7 @@ export function TrelloCardDetails(props: { tenantId: string; caseId: string }) {
       const payload: any = {
         title: form.title.trim() || null,
         summary_text: normalizeRichTextHtmlOrNull(form.descriptionHtml),
+        assigned_user_id: form.assignedUserId === "__unassigned__" ? null : form.assignedUserId,
         meta_json: {
           ...((caseQ.data as any)?.meta_json ?? {}),
           due_at: parseDateInput(form.dueDate),
@@ -232,9 +271,25 @@ export function TrelloCardDetails(props: { tenantId: string; caseId: string }) {
               <div className="flex items-center gap-2 text-xs font-semibold text-slate-700">
                 <UserRound className="h-4 w-4 text-slate-500" /> Responsável
               </div>
-              <div className="mt-1 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-700">
-                Use o card de atribuição (abaixo) para selecionar o responsável.
-              </div>
+              <Select 
+                value={form.assignedUserId} 
+                onValueChange={(val) => setForm(p => ({...p, assignedUserId: val}))} 
+                disabled={saving || usersQ.isLoading}
+              >
+                <SelectTrigger className="mt-1 h-11 rounded-2xl bg-white border-slate-200">
+                  <SelectValue placeholder="Selecionar…" />
+                </SelectTrigger>
+                <SelectContent className="rounded-2xl max-w-[300px]">
+                  <SelectItem value="__unassigned__" className="rounded-xl">
+                    (sem responsável)
+                  </SelectItem>
+                  {(usersQ.data ?? []).map((u) => (
+                    <SelectItem key={u.user_id} value={u.user_id} className="rounded-xl">
+                      {labelForUser(u)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           </div>
 
@@ -260,19 +315,6 @@ export function TrelloCardDetails(props: { tenantId: string; caseId: string }) {
         </div>
       </Card>
 
-      <TrelloEntityCard
-        tenantId={props.tenantId}
-        caseId={props.caseId}
-        customerEntityId={caseQ.data?.customer_entity_id ?? null}
-        metaJson={caseQ.data?.meta_json ?? {}}
-      />
-
-      <TrelloResponsibleCard
-        tenantId={props.tenantId}
-        caseId={props.caseId}
-        assignedUserId={caseQ.data?.assigned_user_id ?? null}
-      />
-
       <CaseTasksCard tenantId={props.tenantId} caseId={props.caseId} />
 
       <Card className="rounded-[22px] border-slate-200 bg-white p-4">
@@ -281,7 +323,7 @@ export function TrelloCardDetails(props: { tenantId: string; caseId: string }) {
             <div className="flex items-center gap-2 text-sm font-semibold text-slate-900">
               <ClipboardList className="h-4 w-4 text-slate-500" /> Anexos
             </div>
-            <div className="mt-1 text-xs text-slate-500">Imagens (base64) e outros anexos vinculados ao case</div>
+            <div className="mt-1 text-xs text-slate-500">Imagens e outros anexos vinculados ao case</div>
           </div>
           <div className="flex items-center gap-2">
             <TrelloAddImageDialog tenantId={props.tenantId} caseId={props.caseId} className="h-9" />

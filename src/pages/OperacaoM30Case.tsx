@@ -29,8 +29,8 @@ import {
 import { WhatsAppConversation } from "@/components/case/WhatsAppConversation";
 import { checkTransitionBlocks, TransitionBlockReason } from "@/lib/journeys/validation";
 import { TransitionBlockDialog } from "@/components/case/TransitionBlockDialog";
-import { CaseTimeline, type CaseTimelineEvent } from "@/components/case/CaseTimeline";
-import { TrelloCardDetails } from "@/components/trello/TrelloCardDetails";
+import { VideoDeliverySection } from "@/components/case/VideoDeliverySection";
+import { LinkDnaModal } from "@/components/case/LinkDnaModal";
 import { Card } from "@/components/ui/card";
 import {
     Command,
@@ -855,7 +855,7 @@ export default function OperacaoM30Case() {
         }
     });
 
-    const repairDna = async (targetCid: string) => {
+    const repairDna = async (targetCid: string, targetDid: string | null) => {
         if (!id || !activeTenantId) return;
         setSaving(true);
         try {
@@ -864,13 +864,14 @@ export default function OperacaoM30Case() {
                 .from("cases")
                 .update({ 
                     meta_json: { ...currentMeta, commitment_id: targetCid },
-                    deliverable_id: null // Reset to force re-link
+                    deliverable_id: targetDid || null
                 })
                 .eq("id", id);
             
             if (error) throw error;
             showSuccess("DNA do card reparado. O orquestrador agora está alinhado.");
             caseQ.refetch();
+            setLinkModalOpen(false);
         } catch (e: any) {
             showError("Falha no reparo: " + e.message);
         } finally {
@@ -1073,13 +1074,29 @@ export default function OperacaoM30Case() {
         }
     };
 
+    const usersQ = useQuery({
+        queryKey: ["users_profile_names", activeTenantId],
+        enabled: Boolean(activeTenantId),
+        queryFn: async () => {
+            const { data } = await supabase
+                .from("users_profile")
+                .select("user_id, display_name")
+                .eq("tenant_id", activeTenantId!);
+            const map = new Map<string, string>();
+            for (const row of (data || [])) {
+                if (row.display_name) map.set(row.user_id, row.display_name);
+            }
+            return map;
+        }
+    });
+
     const timelineQ = useQuery({
         queryKey: ["timeline", activeTenantId, id],
         enabled: Boolean(activeTenantId && id),
         queryFn: async () => {
             const { data, error } = await supabase
                 .from("timeline_events")
-                .select("id,event_type,actor_type,message,occurred_at")
+                .select("id,event_type,actor_type,actor_id,message,occurred_at")
                 .eq("tenant_id", activeTenantId!)
                 .eq("case_id", id!)
                 .order("occurred_at", { ascending: true })
@@ -1088,6 +1105,16 @@ export default function OperacaoM30Case() {
             return (data ?? []) as CaseTimelineEvent[];
         },
     });
+
+    const timelineEvents = useMemo(() => {
+        const events = timelineQ.data || [];
+        const userMap = usersQ.data;
+        if (!userMap) return events;
+        return events.map(e => ({
+            ...e,
+            actor_name: e.actor_id ? userMap.get(e.actor_id) : undefined
+        }));
+    }, [timelineQ.data, usersQ.data]);
 
     const states = useMemo(() => {
         const st = (journeyQ.data as any)?.default_state_machine_json?.states;
@@ -1099,6 +1126,7 @@ export default function OperacaoM30Case() {
     const { transitionState, updating: updatingState } = useJourneyTransition();
     const [creatingIndividualId, setCreatingIndividualId] = useState<number | null>(null);
     const [taskToCreate, setTaskToCreate] = useState<{ st: any, idx: number } | null>(null);
+    const [linkModalOpen, setLinkModalOpen] = useState(false);
 
     const handleCreateIndividualTask = async (st: any, idx: number, deliverableId: string, type: string) => {
         if (!activeTenantId || !id || !caseQ.data) return;
@@ -1776,7 +1804,7 @@ export default function OperacaoM30Case() {
                                 {activeTenantId && id && (
                                     <TrelloCardDetails tenantId={activeTenantId} caseId={id} />
                                 )}
-                                <CaseTimeline events={timelineQ.data ?? []} />
+                                <CaseTimeline events={timelineEvents} />
                             </div>
 
                             <div className="space-y-4">
@@ -1858,10 +1886,7 @@ export default function OperacaoM30Case() {
                                                 variant="outline" 
                                                 size="sm" 
                                                 className="w-full h-9 rounded-xl text-[10px] font-bold border-indigo-200 text-indigo-700 hover:bg-indigo-50 hover:text-indigo-800"
-                                                onClick={() => {
-                                                    const target = window.prompt("Cole o UUID do contrato correto:", commitmentQ.data?.id);
-                                                    if (target && target.length > 20) repairDna(target);
-                                                }}
+                                                onClick={() => setLinkModalOpen(true)}
                                                 disabled={saving}
                                             >
                                                 <RefreshCw className={cn("h-3 w-3 mr-1", saving && "animate-spin")} />
@@ -1899,10 +1924,7 @@ export default function OperacaoM30Case() {
                                                 variant="outline" 
                                                 size="sm" 
                                                 className="w-full h-9 rounded-xl text-[10px] font-bold border-rose-200 text-rose-700 hover:bg-rose-50 hover:text-rose-800"
-                                                onClick={() => {
-                                                    const target = window.prompt("Cole o UUID do contrato correto:", commitmentQ.data?.id);
-                                                    if (target && target.length > 20) repairDna(target);
-                                                }}
+                                                onClick={() => setLinkModalOpen(true)}
                                                 disabled={saving}
                                             >
                                                 <RefreshCw className={cn("h-3 w-3 mr-1", saving && "animate-spin")} />
@@ -1910,13 +1932,6 @@ export default function OperacaoM30Case() {
                                             </Button>
                                         </div>
                                     )}
-                                </div>
-
-                                {id && (
-                                    <div className="h-[600px] overflow-hidden rounded-[28px] border border-slate-200 bg-white/50 shadow-sm backdrop-blur-sm">
-                                        <WhatsAppConversation caseId={id} className="h-full" />
-                                    </div>
-                                )}
                             </div>
                         </div>
                     </Card>
@@ -2035,6 +2050,15 @@ export default function OperacaoM30Case() {
                         </AlertDialogFooter>
                     </AlertDialogContent>
                 </AlertDialog>
+
+                <LinkDnaModal 
+                    tenantId={activeTenantId!}
+                    customerEntityId={caseQ.data?.customer_entity_id ?? null}
+                    open={linkModalOpen}
+                    onOpenChange={setLinkModalOpen}
+                    onSave={repairDna}
+                    saving={saving}
+                />
             </AppShell>
         </RequireAuth>
     );
