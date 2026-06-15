@@ -40,11 +40,35 @@ type UserGroup = {
   items: ItemData[];
 };
 
+const STATE_LABELS: Record<string, string> = {
+  'PLANEJAMENTO': 'Planejamento',
+  'EDIO': 'Edição',
+  'EDIÇÃO': 'Edição',
+  'APROVAO': 'Aprovação',
+  'APROVAÇÃO': 'Aprovação',
+  'POSTAR': 'Postar',
+  'FILA': 'Fila',
+  'CONCLUIDO': 'Concluído',
+  'CONCLUÍDO': 'Concluído',
+  'FINALIZADO': 'Finalizado',
+  'ENTREGUE': 'Entregue',
+};
+
+const formatStateLabel = (s: string) => STATE_LABELS[s.toUpperCase()] || s;
+
+const getGridCols = (len: number) => {
+  if (len <= 4) return "grid-cols-1";
+  if (len <= 10) return "grid-cols-2";
+  if (len <= 18) return "grid-cols-3";
+  return "grid-cols-4";
+};
+
 export default function OperacaoM30Postits() {
   const { activeTenantId } = useTenant();
   const qc = useQueryClient();
 
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   const journeyQ = useQuery({
     queryKey: ["tenant_journeys_enabled", activeTenantId],
@@ -91,7 +115,6 @@ export default function OperacaoM30Postits() {
     setTimeout(() => setIsRefreshing(false), 500);
   };
 
-  // Polling secundário a cada 30 segundos
   useEffect(() => {
     const interval = setInterval(() => {
       casesQ.refetch();
@@ -99,7 +122,6 @@ export default function OperacaoM30Postits() {
     return () => clearInterval(interval);
   }, [casesQ]);
 
-  // Supabase Real-time
   useEffect(() => {
     if (!activeTenantId) return;
     const channel = supabase
@@ -180,7 +202,7 @@ export default function OperacaoM30Postits() {
         id: c.id,
         title: c.title || "Sem título",
         entityName,
-        state: c.state,
+        state: formatStateLabel(c.state),
         dateObj: d && isValid(d) ? d : null,
         formattedDate: d && isValid(d) ? format(d, "dd/MM", { locale: ptBR }) : "",
         isOverdue,
@@ -193,10 +215,8 @@ export default function OperacaoM30Postits() {
 
     for (const g of groupsArray) {
       g.items.sort((a, b) => {
-        // Prioridade primeiro
         if (a.isPriority && !b.isPriority) return -1;
         if (!a.isPriority && b.isPriority) return 1;
-
         if (!a.dateObj) return 1;
         if (!b.dateObj) return -1;
         return a.dateObj.getTime() - b.dateObj.getTime();
@@ -206,139 +226,169 @@ export default function OperacaoM30Postits() {
     return groupsArray;
   }, [casesQ.data, caseEntitiesQ.data]);
 
+  // Hook mágico para escalar o conteúdo (zoom) se estourar a tela
+  useEffect(() => {
+    const calculateZoom = () => {
+      const el = containerRef.current;
+      if (!el) return;
+      
+      // Reseta para 1 para medir o tamanho natural
+      el.style.zoom = "1";
+      
+      const scrollHeight = el.scrollHeight;
+      const windowH = window.innerHeight;
+      
+      if (scrollHeight > windowH) {
+         // Scale down
+         const newZoom = windowH / scrollHeight;
+         // Deixa uma pequena folga (2%)
+         el.style.zoom = (newZoom * 0.98).toString();
+      }
+    };
+    
+    const timeoutId = setTimeout(calculateZoom, 50);
+    window.addEventListener("resize", calculateZoom);
+    return () => {
+      clearTimeout(timeoutId);
+      window.removeEventListener("resize", calculateZoom);
+    };
+  }, [userGroups]);
+
   return (
     <RequireAuth>
-      {/* 100% viewport width and height, dark premium aesthetic */}
-      <div className="w-screen h-screen bg-slate-950 flex flex-col overflow-hidden font-sans text-slate-100">
+      {/* 100% viewport, no scrolls ever on the window */}
+      <div className="w-screen h-screen bg-slate-950 flex flex-col overflow-hidden font-sans text-slate-100 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
         
         {/* Glowing background orb for aesthetics */}
         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[300px] bg-indigo-600/20 blur-[120px] rounded-full pointer-events-none" />
 
-        {/* Header */}
-        <div className="relative flex items-center justify-between p-4 sm:p-6 lg:p-8 border-b border-slate-800/60 bg-slate-900/50 backdrop-blur-xl shrink-0 z-10">
-          <div className="flex items-center gap-4 lg:gap-6">
-            <Button asChild variant="outline" size="icon" className="h-12 w-12 lg:h-16 lg:w-16 rounded-full bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700 hover:text-white transition-colors">
+        {/* Minimal Header */}
+        <div className="relative flex items-center justify-between py-2 px-4 lg:px-6 border-b border-slate-800/60 bg-slate-900/50 backdrop-blur-xl shrink-0 z-10">
+          <div className="flex items-center gap-3">
+            <Button asChild variant="ghost" size="icon" className="h-8 w-8 rounded-full text-slate-400 hover:bg-slate-800 hover:text-white">
               <Link to="/app/operacao-m30">
-                <ArrowLeft className="h-6 w-6 lg:h-8 lg:w-8" />
+                <ArrowLeft className="h-5 w-5" />
               </Link>
             </Button>
-            <div>
-              <h1 className="text-2xl sm:text-3xl lg:text-5xl font-black tracking-tight text-white flex items-center gap-3 lg:gap-4">
-                <Monitor className="h-8 w-8 lg:h-12 lg:w-12 text-indigo-400" />
-                Painel M30
-              </h1>
-              <p className="text-sm sm:text-base lg:text-xl text-slate-400 font-medium mt-1">
-                Jornada de Entregáveis
-              </p>
-            </div>
+            <h1 className="text-lg lg:text-2xl font-black tracking-tight text-white flex items-center gap-2">
+              <Monitor className="h-5 w-5 lg:h-6 lg:w-6 text-indigo-400" />
+              Painel M30
+            </h1>
           </div>
-          <div className="flex items-center gap-4">
-            <Button 
-              onClick={handleRefresh} 
-              className="h-12 lg:h-16 px-6 lg:px-8 rounded-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-sm lg:text-xl shadow-[0_0_20px_rgba(79,70,229,0.3)] transition-all active:scale-95 flex items-center gap-2 lg:gap-3 border border-indigo-500"
-            >
-              <RefreshCw className={cn("h-5 w-5 lg:h-7 lg:w-7", isRefreshing && "animate-spin")} />
-              <span className="hidden sm:inline">Atualizar</span>
-            </Button>
-          </div>
+          <Button 
+            onClick={handleRefresh} 
+            size="sm"
+            className="h-8 rounded-full bg-indigo-600/80 hover:bg-indigo-500 text-white font-bold text-xs lg:text-sm px-4 shadow-sm"
+          >
+            <RefreshCw className={cn("h-3 w-3 lg:h-4 lg:w-4 mr-1.5", isRefreshing && "animate-spin")} />
+            Atualizar
+          </Button>
         </div>
 
-        {/* Body - Masonry Layout e Page Scroll escondido */}
-        <div className="relative flex-1 w-full p-4 sm:p-6 lg:p-8 overflow-y-auto z-10 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
-          <div className={cn(
-            "columns-1 sm:columns-2 md:columns-3 xl:columns-4 2xl:columns-5 gap-4 lg:gap-8 w-full"
-          )}>
-            {userGroups.map((group) => (
-              <div 
-                key={group.responsibleName} 
-                className="flex flex-col bg-slate-900/60 rounded-[24px] lg:rounded-[32px] border border-slate-800/80 shadow-2xl overflow-hidden backdrop-blur-md break-inside-avoid mb-4 lg:mb-8"
-              >
-                {/* User Header Compacto */}
-                <div className="flex flex-row items-center justify-between bg-gradient-to-r from-indigo-900/40 to-transparent p-3 lg:p-4 border-b border-slate-800/80 relative z-10 shrink-0">
-                  <div className="absolute inset-0 bg-indigo-500/5 blur-xl rounded-full" />
-                  <div className="flex flex-row items-center gap-3 relative z-10">
-                    <div className="h-10 w-10 lg:h-12 lg:w-12 rounded-full border lg:border-2 border-indigo-500/50 shadow-md bg-slate-800 overflow-hidden flex items-center justify-center shrink-0">
-                      {group.avatarUrl ? (
-                        <img src={group.avatarUrl} alt={group.responsibleName} className="h-full w-full object-cover" />
-                      ) : (
-                        <span className="text-lg lg:text-xl font-black text-slate-500 uppercase">{group.responsibleName.charAt(0)}</span>
-                      )}
-                    </div>
-                    <h2 className="text-lg lg:text-2xl font-black text-white tracking-tight line-clamp-1 drop-shadow-md uppercase">
-                      {group.responsibleName.split(' ')[0]}
-                    </h2>
-                  </div>
-                  <span className="bg-slate-800 text-indigo-300 font-bold px-3 py-1 rounded text-[10px] lg:text-xs border border-indigo-500/30 shadow-sm whitespace-nowrap z-10 relative">
-                    {group.items.length} cards
-                  </span>
-                </div>
-
-                {/* Cards List 2 Colunas */}
-                <div className="p-2 lg:p-3">
-                  {group.items.length === 0 && (
-                    <div className="flex flex-col items-center justify-center h-full opacity-30 py-10 w-full">
-                      <Monitor className="h-10 w-10 text-slate-500 mb-2" />
-                      <span className="text-sm font-bold text-slate-400">Nenhum card</span>
-                    </div>
-                  )}
-                  <div className="grid grid-cols-2 gap-2 lg:gap-3 auto-rows-max">
-                  {group.items.map((item) => (
-                    <div 
-                      key={item.id} 
-                      className={cn(
-                        "relative p-2.5 lg:p-3 rounded-[12px] lg:rounded-[14px] transition-all flex flex-col gap-1",
-                        "bg-slate-800/50 border backdrop-blur-sm",
-                        item.isPriority 
-                          ? "border-yellow-500/50 shadow-[0_0_15px_rgba(234,179,8,0.15)] bg-yellow-950/20" 
-                          : "border-slate-700/50 hover:bg-slate-800",
-                        item.isOverdue && !item.isPriority 
-                          ? "border-red-500/40 bg-red-950/20 shadow-[0_0_15px_rgba(239,68,68,0.1)]" 
-                          : ""
-                      )}
-                    >
-                      {item.isPriority && (
-                        <div className="absolute -top-1.5 -right-1.5 h-4 w-4 lg:h-5 lg:w-5 bg-yellow-500 rounded-full flex items-center justify-center shadow-[0_0_10px_rgba(234,179,8,0.5)]">
-                          <Star className="h-2.5 w-2.5 text-yellow-950 fill-current" />
-                        </div>
-                      )}
-                      
-                      <div className={cn(
-                        "text-sm lg:text-base font-bold tracking-tight leading-tight line-clamp-1",
-                        item.isPriority ? "text-yellow-400" : "text-slate-100"
-                      )}>
-                        {item.entityName}
-                      </div>
-                      
-                      <div className="flex items-center justify-between pt-1 border-t border-slate-700/50 mt-1">
-                        <span className="text-[10px] lg:text-xs font-semibold text-slate-400 uppercase tracking-wider line-clamp-1">
-                          {item.state}
-                        </span>
-                        
-                        {item.formattedDate && (
-                          <div className={cn(
-                            "flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] lg:text-[11px] font-bold shadow-sm shrink-0",
-                            item.isOverdue 
-                              ? "bg-red-500/20 text-red-400 border border-red-500/30" 
-                              : "bg-slate-700/50 text-slate-300 border border-slate-600/50"
-                          )}>
-                            {item.isOverdue && <AlertCircle className="h-2.5 w-2.5 lg:h-3 lg:w-3" />}
-                            {item.formattedDate}
-                          </div>
+        {/* Body - Masonry Layout and Intelligent Zoom */}
+        <div 
+          className="relative w-full overflow-visible z-10"
+        >
+          <div 
+            ref={containerRef}
+            className="p-3 lg:p-4 w-full"
+            style={{ transformOrigin: "top center" }}
+          >
+            <div className={cn(
+              "columns-1 sm:columns-2 md:columns-3 xl:columns-4 2xl:columns-5 gap-3 lg:gap-4 w-full"
+            )}>
+              {userGroups.map((group) => (
+                <div 
+                  key={group.responsibleName} 
+                  className="flex flex-col bg-slate-900/60 rounded-[16px] lg:rounded-[20px] border border-slate-800/80 shadow-2xl overflow-hidden backdrop-blur-md break-inside-avoid mb-3 lg:mb-4"
+                >
+                  {/* User Header Compacto */}
+                  <div className="flex flex-row items-center justify-between bg-gradient-to-r from-indigo-900/40 to-transparent p-2 lg:p-3 border-b border-slate-800/80 relative z-10 shrink-0">
+                    <div className="absolute inset-0 bg-indigo-500/5 blur-xl rounded-full" />
+                    <div className="flex flex-row items-center gap-2 relative z-10">
+                      <div className="h-8 w-8 lg:h-10 lg:w-10 rounded-full border border-indigo-500/50 shadow-md bg-slate-800 overflow-hidden flex items-center justify-center shrink-0">
+                        {group.avatarUrl ? (
+                          <img src={group.avatarUrl} alt={group.responsibleName} className="h-full w-full object-cover" />
+                        ) : (
+                          <span className="text-sm lg:text-base font-black text-slate-500 uppercase">{group.responsibleName.charAt(0)}</span>
                         )}
                       </div>
+                      <h2 className="text-base lg:text-lg font-black text-white tracking-tight line-clamp-1 drop-shadow-md uppercase">
+                        {group.responsibleName.split(' ')[0]}
+                      </h2>
                     </div>
-                  ))}
+                    <span className="bg-slate-800 text-indigo-300 font-bold px-2 py-0.5 rounded text-[10px] lg:text-[11px] border border-indigo-500/30 shadow-sm whitespace-nowrap z-10 relative">
+                      {group.items.length} cards
+                    </span>
+                  </div>
+
+                  {/* Cards Dynamic Grid */}
+                  <div className="p-1.5 lg:p-2">
+                    {group.items.length === 0 && (
+                      <div className="flex flex-col items-center justify-center opacity-30 py-6 w-full">
+                        <Monitor className="h-8 w-8 text-slate-500 mb-1" />
+                        <span className="text-xs font-bold text-slate-400">Nenhum card</span>
+                      </div>
+                    )}
+                    <div className={cn("grid gap-1.5 lg:gap-2 auto-rows-max", getGridCols(group.items.length))}>
+                    {group.items.map((item) => (
+                      <div 
+                        key={item.id} 
+                        className={cn(
+                          "relative p-1.5 lg:p-2 rounded-lg transition-all flex flex-col justify-between min-h-[52px]",
+                          "bg-slate-800/50 border backdrop-blur-sm",
+                          item.isPriority 
+                            ? "border-yellow-500/50 shadow-[0_0_15px_rgba(234,179,8,0.15)] bg-yellow-950/20" 
+                            : "border-slate-700/50 hover:bg-slate-800",
+                          item.isOverdue && !item.isPriority 
+                            ? "border-red-500/40 bg-red-950/20 shadow-[0_0_15px_rgba(239,68,68,0.1)]" 
+                            : ""
+                        )}
+                      >
+                        {item.isPriority && (
+                          <div className="absolute -top-1 -right-1 h-3.5 w-3.5 bg-yellow-500 rounded-full flex items-center justify-center shadow-[0_0_10px_rgba(234,179,8,0.5)]">
+                            <Star className="h-2 w-2 text-yellow-950 fill-current" />
+                          </div>
+                        )}
+                        
+                        <div className={cn(
+                          "text-xs lg:text-sm font-bold tracking-tight leading-tight line-clamp-1 mb-1",
+                          item.isPriority ? "text-yellow-400" : "text-slate-100"
+                        )}>
+                          {item.entityName}
+                        </div>
+                        
+                        <div className="flex items-center justify-between mt-auto">
+                          <span className="text-[9px] lg:text-[10px] font-semibold text-slate-400 uppercase tracking-wider line-clamp-1">
+                            {item.state}
+                          </span>
+                          
+                          {item.formattedDate && (
+                            <div className={cn(
+                              "flex items-center gap-0.5 px-1 rounded text-[9px] font-bold shadow-sm shrink-0",
+                              item.isOverdue 
+                                ? "bg-red-500/20 text-red-400 border border-red-500/30" 
+                                : "bg-slate-700/50 text-slate-300 border border-slate-600/50"
+                            )}>
+                              {item.isOverdue && <AlertCircle className="h-2.5 w-2.5" />}
+                              {item.formattedDate}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              ))}
 
-            {userGroups.length === 0 && (
-              <div className="col-span-full flex flex-col items-center justify-center h-full opacity-40">
-                <Monitor className="h-24 w-24 lg:h-32 lg:w-32 text-slate-500 mb-6" />
-                <p className="text-3xl lg:text-5xl text-slate-500 font-black">Nenhuma pendência</p>
-              </div>
-            )}
+              {userGroups.length === 0 && (
+                <div className="col-span-full flex flex-col items-center justify-center h-full opacity-40 py-20">
+                  <Monitor className="h-20 w-20 text-slate-500 mb-4" />
+                  <p className="text-2xl text-slate-500 font-black">Nenhuma pendência</p>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>
