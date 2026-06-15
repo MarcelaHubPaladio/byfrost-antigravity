@@ -106,12 +106,12 @@ export default function Me() {
     try {
       const ext = file.name.split('.').pop() || 'jpg';
       const path = `avatars/${user.id}-${Date.now()}.${ext}`;
-      const { error: uploadError } = await supabase.storage.from("inventory").upload(path, file, { upsert: true });
+      const { error: uploadError } = await supabase.storage.from("avatars").upload(path, file, { upsert: true });
       if (uploadError) throw uploadError;
 
-      const { data: publicData } = supabase.storage.from("inventory").getPublicUrl(path);
+      const { data: publicData } = supabase.storage.from("avatars").getPublicUrl(path);
 
-      const { error: updateError } = await supabase.from("users_profile").update({ avatar_url: publicData.publicUrl }).eq("id", user.id);
+      const { error: updateError } = await supabase.from("users_profile").update({ avatar_url: publicData.publicUrl }).eq("user_id", user.id);
       if (updateError) throw updateError;
       
       qc.invalidateQueries({ queryKey: ["users_profile_me", user.id] });
