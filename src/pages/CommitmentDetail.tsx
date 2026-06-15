@@ -111,6 +111,7 @@ export default function CommitmentDetail() {
   const [createDeliverableOpen, setCreateDeliverableOpen] = useState(false);
   const [newDeliverableName, setNewDeliverableName] = useState("");
   const [selectedOfferingId, setSelectedOfferingId] = useState("");
+  const [newDeliverableQty, setNewDeliverableQty] = useState(1);
   const qc = useQueryClient();
 
   const offeringsQ = useQuery({
@@ -543,19 +544,23 @@ export default function CommitmentDetail() {
         showError("Preencha todos os campos.");
         return;
     }
+    const qty = Math.max(1, newDeliverableQty || 1);
     setSaving(true);
     try {
-      const { error } = await supabase.from("deliverables").insert({
+      const inserts = Array.from({ length: qty }).map(() => ({
         tenant_id: activeTenantId,
         commitment_id: commitmentId,
         entity_id: selectedOfferingId,
         name: newDeliverableName.trim(),
         status: "pending",
-      });
+      }));
+      
+      const { error } = await supabase.from("deliverables").insert(inserts);
       if (error) throw error;
-      showSuccess("Entregável adicionado com sucesso.");
+      showSuccess(`${qty} entregável(is) adicionado(s) com sucesso.`);
       setNewDeliverableName("");
       setSelectedOfferingId("");
+      setNewDeliverableQty(1);
       setCreateDeliverableOpen(false);
       deliverablesQ.refetch();
     } catch (err: any) {
@@ -1175,15 +1180,27 @@ export default function CommitmentDetail() {
                   </div>
                   <div className="space-y-2">
                     <Label className="text-xs font-bold uppercase tracking-wider text-slate-500">Nome do Entregável</Label>
-                    <input 
-                      className="flex h-10 w-full rounded-md border border-slate-300 bg-transparent px-3 py-2 text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      placeholder="Ex: Arte de Anúncio Especial"
-                      value={newDeliverableName}
-                      onChange={(e) => setNewDeliverableName(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") handleCreateManualDeliverable();
-                      }}
-                    />
+                    <div className="flex gap-2">
+                      <input 
+                        className="flex h-10 flex-1 rounded-md border border-slate-300 bg-transparent px-3 py-2 text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        placeholder="Ex: Arte de Anúncio Especial"
+                        value={newDeliverableName}
+                        onChange={(e) => setNewDeliverableName(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") handleCreateManualDeliverable();
+                        }}
+                      />
+                      <input 
+                        type="number"
+                        min="1"
+                        className="flex h-10 w-20 rounded-md border border-slate-300 bg-transparent px-3 py-2 text-sm text-center placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        value={newDeliverableQty}
+                        onChange={(e) => setNewDeliverableQty(Number(e.target.value))}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") handleCreateManualDeliverable();
+                        }}
+                      />
+                    </div>
                   </div>
                   <div className="flex justify-end gap-2 pt-2">
                     <Button variant="ghost" onClick={() => setCreateDeliverableOpen(false)}>Cancelar</Button>
