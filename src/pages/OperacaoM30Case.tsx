@@ -976,19 +976,54 @@ export default function OperacaoM30Case() {
         if (!activeTenantId || !id) return;
         setSaving(true);
         try {
+            // Auto-sincronizar contrato ativo
+            const { data: commitments } = await supabase
+                .from("commercial_commitments")
+                .select("id")
+                .eq("tenant_id", activeTenantId)
+                .eq("customer_entity_id", newEntityId)
+                .in("status", ["active", "pending"])
+                .order("created_at", { ascending: false })
+                .limit(1);
+            
+            const commitmentId = commitments?.[0]?.id || null;
+            let deliverableId = null;
+
+            if (commitmentId) {
+                // Auto-sincronizar entregável
+                const { data: deliverables } = await supabase
+                    .from("deliverables")
+                    .select("id")
+                    .eq("commitment_id", commitmentId)
+                    .eq("status", "pending")
+                    .limit(1);
+                if (deliverables && deliverables.length > 0) deliverableId = deliverables[0].id;
+            }
+
             const currentMeta = (caseQ.data?.meta_json as any) || {};
+            const nextMeta = { ...currentMeta, entity_id: newEntityId, customer_entity_name: entityName };
+            if (commitmentId) nextMeta.commitment_id = commitmentId;
+
+            const updateData: any = { 
+                customer_entity_id: newEntityId,
+                meta_json: nextMeta,
+            };
+            if (deliverableId) updateData.deliverable_id = deliverableId;
+
             const { error } = await supabase
                 .from("cases")
-                .update({ 
-                    customer_entity_id: newEntityId,
-                    meta_json: { ...currentMeta, entity_id: newEntityId, customer_entity_name: entityName },
-                })
+                .update(updateData)
                 .eq("id", id);
             
             if (error) throw error;
-            showSuccess("Cliente vinculado com sucesso.");
+            showSuccess("Cliente, contrato e entregável vinculados.");
             caseQ.refetch();
             entityQ.refetch();
+            if (commitmentId) {
+                commitmentQ.refetch();
+                allDeliverablesQ.refetch();
+                deliverableQ.refetch();
+            }
         } catch (e: any) {
             showError("Falha ao vincular cliente: " + e.message);
         } finally {
@@ -1450,28 +1485,47 @@ export default function OperacaoM30Case() {
 
                         <div className="grid gap-6 p-6 sm:p-8 lg:grid-cols-[1fr_400px]">
                             <div className="space-y-6">
-                                {deliverableQ.data && (
+                                {(commitmentQ.data || deliverableQ.data) && (
                                     <div className="rounded-[22px] border border-blue-200 bg-blue-50/50 p-4">
-                                        <div className="flex items-start justify-between">
-                                            <div className="flex items-start gap-3">
+                                        <div className="flex flex-col sm:flex-row items-start justify-between gap-4">
+                                            <div className="flex items-start gap-3 w-full">
                                                 <div className="rounded-xl bg-blue-100 p-2 text-blue-600">
                                                     <PackageCheck className="h-5 w-5" />
                                                 </div>
-                                                <div>
-                                                    <div className="text-sm font-bold text-blue-900">
-                                                        Entregável: {deliverableQ.data.name || "Sem Nome"}
+                                                <div className="flex-1 w-full">
+                                                    <div className="text-sm font-bold text-blue-900 mb-1">
+                                                        Entregável Principal
                                                     </div>
-                                                    <div className="flex items-center gap-2 mt-1">
-                                                        <Badge variant="outline" className="text-[10px] bg-white text-blue-700 border-blue-200">
-                                                            Status: {deliverableQ.data.status || 'pending'}
-                                                        </Badge>
-                                                    </div>
+                                                    <Select 
+                                                        value={caseQ.data?.deliverable_id || "__none__"} 
+                                                        onValueChange={async (val) => {
+                                                            setSaving(true);
+                                                            await supabase.from("cases").update({ deliverable_id: val === "__none__" ? null : val }).eq("id", id!);
+                                                            caseQ.refetch();
+                                                            deliverableQ.refetch();
+                                                            setSaving(false);
+                                                        }}
+                                                    >
+                                                        <SelectTrigger className="h-10 w-full rounded-xl bg-white border-blue-200 shadow-sm text-xs truncate">
+                                                            <SelectValue placeholder="Selecionar entregável..." />
+                                                        </SelectTrigger>
+                                                        <SelectContent className="rounded-2xl max-w-[400px]">
+                                                            <SelectItem value="__none__" className="rounded-xl italic text-slate-500">
+                                                                (Nenhum entregável)
+                                                            </SelectItem>
+                                                            {(allDeliverablesQ.data || []).map((d: any) => (
+                                                                <SelectItem key={d.id} value={d.id} className="rounded-xl">
+                                                                    {d.name} ({d.status})
+                                                                </SelectItem>
+                                                            ))}
+                                                        </SelectContent>
+                                                    </Select>
                                                 </div>
                                             </div>
-                                            {deliverableQ.data.commitment_id && profileQ.data?.role === 'admin' && (
+                                            {(deliverableQ.data?.commitment_id || commitmentQ.data?.id) && profileQ.data?.role === 'admin' && (
                                                 <Link 
-                                                    to={`/app/commitments/${deliverableQ.data.commitment_id}`}
-                                                    className="flex items-center gap-2 text-xs font-semibold text-blue-700 hover:text-blue-800 transition"
+                                                    to={`/app/commitments/${deliverableQ.data?.commitment_id || commitmentQ.data?.id}`}
+                                                    className="flex items-center gap-2 text-xs font-semibold text-blue-700 hover:text-blue-800 transition whitespace-nowrap sm:mt-1"
                                                 >
                                                     <FileText className="h-4 w-4" />
                                                     Ver Contrato
@@ -1726,6 +1780,59 @@ export default function OperacaoM30Case() {
                             </div>
 
                             <div className="space-y-4">
+                                <div className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm mb-4">
+                                    <div className="flex items-center justify-between mb-4">
+                                        <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                                            <Building2 className="h-4 w-4" /> Cliente Vinculado
+                                        </h3>
+                                    </div>
+                                    <Popover open={entityComboOpen} onOpenChange={setEntityComboOpen}>
+                                        <PopoverTrigger asChild>
+                                            <Button
+                                                variant="outline"
+                                                role="combobox"
+                                                aria-expanded={entityComboOpen}
+                                                className="h-10 w-full justify-between rounded-xl bg-slate-50 border-slate-200 px-3 text-xs font-bold text-slate-700 shadow-sm"
+                                            >
+                                                <span className="truncate">
+                                                    {(caseQ.data?.meta_json as any)?.customer_entity_name || 
+                                                     (caseQ.data?.customer_entity_id ? "Cliente Vinculado" : "Escolher cliente...")}
+                                                </span>
+                                                <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                            </Button>
+                                        </PopoverTrigger>
+                                        <PopoverContent className="w-[300px] p-0 rounded-2xl shadow-xl" align="start">
+                                            <Command shouldFilter={true}>
+                                                <CommandInput 
+                                                    placeholder="Buscar cliente..." 
+                                                    value={entitySearch}
+                                                    onValueChange={setEntitySearch}
+                                                />
+                                                <CommandList>
+                                                    {allEntitiesQ.isLoading && (
+                                                        <div className="flex items-center justify-center p-4">
+                                                            <Loader2 className="h-4 w-4 animate-spin text-slate-400" />
+                                                        </div>
+                                                    )}
+                                                    <CommandEmpty>Nenhum cliente encontrado.</CommandEmpty>
+                                                    <CommandGroup>
+                                                        {(allEntitiesQ.data ?? []).map((e) => (
+                                                            <CommandItem
+                                                                key={e.id}
+                                                                value={e.display_name}
+                                                                onSelect={() => linkEntity(e.id, e.display_name)}
+                                                                className="rounded-lg"
+                                                            >
+                                                                {e.display_name}
+                                                            </CommandItem>
+                                                        ))}
+                                                    </CommandGroup>
+                                                </CommandList>
+                                            </Command>
+                                        </PopoverContent>
+                                    </Popover>
+                                </div>
+
                                 <div className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
                                     <div className="flex items-center justify-between mb-4">
                                         <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
@@ -1746,54 +1853,6 @@ export default function OperacaoM30Case() {
                                                     Este card não possui DNA de contrato vinculado.
                                                 </p>
                                             </div>
-
-                                            {(!caseQ.data?.customer_entity_id && !(caseQ.data?.meta_json as any)?.entity_id) && (
-                                                <div className="space-y-2">
-                                                    <Label className="text-[10px] font-bold text-slate-500 uppercase">Vincular a um Cliente</Label>
-                                                    <Popover open={entityComboOpen} onOpenChange={setEntityComboOpen}>
-                                                        <PopoverTrigger asChild>
-                                                            <Button
-                                                                variant="outline"
-                                                                role="combobox"
-                                                                aria-expanded={entityComboOpen}
-                                                                className="h-10 w-full justify-between rounded-xl bg-white px-3 text-xs font-normal"
-                                                            >
-                                                                <span>Escolher cliente...</span>
-                                                                <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                                                            </Button>
-                                                        </PopoverTrigger>
-                                                        <PopoverContent className="w-[300px] p-0 rounded-2xl shadow-xl" align="start">
-                                                            <Command shouldFilter={true}>
-                                                                <CommandInput 
-                                                                    placeholder="Buscar cliente..." 
-                                                                    value={entitySearch}
-                                                                    onValueChange={setEntitySearch}
-                                                                />
-                                                                <CommandList>
-                                                                    {allEntitiesQ.isLoading && (
-                                                                        <div className="flex items-center justify-center p-4">
-                                                                            <Loader2 className="h-4 w-4 animate-spin text-slate-400" />
-                                                                        </div>
-                                                                    )}
-                                                                    <CommandEmpty>Nenhum cliente encontrado.</CommandEmpty>
-                                                                    <CommandGroup>
-                                                                        {(allEntitiesQ.data ?? []).map((e) => (
-                                                                            <CommandItem
-                                                                                key={e.id}
-                                                                                value={e.display_name}
-                                                                                onSelect={() => linkEntity(e.id, e.display_name)}
-                                                                                className="rounded-lg"
-                                                                            >
-                                                                                {e.display_name}
-                                                                            </CommandItem>
-                                                                        ))}
-                                                                    </CommandGroup>
-                                                                </CommandList>
-                                                            </Command>
-                                                        </PopoverContent>
-                                                    </Popover>
-                                                </div>
-                                            )}
 
                                             <Button 
                                                 variant="outline" 
