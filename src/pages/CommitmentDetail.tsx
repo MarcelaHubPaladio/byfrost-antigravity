@@ -110,7 +110,25 @@ export default function CommitmentDetail() {
 
   const [createDeliverableOpen, setCreateDeliverableOpen] = useState(false);
   const [newDeliverableName, setNewDeliverableName] = useState("");
+  const [selectedOfferingId, setSelectedOfferingId] = useState("");
   const qc = useQueryClient();
+
+  const offeringsQ = useQuery({
+    queryKey: ["tenant_offerings", activeTenantId],
+    enabled: Boolean(activeTenantId),
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("core_entities")
+        .select("id, display_name")
+        .eq("tenant_id", activeTenantId!)
+        .eq("entity_type", "offering")
+        .is("deleted_at", null)
+        .order("display_name", { ascending: true });
+      if (error) throw error;
+      return data ?? [];
+    },
+    staleTime: 60_000,
+  });
 
   const refreshAll = () => {
     qc.invalidateQueries({ queryKey: ["commitment", activeTenantId, commitmentId] });
@@ -521,20 +539,23 @@ export default function CommitmentDetail() {
   };
 
   const handleCreateManualDeliverable = async () => {
-    if (!activeTenantId || !commitmentId || !newDeliverableName.trim()) return;
+    if (!activeTenantId || !commitmentId || !newDeliverableName.trim() || !selectedOfferingId) {
+        showError("Preencha todos os campos.");
+        return;
+    }
     setSaving(true);
     try {
       const { error } = await supabase.from("deliverables").insert({
         tenant_id: activeTenantId,
         commitment_id: commitmentId,
-        entity_id: commitmentQ.data?.customer_entity_id,
+        entity_id: selectedOfferingId,
         name: newDeliverableName.trim(),
         status: "pending",
-        schedule_type: "manual",
       });
       if (error) throw error;
       showSuccess("Entregável adicionado com sucesso.");
       setNewDeliverableName("");
+      setSelectedOfferingId("");
       setCreateDeliverableOpen(false);
       deliverablesQ.refetch();
     } catch (err: any) {
@@ -1140,6 +1161,19 @@ export default function CommitmentDetail() {
                 </DialogHeader>
                 <div className="space-y-4 py-4">
                   <div className="space-y-2">
+                    <Label className="text-xs font-bold uppercase tracking-wider text-slate-500">Template / Serviço</Label>
+                    <Select value={selectedOfferingId} onValueChange={setSelectedOfferingId}>
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="Selecione um serviço..." />
+                      </SelectTrigger>
+                      <SelectContent className="max-h-[300px]">
+                        {(offeringsQ.data ?? []).map(o => (
+                          <SelectItem key={o.id} value={o.id}>{o.display_name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
                     <Label className="text-xs font-bold uppercase tracking-wider text-slate-500">Nome do Entregável</Label>
                     <input 
                       className="flex h-10 w-full rounded-md border border-slate-300 bg-transparent px-3 py-2 text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
@@ -1156,7 +1190,7 @@ export default function CommitmentDetail() {
                     <Button 
                       className="bg-blue-600 hover:bg-blue-700" 
                       onClick={handleCreateManualDeliverable}
-                      disabled={saving || !newDeliverableName.trim()}
+                      disabled={saving || !newDeliverableName.trim() || !selectedOfferingId}
                     >
                       {saving ? "Salvando..." : "Adicionar"}
                     </Button>
