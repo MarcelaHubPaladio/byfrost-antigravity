@@ -219,13 +219,18 @@ export default function OperacaoM30Postits() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("core_entities")
-        .select("id, display_name")
+        .select("id, display_name, metadata")
         .eq("tenant_id", activeTenantId!)
         .in("id", caseEntityIds)
         .is("deleted_at", null);
       if (error) throw error;
-      const m = new Map<string, string>();
-      for (const d of data ?? []) m.set(d.id, d.display_name);
+      const m = new Map<string, { display_name: string, label?: string }>();
+      for (const d of data ?? []) {
+        m.set(d.id, {
+          display_name: d.display_name,
+          label: (d.metadata as any)?.label
+        });
+      }
       return m;
     },
   });
@@ -248,8 +253,16 @@ export default function OperacaoM30Postits() {
       const avatarUrl = c.users_profile?.avatar_url || null;
 
       const eid = c.customer_entity_id || (c.meta_json as any)?.entity_id || c.customer_id;
-      const metaName = (c.meta_json as any)?.customer_entity_name || (c.meta_json as any)?.entity_name;
-      const entityName = metaName || (eid ? caseEntitiesQ.data?.get(eid) : null) || "Sem Cliente";
+      let finalEntityName = "Sem Cliente";
+      if (eid && caseEntitiesQ.data?.has(eid)) {
+          const entityData = caseEntitiesQ.data.get(eid)!;
+          finalEntityName = entityData.label 
+              ? `${entityData.display_name} - ${entityData.label}` 
+              : entityData.display_name;
+      } else {
+          const metaName = (c.meta_json as any)?.customer_entity_name || (c.meta_json as any)?.entity_name;
+          if (metaName) finalEntityName = metaName;
+      }
 
       if (!respMap.has(respId)) {
         respMap.set(respId, {
@@ -265,10 +278,13 @@ export default function OperacaoM30Postits() {
       const isOverdue = d && isValid(d) ? isBefore(startOfDay(d), todayStart) : false;
       const isPriority = Boolean((c.meta_json as any)?.priority || (c.meta_json as any)?.is_priority);
 
+      const fullTitle = c.title || "Sem título";
+      const shortTitle = fullTitle.includes("-") ? fullTitle.split("-").pop()?.trim() || fullTitle : fullTitle;
+
       group.items.push({
         id: c.id,
-        title: c.title || "Sem título",
-        entityName,
+        title: shortTitle,
+        entityName: finalEntityName,
         state: formatStateLabel(c.state),
         dateObj: d && isValid(d) ? d : null,
         formattedDate: d && isValid(d) ? format(d, "dd/MM", { locale: ptBR }) : "",
