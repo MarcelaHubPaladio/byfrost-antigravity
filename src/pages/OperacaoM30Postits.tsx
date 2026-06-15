@@ -1,14 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { AppShell } from "@/components/AppShell";
 import { RequireAuth } from "@/components/RequireAuth";
 import { useTenant } from "@/providers/TenantProvider";
 import { supabase } from "@/lib/supabase";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, LayoutGrid, List } from "lucide-react";
+import { ArrowLeft, LayoutGrid, List, Monitor } from "lucide-react";
 import { Link } from "react-router-dom";
-import { format, isValid } from "date-fns";
+import { format, isValid, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
 type CaseRow = {
@@ -24,10 +23,27 @@ type CaseRow = {
   users_profile?: { display_name: string | null; email: string | null } | null;
 };
 
+// Types for grouping
+type ResponsibleGroup = {
+  responsibleName: string;
+  items: Array<{
+    id: string;
+    title: string;
+    entityName: string;
+  }>;
+};
+
+type DateGroup = {
+  dateKey: string;
+  dateObj: Date | null;
+  formattedDate: string;
+  responsibles: Record<string, ResponsibleGroup>;
+};
+
 export default function OperacaoM30Postits() {
   const { activeTenantId } = useTenant();
   const qc = useQueryClient();
-  const [layout, setLayout] = useState<"vertical" | "horizontal">("horizontal");
+  const [layout, setLayout] = useState<"horizontal" | "vertical">("horizontal");
 
   const journeyQ = useQuery({
     queryKey: ["tenant_journeys_enabled", activeTenantId],
@@ -74,7 +90,7 @@ export default function OperacaoM30Postits() {
   useEffect(() => {
     if (!activeTenantId) return;
     const channel = supabase
-      .channel("m30-postits")
+      .channel("m30-postits-tv")
       .on(
         "postgres_changes",
         {
@@ -124,188 +140,197 @@ export default function OperacaoM30Postits() {
   const postItGroups = useMemo(() => {
     if (!casesQ.data) return [];
 
-    const map = new Map<
-      string,
-      { responsibleName: string; entityName: string; items: CaseRow[] }
-    >();
+    const dateMap = new Map<string, DateGroup>();
 
     for (const c of casesQ.data) {
+      // Filtrar concluídos (não listam)
       const isFinal = (s: string) => {
         const up = s.toUpperCase();
         return up.includes("CONCLU") || up.includes("FINAL") || up.includes("ENTREG");
       };
+      if (isFinal(c.state)) continue;
 
+      // Definir a data do caso
+      const rawDate = (c.meta_json as any)?.due_at;
+      const d = rawDate ? new Date(rawDate) : null;
+      
+      let dateKey = "SEM DATA";
+      let formattedDate = "SEM DATA";
+      
+      if (d && isValid(d)) {
+        dateKey = format(d, "yyyy-MM-dd");
+        formattedDate = `GRAV. ${format(d, "dd/MM", { locale: ptBR })}`;
+      }
+
+      // Definir entidade e responsável
       const eid = c.customer_entity_id || (c.meta_json as any)?.entity_id || c.customer_id;
-      const metaName =
-        (c.meta_json as any)?.customer_entity_name || (c.meta_json as any)?.entity_name;
+      const metaName = (c.meta_json as any)?.customer_entity_name || (c.meta_json as any)?.entity_name;
       const entityName = metaName || (eid ? caseEntitiesQ.data?.get(eid) : null) || "Sem Cliente";
 
       const respId = c.assigned_user_id || "unassigned";
-      const respName =
-        c.users_profile?.display_name || c.users_profile?.email || "Sem Responsável";
+      const respName = c.users_profile?.display_name || c.users_profile?.email || "Sem Responsável";
+      const firstName = respName.split(" ")[0].toUpperCase();
 
-      const key = `${respId}::${eid}`;
-
-      if (!map.has(key)) {
-        map.set(key, { responsibleName: respName, entityName, items: [] });
+      // Agrupar no Map
+      if (!dateMap.has(dateKey)) {
+        dateMap.set(dateKey, {
+          dateKey,
+          dateObj: d && isValid(d) ? d : null,
+          formattedDate,
+          responsibles: {},
+        });
       }
 
-      map.get(key)!.items.push(c);
+      const dateGroup = dateMap.get(dateKey)!;
+
+      if (!dateGroup.responsibles[respId]) {
+        dateGroup.responsibles[respId] = {
+          responsibleName: firstName,
+          items: [],
+        };
+      }
+
+      dateGroup.responsibles[respId].items.push({
+        id: c.id,
+        title: c.title || "Sem título",
+        entityName,
+      });
     }
 
-    // Sort items inside groups by date
-    const groups = Array.from(map.values()).map((g) => {
-      const sortedItems = [...g.items].sort((a, b) => {
-        const dateA = new Date((a.meta_json as any)?.due_at || a.updated_at).getTime();
-        const dateB = new Date((b.meta_json as any)?.due_at || b.updated_at).getTime();
-        return dateA - dateB;
-      });
-      return { ...g, items: sortedItems };
+    // Transformar em array e ordenar por data
+    const groupsArray = Array.from(dateMap.values());
+    groupsArray.sort((a, b) => {
+      if (!a.dateObj) return 1;
+      if (!b.dateObj) return -1;
+      return a.dateObj.getTime() - b.dateObj.getTime();
     });
 
-    // Sort groups by Responsible Name -> Entity Name
-    return groups.sort((a, b) => {
-      const cmp = a.responsibleName.localeCompare(b.responsibleName);
-      if (cmp !== 0) return cmp;
-      return a.entityName.localeCompare(b.entityName);
-    });
+    return groupsArray;
   }, [casesQ.data, caseEntitiesQ.data]);
 
   return (
     <RequireAuth>
-      <AppShell>
-        <div className="rounded-[28px] border border-slate-200 bg-slate-50/50 p-4 shadow-sm backdrop-blur md:p-6 min-h-[80vh]">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-8">
-            <div className="flex items-center gap-3">
-              <Button asChild variant="outline" size="icon" className="h-10 w-10 rounded-2xl">
-                <Link to="/app/operacao-m30">
-                  <ArrowLeft className="h-4 w-4" />
-                </Link>
-              </Button>
-              <div>
-                <h2 className="text-xl font-bold tracking-tight text-slate-900">
-                  Quadro de Post-its (M30)
-                </h2>
-                <p className="text-sm text-slate-500">Agrupamento de tarefas por Responsável + Cliente</p>
-              </div>
-            </div>
-
-            <div className="flex bg-white p-1 rounded-2xl border border-slate-200 shadow-sm self-start sm:self-auto">
-              <button
-                onClick={() => setLayout("horizontal")}
-                className={cn(
-                  "flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-xl transition-all",
-                  layout === "horizontal"
-                    ? "bg-slate-100 text-slate-900"
-                    : "text-slate-500 hover:text-slate-700"
-                )}
-              >
-                <LayoutGrid className="h-4 w-4" />
-                Lado a lado
-              </button>
-              <button
-                onClick={() => setLayout("vertical")}
-                className={cn(
-                  "flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-xl transition-all",
-                  layout === "vertical"
-                    ? "bg-slate-100 text-slate-900"
-                    : "text-slate-500 hover:text-slate-700"
-                )}
-              >
-                <List className="h-4 w-4" />
-                Lista
-              </button>
+      {/* Removido o AppShell para ocupar 100% da tela (estilo Dashboard/TV) */}
+      <div className="min-h-screen bg-slate-100 p-4 sm:p-8 font-sans overflow-y-auto">
+        
+        {/* Cabeçalho minimalista que pode ser ignorado na TV, mas útil para navegação */}
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-8 pb-4 border-b border-slate-200/60">
+          <div className="flex items-center gap-4">
+            <Button asChild variant="ghost" size="icon" className="h-10 w-10 rounded-full hover:bg-slate-200">
+              <Link to="/app/operacao-m30">
+                <ArrowLeft className="h-5 w-5 text-slate-600" />
+              </Link>
+            </Button>
+            <div>
+              <h1 className="text-2xl font-black tracking-tight text-slate-800 flex items-center gap-2">
+                <Monitor className="h-6 w-6 text-slate-500" />
+                Painel de Gravações (M30)
+              </h1>
+              <p className="text-sm text-slate-500 font-medium">Atualização em tempo real</p>
             </div>
           </div>
 
-          <div
-            className={cn(
-              "gap-6",
-              layout === "horizontal"
-                ? "grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 items-start"
-                : "flex flex-col max-w-4xl mx-auto"
-            )}
-          >
-            {postItGroups.map((group, i) => {
-              // Alternate slight rotations for realistic feel
-              const rotations = ["-rotate-1", "rotate-1", "-rotate-2", "rotate-2", "rotate-0"];
-              const rot = layout === "horizontal" ? rotations[i % rotations.length] : "rotate-0";
-
-              return (
-                <div
-                  key={`${group.responsibleName}-${group.entityName}`}
-                  className={cn(
-                    "flex flex-col rounded-sm bg-yellow-100/90 shadow-md border border-yellow-200/50 p-5 transition-transform hover:scale-[1.01] hover:shadow-lg hover:z-10",
-                    rot
-                  )}
-                  style={{
-                    boxShadow: "2px 4px 10px rgba(0,0,0,0.08), inset 0 0 40px rgba(255,255,200,0.5)",
-                  }}
-                >
-                  <div className="border-b border-yellow-200/60 pb-3 mb-4">
-                    <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest line-clamp-2">
-                      {group.responsibleName} <span className="text-yellow-600 mx-1">/</span>{" "}
-                      {group.entityName}
-                    </h3>
-                  </div>
-
-                  <div className="flex flex-col gap-3">
-                    {group.items.map((c) => {
-                      const isFinal = (s: string) => {
-                        const up = s.toUpperCase();
-                        return up.includes("CONCLU") || up.includes("FINAL") || up.includes("ENTREG");
-                      };
-                      const concluded = isFinal(c.state);
-                      
-                      const rawDate = (c.meta_json as any)?.due_at;
-                      const d = rawDate ? new Date(rawDate) : null;
-                      const dateStr = d && isValid(d) ? format(d, "dd/MM", { locale: ptBR }) : "";
-
-                      return (
-                        <div
-                          key={c.id}
-                          className={cn(
-                            "group flex flex-col gap-0.5",
-                            concluded ? "opacity-60" : "opacity-100"
-                          )}
-                        >
-                          <div className="flex items-start justify-between gap-2">
-                            <span
-                              className={cn(
-                                "text-[13px] font-bold text-slate-800 leading-tight",
-                                concluded && "line-through decoration-red-500/50 decoration-2"
-                              )}
-                              style={{ fontFamily: "'Inter', sans-serif" }} // You can change to a handwritten font if added to the project
-                            >
-                              {c.title || "Sem título"}
-                            </span>
-                            {dateStr && (
-                              <span className="text-[10px] font-bold text-slate-600 bg-yellow-200/50 px-1.5 py-0.5 rounded-sm shrink-0 whitespace-nowrap">
-                                {dateStr}
-                              </span>
-                            )}
-                          </div>
-                          {concluded && (
-                            <span className="text-[9px] font-bold text-red-500 uppercase tracking-wider">
-                              Concluído
-                            </span>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              );
-            })}
-
-            {postItGroups.length === 0 && (
-              <div className="col-span-full py-20 text-center">
-                <p className="text-slate-500">Nenhum caso encontrado para a Operação M30.</p>
-              </div>
-            )}
+          <div className="flex bg-white p-1.5 rounded-xl border border-slate-200 shadow-sm self-start sm:self-auto">
+            <button
+              onClick={() => setLayout("horizontal")}
+              className={cn(
+                "flex items-center gap-2 px-4 py-2 text-sm font-bold rounded-lg transition-all",
+                layout === "horizontal"
+                  ? "bg-slate-800 text-white shadow-md"
+                  : "text-slate-500 hover:text-slate-800 hover:bg-slate-100"
+              )}
+            >
+              <LayoutGrid className="h-4 w-4" />
+              Parede (Horizontal)
+            </button>
+            <button
+              onClick={() => setLayout("vertical")}
+              className={cn(
+                "flex items-center gap-2 px-4 py-2 text-sm font-bold rounded-lg transition-all",
+                layout === "vertical"
+                  ? "bg-slate-800 text-white shadow-md"
+                  : "text-slate-500 hover:text-slate-800 hover:bg-slate-100"
+              )}
+            >
+              <List className="h-4 w-4" />
+              Lista (Vertical)
+            </button>
           </div>
         </div>
-      </AppShell>
+
+        {/* Quadro de Post-its */}
+        <div
+          className={cn(
+            "gap-8",
+            layout === "horizontal"
+              ? "flex flex-wrap items-start justify-start"
+              : "flex flex-col max-w-2xl mx-auto"
+          )}
+        >
+          {postItGroups.map((group, i) => {
+            // Pequenas rotações para dar aspecto físico
+            const rotations = ["-rotate-2", "rotate-1", "-rotate-1", "rotate-2", "rotate-0"];
+            const rot = layout === "horizontal" ? rotations[i % rotations.length] : "rotate-0";
+
+            return (
+              <div
+                key={group.dateKey}
+                className={cn(
+                  "flex flex-col rounded-sm bg-[#FDFFB6] shadow-md border border-[#f0f2a1] p-6 transition-transform hover:scale-[1.02] hover:shadow-xl hover:z-10",
+                  layout === "horizontal" ? "w-[300px]" : "w-full",
+                  rot
+                )}
+                style={{
+                  boxShadow: "3px 5px 15px rgba(0,0,0,0.08), inset 0 0 50px rgba(255,255,180,0.5)",
+                }}
+              >
+                {/* Título do Post-it (DATA) */}
+                <div className="border-b-2 border-red-500/20 pb-2 mb-4">
+                  <h3 
+                    className="text-xl font-black text-red-700 uppercase tracking-widest"
+                    style={{ fontFamily: "'Caveat', 'Comic Sans MS', cursive, sans-serif" }} // Fonte que lembra escrita manual se disponível
+                  >
+                    {group.formattedDate}
+                  </h3>
+                </div>
+
+                {/* Agrupamentos por Responsável */}
+                <div className="flex flex-col gap-5">
+                  {Object.values(group.responsibles).map((resp) => (
+                    <div key={resp.responsibleName} className="flex flex-col gap-1">
+                      {/* Nome do Responsável - Qtd */}
+                      <div className="flex items-baseline gap-2">
+                        <span 
+                          className="text-base font-bold text-slate-800 uppercase"
+                          style={{ fontFamily: "'Caveat', 'Comic Sans MS', cursive, sans-serif" }}
+                        >
+                          {resp.responsibleName} - {resp.items.length}
+                        </span>
+                      </div>
+
+                      {/* Lista de itens deste responsável */}
+                      <div className="pl-2 border-l-2 border-slate-800/10 flex flex-col gap-1 mt-1">
+                        {resp.items.map((item) => (
+                          <div key={item.id} className="text-sm text-slate-700 leading-tight">
+                            <span className="font-bold">{item.entityName}</span>
+                            {item.title && <span className="opacity-75"> - {item.title}</span>}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+
+          {postItGroups.length === 0 && (
+            <div className="w-full py-20 text-center">
+              <p className="text-xl text-slate-400 font-bold">Nenhuma gravação ou entrega pendente.</p>
+            </div>
+          )}
+        </div>
+      </div>
     </RequireAuth>
   );
 }
