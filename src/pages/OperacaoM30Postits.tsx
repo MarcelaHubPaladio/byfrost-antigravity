@@ -64,8 +64,12 @@ const getGridCols = (len: number) => {
 };
 
 export default function OperacaoM30Postits() {
-  const { activeTenantId } = useTenant();
+  const { activeTenantId, activeTenant } = useTenant();
   const qc = useQueryClient();
+
+  const primaryColorHex = useMemo(() => {
+    return (activeTenant?.branding_json?.palette?.primary?.hex as string | undefined) || "#4f46e5"; // fallback indigo-600
+  }, [activeTenant]);
 
   const [isRefreshing, setIsRefreshing] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -256,11 +260,14 @@ export default function OperacaoM30Postits() {
 
   return (
     <RequireAuth>
-      {/* 100% viewport, no scrolls ever on the window */}
-      <div className="w-screen h-screen bg-slate-950 flex flex-col overflow-hidden font-sans text-slate-100 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+      {/* fixed inset-0 guarantees it locks to the viewport and never scrolls natively */}
+      <div className="fixed inset-0 bg-slate-950 flex flex-col overflow-hidden font-sans text-slate-100 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
         
         {/* Glowing background orb for aesthetics */}
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[300px] bg-indigo-600/20 blur-[120px] rounded-full pointer-events-none" />
+        <div 
+          className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[300px] blur-[120px] rounded-full pointer-events-none" 
+          style={{ backgroundColor: primaryColorHex, opacity: 0.2 }}
+        />
 
         {/* Minimal Header */}
         <div className="relative flex items-center justify-between py-2 px-4 lg:px-6 border-b border-slate-800/60 bg-slate-900/50 backdrop-blur-xl shrink-0 z-10">
@@ -271,14 +278,15 @@ export default function OperacaoM30Postits() {
               </Link>
             </Button>
             <h1 className="text-lg lg:text-2xl font-black tracking-tight text-white flex items-center gap-2">
-              <Monitor className="h-5 w-5 lg:h-6 lg:w-6 text-indigo-400" />
+              <Monitor className="h-5 w-5 lg:h-6 lg:w-6" style={{ color: primaryColorHex }} />
               Painel M30
             </h1>
           </div>
           <Button 
             onClick={handleRefresh} 
             size="sm"
-            className="h-8 rounded-full bg-indigo-600/80 hover:bg-indigo-500 text-white font-bold text-xs lg:text-sm px-4 shadow-sm"
+            className="h-8 rounded-full text-white font-bold text-xs lg:text-sm px-4 shadow-sm"
+            style={{ backgroundColor: primaryColorHex, opacity: 0.9 }}
           >
             <RefreshCw className={cn("h-3 w-3 lg:h-4 lg:w-4 mr-1.5", isRefreshing && "animate-spin")} />
             Atualizar
@@ -303,10 +311,16 @@ export default function OperacaoM30Postits() {
                   className="flex flex-col bg-slate-900/60 rounded-[16px] lg:rounded-[20px] border border-slate-800/80 shadow-2xl overflow-hidden backdrop-blur-md break-inside-avoid mb-3 lg:mb-4"
                 >
                   {/* User Header Compacto */}
-                  <div className="flex flex-row items-center justify-between bg-gradient-to-r from-indigo-900/40 to-transparent p-2 lg:p-3 border-b border-slate-800/80 relative z-10 shrink-0">
-                    <div className="absolute inset-0 bg-indigo-500/5 blur-xl rounded-full" />
+                  <div 
+                    className="flex flex-row items-center justify-between p-2 lg:p-3 border-b border-slate-800/80 relative z-10 shrink-0"
+                    style={{ background: `linear-gradient(to right, ${primaryColorHex}40, transparent)` }}
+                  >
+                    <div className="absolute inset-0 blur-xl rounded-full" style={{ backgroundColor: `${primaryColorHex}0D` }} />
                     <div className="flex flex-row items-center gap-2 relative z-10">
-                      <div className="h-8 w-8 lg:h-10 lg:w-10 rounded-full border border-indigo-500/50 shadow-md bg-slate-800 overflow-hidden flex items-center justify-center shrink-0">
+                      <div 
+                        className="h-8 w-8 lg:h-10 lg:w-10 rounded-full border shadow-md bg-slate-800 overflow-hidden flex items-center justify-center shrink-0"
+                        style={{ borderColor: `${primaryColorHex}80` }}
+                      >
                         {group.avatarUrl ? (
                           <img src={group.avatarUrl} alt={group.responsibleName} className="h-full w-full object-cover" />
                         ) : (
@@ -317,7 +331,10 @@ export default function OperacaoM30Postits() {
                         {group.responsibleName.split(' ')[0]}
                       </h2>
                     </div>
-                    <span className="bg-slate-800 text-indigo-300 font-bold px-2 py-0.5 rounded text-[10px] lg:text-[11px] border border-indigo-500/30 shadow-sm whitespace-nowrap z-10 relative">
+                    <span 
+                      className="bg-slate-800 font-bold px-2 py-0.5 rounded text-[10px] lg:text-[11px] border shadow-sm whitespace-nowrap z-10 relative"
+                      style={{ color: primaryColorHex, borderColor: `${primaryColorHex}4D` }}
+                    >
                       {group.items.length} cards
                     </span>
                   </div>
