@@ -5,9 +5,9 @@ import { useTenant } from "@/providers/TenantProvider";
 import { supabase } from "@/lib/supabase";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Monitor, RefreshCw, AlertCircle, Star } from "lucide-react";
+import { ArrowLeft, Monitor, RefreshCw, AlertCircle, Star, Trophy } from "lucide-react";
 import { Link } from "react-router-dom";
-import { format, isValid, isBefore, startOfDay } from "date-fns";
+import { format, isValid, isBefore, startOfDay, subDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
 type CaseRow = {
@@ -38,6 +38,13 @@ type UserGroup = {
   responsibleName: string;
   avatarUrl: string | null;
   items: ItemData[];
+};
+
+type RankingUser = {
+  id: string;
+  name: string;
+  avatarUrl: string | null;
+  score: number;
 };
 
 const STATE_LABELS: Record<string, string> = {
@@ -113,18 +120,69 @@ export default function OperacaoM30Postits() {
     },
   });
 
+  // Ranking Query
+  const rankingQ = useQuery({
+    queryKey: ["m30_ranking_events", activeTenantId],
+    enabled: Boolean(activeTenantId),
+    staleTime: 15_000,
+    queryFn: async () => {
+      // Busca eventos dos últimos 30 dias para não sobrecarregar
+      const thirtyDaysAgo = subDays(new Date(), 30).toISOString();
+      
+      const { data: events, error: evError } = await supabase
+        .from("timeline_events")
+        .select("actor_id")
+        .eq("tenant_id", activeTenantId!)
+        .gte("created_at", thirtyDaysAgo)
+        .not("actor_id", "is", null);
+
+      if (evError) throw evError;
+
+      const scoreMap = new Map<string, number>();
+      for (const ev of events || []) {
+        if (ev.actor_id) {
+          scoreMap.set(ev.actor_id, (scoreMap.get(ev.actor_id) || 0) + 1);
+        }
+      }
+
+      if (scoreMap.size === 0) return [];
+
+      const { data: users, error: usrError } = await supabase
+        .from("users_profile")
+        .select("user_id, display_name, email, avatar_url")
+        .eq("tenant_id", activeTenantId!)
+        .in("user_id", Array.from(scoreMap.keys()));
+
+      if (usrError) throw usrError;
+
+      const rankingList: RankingUser[] = (users || []).map(u => ({
+        id: u.user_id,
+        name: u.display_name || u.email?.split('@')[0] || 'Usuário',
+        avatarUrl: u.avatar_url,
+        score: scoreMap.get(u.user_id) || 0
+      }));
+
+      rankingList.sort((a, b) => b.score - a.score);
+      return rankingList;
+    }
+  });
+
   const handleRefresh = async () => {
     setIsRefreshing(true);
-    await casesQ.refetch();
+    await Promise.all([
+      casesQ.refetch(),
+      rankingQ.refetch()
+    ]);
     setTimeout(() => setIsRefreshing(false), 500);
   };
 
   useEffect(() => {
     const interval = setInterval(() => {
       casesQ.refetch();
+      rankingQ.refetch();
     }, 30000);
     return () => clearInterval(interval);
-  }, [casesQ]);
+  }, [casesQ, rankingQ]);
 
   useEffect(() => {
     if (!activeTenantId) return;
@@ -134,6 +192,11 @@ export default function OperacaoM30Postits() {
         "postgres_changes",
         { event: "*", schema: "public", table: "cases", filter: `tenant_id=eq.${activeTenantId}` },
         () => qc.invalidateQueries({ queryKey: ["cases_by_tenant_journey_postits"] })
+      )
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "timeline_events", filter: `tenant_id=eq.${activeTenantId}` },
+        () => qc.invalidateQueries({ queryKey: ["m30_ranking_events"] })
       )
       .subscribe();
 
@@ -230,7 +293,7 @@ export default function OperacaoM30Postits() {
     return groupsArray;
   }, [casesQ.data, caseEntitiesQ.data]);
 
-  // Hook mágico para escalar o conteúdo (zoom) se estourar a tela
+  // Hook mágico para escalar o conteúdo (zoom) se estourar a tela (Agora considera apenas a área principal)
   useEffect(() => {
     const calculateZoom = () => {
       const el = containerRef.current;
@@ -240,7 +303,8 @@ export default function OperacaoM30Postits() {
       el.style.zoom = "1";
       
       const scrollHeight = el.scrollHeight;
-      const windowH = window.innerHeight;
+      // Precisamos subtrair o tamanho do header que é de uns 56px, mas windowH serve de base
+      const windowH = window.innerHeight - 60; // Desconto do header
       
       if (scrollHeight > windowH) {
          // Scale down
@@ -270,7 +334,7 @@ export default function OperacaoM30Postits() {
         />
 
         {/* Minimal Header */}
-        <div className="relative flex items-center justify-between py-2 px-4 lg:px-6 border-b border-slate-800/60 bg-slate-900/50 backdrop-blur-xl shrink-0 z-10">
+        <div className="relative flex items-center justify-between py-2 px-4 lg:px-6 border-b border-slate-800/60 bg-slate-900/50 backdrop-blur-xl shrink-0 z-20">
           <div className="flex items-center gap-3">
             <Button asChild variant="ghost" size="icon" className="h-8 w-8 rounded-full text-slate-400 hover:bg-slate-800 hover:text-white">
               <Link to="/app/operacao-m30">
@@ -293,120 +357,191 @@ export default function OperacaoM30Postits() {
           </Button>
         </div>
 
-        {/* Body - Masonry Layout and Intelligent Zoom */}
-        <div 
-          className="relative w-full overflow-visible z-10"
-        >
-          <div 
-            ref={containerRef}
-            className="p-3 lg:p-4 w-full"
-            style={{ transformOrigin: "top center" }}
-          >
-            <div className={cn(
-              "columns-1 sm:columns-2 md:columns-3 xl:columns-4 2xl:columns-5 gap-3 lg:gap-4 w-full"
-            )}>
-              {userGroups.map((group) => (
-                <div 
-                  key={group.responsibleName} 
-                  className="flex flex-col bg-slate-900/60 rounded-[16px] lg:rounded-[20px] border border-slate-800/80 shadow-2xl overflow-hidden backdrop-blur-md break-inside-avoid mb-3 lg:mb-4"
-                >
-                  {/* User Header Compacto */}
+        {/* Body Container (Cards + Sidebar) */}
+        <div className="flex-1 flex flex-row overflow-hidden relative z-10 w-full">
+          
+          {/* Main Area - Masonry Layout and Intelligent Zoom */}
+          <div className="flex-1 w-[calc(100vw-150px)] overflow-visible flex items-start justify-center">
+            <div 
+              ref={containerRef}
+              className="p-3 lg:p-4 w-full"
+              style={{ transformOrigin: "top center" }}
+            >
+              <div className={cn(
+                "columns-1 sm:columns-2 md:columns-3 xl:columns-4 gap-3 lg:gap-4 w-full"
+              )}>
+                {userGroups.map((group) => (
                   <div 
-                    className="flex flex-row items-center justify-between p-2 lg:p-3 border-b border-slate-800/80 relative z-10 shrink-0"
-                    style={{ background: `linear-gradient(to right, ${primaryColorHex}40, transparent)` }}
+                    key={group.responsibleName} 
+                    className="flex flex-col bg-slate-900/60 rounded-[16px] lg:rounded-[20px] border border-slate-800/80 shadow-2xl overflow-hidden backdrop-blur-md break-inside-avoid mb-3 lg:mb-4"
                   >
-                    <div className="absolute inset-0 blur-xl rounded-full" style={{ backgroundColor: `${primaryColorHex}0D` }} />
-                    <div className="flex flex-row items-center gap-2 relative z-10">
-                      <div 
-                        className="h-8 w-8 lg:h-10 lg:w-10 rounded-full border shadow-md bg-slate-800 overflow-hidden flex items-center justify-center shrink-0"
-                        style={{ borderColor: `${primaryColorHex}80` }}
-                      >
-                        {group.avatarUrl ? (
-                          <img src={group.avatarUrl} alt={group.responsibleName} className="h-full w-full object-cover" />
-                        ) : (
-                          <span className="text-sm lg:text-base font-black text-slate-500 uppercase">{group.responsibleName.charAt(0)}</span>
-                        )}
-                      </div>
-                      <h2 className="text-base lg:text-lg font-black text-white tracking-tight line-clamp-1 drop-shadow-md uppercase">
-                        {group.responsibleName.split(' ')[0]}
-                      </h2>
-                    </div>
-                    <span 
-                      className="bg-slate-800 font-bold px-2 py-0.5 rounded text-[10px] lg:text-[11px] border shadow-sm whitespace-nowrap z-10 relative"
-                      style={{ color: primaryColorHex, borderColor: `${primaryColorHex}4D` }}
+                    {/* User Header Compacto */}
+                    <div 
+                      className="flex flex-row items-center justify-between p-2 lg:p-3 border-b border-slate-800/80 relative z-10 shrink-0"
+                      style={{ background: `linear-gradient(to right, ${primaryColorHex}40, transparent)` }}
                     >
-                      {group.items.length} cards
-                    </span>
-                  </div>
-
-                  {/* Cards Dynamic Grid */}
-                  <div className="p-1.5 lg:p-2">
-                    {group.items.length === 0 && (
-                      <div className="flex flex-col items-center justify-center opacity-30 py-6 w-full">
-                        <Monitor className="h-8 w-8 text-slate-500 mb-1" />
-                        <span className="text-xs font-bold text-slate-400">Nenhum card</span>
-                      </div>
-                    )}
-                    <div className={cn("grid gap-1.5 lg:gap-2 auto-rows-max", getGridCols(group.items.length))}>
-                    {group.items.map((item) => (
-                      <div 
-                        key={item.id} 
-                        className={cn(
-                          "relative p-1.5 lg:p-2 rounded-lg transition-all flex flex-col justify-between min-h-[52px]",
-                          "bg-slate-800/50 border backdrop-blur-sm",
-                          item.isPriority 
-                            ? "border-yellow-500/50 shadow-[0_0_15px_rgba(234,179,8,0.15)] bg-yellow-950/20" 
-                            : "border-slate-700/50 hover:bg-slate-800",
-                          item.isOverdue && !item.isPriority 
-                            ? "border-red-500/40 bg-red-950/20 shadow-[0_0_15px_rgba(239,68,68,0.1)]" 
-                            : ""
-                        )}
-                      >
-                        {item.isPriority && (
-                          <div className="absolute -top-1 -right-1 h-3.5 w-3.5 bg-yellow-500 rounded-full flex items-center justify-center shadow-[0_0_10px_rgba(234,179,8,0.5)]">
-                            <Star className="h-2 w-2 text-yellow-950 fill-current" />
-                          </div>
-                        )}
-                        
-                        <div className={cn(
-                          "text-xs lg:text-sm font-bold tracking-tight leading-tight line-clamp-1 mb-1",
-                          item.isPriority ? "text-yellow-400" : "text-slate-100"
-                        )}>
-                          {item.entityName}
-                        </div>
-                        
-                        <div className="flex items-center justify-between mt-auto">
-                          <span className="text-[9px] lg:text-[10px] font-semibold text-slate-400 uppercase tracking-wider line-clamp-1">
-                            {item.state}
-                          </span>
-                          
-                          {item.formattedDate && (
-                            <div className={cn(
-                              "flex items-center gap-0.5 px-1 rounded text-[9px] font-bold shadow-sm shrink-0",
-                              item.isOverdue 
-                                ? "bg-red-500/20 text-red-400 border border-red-500/30" 
-                                : "bg-slate-700/50 text-slate-300 border border-slate-600/50"
-                            )}>
-                              {item.isOverdue && <AlertCircle className="h-2.5 w-2.5" />}
-                              {item.formattedDate}
-                            </div>
+                      <div className="absolute inset-0 blur-xl rounded-full" style={{ backgroundColor: `${primaryColorHex}0D` }} />
+                      <div className="flex flex-row items-center gap-2 relative z-10">
+                        <div 
+                          className="h-8 w-8 lg:h-10 lg:w-10 rounded-full border shadow-md bg-slate-800 overflow-hidden flex items-center justify-center shrink-0"
+                          style={{ borderColor: `${primaryColorHex}80` }}
+                        >
+                          {group.avatarUrl ? (
+                            <img src={group.avatarUrl} alt={group.responsibleName} className="h-full w-full object-cover" />
+                          ) : (
+                            <span className="text-sm lg:text-base font-black text-slate-500 uppercase">{group.responsibleName.charAt(0)}</span>
                           )}
                         </div>
+                        <h2 className="text-base lg:text-lg font-black text-white tracking-tight line-clamp-1 drop-shadow-md uppercase">
+                          {group.responsibleName.split(' ')[0]}
+                        </h2>
                       </div>
-                    ))}
+                      <span 
+                        className="bg-slate-800 font-bold px-2 py-0.5 rounded text-[10px] lg:text-[11px] border shadow-sm whitespace-nowrap z-10 relative"
+                        style={{ color: primaryColorHex, borderColor: `${primaryColorHex}4D` }}
+                      >
+                        {group.items.length} cards
+                      </span>
+                    </div>
+
+                    {/* Cards Dynamic Grid */}
+                    <div className="p-1.5 lg:p-2">
+                      {group.items.length === 0 && (
+                        <div className="flex flex-col items-center justify-center opacity-30 py-6 w-full">
+                          <Monitor className="h-8 w-8 text-slate-500 mb-1" />
+                          <span className="text-xs font-bold text-slate-400">Nenhum card</span>
+                        </div>
+                      )}
+                      <div className={cn("grid gap-1.5 lg:gap-2 auto-rows-max", getGridCols(group.items.length))}>
+                      {group.items.map((item) => (
+                        <div 
+                          key={item.id} 
+                          className={cn(
+                            "relative p-1.5 lg:p-2 rounded-lg transition-all flex flex-col justify-between min-h-[52px]",
+                            "bg-slate-800/50 border backdrop-blur-sm",
+                            item.isPriority 
+                              ? "border-yellow-500/50 shadow-[0_0_15px_rgba(234,179,8,0.15)] bg-yellow-950/20" 
+                              : "border-slate-700/50 hover:bg-slate-800",
+                            item.isOverdue && !item.isPriority 
+                              ? "border-red-500/40 bg-red-950/20 shadow-[0_0_15px_rgba(239,68,68,0.1)]" 
+                              : ""
+                          )}
+                        >
+                          {item.isPriority && (
+                            <div className="absolute -top-1 -right-1 h-3.5 w-3.5 bg-yellow-500 rounded-full flex items-center justify-center shadow-[0_0_10px_rgba(234,179,8,0.5)]">
+                              <Star className="h-2 w-2 text-yellow-950 fill-current" />
+                            </div>
+                          )}
+                          
+                          <div className={cn(
+                            "text-xs lg:text-sm font-bold tracking-tight leading-tight line-clamp-1 mb-1",
+                            item.isPriority ? "text-yellow-400" : "text-slate-100"
+                          )}>
+                            {item.entityName}
+                          </div>
+                          
+                          <div className="flex items-center justify-between mt-auto">
+                            <span className="text-[9px] lg:text-[10px] font-semibold text-slate-400 uppercase tracking-wider line-clamp-1">
+                              {item.state}
+                            </span>
+                            
+                            {item.formattedDate && (
+                              <div className={cn(
+                                "flex items-center gap-0.5 px-1 rounded text-[9px] font-bold shadow-sm shrink-0",
+                                item.isOverdue 
+                                  ? "bg-red-500/20 text-red-400 border border-red-500/30" 
+                                  : "bg-slate-700/50 text-slate-300 border border-slate-600/50"
+                              )}>
+                                {item.isOverdue && <AlertCircle className="h-2.5 w-2.5" />}
+                                {item.formattedDate}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                ))}
 
-              {userGroups.length === 0 && (
-                <div className="col-span-full flex flex-col items-center justify-center h-full opacity-40 py-20">
-                  <Monitor className="h-20 w-20 text-slate-500 mb-4" />
-                  <p className="text-2xl text-slate-500 font-black">Nenhuma pendência</p>
+                {userGroups.length === 0 && (
+                  <div className="col-span-full flex flex-col items-center justify-center h-full opacity-40 py-20">
+                    <Monitor className="h-20 w-20 text-slate-500 mb-4" />
+                    <p className="text-2xl text-slate-500 font-black">Nenhuma pendência</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Ranking Sidebar (Right) */}
+          <div className="w-[150px] shrink-0 border-l border-slate-800/60 bg-slate-900/40 backdrop-blur-md flex flex-col items-center py-4 relative z-10">
+            <div className="flex items-center gap-1.5 mb-5 text-slate-400">
+              <Trophy className="h-4 w-4" style={{ color: primaryColorHex }} />
+              <span className="text-[10px] font-black tracking-[0.2em] uppercase">Ranking</span>
+            </div>
+
+            <div className="flex flex-col gap-4 w-full px-2 overflow-y-auto [&::-webkit-scrollbar]:hidden">
+              {(rankingQ.data || []).slice(0, 10).map((user, index) => {
+                const isFirst = index === 0;
+                const isSecond = index === 1;
+                const isThird = index === 2;
+
+                let ringColor = "border-slate-700/50";
+                if (isFirst) ringColor = "border-yellow-400 shadow-[0_0_15px_rgba(250,204,21,0.3)]";
+                else if (isSecond) ringColor = "border-slate-300 shadow-[0_0_10px_rgba(203,213,225,0.2)]";
+                else if (isThird) ringColor = "border-amber-700 shadow-[0_0_10px_rgba(180,83,9,0.2)]";
+
+                return (
+                  <div key={user.id} className="flex flex-col items-center w-full group">
+                    <div className="relative mb-2">
+                      <div className={cn(
+                        "h-12 w-12 rounded-full border-2 overflow-hidden flex items-center justify-center bg-slate-800",
+                        ringColor
+                      )}>
+                        {user.avatarUrl ? (
+                          <img src={user.avatarUrl} alt={user.name} className="h-full w-full object-cover" />
+                        ) : (
+                          <span className="text-sm font-black text-slate-500 uppercase">{user.name.charAt(0)}</span>
+                        )}
+                      </div>
+                      
+                      {/* Badge da Posição */}
+                      <div 
+                        className={cn(
+                          "absolute -bottom-1 -right-1 h-5 w-5 rounded-full flex items-center justify-center text-[10px] font-black border border-slate-900",
+                          isFirst ? "bg-yellow-400 text-yellow-950" :
+                          isSecond ? "bg-slate-300 text-slate-900" :
+                          isThird ? "bg-amber-600 text-amber-950" :
+                          "bg-slate-800 text-slate-400"
+                        )}
+                      >
+                        {index + 1}
+                      </div>
+                    </div>
+                    
+                    <span className="text-[11px] font-bold text-slate-200 uppercase tracking-tight text-center truncate w-full px-1">
+                      {user.name.split(' ')[0]}
+                    </span>
+                    
+                    <span 
+                      className="text-[10px] font-bold mt-0.5 px-1.5 rounded-sm"
+                      style={isFirst ? { backgroundColor: `${primaryColorHex}30`, color: primaryColorHex } : { color: '#94a3b8' }}
+                    >
+                      {user.score} pts
+                    </span>
+                  </div>
+                );
+              })}
+
+              {(!rankingQ.data || rankingQ.data.length === 0) && !rankingQ.isLoading && (
+                <div className="text-center py-10 opacity-30">
+                  <span className="text-[10px] font-bold uppercase">Sem dados</span>
                 </div>
               )}
             </div>
           </div>
+          
         </div>
       </div>
     </RequireAuth>
