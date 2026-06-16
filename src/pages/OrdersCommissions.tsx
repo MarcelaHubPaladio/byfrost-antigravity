@@ -10,10 +10,17 @@ import { CommissionsRadarTab } from "@/components/finance/CommissionsRadarTab";
 import { CommissionReportDialog } from "@/components/case/CommissionReportDialog";
 import { useTenant } from "@/providers/TenantProvider";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { DateRangePickerCustom } from "@/components/ui/date-range-picker-custom";
+import { startOfMonth, endOfMonth } from "date-fns";
+import { DateRange } from "react-day-picker";
 
 export default function OrdersCommissions() {
   const { activeTenantId } = useTenant();
   const [isCommissionDialogOpen, setIsCommissionDialogOpen] = useState(false);
+  const [dateRange, setDateRange] = useState<DateRange | undefined>({
+    from: startOfMonth(new Date()),
+    to: endOfMonth(new Date()),
+  });
 
   // Queries for the dialog
   const vendorsQ = useQuery({
@@ -35,14 +42,25 @@ export default function OrdersCommissions() {
   });
 
   const casesQ = useQuery({
-    queryKey: ["cases", activeTenantId],
+    queryKey: ["cases", activeTenantId, dateRange],
     enabled: Boolean(activeTenantId),
     queryFn: async () => {
-      const { data } = await supabase
+      let q = supabase
         .from("cases")
         .select("*, assigned_vendor:vendors!cases_assigned_vendor_id_fkey(*), users_profile:users_profile!fk_cases_users_profile(*)")
         .eq("tenant_id", activeTenantId!)
         .is("deleted_at", null);
+        
+      if (dateRange?.from) {
+        q = q.gte("created_at", dateRange.from.toISOString());
+      }
+      if (dateRange?.to) {
+        const toDate = new Date(dateRange.to);
+        toDate.setHours(23, 59, 59, 999);
+        q = q.lte("created_at", toDate.toISOString());
+      }
+      
+      const { data } = await q;
       return data ?? [];
     },
   });
@@ -120,13 +138,21 @@ export default function OrdersCommissions() {
               <h1 className="text-3xl font-black text-slate-900 tracking-tight">Extrato de Comissões</h1>
               <p className="text-slate-500 mt-1">Gerencie os fechamentos, edite descrições e gere PDFs de comissões.</p>
             </div>
-            <Button 
-              className="bg-indigo-600 hover:bg-indigo-700 rounded-xl h-11 px-6 shadow-sm shadow-indigo-200"
-              onClick={() => setIsCommissionDialogOpen(true)}
-            >
-              <Plus className="w-4 h-4 mr-2" />
-              Novo Fechamento
-            </Button>
+            
+            <div className="flex flex-col sm:flex-row items-center gap-3">
+              <DateRangePickerCustom 
+                date={dateRange} 
+                onDateChange={setDateRange} 
+                className="bg-white border-slate-200 h-11 w-64 shadow-sm"
+              />
+              <Button 
+                className="bg-indigo-600 hover:bg-indigo-700 rounded-xl h-11 px-6 shadow-sm shadow-indigo-200"
+                onClick={() => setIsCommissionDialogOpen(true)}
+              >
+                <Plus className="w-4 h-4 mr-2" />
+                Novo Fechamento
+              </Button>
+            </div>
           </div>
 
           <Tabs defaultValue="radar" className="w-full">
