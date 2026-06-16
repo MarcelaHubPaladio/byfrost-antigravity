@@ -62,6 +62,7 @@ type MappedMarker = {
   color: string;
   caseTotal: number;
   caseFaturado: number;
+  cityName?: string;
 };
 
 export function OrdersTerritoryMap({ 
@@ -167,6 +168,8 @@ export function OrdersTerritoryMap({
       const billStatus = (f.billing_status || "Pendente").toLowerCase();
       const billVal = billStatus.includes("pago") || billStatus.includes("faturado") ? caseTotal : (billStatus.includes("parcial") ? Number(f.partial_paid_value || 0) : 0);
       
+      const cityName = f.cidade || f.city || f.Cidade || f.City;
+
       v.totalVendido += caseTotal;
       v.totalFaturado += billVal;
 
@@ -178,7 +181,8 @@ export function OrdersTerritoryMap({
         coords: (c.meta_json?.lat || c.meta_json?.latitude) ? [parseFloat(c.meta_json.lat || c.meta_json.latitude), parseFloat(c.meta_json.lng || c.meta_json.longitude)] : null,
         color: v.color,
         caseTotal,
-        caseFaturado: billVal
+        caseFaturado: billVal,
+        cityName: typeof cityName === 'string' ? cityName : undefined
       };
     });
 
@@ -204,8 +208,24 @@ export function OrdersTerritoryMap({
     });
 
     features.forEach(cityData => {
+       const cityNameTarget = cityData.city.toLowerCase().trim();
+       
        markers.forEach(m => {
-          if (m.coords && isPointInFeature(m.coords[1], m.coords[0], cityData.feature)) {
+          let matchCity = false;
+          
+          if (m.cityName) {
+             const markerCityLower = String(m.cityName).toLowerCase().trim();
+             const normalize = (str: string) => str.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+             if (normalize(markerCityLower) === normalize(cityNameTarget)) {
+                 matchCity = true;
+             }
+          }
+          
+          if (!matchCity && m.coords && isPointInFeature(m.coords[1], m.coords[0], cityData.feature)) {
+             matchCity = true;
+          }
+
+          if (matchCity) {
              cityData.count++;
              cityData.totalVendido += m.caseTotal;
              cityData.totalFaturado += m.caseFaturado;
