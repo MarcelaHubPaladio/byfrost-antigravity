@@ -52,11 +52,63 @@ export default function OrdersTerritoryDashboard() {
 
   const journeyRows = casesQ.data ?? [];
 
+  const caseIdsForLookup = journeyRows.map(r => r.id);
+
+  const caseDataQ = useQuery({
+    queryKey: ["orders_case_fields_dashboard", activeTenantId, journeyRows.length, journeyRows[0]?.id],
+    enabled: Boolean(activeTenantId && caseIdsForLookup.length > 0),
+    refetchInterval: 60_000,
+    queryFn: async () => {
+      const CHUNK_SIZE = 100;
+      const chunks: string[][] = [];
+      for (let i = 0; i < caseIdsForLookup.length; i += CHUNK_SIZE) {
+        chunks.push(caseIdsForLookup.slice(i, i + CHUNK_SIZE));
+      }
+
+      const allFields: any[] = [];
+      const allItems: any[] = [];
+
+      await Promise.all(chunks.map(async (chunk) => {
+        const [fRes, iRes] = await Promise.all([
+          supabase
+            .from("case_fields")
+            .select("case_id,key,value_text")
+            .in("case_id", chunk)
+            .in("key", ["billing_status", "partial_paid_value"])
+            .limit(1000),
+          supabase
+            .from("case_items")
+            .select("case_id,total")
+            .in("case_id", chunk)
+        ]);
+
+        if (fRes.data) allFields.push(...fRes.data);
+        if (iRes.data) allItems.push(...iRes.data);
+      }));
+
+      const fieldMap = new Map<string, any>();
+      for (const r of allFields) {
+        const cid = r.case_id;
+        if (!fieldMap.has(cid)) fieldMap.set(cid, {});
+        fieldMap.get(cid)[r.key] = r.value_text;
+      }
+
+      const totalsMap = new Map<string, number>();
+      for (const itm of allItems) {
+        const cid = itm.case_id;
+        const val = Number(itm.total || 0);
+        totalsMap.set(cid, (totalsMap.get(cid) || 0) + val);
+      }
+
+      return { fields: fieldMap, totals: totalsMap };
+    }
+  });
+
   // Tela de loading
-  if (!activeTenantId || journeyQ.isLoading || casesQ.isLoading) {
+  if (!activeTenantId || journeyQ.isLoading || casesQ.isLoading || caseDataQ.isLoading) {
     return (
-      <div className="w-screen h-screen flex items-center justify-center bg-slate-50">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-slate-200 border-t-blue-500" />
+      <div className="w-screen h-screen flex items-center justify-center bg-slate-900">
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-slate-700 border-t-blue-500" />
       </div>
     );
   }
@@ -77,7 +129,12 @@ export default function OrdersTerritoryDashboard() {
         </Link>
       </div>
       <div className="flex-1 w-full h-full p-4">
-        <OrdersTerritoryMap cases={journeyRows} isFullscreen={true} />
+        <OrdersTerritoryMap 
+          cases={journeyRows} 
+          caseFields={caseDataQ.data?.fields}
+          caseTotals={caseDataQ.data?.totals}
+          isFullscreen={true} 
+        />
       </div>
     </div>
   );
