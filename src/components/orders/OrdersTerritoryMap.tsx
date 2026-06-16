@@ -51,6 +51,7 @@ type VendorTerritory = {
   cityName?: string; // Legacy
   cityNames?: string[]; // Multi-select support
   geojson?: any;
+  hideFromRanking?: boolean;
 };
 
 export function OrdersTerritoryMap({ 
@@ -75,6 +76,7 @@ export function OrdersTerritoryMap({
   // Edit State
   const [editingConfig, setEditingConfig] = useState<string | null>(null);
   const [editTab, setEditTab] = useState<"circle" | "polygon" | "city">("circle");
+  const [editHideRanking, setEditHideRanking] = useState(false);
 
   // Circle Edit
   const [editLat, setEditLat] = useState("");
@@ -136,6 +138,8 @@ export function OrdersTerritoryMap({
       newConf.cityNames = editCityList;
       newConf.geojson = editCityGeoJson;
     }
+    
+    newConf.hideFromRanking = editHideRanking;
 
     const newConfig = { ...vendorConfig, [vId]: newConf };
     setVendorConfig(newConfig);
@@ -254,8 +258,31 @@ export function OrdersTerritoryMap({
   const filteredVendors = vendors.filter(v => v.name.toLowerCase().includes(searchQ.toLowerCase()));
 
   // Rankings
-  const topVendido = [...vendors].filter(v => v.id !== "unassigned").sort((a, b) => b.totalVendido - a.totalVendido).slice(0, 5);
-  const topFaturado = [...vendors].filter(v => v.id !== "unassigned").sort((a, b) => b.totalFaturado - a.totalFaturado).slice(0, 5);
+  const rankingCandidates = vendors.filter(v => v.id !== "unassigned" && !vendorConfig[v.id]?.hideFromRanking && vendorConfig[v.id]);
+  const topVendido = [...rankingCandidates].sort((a, b) => b.totalVendido - a.totalVendido).slice(0, 5);
+  const topFaturado = [...rankingCandidates].sort((a, b) => b.totalFaturado - a.totalFaturado).slice(0, 5);
+
+  // Auto-Play Engine
+  const [autoPlayIndex, setAutoPlayIndex] = useState(0);
+
+  useEffect(() => {
+    if (!isFullscreen || topVendido.length === 0) return;
+    
+    // Inicia com o primeiro se nada tiver selecionado
+    if (!selectedVendorId) {
+      setSelectedVendorId(topVendido[0].id);
+    }
+
+    const interval = setInterval(() => {
+      setAutoPlayIndex(prev => {
+        const next = (prev + 1) % topVendido.length;
+        setSelectedVendorId(topVendido[next].id);
+        return next;
+      });
+    }, 5000);
+
+    return () => clearInterval(interval);
+  }, [isFullscreen, topVendido.length, topVendido.map(x => x.id).join(",")]);
 
   const MapClicker = () => {
     useMapEvents({
@@ -338,9 +365,10 @@ export function OrdersTerritoryMap({
     <div className={cn("flex flex-col md:flex-row w-full gap-4", isFullscreen ? "h-full bg-slate-900 rounded-none p-0" : "h-[calc(100vh-220px)] bg-slate-50 p-2 rounded-[24px]")}>
       
       {/* Sidebar Left */}
+      {!isFullscreen && (
       <div className={cn(
         "flex flex-col rounded-[20px] shadow-sm border overflow-hidden",
-        isFullscreen ? "w-full md:w-80 bg-slate-800 border-slate-700" : "w-full md:w-[350px] bg-white border-slate-200"
+        "w-full md:w-[350px] bg-white border-slate-200"
       )}>
         <div className={cn("p-4 border-b", isFullscreen ? "border-slate-700 bg-slate-800/50" : "border-slate-100 bg-slate-50/50")}>
           <div className="flex items-center justify-between">
@@ -440,6 +468,7 @@ export function OrdersTerritoryMap({
                             const initialCities = conf?.cityNames || (conf?.cityName ? [conf.cityName] : []);
                             setEditCityList(initialCities);
                             setEditCityGeoJson(conf?.geojson || null);
+                            setEditHideRanking(conf?.hideFromRanking || false);
                             
                             setEditingConfig(v.id);
                             setSelectedVendorId(v.id);
@@ -593,8 +622,19 @@ export function OrdersTerritoryMap({
                         )}
                       </div>
                     )}
+                    
+                    <div className="flex items-center space-x-2 pt-2 border-t border-blue-200">
+                      <Checkbox 
+                        id={`hideRanking-${v.id}`} 
+                        checked={editHideRanking}
+                        onCheckedChange={(checked) => setEditHideRanking(!!checked)}
+                      />
+                      <label htmlFor={`hideRanking-${v.id}`} className="text-[10px] uppercase font-bold text-slate-600 cursor-pointer select-none">
+                        Ocultar este vendedor dos Rankings Oficiais
+                      </label>
+                    </div>
 
-                    <Button size="sm" className="w-full h-8 rounded-lg bg-blue-600 hover:bg-blue-700 text-xs shadow-sm font-bold" onClick={() => saveConfig(v.id)}>
+                    <Button size="sm" className="w-full h-8 rounded-lg bg-blue-600 hover:bg-blue-700 text-xs shadow-sm font-bold mt-2" onClick={() => saveConfig(v.id)}>
                       <Save className="w-3.5 h-3.5 mr-2" />
                       Salvar Território
                     </Button>
@@ -605,6 +645,7 @@ export function OrdersTerritoryMap({
           })}
         </div>
       </div>
+      )}
 
       {/* Map Area */}
       <div className={cn(
@@ -742,12 +783,49 @@ export function OrdersTerritoryMap({
             {editTab === "city" && <><Building2 className="w-4 h-4"/> Modo de Cidade: Pesquise a cidade no painel e salve</>}
           </div>
         )}
+
+        {/* Placar Eletrônico Rotativo para Dashboard */}
+        {isFullscreen && selectedVendorId && (
+           <div className="absolute bottom-10 left-1/2 -translate-x-1/2 z-[400] bg-slate-900/95 border border-slate-700/80 p-5 rounded-[32px] shadow-2xl backdrop-blur-xl flex items-center gap-6 animate-in slide-in-from-bottom-10 fade-in duration-500">
+             {/* conteúdo: Avatar, Nome Vendedor, Metricas destacadas */}
+             {(() => {
+               const v = vendors.find(x => x.id === selectedVendorId);
+               if(!v) return null;
+               return (
+                 <>
+                   {v.avatar ? (
+                     <img src={v.avatar} alt={v.name} className="w-16 h-16 md:w-20 md:h-20 rounded-full object-cover border-[3px] shadow-[0_0_20px_rgba(0,0,0,0.5)]" style={{ borderColor: v.color }} />
+                   ) : (
+                     <div className="w-16 h-16 md:w-20 md:h-20 rounded-full shadow-[0_0_20px_rgba(0,0,0,0.5)] text-white text-xl md:text-2xl font-black flex items-center justify-center border-[3px]" style={{ backgroundColor: v.color, borderColor: v.color }}>
+                       {v.name.substring(0, 2).toUpperCase()}
+                     </div>
+                   )}
+                   <div className="flex flex-col pr-8 border-r border-slate-700">
+                     <span className="text-slate-400 font-bold text-[9px] md:text-[10px] tracking-widest uppercase mb-1">Destaque Local</span>
+                     <span className="text-white font-black text-xl md:text-2xl max-w-[250px] truncate leading-tight">{v.name}</span>
+                     <span className="text-slate-400 text-[10px] md:text-xs font-semibold mt-1">Território demarcado exibido</span>
+                   </div>
+                   <div className="flex flex-col px-4">
+                     <span className="text-emerald-500 font-bold text-[9px] md:text-[10px] tracking-widest uppercase mb-1">Total Vendido</span>
+                     <span className="text-emerald-400 font-black text-2xl md:text-3xl leading-tight">{formatCurrency(v.totalVendido)}</span>
+                     <span className="text-slate-500 text-[10px] md:text-xs font-semibold mt-1">{v.count} pedidos processados</span>
+                   </div>
+                   <div className="flex flex-col pl-4">
+                     <span className="text-blue-500 font-bold text-[9px] md:text-[10px] tracking-widest uppercase mb-1">Faturamento</span>
+                     <span className="text-blue-400 font-black text-2xl md:text-3xl leading-tight">{formatCurrency(v.totalFaturado)}</span>
+                     <span className="text-slate-500 text-[10px] md:text-xs font-semibold mt-1">Aprovados e Pagos</span>
+                   </div>
+                 </>
+               )
+             })()}
+           </div>
+        )}
       </div>
 
-      {/* Sidebar Right: Top 5 Finances (Hidden on Mobile) */}
+      {/* Sidebar Right: Top 5 Finances */}
       <div className={cn(
         "hidden lg:flex flex-col rounded-[20px] shadow-sm border overflow-hidden",
-        isFullscreen ? "w-72 bg-slate-800 border-slate-700" : "w-72 bg-white border-slate-200"
+        isFullscreen ? "w-80 bg-slate-900 border-slate-800 shadow-[0_0_40px_rgba(0,0,0,0.2)]" : "w-72 bg-white border-slate-200"
       )}>
         <div className={cn("p-4 border-b", isFullscreen ? "border-slate-700 bg-slate-800/50" : "border-slate-100 bg-slate-50/50")}>
           <h2 className={cn("text-base font-bold flex items-center gap-2", isFullscreen ? "text-slate-100" : "text-slate-800")}>
@@ -757,57 +835,72 @@ export function OrdersTerritoryMap({
           <p className={cn("text-[11px] mt-1", isFullscreen ? "text-slate-400" : "text-slate-500")}>Ranking por faturamento (R$)</p>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-3 space-y-5 no-scrollbar">
+        <div className="flex-1 overflow-y-auto p-4 space-y-6 no-scrollbar">
           
           {/* Top Vendido */}
           <div>
-            <h3 className={cn("text-xs font-black uppercase tracking-widest mb-3 flex items-center gap-1", isFullscreen ? "text-slate-400" : "text-slate-400")}>
-              <TrendingUp className="w-3 h-3 text-emerald-500" /> Mais Vendidos
+            <h3 className={cn("text-[10px] font-black uppercase tracking-widest mb-4 flex items-center gap-1.5", isFullscreen ? "text-slate-500" : "text-slate-400")}>
+              <TrendingUp className="w-3.5 h-3.5 text-emerald-500" /> Mais Vendidos
             </h3>
-            <div className="space-y-3">
+            <div className="space-y-3.5">
               {topVendido.map((v, i) => {
                 const maxVol = topVendido[0]?.totalVendido || 1;
                 const pct = (v.totalVendido / maxVol) * 100;
                 return (
-                  <div key={v.id} className="flex flex-col gap-1.5">
+                  <div key={v.id} className={cn("flex flex-col gap-2 p-2.5 rounded-xl transition-colors", isFullscreen ? "bg-slate-800/50 hover:bg-slate-800" : "bg-slate-50 hover:bg-slate-100")}>
                     <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <span className={cn("text-[10px] font-bold w-3", isFullscreen ? "text-slate-500" : "text-slate-400")}>{i + 1}</span>
+                      <div className="flex items-center gap-2.5">
+                        <span className={cn("text-xs font-black w-4 flex justify-center", i === 0 ? "text-emerald-500" : isFullscreen ? "text-slate-600" : "text-slate-400")}>{i + 1}º</span>
+                        
+                        {v.avatar ? (
+                          <img src={v.avatar} className="w-7 h-7 rounded-full object-cover shadow-sm border" style={{borderColor: v.color}} />
+                        ) : (
+                          <div className="w-7 h-7 rounded-full flex items-center justify-center text-[9px] font-bold text-white shadow-sm border" style={{backgroundColor: v.color, borderColor: v.color}}>
+                            {v.name.substring(0, 2).toUpperCase()}
+                          </div>
+                        )}
                         <span className={cn("text-xs font-bold line-clamp-1 max-w-[100px]", isFullscreen ? "text-slate-200" : "text-slate-700")}>{v.name}</span>
                       </div>
                       <span className={cn("text-xs font-black text-emerald-500")}>{formatCurrency(v.totalVendido)}</span>
                     </div>
-                    <div className={cn("h-1.5 w-full rounded-full overflow-hidden", isFullscreen ? "bg-slate-700" : "bg-slate-100")}>
+                    <div className={cn("h-1.5 w-full rounded-full overflow-hidden", isFullscreen ? "bg-slate-700" : "bg-slate-200")}>
                       <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${pct}%` }}></div>
                     </div>
                   </div>
                 );
               })}
-              {topVendido.length === 0 && <div className="text-xs text-slate-500 text-center py-4">Nenhuma venda encontrada</div>}
+              {topVendido.length === 0 && <div className="text-xs text-slate-500 text-center py-4">Nenhuma venda no período</div>}
             </div>
           </div>
 
-          <div className={cn("h-px w-full", isFullscreen ? "bg-slate-700" : "bg-slate-100")} />
+          <div className={cn("h-px w-full", isFullscreen ? "bg-slate-800" : "bg-slate-100")} />
 
           {/* Top Faturado */}
           <div>
-            <h3 className={cn("text-xs font-black uppercase tracking-widest mb-3 flex items-center gap-1", isFullscreen ? "text-slate-400" : "text-slate-400")}>
+            <h3 className={cn("text-[10px] font-black uppercase tracking-widest mb-4 flex items-center gap-1.5", isFullscreen ? "text-slate-500" : "text-slate-400")}>
                Mais Faturados
             </h3>
-            <div className="space-y-3">
+            <div className="space-y-3.5">
               {topFaturado.map((v, i) => {
                 const maxVol = topFaturado[0]?.totalFaturado || 1;
                 const pct = (v.totalFaturado / maxVol) * 100;
                 return (
-                  <div key={v.id} className="flex flex-col gap-1.5">
+                  <div key={v.id} className={cn("flex flex-col gap-2 p-2.5 rounded-xl transition-colors", isFullscreen ? "bg-slate-800/50 hover:bg-slate-800" : "bg-slate-50 hover:bg-slate-100")}>
                     <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <span className={cn("text-[10px] font-bold w-3", isFullscreen ? "text-slate-500" : "text-slate-400")}>{i + 1}</span>
+                      <div className="flex items-center gap-2.5">
+                        <span className={cn("text-xs font-black w-4 flex justify-center", i === 0 ? "text-blue-500" : isFullscreen ? "text-slate-600" : "text-slate-400")}>{i + 1}º</span>
+                        {v.avatar ? (
+                          <img src={v.avatar} className="w-7 h-7 rounded-full object-cover shadow-sm border" style={{borderColor: v.color}} />
+                        ) : (
+                          <div className="w-7 h-7 rounded-full flex items-center justify-center text-[9px] font-bold text-white shadow-sm border" style={{backgroundColor: v.color, borderColor: v.color}}>
+                            {v.name.substring(0, 2).toUpperCase()}
+                          </div>
+                        )}
                         <span className={cn("text-xs font-bold line-clamp-1 max-w-[100px]", isFullscreen ? "text-slate-200" : "text-slate-700")}>{v.name}</span>
                       </div>
                       <span className={cn("text-xs font-black text-blue-500")}>{formatCurrency(v.totalFaturado)}</span>
                     </div>
-                    <div className={cn("h-1.5 w-full rounded-full overflow-hidden", isFullscreen ? "bg-slate-700" : "bg-slate-100")}>
+                    <div className={cn("h-1.5 w-full rounded-full overflow-hidden", isFullscreen ? "bg-slate-700" : "bg-slate-200")}>
                       <div className="h-full bg-blue-500 rounded-full" style={{ width: `${pct}%` }}></div>
                     </div>
                   </div>

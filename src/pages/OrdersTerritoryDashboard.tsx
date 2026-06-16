@@ -4,12 +4,18 @@ import { supabase } from "@/lib/supabase";
 import { useTenant } from "@/providers/TenantProvider";
 import { OrdersTerritoryMap } from "@/components/orders/OrdersTerritoryMap";
 import { Link } from "react-router-dom";
+import { DateRangePicker } from "@/components/ui/date-range-picker-custom";
+import { startOfMonth, endOfDay } from "date-fns";
+import { DateRange } from "react-day-picker";
 import { ArrowLeft } from "lucide-react";
-
-
 // Componente simples para tela cheia (TV / Totem)
 export default function OrdersTerritoryDashboard() {
   const { activeTenantId } = useTenant();
+
+  const [dateRange, setDateRange] = useState<DateRange | undefined>({
+    from: startOfMonth(new Date()),
+    to: endOfDay(new Date())
+  });
 
   // Fetch journey
   const journeyQ = useQuery({
@@ -32,7 +38,7 @@ export default function OrdersTerritoryDashboard() {
   const casesQ = useQuery({
     queryKey: ["cases_orders_dashboard", activeTenantId, selectedJourney?.id],
     enabled: Boolean(activeTenantId && selectedJourney?.id),
-    refetchInterval: 60_000,
+    refetchInterval: 10_000,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("cases")
@@ -50,14 +56,21 @@ export default function OrdersTerritoryDashboard() {
     },
   });
 
-  const journeyRows = casesQ.data ?? [];
+  const journeyRowsAll = casesQ.data ?? [];
+  const journeyRows = journeyRowsAll.filter((r: any) => {
+    if (!dateRange || !dateRange.from) return true;
+    const cd = new Date(r.created_at);
+    if (cd < dateRange.from) return false;
+    if (dateRange.to && cd > dateRange.to) return false;
+    return true;
+  });
 
   const caseIdsForLookup = journeyRows.map(r => r.id);
 
   const caseDataQ = useQuery({
-    queryKey: ["orders_case_fields_dashboard", activeTenantId, journeyRows.length, journeyRows[0]?.id],
+    queryKey: ["orders_case_fields_dashboard", activeTenantId, journeyRows.length, journeyRows[0]?.id, dateRange?.from?.toISOString(), dateRange?.to?.toISOString()],
     enabled: Boolean(activeTenantId && caseIdsForLookup.length > 0),
-    refetchInterval: 60_000,
+    refetchInterval: 10_000,
     queryFn: async () => {
       const CHUNK_SIZE = 100;
       const chunks: string[][] = [];
@@ -119,7 +132,7 @@ export default function OrdersTerritoryDashboard() {
   // Vamos passar isFullscreen={true} para o componente ocultar as bordas extras e barras de busca se for preciso.
   return (
     <div className="w-screen h-screen overflow-hidden bg-slate-900 text-slate-100 flex relative">
-      <div className="absolute top-6 left-6 z-[1000]">
+      <div className="absolute top-6 left-6 z-[1000] flex items-center gap-4">
         <Link 
           to="/app/orders" 
           className="flex items-center gap-2 px-4 py-2 bg-slate-900/80 hover:bg-slate-800 text-white rounded-full shadow-lg border border-slate-700 backdrop-blur-md transition-colors text-sm font-bold"
@@ -127,6 +140,10 @@ export default function OrdersTerritoryDashboard() {
           <ArrowLeft className="w-4 h-4" />
           Voltar para Pedidos
         </Link>
+        
+        <div className="bg-slate-900/80 backdrop-blur-md border border-slate-700 rounded-full shadow-lg px-2 flex items-center h-9">
+          <DateRangePicker date={dateRange} setDate={setDateRange} className="bg-transparent border-none text-white hover:text-white hover:bg-slate-800 h-8" />
+        </div>
       </div>
       <div className="flex-1 w-full h-full p-4">
         <OrdersTerritoryMap 
