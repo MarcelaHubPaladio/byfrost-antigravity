@@ -102,12 +102,19 @@ export function OrdersTerritoryMap({
   }, []);
 
   useEffect(() => {
+    console.log(`[Territory] Lendo LocalStorage key: ${storageKey}`);
     if (activeTenantId) {
       try {
         const saved = localStorage.getItem(storageKey);
-        if (saved) setVendorConfig(JSON.parse(saved));
+        if (saved) {
+           const parsed = JSON.parse(saved);
+           console.log(`[Territory] Conf resgatada com sucesso para ${Object.keys(parsed).length} vendedores.`);
+           setVendorConfig(parsed);
+        } else {
+           console.log(`[Territory] Nenhuma config salva.`);
+        }
       } catch (e) {
-        console.error("Failed to load territory config", e);
+        console.error("[Territory] Failed to load territory config", e);
       }
     }
   }, [activeTenantId, storageKey]);
@@ -128,10 +135,13 @@ export function OrdersTerritoryMap({
 
     const newConfig = { ...vendorConfig, [vId]: newConf };
     setVendorConfig(newConfig);
+    console.log(`[Territory] Salvando nova config para vendedor ${vId}. payload:`, newConf);
     try {
-      localStorage.setItem(storageKey, JSON.stringify(newConfig));
+      const jsonStr = JSON.stringify(newConfig);
+      localStorage.setItem(storageKey, jsonStr);
+      console.log(`[Territory] Salvo no LocalStorage com sucesso. Tamanho aprox: ${(jsonStr.length / 1024).toFixed(2)} KB`);
     } catch (err: any) {
-      console.error("Storage error", err);
+      console.error("[Territory] Storage error", err);
       alert("Aviso: O armazenamento do navegador lotou (excesso de geometrias muito complexas). O limite deste vendedor não foi guardado na memória permanente.");
     }
     setEditingConfig(null);
@@ -147,17 +157,23 @@ export function OrdersTerritoryMap({
     setEditCityGeoJson(null);
     try {
       const features = [];
+      console.log(`[Territory] Buscando geometria para as cidades: ${editCityList.join(", ")}`);
       for (const city of editCityList) {
         const fullQuery = `${city}, Paraná, Brazil`;
+        console.log(`[Territory] Fetch OSM para: ${fullQuery}`);
         // polygon_threshold=0.005 reduz drasticamente os pontos e o tamanho do GeoJSON (evitando QuotaExceededError do localStorage)
         const res = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(fullQuery)}&format=geojson&polygon_geojson=1&limit=1&polygon_threshold=0.005`);
         const data = await res.json();
+        console.log(`[Territory] Resposta OSM (${city}):`, data);
         if (data && data.features && data.features.length > 0) {
           features.push(data.features[0]);
+        } else {
+          console.warn(`[Territory] Cuidado: Nenhum limite geográfico retornado para ${city}`);
         }
       }
       
       if (features.length > 0) {
+        console.log(`[Territory] Geometrias recebidas. Total de features agrupadas: ${features.length}`);
         setEditCityGeoJson({ type: "FeatureCollection", features });
       } else {
         alert("Nenhuma geometria encontrada para as cidades.");
@@ -676,7 +692,7 @@ export function OrdersTerritoryMap({
             if (conf.type === "city" && conf.geojson) {
               return (
                 <GeoJSON
-                  key={`city-${v.id}-${isSelected ? 'on' : 'off'}`}
+                  key={`city-${v.id}-${isSelected ? 'on' : 'off'}-${Math.random()}`}
                   data={conf.geojson}
                   style={baseStyle}
                 >
