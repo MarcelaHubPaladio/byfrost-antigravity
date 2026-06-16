@@ -323,11 +323,31 @@ export function OrdersTerritoryMap({
         isFullscreen ? "w-full md:w-80 bg-slate-800 border-slate-700" : "w-full md:w-[350px] bg-white border-slate-200"
       )}>
         <div className={cn("p-4 border-b", isFullscreen ? "border-slate-700 bg-slate-800/50" : "border-slate-100 bg-slate-50/50")}>
-          <h2 className={cn("text-lg font-bold flex items-center gap-2", isFullscreen ? "text-slate-100" : "text-slate-800")}>
-            <MapIcon className="w-5 h-5 text-blue-500" />
-            Configurações
-          </h2>
-          <p className={cn("text-xs mt-1", isFullscreen ? "text-slate-400" : "text-slate-500")}>Gerir alcance e raios</p>
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className={cn("text-lg font-bold flex items-center gap-2", isFullscreen ? "text-slate-100" : "text-slate-800")}>
+                <MapIcon className="w-5 h-5 text-blue-500" />
+                Configurações
+              </h2>
+              <p className={cn("text-xs mt-1", isFullscreen ? "text-slate-400" : "text-slate-500")}>Gerir alcance e raios</p>
+            </div>
+            {!isFullscreen && (
+              <button 
+                onClick={() => {
+                  if (confirm("Isso apagará a memória do mapa e os polígonos travados. Deseja limpar os territórios de todos os vendedores?")) {
+                    localStorage.removeItem(storageKey);
+                    setVendorConfig({});
+                    setSelectedVendorId(null);
+                    setEditingConfig(null);
+                  }
+                }}
+                className="p-1.5 text-rose-500 hover:bg-rose-100 rounded-lg transition-colors border border-transparent hover:border-rose-200"
+                title="Limpar memórias e territórios"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+            )}
+          </div>
         </div>
 
         {!isFullscreen && (
