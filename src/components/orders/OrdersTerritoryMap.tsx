@@ -83,6 +83,17 @@ export function OrdersTerritoryMap({
   const [editCityQuery, setEditCityQuery] = useState("");
   const [editCityGeoJson, setEditCityGeoJson] = useState<any>(null);
   const [isCityLoading, setIsCityLoading] = useState(false);
+  const [prCities, setPrCities] = useState<string[]>([]);
+
+  useEffect(() => {
+    fetch("https://servicodados.ibge.gov.br/api/v1/localidades/estados/PR/municipios")
+      .then(res => res.json())
+      .then(data => {
+        const sorted = data.map((d: any) => d.nome).sort();
+        setPrCities(sorted);
+      })
+      .catch(err => console.error("Falha ao buscar cidades do PR", err));
+  }, []);
 
   useEffect(() => {
     if (activeTenantId) {
@@ -120,7 +131,8 @@ export function OrdersTerritoryMap({
     setIsCityLoading(true);
     setEditCityGeoJson(null);
     try {
-      const res = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(editCityQuery)}&format=geojson&polygon_geojson=1&limit=1`);
+      const fullQuery = `${editCityQuery}, PR`;
+      const res = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(fullQuery)}&format=geojson&polygon_geojson=1&limit=1`);
       const data = await res.json();
       if (data && data.features && data.features.length > 0) {
         setEditCityGeoJson(data.features[0]);
@@ -354,18 +366,22 @@ export function OrdersTerritoryMap({
                           Digite a cidade para buscar as divisas geográficas oficias do IBGE pelo OSM.
                         </p>
                         <div>
-                          <label className="text-[10px] uppercase font-bold text-slate-500 ml-1">Nome da Cidade / Estado</label>
+                          <label className="text-[10px] uppercase font-bold text-slate-500 ml-1">Municípios do Paraná (PR)</label>
                           <div className="flex gap-2">
-                            <Input 
+                            <select 
                               value={editCityQuery} 
                               onChange={e => setEditCityQuery(e.target.value)} 
-                              placeholder="Ex: Curitiba, PR"
-                              className="h-8 text-xs rounded-lg bg-white border-slate-200" 
-                            />
+                              className="flex h-8 w-full items-center justify-between rounded-lg border border-slate-200 bg-white px-3 text-xs placeholder:text-slate-500"
+                            >
+                              <option value="" disabled>Selecione uma cidade...</option>
+                              {prCities.map(city => (
+                                <option key={city} value={city}>{city}</option>
+                              ))}
+                            </select>
                             <Button 
                               size="sm" 
                               onClick={handleCitySearch}
-                              disabled={isCityLoading}
+                              disabled={isCityLoading || !editCityQuery}
                               className="h-8 bg-slate-800 hover:bg-slate-900"
                             >
                               {isCityLoading ? "..." : "Buscar"}
