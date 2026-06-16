@@ -128,7 +128,12 @@ export function OrdersTerritoryMap({
 
     const newConfig = { ...vendorConfig, [vId]: newConf };
     setVendorConfig(newConfig);
-    localStorage.setItem(storageKey, JSON.stringify(newConfig));
+    try {
+      localStorage.setItem(storageKey, JSON.stringify(newConfig));
+    } catch (err: any) {
+      console.error("Storage error", err);
+      alert("Aviso: O armazenamento do navegador lotou (excesso de geometrias muito complexas). O limite deste vendedor não foi guardado na memória permanente.");
+    }
     setEditingConfig(null);
   };
 
@@ -144,7 +149,8 @@ export function OrdersTerritoryMap({
       const features = [];
       for (const city of editCityList) {
         const fullQuery = `${city}, PR`;
-        const res = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(fullQuery)}&format=geojson&polygon_geojson=1&limit=1`);
+        // polygon_threshold=0.005 reduz drasticamente os pontos e o tamanho do GeoJSON (evitando QuotaExceededError do localStorage)
+        const res = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(fullQuery)}&format=geojson&polygon_geojson=1&limit=1&polygon_threshold=0.005`);
         const data = await res.json();
         if (data && data.features && data.features.length > 0) {
           features.push(data.features[0]);
@@ -616,7 +622,7 @@ export function OrdersTerritoryMap({
             if (conf.type === "circle" && conf.lat && conf.lng && conf.radiusKm) {
               return (
                 <Circle 
-                  key={`circle-${v.id}`}
+                  key={`circle-${v.id}-${isSelected ? 'on' : 'off'}`}
                   center={[conf.lat, conf.lng]}
                   radius={conf.radiusKm * 1000}
                   pathOptions={baseStyle}
@@ -629,7 +635,7 @@ export function OrdersTerritoryMap({
             if (conf.type === "polygon" && conf.polygonCoords && conf.polygonCoords.length >= 3) {
               return (
                 <Polygon
-                  key={`poly-${v.id}`}
+                  key={`poly-${v.id}-${isSelected ? 'on' : 'off'}`}
                   positions={conf.polygonCoords}
                   pathOptions={baseStyle}
                 >
@@ -641,7 +647,7 @@ export function OrdersTerritoryMap({
             if (conf.type === "city" && conf.geojson) {
               return (
                 <GeoJSON
-                  key={`city-${v.id}`}
+                  key={`city-${v.id}-${isSelected ? 'on' : 'off'}`}
                   data={conf.geojson}
                   style={baseStyle}
                 >
