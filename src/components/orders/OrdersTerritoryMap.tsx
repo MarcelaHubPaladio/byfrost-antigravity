@@ -757,6 +757,25 @@ export function OrdersTerritoryMap({
           })}
         </MapContainer>
 
+        {/* Tooltip da Cidade em Foco */}
+        {isFullscreen && selectedCityName && (() => {
+           const cityObj = activeGeoFeatures.find(x => x.city === selectedCityName);
+           if (cityObj?.feature?.bbox) {
+               const b = cityObj.feature.bbox;
+               // Formato IBGE bbox: [minLng, minLat, maxLng, maxLat]
+               const centerLat = (b[1] + b[3]) / 2;
+               const centerLng = (b[0] + b[2]) / 2;
+               return (
+                  <Marker position={[centerLat, centerLng]} opacity={0} interactive={false}>
+                     <Tooltip permanent direction="center" className="bg-transparent border-none text-white text-xl font-black drop-shadow-[0_3px_5px_rgba(0,0,0,0.9)] opacity-100 shadow-none">
+                        {cityObj.city}
+                     </Tooltip>
+                  </Marker>
+               );
+           }
+           return null;
+        })()}
+
         {/* Editing Hints overlay */}
         {editingConfig && !isFullscreen && (
           <div className="absolute top-4 left-1/2 -translate-x-1/2 z-[400] bg-blue-600 text-white px-5 py-2.5 rounded-full shadow-lg text-xs font-bold animate-pulse pointer-events-none flex items-center gap-2">
@@ -768,41 +787,67 @@ export function OrdersTerritoryMap({
 
         {/* Placar Eletrônico Rotativo para Dashboard (Por CIDADE) */}
         {isFullscreen && selectedCityName && (
-           <div className="absolute bottom-10 left-1/2 -translate-x-1/2 z-[400] bg-slate-900/95 border border-slate-700/80 p-5 rounded-[32px] shadow-2xl backdrop-blur-xl flex items-center gap-6 animate-in slide-in-from-bottom-10 fade-in duration-500">
-             {/* conteúdo: Cidade, Total R$, Faturamento, Vendedores */}
+           <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-[400] bg-slate-900/95 border border-slate-700/80 px-6 py-3.5 rounded-3xl shadow-2xl backdrop-blur-xl flex items-center gap-6 animate-in slide-in-from-bottom-10 fade-in duration-500">
              {(() => {
                const cityObj = activeGeoFeatures.find(x => x.city === selectedCityName);
                if(!cityObj) return null;
                
-               const mainVendor = cityObj.vendors[0] || vendors[0];
+               const vendorStats = new Map();
+               cityObj.vendors.forEach(v => vendorStats.set(v.id, { vendor: v, faturado: 0 }));
+               markers.forEach(m => {
+                  let matchCity = false;
+                  if (m.cityName) {
+                     const markerCityLower = String(m.cityName).toLowerCase().trim();
+                     const normalize = (str: string) => str.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+                     if (normalize(markerCityLower) === normalize(cityObj.city.toLowerCase().trim())) matchCity = true;
+                  }
+                  if (!matchCity && m.coords && isPointInFeature(m.coords[1], m.coords[0], cityObj.feature)) {
+                     matchCity = true;
+                  }
+                  if (matchCity && vendorStats.has(m.vendorId)) {
+                     vendorStats.get(m.vendorId).faturado += m.caseFaturado;
+                  }
+               });
+               const topVendorsCity = Array.from(vendorStats.values()).sort((a,b) => b.faturado - a.faturado).slice(0, 3);
 
                return (
                  <>
-                   <div className="flex -space-x-4 pl-2 pr-4 border-r border-slate-700">
-                     {cityObj.vendors.slice(0, 3).map((v, i) => (
-                       v.avatar ? (
-                         <img key={v.id} src={v.avatar} title={v.name} className="w-16 h-16 md:w-20 md:h-20 rounded-full object-cover border-[3px] shadow-[0_0_20px_rgba(0,0,0,0.5)] z-10" style={{ borderColor: v.color, zIndex: 30 - i }} />
-                       ) : (
-                         <div key={v.id} title={v.name} className="w-16 h-16 md:w-20 md:h-20 rounded-full shadow-[0_0_20px_rgba(0,0,0,0.5)] text-white text-xl md:text-2xl font-black flex items-center justify-center border-[3px] z-10" style={{ backgroundColor: v.color, borderColor: v.color, zIndex: 30 - i }}>
-                           {v.name.substring(0, 2).toUpperCase()}
-                         </div>
-                       )
-                     ))}
+                   <div className="flex flex-col pr-6 border-r border-slate-700">
+                     <span className="text-slate-400 font-bold text-[9px] tracking-widest uppercase mb-0.5 flex items-center gap-1"><Building2 className="w-3 h-3 text-emerald-400"/> Território em Foco</span>
+                     <span className="text-white font-black text-2xl max-w-[200px] truncate leading-tight">{cityObj.city}</span>
                    </div>
-                   <div className="flex flex-col pr-8 border-r border-slate-700">
-                     <span className="text-slate-400 font-bold text-[9px] md:text-[10px] tracking-widest uppercase mb-1 flex items-center gap-1"><Building2 className="w-3 h-3 text-emerald-400"/> Território em Foco</span>
-                     <span className="text-white font-black text-2xl md:text-3xl max-w-[300px] truncate leading-tight">{cityObj.city}</span>
-                     <span className="text-slate-400 text-[10px] md:text-xs font-semibold mt-1">Cálculo em Tempo Real</span>
+
+                   <div className="flex flex-col pr-6 border-r border-slate-700">
+                     <span className="text-emerald-500 font-bold text-[9px] tracking-widest uppercase mb-0.5">Movimentado Local</span>
+                     <span className="text-emerald-400 font-black text-xl leading-tight">{formatCurrency(cityObj.totalVendido)}</span>
                    </div>
-                   <div className="flex flex-col px-4">
-                     <span className="text-emerald-500 font-bold text-[9px] md:text-[10px] tracking-widest uppercase mb-1">Movimentado Local</span>
-                     <span className="text-emerald-400 font-black text-2xl md:text-3xl leading-tight">{formatCurrency(cityObj.totalVendido)}</span>
-                     <span className="text-slate-500 text-[10px] md:text-xs font-semibold mt-1">{cityObj.count} pedidos captados na área</span>
+
+                   <div className="flex flex-col pr-6 border-r border-slate-700">
+                     <span className="text-blue-500 font-bold text-[9px] tracking-widest uppercase mb-0.5">Faturamento Total</span>
+                     <span className="text-blue-400 font-black text-xl leading-tight">{formatCurrency(cityObj.totalFaturado)}</span>
                    </div>
-                   <div className="flex flex-col pl-4">
-                     <span className="text-blue-500 font-bold text-[9px] md:text-[10px] tracking-widest uppercase mb-1">Faturamento Regional</span>
-                     <span className="text-blue-400 font-black text-2xl md:text-3xl leading-tight">{formatCurrency(cityObj.totalFaturado)}</span>
-                     <span className="text-slate-500 text-[10px] md:text-xs font-semibold mt-1">Valores Aprovados e Pagos</span>
+                   
+                   <div className="flex items-center gap-4">
+                     <div className="flex flex-col">
+                       <span className="text-slate-400 font-bold text-[9px] tracking-widest uppercase mb-1.5">Responsáveis Locais</span>
+                       <div className="flex gap-4">
+                         {topVendorsCity.map(({vendor: v, faturado}) => (
+                           <div key={v.id} className="flex items-center gap-2">
+                             {v.avatar ? (
+                               <img src={v.avatar} className="w-7 h-7 rounded-full object-cover shadow-sm border flex-shrink-0" style={{ borderColor: v.color }} />
+                             ) : (
+                               <div className="w-7 h-7 rounded-full flex items-center justify-center text-[8px] font-bold text-white shadow-sm border flex-shrink-0" style={{ backgroundColor: v.color, borderColor: v.color }}>
+                                 {v.name.substring(0, 2).toUpperCase()}
+                               </div>
+                             )}
+                             <div className="flex flex-col">
+                               <span className="text-[10px] font-bold text-white leading-none line-clamp-1 max-w-[80px]">{v.name}</span>
+                               <span className="text-[10px] font-black text-blue-400 leading-tight">{formatCurrency(faturado)}</span>
+                             </div>
+                           </div>
+                         ))}
+                       </div>
+                     </div>
                    </div>
                  </>
                )
