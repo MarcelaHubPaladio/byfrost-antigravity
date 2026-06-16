@@ -213,8 +213,12 @@ export function OrdersTerritoryMap({
     });
     return features.sort((a,b) => b.totalFaturado - a.totalFaturado);
   }, [vendors, vendorConfig, markers]);
-
   const filteredVendors = vendors.filter(v => v.name.toLowerCase().includes(searchQ.toLowerCase()));
+
+  // Rankings
+  const rankingCandidates = vendors.filter(v => v.id !== "unassigned" && !vendorConfig[v.id]?.hideFromRanking && vendorConfig[v.id]);
+  const topFaturado = [...rankingCandidates].sort((a, b) => b.totalFaturado - a.totalFaturado).slice(0, 5);
+  const topCount = [...rankingCandidates].sort((a, b) => b.count - a.count).slice(0, 3);
 
   useEffect(() => {
     if (!isFullscreen || activeGeoFeatures.length === 0) return;
