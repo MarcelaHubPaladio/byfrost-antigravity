@@ -1036,6 +1036,11 @@ export default function Orders() {
               </div>
 
               <div className="flex flex-wrap items-center gap-3">
+                <Link to="/app/orders/territory-map" target="_blank">
+                  <Button variant="outline" className="h-10 rounded-2xl shadow-sm font-bold border-slate-200">
+                     Apresentar Mapa
+                  </Button>
+                </Link>
                 <Button 
                   onClick={() => setIsNewOrderDialogOpen(true)}
                   className="h-10 rounded-2xl bg-blue-600 text-white hover:bg-blue-700 shadow-sm font-bold"

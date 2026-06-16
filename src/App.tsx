@@ -49,6 +49,7 @@ const AdminUserDetail = lazyWithRetry(() => import("@/pages/AdminUserDetail"));
 const Crm = lazyWithRetry(() => import("@/pages/Crm"));
 const CrmCaseDetail = lazyWithRetry(() => import("@/pages/CrmCaseDetail"));
 const Orders = lazyWithRetry(() => import("@/pages/Orders"));
+const OrdersTerritoryDashboard = lazyWithRetry(() => import("@/pages/OrdersTerritoryDashboard"));
 const OrdersCommissions = lazyWithRetry(() => import("@/pages/OrdersCommissions"));
 const CommissionReportDetail = lazyWithRetry(() => import("@/pages/CommissionReportDetail"));
 const SalesOrderCase = lazyWithRetry(() => import("@/pages/SalesOrderCase"));
@@ -324,6 +325,15 @@ const App = () => (
                     element={
                       <RequireRouteAccess routeKey="app.orders">
                         <Orders />
+                      </RequireRouteAccess>
+                    }
+                  />
+
+                  <Route
+                    path="/app/orders/territory-map"
+                    element={
+                      <RequireRouteAccess routeKey="app.orders">
+                        <OrdersTerritoryDashboard />
                       </RequireRouteAccess>
                     }
                   />
