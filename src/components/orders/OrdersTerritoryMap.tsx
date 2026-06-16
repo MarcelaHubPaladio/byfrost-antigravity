@@ -148,7 +148,7 @@ export function OrdersTerritoryMap({
     try {
       const features = [];
       for (const city of editCityList) {
-        const fullQuery = `${city}, PR`;
+        const fullQuery = `${city}, Paraná, Brazil`;
         // polygon_threshold=0.005 reduz drasticamente os pontos e o tamanho do GeoJSON (evitando QuotaExceededError do localStorage)
         const res = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(fullQuery)}&format=geojson&polygon_geojson=1&limit=1&polygon_threshold=0.005`);
         const data = await res.json();
@@ -505,7 +505,16 @@ export function OrdersTerritoryMap({
                                   className="h-8 text-xs mb-2 bg-slate-50 border-slate-200" 
                                 />
                                 <div className="max-h-[200px] overflow-y-auto space-y-1.5 pr-2">
-                                  {prCities.filter(c => c.toLowerCase().includes(citySearchText.toLowerCase())).map(c => (
+                                  {prCities
+                                    .filter(c => c.toLowerCase().includes(citySearchText.toLowerCase()))
+                                    .sort((a, b) => {
+                                      const aSel = editCityList.includes(a);
+                                      const bSel = editCityList.includes(b);
+                                      if (aSel && !bSel) return -1;
+                                      if (!aSel && bSel) return 1;
+                                      return a.localeCompare(b);
+                                    })
+                                    .map(c => (
                                     <div key={c} className="flex items-center space-x-2">
                                       <Checkbox 
                                         id={`city-${c}`} 
