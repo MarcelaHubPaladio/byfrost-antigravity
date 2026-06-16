@@ -139,8 +139,8 @@ export function OrdersTerritoryMap({
     let colorIdx = 0;
 
     const mappedMarkers = cases.map(c => {
-      const vId = c.assigned_user_id || "unassigned";
-      const vName = c.users_profile?.display_name || c.users_profile?.email || "Sem Responsável";
+      const vId = c.assigned_vendor_id || c.assigned_user_id || "unassigned";
+      const vName = c.assigned_vendor?.display_name || c.users_profile?.display_name || c.users_profile?.email || "Sem Responsável";
       
       if (!vMap.has(vId)) {
         vMap.set(vId, {
