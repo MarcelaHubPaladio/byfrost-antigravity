@@ -145,7 +145,7 @@ export default function OrdersTerritoryDashboard() {
         <div className="w-px h-6 bg-slate-700" />
         
         <div className="px-2 flex items-center">
-          <DateRangePickerCustom date={dateRange} setDate={setDateRange} className="bg-transparent border-none text-white font-bold hover:text-blue-400 hover:bg-transparent h-8 [&>button]:text-white [&>button]:font-bold" />
+          <DateRangePickerCustom date={dateRange} onDateChange={setDateRange} className="bg-transparent border-none text-white font-bold hover:text-blue-400 hover:bg-transparent h-8 [&>button]:text-white [&>button]:font-bold" />
         </div>
 
         <div className="w-px h-6 bg-slate-700" />

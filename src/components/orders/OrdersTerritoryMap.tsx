@@ -80,6 +80,7 @@ export function OrdersTerritoryMap({
   const [searchQ, setSearchQ] = useState("");
   const [mapInstance, setMapInstance] = useState<L.Map | null>(null);
   const [selectedCityName, setSelectedCityName] = useState<string | null>(null);
+  const [autoPlayIndex, setAutoPlayIndex] = useState(0);
   
   const storageKey = `territory_config_${activeTenantId}`;
   const [vendorConfig, setVendorConfig] = useState<Record<string, VendorTerritory>>({});
