@@ -69,6 +69,7 @@ import { DateRange } from "react-day-picker";
 import { cn } from "@/lib/utils";
 import { NewSalesOrderDialog } from "@/components/case/NewSalesOrderDialog";
 import { ImportOrdersDialog } from "@/components/case/ImportOrdersDialog";
+import { OrdersTerritoryMap } from "@/components/orders/OrdersTerritoryMap";
 import { Link, useNavigate } from "react-router-dom";
 import { 
   Select, 
@@ -301,7 +302,7 @@ export default function Orders() {
   
   const [exportingCsv, setExportingCsv] = useState(false);
   const [exportingPdf, setExportingPdf] = useState(false);
-  const [viewMode, setViewMode] = useState<"kanban" | "list">(() => {
+  const [viewMode, setViewMode] = useState<"kanban" | "list" | "map">(() => {
     return (localStorage.getItem("orders_view_mode") as any) || "kanban";
   });
   const [showStats, setShowStats] = useState(() => {
@@ -328,7 +329,7 @@ export default function Orders() {
     reasons: [],
   });
 
-  const setAndPersistViewMode = (mode: "kanban" | "list") => {
+  const setAndPersistViewMode = (mode: "kanban" | "list" | "map") => {
     setViewMode(mode);
     localStorage.setItem("orders_view_mode", mode);
   };
@@ -1064,6 +1065,13 @@ export default function Orders() {
                   >
                     <Columns2 className="h-4 w-4" />
                   </Button>
+                  <Button
+                    variant={viewMode === "map" ? "default" : "secondary"}
+                    className="h-8 rounded-xl px-3"
+                    onClick={() => setAndPersistViewMode("map")}
+                  >
+                    <MapPin className="h-4 w-4" />
+                  </Button>
                 </div>
 
                 <Button
@@ -1750,6 +1758,10 @@ export default function Orders() {
                     })}
                   </TableBody>
                 </Table>
+              </div>
+            ) : viewMode === "map" ? (
+              <div className="w-full h-full min-h-[500px]">
+                <OrdersTerritoryMap cases={filteredRows} />
               </div>
             ) : (
               <DndContext
