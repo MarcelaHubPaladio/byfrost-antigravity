@@ -1766,7 +1766,11 @@ export default function Orders() {
               </div>
             ) : viewMode === "map" ? (
               <div className="w-full h-full min-h-[500px]">
-                <OrdersTerritoryMap cases={filteredRows} />
+                <OrdersTerritoryMap 
+                  cases={filteredRows} 
+                  caseFields={caseDataQ.data?.fields} 
+                  caseTotals={caseDataQ.data?.totals} 
+                />
               </div>
             ) : (
               <DndContext
