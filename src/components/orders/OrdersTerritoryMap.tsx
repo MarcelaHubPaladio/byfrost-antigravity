@@ -693,11 +693,7 @@ export function OrdersTerritoryMap({
                            weight: isActiveCity ? 4 : 0, // Borda so na ativa
                          }
                       }}
-                    >
-                      <Tooltip permanent direction="center" className="bg-transparent border-none text-white text-3xl font-black drop-shadow-[0_4px_4px_rgba(0,0,0,0.8)] opacity-100 shadow-none">
-                         {selectedCityName}
-                      </Tooltip>
-                    </GeoJSON>
+                    />
                  );
               }
 
@@ -798,7 +794,7 @@ export function OrdersTerritoryMap({
       {/* Sidebar Right: Rankings Otimizados */}
       <div className={cn(
         "hidden lg:flex flex-col rounded-[20px] shadow-sm overflow-hidden",
-        isFullscreen ? "absolute right-6 top-6 bottom-6 w-[180px] bg-slate-900/80 backdrop-blur-xl border border-slate-700/80 z-[400]" : "w-72 bg-white border border-slate-200"
+        isFullscreen ? "absolute right-6 top-6 bottom-6 w-[240px] bg-slate-900/80 backdrop-blur-xl border border-slate-700/80 z-[400]" : "w-72 bg-white border border-slate-200"
       )}>
         <div className={cn("p-4 border-b", isFullscreen ? "border-slate-700 bg-slate-800/50" : "border-slate-100 bg-slate-50/50")}>
           <h2 className={cn("text-base font-bold flex items-center gap-2", isFullscreen ? "text-slate-100" : "text-slate-800")}>
@@ -830,7 +826,7 @@ export function OrdersTerritoryMap({
                             {v.name.substring(0, 2).toUpperCase()}
                           </div>
                         )}
-                        <span className={cn("text-[10px] font-bold line-clamp-1", isFullscreen ? "text-slate-200 max-w-[50px]" : "text-slate-700 max-w-[100px]")}>{v.name}</span>
+                        <span className={cn("text-[10px] font-bold line-clamp-1", isFullscreen ? "text-slate-200 max-w-[90px]" : "text-slate-700 max-w-[100px]")}>{v.name}</span>
                       </div>
                       <span className={cn("text-[10px] font-black text-blue-500")}>{formatCurrency(v.totalFaturado)}</span>
                     </div>
@@ -868,7 +864,7 @@ export function OrdersTerritoryMap({
                             {v.name.substring(0, 2).toUpperCase()}
                           </div>
                         )}
-                        <span className={cn("text-[10px] font-bold line-clamp-1", isFullscreen ? "text-slate-200 max-w-[50px]" : "text-slate-700 max-w-[100px]")}>{v.name}</span>
+                        <span className={cn("text-[10px] font-bold line-clamp-1", isFullscreen ? "text-slate-200 max-w-[90px]" : "text-slate-700 max-w-[100px]")}>{v.name}</span>
                       </div>
                       <span className={cn("text-xs font-black text-purple-500")}>{v.count} un.</span>
                     </div>
