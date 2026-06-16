@@ -6,8 +6,10 @@ import { FileText, ArrowLeft, Plus } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { Button } from "@/components/ui/button";
 import { CommissionsTab } from "@/components/finance/FinancialLedgerPanel/CommissionsTab";
+import { CommissionsRadarTab } from "@/components/finance/CommissionsRadarTab";
 import { CommissionReportDialog } from "@/components/case/CommissionReportDialog";
 import { useTenant } from "@/providers/TenantProvider";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 export default function OrdersCommissions() {
   const { activeTenantId } = useTenant();
@@ -127,9 +129,28 @@ export default function OrdersCommissions() {
             </Button>
           </div>
 
-          <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-200/60">
-            <CommissionsTab allowEdit={true} allowDelete={true} />
-          </div>
+          <Tabs defaultValue="radar" className="w-full">
+            <TabsList className="mb-6 h-12 bg-white border border-slate-200 rounded-xl p-1 inline-flex w-full sm:w-auto">
+              <TabsTrigger value="radar" className="h-full rounded-lg px-6 font-bold text-sm data-[state=active]:bg-indigo-50 data-[state=active]:text-indigo-700 data-[state=active]:shadow-none">Radar Ao Vivo</TabsTrigger>
+              <TabsTrigger value="history" className="h-full rounded-lg px-6 font-bold text-sm data-[state=active]:bg-slate-100 data-[state=active]:text-slate-800 data-[state=active]:shadow-none">Extratos Emitidos</TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="radar" className="mt-0 outline-none">
+               <CommissionsRadarTab 
+                  cases={casesQ.data || []}
+                  caseFields={caseDataQ.data?.fields || new Map()}
+                  caseTotals={caseDataQ.data?.totals || new Map()}
+                  vendors={vendorsQ.data || []}
+                  users={usersQ.data || []}
+               />
+            </TabsContent>
+
+            <TabsContent value="history" className="mt-0 outline-none">
+              <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-200/60">
+                <CommissionsTab allowEdit={true} allowDelete={true} />
+              </div>
+            </TabsContent>
+          </Tabs>
         </div>
       </div>
 

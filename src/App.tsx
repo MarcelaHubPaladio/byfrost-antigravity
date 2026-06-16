@@ -765,7 +765,7 @@ const App = () => (
                   <Route
                     path="/app/orders/commissions"
                     element={
-                      <RequireRouteAccess routeKey="app.orders">
+                      <RequireRouteAccess routeKey="app.finance">
                         <OrdersCommissions />
                       </RequireRouteAccess>
                     }
@@ -774,7 +774,7 @@ const App = () => (
                   <Route
                     path="/app/orders/commissions/:id"
                     element={
-                      <RequireRouteAccess routeKey="app.orders">
+                      <RequireRouteAccess routeKey="app.finance">
                         <CommissionReportDetail />
                       </RequireRouteAccess>
                     }
