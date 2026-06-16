@@ -604,13 +604,11 @@ export function OrdersTerritoryMap({
             if (!conf) return null;
 
             const isSelected = selectedVendorId === v.id;
-            const isFaded = selectedVendorId !== null && !isSelected;
-            if (isFaded) return null;
 
             const baseStyle = {
               color: v.color,
               fillColor: v.color,
-              fillOpacity: isSelected ? 0.25 : 0.1,
+              fillOpacity: isSelected || selectedVendorId === null ? 0.25 : 0.05,
               weight: isSelected ? 3 : 1,
               dashArray: isSelected ? undefined : "5, 5"
             };
