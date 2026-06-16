@@ -233,6 +233,22 @@ export function OrdersTerritoryMap({
     return () => clearInterval(interval);
   }, [isFullscreen, activeGeoFeatures, autoPlayIntervalSecs, mapInstance]);
 
+  const MapClicker = () => {
+    useMapEvents({
+      click(e) {
+        if (!editingConfig) return;
+
+        if (editTab === "circle") {
+          setEditLat(e.latlng.lat.toFixed(5));
+          setEditLng(e.latlng.lng.toFixed(5));
+        } else if (editTab === "polygon") {
+          setEditPolygon(prev => [...prev, [e.latlng.lat, e.latlng.lng]]);
+        }
+      },
+    });
+    return null;
+  };
+
   return (
     <div className={cn("flex flex-col md:flex-row w-full gap-4", isFullscreen ? "h-full bg-slate-900 rounded-none p-0" : "h-[calc(100vh-220px)] bg-slate-50 p-2 rounded-[24px]")}>
       {!isFullscreen && (

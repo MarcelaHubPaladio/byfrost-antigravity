@@ -89,7 +89,7 @@ export default function OrdersTerritoryDashboard() {
             .from("case_fields")
             .select("case_id,key,value_text")
             .in("case_id", chunk)
-            .in("key", ["billing_status", "partial_paid_value"])
+            .in("key", ["billing_status", "partial_paid_value", "cidade", "city", "address_city"])
             .limit(1000),
           supabase
             .from("case_items")
