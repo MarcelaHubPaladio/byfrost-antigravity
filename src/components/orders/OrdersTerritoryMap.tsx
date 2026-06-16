@@ -816,19 +816,19 @@ export function OrdersTerritoryMap({
                 const pct = (v.totalFaturado / maxVol) * 100;
                 return (
                   <div key={v.id} className={cn("flex flex-col gap-2 p-2.5 rounded-xl transition-colors", isFullscreen ? "bg-slate-800/50 hover:bg-slate-800" : "bg-slate-50 hover:bg-slate-100")}>
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2.5">
-                        <span className={cn("text-xs font-black w-4 flex justify-center", i === 0 ? "text-blue-500" : isFullscreen ? "text-slate-600" : "text-slate-400")}>{i + 1}º</span>
-                        {v.avatar ? (
-                          <img src={v.avatar} className="w-7 h-7 rounded-full object-cover shadow-sm border" style={{borderColor: v.color}} />
-                        ) : (
-                          <div className="w-7 h-7 rounded-full flex items-center justify-center text-[9px] font-bold text-white shadow-sm border" style={{backgroundColor: v.color, borderColor: v.color}}>
-                            {v.name.substring(0, 2).toUpperCase()}
-                          </div>
-                        )}
-                        <span className={cn("text-[10px] font-bold line-clamp-1", isFullscreen ? "text-slate-200 max-w-[90px]" : "text-slate-700 max-w-[100px]")}>{v.name}</span>
+                    <div className="flex items-center gap-3 w-full">
+                      <span className={cn("text-xs font-black w-3 flex justify-center flex-shrink-0", i === 0 ? "text-blue-500" : isFullscreen ? "text-slate-600" : "text-slate-400")}>{i + 1}º</span>
+                      {v.avatar ? (
+                        <img src={v.avatar} className="w-8 h-8 rounded-full object-cover shadow-sm border flex-shrink-0 aspect-square" style={{borderColor: v.color}} />
+                      ) : (
+                        <div className="w-8 h-8 rounded-full flex items-center justify-center text-[9px] font-bold text-white shadow-sm border flex-shrink-0 aspect-square" style={{backgroundColor: v.color, borderColor: v.color}}>
+                          {v.name.substring(0, 2).toUpperCase()}
+                        </div>
+                      )}
+                      <div className="flex flex-col flex-1 min-w-0 justify-center">
+                        <span className={cn("text-[11px] font-bold truncate w-full", isFullscreen ? "text-slate-200" : "text-slate-700")}>{v.name}</span>
+                        <span className={cn("text-xs font-black text-blue-500")}>{formatCurrency(v.totalFaturado)}</span>
                       </div>
-                      <span className={cn("text-[10px] font-black text-blue-500")}>{formatCurrency(v.totalFaturado)}</span>
                     </div>
                     <div className={cn("h-1 w-full rounded-full overflow-hidden", isFullscreen ? "bg-slate-700" : "bg-slate-200")}>
                       <div className="h-full bg-blue-500 rounded-full" style={{ width: `${pct}%` }}></div>
@@ -853,20 +853,19 @@ export function OrdersTerritoryMap({
                 const pct = (v.count / maxVol) * 100;
                 return (
                   <div key={v.id} className={cn("flex flex-col gap-2 p-2.5 rounded-xl transition-colors", isFullscreen ? "bg-slate-800/50 hover:bg-slate-800" : "bg-slate-50 hover:bg-slate-100")}>
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2.5">
-                        <span className={cn("text-xs font-black w-4 flex justify-center", i === 0 ? "text-purple-500" : isFullscreen ? "text-slate-600" : "text-slate-400")}>{i + 1}º</span>
-                        
-                        {v.avatar ? (
-                          <img src={v.avatar} className="w-7 h-7 rounded-full object-cover shadow-sm border" style={{borderColor: v.color}} />
-                        ) : (
-                          <div className="w-7 h-7 rounded-full flex items-center justify-center text-[9px] font-bold text-white shadow-sm border" style={{backgroundColor: v.color, borderColor: v.color}}>
-                            {v.name.substring(0, 2).toUpperCase()}
-                          </div>
-                        )}
-                        <span className={cn("text-[10px] font-bold line-clamp-1", isFullscreen ? "text-slate-200 max-w-[90px]" : "text-slate-700 max-w-[100px]")}>{v.name}</span>
+                    <div className="flex items-center gap-3 w-full">
+                      <span className={cn("text-xs font-black w-3 flex justify-center flex-shrink-0", i === 0 ? "text-purple-500" : isFullscreen ? "text-slate-600" : "text-slate-400")}>{i + 1}º</span>
+                      {v.avatar ? (
+                        <img src={v.avatar} className="w-8 h-8 rounded-full object-cover shadow-sm border flex-shrink-0 aspect-square" style={{borderColor: v.color}} />
+                      ) : (
+                        <div className="w-8 h-8 rounded-full flex items-center justify-center text-[9px] font-bold text-white shadow-sm border flex-shrink-0 aspect-square" style={{backgroundColor: v.color, borderColor: v.color}}>
+                          {v.name.substring(0, 2).toUpperCase()}
+                        </div>
+                      )}
+                      <div className="flex flex-col flex-1 min-w-0 justify-center">
+                        <span className={cn("text-[11px] font-bold truncate w-full", isFullscreen ? "text-slate-200" : "text-slate-700")}>{v.name}</span>
+                        <span className={cn("text-xs font-black text-purple-500")}>{v.count} un.</span>
                       </div>
-                      <span className={cn("text-xs font-black text-purple-500")}>{v.count} un.</span>
                     </div>
                     <div className={cn("h-1 w-full rounded-full overflow-hidden", isFullscreen ? "bg-slate-700" : "bg-slate-200")}>
                       <div className="h-full bg-purple-500 rounded-full" style={{ width: `${pct}%` }}></div>
