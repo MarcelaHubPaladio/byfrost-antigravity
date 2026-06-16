@@ -237,6 +237,56 @@ export function OrdersTerritoryMap({
     return () => clearInterval(interval);
   }, [isFullscreen, activeGeoFeatures, autoPlayIntervalSecs, mapInstance]);
 
+  const renderTerritoryPopup = (v: any, conf: any) => (
+    <Popup className="rounded-xl overflow-hidden shadow-lg border-0">
+      <div className="p-3 bg-white min-w-[220px]">
+        <div className="flex items-center gap-3 border-b pb-2 mb-2">
+          {v.avatar ? (
+            <img src={v.avatar} className="w-10 h-10 rounded-full object-cover shadow-sm border" style={{ borderColor: v.color }} />
+          ) : (
+            <div className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold text-white shadow-sm border" style={{ backgroundColor: v.color, borderColor: v.color }}>
+              {v.name.substring(0, 2).toUpperCase()}
+            </div>
+          )}
+          <div>
+            <h4 className="font-bold text-sm text-slate-800 line-clamp-1" title={v.name}>{v.name}</h4>
+            <div className="flex items-center gap-1 mt-0.5">
+              <span className="w-2 h-2 rounded-full" style={{ backgroundColor: v.color }}></span>
+              <span className="text-[10px] text-slate-500 font-medium tracking-wide uppercase">Área de Atuação</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-2 mb-3">
+          <div className="bg-slate-50 p-2 rounded-lg border border-slate-100">
+            <div className="text-[10px] text-slate-500 font-medium mb-0.5 flex items-center gap-1">Pedidos</div>
+            <div className="font-bold text-sm text-slate-800">{v.count} un.</div>
+          </div>
+          <div className="bg-slate-50 p-2 rounded-lg border border-slate-100">
+            <div className="text-[10px] text-slate-500 font-medium mb-0.5 flex items-center gap-1">Faturado</div>
+            <div className="font-bold text-sm text-emerald-600 line-clamp-1" title={formatCurrency(v.totalFaturado)}>{formatCurrency(v.totalFaturado)}</div>
+          </div>
+        </div>
+
+        {conf.type === "circle" && (
+          <div className="text-[11px] text-slate-600 bg-slate-100/50 p-2 rounded flex items-center gap-1.5 justify-center">
+            Raio de <span className="font-bold">{conf.radiusKm}km</span>
+          </div>
+        )}
+        {conf.type === "polygon" && conf.cityNames && conf.cityNames.length > 0 && (
+          <div className="text-[11px] text-slate-600 bg-slate-100/50 p-2 rounded max-h-[80px] overflow-y-auto no-scrollbar">
+            <div className="font-medium text-slate-800 mb-1 flex items-center gap-1">Cidades Atendidas:</div>
+            <div className="flex flex-wrap gap-1">
+              {conf.cityNames.map((city: string) => (
+                <span key={city} className="bg-white border px-1.5 py-0.5 rounded text-[10px] leading-tight text-slate-700 shadow-sm">{city}</span>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    </Popup>
+  );
+
   const MapClicker = () => {
     useMapEvents({
       click(e) {
