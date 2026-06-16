@@ -109,10 +109,11 @@ export function OrdersTerritoryMap({
       .catch(err => console.error("Falha ao buscar cidades do PR", err));
   }, []);
 
-  // Lógica de Sincronização Temporária: Voltando ao LocalStorage
+  // Lógica de Sincronização: Supabase <- LocalStorage Fallback
   useEffect(() => {
     if (globalVendors.length > 0 && activeTenantId) {
       let mergedConfig: Record<string, VendorTerritory> = {};
+      let needsMigration = false;
       const localStr = localStorage.getItem(storageKey);
       let localConf: Record<string, VendorTerritory> = {};
       if (localStr) {
@@ -120,12 +121,25 @@ export function OrdersTerritoryMap({
       }
 
       globalVendors.forEach(gv => {
-         // Fallback total para o LocalStorage pois a tabela vendors não possui meta_json
-         if (localConf[gv.id]) {
+         const remoteJson = gv.meta_json?.territory_config;
+         if (remoteJson) {
+           mergedConfig[gv.id] = remoteJson;
+         } else if (localConf[gv.id]) {
            mergedConfig[gv.id] = localConf[gv.id];
+           needsMigration = true;
          }
       });
       setVendorConfig(mergedConfig);
+
+      // Auto-Migration de backup local para Supabase
+      if (needsMigration) {
+         globalVendors.forEach(gv => {
+           if (!gv.meta_json?.territory_config && localConf[gv.id]) {
+             const newMeta = { ...(gv.meta_json || {}), territory_config: localConf[gv.id] };
+             supabase.from("vendors").update({ meta_json: newMeta }).eq("id", gv.id).then(()=>console.log("Migrated local map to cloud:", gv.id));
+           }
+         });
+      }
     }
   }, [globalVendors, activeTenantId, storageKey]);
 
@@ -149,8 +163,15 @@ export function OrdersTerritoryMap({
 
     const newConfig = { ...vendorConfig, [vId]: newConf };
     setVendorConfig(newConfig);
-    localStorage.setItem(storageKey, JSON.stringify(newConfig));
     setEditingConfig(null);
+
+    // Save to Supabase Global
+    const vendorRow = globalVendors.find(x => x.id === vId);
+    if (vendorRow || true) {
+       const baseMeta = vendorRow?.meta_json || {};
+       const newMeta = { ...baseMeta, territory_config: newConf };
+       supabase.from("vendors").update({ meta_json: newMeta }).eq("id", vId).then();
+    }
   };
 
   const handleCitySearch = async () => {

@@ -87,7 +87,7 @@ export default function OrdersTerritoryDashboard() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("vendors")
-        .select("id,display_name")
+        .select("id,display_name,meta_json")
         .eq("tenant_id", activeTenantId!);
       if (error) throw error;
       return data ?? [];
