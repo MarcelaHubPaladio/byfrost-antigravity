@@ -306,33 +306,290 @@ export function OrdersTerritoryMap({
 
   return (
     <div className={cn("flex flex-col md:flex-row w-full gap-4", isFullscreen ? "h-full bg-slate-900 rounded-none p-0" : "h-[calc(100vh-220px)] bg-slate-50 p-2 rounded-[24px]")}>
+      {/* Sidebar Left */}
       {!isFullscreen && (
-      <div className="flex flex-col rounded-[20px] shadow-sm border overflow-hidden w-full md:w-[350px] bg-white border-slate-200">
-        <div className="p-4 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
-           <h2 className="text-lg font-bold flex items-center gap-2 text-slate-800"><MapIcon className="w-5 h-5 text-blue-500" />Configurações</h2>
+      <div className={cn(
+        "flex flex-col rounded-[20px] shadow-sm border overflow-hidden",
+        "w-full md:w-[350px] bg-white border-slate-200"
+      )}>
+        <div className={cn("p-4 border-b", isFullscreen ? "border-slate-700 bg-slate-800/50" : "border-slate-100 bg-slate-50/50")}>
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className={cn("text-lg font-bold flex items-center gap-2", isFullscreen ? "text-slate-100" : "text-slate-800")}>
+                <MapIcon className="w-5 h-5 text-blue-500" />
+                Configurações
+              </h2>
+              <p className={cn("text-xs mt-1", isFullscreen ? "text-slate-400" : "text-slate-500")}>Gerir alcance e raios</p>
+            </div>
+            {!isFullscreen && (
+              <button 
+                onClick={() => {
+                  if (confirm("Isso apagará a memória do mapa e os polígonos travados. Deseja limpar os territórios de todos os vendedores?")) {
+                    localStorage.removeItem(storageKey);
+                    setVendorConfig({});
+                    setSelectedVendorId(null);
+                    setEditingConfig(null);
+                  }
+                }}
+                className="p-1.5 text-rose-500 hover:bg-rose-100 rounded-lg transition-colors border border-transparent hover:border-rose-200"
+                title="Limpar memórias e territórios"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+            )}
+          </div>
         </div>
-        <div className="p-3"><Input placeholder="Buscar vendedor..." onChange={(e) => setSearchQ(e.target.value)} className="rounded-xl" /></div>
-        <div className="flex-1 overflow-y-auto p-3 space-y-3">
-          {filteredVendors.map((v) => (
-             <div key={v.id} className="p-3 bg-white border border-slate-200 rounded-xl flex items-center justify-between">
-                <span className="text-sm font-semibold">{v.name}</span>
-                <button onClick={() => { 
-                   setEditingConfig(v.id); 
-                   const conf = vendorConfig[v.id] || {};
-                   setEditTab(conf.type || "circle");
-                   setEditLat(String(conf.lat || -25.467));
-                   setEditLng(String(conf.lng || -50.651));
-                   setEditRadius(String(conf.radiusKm || 3));
-                   setEditPolygon(conf.polygonCoords || []);
-                   setEditCityList(conf.cityNames || []);
-                   setEditCityGeoJson(conf.geojson);
-                   setEditHideRanking(!!conf.hideFromRanking);
-                }} className="p-1.5 rounded-lg hover:bg-slate-100"><Settings className="w-4 h-4" /></button>
-             </div>
-          ))}
+
+        {!isFullscreen && (
+          <div className="p-3">
+            <div className="relative">
+              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <Input 
+                placeholder="Buscar vendedor..." 
+                value={searchQ}
+                onChange={(e) => setSearchQ(e.target.value)}
+                className="pl-9 h-9 rounded-xl text-sm"
+              />
+            </div>
+          </div>
+        )}
+
+        <div className="flex-1 overflow-y-auto p-3 space-y-3 no-scrollbar">
+          {filteredVendors.map((v, i) => {
+             const isSelected = selectedVendorId === v.id;
+             const isEditing = editingConfig === v.id;
+
+             return (
+              <div key={v.id} className="flex flex-col gap-1">
+                <div 
+                  onClick={() => setSelectedVendorId(isSelected ? null : v.id)}
+                  className={cn(
+                    "flex items-center justify-between p-3 rounded-xl cursor-pointer transition-all border",
+                    isSelected 
+                      ? (isFullscreen ? "bg-slate-700 border-slate-600 shadow-sm" : "bg-slate-50 border-slate-300 shadow-sm")
+                      : (isFullscreen ? "bg-slate-800 border-transparent hover:bg-slate-700" : "bg-white border-transparent hover:bg-slate-50")
+                  )}
+                >
+                  <div className="flex items-center gap-3">
+                    {v.avatar ? (
+                       <img src={v.avatar} alt="" className="w-8 h-8 rounded-full object-cover border-2 shadow-sm" style={{ borderColor: v.color }} />
+                    ) : (
+                       <div className="w-8 h-8 rounded-full shadow-sm text-white text-[10px] font-bold flex items-center justify-center border-2" style={{ backgroundColor: v.color, borderColor: v.color }}>
+                         {v.name.substring(0, 2).toUpperCase()}
+                       </div>
+                    )}
+                    
+                    <div>
+                      <div className={cn("text-sm font-semibold line-clamp-1", isFullscreen ? "text-slate-100" : "text-slate-800")}>{v.name}</div>
+                      <div className={cn("text-[10px] font-bold mt-0.5", isFullscreen ? "text-slate-400" : "text-slate-500")}>
+                         Vend: <span className="text-emerald-500">{formatCurrency(v.totalVendido)}</span>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-center gap-2">
+                    <Badge variant="secondary" className={cn("font-bold text-[10px]", isFullscreen ? "bg-slate-900 text-slate-300" : "bg-slate-100 text-slate-700")}>
+                      {v.count} ped.
+                    </Badge>
+                    
+                    {!isFullscreen && v.id !== "unassigned" && (
+                      <button 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (isEditing) {
+                            setEditingConfig(null);
+                          } else {
+                            const conf = vendorConfig[v.id];
+                            setEditTab(conf?.type || "circle");
+                            setEditLat((conf?.lat || -25.467).toString());
+                            setEditLng((conf?.lng || -50.651).toString());
+                            setEditRadius((conf?.radiusKm || 3).toString());
+                            setEditPolygon(conf?.polygonCoords || []);
+                            
+                            // Initialize with multi-city support
+                            const initialCities = conf?.cityNames || (conf?.cityName ? [conf.cityName] : []);
+                            setEditCityList(initialCities);
+                            setEditCityGeoJson(conf?.geojson || null);
+                            setEditHideRanking(conf?.hideFromRanking || false);
+                            
+                            setEditingConfig(v.id);
+                            setSelectedVendorId(v.id);
+                          }
+                        }}
+                        className="p-1.5 rounded-lg hover:bg-slate-200 text-slate-400 hover:text-slate-700 transition-colors"
+                      >
+                        <Settings className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Edit Panel */}
+                {isEditing && !isFullscreen && (
+                  <div className="p-3 bg-blue-50/50 border border-blue-100 rounded-xl mt-1 space-y-4 animate-in fade-in slide-in-from-top-2">
+                    {/* Tabs */}
+                    <div className="flex bg-slate-200/50 p-1 rounded-lg">
+                      <button 
+                        onClick={() => setEditTab("circle")}
+                        className={cn("flex-1 flex items-center justify-center gap-1.5 py-1.5 text-[10px] font-bold uppercase rounded-md transition-all", editTab === "circle" ? "bg-white text-blue-600 shadow-sm" : "text-slate-500")}
+                      >
+                        <Crosshair className="w-3 h-3" /> Raio
+                      </button>
+                      <button 
+                        onClick={() => setEditTab("polygon")}
+                        className={cn("flex-1 flex items-center justify-center gap-1.5 py-1.5 text-[10px] font-bold uppercase rounded-md transition-all", editTab === "polygon" ? "bg-white text-blue-600 shadow-sm" : "text-slate-500")}
+                      >
+                        <Hexagon className="w-3 h-3" /> Polígono
+                      </button>
+                      <button 
+                        onClick={() => setEditTab("city")}
+                        className={cn("flex-1 flex items-center justify-center gap-1.5 py-1.5 text-[10px] font-bold uppercase rounded-md transition-all", editTab === "city" ? "bg-white text-blue-600 shadow-sm" : "text-slate-500")}
+                      >
+                        <Building2 className="w-3 h-3" /> IBGE
+                      </button>
+                    </div>
+
+                    {/* Forms */}
+                    {editTab === "circle" && (
+                      <div className="space-y-3">
+                        <p className="text-[10px] text-slate-500 leading-tight">
+                          Clique no mapa para alterar o <b>Ponto Central</b> da atuação.
+                        </p>
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <label className="text-[10px] uppercase font-bold text-slate-500 ml-1">Lat</label>
+                            <Input value={editLat} onChange={e => setEditLat(e.target.value)} className="h-8 text-xs rounded-lg bg-white border-slate-200" />
+                          </div>
+                          <div>
+                            <label className="text-[10px] uppercase font-bold text-slate-500 ml-1">Lng</label>
+                            <Input value={editLng} onChange={e => setEditLng(e.target.value)} className="h-8 text-xs rounded-lg bg-white border-slate-200" />
+                          </div>
+                        </div>
+                        <div>
+                          <label className="text-[10px] uppercase font-bold text-slate-500 ml-1">Raio (em Km)</label>
+                          <Input type="number" step="0.5" value={editRadius} onChange={e => setEditRadius(e.target.value)} className="h-8 text-xs rounded-lg bg-white border-slate-200" />
+                        </div>
+                      </div>
+                    )}
+
+                    {editTab === "polygon" && (
+                      <div className="space-y-3">
+                        <p className="text-[10px] text-slate-500 leading-tight">
+                          Clique no mapa em sequência para desenhar os vértices (bordas) da região do vendedor.
+                        </p>
+                        <div className="flex items-center justify-between text-xs font-semibold">
+                          <span>{editPolygon.length} vértices demarcados</span>
+                          {editPolygon.length > 0 && (
+                            <button onClick={() => setEditPolygon([])} className="text-rose-500 hover:text-rose-600 flex items-center gap-1 font-bold text-[10px] uppercase">
+                              <Trash2 className="w-3 h-3" /> Limpar
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {editTab === "city" && (
+                      <div className="space-y-3">
+                        <p className="text-[10px] text-slate-500 leading-tight">
+                          Selecione um ou mais municípios para baixar as divisas oficias do IBGE.
+                        </p>
+                        <div>
+                          <label className="text-[10px] uppercase font-bold text-slate-500 ml-1">Municípios do Paraná (PR)</label>
+                          <div className="flex gap-2 mt-1">
+                            
+                            <Popover>
+                              <PopoverTrigger asChild>
+                                <Button variant="outline" className="flex-1 h-8 text-xs bg-white border-slate-200 justify-between">
+                                  <span className="truncate">
+                                    {editCityList.length > 0 
+                                      ? `${editCityList.length} cidade(s) selecionada(s)` 
+                                      : "Selecionar cidades..."}
+                                  </span>
+                                  <ChevronDown className="h-3 w-3 opacity-50 ml-2 flex-shrink-0" />
+                                </Button>
+                              </PopoverTrigger>
+                              <PopoverContent className="w-[300px] p-2 rounded-xl" align="start">
+                                <Input 
+                                  placeholder="Buscar cidade..." 
+                                  value={citySearchText} 
+                                  onChange={(e) => setCitySearchText(e.target.value)} 
+                                  className="h-8 text-xs mb-2 bg-slate-50 border-slate-200" 
+                                />
+                                <div className="max-h-[200px] overflow-y-auto space-y-1.5 pr-2">
+                                  {prCities
+                                    .filter(c => c.toLowerCase().includes(citySearchText.toLowerCase()))
+                                    .sort((a, b) => {
+                                      const aSel = editCityList.includes(a);
+                                      const bSel = editCityList.includes(b);
+                                      if (aSel && !bSel) return -1;
+                                      if (!aSel && bSel) return 1;
+                                      return a.localeCompare(b);
+                                    })
+                                    .map(c => (
+                                    <div key={c} className="flex items-center space-x-2">
+                                      <Checkbox 
+                                        id={`city-${c}`} 
+                                        checked={editCityList.includes(c)}
+                                        onCheckedChange={(checked) => {
+                                          if (checked) setEditCityList(prev => [...prev, c]);
+                                          else setEditCityList(prev => prev.filter(x => x !== c));
+                                        }}
+                                      />
+                                      <label htmlFor={`city-${c}`} className="text-xs text-slate-700 cursor-pointer select-none">
+                                        {c}
+                                      </label>
+                                    </div>
+                                  ))}
+                                  {prCities.filter(c => c.toLowerCase().includes(citySearchText.toLowerCase())).length === 0 && (
+                                    <div className="text-xs text-slate-500 text-center py-2">Nenhuma cidade encontrada.</div>
+                                  )}
+                                </div>
+                              </PopoverContent>
+                            </Popover>
+
+                            <Button 
+                              size="sm" 
+                              onClick={handleCitySearch}
+                              disabled={isCityLoading || editCityList.length === 0}
+                              className="h-8 bg-slate-800 hover:bg-slate-900 px-3"
+                            >
+                              {isCityLoading ? "..." : "Carregar Mapa"}
+                            </Button>
+                          </div>
+                        </div>
+                        {editCityGeoJson && (
+                          <Badge className="bg-emerald-100 text-emerald-700 border-none font-bold">
+                            ✔ Geometria carregada com sucesso!
+                          </Badge>
+                        )}
+                      </div>
+                    )}
+                    
+                    <div className="flex items-center space-x-2 pt-2 border-t border-blue-200">
+                      <Checkbox 
+                        id={`hideRanking-${v.id}`} 
+                        checked={editHideRanking}
+                        onCheckedChange={(checked) => setEditHideRanking(!!checked)}
+                      />
+                      <label htmlFor={`hideRanking-${v.id}`} className="text-[10px] uppercase font-bold text-slate-600 cursor-pointer select-none">
+                        Ocultar este vendedor dos Rankings Oficiais
+                      </label>
+                    </div>
+
+                    <Button size="sm" className="w-full h-8 rounded-lg bg-blue-600 hover:bg-blue-700 text-xs shadow-sm font-bold mt-2" onClick={() => saveConfig(v.id)}>
+                      <Save className="w-3.5 h-3.5 mr-2" />
+                      Salvar Território
+                    </Button>
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
       </div>
       )}
+
+
 
       <div className={cn(
         "relative overflow-hidden rounded-[20px] shadow-sm border",
@@ -341,6 +598,7 @@ export function OrdersTerritoryMap({
         <MapContainer 
           center={[-25.467, -50.651]} 
           zoom={13} 
+          style={{ height: "100%", width: "100%", background: isFullscreen ? "#0f172a" : "#e2e8f0" }}
           className="z-0"
         >
           <TileLayer
