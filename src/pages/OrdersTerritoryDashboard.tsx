@@ -7,17 +7,39 @@ import { Link } from "react-router-dom";
 import { DateRangePickerCustom } from "@/components/ui/date-range-picker-custom";
 import { startOfMonth, endOfDay } from "date-fns";
 import { DateRange } from "react-day-picker";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Maximize } from "lucide-react";
 // Componente simples para tela cheia (TV / Totem)
 export default function OrdersTerritoryDashboard() {
   const { activeTenantId } = useTenant();
 
-  const [dateRange, setDateRange] = useState<DateRange | undefined>({
-    from: startOfMonth(new Date()),
-    to: endOfDay(new Date())
+  const [dateRange, setDateRange] = useState<DateRange | undefined>(() => {
+    const cached = localStorage.getItem("orders_map_daterange");
+    if (cached) {
+      try {
+        const parsed = JSON.parse(cached);
+        return { from: new Date(parsed.from), to: new Date(parsed.to) };
+      } catch(e) {}
+    }
+    return {
+      from: startOfMonth(new Date()),
+      to: endOfDay(new Date())
+    };
   });
 
-  const [autoPlayIntervalSecs, setAutoPlayIntervalSecs] = useState<number>(5);
+  const [autoPlayIntervalSecs, setAutoPlayIntervalSecs] = useState<number>(() => {
+    const cached = localStorage.getItem("orders_map_autoplay_sec");
+    return cached ? Number(cached) : 5;
+  });
+
+  useEffect(() => {
+    if (dateRange?.from && dateRange?.to) {
+      localStorage.setItem("orders_map_daterange", JSON.stringify({ from: dateRange.from, to: dateRange.to }));
+    }
+  }, [dateRange]);
+
+  useEffect(() => {
+    localStorage.setItem("orders_map_autoplay_sec", String(autoPlayIntervalSecs));
+  }, [autoPlayIntervalSecs]);
 
   // Fetch journey
   const journeyQ = useQuery({
@@ -164,6 +186,22 @@ export default function OrdersTerritoryDashboard() {
              <option value={30}>30s</option>
            </select>
         </div>
+        
+        <div className="w-px h-6 bg-slate-700" />
+        
+        <button 
+          onClick={() => {
+            if (!document.fullscreenElement) {
+              document.documentElement.requestFullscreen().catch(err => console.error(err));
+            } else {
+              document.exitFullscreen();
+            }
+          }}
+          className="flex items-center gap-2 px-4 py-2 hover:bg-slate-800 text-slate-400 hover:text-white rounded-full transition-colors text-sm font-bold"
+          title="Modo Tela Cheia Nativo"
+        >
+          <Maximize className="w-4 h-4" />
+        </button>
       </div>
       <div className="flex-1 w-full h-full p-0">
         <OrdersTerritoryMap 

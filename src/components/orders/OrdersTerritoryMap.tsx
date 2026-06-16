@@ -707,10 +707,10 @@ export function OrdersTerritoryMap({
                       style={(feature) => {
                          const isActiveCity = feature?.properties?.name === selectedCityName;
                          return {
-                           color: v.color,
+                           color: isActiveCity ? v.color : "rgba(255,255,255,0.25)",
                            fillColor: v.color,
-                           fillOpacity: isActiveCity ? 0.35 : 0.0, // Acende so a ativia
-                           weight: isActiveCity ? 4 : 0, // Borda so na ativa
+                           fillOpacity: isActiveCity ? 0.35 : 0.0,
+                           weight: isActiveCity ? 4 : 1.5,
                          }
                       }}
                     />
