@@ -8,6 +8,7 @@ import { MapPin, Search, Settings, Save, Crosshair, Map as MapIcon, Hexagon, Bui
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useTenant } from "@/providers/TenantProvider";
+import { supabase } from "@/lib/supabase";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Checkbox } from "@/components/ui/checkbox";
 import { isPointInFeature } from "./TerritoryMath";
@@ -69,12 +70,14 @@ export function OrdersTerritoryMap({
   cases,
   isFullscreen = false,
   caseFields,
-  caseTotals
+  caseTotals,
+  globalVendors = []
 }: { 
   cases: CaseRow[];
   isFullscreen?: boolean;
   caseFields?: Map<string, any>;
   caseTotals?: Map<string, number>;
+  globalVendors?: any[];
 }) {
   const { activeTenantId } = useTenant();
   const [selectedVendorId, setSelectedVendorId] = useState<string | null>(null);
@@ -106,12 +109,39 @@ export function OrdersTerritoryMap({
       .catch(err => console.error("Falha ao buscar cidades do PR", err));
   }, []);
 
+  // Lógica de Sincronização: Supabase <- LocalStorage Fallback
   useEffect(() => {
-    if (activeTenantId) {
-      const saved = localStorage.getItem(storageKey);
-      if (saved) setVendorConfig(JSON.parse(saved));
+    if (globalVendors.length > 0 && activeTenantId) {
+      let mergedConfig: Record<string, VendorTerritory> = {};
+      let needsMigration = false;
+      const localStr = localStorage.getItem(storageKey);
+      let localConf: Record<string, VendorTerritory> = {};
+      if (localStr) {
+         try { localConf = JSON.parse(localStr); } catch(e){}
+      }
+
+      globalVendors.forEach(gv => {
+         const remoteJson = gv.meta_json?.territory_config;
+         if (remoteJson) {
+           mergedConfig[gv.id] = remoteJson;
+         } else if (localConf[gv.id]) {
+           mergedConfig[gv.id] = localConf[gv.id];
+           needsMigration = true;
+         }
+      });
+      setVendorConfig(mergedConfig);
+
+      // Auto-Migration de backup local para Supabase
+      if (needsMigration) {
+         globalVendors.forEach(gv => {
+           if (!gv.meta_json?.territory_config && localConf[gv.id]) {
+             const newMeta = { ...(gv.meta_json || {}), territory_config: localConf[gv.id] };
+             supabase.from("vendors").update({ meta_json: newMeta }).eq("id", gv.id).then(()=>console.log("Migrated local map to cloud:", gv.id));
+           }
+         });
+      }
     }
-  }, [activeTenantId, storageKey]);
+  }, [globalVendors, activeTenantId, storageKey]);
 
   const saveConfig = (vId: string) => {
     const newConf: VendorTerritory = { 
@@ -133,8 +163,15 @@ export function OrdersTerritoryMap({
 
     const newConfig = { ...vendorConfig, [vId]: newConf };
     setVendorConfig(newConfig);
-    localStorage.setItem(storageKey, JSON.stringify(newConfig));
     setEditingConfig(null);
+
+    // Save to Supabase Global
+    const vendorRow = globalVendors.find(x => x.id === vId);
+    if (vendorRow || true) {
+       const baseMeta = vendorRow?.meta_json || {};
+       const newMeta = { ...baseMeta, territory_config: newConf };
+       supabase.from("vendors").update({ meta_json: newMeta }).eq("id", vId).then();
+    }
   };
 
   const handleCitySearch = async () => {
@@ -155,6 +192,20 @@ export function OrdersTerritoryMap({
     const vMap = new Map<string, any>();
     let colorIdx = 0;
     const vendorColors = ["#6366f1", "#ec4899", "#8b5cf6", "#14b8a6", "#f97316", "#eab308", "#10b981", "#ef4444", "#3b82f6"];
+
+    if (globalVendors && globalVendors.length > 0) {
+       globalVendors.forEach(gv => {
+          vMap.set(gv.id, { 
+             id: gv.id, 
+             name: gv.display_name || "Sem Nome", 
+             avatar: gv.meta_json?.avatar_url,
+             count: 0, 
+             color: vendorColors[colorIdx++ % vendorColors.length], 
+             totalVendido: 0, 
+             totalFaturado: 0 
+          });
+       });
+    }
 
     const mappedMarkers: MappedMarker[] = cases.map(c => {
       const vId = c.assigned_vendor_id || "unassigned";

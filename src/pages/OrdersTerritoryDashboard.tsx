@@ -1,5 +1,5 @@
 import { useMemo, useState, useEffect } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { useTenant } from "@/providers/TenantProvider";
 import { OrdersTerritoryMap } from "@/components/orders/OrdersTerritoryMap";
@@ -7,10 +7,11 @@ import { Link } from "react-router-dom";
 import { DateRangePickerCustom } from "@/components/ui/date-range-picker-custom";
 import { startOfMonth, endOfDay } from "date-fns";
 import { DateRange } from "react-day-picker";
-import { ArrowLeft, Maximize } from "lucide-react";
+import { ArrowLeft, Maximize, RefreshCw } from "lucide-react";
 // Componente simples para tela cheia (TV / Totem)
 export default function OrdersTerritoryDashboard() {
   const { activeTenantId } = useTenant();
+  const queryClient = useQueryClient();
 
   const [dateRange, setDateRange] = useState<DateRange | undefined>(() => {
     const cached = localStorage.getItem("orders_map_daterange");
@@ -58,13 +59,48 @@ export default function OrdersTerritoryDashboard() {
 
   const selectedJourney = journeyQ.data;
 
-  // Fetch active cases
-  const casesQ = useQuery({
-    queryKey: ["cases_orders_dashboard", activeTenantId, selectedJourney?.id],
-    enabled: Boolean(activeTenantId && selectedJourney?.id),
-    refetchInterval: 10_000,
+  // Supabase Realtime Subscription para o Placar
+  useEffect(() => {
+    if (!activeTenantId || !selectedJourney?.id) return;
+
+    const channel = supabase.channel('dashboard_cases_changes')
+      .on('postgres_changes', { 
+        event: '*', 
+        schema: 'public', 
+        table: 'cases', 
+        filter: `tenant_id=eq.${activeTenantId}` 
+      }, () => {
+         queryClient.invalidateQueries({ queryKey: ["cases_orders_dashboard"] });
+         queryClient.invalidateQueries({ queryKey: ["orders_case_fields_dashboard"] });
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [activeTenantId, selectedJourney?.id, queryClient]);
+
+  // Busca TODOS os Vendors (para carregar territórios globais independentemente se tem vendas)
+  const vendorsQ = useQuery({
+    queryKey: ["vendors_orders_dashboard", activeTenantId],
+    enabled: Boolean(activeTenantId),
     queryFn: async () => {
       const { data, error } = await supabase
+        .from("vendors")
+        .select("id,display_name,meta_json")
+        .eq("tenant_id", activeTenantId!)
+        .is("deleted_at", null);
+      if (error) throw error;
+      return data ?? [];
+    }
+  });
+
+  // Fetch active cases (Filtrados na base de dados diretamente para cortar Egress)
+  const casesQ = useQuery({
+    queryKey: ["cases_orders_dashboard", activeTenantId, selectedJourney?.id, dateRange?.from?.toISOString(), dateRange?.to?.toISOString()],
+    enabled: Boolean(activeTenantId && selectedJourney?.id),
+    queryFn: async () => {
+      let q = supabase
         .from("cases")
         .select(
           "id,title,status,state,created_at,assigned_user_id,assigned_vendor_id,users_profile:users_profile!fk_cases_users_profile(display_name,email),assigned_vendor:vendors!cases_assigned_vendor_id_fkey(display_name),meta_json"
@@ -72,29 +108,29 @@ export default function OrdersTerritoryDashboard() {
         .eq("tenant_id", activeTenantId!)
         .eq("journey_id", selectedJourney!.id)
         .is("deleted_at", null)
-        .eq("is_chat", false)
-        .order("created_at", { ascending: false });
+        .eq("is_chat", false);
+
+      if (dateRange?.from) {
+        q = q.gte("created_at", dateRange.from.toISOString());
+      }
+      if (dateRange?.to) {
+        q = q.lte("created_at", dateRange.to.toISOString());
+      }
+
+      const { data, error } = await q.order("created_at", { ascending: false });
 
       if (error) throw error;
       return data ?? [];
     },
   });
 
-  const journeyRowsAll = casesQ.data ?? [];
-  const journeyRows = journeyRowsAll.filter((r: any) => {
-    if (!dateRange || !dateRange.from) return true;
-    const cd = new Date(r.created_at);
-    if (cd < dateRange.from) return false;
-    if (dateRange.to && cd > dateRange.to) return false;
-    return true;
-  });
+  const journeyRows = casesQ.data ?? [];
 
   const caseIdsForLookup = journeyRows.map(r => r.id);
 
   const caseDataQ = useQuery({
     queryKey: ["orders_case_fields_dashboard", activeTenantId, journeyRows.length, journeyRows[0]?.id, dateRange?.from?.toISOString(), dateRange?.to?.toISOString()],
     enabled: Boolean(activeTenantId && caseIdsForLookup.length > 0),
-    refetchInterval: 10_000,
     queryFn: async () => {
       const CHUNK_SIZE = 100;
       const chunks: string[][] = [];
@@ -191,6 +227,17 @@ export default function OrdersTerritoryDashboard() {
         
         <button 
           onClick={() => {
+            queryClient.invalidateQueries({ queryKey: ["cases_orders_dashboard"] });
+            queryClient.invalidateQueries({ queryKey: ["orders_case_fields_dashboard"] });
+          }}
+          className="flex items-center gap-2 px-4 py-2 hover:bg-slate-800 text-slate-400 hover:text-white rounded-full transition-colors text-sm font-bold"
+          title="Forçar Atualização Agora"
+        >
+          <RefreshCw className="w-4 h-4" />
+        </button>
+
+        <button 
+          onClick={() => {
             if (!document.fullscreenElement) {
               document.documentElement.requestFullscreen().catch(err => console.error(err));
             } else {
@@ -208,8 +255,8 @@ export default function OrdersTerritoryDashboard() {
           cases={journeyRows} 
           caseFields={caseDataQ.data?.fields} 
           caseTotals={caseDataQ.data?.totals}
+          globalVendors={vendorsQ.data}
           isFullscreen={true}
-          autoPlayIntervalSecs={autoPlayIntervalSecs}
         />
       </div>
     </div>
