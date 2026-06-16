@@ -755,7 +755,6 @@ export function OrdersTerritoryMap({
               </Marker>
             );
           })}
-        </MapContainer>
 
         {/* Tooltip da Cidade em Foco */}
         {isFullscreen && selectedCityName && (() => {
@@ -775,6 +774,7 @@ export function OrdersTerritoryMap({
            }
            return null;
         })()}
+        </MapContainer>
 
         {/* Editing Hints overlay */}
         {editingConfig && !isFullscreen && (
