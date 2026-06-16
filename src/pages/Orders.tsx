@@ -1036,7 +1036,7 @@ export default function Orders() {
               </div>
 
               <div className="flex flex-wrap items-center gap-3">
-                <Link to="/app/orders/territory-map" target="_blank">
+                <Link to="/app/orders/territory-map">
                   <Button variant="outline" className="h-10 rounded-2xl shadow-sm font-bold border-slate-200">
                      Apresentar Mapa
                   </Button>

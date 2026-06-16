@@ -3,6 +3,8 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { useTenant } from "@/providers/TenantProvider";
 import { OrdersTerritoryMap } from "@/components/orders/OrdersTerritoryMap";
+import { Link } from "react-router-dom";
+import { ArrowLeft } from "lucide-react";
 
 
 // Componente simples para tela cheia (TV / Totem)
@@ -64,8 +66,19 @@ export default function OrdersTerritoryDashboard() {
   // flex-col md:flex-row garante adaptação baseada no width via Media Query.
   // Vamos passar isFullscreen={true} para o componente ocultar as bordas extras e barras de busca se for preciso.
   return (
-    <div className="w-screen h-screen overflow-hidden bg-slate-900 text-slate-100 flex p-4">
-      <OrdersTerritoryMap cases={journeyRows} isFullscreen={true} />
+    <div className="w-screen h-screen overflow-hidden bg-slate-900 text-slate-100 flex relative">
+      <div className="absolute top-6 left-6 z-[1000]">
+        <Link 
+          to="/app/orders" 
+          className="flex items-center gap-2 px-4 py-2 bg-slate-900/80 hover:bg-slate-800 text-white rounded-full shadow-lg border border-slate-700 backdrop-blur-md transition-colors text-sm font-bold"
+        >
+          <ArrowLeft className="w-4 h-4" />
+          Voltar para Pedidos
+        </Link>
+      </div>
+      <div className="flex-1 w-full h-full p-4">
+        <OrdersTerritoryMap cases={journeyRows} isFullscreen={true} />
+      </div>
     </div>
   );
 }
