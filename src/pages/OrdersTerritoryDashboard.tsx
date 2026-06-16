@@ -4,7 +4,7 @@ import { supabase } from "@/lib/supabase";
 import { useTenant } from "@/providers/TenantProvider";
 import { OrdersTerritoryMap } from "@/components/orders/OrdersTerritoryMap";
 import { Link } from "react-router-dom";
-import { DateRangePicker } from "@/components/ui/date-range-picker-custom";
+import { DateRangePickerCustom } from "@/components/ui/date-range-picker-custom";
 import { startOfMonth, endOfDay } from "date-fns";
 import { DateRange } from "react-day-picker";
 import { ArrowLeft } from "lucide-react";
@@ -142,7 +142,7 @@ export default function OrdersTerritoryDashboard() {
         </Link>
         
         <div className="bg-slate-900/80 backdrop-blur-md border border-slate-700 rounded-full shadow-lg px-2 flex items-center h-9">
-          <DateRangePicker date={dateRange} setDate={setDateRange} className="bg-transparent border-none text-white hover:text-white hover:bg-slate-800 h-8" />
+          <DateRangePickerCustom date={dateRange} setDate={setDateRange} className="bg-transparent border-none text-white hover:text-white hover:bg-slate-800 h-8" />
         </div>
       </div>
       <div className="flex-1 w-full h-full p-4">
