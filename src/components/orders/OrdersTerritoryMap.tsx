@@ -129,6 +129,10 @@ export function OrdersTerritoryMap({
     } else if (editTab === "polygon") {
       newConf.polygonCoords = [...editPolygon];
     } else if (editTab === "city") {
+      if (editCityList.length > 0 && !editCityGeoJson) {
+         alert("⚠️ Você escolheu a cidade, mas esqueceu de baixar os limites dela!\n\nPor favor, clique no botão preto 'Carregar Mapa' logo abaixo da seleção de cidades antes de salvar.");
+         return;
+      }
       newConf.cityNames = editCityList;
       newConf.geojson = editCityGeoJson;
     }
