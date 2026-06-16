@@ -17,6 +17,8 @@ export default function OrdersTerritoryDashboard() {
     to: endOfDay(new Date())
   });
 
+  const [autoPlayIntervalSecs, setAutoPlayIntervalSecs] = useState<number>(5);
+
   // Fetch journey
   const journeyQ = useQuery({
     queryKey: ["journey_orders_dashboard", activeTenantId],
@@ -132,25 +134,44 @@ export default function OrdersTerritoryDashboard() {
   // Vamos passar isFullscreen={true} para o componente ocultar as bordas extras e barras de busca se for preciso.
   return (
     <div className="w-screen h-screen overflow-hidden bg-slate-900 text-slate-100 flex relative">
-      <div className="absolute top-6 left-6 z-[1000] flex items-center gap-4">
+      <div className="absolute top-6 left-6 z-[1000] flex items-center gap-4 bg-slate-900/90 backdrop-blur-md p-1.5 rounded-full border border-slate-700 shadow-2xl">
         <Link 
           to="/app/orders" 
-          className="flex items-center gap-2 px-4 py-2 bg-slate-900/80 hover:bg-slate-800 text-white rounded-full shadow-lg border border-slate-700 backdrop-blur-md transition-colors text-sm font-bold"
+          className="flex items-center gap-2 px-4 py-2 hover:bg-slate-800 text-white rounded-full transition-colors text-sm font-bold"
         >
           <ArrowLeft className="w-4 h-4" />
-          Voltar para Pedidos
+          Sair
         </Link>
+        <div className="w-px h-6 bg-slate-700" />
         
-        <div className="bg-slate-900/80 backdrop-blur-md border border-slate-700 rounded-full shadow-lg px-2 flex items-center h-9">
-          <DateRangePickerCustom date={dateRange} setDate={setDateRange} className="bg-transparent border-none text-white hover:text-white hover:bg-slate-800 h-8" />
+        <div className="px-2 flex items-center">
+          <DateRangePickerCustom date={dateRange} setDate={setDateRange} className="bg-transparent border-none text-white font-bold hover:text-blue-400 hover:bg-transparent h-8 [&>button]:text-white [&>button]:font-bold" />
+        </div>
+
+        <div className="w-px h-6 bg-slate-700" />
+        
+        <div className="px-4 pr-6 flex items-center gap-2">
+           <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Trocar Placar a cada:</span>
+           <select 
+              value={autoPlayIntervalSecs} 
+              onChange={(e) => setAutoPlayIntervalSecs(Number(e.target.value))}
+              className="bg-slate-800 border border-slate-600 text-white rounded-md text-xs font-bold px-2 py-1 outline-none"
+           >
+             <option value={3}>3s</option>
+             <option value={5}>5s</option>
+             <option value={10}>10s</option>
+             <option value={15}>15s</option>
+             <option value={30}>30s</option>
+           </select>
         </div>
       </div>
-      <div className="flex-1 w-full h-full p-4">
+      <div className="flex-1 w-full h-full p-0">
         <OrdersTerritoryMap 
           cases={journeyRows} 
-          caseFields={caseDataQ.data?.fields}
+          caseFields={caseDataQ.data?.fields} 
           caseTotals={caseDataQ.data?.totals}
-          isFullscreen={true} 
+          isFullscreen={true}
+          autoPlayIntervalSecs={autoPlayIntervalSecs}
         />
       </div>
     </div>
