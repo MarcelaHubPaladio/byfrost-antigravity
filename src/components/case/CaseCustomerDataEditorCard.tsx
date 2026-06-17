@@ -281,6 +281,89 @@ export function CaseCustomerDataEditorCard(props: {
     }
   };
 
+  const createCustomerEntity = async () => {
+    if (!draft.name?.trim()) {
+      showError("O Nome é obrigatório para criar a entidade.");
+      return;
+    }
+    if (!draft.cpf?.trim()) {
+      showError("O CPF é obrigatório para criar a entidade.");
+      return;
+    }
+    if (!draft.whatsapp?.trim() && !draft.phone?.trim()) {
+      showError("O Número (WhatsApp ou Celular) é obrigatório para criar a entidade.");
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const metadata: any = {
+         cpf: draft.cpf,
+         whatsapp: draft.whatsapp || draft.phone,
+         email: draft.email,
+         phone: draft.phone,
+         cnpj: draft.cnpj,
+         rg: draft.rg,
+         birth_date_text: draft.birth_date_text,
+         address: draft.address,
+         city: draft.city,
+         cep: draft.cep,
+         state: draft.state,
+         uf: draft.uf,
+      };
+
+      // Remover undefined ou null do metadata
+      Object.keys(metadata).forEach(key => (metadata[key] == null) ? delete metadata[key] : {});
+
+      // 1. Verifica se já existe um cliente com este CPF neste tenant
+      const { data: existing } = await supabase
+        .from("core_entities")
+        .select("id")
+        .eq("tenant_id", activeTenantId!)
+        .eq("entity_type", "party")
+        .contains("metadata", { cpf: draft.cpf })
+        .maybeSingle();
+
+      let entityId = existing?.id;
+
+      if (!entityId) {
+         // Cria a entidade
+         const { data: newEntity, error } = await supabase.from("core_entities").insert({
+           tenant_id: activeTenantId!,
+           entity_type: "party",
+           subtype: "cliente",
+           display_name: draft.name.trim(),
+           status: "active",
+           metadata
+         }).select("id").single();
+         
+         if (error) throw error;
+         entityId = newEntity.id;
+      } else {
+         // Atualiza a entidade existente
+         await supabase.from("core_entities").update({
+           display_name: draft.name.trim(),
+           metadata
+         }).eq("id", entityId);
+      }
+
+      // 2. Vincula no case
+      const { error: caseErr } = await supabase.from("cases").update({
+        customer_entity_id: entityId
+      }).eq("id", caseId);
+      
+      if (caseErr) throw caseErr;
+
+      showSuccess(existing ? "Cliente atualizado e vinculado ao pedido!" : "Cliente criado e vinculado ao pedido com sucesso!");
+      await qc.invalidateQueries({ queryKey: ["case", caseId] });
+      await qc.invalidateQueries({ queryKey: ["customer_contract"] });
+    } catch (e: any) {
+      showError(`Falha ao criar/vincular cliente: ${e?.message ?? "erro"}`);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <div className={cn("rounded-[22px] border border-slate-200 bg-white p-4", className)}>
       <div className="flex items-start justify-between gap-3">
@@ -292,15 +375,26 @@ export function CaseCustomerDataEditorCard(props: {
             Campos editáveis. Ao salvar, gravamos em <span className="font-mono">case_fields</span>.
           </div>
         </div>
-        <Button
-          onClick={save}
-          disabled={saving}
-          size="sm"
-          className="h-9 rounded-xl bg-[hsl(var(--byfrost-accent))] text-white shadow-sm hover:bg-[hsl(var(--byfrost-accent)/0.92)] font-bold px-4 shrink-0"
-        >
-          {saving ? "Salvando…" : "Salvar"}
-          <Save className="ml-2 h-3.5 w-3.5" />
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            onClick={createCustomerEntity}
+            disabled={saving}
+            size="sm"
+            variant="outline"
+            className="h-9 rounded-xl text-blue-600 border-blue-200 hover:bg-blue-50 font-bold px-4 shrink-0"
+          >
+            Vincular Cadastro
+          </Button>
+          <Button
+            onClick={save}
+            disabled={saving}
+            size="sm"
+            className="h-9 rounded-xl bg-[hsl(var(--byfrost-accent))] text-white shadow-sm hover:bg-[hsl(var(--byfrost-accent)/0.92)] font-bold px-4 shrink-0"
+          >
+            {saving ? "Salvando…" : "Salvar"}
+            <Save className="ml-2 h-3.5 w-3.5" />
+          </Button>
+        </div>
       </div>
 
       <div className="mt-4 grid gap-3">
