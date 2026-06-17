@@ -6,7 +6,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { showError, showSuccess } from "@/utils/toast";
 import { cn } from "@/lib/utils";
-import { Plus, ReceiptText, Save, Trash2, Check, Loader2, DollarSign } from "lucide-react";
+import { Plus, ReceiptText, Save, Trash2, Check, Loader2, DollarSign, ExternalLink } from "lucide-react";
+import { Link } from "react-router-dom";
 import { useTenant } from "@/providers/TenantProvider";
 import { useSession } from "@/providers/SessionProvider";
 import { QuickCreateProductDialog } from "@/components/case/QuickCreateProductDialog";
@@ -659,9 +660,14 @@ interface SearchOption {
                             setOpenOfferingPerLine((prev) => ({ ...prev, [`mob-${row.line_no}`]: false }));
                           }, 200);
                         }}
-                        className="mt-1 h-10 rounded-2xl"
+                        className={cn("mt-1 h-10 rounded-2xl", row.offering_entity_id && "pr-10")}
                         placeholder="Digite o nome do produto..."
                       />
+                      {row.offering_entity_id && (
+                         <Link to={`/app/inventory/${row.offering_entity_id}`} target="_blank" title="Abrir produto no inventário" className="absolute right-2 top-1/2 -translate-y-1/2 z-10 flex items-center justify-center h-7 w-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-blue-600 transition-colors mt-0.5">
+                             <ExternalLink className="h-4 w-4" />
+                         </Link>
+                      )}
                       
                       {openOfferingPerLine[`mob-${row.line_no}`] && (
                         <div className="absolute left-0 right-0 top-full z-[100] mt-1 max-h-[220px] overflow-y-auto rounded-2xl border border-slate-200 bg-white shadow-2xl">
@@ -848,9 +854,14 @@ interface SearchOption {
                           setOpenOfferingPerLine((prev) => ({ ...prev, [`desk-${row.line_no}`]: false }));
                         }, 200);
                       }}
-                      className="h-10 rounded-xl text-sm border-slate-200"
+                      className={cn("h-10 rounded-xl text-sm border-slate-200", row.offering_entity_id && "pr-10")}
                       placeholder="Nome do produto ou serviço..."
                     />
+                    {row.offering_entity_id && (
+                       <Link to={`/app/inventory/${row.offering_entity_id}`} target="_blank" title="Abrir produto no inventário" className="absolute right-2 top-1/2 -translate-y-1/2 z-10 flex items-center justify-center h-6 w-6 rounded bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-blue-600 transition-colors">
+                           <ExternalLink className="h-3 w-3" />
+                       </Link>
+                    )}
 
                     {openOfferingPerLine[`desk-${row.line_no}`] && (
                       <div className="absolute left-0 right-0 top-full z-[100] mt-1 max-h-[260px] overflow-y-auto rounded-2xl border border-slate-200 bg-white shadow-2xl">
