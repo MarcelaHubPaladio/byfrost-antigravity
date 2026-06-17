@@ -1615,8 +1615,8 @@ export default function InventoryDetail() {
                             qc.invalidateQueries({ queryKey: ["deliverable_templates", activeTenantId, id] });
                         }}
                     />
-                    </Tabs>
-                </div>
+                )}
+            </div>
             )}
         </AppShell>
     );
