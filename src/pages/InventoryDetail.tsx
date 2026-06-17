@@ -21,8 +21,9 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
-import { ArrowLeft, Loader2, Package, Image as ImageIcon, Upload, Trash2, Info, CloudUpload, Plus, Pencil, ClipboardList, Sliders, MapPin, CheckCircle, RefreshCw, Calendar, User } from "lucide-react";
+import { ArrowLeft, Loader2, Package, Image as ImageIcon, Upload, Trash2, Info, CloudUpload, Plus, Pencil, ClipboardList, Sliders, MapPin, CheckCircle, RefreshCw, Calendar, User, Lock } from "lucide-react";
 import { DeliverableTemplateUpsertDialog } from "@/components/core/DeliverableTemplateUpsertDialog";
+import { useAcquireProductLock } from "@/hooks/useProductPresence";
 import { Separator } from "@/components/ui/separator";
 import { Label } from "@/components/ui/label";
 
@@ -79,6 +80,8 @@ export default function InventoryDetail() {
     const [selectedConfigForConsignment, setSelectedConfigForConsignment] = useState<string>("product");
     const [editingTemplate, setEditingTemplate] = useState<any>(null);
     const isEdit = Boolean(id && id !== "new");
+
+    const { status: lockStatus, lockedBy } = useAcquireProductLock(activeTenantId, isEdit ? id! : null, user);
 
     // Configurations State
     const [configurations, setConfigurations] = useState<ConfigurationItem[]>([]);
@@ -746,8 +749,29 @@ export default function InventoryDetail() {
 
     return (
         <AppShell>
-            <div className="max-w-4xl mx-auto space-y-6">
-                <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+            {lockStatus === "checking" && isEdit ? (
+                <div className="flex flex-col items-center justify-center min-h-[50vh] text-slate-400">
+                    <Loader2 className="w-8 h-8 animate-spin mb-4" />
+                    <p className="font-medium">Sincronizando trava de acesso...</p>
+                </div>
+            ) : lockStatus === "locked" && isEdit ? (
+                <div className="max-w-md mx-auto mt-20 text-center space-y-6">
+                    <div className="w-24 h-24 bg-red-100 text-red-600 rounded-full flex items-center justify-center mx-auto">
+                        <Lock className="w-12 h-12" />
+                    </div>
+                    <div>
+                        <h2 className="text-2xl font-black text-slate-900 mb-2">Produto Bloqueado</h2>
+                        <p className="text-slate-500">
+                            Este produto está sendo editado neste exato momento por <strong className="text-slate-700">{lockedBy?.userName}</strong>.
+                        </p>
+                    </div>
+                    <Button onClick={() => nav("/app/inventory")} variant="outline" className="w-full h-12 rounded-xl">
+                        Voltar para o Inventário
+                    </Button>
+                </div>
+            ) : (
+                <div className="max-w-4xl mx-auto space-y-6">
+                    <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
                     <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-3xl border shadow-sm">
                         <div className="flex items-center gap-4">
                             <Button variant="outline" size="icon" type="button" onClick={() => nav("/app/inventory")} className="rounded-xl shrink-0">
@@ -1591,8 +1615,9 @@ export default function InventoryDetail() {
                             qc.invalidateQueries({ queryKey: ["deliverable_templates", activeTenantId, id] });
                         }}
                     />
-                )}
-            </div>
+                    </Tabs>
+                </div>
+            )}
         </AppShell>
     );
 }

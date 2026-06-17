@@ -6,11 +6,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { showError, showSuccess } from "@/utils/toast";
 import { cn } from "@/lib/utils";
-import { Plus, ReceiptText, Save, Trash2, Check, Loader2, DollarSign, ExternalLink } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Plus, ReceiptText, Save, Trash2, Check, Loader2, DollarSign, ExternalLink, Lock } from "lucide-react";
+import { Link, useNavigate } from "react-router-dom";
 import { useTenant } from "@/providers/TenantProvider";
 import { useSession } from "@/providers/SessionProvider";
 import { QuickCreateProductDialog } from "@/components/case/QuickCreateProductDialog";
+import { useProductPresence } from "@/hooks/useProductPresence";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
@@ -82,8 +83,10 @@ function computeRowTotal(qty: number | null, price: number | null, discountPct: 
 export function SalesOrderItemsEditorCard(props: { caseId: string; fields?: any[]; className?: string }) {
   const { caseId, fields, className } = props;
   const qc = useQueryClient();
+  const nav = useNavigate();
   const { activeTenantId } = useTenant();
   const { user } = useSession();
+  const locks = useProductPresence(activeTenantId);
   const [saving, setSaving] = useState(false);
   const [globalDiscountInput, setGlobalDiscountInput] = useState("");
 
@@ -678,9 +681,15 @@ interface SearchOption {
                         placeholder="Digite o nome do produto..."
                       />
                       {row.offering_entity_id && (
-                         <Link to={`/app/inventory/${row.offering_entity_id}`} title="Abrir produto no inventário" className="absolute right-2 top-1/2 -translate-y-1/2 z-10 flex items-center justify-center h-7 w-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-blue-600 transition-colors mt-0.5">
+                         <button type="button" onClick={() => {
+                             if (locks[row.offering_entity_id!] && locks[row.offering_entity_id!].userId !== user?.id) {
+                               showError(`Produto em uso por ${locks[row.offering_entity_id!].userName}`);
+                               return;
+                             }
+                             nav(`/app/inventory/${row.offering_entity_id}`);
+                           }} title="Abrir produto no inventário" className="absolute right-2 top-1/2 -translate-y-1/2 z-10 flex items-center justify-center h-7 w-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-blue-600 transition-colors mt-0.5">
                              <ExternalLink className="h-4 w-4" />
-                         </Link>
+                         </button>
                       )}
                       
                       {openOfferingPerLine[`mob-${row.line_no}`] && (
@@ -717,8 +726,11 @@ interface SearchOption {
                               >
                                 <div className="flex items-center justify-between gap-3">
                                   <div className="flex flex-col gap-0.5">
-                                    <div className="text-sm font-medium text-slate-900 leading-snug">
+                                    <div className="text-sm font-medium text-slate-900 leading-snug flex items-center gap-2">
                                       {opt.display_name}
+                                      {locks[opt.offering.id] && locks[opt.offering.id].userId !== user?.id && (
+                                          <Lock className="w-3 h-3 text-red-500" />
+                                      )}
                                     </div>
                                     {opt.code && (
                                       <div className="text-[11px] text-slate-500 font-mono">
@@ -872,9 +884,15 @@ interface SearchOption {
                       placeholder="Nome do produto ou serviço..."
                     />
                     {row.offering_entity_id && (
-                       <Link to={`/app/inventory/${row.offering_entity_id}`} title="Abrir produto no inventário" className="absolute right-2 top-1/2 -translate-y-1/2 z-10 flex items-center justify-center h-6 w-6 rounded bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-blue-600 transition-colors">
+                       <button type="button" onClick={() => {
+                           if (locks[row.offering_entity_id!] && locks[row.offering_entity_id!].userId !== user?.id) {
+                             showError(`Produto em uso por ${locks[row.offering_entity_id!].userName}`);
+                             return;
+                           }
+                           nav(`/app/inventory/${row.offering_entity_id}`);
+                         }} title="Abrir produto no inventário" className="absolute right-2 top-1/2 -translate-y-1/2 z-10 flex items-center justify-center h-6 w-6 rounded bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-blue-600 transition-colors">
                            <ExternalLink className="h-3 w-3" />
-                       </Link>
+                       </button>
                     )}
 
                     {openOfferingPerLine[`desk-${row.line_no}`] && (
@@ -911,8 +929,11 @@ interface SearchOption {
                             >
                               <div className="flex items-center justify-between gap-3">
                                 <div className="flex flex-col gap-0.5">
-                                  <div className="text-sm font-medium text-slate-900 leading-snug">
+                                  <div className="text-sm font-medium text-slate-900 leading-snug flex items-center gap-2">
                                     {opt.display_name}
+                                    {locks[opt.offering.id] && locks[opt.offering.id].userId !== user?.id && (
+                                        <Lock className="w-3 h-3 text-red-500" />
+                                    )}
                                   </div>
                                   {opt.code && (
                                     <div className="text-[11px] text-slate-500 font-mono">

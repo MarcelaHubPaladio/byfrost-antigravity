@@ -13,10 +13,11 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus, Search, Package, Image as ImageIcon, LayoutGrid, List as ListIcon, MapPin, Download, ClipboardList, User } from "lucide-react";
+import { Plus, Search, Package, Image as ImageIcon, LayoutGrid, List as ListIcon, MapPin, Download, ClipboardList, User, Lock } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
+import { useProductPresence } from "@/hooks/useProductPresence";
 
 interface ConsignmentItem {
     user_id: string;
@@ -91,6 +92,8 @@ export default function Inventory() {
     const [q, setQ] = useState("");
     const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
     const [activeTab, setActiveTab] = useState("products");
+    
+    const locks = useProductPresence(activeTenantId);
 
     // Consignment Search
     const [consignmentSearch, setConsignmentSearch] = useState("");
@@ -244,6 +247,10 @@ export default function Inventory() {
     }, [items]);
 
     const handleEdit = (item: InventoryItem) => {
+        if (locks[item.id] && locks[item.id].userId !== user?.id) {
+            toast.error(`Acesso negado: Sendo editado por ${locks[item.id].userName}`);
+            return;
+        }
         nav(`/app/inventory/${item.id}`);
     };
 
@@ -737,6 +744,12 @@ export default function Inventory() {
                                         onClick={() => handleEdit(item)}
                                     >
                                         <div className="aspect-square bg-slate-100 relative overflow-hidden">
+                                            {locks[item.id] && locks[item.id].userId !== user?.id && (
+                                                <div className="absolute inset-0 bg-slate-900/60 z-10 flex flex-col items-center justify-center backdrop-blur-sm">
+                                                    <Lock className="w-8 h-8 text-white mb-2" />
+                                                    <span className="text-white text-xs font-bold text-center px-4">Editado por {locks[item.id].userName}</span>
+                                                </div>
+                                            )}
                                             {item.metadata?.photo_url ? (
                                                 <img
                                                     src={item.metadata.photo_url}
@@ -856,8 +869,18 @@ export default function Inventory() {
                                                         </div>
                                                     </td>
                                                     <td className="px-6 py-3">
-                                                        <div className="font-bold text-slate-900">{item.display_name}</div>
-                                                        <div className="text-xs text-slate-500">{item.subtype || "Sem categoria"}</div>
+                                                        <div className="flex flex-col gap-1 items-start">
+                                                            <div className="font-bold text-slate-900 flex items-center gap-2">
+                                                                {item.display_name}
+                                                                {locks[item.id] && locks[item.id].userId !== user?.id && (
+                                                                    <Badge variant="destructive" className="bg-red-500 gap-1 text-[10px]">
+                                                                        <Lock className="w-3 h-3" />
+                                                                        {locks[item.id].userName}
+                                                                    </Badge>
+                                                                )}
+                                                            </div>
+                                                            <div className="text-xs text-slate-500">{item.subtype || "Sem categoria"}</div>
+                                                        </div>
                                                     </td>
                                                     <td className="px-6 py-3 font-mono text-xs text-slate-400">
                                                         {item.metadata?.internal_code || "—"}
