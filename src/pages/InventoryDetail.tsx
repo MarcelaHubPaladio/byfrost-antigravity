@@ -41,6 +41,7 @@ const formSchema = z.object({
     has_configurations: z.boolean().optional().default(false),
     estoque_loja: z.coerce.number().min(0, "Estoque não pode ser negativo"),
     estoque_consignado: z.coerce.number().min(0, "Estoque não pode ser negativo"),
+    commission_category_id: z.string().optional(),
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -292,6 +293,22 @@ export default function InventoryDetail() {
         }
     });
 
+    const commissionCategoriesQ = useQuery({
+        queryKey: ["commission_categories", activeTenantId],
+        enabled: !!activeTenantId,
+        queryFn: async () => {
+            const { data, error } = await supabase
+                .from("core_entities")
+                .select("id, display_name")
+                .eq("tenant_id", activeTenantId!)
+                .eq("entity_type", "commission_category")
+                .is("deleted_at", null)
+                .order("display_name", { ascending: true });
+            if (error) throw error;
+            return data || [];
+        }
+    });
+
     const stockHistoryQ = useQuery({
         queryKey: ["stock_history", id],
         enabled: isEdit,
@@ -351,6 +368,7 @@ export default function InventoryDetail() {
             has_configurations: false,
             estoque_loja: 0,
             estoque_consignado: 0,
+            commission_category_id: "",
         },
     });
 
@@ -371,6 +389,7 @@ export default function InventoryDetail() {
                 has_configurations: !!itemQ.data.metadata?.has_configurations,
                 estoque_loja: itemQ.data.metadata?.estoque_loja || 0,
                 estoque_consignado: itemQ.data.metadata?.estoque_consignado || 0,
+                commission_category_id: itemQ.data.metadata?.commission_category_id || "",
             });
             setConfigurations(itemQ.data.metadata?.configurations || []);
             setProductConsignments(itemQ.data.metadata?.consignments || []);
@@ -461,6 +480,7 @@ export default function InventoryDetail() {
                 estoque_consignado: values.has_configurations ? 0 : values.estoque_consignado,
                 estoque_total: stock_quantity,
                 stock_quantity: stock_quantity,
+                commission_category_id: (!values.commission_category_id || values.commission_category_id === "none") ? null : values.commission_category_id,
                 configurations: values.has_configurations ? configurations : [],
                 consignments: values.has_configurations ? [] : productConsignments
             };
@@ -937,6 +957,30 @@ export default function InventoryDetail() {
                                                         <SelectContent className="rounded-xl">
                                                             <SelectItem value="none" className="rounded-lg">Nenhum fornecedor</SelectItem>
                                                             {suppliersQ.data?.map(s => (
+                                                                <SelectItem key={s.id} value={s.id} className="rounded-lg">{s.display_name}</SelectItem>
+                                                            ))}
+                                                        </SelectContent>
+                                                    </Select>
+                                                    <FormMessage />
+                                                </FormItem>
+                                            )}
+                                        />
+
+                                        <FormField
+                                            control={form.control}
+                                            name="commission_category_id"
+                                            render={({ field }) => (
+                                                <FormItem>
+                                                    <FormLabel className="text-xs font-black text-slate-400 uppercase tracking-wider">Categoria de Comissão</FormLabel>
+                                                    <Select onValueChange={field.onChange} value={field.value || ""}>
+                                                        <FormControl>
+                                                            <SelectTrigger className="h-11 rounded-xl">
+                                                                <SelectValue placeholder="Sem flag específica (Usa padrão)" />
+                                                            </SelectTrigger>
+                                                        </FormControl>
+                                                        <SelectContent className="rounded-xl">
+                                                            <SelectItem value="none" className="rounded-lg">Sem flag específica (Usa padrão)</SelectItem>
+                                                            {commissionCategoriesQ.data?.map(s => (
                                                                 <SelectItem key={s.id} value={s.id} className="rounded-lg">{s.display_name}</SelectItem>
                                                             ))}
                                                         </SelectContent>

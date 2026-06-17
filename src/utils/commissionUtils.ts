@@ -52,11 +52,48 @@ export async function calculateCommissionForOrders(
     commissionRules = {
       base_percent: 0,
       discount_tiers: [],
+      category_rules: {}
     };
   }
 
   const basePercent = commissionRules.base_percent || 0;
   const tiers = commissionRules.discount_tiers || [];
+  const categoryRules = commissionRules.category_rules || {};
+
+  // Optimize: Fetch all items for all orders first to avoid N+1
+  const orderIds = orders.map((o: any) => o.id);
+  let allItems: any[] = [];
+  if (orderIds.length > 0) {
+    const { data } = await supabase
+      .from("case_items")
+      .select("case_id, qty, price, discount_percent, total, commission_value, description, code, offering_entity_id")
+      .in("case_id", orderIds);
+    allItems = data || [];
+  }
+
+  const itemsByOrder = new Map();
+  const offeringIds = new Set<string>();
+  
+  for (const item of allItems) {
+      if (!itemsByOrder.has(item.case_id)) itemsByOrder.set(item.case_id, []);
+      itemsByOrder.get(item.case_id).push(item);
+      if (item.offering_entity_id) offeringIds.add(item.offering_entity_id);
+  }
+
+  const offeringCategoryMap = new Map<string, string>();
+  if (offeringIds.size > 0) {
+      const { data: offerings } = await supabase
+         .from("core_entities")
+         .select("id, metadata")
+         .in("id", Array.from(offeringIds));
+      if (offerings) {
+         for (const off of offerings) {
+            if (off.metadata?.commission_category_id) {
+                offeringCategoryMap.set(off.id, off.metadata.commission_category_id);
+            }
+         }
+      }
+  }
 
   // Calculate commission
   const calculatedOrders = [];
@@ -64,11 +101,7 @@ export async function calculateCommissionForOrders(
   let grandTotalCommission = 0;
 
   for (const order of orders) {
-    // Get case items to calculate exact discount if possible
-    const { data: items } = await supabase
-      .from("case_items")
-      .select("qty, price, discount_percent, total, commission_value, description, code")
-      .eq("case_id", order.id);
+    const items = itemsByOrder.get(order.id) || [];
 
     let orderTotalValue = caseDataTotals.get(order.id) || 0;
     let orderCommission = 0;
@@ -80,11 +113,19 @@ export async function calculateCommissionForOrders(
         if (item.commission_value != null) {
           rowCommission = Number(item.commission_value);
         } else {
-          // Fallback calculation
           const rowTotal = Number(item.total || 0);
+          const catId = item.offering_entity_id ? offeringCategoryMap.get(item.offering_entity_id) : null;
+          let activeBase = basePercent;
+          let activeTiers = tiers;
+          
+          if (catId && categoryRules[catId]) {
+              activeBase = categoryRules[catId].base_percent ?? basePercent;
+              activeTiers = categoryRules[catId].discount_tiers ?? tiers;
+          }
+
           const discountPct = Number(item.discount_percent || 0);
-          const applicableTier = tiers.find((t: any) => t.max_discount_pct >= discountPct);
-          const pct = applicableTier ? applicableTier.commission_pct : basePercent;
+          const applicableTier = activeTiers.find((t: any) => t.max_discount_pct >= discountPct);
+          const pct = applicableTier ? applicableTier.commission_pct : activeBase;
           rowCommission = rowTotal * (pct / 100);
         }
         orderCommission += rowCommission;
@@ -154,8 +195,29 @@ export async function calculateCommissionForSingleOrder(
   // Fetch items
   const { data: items } = await supabase
     .from("case_items")
-    .select("qty, price, discount_percent, total, commission_value, description, code")
+    .select("qty, price, discount_percent, total, commission_value, description, code, offering_entity_id")
     .eq("case_id", orderId);
+
+  // Fetch categories
+  const offeringIds = new Set<string>();
+  for (const item of items || []) {
+      if (item.offering_entity_id) offeringIds.add(item.offering_entity_id);
+  }
+  
+  const offeringCategoryMap = new Map<string, string>();
+  if (offeringIds.size > 0) {
+      const { data: offerings } = await supabase
+         .from("core_entities")
+         .select("id, metadata")
+         .in("id", Array.from(offeringIds));
+      if (offerings) {
+         for (const off of offerings) {
+            if (off.metadata?.commission_category_id) {
+                offeringCategoryMap.set(off.id, off.metadata.commission_category_id);
+            }
+         }
+      }
+  }
 
   // Fetch fields
   const { data: fields } = await supabase
@@ -165,6 +227,7 @@ export async function calculateCommissionForSingleOrder(
 
   const basePercent = commissionRules?.base_percent || 0;
   const tiers = commissionRules?.discount_tiers || [];
+  const categoryRules = commissionRules?.category_rules || {};
 
   let orderTotalValue = 0;
   let orderCommission = 0;
@@ -179,9 +242,18 @@ export async function calculateCommissionForSingleOrder(
       if (item.commission_value != null) {
         rowCommission = Number(item.commission_value);
       } else {
+        const catId = item.offering_entity_id ? offeringCategoryMap.get(item.offering_entity_id) : null;
+        let activeBase = basePercent;
+        let activeTiers = tiers;
+        
+        if (catId && categoryRules[catId]) {
+            activeBase = categoryRules[catId].base_percent ?? basePercent;
+            activeTiers = categoryRules[catId].discount_tiers ?? tiers;
+        }
+
         const discountPct = Number(item.discount_percent || 0);
-        const applicableTier = tiers.find((t: any) => t.max_discount_pct >= discountPct);
-        const pct = applicableTier ? applicableTier.commission_pct : basePercent;
+        const applicableTier = activeTiers.find((t: any) => t.max_discount_pct >= discountPct);
+        const pct = applicableTier ? applicableTier.commission_pct : activeBase;
         rowCommission = rowTotal * (pct / 100);
       }
       orderCommission += rowCommission;

@@ -48,6 +48,7 @@ import { IncentivesPanel } from "@/components/admin/IncentivesPanel";
 import { TenantModulesPanel } from "@/components/admin/TenantModulesPanel";
 import { PlansPanel } from "@/components/admin/PlansPanel";
 import { UsageIndicator } from "@/components/admin/UsageIndicator";
+import { CommissionsCategoryPanel } from "@/components/admin/CommissionsCategoryPanel";
 import { SupabaseUsagePanel } from "@/components/admin/SupabaseUsagePanel";
 import { LayoutGrid, Users, Zap, MessageSquare, History, Database, Share2, Search, Smartphone, Shield, Plus, MoreVertical, Edit2, Trash2, PauseCircle, PlayCircle, ChevronLeft, ChevronRight, UsersRound, Copy, Settings2, UserCog, CreditCard, BarChart3, Package, Layers, UserPlus } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
@@ -1219,6 +1220,9 @@ export default function Admin() {
                 <TabsTrigger value="incentives" className="rounded-xl">
                   Incentives
                 </TabsTrigger>
+                <TabsTrigger value="commissions" className="rounded-xl">
+                  Comissões
+                </TabsTrigger>
                 <TabsTrigger value="modules" className="rounded-xl">
                   Módulos
                 </TabsTrigger>
@@ -1396,6 +1400,10 @@ export default function Admin() {
 
               <TabsContent value="journeys" className="mt-4">
                 <TenantJourneysPanel />
+              </TabsContent>
+
+              <TabsContent value="commissions" className="mt-4">
+                <CommissionsCategoryPanel />
               </TabsContent>
 
               <TabsContent value="prompts" className="mt-4">
