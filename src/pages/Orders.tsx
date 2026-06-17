@@ -35,9 +35,9 @@ import {
   BarChart2,
   LayoutList,
   Columns2,
-  ChevronRight,
   DollarSign,
-  GripVertical
+  GripVertical,
+  Lock
 } from "lucide-react";
 
 import {
@@ -101,6 +101,7 @@ import { RequireAuth } from "@/components/RequireAuth";
 import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianGrid } from "recharts";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { ProjetistasManagerDialog } from "@/components/case/ProjetistasManagerDialog";
+import { useOrderPresence } from "@/hooks/useOrderPresence";
 
 type CaseRow = {
   id: string;
@@ -203,6 +204,7 @@ export default function Orders() {
   const { user } = useSession();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const locks = useOrderPresence(activeTenantId);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
@@ -1669,12 +1671,24 @@ export default function Orders() {
                       const partialVal = Number(f?.partial_paid_value || 0);
 
                       return (
-                        <TableRow key={c.id} className="group cursor-pointer hover:bg-slate-50/80 transition-colors" onClick={() => navigate(`/app/orders/${c.id}`)}>
+                        <TableRow key={c.id} className="group cursor-pointer hover:bg-slate-50/80 transition-colors" onClick={() => {
+                            if (locks[c.id] && locks[c.id].userId !== user?.id) {
+                                showError(`Acesso negado: Sendo editado por ${locks[c.id].userName}`);
+                                return;
+                            }
+                            navigate(`/app/orders/${c.id}`);
+                        }}>
                           <TableCell>
                             <div className="flex flex-col gap-0.5">
                               <div className="flex items-center gap-2">
-                                <span className="text-sm font-bold text-slate-900 uppercase">
+                                <span className="text-sm font-bold text-slate-900 uppercase flex items-center gap-2">
                                   {customersQ.data instanceof Map ? (customersQ.data.get(c.customer_id!)?.name || c.title || "Pedido") : (c.title || "Pedido")}
+                                  {locks[c.id] && locks[c.id].userId !== user?.id && (
+                                      <Badge variant="destructive" className="bg-red-500 gap-1 text-[10px] border-none px-1.5 h-5 flex items-center shrink-0">
+                                          <Lock className="w-3 h-3" />
+                                          {locks[c.id].userName}
+                                      </Badge>
+                                  )}
                                 </span>
                                 {caseDataQ.data?.negativeStockCases?.has(c.id) && (
                                   <Badge className="bg-rose-100 text-rose-700 hover:bg-rose-100 border-none font-bold text-[10px]">
@@ -1811,6 +1825,8 @@ export default function Orders() {
                                   caseDataQ={caseDataQ} 
                                   navigate={navigate} 
                                   formatRelativeUpdate={formatRelativeUpdate} 
+                                  locks={locks}
+                                  user={user}
                                 />
                               ))}
                             </div>
@@ -1868,7 +1884,7 @@ export default function Orders() {
   );
 }
 
-function SortableOrderCard({ c, customersQ, caseDataQ, navigate, formatRelativeUpdate }: any) {
+function SortableOrderCard({ c, customersQ, caseDataQ, navigate, formatRelativeUpdate, locks, user }: any) {
   const {
     attributes,
     listeners,
@@ -1901,14 +1917,25 @@ function SortableOrderCard({ c, customersQ, caseDataQ, navigate, formatRelativeU
       )}
       onClick={(e) => {
         // Only navigate if not dragging
-        if (!isDragging) navigate(`/app/orders/${c.id}`);
+        if (!isDragging) {
+            if (locks && locks[c.id] && locks[c.id].userId !== user?.id) {
+                showError(`Acesso negado: Sendo editado por ${locks[c.id].userName}`);
+                return;
+            }
+            navigate(`/app/orders/${c.id}`);
+        }
       }}
     >
       <div className="mb-3 flex items-start justify-between">
         <div className="flex flex-col gap-1">
           <div className="flex items-center gap-2">
-            <span className="text-sm font-black text-slate-900 uppercase line-clamp-1">
+            <span className="text-sm font-black text-slate-900 uppercase line-clamp-1 flex items-center gap-2">
               {customersQ.data instanceof Map ? (customersQ.data.get(c.customer_id!)?.name || c.title || "Pedido") : (c.title || "Pedido")}
+              {locks && locks[c.id] && locks[c.id].userId !== user?.id && (
+                  <Badge variant="destructive" className="bg-red-500 gap-1 text-[9px] border-none px-1.5 h-4 flex items-center shrink-0">
+                      <Lock className="w-2 h-2" />
+                  </Badge>
+              )}
             </span>
             {caseDataQ.data?.negativeStockCases?.has(c.id) && (
               <Badge className="bg-rose-100 text-rose-700 hover:bg-rose-100 border-none font-bold text-[9px] px-1.5 h-4 flex items-center shrink-0">

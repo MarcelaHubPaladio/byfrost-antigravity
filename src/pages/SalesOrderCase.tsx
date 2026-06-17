@@ -58,8 +58,9 @@ import { RequireAuth } from "@/components/RequireAuth";
 import { useTenant } from "@/providers/TenantProvider";
 import { showError, showSuccess } from "@/utils/toast";
 import { useJourneyTransition } from "@/hooks/useJourneyTransition";
-import { UsersRound, RefreshCw } from "lucide-react";
+import { UsersRound, RefreshCw, Loader2, Lock } from "lucide-react";
 import { CaseUpdatesCard } from "@/components/case/CaseUpdatesCard";
+import { useAcquireOrderLock } from "@/hooks/useOrderPresence";
 
 export default function SalesOrderCase() {
   const { id: caseId } = useParams<{ id: string }>();
@@ -81,6 +82,8 @@ export default function SalesOrderCase() {
 
   const { activeTenantId, activeTenant, isSuperAdmin } = useTenant();
   const tenantId = activeTenantId;
+
+  const { status: lockStatus, lockedBy } = useAcquireOrderLock(tenantId, caseId || null, sessionUser);
 
   const canDelete = isSuperAdmin || ["admin", "financeiro", "lider", "leader"].includes(activeTenant?.role || "");
 
@@ -504,6 +507,27 @@ export default function SalesOrderCase() {
   return (
     <RequireAuth>
       <AppShell>
+        {lockStatus === "checking" ? (
+            <div className="flex flex-col items-center justify-center min-h-[50vh] text-slate-400">
+                <Loader2 className="w-8 h-8 animate-spin mb-4" />
+                <p className="font-medium">Sincronizando trava de acesso...</p>
+            </div>
+        ) : lockStatus === "locked" ? (
+            <div className="max-w-md mx-auto mt-20 text-center space-y-6">
+                <div className="w-24 h-24 bg-red-100 text-red-600 rounded-full flex items-center justify-center mx-auto">
+                    <Lock className="w-12 h-12" />
+                </div>
+                <div>
+                    <h2 className="text-2xl font-black text-slate-900 mb-2">Pedido Bloqueado</h2>
+                    <p className="text-slate-500">
+                        Este pedido está sendo editado neste exato momento por <strong className="text-slate-700">{lockedBy?.userName}</strong>.
+                    </p>
+                </div>
+                <Button onClick={() => navigate("/app/orders")} variant="outline" className="w-full h-12 rounded-xl">
+                    Voltar para Pedidos
+                </Button>
+            </div>
+        ) : (
         <div className="flex flex-col h-full bg-[#F8FAFC]">
           {/* Header */}
           <div className="sticky top-0 z-50 w-full bg-white/80 backdrop-blur-xl border-b border-slate-200/60 transition-all duration-300">
@@ -942,6 +966,7 @@ export default function SalesOrderCase() {
           </div>
         </main>
       </div>
+      )}
 
         <TransitionBlockDialog
           open={transitionBlock.open}
