@@ -869,7 +869,7 @@ export default function Orders() {
     }
 
     return rows;
-  }, [journeyRows, q, dateRange, selectedSellerId, selectedPaymentMethods, selectedCities, selectedInventoryIds, selectedStates, caseDataQ.data, caseDataQ.isLoading, vendorsQ.data]);
+  }, [journeyRows, q, dateRange, selectedSellerId, selectedPaymentMethods, selectedCities, selectedInventoryIds, selectedProjetistasIds, selectedCommissionCategories, selectedStates, caseDataQ.data, caseDataQ.isLoading, vendorsQ.data]);
 
   const paymentOptions = useMemo(() => {
     const opts = new Set<string>();
