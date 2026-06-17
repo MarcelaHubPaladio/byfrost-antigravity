@@ -296,10 +296,24 @@ interface SearchOption {
     return max + 1;
   }, [draft]);
 
-  function calculateRowCommission(rowTotal: number, discountPct: number) {
+  function calculateRowCommission(rowTotal: number, discountPct: number, offeringEntityId?: string | null) {
     if (!commissionRules) return 0;
-    const base = commissionRules.base_percent || 0;
-    const tiers = commissionRules.discount_tiers || [];
+    
+    let base = commissionRules.base_percent || 0;
+    let tiers = commissionRules.discount_tiers || [];
+
+    if (offeringEntityId && offeringsQ.data) {
+       const off = offeringsQ.data.find((o: any) => o.id === offeringEntityId);
+       const catId = off?.metadata?.commission_category_id;
+       if (catId) {
+          const catRule = (commissionRules.category_rules || {})[catId];
+          if (catRule) {
+             base = catRule.base_percent;
+             tiers = catRule.discount_tiers || [];
+          }
+       }
+    }
+
     const applicableTier = tiers.find((t: any) => t.max_discount_pct >= discountPct);
     const pct = applicableTier ? applicableTier.commission_pct : base;
     return rowTotal * (pct / 100);
@@ -320,9 +334,9 @@ interface SearchOption {
       const price = parsePtBrNumber(r.price) ?? 0;
       const discountPct = parsePtBrNumber(r.discount_percent) ?? 0;
       const total = computeRowTotal(qty, price, discountPct);
-      return acc + calculateRowCommission(total, discountPct);
+      return acc + calculateRowCommission(total, discountPct, r.offering_entity_id);
     }, 0);
-  }, [draft, commissionRules]);
+  }, [draft, commissionRules, offeringsQ.data]);
 
   const applyGlobalDiscount = (pct: number) => {
     setDraft((prev) =>
@@ -429,7 +443,7 @@ interface SearchOption {
         const rowTotalBruto = qty * price;
         const discountValue = rowTotalBruto * (discountPct / 100);
         const total = rowTotalBruto - discountValue;
-        const commissionValue = calculateRowCommission(total, discountPct);
+        const commissionValue = calculateRowCommission(total, discountPct, r.offering_entity_id);
 
         const payload = {
           case_id: caseId,
