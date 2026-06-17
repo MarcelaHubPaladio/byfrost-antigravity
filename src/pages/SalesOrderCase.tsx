@@ -862,7 +862,11 @@ export default function SalesOrderCase() {
                           </div>
                         </AccordionTrigger>
                         <AccordionContent className="p-8 border-t border-slate-100 pt-8">
-                          <CaseCustomerDataEditorCard caseId={caseId!} fields={fieldsData} />
+                          <CaseCustomerDataEditorCard 
+                            caseId={caseId!} 
+                            fields={fieldsData} 
+                            customerEntityId={caseData?.customer_entity_id} 
+                          />
                         </AccordionContent>
                       </Card>
                     </AccordionItem>

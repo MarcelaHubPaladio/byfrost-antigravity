@@ -17,7 +17,7 @@ export function EntitySalesOrdersTab(props: { tenantId: string; entityId: string
                 .from("cases")
                 .select("id, status, state, title, created_at, meta_json")
                 .eq("tenant_id", props.tenantId)
-                .eq("customer_id", props.entityId)
+                .or(`customer_entity_id.eq.${props.entityId},customer_id.eq.${props.entityId}`)
                 .eq("case_type", "order")
                 .order("created_at", { ascending: false });
 
@@ -77,7 +77,7 @@ export function EntitySalesOrdersTab(props: { tenantId: string; entityId: string
 
                                 <div className="flex justify-end shrink-0">
                                     <Button asChild variant="secondary" size="sm" className="rounded-xl bg-indigo-50 text-indigo-700 hover:bg-indigo-100">
-                                        <Link to={`/app/sales_order/cases/${order.id}`}>
+                                        <Link to={`/app/orders/${order.id}`}>
                                             Abrir Pedido <ExternalLink className="w-3.5 h-3.5 ml-2" />
                                         </Link>
                                     </Button>

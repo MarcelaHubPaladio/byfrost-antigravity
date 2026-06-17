@@ -11,6 +11,7 @@ import { cn } from "@/lib/utils";
 import { Banknote, ExternalLink, IdCard, MapPin, Save, Mail, MessageSquare, DollarSign } from "lucide-react";
 import { useTenant } from "@/providers/TenantProvider";
 import { useSession } from "@/providers/SessionProvider";
+import { Link } from "react-router-dom";
 import {
   Select,
   SelectContent,
@@ -48,6 +49,7 @@ export function CaseCustomerDataEditorCard(props: {
   caseId: string;
   fields: FieldRow[] | undefined;
   className?: string;
+  customerEntityId?: string | null;
 }) {
   const { caseId, fields, className } = props;
   const qc = useQueryClient();
@@ -376,15 +378,29 @@ export function CaseCustomerDataEditorCard(props: {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <Button
-            onClick={createCustomerEntity}
-            disabled={saving}
-            size="sm"
-            variant="outline"
-            className="h-9 rounded-xl text-blue-600 border-blue-200 hover:bg-blue-50 font-bold px-4 shrink-0"
-          >
-            Vincular Cadastro
-          </Button>
+          {props.customerEntityId ? (
+            <Button
+              asChild
+              size="sm"
+              variant="outline"
+              className="h-9 rounded-xl text-indigo-600 border-indigo-200 hover:bg-indigo-50 font-bold px-4 shrink-0"
+            >
+              <Link to={`/app/entities/${props.customerEntityId}`}>
+                Navegar para Entidade
+                <ExternalLink className="ml-2 h-3.5 w-3.5" />
+              </Link>
+            </Button>
+          ) : (
+            <Button
+              onClick={createCustomerEntity}
+              disabled={saving}
+              size="sm"
+              variant="outline"
+              className="h-9 rounded-xl text-blue-600 border-blue-200 hover:bg-blue-50 font-bold px-4 shrink-0"
+            >
+              Vincular Cadastro
+            </Button>
+          )}
           <Button
             onClick={save}
             disabled={saving}
