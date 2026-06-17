@@ -13,6 +13,8 @@ export function CommissionsRadarTab({
   cases: any[];
   caseFields: Map<string, any>;
   caseTotals: Map<string, number>;
+  caseItems: Map<string, any[]>;
+  offeringCategoryMap: Map<string, string>;
   vendors: any[];
   users: any[];
 }) {
@@ -51,10 +53,54 @@ export function CommissionsRadarTab({
       const billStatus = (f.billing_status || "Pendente").toLowerCase();
       const isFaturado = billStatus.includes("pago") || billStatus.includes("faturado");
       const isParcial = billStatus.includes("parcial");
-      const billVal = isFaturado ? caseTotal : (isParcial ? Number(f.partial_paid_value || 0) : 0);
 
-      const cTirada = caseTotal * (v.basePercent / 100);
-      const cFaturada = billVal * (v.basePercent / 100);
+      const items = caseItems?.get(c.id) || [];
+      let cTirada = 0;
+      let cFaturada = 0;
+      let billVal = 0;
+
+      if (items.length > 0) {
+        let totalItemsValue = 0;
+        let totalCommissionItems = 0;
+        
+        items.forEach(item => {
+           const qty = Number(item.qty) || 0;
+           const price = Number(item.price) || 0;
+           const discountPct = Number(item.discount_percent) || 0;
+           const itemTotalBruto = qty * price;
+           const itemTotal = itemTotalBruto - (itemTotalBruto * (discountPct / 100));
+           totalItemsValue += itemTotal;
+           
+           const applicableTier = (rules.discount_tiers || []).find((t: any) => t.max_discount_pct >= discountPct);
+           let pct = applicableTier ? applicableTier.commission_pct : (rules.base_percent || 0);
+
+           if (item.offering_entity_id && offeringCategoryMap?.has(item.offering_entity_id)) {
+              const catId = offeringCategoryMap.get(item.offering_entity_id)!;
+              const catRule = (rules.category_rules || {})[catId];
+              if (catRule) {
+                 const catTier = (catRule.discount_tiers || []).find((t: any) => t.max_discount_pct >= discountPct);
+                 pct = catTier ? catTier.commission_pct : catRule.base_percent;
+              }
+           }
+
+           totalCommissionItems += itemTotal * (pct / 100);
+        });
+        
+        cTirada = totalCommissionItems;
+        if (isFaturado) {
+          cFaturada = cTirada;
+          billVal = caseTotal;
+        } else if (isParcial && totalItemsValue > 0) {
+          const paidValue = Number(f.partial_paid_value || 0);
+          const fraction = paidValue / totalItemsValue;
+          cFaturada = cTirada * fraction;
+          billVal = paidValue;
+        }
+      } else {
+         billVal = isFaturado ? caseTotal : (isParcial ? Number(f.partial_paid_value || 0) : 0);
+         cTirada = caseTotal * ((rules.base_percent || 0) / 100);
+         cFaturada = billVal * ((rules.base_percent || 0) / 100);
+      }
 
       v.qtdPedidos += 1;
       v.totalTirado += caseTotal;
@@ -81,7 +127,7 @@ export function CommissionsRadarTab({
          pedidos: v.pedidos.sort((a:any, b:any) => new Date(b.date).getTime() - new Date(a.date).getTime()) 
       }))
       .sort((a, b) => b.comissaoFaturada - a.comissaoFaturada);
-  }, [cases, caseFields, caseTotals, vendors, users]);
+  }, [cases, caseFields, caseTotals, caseItems, offeringCategoryMap, vendors, users]);
 
   const filteredData = useMemo(() => {
     if (!searchTerm) return radarData;

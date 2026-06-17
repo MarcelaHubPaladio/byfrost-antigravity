@@ -90,11 +90,13 @@ export default function OrdersCommissions() {
 
       const fields = new Map();
       const totals = new Map();
+      const items = new Map();
+      const offeringIds = new Set<string>();
 
       await Promise.all(chunks.map(async (chunk) => {
         const [fRes, iRes] = await Promise.all([
           supabase.from("case_fields").select("case_id,key,value_text").in("case_id", chunk),
-          supabase.from("case_items").select("case_id,total").in("case_id", chunk)
+          supabase.from("case_items").select("case_id,total,commission_value,offering_entity_id,qty,price,discount_percent").in("case_id", chunk)
         ]);
         
         if (fRes.data) {
@@ -103,6 +105,8 @@ export default function OrdersCommissions() {
             const obj = fields.get(d.case_id);
             if (d.key === "billing_status") obj.billing_status = d.value_text;
             if (d.key === "billing_date" || d.key === "data_faturamento") obj.billing_date = d.value_text;
+            if (d.key === "partial_paid_value") obj.partial_paid_value = d.value_text;
+            if (d.key === "expected_revenue") obj.expected_revenue = d.value_text;
           });
         }
         
@@ -110,11 +114,26 @@ export default function OrdersCommissions() {
           iRes.data.forEach(d => {
             const current = totals.get(d.case_id) || 0;
             totals.set(d.case_id, current + (Number(d.total) || 0));
+            if (!items.has(d.case_id)) items.set(d.case_id, []);
+            items.get(d.case_id).push(d);
+            if (d.offering_entity_id) offeringIds.add(d.offering_entity_id);
           });
         }
       }));
 
-      return { fields, totals };
+      const offeringCategoryMap = new Map<string, string>();
+      if (offeringIds.size > 0) {
+        const { data: offerings } = await supabase.from("core_entities").select("id, metadata").in("id", Array.from(offeringIds));
+        if (offerings) {
+          offerings.forEach(off => {
+            if (off.metadata?.commission_category_id) {
+              offeringCategoryMap.set(off.id, off.metadata.commission_category_id);
+            }
+          });
+        }
+      }
+
+      return { fields, totals, items, offeringCategoryMap };
     },
   });
 
@@ -166,6 +185,8 @@ export default function OrdersCommissions() {
                   cases={casesQ.data || []}
                   caseFields={caseDataQ.data?.fields || new Map()}
                   caseTotals={caseDataQ.data?.totals || new Map()}
+                  caseItems={caseDataQ.data?.items || new Map()}
+                  offeringCategoryMap={caseDataQ.data?.offeringCategoryMap || new Map()}
                   vendors={vendorsQ.data || []}
                   users={usersQ.data || []}
                />
