@@ -389,7 +389,7 @@ export default function InventoryDetail() {
                 has_configurations: !!itemQ.data.metadata?.has_configurations,
                 estoque_loja: itemQ.data.metadata?.estoque_loja || 0,
                 estoque_consignado: itemQ.data.metadata?.estoque_consignado || 0,
-                commission_category_id: itemQ.data.metadata?.commission_category_id || "",
+                commission_category_id: itemQ.data.metadata?.commission_category_id || "none",
             });
             setConfigurations(itemQ.data.metadata?.configurations || []);
             setProductConsignments(itemQ.data.metadata?.consignments || []);
@@ -466,6 +466,7 @@ export default function InventoryDetail() {
                 : (Number(values.estoque_loja || 0) + Number(values.estoque_consignado || 0));
 
             const metadata = {
+                ...(itemQ.data?.metadata || {}),
                 description: values.description,
                 photo_url: values.photo_url,
                 internal_code: values.internal_code,
