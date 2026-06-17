@@ -138,6 +138,7 @@ function SubtaskItemContent({
     handleCreateIndividualTask: (st: any, idx: number, deliverableId: string, type: string) => Promise<void>
 }) {
     const { user } = useSession();
+    const qc = useQueryClient();
     const [title, setTitle] = useState(st.title || "");
     const [type, setType] = useState(st.type || "edicao");
     const [postDate, setPostDate] = useState(st.post_date || "");
@@ -166,21 +167,28 @@ function SubtaskItemContent({
                 script_items: scriptItems
             };
 
-            await supabase.from("cases").update({
+            const { error: updateError } = await supabase.from("cases").update({
                 meta_json: { ...caseMeta, pending_subtasks: currentSubtasks }
             }).eq("id", caseId);
 
+            if (updateError) throw updateError;
+
             // Log Timeline
-            await supabase.from("timeline_events").insert({
-                tenant_id: caseData.tenant_id,
-                case_id: caseId,
-                event_type: "subtask_updated",
-                actor_type: "admin",
-                actor_id: (user as any)?.id ?? null,
-                message: `Subtarefa ${title} atualizada (briefing/roteiro/checklist).`,
-                meta_json: {},
-                occurred_at: new Date().toISOString(),
-            });
+            if (caseData?.case_type === "planejamento" && caseState === "planejamento") {
+                const { error: logError } = await supabase.from("timeline_events").insert({
+                    tenant_id: caseData.tenant_id,
+                    entity_id: caseData.customer_entity_id || null,
+                    journey_id: caseData.journey_id || null,
+                    case_id: caseId,
+                    event_type: "subtask_updated",
+                    actor_type: "admin",
+                    actor_id: (user as any)?.id ?? null,
+                    message: `Subtarefa de produção (${title}) atualizada no planejamento.`,
+                    meta_json: {},
+                    occurred_at: new Date().toISOString(),
+                });
+                if (logError) console.error("Erro ao gerar log da timeline:", logError);
+            }
 
             setLastSaved(new Date());
             onRefetch();
@@ -188,7 +196,8 @@ function SubtaskItemContent({
             qc.invalidateQueries({ queryKey: ["cases_by_tenant", caseData.tenant_id] });
             showSuccess("Alterações salvas.");
         } catch (e: any) {
-            showError("Erro ao salvar.");
+            console.error("Erro ao salvar subtarefa:", e);
+            showError(`Erro ao salvar: ${e.message || "Desconhecido"}`);
         } finally {
             setSaving(false);
         }
