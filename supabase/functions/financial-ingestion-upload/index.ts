@@ -471,6 +471,26 @@ async function processFinancialIngestion(opts: {
     .update({ status: "done", processed_rows: inserted, error_log: errLog })
     .eq("id", ingestionJobId);
 
+  const msg = `Importação de extrato bancário finalizada: ${inserted} transações cadastradas/processadas.`;
+
+  // Timeline Global do Guardião
+  await supabase.from("timeline_events").insert({
+    tenant_id: tenantId,
+    event_type: "financial_ingestion_completed",
+    actor_type: "system",
+    message: msg,
+    meta_json: { job_id: ingestionJobId, parsedRows: parsed.rows.length, inserted, errors: errors.length },
+    occurred_at: new Date().toISOString()
+  });
+
+  // Auditoria do Financeiro
+  await supabase.from("financial_logs").insert({
+    tenant_id: tenantId,
+    action_type: "INGESTION_COMPLETED",
+    description: msg,
+    metadata: { job_id: ingestionJobId, parsedRows: parsed.rows.length, inserted, errors: errors.length }
+  });
+
   return { ok: true, inserted, parsedRows: parsed.rows.length, errors: errors.length };
 }
 

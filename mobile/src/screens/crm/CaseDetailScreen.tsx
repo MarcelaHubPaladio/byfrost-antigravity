@@ -249,6 +249,21 @@ export function CaseDetailScreen() {
     mutationFn: async (updates: any) => {
       const { error } = await supabase.from('cases').update(updates).eq('id', caseId);
       if (error) throw error;
+
+      let msg = "Lead atualizado";
+      if (updates.state) msg = `Fase alterada para: ${updates.state.replace(/[_-]+/g, ' ')}`;
+      else if ('assigned_user_id' in updates) msg = updates.assigned_user_id ? "Responsável atribuído" : "Responsável removido";
+
+      await supabase.from('timeline_events').insert({
+        tenant_id: activeTenantId,
+        case_id: caseId,
+        event_type: "card_updated",
+        actor_type: "admin",
+        actor_id: user?.id || null,
+        message: msg,
+        meta_json: updates,
+        occurred_at: new Date().toISOString()
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['crm_cases_by_tenant'] });
@@ -265,6 +280,11 @@ export function CaseDetailScreen() {
         .update({ name: customerName, email: customerEmail, phone_e164: customerPhone })
         .eq('id', caseData.customer_id);
       if (error) throw error;
+
+      await supabase.from('timeline_events').insert({
+        tenant_id: activeTenantId, case_id: caseId, event_type: "card_updated",
+        actor_type: "admin", actor_id: user?.id || null, message: "Dados do cliente atualizados", occurred_at: new Date().toISOString()
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['case_detail', caseId] });
@@ -286,6 +306,11 @@ export function CaseDetailScreen() {
         offering_entity_id: productEntityId,
       });
       if (error) throw error;
+
+      await supabase.from('timeline_events').insert({
+        tenant_id: activeTenantId, case_id: caseId, event_type: "card_updated",
+        actor_type: "admin", actor_id: user?.id || null, message: `Produto adicionado: ${productDesc}`, occurred_at: new Date().toISOString()
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['case_items', caseId] });
@@ -298,6 +323,11 @@ export function CaseDetailScreen() {
     mutationFn: async (id: string) => {
       const { error } = await supabase.from('case_items').delete().eq('id', id);
       if (error) throw error;
+
+      await supabase.from('timeline_events').insert({
+        tenant_id: activeTenantId, case_id: caseId, event_type: "card_updated",
+        actor_type: "admin", actor_id: user?.id || null, message: "Produto removido", occurred_at: new Date().toISOString()
+      });
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['case_items', caseId] }),
   });
@@ -313,6 +343,11 @@ export function CaseDetailScreen() {
         meta_json: {},
       });
       if (error) throw error;
+
+      await supabase.from('timeline_events').insert({
+        tenant_id: activeTenantId, case_id: caseId, event_type: "card_updated",
+        actor_type: "admin", actor_id: user?.id || null, message: `Tarefa adicionada: ${newTaskTitle.trim()}`, occurred_at: new Date().toISOString()
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['case_tasks', caseId] });
@@ -327,6 +362,11 @@ export function CaseDetailScreen() {
         .update({ status: status === 'done' ? 'pending' : 'done' })
         .eq('id', id);
       if (error) throw error;
+
+      await supabase.from('timeline_events').insert({
+        tenant_id: activeTenantId, case_id: caseId, event_type: "card_updated",
+        actor_type: "admin", actor_id: user?.id || null, message: `Tarefa marcada como ${status === 'done' ? 'pendente' : 'concluída'}`, occurred_at: new Date().toISOString()
+      });
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['case_tasks', caseId] }),
   });
@@ -335,6 +375,11 @@ export function CaseDetailScreen() {
     mutationFn: async (id: string) => {
       const { error } = await supabase.from('tasks').update({ deleted_at: new Date().toISOString() }).eq('id', id);
       if (error) throw error;
+
+      await supabase.from('timeline_events').insert({
+        tenant_id: activeTenantId, case_id: caseId, event_type: "card_updated",
+        actor_type: "admin", actor_id: user?.id || null, message: "Tarefa removida", occurred_at: new Date().toISOString()
+      });
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['case_tasks', caseId] }),
   });
@@ -349,6 +394,11 @@ export function CaseDetailScreen() {
         created_by_user_id: user?.id,
       });
       if (error) throw error;
+
+      await supabase.from('timeline_events').insert({
+        tenant_id: activeTenantId, case_id: caseId, event_type: "card_updated",
+        actor_type: "admin", actor_id: user?.id || null, message: "Observação adicionada", occurred_at: new Date().toISOString()
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['case_notes', caseId] });
@@ -368,6 +418,16 @@ export function CaseDetailScreen() {
     mutationFn: async () => {
       const { error } = await supabase.from('cases').update({ deleted_at: new Date().toISOString() }).eq('id', caseId);
       if (error) throw error;
+
+      await supabase.from('timeline_events').insert({
+        tenant_id: activeTenantId,
+        case_id: caseId,
+        event_type: "card_deleted",
+        actor_type: "admin",
+        actor_id: user?.id || null,
+        message: "Lead arquivado/excluído",
+        occurred_at: new Date().toISOString()
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['crm_cases_by_tenant'] });

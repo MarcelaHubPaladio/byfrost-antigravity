@@ -548,6 +548,27 @@ export function TransactionsTab() {
           });
         }
       }
+
+      const msg = editingTxId ? `Atualizou o lançamento "${description}".` : `Criou o lançamento "${description}".`;
+      const actionType = editingTxId ? "UPDATE_TRANSACTION" : "CREATE_TRANSACTION";
+      const eventType = editingTxId ? "financial_transaction_updated" : "financial_transaction_created";
+
+      await supabase.from("financial_logs").insert({
+        tenant_id: activeTenantId,
+        action_type: actionType,
+        description: msg,
+        metadata: { amount: n, description, categoryId },
+        created_by: user?.id || null
+      });
+
+      await supabase.from("timeline_events").insert({
+        tenant_id: activeTenantId,
+        event_type: eventType,
+        actor_type: user?.id ? "user" : "system",
+        actor_id: user?.id || null,
+        message: msg,
+        meta_json: { amount: n, description, categoryId }
+      });
     },
     onSuccess: async () => {
       showSuccess(editingTxId ? "Lançamento atualizado." : "Lançamento criado.");
@@ -583,6 +604,15 @@ export function TransactionsTab() {
         metadata: { id },
         created_by: user?.id || null
       });
+
+      await supabase.from("timeline_events").insert({
+        tenant_id: activeTenantId,
+        event_type: "financial_transaction_deleted",
+        actor_type: user?.id ? "user" : "system",
+        actor_id: user?.id || null,
+        message: "Lançamento financeiro excluído.",
+        meta_json: { id }
+      });
     },
     onSuccess: async () => {
       showSuccess("Lançamento excluído.");
@@ -609,6 +639,15 @@ export function TransactionsTab() {
         description: `Excluiu em massa ${ids.length} transações.`,
         metadata: { ids },
         created_by: user?.id || null
+      });
+
+      await supabase.from("timeline_events").insert({
+        tenant_id: activeTenantId,
+        event_type: "financial_bulk_deleted",
+        actor_type: user?.id ? "user" : "system",
+        actor_id: user?.id || null,
+        message: `Exclusão em massa de ${ids.length} lançamentos financeiros.`,
+        meta_json: { ids }
       });
     },
     onSuccess: async () => {
@@ -641,6 +680,15 @@ export function TransactionsTab() {
         metadata: { ids, field, value },
         created_by: user?.id || null
       });
+
+      await supabase.from("timeline_events").insert({
+        tenant_id: activeTenantId,
+        event_type: "financial_bulk_updated",
+        actor_type: user?.id ? "user" : "system",
+        actor_id: user?.id || null,
+        message: `Atualização em massa de ${ids.length} lançamentos financeiros.`,
+        meta_json: { ids, field, value }
+      });
     },
     onSuccess: async () => {
       showSuccess("Lançamentos atualizados.");
@@ -670,6 +718,15 @@ export function TransactionsTab() {
         description: `Alterou manualmente a categoria da transação para "${description}".`,
         metadata: { id, category_id: categoryId },
         created_by: user?.id || null
+      });
+
+      await supabase.from("timeline_events").insert({
+        tenant_id: activeTenantId,
+        event_type: "financial_category_updated",
+        actor_type: user?.id ? "user" : "system",
+        actor_id: user?.id || null,
+        message: `Categoria do lançamento "${description}" alterada.`,
+        meta_json: { id, category_id: categoryId }
       });
     },
     onSuccess: async (_, vars) => {
@@ -723,6 +780,15 @@ export function TransactionsTab() {
             metadata: { category_id: categoryId, pattern: descN, updated_count: toUpdate.length },
             created_by: user?.id || null
           });
+
+          await supabase.from("timeline_events").insert({
+            tenant_id: activeTenantId,
+            event_type: "financial_learning_rule",
+            actor_type: user?.id ? "user" : "system",
+            actor_id: user?.id || null,
+            message: `Regra financeira criada para "${description}". Atualizou ${toUpdate.length} transações.`,
+            meta_json: { category_id: categoryId, pattern: descN, updated_count: toUpdate.length }
+          });
           
           return toUpdate.length;
         }
@@ -760,6 +826,15 @@ export function TransactionsTab() {
           p_used_increment: 1,
         });
       }
+
+      await supabase.from("timeline_events").insert({
+        tenant_id: activeTenantId,
+        event_type: "financial_transaction_updated",
+        actor_type: user?.id ? "user" : "system",
+        actor_id: user?.id || null,
+        message: `Entidade atrelada ao lançamento "${description}".`,
+        meta_json: { id, entity_id: entityId }
+      });
     },
     onSuccess: async () => {
       await qc.invalidateQueries({ queryKey: ["financial_transactions", activeTenantId] });

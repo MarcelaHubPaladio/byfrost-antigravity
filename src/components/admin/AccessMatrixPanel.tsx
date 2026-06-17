@@ -150,6 +150,13 @@ const DEFAULT_ROUTES: RouteRow[] = [
     path_pattern: "/app/operacao-m30",
     description: "Visão de contratos e operacional M30",
   },
+  {
+    key: "app.orders.commissions",
+    name: "Comissões",
+    category: "App",
+    path_pattern: "/app/orders/commissions",
+    description: "Visão e relatórios de comissões de vendedores",
+  },
 ];
 
 const DEFAULT_ROLES = [

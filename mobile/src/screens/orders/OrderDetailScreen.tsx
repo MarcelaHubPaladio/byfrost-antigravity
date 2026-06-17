@@ -142,6 +142,11 @@ export function OrderDetailScreen() {
   const [localState, setLocalState] = useState('');
   const [showStateModal, setShowStateModal] = useState(false);
 
+  // Modals for customer
+  const [showEditCustomerModal, setShowEditCustomerModal] = useState(false);
+  const [editCustomerName, setEditCustomerName] = useState('');
+  const [editCustomerPhone, setEditCustomerPhone] = useState('');
+
   // Modals for products
   const [showProductModal, setShowProductModal] = useState(false);
   const [productDesc, setProductDesc] = useState('');
@@ -362,10 +367,74 @@ export function OrderDetailScreen() {
     mutationFn: async () => {
       const { error } = await supabase.from('cases').update({ deleted_at: new Date().toISOString() }).eq('id', orderId);
       if (error) throw error;
+      
+      await supabase.from('timeline_events').insert({
+        tenant_id: activeTenantId,
+        case_id: orderId,
+        event_type: 'case_deleted',
+        actor_type: 'vendor',
+        actor_id: user?.id ?? null,
+        message: 'Pedido excluído via App.',
+        occurred_at: new Date().toISOString()
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['orders_mobile'] });
       navigation.goBack();
+    },
+  });
+
+  const updateCustomer = useMutation({
+    mutationFn: async () => {
+      const currentMeta = orderData?.meta_json || {};
+      const { error } = await supabase.from('cases').update({
+        meta_json: {
+          ...currentMeta,
+          customer_name: editCustomerName.trim(),
+          customer_phone: editCustomerPhone.trim(),
+        }
+      }).eq('id', orderId);
+      if (error) throw error;
+
+      // Update case_fields if they exist
+      const nameField = fieldsData?.find((f: any) => f.key === 'name');
+      const phoneField = fieldsData?.find((f: any) => f.key === 'phone' || f.key === 'whatsapp');
+
+      if (nameField) {
+        await supabase.from('case_fields').update({ value_text: editCustomerName.trim() }).eq('id', nameField.id);
+      } else {
+        await supabase.from('case_fields').insert({ case_id: orderId, key: 'name', value_text: editCustomerName.trim(), confidence: 1 });
+      }
+
+      if (phoneField) {
+        await supabase.from('case_fields').update({ value_text: editCustomerPhone.trim() }).eq('id', phoneField.id);
+      } else {
+        await supabase.from('case_fields').insert({ case_id: orderId, key: 'whatsapp', value_text: editCustomerPhone.trim(), confidence: 1 });
+      }
+
+      // If it's a linked customer, update customer_accounts
+      if (orderData?.customer_id) {
+        await supabase.from('customer_accounts').update({
+          name: editCustomerName.trim(),
+          phone_e164: editCustomerPhone.trim() || null,
+        }).eq('id', orderData.customer_id);
+      }
+
+      await supabase.from('timeline_events').insert({
+        tenant_id: activeTenantId,
+        case_id: orderId,
+        event_type: 'customer_updated',
+        actor_type: 'vendor',
+        actor_id: user?.id ?? null,
+        message: 'Dados do cliente atualizados via App.',
+        occurred_at: new Date().toISOString()
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['order_detail', orderId] });
+      queryClient.invalidateQueries({ queryKey: ['case_fields', orderId] });
+      queryClient.invalidateQueries({ queryKey: ['orders_mobile'] });
+      setShowEditCustomerModal(false);
     },
   });
 
@@ -506,7 +575,19 @@ export function OrderDetailScreen() {
             </SectionCard>
 
             {/* ── Cliente ── */}
-            <SectionCard icon={<UserIcon size={14} color={neon} />} title="Dados do Cliente">
+            <SectionCard 
+              icon={<UserIcon size={14} color={neon} />} 
+              title="Dados do Cliente"
+              action={
+                <TouchableOpacity style={styles.iconRoundBtn} onPress={() => {
+                  setEditCustomerName(customerName || '');
+                  setEditCustomerPhone(customerPhone || '');
+                  setShowEditCustomerModal(true);
+                }}>
+                  <User size={16} color={neon} />
+                </TouchableOpacity>
+              }
+            >
               <View style={styles.infoRow}>
                 <Text style={styles.infoLabel}>Nome</Text>
                 <Text style={styles.infoValue}>{customerName}</Text>
@@ -678,6 +759,44 @@ export function OrderDetailScreen() {
             {addProduct.isPending
               ? <ActivityIndicator size="small" color="#000" />
               : <Text style={styles.submitChipText}>Adicionar Produto</Text>}
+          </TouchableOpacity>
+        </View>
+      </BottomSheet>
+
+      {/* ── Edit Customer Modal ── */}
+      <BottomSheet visible={showEditCustomerModal} title="Editar Cliente" onClose={() => setShowEditCustomerModal(false)}>
+        <View style={{ padding: 8, gap: 16 }}>
+          <View>
+            <Text style={styles.fieldLabel}>NOME DO CLIENTE</Text>
+            <TextInput
+              style={styles.modalInput}
+              value={editCustomerName}
+              onChangeText={setEditCustomerName}
+              placeholder="Ex: João da Silva"
+              placeholderTextColor="#4B5563"
+            />
+          </View>
+          <View>
+            <Text style={styles.fieldLabel}>WHATSAPP / TELEFONE</Text>
+            <TextInput
+              style={styles.modalInput}
+              value={editCustomerPhone}
+              onChangeText={setEditCustomerPhone}
+              placeholder="+55 (00) 00000-0000"
+              placeholderTextColor="#4B5563"
+              keyboardType="phone-pad"
+            />
+          </View>
+          <TouchableOpacity
+            style={[styles.submitChip, { backgroundColor: neon }, (!editCustomerName.trim() || updateCustomer.isPending) && styles.submitChipDisabled]}
+            onPress={() => updateCustomer.mutate()}
+            disabled={!editCustomerName.trim() || updateCustomer.isPending}
+          >
+            {updateCustomer.isPending ? (
+              <ActivityIndicator size="small" color="#000" />
+            ) : (
+              <Text style={styles.submitChipText}>Salvar Cliente</Text>
+            )}
           </TouchableOpacity>
         </View>
       </BottomSheet>

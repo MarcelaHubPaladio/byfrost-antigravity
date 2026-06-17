@@ -256,12 +256,12 @@ export function NewOrderScreen() {
   });
 
   // ── Validation ─────────────────────────────────────────────────────────────
-  const isValid = customerName.trim().length >= 2;
+  const isValid = customerName.trim().length >= 2 && customerPhone.trim().length >= 8;
 
   // ── Submit ─────────────────────────────────────────────────────────────────
   const handleSubmit = async () => {
     if (!isValid) {
-      Alert.alert('Campo obrigatório', 'Informe o nome do cliente para continuar.');
+      Alert.alert('Campos obrigatórios', 'Informe o nome e um telefone válido para o cliente.');
       return;
     }
     if (!journeyQ.data?.id) {
@@ -275,17 +275,31 @@ export function NewOrderScreen() {
 
     setSubmitting(true);
     try {
+      // 1. Criar ou aproveitar Cliente
+      const { data: customer, error: custErr } = await supabase
+        .from('customer_accounts')
+        .upsert({
+          tenant_id: activeTenantId,
+          name: customerName.trim(),
+          phone_e164: customerPhone.trim(),
+        }, { onConflict: 'tenant_id,phone_e164' })
+        .select('id')
+        .single();
+        
+      if (custErr) throw custErr;
+
       // Parse value (removed since we use totalItemsValue)
       const numericValue = totalItemsValue;
 
       // Build title
       const title = customerName.trim();
 
-      // Insert case
+      // 2. Insert case
       const { data: caseData, error: caseError } = await supabase
         .from('cases')
         .insert({
           tenant_id: activeTenantId,
+          customer_id: customer.id,
           journey_id: journeyQ.data.id,
           title,
           status: 'open',
@@ -394,8 +408,22 @@ export function NewOrderScreen() {
       navigation.goBack();
 
       Alert.alert('Pedido criado!', `Pedido de ${customerName} registrado com sucesso.`);
-    } catch (e: any) {
-      Alert.alert('Erro', e.message || 'Não foi possível criar o pedido.');
+    } catch (err: any) {
+      console.error(err);
+      let msg = 'Não foi possível criar o pedido. Tente novamente ou contate o suporte.';
+      const rawMsg = String(err.message || '').toLowerCase();
+      
+      if (rawMsg.includes('violates unique constraint')) {
+        msg = 'Já existe um cliente cadastrado com esse número de WhatsApp neste sistema.';
+      } else if (rawMsg.includes('violates check constraint')) {
+        msg = 'Alguma informação não atende aos requisitos do sistema. Verifique os dados.';
+      } else if (rawMsg.includes('network') || rawMsg.includes('fetch')) {
+        msg = 'Problema de conexão. Verifique sua internet.';
+      } else if (rawMsg.includes('tenant')) {
+        msg = 'Você precisa estar logado e com um workspace ativo.';
+      }
+
+      Alert.alert('Ops, algo deu errado', msg);
     } finally {
       setSubmitting(false);
     }
@@ -445,8 +473,8 @@ export function NewOrderScreen() {
           {/* ── Telefone ── */}
           <View style={styles.fieldGroup}>
             <View style={styles.fieldLabelRow}>
-              <FileText size={14} color="#6B7280" />
-              <FieldLabel label="WHATSAPP / TELEFONE" />
+              <Phone size={14} color={neon} />
+              <FieldLabel label="WHATSAPP / TELEFONE" required />
             </View>
             <TextFieldInput
               value={customerPhone}

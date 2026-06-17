@@ -45,6 +45,14 @@ const EVENT_TYPE_LABELS: Record<string, string> = {
   user_assigned: "Usuário Atribuído",
   user_unassigned: "Usuário Removido",
   subtask_updated: "Subtarefa Atualizada",
+  financial_ingestion_completed: "Importação Financeira",
+  financial_transaction_created: "Lançamento Criado",
+  financial_transaction_deleted: "Lançamento Excluído",
+  financial_transaction_updated: "Lançamento Atualizado",
+  financial_category_updated: "Categoria Atualizada",
+  financial_learning_rule: "Regra Aprendida",
+  financial_bulk_deleted: "Exclusão Financeira em Massa",
+  financial_bulk_updated: "Atualização Financeira em Massa",
 };
 
 const getEventLabel = (type: string) => EVENT_TYPE_LABELS[type] || type;

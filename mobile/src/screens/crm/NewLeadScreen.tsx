@@ -6,7 +6,6 @@ import {
   TouchableOpacity, 
   TextInput,
   ScrollView,
-  
   ActivityIndicator,
   Alert
 } from 'react-native';
@@ -15,11 +14,115 @@ import { useNavigation } from '@react-navigation/native';
 import { X, MapPin, LocateFixed } from 'lucide-react-native';
 import * as Location from 'expo-location';
 import { useTenant } from '../../providers/TenantProvider';
+import { useSession } from '../../providers/SessionProvider';
+import { supabase } from '../../lib/supabase';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
 export function NewLeadScreen() {
   const navigation = useNavigation();
+  const queryClient = useQueryClient();
+  const { user } = useSession();
   const { activeTenant } = useTenant();
+  const activeTenantId = activeTenant?.id;
   const neon = activeTenant?.neon_primary || '#A3FF47';
+
+  // Buscar jornada CRM
+  const { data: journeys } = useQuery({
+    queryKey: ['tenant_crm_journeys_enabled', activeTenantId],
+    enabled: Boolean(activeTenantId),
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('tenant_journeys')
+        .select('journeys(id,key,name,is_crm,default_state_machine_json)')
+        .eq('tenant_id', activeTenantId!)
+        .eq('enabled', true);
+      if (error) throw error;
+      return (data ?? [])
+        .map((r: any) => r.journeys)
+        .filter((j: any) => j && j.is_crm);
+    },
+  });
+
+  const createLead = useMutation({
+    mutationFn: async () => {
+      if (!activeTenantId) throw new Error('Tenant não selecionado');
+      if (!name.trim()) throw new Error('O nome do lead é obrigatório');
+      if (!whatsapp.trim() || whatsapp.trim() === '+55') throw new Error('O WhatsApp do lead é obrigatório');
+
+      const journeyId = journeys?.[0]?.id;
+      if (!journeyId) throw new Error('Nenhuma jornada CRM ativa encontrada neste workspace.');
+      
+      const stateMachine = journeys?.[0]?.default_state_machine_json;
+      const initialState = stateMachine?.states?.[0] || 'novo';
+
+      // 1. Criar Cliente (ou aproveitar existente)
+      const { data: customer, error: custErr } = await supabase
+        .from('customer_accounts')
+        .upsert({
+          tenant_id: activeTenantId,
+          name: name.trim(),
+          phone_e164: whatsapp.trim(),
+          email: email.trim() || null
+        }, { onConflict: 'tenant_id,phone_e164' })
+        .select('id')
+        .single();
+      
+      if (custErr) throw custErr;
+
+      // 2. Criar Caso (Lead)
+      const { data: newCase, error: caseErr } = await supabase
+        .from('cases')
+        .insert({
+          tenant_id: activeTenantId,
+          customer_id: customer.id,
+          journey_id: journeyId,
+          state: initialState,
+          assigned_user_id: user?.id,
+          title: name.trim(),
+          is_chat: false
+        })
+        .select('id')
+        .single();
+      
+      if (caseErr) throw caseErr;
+
+      // 3. Registrar na Timeline
+      await supabase.from('timeline_events').insert({
+        tenant_id: activeTenantId,
+        case_id: newCase.id,
+        event_type: 'card_created',
+        actor_type: 'admin',
+        actor_id: user?.id || null,
+        message: `Lead criado: ${name.trim()}`,
+        meta_json: { kind: 'crm', assigned_user_id: user?.id },
+        occurred_at: new Date().toISOString()
+      });
+
+      return newCase.id;
+    },
+    onSuccess: (newCaseId) => {
+      queryClient.invalidateQueries({ queryKey: ['crm_cases_by_tenant'] });
+      // Substitui a tela atual (modal de criação) pela tela de detalhes do lead
+      navigation.replace('CaseDetail', { id: newCaseId });
+    },
+    onError: (err: any) => {
+      console.error(err);
+      let msg = 'Não foi possível criar o lead. Tente novamente ou contate o suporte.';
+      const rawMsg = String(err.message || '').toLowerCase();
+      
+      if (rawMsg.includes('violates unique constraint')) {
+        msg = 'Já existe um lead cadastrado com esse número de WhatsApp neste sistema.';
+      } else if (rawMsg.includes('violates check constraint')) {
+        msg = 'Alguma informação não atende aos requisitos do sistema. Verifique os dados.';
+      } else if (rawMsg.includes('network') || rawMsg.includes('fetch')) {
+        msg = 'Problema de conexão. Verifique sua internet.';
+      } else if (rawMsg.includes('tenant')) {
+        msg = 'Você precisa estar logado e com um workspace ativo.';
+      }
+
+      Alert.alert('Ops, algo deu errado', msg);
+    }
+  });
   const [name, setName] = useState('');
   const [whatsapp, setWhatsapp] = useState('+55');
   const [email, setEmail] = useState('');
@@ -144,11 +247,16 @@ export function NewLeadScreen() {
           <TouchableOpacity style={styles.cancelBtn} onPress={() => navigation.goBack()}>
             <Text style={styles.cancelBtnText}>Cancelar</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={[styles.createBtn, { backgroundColor: neon }]} onPress={() => {
-            console.log('Create lead', { name, whatsapp, email, location });
-            navigation.goBack();
-          }}>
-            <Text style={styles.createBtnText}>Criar lead</Text>
+          <TouchableOpacity 
+            style={[styles.createBtn, { backgroundColor: neon }, createLead.isPending && { opacity: 0.7 }]} 
+            onPress={() => createLead.mutate()}
+            disabled={createLead.isPending}
+          >
+            {createLead.isPending ? (
+              <ActivityIndicator size="small" color="#000000" />
+            ) : (
+              <Text style={styles.createBtnText}>Criar lead</Text>
+            )}
           </TouchableOpacity>
         </View>
       </View>
