@@ -35,6 +35,7 @@ export function CommissionsRadarTab({
         name: v.display_name || "Sem Nome",
         avatar: v.meta_json?.avatar_url || user?.avatar_url,
         basePercent: rules.base_percent || 5,
+        rules: rules,
         totalTirado: 0,
         totalFaturado: 0,
         comissaoTirada: 0,
@@ -48,6 +49,7 @@ export function CommissionsRadarTab({
       const vId = c.assigned_vendor_id;
       if (!vId || !vMap.has(vId)) return;
       const v = vMap.get(vId);
+      const rules = v.rules;
 
       const f = caseFields.get(c.id) || {};
       const caseTotal = caseTotals.get(c.id) || Number(f.expected_revenue) || 0;
