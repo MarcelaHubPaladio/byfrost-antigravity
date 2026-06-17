@@ -7,6 +7,8 @@ export function CommissionsRadarTab({
   cases, 
   caseFields, 
   caseTotals,
+  caseItems,
+  offeringCategoryMap,
   vendors,
   users
 }: { 
