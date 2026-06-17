@@ -37,7 +37,8 @@ import {
   Columns2,
   DollarSign,
   GripVertical,
-  Lock
+  Lock,
+  Banknote
 } from "lucide-react";
 
 import {
@@ -289,6 +290,13 @@ export default function Orders() {
     }
     return new Set();
   });
+  const [selectedCommissionCategories, setSelectedCommissionCategories] = useState<Set<string>>(() => {
+    const saved = localStorage.getItem(ORDERS_FILTERS_V2_KEY);
+    if (saved) {
+      try { const parsed = JSON.parse(saved); if (Array.isArray(parsed.commissionCategories)) return new Set<string>(parsed.commissionCategories); } catch (e) {}
+    }
+    return new Set();
+  });
   const [selectedStates, setSelectedStates] = useState<Set<string>>(() => {
     const saved = localStorage.getItem(ORDERS_FILTERS_V2_KEY);
     if (saved) {
@@ -344,13 +352,14 @@ export default function Orders() {
       cities: Array.from(selectedCities),
       inventoryIds: Array.from(selectedInventoryIds),
       projetistasIds: Array.from(selectedProjetistasIds),
+      commissionCategories: Array.from(selectedCommissionCategories),
       dateRange: {
         from: dateRange.from ? dateRange.from.toISOString() : null,
         to: dateRange.to ? dateRange.to.toISOString() : null
       }
     };
     localStorage.setItem(ORDERS_FILTERS_V2_KEY, JSON.stringify(filters));
-  }, [selectedSellerId, selectedStates, dateRange, selectedPaymentMethods, selectedCities, selectedInventoryIds, selectedProjetistasIds]);
+  }, [selectedSellerId, selectedStates, dateRange, selectedPaymentMethods, selectedCities, selectedInventoryIds, selectedProjetistasIds, selectedCommissionCategories]);
 
   // Force fresh build - query cleaned v5
   const journeyQ = useQuery({
@@ -491,6 +500,22 @@ export default function Orders() {
     },
   });
 
+  const commissionCategoriesQ = useQuery({
+    queryKey: ["commission_categories_for_filter", activeTenantId],
+    enabled: Boolean(activeTenantId),
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("core_entities")
+        .select("id, display_name")
+        .eq("tenant_id", activeTenantId!)
+        .eq("entity_type", "commission_category")
+        .is("deleted_at", null)
+        .order("display_name", { ascending: true });
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+
   const formatRelativeUpdate = (iso: string) => {
     if (!iso) return "—";
     const d = new Date(iso);
@@ -621,12 +646,20 @@ export default function Orders() {
       }
 
       const casesWithNegativeStock = new Set<string>();
+      const orderCommissionCategories = new Map<string, Set<string>>();
+
       for (const itm of allItems) {
         const cid = itm.case_id;
         const prodId = itm.offering_entity_id;
         if (prodId) {
           const prod = productsMap.get(prodId);
           if (prod) {
+            const catId = prod.metadata?.commission_category_id;
+            if (catId) {
+                if (!orderCommissionCategories.has(cid)) orderCommissionCategories.set(cid, new Set());
+                orderCommissionCategories.get(cid)!.add(catId);
+            }
+
             const configId = itm.confidence_json?.config_id;
             let isNeg = false;
             if (configId && Array.isArray(prod.metadata?.configurations)) {
@@ -651,7 +684,8 @@ export default function Orders() {
         totals: totalsMap, 
         itemCounts: itemCountsMap, 
         inventory: inventoryIdsMap,
-        negativeStockCases: casesWithNegativeStock
+        negativeStockCases: casesWithNegativeStock,
+        orderCommissionCategories
       };
     },
   });
@@ -806,7 +840,16 @@ export default function Orders() {
     if (selectedProjetistasIds.size > 0) {
       rows = rows.filter(r => {
         const f = caseDataQ.data?.fields.get(r.id);
-        return selectedProjetistasIds.has(String(f?.projetista_entity_id ?? "").trim());
+        const pid = f?.projetista_entity_id;
+        return pid && selectedProjetistasIds.has(pid);
+      });
+    }
+
+    if (selectedCommissionCategories.size > 0) {
+      rows = rows.filter(r => {
+        const orderCats = caseDataQ.data?.orderCommissionCategories?.get(r.id);
+        if (!orderCats) return false;
+        return Array.from(selectedCommissionCategories).some(id => orderCats.has(id));
       });
     }
 
@@ -1321,6 +1364,47 @@ export default function Orders() {
                     >
                       <Plus className="mr-2 h-3.5 w-3.5" /> Gerenciar Projetistas
                     </Button>
+                  </div>
+                </PopoverContent>
+              </Popover>
+
+              {/* Commission Categories Multi-Select */}
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className={cn(
+                      "h-10 rounded-2xl border-slate-200 bg-white/70 text-xs font-bold text-slate-700 min-w-[150px] justify-start hover:bg-white transition-all shadow-sm gap-2",
+                      selectedCommissionCategories.size > 0 && "border-indigo-400 bg-indigo-50 text-indigo-700"
+                    )}
+                  >
+                    <Banknote className="h-4 w-4 text-slate-400 flex-shrink-0" />
+                    {selectedCommissionCategories.size === 0 ? "Comissão: Todas" : `${selectedCommissionCategories.size} selecionadas`}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[220px] rounded-2xl p-2 shadow-xl border-slate-200" align="start">
+                  <div className="flex items-center justify-between px-2 py-1 mb-1">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Categoria de Comissão</p>
+                    {selectedCommissionCategories.size > 0 && (
+                      <button onClick={() => setSelectedCommissionCategories(new Set())} className="text-[10px] text-indigo-600 font-bold hover:underline">Limpar</button>
+                    )}
+                  </div>
+                  <div className="max-h-[240px] overflow-y-auto space-y-0.5">
+                    {commissionCategoriesQ.data?.map((opt) => (
+                      <label key={opt.id} className="flex items-center gap-2.5 px-2 py-1.5 rounded-xl cursor-pointer hover:bg-slate-50 transition-colors">
+                        <input
+                          type="checkbox"
+                          className="accent-indigo-600 h-3.5 w-3.5 rounded"
+                          checked={selectedCommissionCategories.has(opt.id)}
+                          onChange={() => {
+                            const next = new Set(selectedCommissionCategories);
+                            next.has(opt.id) ? next.delete(opt.id) : next.add(opt.id);
+                            setSelectedCommissionCategories(next);
+                          }}
+                        />
+                        <span className="text-xs font-semibold text-slate-700 truncate">{opt.display_name}</span>
+                      </label>
+                    ))}
                   </div>
                 </PopoverContent>
               </Popover>
