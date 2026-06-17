@@ -233,6 +233,20 @@ export function TransactionsTab() {
     }, 0);
   }, [selectedTxs]);
 
+  const hasActiveFilters = Boolean(
+    filterEntityId || 
+    filterCategoryId || 
+    (filterType && filterType !== "all") || 
+    txSearchText
+  );
+
+  const clearFilters = () => {
+    setFilterEntityId(null);
+    setFilterCategoryId(null);
+    setFilterType("all");
+    setTxSearchText("");
+  };
+
   const toggleSort = (key: string) => {
     if (sortKey === key) {
       setSortDir(sortDir === "asc" ? "desc" : "asc");
@@ -1318,25 +1332,68 @@ export function TransactionsTab() {
           ) : null}
         </Card>
 
-        <Card className="rounded-[22px] border-slate-200 bg-white/70 p-4 shadow-sm backdrop-blur dark:border-slate-800 dark:bg-slate-950/40">
+        <Card className={cn(
+          "rounded-[22px] p-4 shadow-sm backdrop-blur transition-all",
+          hasActiveFilters ? "border-indigo-200 bg-indigo-50/30 dark:border-indigo-900/40 dark:bg-indigo-900/10" : "border-slate-200 bg-white/70 dark:border-slate-800 dark:bg-slate-950/40"
+        )}>
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">Transações</div>
+              <div className="text-sm font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                Transações
+                {hasActiveFilters && (
+                  <Badge variant="secondary" className="bg-indigo-100 text-indigo-700 border-indigo-200 text-[9px] font-black uppercase tracking-widest px-1.5 py-0">
+                    Filtros Ativos
+                  </Badge>
+                )}
+              </div>
               <div className="mt-1 text-xs text-slate-600 dark:text-slate-400">Filtre por período (padrão: mês atual).</div>
+              
+              {/* Show which column filters are active */}
+              {(filterEntityId || filterCategoryId) && (
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {filterEntityId && (
+                    <Badge variant="outline" className="bg-white border-indigo-200 text-indigo-700 text-[10px] font-bold gap-1 pr-1">
+                      Entidade Específica
+                      <button onClick={() => setFilterEntityId(null)} className="hover:bg-indigo-100 rounded-full p-0.5"><X className="h-3 w-3" /></button>
+                    </Badge>
+                  )}
+                  {filterCategoryId && (
+                    <Badge variant="outline" className="bg-white border-indigo-200 text-indigo-700 text-[10px] font-bold gap-1 pr-1">
+                      Categoria Específica
+                      <button onClick={() => setFilterCategoryId(null)} className="hover:bg-indigo-100 rounded-full p-0.5"><X className="h-3 w-3" /></button>
+                    </Badge>
+                  )}
+                </div>
+              )}
             </div>
 
             <div className="flex flex-wrap items-end gap-2">
+              {hasActiveFilters && (
+                <Button 
+                  variant="ghost" 
+                  className="h-9 rounded-2xl text-indigo-600 hover:text-indigo-700 hover:bg-indigo-100 text-xs font-bold transition-all" 
+                  onClick={clearFilters}
+                >
+                  <X className="mr-1.5 h-3.5 w-3.5" /> Limpar Filtros
+                </Button>
+              )}
               <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                <Search className={cn("absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4", txSearchText ? "text-indigo-500" : "text-slate-400")} />
                 <Input
-                  className="mt-1 h-9 w-[200px] rounded-2xl pl-9 bg-white dark:bg-slate-950"
+                  className={cn(
+                    "mt-1 h-9 w-[200px] rounded-2xl pl-9 transition-all",
+                    txSearchText ? "border-indigo-300 bg-indigo-50/50 text-indigo-900 placeholder:text-indigo-400" : "bg-white dark:bg-slate-950"
+                  )}
                   placeholder="Buscar lançamentos..."
                   value={txSearchText}
                   onChange={(e) => setTxSearchText(e.target.value)}
                 />
               </div>
               <Select value={filterType} onValueChange={setFilterType}>
-                <SelectTrigger className="mt-1 h-9 w-[130px] rounded-2xl bg-white dark:bg-slate-950 font-medium text-xs">
+                <SelectTrigger className={cn(
+                  "mt-1 h-9 w-[130px] rounded-2xl font-medium text-xs transition-all",
+                  filterType !== "all" ? "border-indigo-300 bg-indigo-50/50 text-indigo-700" : "bg-white dark:bg-slate-950"
+                )}>
                   <SelectValue placeholder="Tipo" />
                 </SelectTrigger>
                 <SelectContent>
