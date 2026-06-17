@@ -664,7 +664,7 @@ interface SearchOption {
                         placeholder="Digite o nome do produto..."
                       />
                       {row.offering_entity_id && (
-                         <Link to={`/app/inventory/${row.offering_entity_id}`} target="_blank" title="Abrir produto no inventário" className="absolute right-2 top-1/2 -translate-y-1/2 z-10 flex items-center justify-center h-7 w-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-blue-600 transition-colors mt-0.5">
+                         <Link to={`/app/inventory/${row.offering_entity_id}`} title="Abrir produto no inventário" className="absolute right-2 top-1/2 -translate-y-1/2 z-10 flex items-center justify-center h-7 w-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-blue-600 transition-colors mt-0.5">
                              <ExternalLink className="h-4 w-4" />
                          </Link>
                       )}
@@ -858,7 +858,7 @@ interface SearchOption {
                       placeholder="Nome do produto ou serviço..."
                     />
                     {row.offering_entity_id && (
-                       <Link to={`/app/inventory/${row.offering_entity_id}`} target="_blank" title="Abrir produto no inventário" className="absolute right-2 top-1/2 -translate-y-1/2 z-10 flex items-center justify-center h-6 w-6 rounded bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-blue-600 transition-colors">
+                       <Link to={`/app/inventory/${row.offering_entity_id}`} title="Abrir produto no inventário" className="absolute right-2 top-1/2 -translate-y-1/2 z-10 flex items-center justify-center h-6 w-6 rounded bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-blue-600 transition-colors">
                            <ExternalLink className="h-3 w-3" />
                        </Link>
                     )}
