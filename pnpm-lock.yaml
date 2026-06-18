@@ -318,6 +318,9 @@ importers:
       expo-location:
         specifier: ~56.0.16
         version: 56.0.16(expo@56.0.9)(typescript@6.0.3)
+      expo-network:
+        specifier: ~56.0.5
+        version: 56.0.5(expo@56.0.9)(react@19.2.3)
       expo-notifications:
         specifier: ~56.0.16
         version: 56.0.16(expo@56.0.9)(react-native@0.85.3(@babel/core@7.29.7)(@types/react@19.2.8)(react@19.2.3))(react@19.2.3)(typescript@6.0.3)
@@ -3417,6 +3420,12 @@ packages:
     resolution: {integrity: sha512-tXqFU1MHrf7Ctq+Pw0qOeIPDFl1W51p9nRRZy9vVUn4GNuAk1Av0vrj0SGLvcxJvDf3aGwSzr8o8dgUsX5sG0g==}
     peerDependencies:
       react-native: '*'
+
+  expo-network@56.0.5:
+    resolution: {integrity: sha512-zmuyO95jayDY9jyUfOAlNp9XXJrJaAOkBXXLy0TS/nh2kppj7CHirRPkQ/tf0rsxhIL3AEd9nsRTiPtNsGT9Lw==}
+    peerDependencies:
+      expo: '*'
+      react: '*'
 
   expo-notifications@56.0.16:
     resolution: {integrity: sha512-fg76oPZhs86aKQij2ZBkWeBUti98fA53BRbjgP/ysEl+GlzIsP4BQR4Lw1ORY4MqOCO8x/5V2oykAdFne9ITSg==}
@@ -8890,6 +8899,11 @@ snapshots:
   expo-modules-jsi@56.0.8(react-native@0.85.3(@babel/core@7.29.7)(@types/react@19.2.8)(react@19.2.3)):
     dependencies:
       react-native: 0.85.3(@babel/core@7.29.7)(@types/react@19.2.8)(react@19.2.3)
+
+  expo-network@56.0.5(expo@56.0.9)(react@19.2.3):
+    dependencies:
+      expo: 56.0.9(@babel/core@7.29.7)(@expo/dom-webview@56.0.5)(react-dom@19.2.3(react@19.2.3))(react-native@0.85.3(@babel/core@7.29.7)(@types/react@19.2.8)(react@19.2.3))(react@19.2.3)(typescript@6.0.3)
+      react: 19.2.3
 
   expo-notifications@56.0.16(expo@56.0.9)(react-native@0.85.3(@babel/core@7.29.7)(@types/react@19.2.8)(react@19.2.3))(react@19.2.3)(typescript@6.0.3):
     dependencies:

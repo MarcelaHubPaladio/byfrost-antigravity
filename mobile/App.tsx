@@ -6,20 +6,29 @@ import { QueryProvider } from './src/providers/QueryProvider';
 import { PushNotificationProvider } from './src/providers/PushNotificationProvider';
 import { RootNavigator } from './src/navigation/RootNavigator';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { NetworkProvider } from './src/providers/NetworkProvider';
+import { GlobalNetworkIndicator } from './src/providers/GlobalNetworkIndicator';
+import { SyncEngine } from './src/lib/SyncEngine';
+import { processSyncJob } from './src/lib/syncProcessor';
 
 export default function App() {
   return (
     <SafeAreaProvider>
-      <QueryProvider>
-        <SessionProvider>
-          <TenantProvider>
-            <PushNotificationProvider>
-              <RootNavigator />
-              <StatusBar style="light" />
-            </PushNotificationProvider>
-          </TenantProvider>
-        </SessionProvider>
-      </QueryProvider>
+      <NetworkProvider onConnect={() => {
+        SyncEngine.processQueue(processSyncJob).catch(console.error);
+      }}>
+        <QueryProvider>
+          <SessionProvider>
+            <TenantProvider>
+              <PushNotificationProvider>
+                <RootNavigator />
+                <GlobalNetworkIndicator />
+                <StatusBar style="light" />
+              </PushNotificationProvider>
+            </TenantProvider>
+          </SessionProvider>
+        </QueryProvider>
+      </NetworkProvider>
     </SafeAreaProvider>
   );
 }

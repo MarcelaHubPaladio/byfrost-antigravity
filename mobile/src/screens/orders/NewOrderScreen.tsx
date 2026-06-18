@@ -20,6 +20,10 @@ import { useSession } from '../../providers/SessionProvider';
 import { useTenant } from '../../providers/TenantProvider';
 import { supabase } from '../../lib/supabase';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useNetwork } from '../../providers/NetworkProvider';
+import { SyncEngine } from '../../lib/SyncEngine';
+import * as Location from 'expo-location';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   X,
   ShoppingBag,
@@ -32,6 +36,7 @@ import {
   AlertCircle,
   Plus,
   Trash2,
+  Phone,
 } from 'lucide-react-native';
 
 // ─── Helpers & Components ───────────────────────────────────────────────────
@@ -176,6 +181,7 @@ export function NewOrderScreen() {
   const { activeTenantId, activeTenant } = useTenant();
   const neon = activeTenant?.neon_primary || '#A3FF47';
   const qc = useQueryClient();
+  const network = useNetwork();
 
   // Form state
   const [customerName, setCustomerName] = useState('');
@@ -195,23 +201,34 @@ export function NewOrderScreen() {
 
   const totalItemsValue = selectedProducts.reduce((acc, p) => acc + p.total, 0);
 
-  const offeringsQ = useQuery({
-    queryKey: ['crm_offerings_search_new_order', activeTenantId, productDesc],
-    enabled: Boolean(activeTenantId && productDesc.length > 1),
+  const allOfferingsQ = useQuery({
+    queryKey: ['crm_offerings_all_mobile', activeTenantId],
+    enabled: Boolean(activeTenantId),
+    staleTime: 1000 * 60 * 60 * 12, // 12 hours
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('core_entities')
-        .select('id, display_name, metadata')
-        .eq('tenant_id', activeTenantId!)
-        .in('entity_type', ['offering', 'product'])
-        .is('deleted_at', null)
-        .ilike('display_name', `%${productDesc}%`)
-        .order('display_name', { ascending: true })
-        .limit(5);
-      if (error) throw error;
-      return data ?? [];
+      const cacheKey = `offerings_all_${activeTenantId}`;
+      if (network.isConnected) {
+        const { data, error } = await supabase
+          .from('core_entities')
+          .select('id, display_name, metadata')
+          .eq('tenant_id', activeTenantId!)
+          .in('entity_type', ['offering', 'product'])
+          .is('deleted_at', null)
+          .order('display_name', { ascending: true })
+          .limit(1000);
+        if (data) {
+          await AsyncStorage.setItem(cacheKey, JSON.stringify(data));
+          return data;
+        }
+      }
+      const cached = await AsyncStorage.getItem(cacheKey);
+      return cached ? JSON.parse(cached) : [];
     },
   });
+
+  const filteredOfferings = productDesc.length > 1
+    ? (allOfferingsQ.data ?? []).filter((o: any) => o.display_name.toLowerCase().includes(productDesc.toLowerCase())).slice(0, 5)
+    : [];
 
   const handleAddProduct = () => {
     let priceStr = String(productPrice).replace(/\./g, '').replace(',', '.');
@@ -245,13 +262,20 @@ export function NewOrderScreen() {
     enabled: Boolean(activeTenantId),
     staleTime: 60_000,
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('journeys')
-        .select('id, key, name')
-        .eq('key', 'sales_order')
-        .single();
-      if (error) return null;
-      return data;
+      const cacheKey = `journey_sales_order_${activeTenantId}`;
+      if (network.isConnected) {
+        const { data, error } = await supabase
+          .from('journeys')
+          .select('id, key, name')
+          .eq('key', 'sales_order')
+          .single();
+        if (data) {
+          await AsyncStorage.setItem(cacheKey, JSON.stringify(data));
+          return data;
+        }
+      }
+      const cached = await AsyncStorage.getItem(cacheKey);
+      return cached ? JSON.parse(cached) : null;
     },
   });
 
@@ -275,24 +299,104 @@ export function NewOrderScreen() {
 
     setSubmitting(true);
     try {
-      // 1. Criar ou aproveitar Cliente
-      const { data: customer, error: custErr } = await supabase
-        .from('customer_accounts')
-        .upsert({
+      // Fetch location if possible
+      let lat: number | undefined;
+      let lng: number | undefined;
+      try {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status === 'granted') {
+          const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+          lat = loc.coords.latitude;
+          lng = loc.coords.longitude;
+        }
+      } catch (locErr) {
+        console.log('Could not get location:', locErr);
+      }
+
+      const title = customerName.trim();
+      const numericValue = totalItemsValue;
+
+      // Prepare the payload for SyncEngine or direct execution
+      const payload: any = {
+        customer: {
           tenant_id: activeTenantId,
           name: customerName.trim(),
           phone_e164: customerPhone.trim(),
-        }, { onConflict: 'tenant_id,phone_e164' })
+        },
+        case: {
+          tenant_id: activeTenantId,
+          journey_id: journeyQ.data.id,
+          title,
+          status: 'open',
+          state: 'new',
+          assigned_user_id: user.id,
+          is_chat: false,
+          meta_json: {
+            customer_name: customerName.trim(),
+            customer_phone: customerPhone.trim(),
+            total_value: totalItemsValue > 0 ? totalItemsValue : null,
+            payment_method: paymentMethod || null,
+            obs: obs.trim() || null,
+            created_via: 'mobile',
+          },
+        },
+        case_fields: [],
+        case_items: [],
+        timeline_events: [],
+      };
+
+      if (customerPhone.trim()) {
+        payload.case_fields.push({ key: 'whatsapp', value_text: customerPhone.trim(), confidence: 1, source: 'mobile' });
+      }
+      if (paymentMethod) {
+        payload.case_fields.push({ key: 'payment_method', value_text: paymentMethod, confidence: 1, source: 'mobile' });
+      }
+      if (obs.trim()) {
+        payload.case_fields.push({ key: 'obs', value_text: obs.trim(), confidence: 1, source: 'mobile' });
+      }
+      if (numericValue > 0) {
+        payload.case_fields.push({ key: 'total_value_raw', value_text: String(numericValue), confidence: 1, source: 'mobile' });
+      }
+      payload.case_fields.push({ key: 'sale_date_text', value_text: new Date().toLocaleDateString('pt-BR'), confidence: 1, source: 'mobile' });
+
+      if (selectedProducts.length > 0) {
+        payload.case_items = selectedProducts.map((p, index) => ({
+          tenant_id: activeTenantId,
+          line_no: index + 1,
+          description: p.description,
+          price: p.price,
+          qty: p.qty,
+          total: p.total,
+          offering_entity_id: p.offering_entity_id,
+        }));
+      }
+
+      payload.timeline_events.push({
+        tenant_id: activeTenantId,
+        event_type: 'case_created',
+        actor_type: 'vendor',
+        actor_id: user?.id ?? null,
+        message: 'Pedido criado via App.',
+        occurred_at: new Date().toISOString(),
+      });
+
+      if (!network.isConnected) {
+        // OFFLINE MODE: Queue it up!
+        await SyncEngine.enqueueJob('order', payload, lat, lng);
+        Alert.alert('Pedido Salvo Offline', `O pedido de ${customerName} foi guardado e será sincronizado quando houver internet.`);
+        navigation.goBack();
+        return;
+      }
+
+      // ONLINE MODE: Execute directly (or use processor)
+      // 1. Criar ou aproveitar Cliente
+      const { data: customer, error: custErr } = await supabase
+        .from('customer_accounts')
+        .upsert(payload.customer, { onConflict: 'tenant_id,phone_e164' })
         .select('id')
         .single();
         
       if (custErr) throw custErr;
-
-      // Parse value (removed since we use totalItemsValue)
-      const numericValue = totalItemsValue;
-
-      // Build title
-      const title = customerName.trim();
 
       // 2. Insert case
       const { data: caseData, error: caseError } = await supabase
@@ -384,24 +488,19 @@ export function NewOrderScreen() {
       }
 
       // Generate timeline event
-      await supabase.from('timeline_events').insert({
-        tenant_id: activeTenantId,
-        case_id: caseId,
-        event_type: 'case_created',
-        actor_type: 'vendor',
-        actor_id: user?.id ?? null,
-        message: 'Pedido criado via App.',
-        occurred_at: new Date().toISOString()
-      });
+      const timelineInsert = payload.timeline_events[0];
+      timelineInsert.case_id = caseId;
+      if (lat && lng) {
+        timelineInsert.meta_json = { location: { lat, lng } };
+      }
+      await supabase.from('timeline_events').insert(timelineInsert);
 
       // Set sale date
-      await supabase.from('case_fields').insert({
-        case_id: caseId,
-        key: 'sale_date_text',
-        value_text: new Date().toLocaleDateString('pt-BR'),
-        confidence: 1,
-        source: 'mobile',
-      });
+      const saleDateInsert = payload.case_fields.find((f: any) => f.key === 'sale_date_text');
+      if (saleDateInsert) {
+        saleDateInsert.case_id = caseId;
+        await supabase.from('case_fields').insert(saleDateInsert);
+      }
 
       // Invalidate and go back
       await qc.invalidateQueries({ queryKey: ['orders_mobile'] });
@@ -579,9 +678,9 @@ export function NewOrderScreen() {
           <View>
             <Text style={styles.fieldLabel}>DESCRIÇÃO</Text>
             <TextInput style={styles.modalInput} value={productDesc} onChangeText={t => { setProductDesc(t); setProductEntityId(null); }} placeholder="Ex: Semente de Milho" placeholderTextColor="#4B5563" />
-            {productDesc.length > 0 && !productEntityId && (offeringsQ.data ?? []).length > 0 && (
+            {filteredOfferings.length > 0 && !productEntityId && (
               <View style={styles.suggestions}>
-                {(offeringsQ.data ?? []).map(o => (
+                {filteredOfferings.map((o: any) => (
                   <TouchableOpacity
                     key={o.id}
                     style={styles.suggestionRow}

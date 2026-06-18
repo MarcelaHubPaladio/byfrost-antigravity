@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -32,8 +32,13 @@ import {
   Layers,
   X,
   Check,
+  CloudLightning,
 } from 'lucide-react-native';
 import { UserMenuButton } from '../../components/UserMenuButton';
+import { useNetwork } from '../../providers/NetworkProvider';
+import { SyncEngine } from '../../lib/SyncEngine';
+import { processSyncJob } from '../../lib/syncProcessor';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -390,6 +395,33 @@ export function OrdersScreen({ navigation }: any) {
   const [adminFilters, setAdminFilters] = useState<AdminFilters>({ 
     sellerIds: [], states: [], paymentMethods: [], dateRange: 'current_month', customDateStart: '', customDateEnd: '', productSearch: '', projetistaIds: [], cities: [] 
   });
+  const network = useNetwork();
+  const [pendingJobs, setPendingJobs] = useState(0);
+  const [pendingQueue, setPendingQueue] = useState<any[]>([]);
+  const [isSyncing, setIsSyncing] = useState(false);
+
+  const checkPendingJobs = async () => {
+    const queue = await SyncEngine.getQueue();
+    setPendingJobs(queue.length);
+    setPendingQueue(queue);
+  };
+
+  useEffect(() => {
+    checkPendingJobs();
+    const interval = setInterval(checkPendingJobs, 5000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const handleManualSync = async () => {
+    setIsSyncing(true);
+    try {
+      await SyncEngine.processQueue(processSyncJob);
+      await checkPendingJobs();
+      await qc.invalidateQueries({ queryKey: ['orders_mobile'] });
+    } finally {
+      setIsSyncing(false);
+    }
+  };
 
   const isAdmin =
     isSuperAdmin ||
@@ -420,9 +452,16 @@ export function OrdersScreen({ navigation }: any) {
     enabled: Boolean(activeTenantId),
     staleTime: 60_000,
     queryFn: async () => {
-      const { data, error } = await supabase.from('journeys').select('id, key, name, default_state_machine_json').eq('key', 'sales_order').single();
-      if (error) return null;
-      return data;
+      const cacheKey = `journey_sales_order_${activeTenantId}`;
+      if (network.isConnected) {
+        const { data, error } = await supabase.from('journeys').select('id, key, name, default_state_machine_json').eq('key', 'sales_order').single();
+        if (data) {
+          await AsyncStorage.setItem(cacheKey, JSON.stringify(data));
+          return data;
+        }
+      }
+      const cached = await AsyncStorage.getItem(cacheKey);
+      return cached ? JSON.parse(cached) : null;
     },
   });
 
@@ -431,26 +470,52 @@ export function OrdersScreen({ navigation }: any) {
     queryKey: ['orders_mobile', activeTenantId, user?.id, journeyQ.data?.id, isAdmin],
     enabled: Boolean(activeTenantId && journeyQ.data?.id),
     queryFn: async () => {
-      let q = supabase
-        .from('cases')
-        .select('id,title,status,state,created_at,updated_at,assigned_user_id,assigned_vendor_id,meta_json,users_profile!fk_cases_users_profile(display_name,email)')
-        .eq('tenant_id', activeTenantId!)
-        .eq('journey_id', journeyQ.data!.id)
-        .is('deleted_at', null)
-        .eq('is_chat', false);
+      const cacheKey = `orders_mobile_${activeTenantId}_${user?.id}_${isAdmin}`;
+      if (network.isConnected) {
+        let q = supabase
+          .from('cases')
+          .select('id,title,status,state,created_at,updated_at,assigned_user_id,assigned_vendor_id,meta_json,users_profile!fk_cases_users_profile(display_name,email)')
+          .eq('tenant_id', activeTenantId!)
+          .eq('journey_id', journeyQ.data!.id)
+          .is('deleted_at', null)
+          .eq('is_chat', false);
 
-      if (!isAdmin && user?.id) {
-        q = q.eq('assigned_user_id', user.id);
+        if (!isAdmin && user?.id) {
+          q = q.eq('assigned_user_id', user.id);
+        }
+
+        const { data, error } = await q.order('created_at', { ascending: false }).limit(500);
+        if (data) {
+          await AsyncStorage.setItem(cacheKey, JSON.stringify(data));
+          return data as unknown as OrderRow[];
+        }
       }
-
-      const { data, error } = await q.order('created_at', { ascending: false }).limit(500);
-      if (error) throw error;
-      return (data ?? []) as unknown as OrderRow[];
+      const cached = await AsyncStorage.getItem(cacheKey);
+      return cached ? JSON.parse(cached) : [];
     },
   });
 
-  const allOrders = ordersQ.data ?? [];
-  const caseIds = useMemo(() => allOrders.map(o => o.id), [allOrders]);
+  const allOrders = useMemo(() => {
+    const fetched = ordersQ.data ?? [];
+    const pendingMapped = pendingQueue.map(job => {
+      const payload = job.payload || {};
+      return {
+        id: `offline-${job.id}`,
+        title: payload.title || 'Pedido Offline',
+        status: 'open',
+        state: 'new',
+        created_at: job.createdAt || new Date().toISOString(),
+        updated_at: job.createdAt || new Date().toISOString(),
+        assigned_user_id: user?.id || null,
+        assigned_vendor_id: null,
+        meta_json: { ...payload.meta_json, _isOffline: true },
+        users_profile: { display_name: 'Aguardando Sincronização', email: null }
+      } as OrderRow;
+    });
+    return [...pendingMapped, ...fetched];
+  }, [ordersQ.data, pendingQueue, user?.id]);
+
+  const caseIds = useMemo(() => allOrders.filter(o => !o.id.startsWith('offline-')).map(o => o.id), [allOrders]);
 
   // ── Extended Fields for filtering ──────────────────────────────────────────
   const caseFieldsQ = useQuery({
@@ -663,6 +728,29 @@ export function OrdersScreen({ navigation }: any) {
           <UserMenuButton />
         </View>
       </View>
+
+      {/* ── Offline Sync Indicator ── */}
+      {pendingJobs > 0 && (
+        <View style={{ backgroundColor: '#4B5563', paddingVertical: 8, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <CloudLightning size={16} color="#fff" />
+            <Text style={{ color: '#fff', fontSize: 12, fontWeight: '600' }}>
+              {pendingJobs} pedido(s) pendente(s)
+            </Text>
+          </View>
+          <TouchableOpacity 
+            style={{ backgroundColor: neon, paddingHorizontal: 12, paddingVertical: 4, borderRadius: 12 }}
+            onPress={handleManualSync}
+            disabled={isSyncing || !network.isConnected}
+          >
+            {isSyncing ? (
+              <ActivityIndicator size="small" color="#000" />
+            ) : (
+              <Text style={{ color: '#000', fontSize: 11, fontWeight: '700' }}>Sincronizar</Text>
+            )}
+          </TouchableOpacity>
+        </View>
+      )}
 
       {/* ── Search ── */}
       <View style={styles.searchBar}>
