@@ -4,16 +4,18 @@ import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { CheckCircle2, FileText, ListChecks, Loader2, AlertCircle, Rocket, ChevronDown } from "lucide-react";
+import { CheckCircle2, FileText, ListChecks, Loader2, AlertCircle } from "lucide-react";
 import { showSuccess, showError } from "@/utils/toast";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { cn } from "@/lib/utils";
+import { PublicPortalShell, type PublicPalette } from "@/components/public/PublicPortalShell";
 
 export default function PublicScriptApproval() {
     const { token } = useParams();
     const [loading, setLoading] = useState(true);
     const [approving, setApproving] = useState(false);
     const [caseData, setCaseData] = useState<any>(null);
+    const [tenant, setTenant] = useState<any>(null);
     const [notFound, setNotFound] = useState(false);
     const [alreadyApproved, setAlreadyApproved] = useState(false);
 
@@ -31,9 +33,17 @@ export default function PublicScriptApproval() {
             } else {
                 const c = data[0];
                 setCaseData(c);
-                // In M30 flow, once it leaves 'aprovar_roteiro', it means it was approved
                 if (c.state !== "aprovar_roteiro" && c.journey_name?.includes("M30")) {
                     setAlreadyApproved(true);
+                }
+
+                if (c.tenant_id) {
+                    const { data: tData } = await supabase
+                        .from("tenants")
+                        .select("id, name, branding_json")
+                        .eq("id", c.tenant_id)
+                        .maybeSingle();
+                    if (tData) setTenant(tData);
                 }
             }
         } catch (e) {
@@ -55,7 +65,7 @@ export default function PublicScriptApproval() {
                 showError("Não foi possível aprovar este vídeo agora.");
             } else {
                 showSuccess("Vídeo aprovado com sucesso!");
-                fetchCase(); // Refresh to show approved state
+                fetchCase();
             }
         } catch (e) {
             showError("Falha na aprovação individual.");
@@ -129,7 +139,13 @@ export default function PublicScriptApproval() {
     const subtasks = (caseData.meta_json?.pending_subtasks || []) as any[];
     const hasSubtasks = subtasks.length > 0;
 
+    const palette = tenant?.branding_json?.palette as PublicPalette;
+    const rawPrimary = (palette as any)?.primary;
+    const primaryColor = (typeof rawPrimary === 'string' ? rawPrimary : rawPrimary?.hex) || "#4f46e5";
+    const primaryText = palette?.primary?.text || "#ffffff";
+
     return (
+        <PublicPortalShell palette={{ ...palette, primary: { hex: primaryColor, text: primaryText } }}>
         <div className="min-h-screen bg-slate-950 pb-24 font-sans text-slate-300">
             <header className="bg-slate-900/50 backdrop-blur-xl border-b border-white/5 px-6 py-8 text-center sticky top-0 z-10 shadow-sm">
                 <div className="mx-auto max-w-2xl">
@@ -223,7 +239,8 @@ export default function PublicScriptApproval() {
                                                 <Button 
                                                     onClick={() => handleApproveSubtask(idx)}
                                                     disabled={approving}
-                                                    className="w-full h-12 rounded-2xl bg-primary hover:bg-primary/90 text-primary-foreground font-black text-xs shadow-lg shadow-primary/20 transition-all active:scale-95 gap-3"
+                                                    style={{ backgroundColor: primaryColor, color: primaryText }}
+                                                    className="w-full h-12 rounded-2xl font-black text-xs shadow-lg transition-all active:scale-95 gap-3 hover:opacity-90"
                                                 >
                                                     {approving ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
                                                     APROVAR ESTE VÍDEO ✅
@@ -265,7 +282,8 @@ export default function PublicScriptApproval() {
                     <Button 
                         onClick={handleApprove}
                         disabled={approving}
-                        className="w-full h-14 rounded-2xl bg-primary hover:bg-primary/90 text-primary-foreground font-black text-base shadow-2xl shadow-primary/20 transition-all active:scale-95 gap-3"
+                        style={{ backgroundColor: primaryColor, color: primaryText }}
+                        className="w-full h-14 rounded-2xl font-black text-base shadow-2xl transition-all active:scale-95 gap-3 hover:opacity-90"
                     >
                         {approving ? <Loader2 className="h-5 w-5 animate-spin" /> : <CheckCircle2 className="h-5 w-5" />}
                         APROVAR ROTEIROS AGORA
@@ -273,5 +291,6 @@ export default function PublicScriptApproval() {
                 </div>
             </footer>
         </div>
+        </PublicPortalShell>
     );
 }
