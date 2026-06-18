@@ -1700,6 +1700,32 @@ export default function OperacaoM30Case() {
                                                             </AccordionTrigger>
                                                             
                                                             <div className="flex items-center gap-1">
+                                                                {st.is_approved && (
+                                                                    <Button 
+                                                                        size="sm" 
+                                                                        variant="ghost" 
+                                                                        className="h-9 w-9 rounded-xl flex items-center justify-center p-0 text-slate-400 hover:text-amber-600 hover:bg-amber-50 transition-all"
+                                                                        onClick={async (e) => {
+                                                                            e.stopPropagation();
+                                                                            if (!confirm("Tem certeza que deseja desaprovar este roteiro?")) return;
+                                                                            const current = (caseQ.data?.meta_json as any)?.pending_subtasks || [];
+                                                                            const next = [...current];
+                                                                            next[idx] = { ...next[idx], is_approved: false };
+                                                                            try {
+                                                                                await supabase.from("cases").update({
+                                                                                    meta_json: { ...(caseQ.data?.meta_json as any), pending_subtasks: next }
+                                                                                }).eq("id", id!);
+                                                                                showSuccess("Roteiro desaprovado.");
+                                                                                caseQ.refetch();
+                                                                            } catch (err: any) {
+                                                                                showError("Erro: " + err.message);
+                                                                            }
+                                                                        }}
+                                                                        title="Desaprovar Roteiro"
+                                                                    >
+                                                                        <X className="h-4 w-4" />
+                                                                    </Button>
+                                                                )}
                                                                 {caseQ.data?.state === 'gravao' && !st.linked_case_id && (
                                                                     <Button 
                                                                         size="sm" 

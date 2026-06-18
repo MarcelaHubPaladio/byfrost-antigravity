@@ -198,20 +198,7 @@ export default function PublicScriptApproval() {
                                             />
                                         </div>
 
-                                        {/* sub-script */}
-                                        <div className="space-y-3">
-                                            <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                                                <ListChecks className="h-3 w-3" /> Roteiro Completo
-                                            </div>
-                                            <div className="rounded-3xl bg-slate-900 p-8 text-slate-100 relative overflow-hidden">
-                                                <div className="absolute top-0 right-0 p-6 opacity-5">
-                                                    <Rocket className="h-20 w-20" />
-                                                </div>
-                                                <div className="relative z-10 whitespace-pre-wrap leading-relaxed text-sm font-medium font-sans">
-                                                    {st.script_raw || "O roteiro deste vídeo está sendo finalizado..."}
-                                                </div>
-                                            </div>
-                                        </div>
+
 
                                         {/* checklist items (Itens do Roteiro) */}
                                         {st.script_items && st.script_items.length > 0 && (
@@ -263,19 +250,7 @@ export default function PublicScriptApproval() {
                             </Card>
                         </section>
 
-                        <section className="space-y-4">
-                            <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                                <ListChecks className="h-4 w-4" /> Roteiro Completo
-                            </h3>
-                            <Card className="rounded-[32px] border-none shadow-xl shadow-slate-200/40 p-8 bg-slate-900 text-slate-100 overflow-hidden relative">
-                                <div className="absolute top-0 right-0 p-8 opacity-5">
-                                    <Rocket className="h-24 w-24" />
-                                </div>
-                                <div className="relative z-10 whitespace-pre-wrap leading-relaxed text-sm font-medium font-sans">
-                                    {caseData.meta_json?.script_raw || "O roteiro está sendo finalizado..."}
-                                </div>
-                            </Card>
-                        </section>
+
                     </>
                 )}
 
