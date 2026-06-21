@@ -1,7 +1,9 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
+import { toast } from "sonner";
 import { useTenant } from "@/providers/TenantProvider";
+import { useAuth } from "@/providers/AuthProvider";
 
 export type CampaignStatus = 'draft' | 'tested' | 'scheduled' | 'processing' | 'completed' | 'failed' | 'cancelled';
 export type CampaignType = 'boleto' | 'nota_fiscal' | 'video_aprovacao' | 'comunicado' | 'cobranca' | 'pos_venda' | 'aviso' | 'outro';
@@ -14,58 +16,67 @@ export interface SmartCampaign {
   campaign_type: CampaignType;
   status: CampaignStatus;
   message_template: string;
-  audience_config_json: Record<string, unknown>;
+  audience_config_json: any;
   attachments_json: string[];
+  channels_json: string[];
+  parent_campaign_id?: string | null;
   scheduled_at: string | null;
   created_at: string;
+  created_by: string;
   updated_at: string;
   wa_instance?: { name: string, phone_number: string };
 }
 
 export function useSmartCampaigns() {
   const { tenant } = useTenant();
+  const { user } = useAuth();
   const queryClient = useQueryClient();
+  const activeTenantId = tenant?.id;
 
   const { data: campaigns, isLoading } = useQuery({
-    queryKey: ['smart_campaigns', tenant?.id],
+    queryKey: ['smart_campaigns', activeTenantId],
     queryFn: async () => {
-      if (!tenant?.id) return [];
+      if (!activeTenantId) return [];
       const { data, error } = await supabase
         .from('smart_campaigns')
         .select(`
           *,
           wa_instance:wa_instances(name, phone_number)
         `)
-        .eq('tenant_id', tenant.id)
+        .eq('tenant_id', activeTenantId)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
       return data as SmartCampaign[];
     },
-    enabled: !!tenant?.id,
+    enabled: !!activeTenantId,
   });
 
   const { data: instances, isLoading: isLoadingInstances } = useQuery({
-    queryKey: ['wa_instances', tenant?.id],
+    queryKey: ['wa_instances', activeTenantId],
     queryFn: async () => {
-      if (!tenant?.id) return [];
+      if (!activeTenantId) return [];
       const { data, error } = await supabase
         .from('wa_instances')
         .select('*')
-        .eq('tenant_id', tenant.id)
+        .eq('tenant_id', activeTenantId)
         .eq('status', 'active');
       if (error) throw error;
       return data;
     },
-    enabled: !!tenant?.id,
+    enabled: !!activeTenantId,
   });
 
   const createCampaign = useMutation({
-    mutationFn: async (newCampaign: Partial<SmartCampaign>) => {
-      if (!tenant?.id) throw new Error("No tenant");
+    mutationFn: async (payload: Omit<SmartCampaign, "id" | "tenant_id" | "created_at" | "updated_at" | "created_by" | "wa_instance">) => {
       const { data, error } = await supabase
-        .from('smart_campaigns')
-        .insert({ ...newCampaign, tenant_id: tenant.id })
+        .from("smart_campaigns")
+        .insert({
+          ...payload,
+          tenant_id: activeTenantId!,
+          created_by: user?.id,
+          channels_json: payload.channels_json || ["whatsapp"]
+        })
         .select()
         .single();
       
@@ -73,7 +84,7 @@ export function useSmartCampaigns() {
       return data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['smart_campaigns', tenant?.id] });
+      queryClient.invalidateQueries({ queryKey: ['smart_campaigns', activeTenantId] });
       toast.success("Disparo criado com sucesso.");
     },
     onError: (error) => {
@@ -95,7 +106,7 @@ export function useSmartCampaigns() {
       return data;
     },
     onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['smart_campaigns', tenant?.id] });
+      queryClient.invalidateQueries({ queryKey: ['smart_campaigns', activeTenantId] });
       queryClient.invalidateQueries({ queryKey: ['smart_campaign', variables.id] });
       toast.success("Disparo atualizado com sucesso.");
     },
@@ -106,18 +117,32 @@ export function useSmartCampaigns() {
   });
 
   const sendTest = useMutation({
-    mutationFn: async (params: { campaign_id: string; wa_instance_id: string; test_phone_e164: string; message: string; attachments: string[] }) => {
-      if (!tenant?.id) throw new Error("No tenant");
+    mutationFn: async (payload: { 
+      campaign_id: string; 
+      wa_instance_id: string; 
+      test_phone_e164?: string; 
+      test_email?: string;
+      message: string; 
+      subject?: string;
+      attachments: string[]; 
+      channels_json?: string[];
+    }) => {
+      if (!activeTenantId) throw new Error("No tenant");
       
-      // Salva o teste no banco
       const { data: testRecord, error: testError } = await supabase
-        .from('smart_campaign_tests')
+        .from("smart_campaign_tests")
         .insert({
-          tenant_id: tenant.id,
-          campaign_id: params.campaign_id,
-          wa_instance_id: params.wa_instance_id,
-          test_phone_e164: params.test_phone_e164,
-          payload_json: { message: params.message, attachments: params.attachments }
+          tenant_id: activeTenantId,
+          campaign_id: payload.campaign_id,
+          wa_instance_id: payload.wa_instance_id,
+          test_phone_e164: payload.test_phone_e164 || "email_only",
+          payload_json: { 
+            message: payload.message, 
+            attachments: payload.attachments,
+            subject: payload.subject,
+            test_email: payload.test_email,
+            channels: payload.channels_json || ["whatsapp"]
+          },
         })
         .select()
         .single();

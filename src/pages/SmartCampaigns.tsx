@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { format } from "date-fns";
-import { Plus, MessageSquare, Calendar, CheckCircle2, Clock, XCircle, AlertCircle, Play } from "lucide-react";
+import { Plus, MessageSquare, Calendar, CheckCircle2, Clock, XCircle, AlertCircle, Play, Mail, Copy } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { AppShell } from "@/components/AppShell";
@@ -63,6 +63,12 @@ export default function SmartCampaigns() {
       outro: "Outro"
     };
     return types[type] || type;
+  };
+
+  const handleDuplicate = async (e: React.MouseEvent, campaign: any) => {
+    e.stopPropagation();
+    // navigate to new with the id to clone
+    navigate(`/app/smart-campaigns/new?clone=${campaign.id}`);
   };
 
   return (
@@ -147,8 +153,10 @@ export default function SmartCampaigns() {
                       <th className="px-6 py-4">Nome do Disparo</th>
                       <th className="px-6 py-4">Tipo</th>
                       <th className="px-6 py-4">Instância Z-API</th>
+                      <th className="px-6 py-4">Canais</th>
                       <th className="px-6 py-4">Agendamento</th>
                       <th className="px-6 py-4">Status</th>
+                      <th className="px-6 py-4">Ações</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
@@ -172,6 +180,12 @@ export default function SmartCampaigns() {
                           </span>
                         </td>
                         <td className="px-6 py-4">
+                          <div className="flex gap-2 text-slate-500">
+                            {(campaign.channels_json || []).includes("whatsapp") && <MessageSquare className="w-4 h-4 text-green-500" title="WhatsApp" />}
+                            {(campaign.channels_json || []).includes("email") && <Mail className="w-4 h-4 text-blue-500" title="E-mail" />}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4">
                           <span className="text-slate-500 dark:text-slate-400">
                             {campaign.scheduled_at 
                               ? format(new Date(campaign.scheduled_at), "dd/MM/yyyy HH:mm") 
@@ -183,6 +197,11 @@ export default function SmartCampaigns() {
                             {getStatusIcon(campaign.status)}
                             <span className="capitalize">{campaign.status}</span>
                           </Badge>
+                        </td>
+                        <td className="px-6 py-4">
+                          <Button variant="ghost" size="icon" onClick={(e) => handleDuplicate(e, campaign)} title="Duplicar Disparo">
+                            <Copy className="w-4 h-4 text-slate-500" />
+                          </Button>
                         </td>
                       </tr>
                     ))}

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
-import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, Save, Send, Clock, Play, Phone, FileText } from "lucide-react";
+import { useParams, useNavigate, useSearchParams } from "react-router-dom";
+import { ArrowLeft, Save, Send, Clock, Play, Phone, FileText, Mail, MessageSquare, Plus, Search, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -8,62 +8,123 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
 import { AppShell } from "@/components/AppShell";
 import { useSmartCampaigns, useSmartCampaign, CampaignType } from "@/hooks/useSmartCampaigns";
+import { useSmartCampaignTemplates } from "@/hooks/useSmartCampaignTemplates";
 import { toast } from "sonner";
+import { supabase } from "@/lib/supabase";
+import { useTenant } from "@/providers/TenantProvider";
 
 export default function SmartCampaignDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const cloneId = searchParams.get("clone");
   const isNew = !id || id === 'new';
+  const { activeTenantId } = useTenant();
 
   const { instances, createCampaign, updateCampaign, sendTest } = useSmartCampaigns();
-  const { campaign, isLoading: isLoadingCampaign } = useSmartCampaign(isNew ? undefined : id);
+  
+  // Se for clone, carrega a campanha a ser clonada, se não carrega a atual (se houver id)
+  const queryId = isNew && cloneId ? cloneId : (!isNew ? id : undefined);
+  const { campaign, isLoading: isLoadingCampaign } = useSmartCampaign(queryId);
+  const { templates, createTemplate } = useSmartCampaignTemplates();
 
   const [name, setName] = useState("");
   const [type, setType] = useState<CampaignType>("comunicado");
   const [instanceId, setInstanceId] = useState("");
   const [message, setMessage] = useState("");
+  const [subject, setSubject] = useState("");
+  const [channels, setChannels] = useState<string[]>(["whatsapp"]);
+  
   const [audienceType, setAudienceType] = useState("all_active");
   const [manualNumbersText, setManualNumbersText] = useState("");
+  
+  // Entities selection
+  const [selectedEntities, setSelectedEntities] = useState<any[]>([]);
+  const [entitySearch, setEntitySearch] = useState("");
+  const [entityResults, setEntityResults] = useState<any[]>([]);
+  const [isSearchingEntities, setIsSearchingEntities] = useState(false);
+
   const [testPhone, setTestPhone] = useState("");
+  const [testEmail, setTestEmail] = useState("");
   const [attachments, setAttachments] = useState<string[]>([]);
   const [newAttachment, setNewAttachment] = useState("");
 
+  const [saveAsTemplateName, setSaveAsTemplateName] = useState("");
+
+  // Search entities
   useEffect(() => {
-    if (campaign && !isNew) {
-      setName(campaign.name);
+    if (entitySearch.length < 2) {
+      setEntityResults([]);
+      return;
+    }
+    const search = async () => {
+      setIsSearchingEntities(true);
+      const { data, error } = await supabase
+        .from("core_entities")
+        .select("id, display_name, metadata")
+        .eq("tenant_id", activeTenantId!)
+        .ilike("display_name", `%${entitySearch}%`)
+        .limit(10);
+      if (!error && data) {
+        setEntityResults(data);
+      }
+      setIsSearchingEntities(false);
+    };
+    const to = setTimeout(search, 300);
+    return () => clearTimeout(to);
+  }, [entitySearch, activeTenantId]);
+
+  useEffect(() => {
+    if (campaign) {
+      setName(isNew && cloneId ? `${campaign.name} (Cópia)` : campaign.name);
       setType(campaign.campaign_type);
       setInstanceId(campaign.wa_instance_id);
       setMessage(campaign.message_template);
-      setAudienceType(campaign.audience_config_json?.type || "all_active");
-      if (campaign.audience_config_json?.type === "manual" && campaign.audience_config_json?.numbers) {
-        setManualNumbersText(campaign.audience_config_json.numbers.join(", "));
+      setChannels(campaign.channels_json || ["whatsapp"]);
+      
+      const conf = campaign.audience_config_json || {};
+      setAudienceType(conf.type || "all_active");
+      
+      if (conf.type === "manual" && conf.numbers) {
+        setManualNumbersText(conf.numbers.join(", "));
       }
+      
+      if (conf.type === "entities" && conf.entities) {
+        setSelectedEntities(conf.entities);
+      }
+
       setAttachments(campaign.attachments_json || []);
     }
-  }, [campaign, isNew]);
+  }, [campaign, isNew, cloneId]);
 
   const insertVariable = (variable: string) => {
     setMessage(prev => prev + ` {{${variable}}} `);
   };
 
   const getVariablesForType = (t: CampaignType) => {
-    const base = ["nome_cliente", "telefone_cliente", "empresa_cliente", "nome_empresa"];
+    const base = ["nome_cliente", "telefone_cliente", "email_cliente", "nome_empresa"];
     switch (t) {
       case 'boleto': return [...base, "valor_boleto", "vencimento_boleto", "link_boleto", "numero_boleto"];
       case 'nota_fiscal': return [...base, "numero_nf", "valor_nf", "data_emissao_nf", "link_nf"];
-      case 'video_aprovacao': return [...base, "nome_video", "link_video", "prazo_aprovacao", "nome_projeto"];
+      case 'video_aprovacao': return [...base, "nome_video", "link_video", "prazo_aprovacao"];
       default: return base;
     }
   };
 
   const handleSaveDraft = async () => {
     try {
-      if (!name || !instanceId) {
-        toast.error("Nome e Instância são obrigatórios.");
+      if (!name || (channels.includes("whatsapp") && !instanceId)) {
+        toast.error("Nome e Instância (para WhatsApp) são obrigatórios.");
         return;
       }
+      if (channels.length === 0) {
+        toast.error("Selecione pelo menos um canal (WhatsApp ou E-mail).");
+        return;
+      }
+      
       let audiencePayload: any = { type: audienceType };
       if (audienceType === "manual") {
         const numbers = manualNumbersText.split(/[\s,;\n]+/).map(n => n.trim()).filter(n => n.length > 0);
@@ -72,16 +133,24 @@ export default function SmartCampaignDetail() {
           return;
         }
         audiencePayload.numbers = numbers;
+      } else if (audienceType === "entities") {
+        if (selectedEntities.length === 0) {
+          toast.error("Selecione pelo menos uma entidade.");
+          return;
+        }
+        audiencePayload.entities = selectedEntities;
       }
 
       const payload = {
         name,
         campaign_type: type,
-        wa_instance_id: instanceId,
+        wa_instance_id: instanceId || instances?.[0]?.id || '', // fallback
         message_template: message,
         audience_config_json: audiencePayload,
         attachments_json: attachments,
-        status: 'draft' as const
+        channels_json: channels,
+        status: 'draft' as const,
+        parent_campaign_id: cloneId || null
       };
 
       if (isNew) {
@@ -96,8 +165,16 @@ export default function SmartCampaignDetail() {
   };
 
   const handleSendTest = async () => {
-    if (!testPhone || !instanceId || !message) {
-      toast.error("Telefone de teste, Instância e Mensagem são obrigatórios para enviar teste.");
+    if (!message) {
+      toast.error("Mensagem é obrigatória.");
+      return;
+    }
+    if (channels.includes("whatsapp") && (!testPhone || !instanceId)) {
+      toast.error("Telefone de teste e Instância são obrigatórios para envio de WhatsApp.");
+      return;
+    }
+    if (channels.includes("email") && !testEmail) {
+      toast.error("E-mail de teste é obrigatório para envio de E-mail.");
       return;
     }
     
@@ -105,33 +182,39 @@ export default function SmartCampaignDetail() {
     let currentId = id;
     if (isNew) {
       if (!name) { toast.error("Preencha o nome do disparo primeiro."); return; }
+      
       let audiencePayload: any = { type: audienceType };
       if (audienceType === "manual") {
         audiencePayload.numbers = manualNumbersText.split(/[\s,;\n]+/).map(n => n.trim()).filter(n => n.length > 0);
+      } else if (audienceType === "entities") {
+        audiencePayload.entities = selectedEntities;
       }
 
       const newCampaign = await createCampaign.mutateAsync({
         name,
         campaign_type: type,
-        wa_instance_id: instanceId,
+        wa_instance_id: instanceId || instances?.[0]?.id || '',
         message_template: message,
         audience_config_json: audiencePayload,
         attachments_json: attachments,
-        status: 'draft'
+        channels_json: channels,
+        status: 'draft',
+        parent_campaign_id: cloneId || null
       });
       currentId = newCampaign.id;
-      // Note: we don't navigate yet, user might want to stay
-      // But we'd need to update the URL in a real scenario. For MVP we'll just test.
     }
 
     if (!currentId) return;
 
     await sendTest.mutateAsync({
       campaign_id: currentId,
-      wa_instance_id: instanceId,
+      wa_instance_id: instanceId || instances?.[0]?.id || '',
       test_phone_e164: testPhone,
+      test_email: testEmail,
       message,
-      attachments
+      subject,
+      attachments,
+      channels_json: channels
     });
   };
 
@@ -140,6 +223,50 @@ export default function SmartCampaignDetail() {
       setAttachments([...attachments, newAttachment]);
       setNewAttachment("");
     }
+  };
+
+  const handleSaveTemplate = async () => {
+    if (!saveAsTemplateName) {
+      toast.error("Digite um nome para o template.");
+      return;
+    }
+    if (!message) {
+      toast.error("A mensagem não pode estar vazia.");
+      return;
+    }
+    await createTemplate.mutateAsync({
+      name: saveAsTemplateName,
+      channel_type: channels.includes("whatsapp") && channels.includes("email") ? "both" : (channels.includes("whatsapp") ? "whatsapp" : "email"),
+      subject_template: subject || null,
+      body_template: message
+    });
+    setSaveAsTemplateName("");
+  };
+
+  const applyTemplate = (templateId: string) => {
+    const tmpl = templates?.find(t => t.id === templateId);
+    if (tmpl) {
+      setMessage(tmpl.body_template);
+      if (tmpl.subject_template) setSubject(tmpl.subject_template);
+      toast.success("Template aplicado.");
+    }
+  };
+
+  const addEntity = (entity: any) => {
+    if (!selectedEntities.find(e => e.id === entity.id)) {
+      setSelectedEntities([...selectedEntities, {
+        id: entity.id,
+        name: entity.display_name,
+        email: entity.metadata?.email,
+        phone: entity.metadata?.phone || entity.metadata?.whatsapp
+      }]);
+    }
+    setEntitySearch("");
+    setEntityResults([]);
+  };
+
+  const removeEntity = (id: string) => {
+    setSelectedEntities(selectedEntities.filter(e => e.id !== id));
   };
 
   if (!isNew && isLoadingCampaign) return <div className="p-8">Carregando...</div>;
@@ -157,7 +284,7 @@ export default function SmartCampaignDetail() {
             </Button>
             <div>
               <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-50">
-                {isNew ? "Novo Disparo" : "Editar Disparo"}
+                {isNew ? (cloneId ? "Duplicar Disparo" : "Novo Disparo") : "Editar Disparo"}
               </h1>
             </div>
           </div>
@@ -186,7 +313,7 @@ export default function SmartCampaignDetail() {
               <CardHeader>
                 <CardTitle>Configurações Básicas</CardTitle>
               </CardHeader>
-              <CardContent className="space-y-4">
+              <CardContent className="space-y-6">
                 <div className="space-y-2">
                   <Label>Nome do Disparo / Campanha</Label>
                   <Input 
@@ -194,6 +321,38 @@ export default function SmartCampaignDetail() {
                     onChange={e => setName(e.target.value)} 
                     placeholder="Ex: Cobrança Junho 2026" 
                   />
+                </div>
+
+                <div className="space-y-4">
+                  <Label>Canais de Envio</Label>
+                  <div className="flex gap-6 border border-slate-200 dark:border-slate-800 p-4 rounded-lg">
+                    <div className="flex items-center space-x-2">
+                      <Checkbox 
+                        id="channel-wa" 
+                        checked={channels.includes("whatsapp")}
+                        onCheckedChange={(c) => {
+                          if (c) setChannels([...channels, "whatsapp"]);
+                          else setChannels(channels.filter(ch => ch !== "whatsapp"));
+                        }}
+                      />
+                      <label htmlFor="channel-wa" className="text-sm font-medium leading-none cursor-pointer flex items-center gap-2">
+                        <MessageSquare className="w-4 h-4 text-green-500" /> WhatsApp
+                      </label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <Checkbox 
+                        id="channel-email" 
+                        checked={channels.includes("email")}
+                        onCheckedChange={(c) => {
+                          if (c) setChannels([...channels, "email"]);
+                          else setChannels(channels.filter(ch => ch !== "email"));
+                        }}
+                      />
+                      <label htmlFor="channel-email" className="text-sm font-medium leading-none cursor-pointer flex items-center gap-2">
+                        <Mail className="w-4 h-4 text-blue-500" /> E-mail
+                      </label>
+                    </div>
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -213,21 +372,23 @@ export default function SmartCampaignDetail() {
                     </Select>
                   </div>
                   
-                  <div className="space-y-2">
-                    <Label>Instância Z-API</Label>
-                    <Select value={instanceId} onValueChange={setInstanceId}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Selecione uma instância" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {instances?.map(inst => (
-                          <SelectItem key={inst.id} value={inst.id}>
-                            {inst.name} ({inst.phone_number || 'S/N'})
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
+                  {channels.includes("whatsapp") && (
+                    <div className="space-y-2">
+                      <Label>Instância Z-API</Label>
+                      <Select value={instanceId} onValueChange={setInstanceId}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Selecione uma instância" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {instances?.map(inst => (
+                            <SelectItem key={inst.id} value={inst.id}>
+                              {inst.name} ({inst.phone_number || 'S/N'})
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
                 </div>
 
                 <div className="space-y-2">
@@ -237,14 +398,70 @@ export default function SmartCampaignDetail() {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
+                      <SelectItem value="entities">Selecionar Entidades (Clientes)</SelectItem>
                       <SelectItem value="all_active">Todos os Clientes Ativos</SelectItem>
                       <SelectItem value="boletos_abertos">Clientes com Boletos em Aberto</SelectItem>
                       <SelectItem value="boletos_vencidos">Clientes com Boletos Vencidos</SelectItem>
-                      <SelectItem value="aguardando_aprovacao">Aguardando Aprovação de Vídeo</SelectItem>
                       <SelectItem value="manual">Envio Avulso (Inserir Números Manualmente)</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
+
+                {audienceType === "entities" && (
+                  <div className="space-y-4 border border-slate-200 dark:border-slate-800 p-4 rounded-lg bg-slate-50 dark:bg-slate-900/30">
+                    <div className="space-y-2">
+                      <Label>Buscar e Adicionar Entidades</Label>
+                      <div className="relative">
+                        <Search className="w-4 h-4 absolute left-3 top-3 text-slate-400" />
+                        <Input 
+                          placeholder="Digite o nome do cliente..." 
+                          value={entitySearch}
+                          onChange={e => setEntitySearch(e.target.value)}
+                          className="pl-9"
+                        />
+                        {isSearchingEntities && <div className="absolute right-3 top-3 text-xs text-slate-400">Buscando...</div>}
+                        
+                        {entityResults.length > 0 && (
+                          <div className="absolute z-10 w-full mt-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md shadow-lg max-h-60 overflow-auto">
+                            {entityResults.map(ent => (
+                              <button
+                                key={ent.id}
+                                className="w-full text-left px-4 py-2 hover:bg-slate-100 dark:hover:bg-slate-800 text-sm flex justify-between items-center"
+                                onClick={() => addEntity(ent)}
+                              >
+                                <span>{ent.display_name}</span>
+                                <Plus className="w-4 h-4 text-slate-400" />
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    
+                    {selectedEntities.length > 0 && (
+                      <div className="space-y-2">
+                        <Label>Entidades Selecionadas ({selectedEntities.length})</Label>
+                        <div className="grid gap-2 max-h-60 overflow-y-auto pr-2">
+                          {selectedEntities.map(ent => (
+                            <div key={ent.id} className="flex items-center justify-between bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-2 rounded-md text-sm">
+                              <div>
+                                <div className="font-medium">{ent.name}</div>
+                                <div className="text-xs text-slate-500 flex gap-3">
+                                  {ent.phone && <span>WhatsApp: {ent.phone}</span>}
+                                  {ent.email && <span>E-mail: {ent.email}</span>}
+                                  {!ent.phone && !ent.email && <span className="text-red-400">Sem contato válido</span>}
+                                </div>
+                              </div>
+                              <Button variant="ghost" size="icon" onClick={() => removeEntity(ent.id)}>
+                                <Trash2 className="w-4 h-4 text-red-500" />
+                              </Button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 {audienceType === "manual" && (
                   <div className="space-y-2 mt-2">
@@ -265,10 +482,27 @@ export default function SmartCampaignDetail() {
 
             <Card>
               <CardHeader>
-                <CardTitle>Mensagem e Conteúdo</CardTitle>
-                <CardDescription>
-                  Escreva a mensagem personalizada. Use os botões abaixo para inserir variáveis.
-                </CardDescription>
+                <div className="flex justify-between items-start">
+                  <div>
+                    <CardTitle>Mensagem e Conteúdo</CardTitle>
+                    <CardDescription>
+                      Escreva a mensagem personalizada. Use os botões abaixo para inserir variáveis.
+                    </CardDescription>
+                  </div>
+                  
+                  {templates && templates.length > 0 && (
+                    <Select onValueChange={applyTemplate}>
+                      <SelectTrigger className="w-[200px]">
+                        <SelectValue placeholder="Usar Template..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {templates.map(t => (
+                          <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                </div>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="flex flex-wrap gap-2 mb-2">
@@ -284,12 +518,35 @@ export default function SmartCampaignDetail() {
                   ))}
                 </div>
                 
+                {channels.includes("email") && (
+                  <div className="space-y-2 pb-4">
+                    <Label>Assunto do E-mail</Label>
+                    <Input 
+                      placeholder="Ex: Seu boleto chegou {{nome_cliente}}" 
+                      value={subject}
+                      onChange={e => setSubject(e.target.value)}
+                    />
+                  </div>
+                )}
+                
                 <Textarea 
                   className="min-h-[200px] resize-y"
                   value={message}
                   onChange={e => setMessage(e.target.value)}
                   placeholder="Olá {{nome_cliente}}, tudo bem? ..."
                 />
+                
+                <div className="flex items-center gap-2 pt-2">
+                  <Input 
+                    placeholder="Nome para salvar como novo template..." 
+                    value={saveAsTemplateName}
+                    onChange={e => setSaveAsTemplateName(e.target.value)}
+                    className="max-w-[300px]"
+                  />
+                  <Button variant="secondary" onClick={handleSaveTemplate} disabled={!saveAsTemplateName || !message}>
+                    Salvar Template
+                  </Button>
+                </div>
                 
                 <div className="space-y-2 mt-4 pt-4 border-t border-slate-100 dark:border-slate-800">
                   <Label>Anexos (Links)</Label>
@@ -334,28 +591,42 @@ export default function SmartCampaignDetail() {
                   Teste de Envio
                 </CardTitle>
                 <CardDescription>
-                  Envie a mensagem para um número de teste antes do disparo oficial.
+                  Envie a mensagem para você mesmo antes do disparo oficial.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <Label>Telefone (WhatsApp)</Label>
-                  <div className="relative">
-                    <Phone className="w-4 h-4 absolute left-3 top-3 text-slate-400" />
-                    <Input 
-                      className="pl-9"
-                      placeholder="Ex: 5511999999999" 
-                      value={testPhone}
-                      onChange={e => setTestPhone(e.target.value)}
-                    />
+                {channels.includes("whatsapp") && (
+                  <div className="space-y-2">
+                    <Label>Telefone de Teste</Label>
+                    <div className="relative">
+                      <Phone className="w-4 h-4 absolute left-3 top-3 text-slate-400" />
+                      <Input 
+                        className="pl-9"
+                        placeholder="Ex: 5511999999999" 
+                        value={testPhone}
+                        onChange={e => setTestPhone(e.target.value)}
+                      />
+                    </div>
                   </div>
-                  <p className="text-xs text-slate-500">
-                    O teste usará dados fictícios para substituir as variáveis.
-                  </p>
-                </div>
+                )}
+                
+                {channels.includes("email") && (
+                  <div className="space-y-2">
+                    <Label>E-mail de Teste</Label>
+                    <div className="relative">
+                      <Mail className="w-4 h-4 absolute left-3 top-3 text-slate-400" />
+                      <Input 
+                        className="pl-9"
+                        placeholder="Ex: seu@email.com" 
+                        value={testEmail}
+                        onChange={e => setTestEmail(e.target.value)}
+                      />
+                    </div>
+                  </div>
+                )}
                 
                 <Button 
-                  className="w-full bg-blue-600 hover:bg-blue-700 text-white"
+                  className="w-full bg-blue-600 hover:bg-blue-700 text-white mt-2"
                   onClick={handleSendTest}
                   disabled={sendTest.isPending}
                 >
@@ -369,6 +640,9 @@ export default function SmartCampaignDetail() {
                 <CardTitle>Prévia da Mensagem</CardTitle>
               </CardHeader>
               <CardContent>
+                {subject && channels.includes("email") && (
+                  <div className="mb-2 text-sm font-medium">Assunto: {subject}</div>
+                )}
                 <div className="bg-slate-100 dark:bg-slate-900 rounded-lg p-4 font-mono text-sm whitespace-pre-wrap text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-800">
                   {message || "Nenhuma mensagem configurada..."}
                 </div>
@@ -382,5 +656,3 @@ export default function SmartCampaignDetail() {
     </AppShell>
   );
 }
-
-// Needed Badge component placeholder since it's used in the text. I'll import it correctly above.
