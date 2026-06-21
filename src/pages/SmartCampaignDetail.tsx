@@ -8,6 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { AppShell } from "@/components/AppShell";
 import { useSmartCampaigns, useSmartCampaign, CampaignType } from "@/hooks/useSmartCampaigns";
 import { toast } from "sonner";
 
@@ -24,6 +25,7 @@ export default function SmartCampaignDetail() {
   const [instanceId, setInstanceId] = useState("");
   const [message, setMessage] = useState("");
   const [audienceType, setAudienceType] = useState("all_active");
+  const [manualNumbersText, setManualNumbersText] = useState("");
   const [testPhone, setTestPhone] = useState("");
   const [attachments, setAttachments] = useState<string[]>([]);
   const [newAttachment, setNewAttachment] = useState("");
@@ -35,6 +37,9 @@ export default function SmartCampaignDetail() {
       setInstanceId(campaign.wa_instance_id);
       setMessage(campaign.message_template);
       setAudienceType(campaign.audience_config_json?.type || "all_active");
+      if (campaign.audience_config_json?.type === "manual" && campaign.audience_config_json?.numbers) {
+        setManualNumbersText(campaign.audience_config_json.numbers.join(", "));
+      }
       setAttachments(campaign.attachments_json || []);
     }
   }, [campaign, isNew]);
@@ -59,13 +64,22 @@ export default function SmartCampaignDetail() {
         toast.error("Nome e Instância são obrigatórios.");
         return;
       }
-      
+      let audiencePayload: any = { type: audienceType };
+      if (audienceType === "manual") {
+        const numbers = manualNumbersText.split(/[\s,;\n]+/).map(n => n.trim()).filter(n => n.length > 0);
+        if (numbers.length === 0) {
+          toast.error("Insira ao menos um número de telefone no envio avulso.");
+          return;
+        }
+        audiencePayload.numbers = numbers;
+      }
+
       const payload = {
         name,
         campaign_type: type,
         wa_instance_id: instanceId,
         message_template: message,
-        audience_config_json: { type: audienceType },
+        audience_config_json: audiencePayload,
         attachments_json: attachments,
         status: 'draft' as const
       };
@@ -91,12 +105,17 @@ export default function SmartCampaignDetail() {
     let currentId = id;
     if (isNew) {
       if (!name) { toast.error("Preencha o nome do disparo primeiro."); return; }
+      let audiencePayload: any = { type: audienceType };
+      if (audienceType === "manual") {
+        audiencePayload.numbers = manualNumbersText.split(/[\s,;\n]+/).map(n => n.trim()).filter(n => n.length > 0);
+      }
+
       const newCampaign = await createCampaign.mutateAsync({
         name,
         campaign_type: type,
         wa_instance_id: instanceId,
         message_template: message,
-        audience_config_json: { type: audienceType },
+        audience_config_json: audiencePayload,
         attachments_json: attachments,
         status: 'draft'
       });
@@ -126,7 +145,8 @@ export default function SmartCampaignDetail() {
   if (!isNew && isLoadingCampaign) return <div className="p-8">Carregando...</div>;
 
   return (
-    <div className="flex-1 w-full h-screen overflow-auto bg-slate-50 dark:bg-slate-950 p-8">
+    <AppShell>
+    <div className="flex-1 w-full h-full overflow-auto bg-transparent p-2 md:p-8">
       <div className="max-w-5xl mx-auto space-y-6">
         
         {/* Header Options */}
@@ -221,9 +241,25 @@ export default function SmartCampaignDetail() {
                       <SelectItem value="boletos_abertos">Clientes com Boletos em Aberto</SelectItem>
                       <SelectItem value="boletos_vencidos">Clientes com Boletos Vencidos</SelectItem>
                       <SelectItem value="aguardando_aprovacao">Aguardando Aprovação de Vídeo</SelectItem>
+                      <SelectItem value="manual">Envio Avulso (Inserir Números Manualmente)</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
+
+                {audienceType === "manual" && (
+                  <div className="space-y-2 mt-2">
+                    <Label>Números de Telefone (WhatsApp)</Label>
+                    <Textarea 
+                      placeholder="Ex: 5511999999999, 5511888888888"
+                      value={manualNumbersText}
+                      onChange={e => setManualNumbersText(e.target.value)}
+                      className="min-h-[80px]"
+                    />
+                    <p className="text-[11px] text-slate-500">
+                      Cole ou digite os números de telefone com DDI e DDD (ex: 5511999999999), separados por vírgula, espaço ou quebra de linha.
+                    </p>
+                  </div>
+                )}
               </CardContent>
             </Card>
 
@@ -343,6 +379,7 @@ export default function SmartCampaignDetail() {
         </div>
       </div>
     </div>
+    </AppShell>
   );
 }
 

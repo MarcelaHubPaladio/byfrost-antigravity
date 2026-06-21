@@ -4,6 +4,7 @@ import { format } from "date-fns";
 import { Plus, MessageSquare, Calendar, CheckCircle2, Clock, XCircle, AlertCircle, Play } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { AppShell } from "@/components/AppShell";
 import { useSmartCampaigns, CampaignStatus, CampaignType } from "@/hooks/useSmartCampaigns";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { 
@@ -65,8 +66,9 @@ export default function SmartCampaigns() {
   };
 
   return (
-    <div className="flex-1 w-full h-screen overflow-auto bg-slate-50 dark:bg-slate-950">
-      <div className="p-8 max-w-7xl mx-auto space-y-8">
+    <AppShell>
+      <div className="flex-1 w-full h-full overflow-auto bg-transparent">
+        <div className="p-2 md:p-8 max-w-7xl mx-auto space-y-8">
         
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div>
@@ -193,5 +195,6 @@ export default function SmartCampaigns() {
 
       </div>
     </div>
+    </AppShell>
   );
 }
