@@ -407,6 +407,10 @@ function isCommunicationEnabled(modulesJson: any) {
   return Boolean(modulesJson?.communication_enabled === true);
 }
 
+function isSmartCampaignsEnabled(modulesJson: any) {
+  return Boolean(modulesJson?.smart_campaigns_enabled === true);
+}
+
 function isProcessesEnabled(modulesJson: any) {
   return Boolean(modulesJson?.processes_enabled === true);
 }
@@ -484,11 +488,6 @@ const CREATE_NAV_CHILDREN = [
   { to: "/app/link-manager", label: "Links", icon: Link2, routeKey: "app.link_manager" },
   { to: "/app/media-kit", label: "Mídia Kit", icon: Palette, routeKey: "app.media_kit" },
   { to: "/app/portal", label: "Portal", icon: Globe, routeKey: "app.portal" },
-];
-
-const COMMUNICATION_NAV_CHILDREN = [
-  { to: "/app/communication", label: "Inbox", icon: MessageSquare, routeKey: "app.communication" },
-  { to: "/app/smart-campaigns", label: "Disparos", icon: Zap, routeKey: "app.smart_campaigns" },
 ];
 
 function DesktopHoverMenu({
@@ -571,7 +570,6 @@ export function AppShell({
   const [mobilePresenceOpen, setMobilePresenceOpen] = useState(false);
   const [mobileCoreOpen, setMobileCoreOpen] = useState(false);
   const [mobileCreateOpen, setMobileCreateOpen] = useState(false);
-  const [mobileCommOpen, setMobileCommOpen] = useState(false);
   const [mobileM30Open, setMobileM30Open] = useState(false);
   const [isSuperTasksOpen, setIsSuperTasksOpen] = useState(() => {
     try {
@@ -603,6 +601,7 @@ export function AppShell({
   const portalEnabledForTenant = isPortalEnabled(activeTenant?.modules_json);
   const mediaKitEnabledForTenant = isMediaKitEnabled(activeTenant?.modules_json);
   const communicationEnabledForTenant = isCommunicationEnabled(activeTenant?.modules_json);
+  const smartCampaignsEnabledForTenant = isSmartCampaignsEnabled(activeTenant?.modules_json);
   const processesEnabledForTenant = isProcessesEnabled(activeTenant?.modules_json);
   const reportsEnabledForTenant = isReportsEnabled(activeTenant?.modules_json);
 
@@ -954,7 +953,6 @@ export function AppShell({
     if (isActivePresencePath(loc.pathname)) setMobilePresenceOpen(true);
     if (isActiveCorePath(loc.pathname)) setMobileCoreOpen(true);
     if (CREATE_NAV_CHILDREN.some((c) => loc.pathname.startsWith(c.to))) setMobileCreateOpen(true);
-    if (COMMUNICATION_NAV_CHILDREN.some((c) => loc.pathname.startsWith(c.to))) setMobileCommOpen(true);
   }, [loc.pathname]);
 
   return (
@@ -1083,21 +1081,11 @@ export function AppShell({
                 )}
 
                 {communicationEnabledForTenant && (
-                  <DesktopHoverMenu
-                    title="Comunicação"
-                    trigger={<div className="w-full"><NavTile to="/app/communication" icon={MessageSquare} label="Comunicação" disabled={false} /></div>}
-                  >
-                    {COMMUNICATION_NAV_CHILDREN.map(({ to, label, icon, routeKey }) => (
-                      <DesktopHoverMenuLink
-                        key={to}
-                        to={to}
-                        label={label}
-                        icon={icon}
-                        active={loc.pathname === to || loc.pathname.startsWith(to + "/")}
-                        disabled={!can(routeKey)}
-                      />
-                    ))}
-                  </DesktopHoverMenu>
+                  <NavTile to="/app/communication" icon={MessageSquare} label="Comunicação" disabled={!can("app.communication")} />
+                )}
+
+                {smartCampaignsEnabledForTenant && (
+                  <NavTile to="/app/smart-campaigns" icon={Zap} label="Disparos" disabled={!can("app.smart_campaigns")} />
                 )}
 
                 {/* Core (desktop): hover menu */}
@@ -1660,42 +1648,23 @@ export function AppShell({
                             )}
 
                             {communicationEnabledForTenant && (
-                              <Collapsible open={mobileCommOpen} onOpenChange={setMobileCommOpen}>
-                                <CollapsibleTrigger asChild>
-                                  <button
-                                    type="button"
-                                    className={cn(
-                                      "flex w-full items-center justify-between gap-3 rounded-2xl border px-4 py-3 transition",
-                                      COMMUNICATION_NAV_CHILDREN.some((c) => loc.pathname.startsWith(c.to))
-                                        ? "border-[hsl(var(--byfrost-accent)/0.35)] bg-[hsl(var(--byfrost-accent)/0.10)] text-[hsl(var(--byfrost-accent))]"
-                                        : "border-slate-200 bg-white/75 text-slate-800 hover:border-slate-300 hover:bg-white",
-                                      "dark:border-slate-800 dark:bg-slate-950/40 dark:text-slate-100 dark:hover:bg-slate-950/60"
-                                    )}
-                                    title="Comunicação"
-                                  >
-                                    <div className="flex items-center gap-3">
-                                      <MessageSquare className="h-5 w-5" />
-                                      <span className="text-sm font-semibold tracking-tight">Comunicação</span>
-                                    </div>
-                                    <ChevronRight
-                                      className={cn("h-5 w-5 opacity-70 transition", mobileCommOpen && "rotate-90")}
-                                    />
-                                  </button>
-                                </CollapsibleTrigger>
+                              <MobileNavItem
+                                to="/app/communication"
+                                icon={MessageSquare}
+                                label="Comunicação"
+                                disabled={!can("app.communication")}
+                                onNavigate={() => setMobileNavOpen(false)}
+                              />
+                            )}
 
-                                <CollapsibleContent className="mt-2 grid gap-2 pl-2">
-                                  {COMMUNICATION_NAV_CHILDREN.map(({ to, label, icon, routeKey }) => (
-                                    <MobileNavItem
-                                      key={to}
-                                      to={to}
-                                      icon={icon}
-                                      label={label}
-                                      disabled={!can(routeKey)}
-                                      onNavigate={() => setMobileNavOpen(false)}
-                                    />
-                                  ))}
-                                </CollapsibleContent>
-                              </Collapsible>
+                            {smartCampaignsEnabledForTenant && (
+                              <MobileNavItem
+                                to="/app/smart-campaigns"
+                                icon={Zap}
+                                label="Disparos"
+                                disabled={!can("app.smart_campaigns")}
+                                onNavigate={() => setMobileNavOpen(false)}
+                              />
                             )}
 
                             {(activeTenant?.modules_json?.tasks_enabled) && (

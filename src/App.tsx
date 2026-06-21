@@ -23,6 +23,7 @@ import { RequireSimulatorEnabled } from "@/components/RequireSimulatorEnabled";
 import { RequireLinkManagerEnabled } from "@/components/RequireLinkManagerEnabled";
 import { RequirePortalEnabled } from "@/components/RequirePortalEnabled";
 import { RequireCommunicationEnabled } from "@/components/chat/RequireCommunicationEnabled";
+import { RequireSmartCampaignsEnabled } from "@/components/RequireSmartCampaignsEnabled";
 import { GlobalErrorBoundary } from "@/components/GlobalErrorBoundary";
 import { lazyWithRetry } from "@/lib/lazyWithRetry";
 
@@ -382,25 +383,31 @@ const App = () => (
                   <Route
                     path="/app/smart-campaigns"
                     element={
-                      <RequireRouteAccess routeKey="app.smart_campaigns">
-                        <SmartCampaigns />
-                      </RequireRouteAccess>
+                      <RequireSmartCampaignsEnabled>
+                        <RequireRouteAccess routeKey="app.smart_campaigns">
+                          <SmartCampaigns />
+                        </RequireRouteAccess>
+                      </RequireSmartCampaignsEnabled>
                     }
                   />
                   <Route
                     path="/app/smart-campaigns/new"
                     element={
-                      <RequireRouteAccess routeKey="app.smart_campaigns">
-                        <SmartCampaignDetail />
-                      </RequireRouteAccess>
+                      <RequireSmartCampaignsEnabled>
+                        <RequireRouteAccess routeKey="app.smart_campaigns">
+                          <SmartCampaignDetail />
+                        </RequireRouteAccess>
+                      </RequireSmartCampaignsEnabled>
                     }
                   />
                   <Route
                     path="/app/smart-campaigns/:id"
                     element={
-                      <RequireRouteAccess routeKey="app.smart_campaigns">
-                        <SmartCampaignDetail />
-                      </RequireRouteAccess>
+                      <RequireSmartCampaignsEnabled>
+                        <RequireRouteAccess routeKey="app.smart_campaigns">
+                          <SmartCampaignDetail />
+                        </RequireRouteAccess>
+                      </RequireSmartCampaignsEnabled>
                     }
                   />
 
