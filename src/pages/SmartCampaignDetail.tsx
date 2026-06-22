@@ -40,6 +40,7 @@ export default function SmartCampaignDetail() {
   
   const [audienceType, setAudienceType] = useState("all_active");
   const [manualNumbersText, setManualNumbersText] = useState("");
+  const [referenceMonth, setReferenceMonth] = useState("");
   
   // Entities selection
   const [selectedEntities, setSelectedEntities] = useState<any[]>([]);
@@ -66,6 +67,7 @@ export default function SmartCampaignDetail() {
         .from("core_entities")
         .select("id, display_name, metadata")
         .eq("tenant_id", activeTenantId!)
+        .eq("entity_type", "party")
         .ilike("display_name", `%${entitySearch}%`)
         .limit(10);
       if (!error && data) {
@@ -94,6 +96,10 @@ export default function SmartCampaignDetail() {
       
       if (conf.type === "entities" && conf.entities) {
         setSelectedEntities(conf.entities);
+      }
+      
+      if (conf.referenceMonth) {
+        setReferenceMonth(conf.referenceMonth);
       }
 
       setAttachments(campaign.attachments_json || []);
@@ -126,6 +132,9 @@ export default function SmartCampaignDetail() {
       }
       
       let audiencePayload: any = { type: audienceType };
+      if (type === "boleto") {
+        audiencePayload.referenceMonth = referenceMonth;
+      }
       if (audienceType === "manual") {
         const numbers = manualNumbersText.split(/[\s,;\n]+/).map(n => n.trim()).filter(n => n.length > 0);
         if (numbers.length === 0) {
@@ -184,6 +193,9 @@ export default function SmartCampaignDetail() {
       if (!name) { toast.error("Preencha o nome do disparo primeiro."); return; }
       
       let audiencePayload: any = { type: audienceType };
+      if (type === "boleto") {
+        audiencePayload.referenceMonth = referenceMonth;
+      }
       if (audienceType === "manual") {
         audiencePayload.numbers = manualNumbersText.split(/[\s,;\n]+/).map(n => n.trim()).filter(n => n.length > 0);
       } else if (audienceType === "entities") {
@@ -390,6 +402,21 @@ export default function SmartCampaignDetail() {
                     </div>
                   )}
                 </div>
+
+                {type === "boleto" && (
+                  <div className="space-y-2 p-4 bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800 rounded-lg">
+                    <Label className="text-amber-800 dark:text-amber-300">Mês de Referência (MM/AAAA)</Label>
+                    <Input 
+                      placeholder="Ex: 06/2026" 
+                      value={referenceMonth}
+                      onChange={e => setReferenceMonth(e.target.value)}
+                      className="max-w-[200px]"
+                    />
+                    <p className="text-xs text-amber-700 dark:text-amber-400 mt-1">
+                      Os boletos serão extraídos automaticamente da aba "Arquivos" do cadastro de cada cliente, filtrando pelo tipo "Boleto" ou de acordo com a referência informada no momento do disparo.
+                    </p>
+                  </div>
+                )}
 
                 <div className="space-y-2">
                   <Label>Público Alvo (Categoria)</Label>

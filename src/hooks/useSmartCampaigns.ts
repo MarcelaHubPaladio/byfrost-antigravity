@@ -59,8 +59,7 @@ export function useSmartCampaigns() {
       const { data, error } = await supabase
         .from('wa_instances')
         .select('*')
-        .eq('tenant_id', activeTenantId)
-        .eq('status', 'active');
+        .eq('tenant_id', activeTenantId);
       if (error) throw error;
       return data;
     },
