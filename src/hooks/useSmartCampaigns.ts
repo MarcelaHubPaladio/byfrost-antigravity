@@ -28,10 +28,9 @@ export interface SmartCampaign {
 }
 
 export function useSmartCampaigns() {
-  const { tenant } = useTenant();
+  const { activeTenantId } = useTenant();
   const { user } = useSession();
   const queryClient = useQueryClient();
-  const activeTenantId = tenant?.id;
 
   const { data: campaigns, isLoading } = useQuery({
     queryKey: ['smart_campaigns', activeTenantId],
