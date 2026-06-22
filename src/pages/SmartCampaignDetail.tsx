@@ -14,7 +14,43 @@ import { useSmartCampaigns, useSmartCampaign, CampaignType } from "@/hooks/useSm
 import { useSmartCampaignTemplates } from "@/hooks/useSmartCampaignTemplates";
 import { toast } from "sonner";
 import { supabase } from "@/lib/supabase";
-import { useTenant } from "@/providers/TenantProvider";
+import { useQuery } from "@tanstack/react-query";
+
+function EntityFileSelector({ tenantId, entityId, currentPath, onSelect }: { tenantId: string; entityId: string; currentPath?: string; onSelect: (path: string) => void }) {
+  const { data: files, isLoading } = useQuery({
+    queryKey: ["entity_files", tenantId, entityId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("core_entity_files")
+        .select("id, original_filename, storage_path, file_type")
+        .eq("tenant_id", tenantId)
+        .eq("entity_id", entityId)
+        .is("deleted_at", null)
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!tenantId && !!entityId
+  });
+
+  if (isLoading) return <span className="text-xs text-slate-400">Carregando arquivos...</span>;
+  if (!files || files.length === 0) return <span className="text-xs text-amber-500">Nenhum arquivo encontrado nesta entidade.</span>;
+
+  return (
+    <Select value={currentPath || ""} onValueChange={onSelect}>
+      <SelectTrigger className="h-7 text-xs w-[200px]">
+        <SelectValue placeholder="Selecione o arquivo..." />
+      </SelectTrigger>
+      <SelectContent>
+        {files.map(f => (
+          <SelectItem key={f.id} value={f.storage_path}>
+            <span className="truncate block max-w-[150px]">{f.file_type.toUpperCase()} - {f.original_filename}</span>
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+}
 
 export default function SmartCampaignDetail() {
   const { id } = useParams();
@@ -40,7 +76,6 @@ export default function SmartCampaignDetail() {
   
   const [audienceType, setAudienceType] = useState("all_active");
   const [manualNumbersText, setManualNumbersText] = useState("");
-  const [referenceMonth, setReferenceMonth] = useState("");
   
   // Entities selection
   const [selectedEntities, setSelectedEntities] = useState<any[]>([]);
@@ -97,10 +132,6 @@ export default function SmartCampaignDetail() {
       if (conf.type === "entities" && conf.entities) {
         setSelectedEntities(conf.entities);
       }
-      
-      if (conf.referenceMonth) {
-        setReferenceMonth(conf.referenceMonth);
-      }
 
       setAttachments(campaign.attachments_json || []);
     }
@@ -132,9 +163,6 @@ export default function SmartCampaignDetail() {
       }
       
       let audiencePayload: any = { type: audienceType };
-      if (type === "boleto") {
-        audiencePayload.referenceMonth = referenceMonth;
-      }
       if (audienceType === "manual") {
         const numbers = manualNumbersText.split(/[\s,;\n]+/).map(n => n.trim()).filter(n => n.length > 0);
         if (numbers.length === 0) {
@@ -193,9 +221,6 @@ export default function SmartCampaignDetail() {
       if (!name) { toast.error("Preencha o nome do disparo primeiro."); return; }
       
       let audiencePayload: any = { type: audienceType };
-      if (type === "boleto") {
-        audiencePayload.referenceMonth = referenceMonth;
-      }
       if (audienceType === "manual") {
         audiencePayload.numbers = manualNumbersText.split(/[\s,;\n]+/).map(n => n.trim()).filter(n => n.length > 0);
       } else if (audienceType === "entities") {
@@ -279,6 +304,10 @@ export default function SmartCampaignDetail() {
 
   const removeEntity = (id: string) => {
     setSelectedEntities(selectedEntities.filter(e => e.id !== id));
+  };
+
+  const updateEntityFile = (id: string, file_path: string) => {
+    setSelectedEntities(selectedEntities.map(e => e.id === id ? { ...e, file_path } : e));
   };
 
   if (!isNew && isLoadingCampaign) return <div className="p-8">Carregando...</div>;
@@ -403,21 +432,6 @@ export default function SmartCampaignDetail() {
                   )}
                 </div>
 
-                {type === "boleto" && (
-                  <div className="space-y-2 p-4 bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800 rounded-lg">
-                    <Label className="text-amber-800 dark:text-amber-300">Mês de Referência (MM/AAAA)</Label>
-                    <Input 
-                      placeholder="Ex: 06/2026" 
-                      value={referenceMonth}
-                      onChange={e => setReferenceMonth(e.target.value)}
-                      className="max-w-[200px]"
-                    />
-                    <p className="text-xs text-amber-700 dark:text-amber-400 mt-1">
-                      Os boletos serão extraídos automaticamente da aba "Arquivos" do cadastro de cada cliente, filtrando pelo tipo "Boleto" ou de acordo com a referência informada no momento do disparo.
-                    </p>
-                  </div>
-                )}
-
                 <div className="space-y-2">
                   <Label>Público Alvo (Categoria)</Label>
                   <Select value={audienceType} onValueChange={setAudienceType}>
@@ -470,7 +484,7 @@ export default function SmartCampaignDetail() {
                         <Label>Entidades Selecionadas ({selectedEntities.length})</Label>
                         <div className="grid gap-2 max-h-60 overflow-y-auto pr-2">
                           {selectedEntities.map(ent => (
-                            <div key={ent.id} className="flex items-center justify-between bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-2 rounded-md text-sm">
+                            <div key={ent.id} className="flex flex-col sm:flex-row sm:items-center justify-between bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-2 rounded-md text-sm gap-2">
                               <div>
                                 <div className="font-medium">{ent.name}</div>
                                 <div className="text-xs text-slate-500 flex gap-3">
@@ -479,9 +493,19 @@ export default function SmartCampaignDetail() {
                                   {!ent.phone && !ent.email && <span className="text-red-400">Sem contato válido</span>}
                                 </div>
                               </div>
-                              <Button variant="ghost" size="icon" onClick={() => removeEntity(ent.id)}>
-                                <Trash2 className="w-4 h-4 text-red-500" />
-                              </Button>
+                              <div className="flex items-center gap-2">
+                                {type === "boleto" && (
+                                  <EntityFileSelector 
+                                    tenantId={activeTenantId!} 
+                                    entityId={ent.id} 
+                                    currentPath={ent.file_path} 
+                                    onSelect={(path) => updateEntityFile(ent.id, path)} 
+                                  />
+                                )}
+                                <Button variant="ghost" size="icon" onClick={() => removeEntity(ent.id)}>
+                                  <Trash2 className="w-4 h-4 text-red-500" />
+                                </Button>
+                              </div>
                             </div>
                           ))}
                         </div>
