@@ -22,7 +22,7 @@ function EntityFileSelector({ tenantId, entityId, currentPath, onSelect }: { ten
     queryFn: async () => {
       const { data, error } = await supabase
         .from("core_entity_files")
-        .select("id, original_filename, storage_path, file_type")
+        .select("id, original_filename, storage_path, file_type, metadata")
         .eq("tenant_id", tenantId)
         .eq("entity_id", entityId)
         .is("deleted_at", null)
@@ -42,11 +42,14 @@ function EntityFileSelector({ tenantId, entityId, currentPath, onSelect }: { ten
         <SelectValue placeholder="Selecione o arquivo..." />
       </SelectTrigger>
       <SelectContent>
-        {files.map(f => (
-          <SelectItem key={f.id} value={f.storage_path}>
-            <span className="truncate block max-w-[150px]">{f.file_type.toUpperCase()} - {f.original_filename}</span>
-          </SelectItem>
-        ))}
+        {files.map(f => {
+          const ref = f.metadata?.reference_month ? ` (Ref: ${f.metadata.reference_month})` : "";
+          return (
+            <SelectItem key={f.id} value={f.storage_path}>
+              <span className="truncate block max-w-[200px]">{f.file_type.toUpperCase()}{ref} - {f.original_filename}</span>
+            </SelectItem>
+          );
+        })}
       </SelectContent>
     </Select>
   );

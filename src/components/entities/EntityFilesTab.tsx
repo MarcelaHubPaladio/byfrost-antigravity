@@ -21,6 +21,7 @@ export function EntityFilesTab({ tenantId, entityId }: EntityFilesTabProps) {
   const qc = useQueryClient();
   const [uploading, setUploading] = useState(false);
   const [selectedType, setSelectedType] = useState<string>("nfe");
+  const [referenceMonth, setReferenceMonth] = useState<string>("");
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const filesQ = useQuery({
@@ -83,6 +84,7 @@ export function EntityFilesTab({ tenantId, entityId }: EntityFilesTabProps) {
           storage_path: storagePath,
           original_filename: file.name,
           content_type: file.type,
+          metadata: referenceMonth ? { reference_month: referenceMonth } : {},
         });
 
         if (dbError) {
@@ -100,6 +102,7 @@ export function EntityFilesTab({ tenantId, entityId }: EntityFilesTabProps) {
       showError(err?.message || "Erro ao fazer upload dos arquivos.");
     } finally {
       setUploading(false);
+      setReferenceMonth("");
       // Reset file input
       e.target.value = '';
     }
@@ -176,6 +179,19 @@ export function EntityFilesTab({ tenantId, entityId }: EntityFilesTabProps) {
               </Select>
             </div>
             
+            {(selectedType === "boleto" || selectedType === "nfe") && (
+              <div className="w-full sm:w-[150px]">
+                <Input 
+                  type="month" 
+                  value={referenceMonth} 
+                  onChange={e => setReferenceMonth(e.target.value)} 
+                  className="h-9 w-full rounded-xl text-xs bg-white border-slate-200"
+                  placeholder="Mês ref."
+                  disabled={uploading}
+                />
+              </div>
+            )}
+            
             <div className="relative w-full sm:w-auto">
               <Input 
                 type="file" 
@@ -216,9 +232,16 @@ export function EntityFilesTab({ tenantId, entityId }: EntityFilesTabProps) {
                     </span>
                   </TableCell>
                   <TableCell>
-                    <Badge variant="outline" className="text-[10px] font-bold uppercase">
-                      {file.file_type}
-                    </Badge>
+                    <div className="flex flex-col gap-1 items-start">
+                      <Badge variant="outline" className="text-[10px] font-bold uppercase">
+                        {file.file_type}
+                      </Badge>
+                      {file.metadata?.reference_month && (
+                        <span className="text-[10px] text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded font-medium">
+                          Ref: {file.metadata.reference_month}
+                        </span>
+                      )}
+                    </div>
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-2">
