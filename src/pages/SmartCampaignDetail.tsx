@@ -14,6 +14,7 @@ import { useSmartCampaigns, useSmartCampaign, CampaignType } from "@/hooks/useSm
 import { useSmartCampaignTemplates } from "@/hooks/useSmartCampaignTemplates";
 import { toast } from "sonner";
 import { supabase } from "@/lib/supabase";
+import { useTenant } from "@/providers/TenantProvider";
 import { useQuery } from "@tanstack/react-query";
 
 function EntityFileSelector({ tenantId, entityId, currentPath, onSelect }: { tenantId: string; entityId: string; currentPath?: string; onSelect: (path: string) => void }) {
