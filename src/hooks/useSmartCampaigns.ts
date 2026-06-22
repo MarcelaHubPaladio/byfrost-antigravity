@@ -3,7 +3,7 @@ import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
 import { toast } from "sonner";
 import { useTenant } from "@/providers/TenantProvider";
-import { useAuth } from "@/providers/AuthProvider";
+import { useSession } from "@/providers/SessionProvider";
 
 export type CampaignStatus = 'draft' | 'tested' | 'scheduled' | 'processing' | 'completed' | 'failed' | 'cancelled';
 export type CampaignType = 'boleto' | 'nota_fiscal' | 'video_aprovacao' | 'comunicado' | 'cobranca' | 'pos_venda' | 'aviso' | 'outro';
@@ -29,7 +29,7 @@ export interface SmartCampaign {
 
 export function useSmartCampaigns() {
   const { tenant } = useTenant();
-  const { user } = useAuth();
+  const { user } = useSession();
   const queryClient = useQueryClient();
   const activeTenantId = tenant?.id;
 
