@@ -1265,24 +1265,27 @@ export function TransactionsTab() {
                         Categoria 
                         {suggested?.category_id && <Badge variant="secondary" className="h-4 text-[9px] px-1 bg-indigo-50 text-indigo-600 hover:bg-indigo-100">Sugerida</Badge>}
                       </Label>
-                      <Select
+                      <AsyncSelect
+                        className="h-10 rounded-2xl bg-white dark:bg-slate-950"
                         value={categoryId}
-                        onValueChange={(v) => {
+                        initialLabel={categoriesQ.data?.find(c => c.id === categoryId)?.name || undefined}
+                        onChange={(v) => {
                           setCategoryTouched(true);
                           setCategoryId(v);
                         }}
-                      >
-                        <SelectTrigger className="h-10 rounded-2xl bg-white dark:bg-slate-950">
-                          <SelectValue placeholder={categoriesQ.isLoading ? "Carregando…" : "Selecione..."} />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {(categoriesQ.data ?? []).map((c) => (
-                            <SelectItem key={c.id} value={c.id}>
-                              {c.name} ({c.type})
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                        placeholder={categoriesQ.isLoading ? "Carregando…" : "Selecione..."}
+                        loadOptions={async (val) => {
+                          const all = categoriesQ.data || [];
+                          if (!val) {
+                            return all.slice(0, 50).map(c => ({ value: c.id, label: `${c.name} (${c.type})` }));
+                          }
+                          const lower = val.toLowerCase();
+                          return all
+                            .filter(c => c.name.toLowerCase().includes(lower))
+                            .slice(0, 50)
+                            .map(c => ({ value: c.id, label: `${c.name} (${c.type})` }));
+                        }}
+                      />
                       {suggested?.pattern ? (
                         <div className="text-[10px] font-medium text-slate-400">
                           Regra automática: "{suggested.pattern}"

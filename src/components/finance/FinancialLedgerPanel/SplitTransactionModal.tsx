@@ -26,14 +26,21 @@ export function SplitTransactionModal({
   const { user } = useSession();
   const qc = useQueryClient();
 
-  const [splits, setSplits] = useState<{ id: string; amount: string; categoryId: string | null; entityId: string | null }[]>([]);
+  const [splits, setSplits] = useState<{ id: string; amount: string; categoryId: string | null; categoryName?: string | null; entityId: string | null; entityName?: string | null }[]>([]);
 
   // Initialize splits when modal opens
   React.useEffect(() => {
     if (open && transaction) {
       const initialAmountStr = transaction.amount ? (Number(transaction.amount) * 100).toFixed(0).toString() : "";
       setSplits([
-        { id: "1", amount: formatMoneyInput(initialAmountStr), categoryId: transaction.category_id || null, entityId: transaction.entity_id || null },
+        { 
+          id: "1", 
+          amount: formatMoneyInput(initialAmountStr), 
+          categoryId: transaction.category_id || null, 
+          categoryName: transaction.financial_categories?.name || null,
+          entityId: transaction.entity_id || null,
+          entityName: transaction.core_entities?.display_name || null
+        },
       ]);
     }
   }, [open, transaction]);
@@ -135,9 +142,11 @@ export function SplitTransactionModal({
                   <AsyncSelect
                     className="h-9 rounded-lg text-xs"
                     value={split.entityId}
+                    initialLabel={split.entityName}
                     onChange={(v) => {
                       const newSplits = [...splits];
                       newSplits[i].entityId = v;
+                      newSplits[i].entityName = null;
                       setSplits(newSplits);
                     }}
                     placeholder="Sem entidade"
@@ -159,9 +168,11 @@ export function SplitTransactionModal({
                   <AsyncSelect
                     className="h-9 rounded-lg text-xs"
                     value={split.categoryId}
+                    initialLabel={split.categoryName}
                     onChange={(v) => {
                       const newSplits = [...splits];
                       newSplits[i].categoryId = v;
+                      newSplits[i].categoryName = null;
                       setSplits(newSplits);
                     }}
                     placeholder="Sem categoria"
