@@ -1575,7 +1575,7 @@ export function TransactionsTab() {
                     const children = groupedTransactions.childrenMap.get(t.id) || [];
                     return (
                       <React.Fragment key={t.id}>
-                      <TableRow className={cn("group", t.is_split && "bg-slate-50/50 opacity-80")}>
+                      <TableRow className={cn("group", t.is_split ? "bg-slate-50/50 opacity-80" : (!t.category_id || !t.entity_id) ? "bg-amber-50/40 hover:bg-amber-100/40 dark:bg-amber-900/10 dark:hover:bg-amber-900/20" : "")}>
                         <TableCell className="w-[40px] px-3">
                           <Checkbox
                             checked={selectedTxIds.has(t.id)}

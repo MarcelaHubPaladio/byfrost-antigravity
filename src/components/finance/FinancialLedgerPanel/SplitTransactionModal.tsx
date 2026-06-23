@@ -8,7 +8,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Trash2, Plus } from "lucide-react";
-import { formatMoneyBRL, parseMoneyInput, formatMoneyInput } from "@/lib/financial-utils";
+import { parseMoneyInput, formatMoneyInput } from "@/lib/financial-utils";
+import { formatMoneyBRL } from "@/lib/utils";
 import { AsyncSelect } from "@/components/ui/async-select";
 import { showError, showSuccess } from "@/utils/toast";
 
