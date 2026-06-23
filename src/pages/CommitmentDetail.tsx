@@ -577,6 +577,23 @@ export default function CommitmentDetail() {
     );
   };
 
+  const toggleDeliverableStatus = async (deliverableId: string, newStatus: string) => {
+    setSaving(true);
+    try {
+      const { error } = await supabase
+        .from("deliverables")
+        .update({ status: newStatus })
+        .eq("id", deliverableId);
+      if (error) throw error;
+      showSuccess(`Entregável marcado como ${newStatus === 'completed' ? 'concluído' : 'pendente'}`);
+      deliverablesQ.refetch();
+    } catch (err: any) {
+      showError(err.message ?? "Erro ao atualizar");
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const title = useMemo(() => {
     const c = commitmentQ.data;
     if (!c) return "Compromisso";
@@ -920,9 +937,18 @@ export default function CommitmentDetail() {
                                           </div>
                                         </div>
                                       </div>
-                                      <Badge variant={d.status === 'completed' ? 'default' : 'secondary'} className="text-[9px] h-4">
-                                        {d.status || 'pending'}
-                                      </Badge>
+                                      <Button
+                                        size="sm"
+                                        variant={d.status === 'completed' ? 'default' : 'outline'}
+                                        className={cn("h-6 text-[9px] font-bold uppercase rounded-full px-3 transition-colors", d.status === 'completed' ? 'bg-emerald-500 hover:bg-emerald-600 border-none' : 'text-slate-500 border-slate-200 hover:bg-slate-100 hover:text-slate-800')}
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          toggleDeliverableStatus(d.id, d.status === 'completed' ? 'pending' : 'completed');
+                                        }}
+                                        disabled={saving}
+                                      >
+                                        {d.status === 'completed' ? 'Concluído' : 'Marcar Concluído'}
+                                      </Button>
                                     </div>
 
                                     {/* Linked Cases per occurrence */}

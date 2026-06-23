@@ -1263,16 +1263,59 @@ export default function OperacaoM30Case() {
         setCreatingTasks(true);
         const parentCommitmentId = (caseQ.data.meta_json as any)?.commitment_id || deliverableQ.data?.commitment_id;
 
+        const dynamicallyUsedDeliverables = new Set(usedDeliverablesQ.data || []);
+        
+        const getNextDeliverable = (type: string) => {
+            const all = allDeliverablesQ.data || [];
+            const mapping: Record<string, string[]> = {
+                'edicao': ['Vídeos Promocionais', 'Vídeo', 'Edição'],
+                'gravacao': ['Vídeos Promocionais', 'Vídeo', 'Gravação'],
+                'planejamento': ['Planejamento de Vídeos', 'Extra Escopo', 'Estratégia'],
+                'whatsapp_copy': ['Planejamento de Vídeos', 'Texto', 'Copy'],
+                'roteiro': ['Planejamento de Vídeos', 'Roteiro'],
+                'artes': ['Artes / Criativo', 'Artes'],
+                'campanhas': ['Gestão de Tráfego Pago', 'Campanhas'],
+                'validacao': ['Vídeos Promocionais', 'Vídeo', 'Aprovação'],
+                'aprovacao': ['Vídeos Promocionais', 'Vídeo', 'Aprovação'],
+            };
+            const possibleNames = mapping[type] || [];
+            
+            for (const name of possibleNames) {
+                const available = all.find((d: any) => 
+                    d.name.toLowerCase().includes(name.toLowerCase()) && 
+                    !dynamicallyUsedDeliverables.has(d.id)
+                );
+                if (available) {
+                    dynamicallyUsedDeliverables.add(available.id);
+                    return available.id;
+                }
+            }
+            
+            const availableFallback = all.find((d: any) => !dynamicallyUsedDeliverables.has(d.id));
+            if (availableFallback) {
+                dynamicallyUsedDeliverables.add(availableFallback.id);
+                return availableFallback.id;
+            }
+            
+            return null;
+        };
+
         try {
             for (const st of subtasks) {
+                const targetType = st.type || 'edicao';
+                let targetDeliverableId = st.deliverable_id;
+                if (!targetDeliverableId) {
+                    targetDeliverableId = getNextDeliverable(targetType) || caseQ.data.deliverable_id;
+                }
+
                 await supabase.from("cases").insert({
                     tenant_id: activeTenantId,
                     journey_id: caseQ.data.journey_id,
-                    case_type: st.type || 'edicao', 
+                    case_type: targetType, 
                     title: st.title,
                     summary_text: st.description || null, 
                     customer_entity_id: caseQ.data.customer_entity_id,
-                    deliverable_id: st.deliverable_id || caseQ.data.deliverable_id,
+                    deliverable_id: targetDeliverableId,
                     status: "open",
                     state: "decupagem__upload",
                     meta_json: {
@@ -1552,7 +1595,9 @@ export default function OperacaoM30Case() {
                                                             <SelectItem value="__none__" className="rounded-xl italic text-slate-500">
                                                                 (Nenhum entregável)
                                                             </SelectItem>
-                                                            {(allDeliverablesQ.data || []).map((d: any) => (
+                                                            {(allDeliverablesQ.data || [])
+                                                                .filter((d: any) => d.id === caseQ.data?.deliverable_id || !(usedDeliverablesQ.data || []).includes(d.id))
+                                                                .map((d: any) => (
                                                                 <SelectItem key={d.id} value={d.id} className="rounded-xl">
                                                                     {d.name} ({d.status})
                                                                 </SelectItem>
