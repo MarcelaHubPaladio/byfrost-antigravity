@@ -17,8 +17,8 @@ begin
     execute $sql$
       alter table public.financial_transactions
         add constraint financial_transactions_split_parent_fk
-        foreign key (tenant_id, split_parent_id)
-        references public.financial_transactions(tenant_id, id)
+        foreign key (split_parent_id)
+        references public.financial_transactions(id)
         on delete cascade
     $sql$;
   end if;
