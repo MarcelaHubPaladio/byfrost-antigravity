@@ -64,7 +64,7 @@ export function SplitTransactionModal({
           status: transaction.status,
           source: transaction.source,
           fingerprint: transaction.fingerprint + "-split-" + Math.random().toString(36).substring(7),
-          raw_payload: transaction.raw_payload,
+          raw_payload: transaction.raw_payload || {},
           category_id: split.categoryId,
           entity_id: split.entityId,
           invoice_number: transaction.invoice_number,
