@@ -63,6 +63,7 @@ export function EntityFinanceTab({ tenantId, entityId }: EntityFinanceTabProps) 
         `)
                 .eq("tenant_id", tenantId)
                 .eq("entity_id", entityId)
+                .eq("is_split", false)
                 .order("transaction_date", { ascending: false });
 
             if (error) throw error;

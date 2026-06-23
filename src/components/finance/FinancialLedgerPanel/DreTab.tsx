@@ -123,6 +123,7 @@ export function DreTab() {
         .from("financial_transactions")
         .select("amount, type, category_id, transaction_date, entity_id")
         .eq("tenant_id", activeTenantId!)
+        .eq("is_split", false)
         .gte("transaction_date", dreStartDate)
         .lte("transaction_date", dreEndDate);
       if (error) throw error;

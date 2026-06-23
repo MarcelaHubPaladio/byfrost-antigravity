@@ -122,6 +122,7 @@ export function FinanceControlTowerPanel() {
         .from("financial_transactions")
         .select("id,amount,type,transaction_date,category_id,entity_id")
         .eq("tenant_id", activeTenantId!)
+        .eq("is_split", false)
         .gte("transaction_date", rangeStart)
         .lte("transaction_date", rangeEnd)
         .order("transaction_date", { ascending: true })

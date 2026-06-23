@@ -41,6 +41,7 @@ export function FinancialCategoryDetailPanel({ categoryId, startDate, endDate, c
         `)
         .eq("tenant_id", activeTenantId!)
         .eq("category_id", categoryId)
+        .eq("is_split", false)
         .order("transaction_date", { ascending: false });
 
       if (startDate) query = query.gte("transaction_date", startDate);

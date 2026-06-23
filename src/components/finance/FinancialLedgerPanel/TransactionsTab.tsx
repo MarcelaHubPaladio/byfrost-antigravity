@@ -38,7 +38,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { addDays, subDays, addMonths, subMonths, format, parseISO, startOfMonth, endOfMonth, startOfDay, endOfDay } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import {
-  Download, Landmark, Pencil, Plus, Upload, Link2, CheckCircle2, Search, Info, Trash2, X, ChevronRight, ChevronLeft, Calendar as CalendarIcon, UploadCloud } from "lucide-react";
+  Download, Landmark, Pencil, Plus, Upload, Link2, CheckCircle2, Search, Info, Trash2, X, ChevronRight, ChevronLeft, Calendar as CalendarIcon, UploadCloud, Network, CornerDownRight, Scissors } from "lucide-react";
 import { AsyncSelect } from "@/components/ui/async-select";
 import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -46,6 +46,7 @@ import { Link } from "react-router-dom";
 import { useSession } from "@/providers/SessionProvider";
 
 import { FinancialIngestionPanel } from "../FinancialIngestionPanel";
+import { SplitTransactionModal } from "./SplitTransactionModal";
 
 import { CategoryType, CATEGORY_LABELS, normalizeDescription, stripOuterQuotes, splitCsvLine, parseCategoryType, ParsedCategory, parseCategoryCsv, sha256Hex, parseMoneyInput, formatMoneyInput, prettyAccountType, currentMonthRangeIso } from "@/lib/financial-utils";
 type BankAccountRow = {
@@ -129,6 +130,9 @@ export function TransactionsTab() {
   const [bulkActionValue, setBulkActionValue] = useState<string | null>(null);
   const [showIngestion, setShowIngestion] = useState(false);
 
+  const [splitTxDialogOpen, setSplitTxDialogOpen] = useState(false);
+  const [txToSplit, setTxToSplit] = useState<any>(null);
+
   const transactionsQ = useQuery({
     queryKey: ["financial_transactions", activeTenantId, txStartDate, txEndDate],
     enabled: Boolean(activeTenantId && txStartDate && txEndDate),
@@ -140,7 +144,7 @@ export function TransactionsTab() {
       const { data, error } = await supabase
         .from("financial_transactions")
         .select(
-          "id,tenant_id,account_id,amount,type,description,transaction_date,status,source,fingerprint,category_id,created_at,entity_id,linked_payable_id,linked_receivable_id,invoice_number,core_entities(display_name),financial_categories(name)"
+          "id,tenant_id,account_id,amount,type,description,transaction_date,status,source,fingerprint,category_id,created_at,entity_id,linked_payable_id,linked_receivable_id,invoice_number,core_entities(display_name),financial_categories(name),is_split,split_parent_id"
         )
         .eq("tenant_id", activeTenantId!)
         .gte("transaction_date", txStartDate)
@@ -222,12 +226,28 @@ export function TransactionsTab() {
     return data;
   }, [transactionsQ.data, filterEntityId, filterCategoryId, filterType, sortKey, sortDir, txSearchText, accountById, categoryById]);
 
+  const groupedTransactions = useMemo(() => {
+    const mainTxs: any[] = [];
+    const childrenMap = new Map<string, any[]>();
+    
+    sortedTransactions.forEach(t => {
+      if (t.split_parent_id && sortedTransactions.some(p => p.id === t.split_parent_id)) {
+        if (!childrenMap.has(t.split_parent_id)) childrenMap.set(t.split_parent_id, []);
+        childrenMap.get(t.split_parent_id)!.push(t);
+      } else {
+        mainTxs.push(t);
+      }
+    });
+    return { mainTxs, childrenMap };
+  }, [sortedTransactions]);
+
   const selectedTxs = useMemo(() => {
     return sortedTransactions.filter((t) => selectedTxIds.has(t.id));
   }, [sortedTransactions, selectedTxIds]);
 
   const sumSelected = useMemo(() => {
     return selectedTxs.reduce((acc, t) => {
+      if (t.is_split) return acc;
       const v = Number(t.amount) || 0;
       return (t.type || "").toLowerCase().trim() === "credit" ? acc + v : acc - v;
     }, 0);
@@ -1077,6 +1097,11 @@ export function TransactionsTab() {
           </Button>
         </div>
         <FinancialIngestionPanel />
+        <SplitTransactionModal 
+        open={splitTxDialogOpen} 
+        onOpenChange={setSplitTxDialogOpen} 
+        transaction={txToSplit} 
+      />
       </div>
     );
   }
@@ -1544,11 +1569,13 @@ export function TransactionsTab() {
                     </TableCell>
                   </TableRow>
                 ) : transactionsQ.isSuccess ? (
-                  sortedTransactions.map((t) => {
+                  groupedTransactions.mainTxs.map((t) => {
                     const acc = accountById.get(t.account_id);
                     const cat = t.category_id ? categoryById.get(t.category_id) : null;
+                    const children = groupedTransactions.childrenMap.get(t.id) || [];
                     return (
-                      <TableRow key={t.id} className="group">
+                      <React.Fragment key={t.id}>
+                      <TableRow className={cn("group", t.is_split && "bg-slate-50/50 opacity-80")}>
                         <TableCell className="w-[40px] px-3">
                           <Checkbox
                             checked={selectedTxIds.has(t.id)}
@@ -1709,6 +1736,26 @@ export function TransactionsTab() {
                         </TableCell>
                         <TableCell className="w-[100px]">
                           <div className="flex justify-end gap-1">
+                            {!t.is_split && !t.split_parent_id && (
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-7 w-7 rounded-lg text-slate-400 hover:text-indigo-600"
+                                      onClick={() => {
+                                        setTxToSplit(t);
+                                        setSplitTxDialogOpen(true);
+                                      }}
+                                    >
+                                      <Scissors className="h-3.5 w-3.5" />
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>Dividir Lançamento</TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+                            )}
                             <Button
                               variant="ghost"
                               size="icon"
@@ -1749,6 +1796,63 @@ export function TransactionsTab() {
                           </div>
                         </TableCell>
                       </TableRow>
+                      {children.map(child => {
+                        const childCat = child.category_id ? categoryById.get(child.category_id) : null;
+                        return (
+                          <TableRow key={child.id} className="group bg-slate-50/40">
+                            <TableCell className="w-[40px] px-3"></TableCell>
+                            <TableCell className="w-[110px] whitespace-nowrap pl-6">
+                              <div className="flex items-center gap-1.5 text-slate-400">
+                                <CornerDownRight className="h-4 w-4" />
+                                <span className="text-[11px] font-medium">{child.transaction_date}</span>
+                              </div>
+                            </TableCell>
+                            <TableCell className="max-w-[300px]">
+                              <div className="truncate font-medium text-slate-600 text-xs" title={child.description}>{child.description ?? "—"}</div>
+                            </TableCell>
+                            <TableCell className="w-[180px]">
+                               <div className="text-[11px] text-slate-600 font-medium">
+                                 {child.core_entities?.display_name ?? "—"}
+                               </div>
+                            </TableCell>
+                            <TableCell className="w-[140px]"><span className="text-[10px] text-slate-400">Pai: {t.id.slice(0, 8)}...</span></TableCell>
+                            <TableCell className="w-[80px]">
+                              <Badge variant="outline" className={cn("text-[9px] uppercase font-black px-1.5 py-0", child.type === "credit" ? "text-emerald-700 bg-emerald-50 border-emerald-200" : "text-rose-700 bg-rose-50 border-rose-200")}>
+                                {child.type === "credit" ? "Entrada" : "Saída"}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="w-[110px] text-right font-bold text-xs text-slate-700">
+                              {child.type === "credit" ? "+" : "-"} {formatMoneyBRL(child.amount)}
+                            </TableCell>
+                            <TableCell className="w-[180px]">
+                               <div className="text-[11px] text-slate-600 font-medium">
+                                 {childCat?.name ?? "—"}
+                               </div>
+                            </TableCell>
+                            <TableCell className="w-[100px]"></TableCell>
+                            <TableCell className="w-[120px]"></TableCell>
+                            <TableCell className="w-[100px]">
+                               <div className="flex justify-end gap-1">
+                                 <Button variant="ghost" size="icon" className="h-7 w-7 rounded-lg text-slate-400 hover:text-indigo-600" onClick={() => handleEdit(child)}>
+                                   <Pencil className="h-3.5 w-3.5" />
+                                 </Button>
+                                 <AlertDialog>
+                                   <AlertDialogTrigger asChild>
+                                     <Button variant="ghost" size="icon" className="h-7 w-7 rounded-lg text-slate-400 hover:text-rose-600">
+                                       <Trash2 className="h-3.5 w-3.5" />
+                                     </Button>
+                                   </AlertDialogTrigger>
+                                   <AlertDialogContent className="rounded-2xl">
+                                     <AlertDialogHeader><AlertDialogTitle>Excluir parcela?</AlertDialogTitle><AlertDialogDescription>Deseja excluir esta parcela dividida? A soma das partes pode ficar inválida.</AlertDialogDescription></AlertDialogHeader>
+                                     <AlertDialogFooter><AlertDialogCancel className="rounded-xl">Cancelar</AlertDialogCancel><AlertDialogAction className="rounded-xl bg-rose-600 hover:bg-rose-700" onClick={() => deleteTxM.mutate(child.id)}>Excluir</AlertDialogAction></AlertDialogFooter>
+                                   </AlertDialogContent>
+                                 </AlertDialog>
+                               </div>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                      </React.Fragment>
                     );
                   })
                 ) : null}
@@ -2316,6 +2420,11 @@ export function TransactionsTab() {
         </DialogContent>
       </Dialog>
 
+      <SplitTransactionModal 
+        open={splitTxDialogOpen} 
+        onOpenChange={setSplitTxDialogOpen} 
+        transaction={txToSplit} 
+      />
     </>
   );
 }
