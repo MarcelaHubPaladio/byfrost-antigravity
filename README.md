@@ -159,3 +159,4 @@ No painel:
 - `src/` — app React
 - `supabase/migrations/` — schema + RLS
 - `supabase/functions/` — Edge Functions (Deno)
+
