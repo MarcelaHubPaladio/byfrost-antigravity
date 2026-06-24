@@ -32,6 +32,8 @@ import {
   Link2,
   Zap,
   BarChart3,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import {
@@ -300,6 +302,34 @@ export default function CommitmentDetail() {
     },
     staleTime: 60_000,
   });
+
+  const activeContractsQ = useQuery({
+    queryKey: ["active_contracts_nav", activeTenantId],
+    enabled: Boolean(activeTenantId),
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("commercial_commitments")
+        .select("id, created_at")
+        .eq("tenant_id", activeTenantId!)
+        .eq("status", "active")
+        .eq("commitment_type", "contract")
+        .is("deleted_at", null)
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      return data || [];
+    },
+    staleTime: 60_000,
+  });
+
+  const { prevContractId, nextContractId } = useMemo(() => {
+    const list = activeContractsQ.data || [];
+    const idx = list.findIndex(c => c.id === commitmentId);
+    if (idx === -1) return { prevContractId: null, nextContractId: null };
+    return {
+      prevContractId: idx > 0 ? list[idx - 1].id : null,
+      nextContractId: idx < list.length - 1 ? list[idx + 1].id : null,
+    };
+  }, [activeContractsQ.data, commitmentId]);
 
   const isM30Journey = Boolean(m30JourneyQ.data?.id);
 
@@ -700,6 +730,26 @@ export default function CommitmentDetail() {
                 >
                   Voltar
                 </Link>
+                <div className="flex items-center gap-1 bg-white border border-slate-200 rounded-xl px-1 py-1">
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    className="h-6 w-6 p-0 text-slate-500 hover:text-slate-800 disabled:opacity-30 rounded-lg"
+                    disabled={!prevContractId}
+                    onClick={() => prevContractId && nav(`/app/commitments/${prevContractId}`)}
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    className="h-6 w-6 p-0 text-slate-500 hover:text-slate-800 disabled:opacity-30 rounded-lg"
+                    disabled={!nextContractId}
+                    onClick={() => nextContractId && nav(`/app/commitments/${nextContractId}`)}
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </div>
               </div>
             </div>
 
