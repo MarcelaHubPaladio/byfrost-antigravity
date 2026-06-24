@@ -379,6 +379,17 @@ function SubtaskItemContent({
 
     return (
         <div className="space-y-6">
+            <div className="space-y-2">
+                <Label className="text-[10px] font-bold text-slate-500 uppercase">Título da Subtarefa</Label>
+                <input 
+                    type="text"
+                    value={title}
+                    onChange={(e) => setTitle(e.target.value)}
+                    className="w-full h-9 rounded-xl border border-slate-200 bg-white px-3 text-xs focus:ring-indigo-500/20 outline-none shadow-sm"
+                    placeholder="Título da subtarefa..."
+                />
+            </div>
+
             <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                     <Label className="text-[10px] font-bold text-slate-500 uppercase">Data de Postagem</Label>
