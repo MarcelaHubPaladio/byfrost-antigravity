@@ -213,8 +213,9 @@ export default function Contracts() {
     const list = processedContracts;
     const activeCount = list.filter(c => c.status === 'active').length;
     const completedCount = list.filter(c => c.status === 'completed' || c.metrics.percentage === 100).length;
-    const avgProgress = list.length > 0 
-      ? Math.round(list.reduce((acc, c) => acc + c.metrics.percentage, 0) / list.length) 
+    const contractsWithDeliverables = list.filter(c => c.metrics.total_deliverables > 0);
+    const avgProgress = contractsWithDeliverables.length > 0 
+      ? Math.round(contractsWithDeliverables.reduce((acc, c) => acc + c.metrics.percentage, 0) / contractsWithDeliverables.length) 
       : 0;
     
     return { activeCount, completedCount, avgProgress };
@@ -413,7 +414,7 @@ export default function Contracts() {
                           </div>
                           <div className="divide-y divide-slate-100 dark:divide-slate-800">
                             {contracts.map(c => (
-                              <ContractListItem key={c.id} c={c} />
+                              <ContractListItem key={c.id} c={c} handleOrchestrate={handleOrchestrate} isOrchestrating={isOrchestrating} onStatusChange={handleStatusChange} />
                             ))}
                           </div>
                         </div>
@@ -424,7 +425,7 @@ export default function Contracts() {
                         </div>
                         <div className="divide-y divide-slate-100 dark:divide-slate-800">
                           {groupedContracts.ungrouped.map(c => (
-                            <ContractListItem key={c.id} c={c} />
+                            <ContractListItem key={c.id} c={c} handleOrchestrate={handleOrchestrate} isOrchestrating={isOrchestrating} onStatusChange={handleStatusChange} />
                           ))}
                         </div>
                       </div>
@@ -564,7 +565,12 @@ function ContractCard({ c, handleOrchestrate, isOrchestrating }: { c: any, handl
   );
 }
 
-function ContractListItem({ c }: { c: any }) {
+function ContractListItem({ c, handleOrchestrate, isOrchestrating, onStatusChange }: { 
+  c: any,
+  handleOrchestrate: (id: string) => void,
+  isOrchestrating: string | null,
+  onStatusChange: (id: string, status: string) => void
+}) {
   return (
     <Link to={`/app/commitments/${c.id}`} className="group block hover:bg-slate-50 dark:hover:bg-slate-900 transition-colors">
       <div className="px-6 py-4 flex items-center justify-between gap-4">
@@ -593,12 +599,40 @@ function ContractListItem({ c }: { c: any }) {
             <span className="text-xs font-bold text-slate-600 dark:text-slate-400">{c.metrics.percentage}%</span>
           </div>
 
-          <Badge className={cn(
-            "rounded-lg px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider w-24 justify-center shrink-0",
-            STATUS_COLORS[c.status as string || 'draft']
-          )}>
-            {STATUS_LABELS[c.status as string || 'draft'] || 'Rascunho'}
-          </Badge>
+          <div onClick={(e) => { e.preventDefault(); e.stopPropagation(); }} className="flex items-center gap-3">
+            {c.status === 'active' && c.metrics.total_deliverables === 0 && handleOrchestrate && (
+              <Button 
+                size="sm" 
+                variant="outline"
+                className="h-8 text-[10px] gap-1.5 border-blue-200 text-blue-600 hover:bg-blue-50 dark:border-blue-900/50 dark:text-blue-400"
+                onClick={() => handleOrchestrate(c.id)}
+                disabled={isOrchestrating === c.id}
+              >
+                {isOrchestrating === c.id ? (
+                  <div className="h-3 w-3 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+                ) : (
+                  <Play className="w-3 h-3" />
+                )}
+                Gerar Entregáveis
+              </Button>
+            )}
+
+            <Select
+              value={c.status || 'draft'}
+              onValueChange={(val) => onStatusChange(c.id, val)}
+            >
+              <SelectTrigger className="h-8 w-28 text-[10px] font-bold uppercase">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {Object.entries(STATUS_LABELS).map(([val, label]) => (
+                  <SelectItem key={val} value={val} className="text-[10px] font-bold uppercase">
+                    {label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
 
           <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-slate-600 transition-colors" />
         </div>
