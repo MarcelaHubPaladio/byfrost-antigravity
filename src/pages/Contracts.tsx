@@ -156,6 +156,8 @@ export default function Contracts() {
     const ungrouped: typeof processedContracts = [];
 
     processedContracts.forEach(c => {
+      if (c.status === 'canceled') return;
+
       const customerId = c.customer?.id;
       if (customerId) {
         if (!groups[customerId]) groups[customerId] = [];
