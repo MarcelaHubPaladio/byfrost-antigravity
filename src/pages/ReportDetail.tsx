@@ -138,7 +138,7 @@ export default function ReportDetail() {
     if (!selectedReport) return { cpv: 0, cpl: 0, cac: 0 };
     const adSpend = Number(selectedReport.ad_spend) || 0;
     return {
-        cpv: adSpend / (selectedReport.profile_visits || 1),
+        cpv: adSpend / (selectedReport.visualizations || 1),
         cpl: adSpend / (selectedReport.initiated_conversations || 1),
         cac: adSpend / (selectedReport.tracked_sales || 1)
     };
@@ -1060,10 +1060,16 @@ function ReportFormDialog({ onSave, isLoading, initialData, existingUnits = [] }
                         <div className="space-y-2">
                             <Label className="flex items-center gap-1.5"><Download className="h-3 w-3 rotate-180" /> Gasto (R$)</Label>
                             <Input 
-                                type="number"
-                                step="0.01"
-                                value={formData.ad_spend} 
-                                onChange={e => setFormData({ ...formData, ad_spend: parseFloat(e.target.value) || 0 })}
+                                type="text"
+                                value={formData.ad_spend === 0 ? '' : formData.ad_spend} 
+                                onChange={e => setFormData({ ...formData, ad_spend: e.target.value })}
+                                onBlur={() => {
+                                    let val = String(formData.ad_spend);
+                                    if (val.includes(',')) {
+                                        val = val.replace(/\./g, '').replace(',', '.');
+                                    }
+                                    setFormData({ ...formData, ad_spend: parseFloat(val) || 0 });
+                                }}
                                 className="rounded-xl bg-white"
                             />
                         </div>
