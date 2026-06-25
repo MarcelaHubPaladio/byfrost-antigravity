@@ -109,25 +109,20 @@ export async function calculateCommissionForOrders(
 
     if (items && items.length > 0) {
       for (const item of items) {
-        let rowCommission = 0;
-        if (item.commission_value != null) {
-          rowCommission = Number(item.commission_value);
-        } else {
-          const rowTotal = Number(item.total || 0);
-          const catId = item.offering_entity_id ? offeringCategoryMap.get(item.offering_entity_id) : null;
-          let activeBase = basePercent;
-          let activeTiers = tiers;
-          
-          if (catId && categoryRules[catId]) {
-              activeBase = categoryRules[catId].base_percent ?? basePercent;
-              activeTiers = categoryRules[catId].discount_tiers ?? tiers;
-          }
-
-          const discountPct = Number(item.discount_percent || 0);
-          const applicableTier = activeTiers.find((t: any) => t.max_discount_pct >= discountPct);
-          const pct = applicableTier ? applicableTier.commission_pct : activeBase;
-          rowCommission = rowTotal * (pct / 100);
+        const rowTotal = Number(item.total || 0);
+        const catId = item.offering_entity_id ? offeringCategoryMap.get(item.offering_entity_id) : null;
+        let activeBase = basePercent;
+        let activeTiers = tiers;
+        
+        if (catId && categoryRules[catId]) {
+            activeBase = categoryRules[catId].base_percent ?? basePercent;
+            activeTiers = categoryRules[catId].discount_tiers ?? tiers;
         }
+
+        const discountPct = Number(item.discount_percent || 0);
+        const applicableTier = activeTiers.find((t: any) => t.max_discount_pct >= discountPct);
+        const pct = applicableTier ? applicableTier.commission_pct : activeBase;
+        const rowCommission = rowTotal * (pct / 100);
         orderCommission += rowCommission;
 
         const prodName = item.description || item.code || "Item";

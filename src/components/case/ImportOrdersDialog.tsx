@@ -583,8 +583,21 @@ export function ImportOrdersDialog({
             const total = subtotal - discValue;
 
             if (ownerCommissionRules) {
-                const base = ownerCommissionRules.base_percent || 0;
-                const tiers = ownerCommissionRules.discount_tiers || [];
+                let base = ownerCommissionRules.base_percent || 0;
+                let tiers = ownerCommissionRules.discount_tiers || [];
+                
+                if (offeringId && offeringsQ.data) {
+                    const off = offeringsQ.data.find((o: any) => o.id === offeringId);
+                    if (off?.metadata?.commission_category_id) {
+                        const catId = off.metadata.commission_category_id;
+                        const catRule = (ownerCommissionRules.category_rules || {})[catId];
+                        if (catRule) {
+                            base = catRule.base_percent ?? base;
+                            tiers = catRule.discount_tiers ?? tiers;
+                        }
+                    }
+                }
+
                 const tier = tiers.find((t: any) => t.max_discount_pct >= it.discountPct);
                 const pct = tier ? tier.commission_pct : base;
                 commissionValue = total * (pct / 100);
