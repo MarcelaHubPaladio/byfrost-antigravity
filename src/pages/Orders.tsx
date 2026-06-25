@@ -1865,7 +1865,7 @@ export default function Orders() {
                                   className={cn(
                                     "h-8 w-[140px] rounded-xl text-[10px] font-black uppercase border-none",
                                     billingStatus === "Boleto" ? "bg-indigo-100 text-indigo-700" :
-                                    billingStatus === "Pago" ? "bg-emerald-100 text-emerald-700" :
+                                    billingStatus === "Faturado" ? "bg-emerald-100 text-emerald-700" :
                                     billingStatus === "Faturado Parcial" ? "bg-blue-100 text-blue-700" :
                                     billingStatus === "Cancelado" ? "bg-rose-100 text-rose-700" :
                                     billingStatus === "Aguardando Banco" ? "bg-amber-100 text-amber-700" :
@@ -2062,7 +2062,7 @@ function SortableOrderCard({ c, customersQ, caseDataQ, navigate, formatRelativeU
         </div>
         <div className={cn(
           "rounded-lg px-2 py-1 text-[8px] font-black uppercase",
-          billingStatus === "Pago" || billingStatus === "Faturado" ? "bg-emerald-100 text-emerald-700" :
+          billingStatus === "Faturado" ? "bg-emerald-100 text-emerald-700" :
           billingStatus === "Faturado Parcial" ? "bg-blue-100 text-blue-700" :
           billingStatus === "Cancelado" ? "bg-rose-100 text-rose-700" :
           "bg-amber-100 text-amber-700"
