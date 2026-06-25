@@ -878,9 +878,26 @@ export default function Orders() {
       const val = String(f?.payment_method ?? "").trim();
       if (val) opts.add(val);
     }
-    const list = Array.from(opts);
-    list.sort();
-    return list;
+    
+    const OFFICIAL_PAYMENT_METHODS = [
+      "Boleto",
+      "PIX",
+      "Cartão de Crédito",
+      "Cartão de Débito",
+      "Dinheiro",
+      "Transferência",
+      "Pronaf",
+      "Pronamp",
+      "Direto pelo banco",
+      "Moderfrota",
+      "Banco da família",
+      "Outros"
+    ];
+
+    const extras = Array.from(opts).filter(m => !OFFICIAL_PAYMENT_METHODS.includes(m));
+    extras.sort();
+
+    return { official: OFFICIAL_PAYMENT_METHODS, extras };
   }, [journeyRows, caseDataQ.data]);
 
   const cityOptions = useMemo(() => {
@@ -1217,7 +1234,7 @@ export default function Orders() {
                     )}
                   </div>
                   <div className="max-h-[240px] overflow-y-auto space-y-0.5">
-                    {paymentOptions.map((opt) => (
+                    {paymentOptions.official.map((opt) => (
                       <label key={opt} className="flex items-center gap-2.5 px-2 py-1.5 rounded-xl cursor-pointer hover:bg-slate-50 transition-colors">
                         <input
                           type="checkbox"
@@ -1232,6 +1249,26 @@ export default function Orders() {
                         <span className="text-xs font-semibold text-slate-700 truncate">{opt}</span>
                       </label>
                     ))}
+                    {paymentOptions.extras.length > 0 && (
+                      <div className="pt-2 mt-2 border-t border-slate-100">
+                        <p className="px-2 pb-1 text-[10px] font-black uppercase tracking-widest text-slate-400">Outros (Antigos)</p>
+                        {paymentOptions.extras.map((opt) => (
+                          <label key={opt} className="flex items-center gap-2.5 px-2 py-1.5 rounded-xl cursor-pointer hover:bg-slate-50 transition-colors">
+                            <input
+                              type="checkbox"
+                              className="accent-blue-600 h-3.5 w-3.5 rounded"
+                              checked={selectedPaymentMethods.has(opt)}
+                              onChange={() => {
+                                const next = new Set(selectedPaymentMethods);
+                                next.has(opt) ? next.delete(opt) : next.add(opt);
+                                setSelectedPaymentMethods(next);
+                              }}
+                            />
+                            <span className="text-xs font-semibold text-slate-700 truncate">{opt}</span>
+                          </label>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </PopoverContent>
               </Popover>
