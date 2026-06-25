@@ -818,7 +818,7 @@ export default function Orders() {
     if (selectedPaymentMethods.size > 0) {
       rows = rows.filter(r => {
         const f = caseDataQ.data?.fields.get(r.id);
-        return selectedPaymentMethods.has(String(f?.payment_method ?? "").trim());
+        return selectedPaymentMethods.has(String(f?.billing_status ?? "").trim());
       });
     }
 
@@ -875,29 +875,23 @@ export default function Orders() {
     const opts = new Set<string>();
     for (const r of journeyRows) {
       const f = caseDataQ.data?.fields.get(r.id);
-      const val = String(f?.payment_method ?? "").trim();
+      const val = String(f?.billing_status ?? "").trim();
       if (val) opts.add(val);
     }
     
-    const OFFICIAL_PAYMENT_METHODS = [
-      "Boleto",
-      "PIX",
-      "Cartão de Crédito",
-      "Cartão de Débito",
-      "Dinheiro",
-      "Transferência",
-      "Pronaf",
-      "Pronamp",
-      "Direto pelo banco",
-      "Moderfrota",
-      "Banco da família",
-      "Outros"
+    const OFFICIAL_STATUSES = [
+      "Pendente", 
+      "Faturado", 
+      "Faturado Parcial", 
+      "Cancelado", 
+      "Boleto", 
+      "Aguardando Banco"
     ];
 
-    const extras = Array.from(opts).filter(m => !OFFICIAL_PAYMENT_METHODS.includes(m));
+    const extras = Array.from(opts).filter(m => !OFFICIAL_STATUSES.includes(m));
     extras.sort();
 
-    return { official: OFFICIAL_PAYMENT_METHODS, extras };
+    return { official: OFFICIAL_STATUSES, extras };
   }, [journeyRows, caseDataQ.data]);
 
   const cityOptions = useMemo(() => {
