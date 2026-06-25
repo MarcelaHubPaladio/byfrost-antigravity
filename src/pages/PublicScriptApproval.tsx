@@ -147,15 +147,15 @@ export default function PublicScriptApproval() {
     return (
         <PublicPortalShell palette={{ ...palette, primary: { hex: primaryColor, text: primaryText } }}>
         <div className="min-h-screen bg-slate-950 pb-24 font-sans text-slate-300">
-            <header className="bg-slate-900/50 backdrop-blur-xl border-b border-white/5 px-6 py-8 text-center sticky top-0 z-10 shadow-sm">
+            <header className="bg-slate-900/50 backdrop-blur-xl border-b border-white/5 px-6 py-4 text-center sticky top-0 z-10 shadow-sm">
                 <div className="mx-auto max-w-2xl">
-                    <Badge variant="outline" className="mb-4 bg-primary/10 text-primary border-primary/20 px-3 py-1 text-[10px] uppercase font-black tracking-widest">
+                    <Badge variant="outline" className="mb-2 bg-primary/10 text-primary border-primary/20 px-3 py-1 text-[10px] uppercase font-black tracking-widest">
                         Aprovação de Roteiro
                     </Badge>
-                    <h1 className="text-2xl font-black text-white leading-tight">
+                    <h1 className="text-xl font-black text-white leading-tight">
                         {caseData.title || "Roteiro M30"}
                     </h1>
-                    <p className="mt-2 text-sm text-slate-400 font-medium">
+                    <p className="mt-1 text-xs text-slate-400 font-medium">
                         Cliente: <span className="text-slate-300">{caseData.customer_name || "M30 Client"}</span>
                     </p>
                 </div>
@@ -185,19 +185,19 @@ export default function PublicScriptApproval() {
                                 >
                                     <AccordionTrigger className="px-8 py-6 hover:no-underline hover:bg-slate-800/50 transition-all [&[data-state=open]>div>svg]:rotate-180">
                                         <div className="flex items-center gap-4 text-left w-full justify-between pr-4">
-                                            <div className="flex items-center gap-4">
+                                            <div className="flex items-center gap-4 flex-1">
                                                 <div className={cn(
                                                     "h-10 w-10 rounded-2xl flex items-center justify-center font-black text-xs shrink-0 transition-colors",
                                                     st.is_approved ? "bg-primary/20 text-primary" : "bg-slate-800 text-slate-400"
                                                 )}>
                                                     {st.is_approved ? <CheckCircle2 className="h-5 w-5" /> : idx + 1}
                                                 </div>
-                                                <div>
-                                                    <div className="text-[10px] font-black text-slate-500 uppercase tracking-wider mb-0.5 flex items-center gap-2">
+                                                <div className="flex-1">
+                                                    <div className="text-[10px] font-black text-slate-500 uppercase tracking-wider mb-0.5 flex flex-wrap items-center gap-2">
                                                         {st.type === 'arte_estatica' ? 'Design/Arte' : 'Vídeo/Roteiro'}
                                                         {st.is_approved && <Badge className="bg-primary text-primary-foreground border-none h-4 px-1.5 text-[8px]">APROVADO</Badge>}
                                                     </div>
-                                                    <div className="text-base font-black text-slate-100 truncate max-w-[180px] sm:max-w-xs">{st.title}</div>
+                                                    <div className="text-sm font-black text-slate-100 break-words leading-tight pr-2">{st.title}</div>
                                                 </div>
                                             </div>
                                         </div>
