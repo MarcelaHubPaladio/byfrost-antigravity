@@ -818,7 +818,8 @@ export default function Orders() {
     if (selectedPaymentMethods.size > 0) {
       rows = rows.filter(r => {
         const f = caseDataQ.data?.fields.get(r.id);
-        return selectedPaymentMethods.has(String(f?.billing_status ?? "").trim());
+        const status = f?.billing_status || "Pendente";
+        return selectedPaymentMethods.has(String(status).trim());
       });
     }
 
