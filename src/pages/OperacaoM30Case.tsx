@@ -390,7 +390,7 @@ function SubtaskItemContent({
                 />
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
                     <Label className="text-[10px] font-bold text-slate-500 uppercase">Data de Postagem</Label>
                     <input 
@@ -1441,7 +1441,7 @@ export default function OperacaoM30Case() {
                                                 <ArrowLeft className="mr-2 h-4 w-4" /> Voltar
                                             </Button>
                                         </Link>
-                                        <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                                        <div className="flex flex-wrap items-center gap-2 text-[10px] font-bold uppercase tracking-wider text-slate-400">
                                             {(() => {
                                                 const eid = (caseQ.data as any).customer_entity_id || (caseQ.data.meta_json as any)?.entity_id;
                                                 const metaName = (caseQ.data.meta_json as any)?.customer_entity_name || (caseQ.data.meta_json as any)?.entity_name;
@@ -1487,7 +1487,7 @@ export default function OperacaoM30Case() {
                                     </h1>
                                 </div>
 
-                                <div className="flex items-center gap-2">
+                                <div className="flex flex-wrap items-center gap-2 mt-4 sm:mt-0">
                                     {(() => {
                                         const isFinalState = (s: string) => {
                                             const up = s.toUpperCase();
@@ -1731,11 +1731,11 @@ export default function OperacaoM30Case() {
                                                     >
                                                         <div className="flex items-center justify-between p-1 pr-3">
                                                             <AccordionTrigger className="flex-1 hover:no-underline py-2 px-3">
-                                                                <div className="flex items-center gap-3">
-                                                                    <Badge variant="secondary" className="text-[10px] h-5">
+                                                                <div className="flex flex-wrap items-center gap-2 sm:gap-3 flex-1 w-full">
+                                                                    <Badge variant="secondary" className="text-[10px] h-5 shrink-0">
                                                                         {st.type === "arte_estatica" ? "ARTE" : "VÍDEO"}
                                                                     </Badge>
-                                                                    <span className="text-sm text-slate-700 font-bold">{st.title}</span>
+                                                                    <span className="text-sm text-slate-700 font-bold text-left flex-1 min-w-[150px] leading-tight break-words">{st.title}</span>
                                                                     {st.is_approved && (
                                                                         <Badge className="bg-emerald-500 text-white border-none h-4 px-1.5 text-[8px] font-black animate-in fade-in zoom-in duration-300">
                                                                             APROVADO PELO CLIENTE
