@@ -288,8 +288,10 @@ export default function Contracts() {
     const avgProgress = contractsWithDeliverables.length > 0 
       ? Math.round(contractsWithDeliverables.reduce((acc, c) => acc + c.metrics.percentage, 0) / contractsWithDeliverables.length) 
       : 0;
+    const onTimeCount = list.filter(c => c.status === 'active' && c.metrics.hasTermData && !c.metrics.isLate).length;
+    const lateCount = list.filter(c => c.status === 'active' && c.metrics.hasTermData && c.metrics.isLate).length;
     
-    return { activeCount, completedCount, avgProgress };
+    return { activeCount, completedCount, avgProgress, onTimeCount, lateCount };
   }, [processedContracts]);
 
   return (
@@ -365,7 +367,7 @@ export default function Contracts() {
             </div>
 
             {/* Stats Grid */}
-            <div className="mb-8 grid grid-cols-1 gap-6 sm:grid-cols-3">
+            <div className="mb-8 grid grid-cols-1 gap-6 sm:grid-cols-4">
               <Card className="relative overflow-hidden border-none bg-gradient-to-br from-blue-600 to-indigo-700 p-6 text-white shadow-xl shadow-blue-500/20">
                 <div className="relative z-10">
                   <p className="text-sm font-medium opacity-80">Contratos Ativos</p>
@@ -400,6 +402,20 @@ export default function Contracts() {
                 <p className="mt-4 text-xs font-medium text-slate-500 dark:text-slate-400">
                   Total de contratos com entrega 100% finalizada
                 </p>
+              </Card>
+
+              <Card className="border-slate-200/60 bg-white/50 p-6 backdrop-blur-sm dark:border-slate-800 dark:bg-slate-950/50 shadow-sm flex flex-col justify-between">
+                <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Status de Execução</p>
+                <div className="mt-4 flex gap-4">
+                  <div className="flex flex-col flex-1 border-r pr-4 border-slate-200 dark:border-slate-800">
+                    <span className="text-3xl font-bold text-emerald-600 dark:text-emerald-400">{globalStats.onTimeCount}</span>
+                    <span className="text-[10px] uppercase font-bold text-slate-500 mt-1">No Prazo</span>
+                  </div>
+                  <div className="flex flex-col flex-1">
+                    <span className="text-3xl font-bold text-amber-500 dark:text-amber-400">{globalStats.lateCount}</span>
+                    <span className="text-[10px] uppercase font-bold text-slate-500 mt-1">Atrasados</span>
+                  </div>
+                </div>
               </Card>
             </div>
 
