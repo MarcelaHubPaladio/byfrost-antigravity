@@ -637,6 +637,9 @@ export default function CommitmentDetail() {
   let isOnTime = true;
   let isLate = false;
   let hasTermData = false;
+  let startDateStr = "";
+  let endDateStr = "";
+  let currentDateStr = new Date().toLocaleDateString('pt-BR');
 
   const proposals = (proposalsQ.data ?? []) as any[];
   const linkedProposal = proposals.length > 0 ? proposals[0] : null;
@@ -652,6 +655,12 @@ export default function CommitmentDetail() {
   if (contractMonths > 0 && commitmentQ.data) {
     hasTermData = true;
     const start = new Date(commitmentQ.data.created_at);
+    startDateStr = start.toLocaleDateString('pt-BR');
+    
+    const end = new Date(start);
+    end.setMonth(end.getMonth() + contractMonths);
+    endDateStr = end.toLocaleDateString('pt-BR');
+
     const now = new Date();
     const diffTime = now.getTime() - start.getTime();
     const diffDays = Math.max(0, diffTime / (1000 * 3600 * 24));
@@ -888,6 +897,22 @@ export default function CommitmentDetail() {
                         style={{ width: `${Math.round(((deliverablesQ.data ?? []).filter(d => d.status === 'completed').length / Math.max((deliverablesQ.data ?? []).length, 1)) * 100)}%` }}
                       />
                     </div>
+                    {hasTermData && (
+                      <div className="mt-2 flex justify-between text-[9px] uppercase font-bold text-slate-300">
+                        <div className="flex flex-col">
+                          <span className="opacity-50">Início</span>
+                          <span>{startDateStr}</span>
+                        </div>
+                        <div className="flex flex-col text-center">
+                          <span className="opacity-50">Hoje</span>
+                          <span className="text-blue-300">{currentDateStr}</span>
+                        </div>
+                        <div className="flex flex-col text-right">
+                          <span className="opacity-50">Fim (previsto)</span>
+                          <span>{endDateStr}</span>
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   <div className="flex gap-4">
@@ -899,21 +924,22 @@ export default function CommitmentDetail() {
                     </div>
                     <div className="w-[1px] bg-white/10" />
                     <div className="text-center">
-                      <p className="text-[10px] font-bold uppercase opacity-50">Restantes</p>
-                      <p className="text-xl font-black text-amber-400">
-                        {(deliverablesQ.data ?? []).length - (deliverablesQ.data ?? []).filter(d => d.status === 'completed').length}
-                      </p>
-                    </div>
-                    <div className="w-[1px] bg-white/10" />
-                    <div className="text-center">
-                      <p className="text-[10px] font-bold uppercase opacity-50">Finalizados</p>
+                      <p className="text-[10px] font-bold uppercase opacity-50">Realizado</p>
                       <p className="text-xl font-black text-emerald-400">
                         {(deliverablesQ.data ?? []).filter(d => d.status === 'completed').length}
                       </p>
-                      {hasTermData && (
-                        <p className="text-[9px] mt-1 text-slate-400 lowercase">esp: {Math.floor(expectedCompleted)}</p>
-                      )}
                     </div>
+                    {hasTermData && (
+                      <>
+                        <div className="w-[1px] bg-white/10" />
+                        <div className="text-center">
+                          <p className="text-[10px] font-bold uppercase opacity-50">Esperado (Hoje)</p>
+                          <p className="text-xl font-black text-blue-400">
+                            {Math.floor(expectedCompleted)}
+                          </p>
+                        </div>
+                      </>
+                    )}
                   </div>
                 </div>
               </Card>
