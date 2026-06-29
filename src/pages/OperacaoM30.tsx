@@ -1,5 +1,7 @@
 import { useMemo, useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useM30CasePresence } from "@/hooks/useM30CasePresence";
+import { Lock } from "lucide-react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { AppShell } from "@/components/AppShell";
 import { RequireAuth } from "@/components/RequireAuth";
@@ -153,7 +155,7 @@ function samePhoneLoose(a: string | null | undefined, b: string | null | undefin
   return da === db;
 }
 
-function M30CalendarView({ cases, date, onChangeDate }: { cases: CaseRow[], date: Date, onChangeDate: (d: Date) => void }) {
+function M30CalendarView({ cases, date, onChangeDate, locks }: { cases: CaseRow[], date: Date, onChangeDate: (d: Date) => void, locks: Record<string, any> }) {
   const monthStart = startOfMonth(date);
   const monthEnd = endOfMonth(monthStart);
   const daysInMonth = eachDayOfInterval({ start: monthStart, end: monthEnd });
@@ -242,8 +244,15 @@ function M30CalendarView({ cases, date, onChangeDate }: { cases: CaseRow[], date
                       className="block p-2 rounded-[16px] border border-slate-100 bg-white hover:bg-slate-50 hover:border-slate-200 transition-colors cursor-pointer shadow-sm"
                       title={commitmentId ? `Ir para Contrato ${commitmentId.slice(0,8)}` : (c.title ?? "Caso sem título")}
                     >
-                      <div className="text-[11px] font-semibold text-slate-800 line-clamp-2 leading-tight">
-                        {c.title || "Caso sem título"}
+                      <div className="flex items-start justify-between gap-1">
+                        <div className="text-[11px] font-semibold text-slate-800 line-clamp-2 leading-tight">
+                          {c.title || "Caso sem título"}
+                        </div>
+                        {locks[c.id] && (
+                          <div className="text-rose-600 shrink-0" title={`Editado por ${locks[c.id].userName}`}>
+                            <Lock className="h-3 w-3" />
+                          </div>
+                        )}
                       </div>
                       {Boolean(c.users_profile?.display_name || c.users_profile?.email) && (
                         <div className="text-[10px] text-slate-500 truncate mt-1 font-medium">
@@ -1409,7 +1418,14 @@ export default function OperacaoM30() {
                             >
                               <div className="flex items-start justify-between gap-3">
                                 <div className="min-w-0 flex-1 pr-1">
-                                  <div className="truncate text-sm font-semibold text-slate-900">{titlePrimary}</div>
+                                  <div className="flex items-center gap-2">
+                                    <div className="truncate text-sm font-semibold text-slate-900">{titlePrimary}</div>
+                                    {locks[c.id] && (
+                                      <div className="flex items-center gap-1 rounded bg-rose-50 px-1.5 py-0.5 text-[10px] uppercase font-bold text-rose-600 ring-1 ring-inset ring-rose-500/20" title={`Sendo editado por ${locks[c.id].userName}`}>
+                                        <Lock className="h-3 w-3" /> Em Edição
+                                      </div>
+                                    )}
+                                  </div>
                                   
                                   {(() => {
                                     const eid = (c as any).customer_entity_id || (c as any).customer_id || (c.meta_json as any)?.entity_id;
