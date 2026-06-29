@@ -324,8 +324,6 @@ export default function CommitmentDetail() {
   });
 
   const { prevContractId, nextContractId } = useMemo(() => {
-    const proposals = (proposalsQ.data ?? []) as any[];
-    const linkedProposal = proposals.length > 0 ? proposals[0] : null;
     const list = activeContractsQ.data || [];
     const idx = list.findIndex(c => c.id === commitmentId);
     if (idx === -1) return { prevContractId: null, nextContractId: null };
@@ -627,6 +625,46 @@ export default function CommitmentDetail() {
       setSaving(false);
     }
   };
+
+  // --- Ritmo do Contrato ---
+  const deliverables = deliverablesQ.data ?? [];
+  const totalDeliverables = deliverables.length;
+  const completedDeliverables = deliverables.filter(d => d.status === "completed").length;
+
+  let contractMonths = 0;
+  let expectedCompleted = 0;
+  let monthsElapsed = 0;
+  let isOnTime = true;
+  let isLate = false;
+  let hasTermData = false;
+
+  const proposals = (proposalsQ.data ?? []) as any[];
+  const linkedProposal = proposals.length > 0 ? proposals[0] : null;
+  
+  if (linkedProposal && linkedProposal.approval_json?.contract_term) {
+    const termText = String(linkedProposal.approval_json.contract_term);
+    const match = termText.match(/(\d+)/);
+    if (match && match[1]) {
+      contractMonths = parseInt(match[1], 10);
+    }
+  }
+
+  if (contractMonths > 0 && commitmentQ.data) {
+    hasTermData = true;
+    const start = new Date(commitmentQ.data.created_at);
+    const now = new Date();
+    const diffTime = now.getTime() - start.getTime();
+    const diffDays = Math.max(0, diffTime / (1000 * 3600 * 24));
+    monthsElapsed = diffDays / 30;
+
+    expectedCompleted = (totalDeliverables / contractMonths) * monthsElapsed;
+    expectedCompleted = Math.min(expectedCompleted, totalDeliverables);
+
+    if (completedDeliverables < (expectedCompleted - 0.5)) {
+      isOnTime = false;
+      isLate = true;
+    }
+  }
 
   const title = useMemo(() => {
     const c = commitmentQ.data;
