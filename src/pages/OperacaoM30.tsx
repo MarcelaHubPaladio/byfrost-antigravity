@@ -263,7 +263,7 @@ function M30CalendarView({ cases, date, onChangeDate }: { cases: CaseRow[], date
 }
 
 export default function OperacaoM30() {
-  const { activeTenantId, isSuperAdmin } = useTenant();
+  const { activeTenantId, activeTenant, isSuperAdmin } = useTenant();
   const { user } = useSession();
   const nav = useNavigate();
   const loc = useLocation();
@@ -1186,7 +1186,7 @@ export default function OperacaoM30() {
             </div>
 
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-              {activeTenantId && selectedJourney?.id ? (
+              {activeTenantId && selectedJourney?.id && (isSuperAdmin || activeTenant?.role === "admin") ? (
                 <NewOperacaoM30CardDialog tenantId={activeTenantId} journeyId={selectedJourney.id} />
               ) : null}
 
