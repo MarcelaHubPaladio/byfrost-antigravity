@@ -90,6 +90,7 @@ export default function Contracts() {
   const { activeTenantId } = useTenant();
   const [searchTerm, setSearchTerm] = useState("");
   const [viewMode, setViewMode] = useState<ViewMode>("grid");
+  const [executionFilter, setExecutionFilter] = useState<'all' | 'on_time' | 'late'>('all');
 
   const contractsQ = useQuery({
     queryKey: ["contracts_dashboard", activeTenantId],
@@ -133,7 +134,7 @@ export default function Contracts() {
     staleTime: 10_000,
   });
 
-  const processedContracts = useMemo(() => {
+  const baseProcessedContracts = useMemo(() => {
     const list = (contractsQ.data ?? []) as ContractWithProgress[];
     return list.map(c => {
       const items = c.items || [];
@@ -213,6 +214,13 @@ export default function Contracts() {
     );
   }, [contractsQ.data, proposalsQ.data, searchTerm]);
 
+  const processedContracts = useMemo(() => {
+    if (executionFilter === 'all') return baseProcessedContracts;
+    if (executionFilter === 'on_time') return baseProcessedContracts.filter(c => c.metrics.hasTermData && !c.metrics.isLate);
+    if (executionFilter === 'late') return baseProcessedContracts.filter(c => c.metrics.hasTermData && c.metrics.isLate);
+    return baseProcessedContracts;
+  }, [baseProcessedContracts, executionFilter]);
+
   const groupedContracts = useMemo(() => {
     const groups: Record<string, typeof processedContracts> = {};
     const ungrouped: typeof processedContracts = [];
@@ -281,7 +289,7 @@ export default function Contracts() {
   };
 
   const globalStats = useMemo(() => {
-    const list = processedContracts;
+    const list = baseProcessedContracts;
     const activeCount = list.filter(c => c.status === 'active').length;
     const completedCount = list.filter(c => c.status === 'completed' || c.metrics.percentage === 100).length;
     const contractsWithDeliverables = list.filter(c => c.metrics.total_deliverables > 0);
@@ -292,13 +300,13 @@ export default function Contracts() {
     const lateCount = list.filter(c => c.status === 'active' && c.metrics.hasTermData && c.metrics.isLate).length;
     
     return { activeCount, completedCount, avgProgress, onTimeCount, lateCount };
-  }, [processedContracts]);
+  }, [baseProcessedContracts]);
 
   return (
     <RequireAuth>
       <RequireRouteAccess routeKey="app.commitments">
         <AppShell>
-          <div className="mx-auto max-w-7xl animate-in fade-in slide-in-from-bottom-4 duration-700">
+          <div className="mx-auto w-full px-4 sm:px-6 animate-in fade-in slide-in-from-bottom-4 duration-700">
             {/* Header Section */}
             <div className="mb-8 flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
               <div>
@@ -405,16 +413,35 @@ export default function Contracts() {
               </Card>
 
               <Card className="border-slate-200/60 bg-white/50 p-6 backdrop-blur-sm dark:border-slate-800 dark:bg-slate-950/50 shadow-sm flex flex-col justify-between">
-                <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Status de Execução</p>
+                <div className="flex items-center justify-between">
+                  <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Status de Execução</p>
+                  {executionFilter !== 'all' && (
+                    <Button variant="ghost" size="sm" className="h-6 px-2 text-xs" onClick={() => setExecutionFilter('all')}>
+                      Limpar filtro
+                    </Button>
+                  )}
+                </div>
                 <div className="mt-4 flex gap-4">
-                  <div className="flex flex-col flex-1 border-r pr-4 border-slate-200 dark:border-slate-800">
+                  <button 
+                    onClick={() => setExecutionFilter(executionFilter === 'on_time' ? 'all' : 'on_time')}
+                    className={cn(
+                      "flex flex-col flex-1 border-r pr-4 border-slate-200 dark:border-slate-800 text-left transition-opacity hover:opacity-80 rounded-md outline-none",
+                      executionFilter === 'late' && "opacity-30 grayscale"
+                    )}
+                  >
                     <span className="text-3xl font-bold text-emerald-600 dark:text-emerald-400">{globalStats.onTimeCount}</span>
                     <span className="text-[10px] uppercase font-bold text-slate-500 mt-1">No Prazo</span>
-                  </div>
-                  <div className="flex flex-col flex-1">
+                  </button>
+                  <button 
+                    onClick={() => setExecutionFilter(executionFilter === 'late' ? 'all' : 'late')}
+                    className={cn(
+                      "flex flex-col flex-1 text-left transition-opacity hover:opacity-80 rounded-md outline-none",
+                      executionFilter === 'on_time' && "opacity-30 grayscale"
+                    )}
+                  >
                     <span className="text-3xl font-bold text-amber-500 dark:text-amber-400">{globalStats.lateCount}</span>
                     <span className="text-[10px] uppercase font-bold text-slate-500 mt-1">Atrasados</span>
-                  </div>
+                  </button>
                 </div>
               </Card>
             </div>
