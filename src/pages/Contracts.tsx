@@ -117,6 +117,22 @@ export default function Contracts() {
     staleTime: 10_000,
   });
 
+  const proposalsQ = useQuery({
+    queryKey: ["contracts_proposals", activeTenantId],
+    enabled: Boolean(activeTenantId),
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("party_proposals")
+        .select("id, selected_commitment_ids, approval_json")
+        .eq("tenant_id", activeTenantId!)
+        .is("deleted_at", null);
+
+      if (error) throw error;
+      return (data ?? []) as any[];
+    },
+    staleTime: 10_000,
+  });
+
   const processedContracts = useMemo(() => {
     const list = (contractsQ.data ?? []) as ContractWithProgress[];
     return list.map(c => {
@@ -134,7 +150,48 @@ export default function Contracts() {
       
       const progressRatio = totalDeliverables > 0 ? (completedDeliverablescount / totalDeliverables) : 0;
       const percentage = Math.round(progressRatio * 100);
+
+      // --- Ritmo do Contrato ---
+      let contractMonths = 0;
+      let expectedCompleted = 0;
+      let monthsElapsed = 0;
+      let isOnTime = true;
+      let isLate = false;
+      let hasTermData = false;
+
+      const proposals = (proposalsQ.data ?? []) as any[];
+      const linkedProposal = proposals.find(p => (p.selected_commitment_ids || []).includes(c.id));
       
+      if (linkedProposal && linkedProposal.approval_json?.contract_term) {
+        const termText = String(linkedProposal.approval_json.contract_term);
+        const match = termText.match(/(\d+)/); // Ex: "12 meses" -> "12"
+        if (match && match[1]) {
+          contractMonths = parseInt(match[1], 10);
+        }
+      }
+
+      if (contractMonths > 0) {
+        hasTermData = true;
+        const start = new Date(c.created_at);
+        const now = new Date();
+        const diffTime = now.getTime() - start.getTime();
+        const diffDays = Math.max(0, diffTime / (1000 * 3600 * 24));
+        monthsElapsed = diffDays / 30; // Aproximação por mês
+
+        // Se o contrato tem X entregáveis em Y meses, a expectativa é (X/Y) por mês.
+        // A expectativa total no momento é (X/Y) * meses corridos
+        expectedCompleted = (totalDeliverables / contractMonths) * monthsElapsed;
+        
+        // Pode não fazer sentido cobrar além do total
+        expectedCompleted = Math.min(expectedCompleted, totalDeliverables);
+
+        // Se os concluídos forem menores do que o esperado (com margem de 0.5 pra não ser tão rigoroso)
+        if (completedDeliverablescount < (expectedCompleted - 0.5)) {
+          isOnTime = false;
+          isLate = true;
+        }
+      }
+
       return {
         ...c,
         metrics: {
@@ -142,14 +199,19 @@ export default function Contracts() {
           completed: completedDeliverablescount,
           percentage,
           total_units: totalUnits,
-          total_deliverables: totalDeliverables
+          total_deliverables: totalDeliverables,
+          hasTermData,
+          contractMonths,
+          expectedCompleted,
+          isOnTime,
+          isLate
         }
       };
     }).filter(c => 
       c.customer?.display_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       c.id.toLowerCase().includes(searchTerm.toLowerCase())
     );
-  }, [contractsQ.data, searchTerm]);
+  }, [contractsQ.data, proposalsQ.data, searchTerm]);
 
   const groupedContracts = useMemo(() => {
     const groups: Record<string, typeof processedContracts> = {};
@@ -507,8 +569,25 @@ function ContractCard({ c, handleOrchestrate, isOrchestrating }: { c: any, handl
 
           <div className="mt-8">
             <div className="flex items-center justify-between text-xs font-semibold uppercase tracking-tight text-slate-500 dark:text-slate-400">
-              <span>Execução</span>
-              <span className="text-blue-600 dark:text-blue-400">{c.metrics.percentage}%</span>
+              <div className="flex items-center gap-2">
+                <span>Execução</span>
+                {c.metrics.hasTermData && (
+                  <Badge variant="outline" className={cn(
+                    "text-[9px] h-4 px-1.5 border-none",
+                    c.metrics.isLate ? "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400" : "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"
+                  )}>
+                    {c.metrics.isLate ? "ATRASADO" : "NO PRAZO"}
+                  </Badge>
+                )}
+              </div>
+              <div className="flex flex-col items-end">
+                <span className="text-blue-600 dark:text-blue-400">{c.metrics.percentage}%</span>
+                {c.metrics.hasTermData && (
+                  <span className="text-[9px] text-slate-400 lowercase mt-0.5 font-normal tracking-normal">
+                    esp: {Math.floor(c.metrics.expectedCompleted)}
+                  </span>
+                )}
+              </div>
             </div>
             <Progress value={c.metrics.percentage} className="mt-2 h-2.5 bg-slate-100 dark:bg-slate-900 [&>div]:bg-blue-500" />
           </div>
@@ -603,9 +682,22 @@ function ContractListItem({ c, handleOrchestrate, isOrchestrating, onStatusChang
         </div>
 
         <div className="flex items-center gap-8">
-          <div className="hidden sm:flex items-center gap-3 w-32">
-            <Progress value={c.metrics.percentage} className="h-1.5 flex-1" />
-            <span className="text-xs font-bold text-slate-600 dark:text-slate-400">{c.metrics.percentage}%</span>
+          <div className="hidden sm:flex flex-col items-end justify-center w-32">
+            <div className="flex items-center gap-3 w-full">
+              <Progress value={c.metrics.percentage} className="h-1.5 flex-1" />
+              <span className="text-xs font-bold text-slate-600 dark:text-slate-400">{c.metrics.percentage}%</span>
+            </div>
+            {c.metrics.hasTermData && (
+              <div className="flex items-center gap-2 mt-1">
+                <span className="text-[9px] text-slate-400 lowercase">esp: {Math.floor(c.metrics.expectedCompleted)}</span>
+                <Badge variant="outline" className={cn(
+                  "text-[9px] h-4 px-1.5 border-none",
+                  c.metrics.isLate ? "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400" : "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"
+                )}>
+                  {c.metrics.isLate ? "ATRASADO" : "NO PRAZO"}
+                </Badge>
+              </div>
+            )}
           </div>
 
           <div onClick={(e) => { e.preventDefault(); e.stopPropagation(); }} className="flex items-center gap-3">
@@ -822,9 +914,24 @@ function ContractKanbanCard({ c, handleOrchestrate, isOrchestrating, isOverlay }
           </div>
 
           <div className="space-y-1.5">
-            <div className="flex justify-between text-[10px] font-bold text-slate-500">
-              <span>PROGRESSO</span>
-              <span>{c.metrics.percentage}%</span>
+            <div className="flex justify-between items-center text-[10px] font-bold text-slate-500">
+              <div className="flex items-center gap-2">
+                <span>PROGRESSO</span>
+                {c.metrics.hasTermData && (
+                  <Badge variant="outline" className={cn(
+                    "text-[8px] h-3.5 px-1 border-none",
+                    c.metrics.isLate ? "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400" : "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"
+                  )}>
+                    {c.metrics.isLate ? "ATRASADO" : "NO PRAZO"}
+                  </Badge>
+                )}
+              </div>
+              <div className="flex flex-col items-end">
+                <span>{c.metrics.percentage}%</span>
+                {c.metrics.hasTermData && (
+                  <span className="text-[8px] text-slate-400 lowercase font-normal -mt-0.5">esp: {Math.floor(c.metrics.expectedCompleted)}</span>
+                )}
+              </div>
             </div>
             <Progress value={c.metrics.percentage} className="h-1.5" />
           </div>
