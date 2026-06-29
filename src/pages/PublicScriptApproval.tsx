@@ -146,7 +146,7 @@ export default function PublicScriptApproval() {
     const hasSubtasks = subtasks.length > 0;
 
     
-    const isGravacaoCase = caseData?.state?.toLowerCase().includes('grava') || caseData?.journey_name?.toLowerCase().includes('grava');
+    const isGravacaoCase = caseData?.case_type === 'gravacao' || caseData?.state?.toLowerCase().includes('grava') || caseData?.journey_name?.toLowerCase().includes('grava');
 
     const handleCheckItem = (subIdx: number, itemIdx: number) => {
         const newData = { ...subtaskData };
