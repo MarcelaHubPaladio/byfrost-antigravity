@@ -1741,7 +1741,7 @@ export default function OperacaoM30Case() {
                                     </div>
                                 )}
 
-                                {caseQ.data?.case_type === "planejamento" && (
+                                {(caseQ.data?.case_type === "planejamento" || caseQ.data?.case_type === "gravacao") && (
                                     <div className="rounded-[32px] border border-slate-200 bg-slate-50/40 p-6 shadow-inner-sm">
                                         <div className="flex items-center justify-between mb-4">
                                             <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
