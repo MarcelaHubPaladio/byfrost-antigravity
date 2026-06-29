@@ -1355,6 +1355,7 @@ export default function OperacaoM30Case() {
                 }
             }).eq("id", id);
             
+            logEvent(`Foram geradas ${subtasks.length} tarefas de produção a partir do planejamento.`);
             showSuccess("Tarefas de produção criadas com sucesso!");
             caseQ.refetch();
             qc.invalidateQueries({ queryKey: ["cases_by_tenant_journey", activeTenantId] });
@@ -1375,6 +1376,7 @@ export default function OperacaoM30Case() {
                 .update({ case_type: newType })
                 .eq("id", id);
             if (error) throw error;
+            logEvent(`O tipo do caso foi alterado para: ${newType}`);
             showSuccess("Tipo de caso atualizado.");
             caseQ.refetch();
             qc.invalidateQueries({ queryKey: ["cases_by_tenant_journey", activeTenantId] });
@@ -1408,6 +1410,7 @@ export default function OperacaoM30Case() {
                 })
                 .eq("id", id);
             if (error) throw error;
+            logEvent("Informações gerais do card foram atualizadas.");
             showSuccess("Card atualizado com sucesso.");
             caseQ.refetch();
             qc.invalidateQueries({ queryKey: ["cases_by_tenant_journey", activeTenantId] });
