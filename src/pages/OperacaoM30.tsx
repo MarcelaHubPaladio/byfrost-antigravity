@@ -123,9 +123,13 @@ type WaMsgLite = { case_id: string | null; occurred_at: string; from_phone: stri
 
 type WaInstanceRow = { id: string; phone_number: string | null };
 
-function minutesAgo(iso: string) {
-  const diff = Date.now() - new Date(iso).getTime();
-  return Math.max(0, Math.round(diff / 60000));
+function formatCaseDate(iso: string) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (isToday(d)) {
+    return `Hoje às ${format(d, 'HH:mm')}`;
+  }
+  return format(d, "dd/MM/yyyy 'às' HH:mm");
 }
 
 function getMetaPhone(meta: any): string | null {
@@ -1382,7 +1386,7 @@ export default function OperacaoM30() {
                       >
                         {col.items.map((c) => {
                           const pend = pendQ.data?.get(c.id);
-                          const age = minutesAgo(c.updated_at);
+                          const age = formatCaseDate(c.updated_at);
                           const isMoving = movingCaseId === c.id;
                           const unread = unreadByCase.has(c.id);
                           const cust = isCrm ? customersQ.data?.get(String((c as any).customer_id ?? "")) : null;
@@ -1473,7 +1477,7 @@ export default function OperacaoM30() {
                               <div className="mt-3 flex items-center justify-between gap-2 text-xs text-slate-600">
                                 <div className="flex items-center gap-1">
                                   <Clock className="h-3.5 w-3.5 text-slate-400" />
-                                  {age} min
+                                  {age}
                                 </div>
                                 {pend?.need_location && (
                                   <div className="flex items-center gap-1 rounded-full bg-rose-50 px-2 py-1 text-rose-700">
