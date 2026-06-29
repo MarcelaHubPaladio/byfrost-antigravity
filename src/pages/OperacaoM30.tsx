@@ -282,6 +282,7 @@ export default function OperacaoM30() {
   const loc = useLocation();
   const { prefs } = useTheme();
   const qc = useQueryClient();
+  const locks = useM30CasePresence(activeTenantId);
 
   const [refreshingToken, setRefreshingToken] = useState(false);
   const [q, setQ] = useState("");
