@@ -167,8 +167,12 @@ function SubtaskItemContent({
                 script_items: scriptItems
             };
 
+            // Pega os dados mais recentes do banco pra evitar race condition
+            const { data: latestCase } = await supabase.from("cases").select("meta_json").eq("id", caseId).single();
+            const latestMeta = latestCase?.meta_json as any || caseMeta;
+            
             const { error: updateError } = await supabase.from("cases").update({
-                meta_json: { ...caseMeta, pending_subtasks: currentSubtasks }
+                meta_json: { ...latestMeta, pending_subtasks: currentSubtasks }
             }).eq("id", caseId);
 
             if (updateError) throw updateError;
@@ -177,8 +181,7 @@ function SubtaskItemContent({
             if (caseData?.case_type === "planejamento" && caseState === "planejamento") {
                 const { error: logError } = await supabase.from("timeline_events").insert({
                     tenant_id: caseData.tenant_id,
-                    entity_id: caseData.customer_entity_id || null,
-                    journey_id: caseData.journey_id || null,
+                    
                     case_id: caseId,
                     event_type: "subtask_updated",
                     actor_type: "admin",
@@ -1384,13 +1387,16 @@ export default function OperacaoM30Case() {
         if (!activeTenantId || !id || !caseQ.data) return;
         setSaving(true);
         try {
+            const { data: latestCase } = await supabase.from("cases").select("meta_json").eq("id", id).single();
+            const latestMeta = latestCase?.meta_json as any || caseQ.data.meta_json;
+
             const { error } = await supabase
                 .from("cases")
                 .update({ 
                     title: mainTitle, 
                     summary_text: mainSummary,
                     meta_json: {
-                        ...(caseQ.data.meta_json as any),
+                        ...latestMeta,
                         video_url: videoUrl,
                         important_links: importantLinks,
                         script_raw: mainScript
