@@ -476,12 +476,12 @@ const CORE_NAV_CHILDREN: CoreNavChild[] = [
     routeKey: "app.settings",
   },
   { to: "/app/commitments", label: "Venda", icon: Handshake, routeKey: "app.commitments" },
-  { to: "/app/contracts", label: "Gestor", icon: ClipboardCheck, routeKey: "app.commitments" },
 ];
 
 const M30_NAV_CHILDREN = [
   { to: "/app/operacao-m30", label: "Gestão M30", icon: Users, routeKey: "app.operacao_m30" },
   { to: "/app/reports", label: "Relatórios", icon: BarChart3, routeKey: "app.commitments" },
+  { to: "/app/contracts", label: "Gestor", icon: ClipboardCheck, routeKey: "app.commitments" },
 ];
 
 const CREATE_NAV_CHILDREN = [
