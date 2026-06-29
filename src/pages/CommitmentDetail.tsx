@@ -288,21 +288,7 @@ export default function CommitmentDetail() {
     staleTime: 5_000,
   });
 
-  const proposalsQ = useQuery({
-    queryKey: ["commitment_proposals", activeTenantId],
-    enabled: Boolean(activeTenantId),
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("party_proposals")
-        .select("id, selected_commitment_ids, approval_json")
-        .eq("tenant_id", activeTenantId!)
-        .is("deleted_at", null);
 
-      if (error) throw error;
-      return (data ?? []) as any[];
-    },
-    staleTime: 10_000,
-  });
 
   const m30JourneyQ = useQuery({
     queryKey: ["m30_journey_meta", activeTenantId],
@@ -338,6 +324,8 @@ export default function CommitmentDetail() {
   });
 
   const { prevContractId, nextContractId } = useMemo(() => {
+    const proposals = (proposalsQ.data ?? []) as any[];
+    const linkedProposal = proposals.length > 0 ? proposals[0] : null;
     const list = activeContractsQ.data || [];
     const idx = list.findIndex(c => c.id === commitmentId);
     if (idx === -1) return { prevContractId: null, nextContractId: null };
@@ -438,7 +426,7 @@ export default function CommitmentDetail() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("party_proposals")
-        .select("id, token, status, created_at")
+        .select("id, token, status, created_at, approval_json")
         .filter("selected_commitment_ids", "cs", `{${commitmentId}}`)
         .eq("tenant_id", activeTenantId!)
         .is("deleted_at", null);
