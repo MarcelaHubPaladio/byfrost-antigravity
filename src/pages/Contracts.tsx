@@ -292,14 +292,27 @@ export default function Contracts() {
     const list = baseProcessedContracts;
     const activeCount = list.filter(c => c.status === 'active').length;
     const completedCount = list.filter(c => c.status === 'completed' || c.metrics.percentage === 100).length;
-    const contractsWithDeliverables = list.filter(c => c.metrics.total_deliverables > 0);
-    const avgProgress = contractsWithDeliverables.length > 0 
-      ? Math.round(contractsWithDeliverables.reduce((acc, c) => acc + c.metrics.percentage, 0) / contractsWithDeliverables.length) 
-      : 0;
+    
+    const activeWithDeliverables = list.filter(c => c.status === 'active' && c.metrics.total_deliverables > 0);
+    
+    let totalRealized = 0;
+    let totalExpected = 0;
+    let totalDeliverables = 0;
+    
+    activeWithDeliverables.forEach(c => {
+      totalRealized += c.metrics.completed;
+      totalDeliverables += c.metrics.total_deliverables;
+      if (c.metrics.hasTermData) {
+        totalExpected += c.metrics.expectedCompleted;
+      }
+    });
+
+    const avgProgress = totalDeliverables > 0 ? Math.round((totalRealized / totalDeliverables) * 100) : 0;
+    const avgExpected = totalDeliverables > 0 ? Math.round((totalExpected / totalDeliverables) * 100) : 0;
     const onTimeCount = list.filter(c => c.status === 'active' && c.metrics.hasTermData && !c.metrics.isLate).length;
     const lateCount = list.filter(c => c.status === 'active' && c.metrics.hasTermData && c.metrics.isLate).length;
     
-    return { activeCount, completedCount, avgProgress, onTimeCount, lateCount };
+    return { activeCount, completedCount, avgProgress, avgExpected, onTimeCount, lateCount };
   }, [baseProcessedContracts]);
 
   return (
@@ -388,15 +401,33 @@ export default function Contracts() {
                 <TrendingUp className="absolute -right-4 -top-4 h-32 w-32 opacity-10" />
               </Card>
 
-              <Card className="border-slate-200/60 bg-white/50 p-6 backdrop-blur-sm dark:border-slate-800 dark:bg-slate-950/50 shadow-sm">
-                <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Progresso Médio</p>
-                <div className="mt-2 flex items-end justify-between">
-                  <h3 className="text-4xl font-bold text-slate-900 dark:text-white">{globalStats.avgProgress}%</h3>
-                  <div className="h-12 w-12 rounded-full border-4 border-blue-100 flex items-center justify-center dark:border-blue-900/30">
-                     <div className="h-2 w-2 rounded-full bg-blue-500 animate-pulse" />
+              <Card className="border-slate-200/60 bg-white/50 p-6 backdrop-blur-sm dark:border-slate-800 dark:bg-slate-950/50 shadow-sm flex flex-col justify-between">
+                <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Progresso Operacional</p>
+                <div className="mt-4 flex items-end justify-between">
+                  <div className="flex flex-col gap-1">
+                    <h3 className="text-4xl font-bold text-slate-900 dark:text-white flex items-baseline gap-2">
+                      {globalStats.avgProgress}%
+                      <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Realizado</span>
+                    </h3>
+                  </div>
+                  <div className="flex flex-col items-end gap-1">
+                    <span className="text-sm font-bold text-slate-400">{globalStats.avgExpected}%</span>
+                    <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Esperado</span>
                   </div>
                 </div>
-                <Progress value={globalStats.avgProgress} className="mt-4 h-2 bg-slate-100 dark:bg-slate-800 [&>div]:bg-blue-500" />
+                <div className="relative mt-4 h-3 w-full overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
+                  <div 
+                    className={cn(
+                      "absolute top-0 bottom-0 left-0 transition-all duration-1000", 
+                      globalStats.avgProgress >= globalStats.avgExpected ? "bg-emerald-500" : "bg-amber-500"
+                    )} 
+                    style={{ width: `${globalStats.avgProgress}%` }}
+                  />
+                  <div 
+                    className="absolute top-0 bottom-0 border-r-2 border-slate-900 dark:border-slate-200 z-10"
+                    style={{ left: `${globalStats.avgExpected}%`, width: '1px' }}
+                  />
+                </div>
               </Card>
 
               <Card className="border-slate-200/60 bg-white/50 p-6 backdrop-blur-sm dark:border-slate-800 dark:bg-slate-950/50 shadow-sm">
