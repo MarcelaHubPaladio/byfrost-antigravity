@@ -2068,7 +2068,8 @@ serve(async (req: any) => {
           }
 
           // 8. Send reply via integrations-zapi-send Edge Function
-          const functionUrl = (Deno.env.get("SUPABASE_FUNCTION_URL") || "http://localhost:54321/functions/v1").replace(/\/$/, "");
+          const supabaseUrl = Deno.env.get("SUPABASE_URL")?.replace(/\/$/, "");
+          const functionUrl = supabaseUrl ? `${supabaseUrl}/functions/v1` : "http://localhost:54321/functions/v1";
           const sendUrl = `${functionUrl}/integrations-zapi-send`;
           const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 
