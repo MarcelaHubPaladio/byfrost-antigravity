@@ -475,6 +475,30 @@ export function WhatsAppConversation({
     },
   });
 
+  // Detect stuck BeeIA jobs: pending > 2 minutes for this case
+  const beeiaStuckQ = useQuery({
+    queryKey: ["beeia_stuck_job", activeTenantId, caseId],
+    enabled: Boolean(activeTenantId && caseId),
+    refetchInterval: 15_000,
+    queryFn: async () => {
+      const twoMinAgo = new Date(Date.now() - 2 * 60 * 1000).toISOString();
+      const { data } = await supabase
+        .from("job_queue")
+        .select("id, status, created_at")
+        .eq("tenant_id", activeTenantId!)
+        .eq("type", "BEEIA_PROCESS_MESSAGE")
+        .contains("payload_json", { case_id: caseId })
+        .in("status", ["pending", "failed"])
+        .lte("created_at", twoMinAgo)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      return data as { id: string; status: string; created_at: string } | null;
+    },
+  });
+  const beeiaIsStuck = Boolean(beeiaStuckQ.data);
+  const beeiaIsFailed = beeiaStuckQ.data?.status === "failed";
+
   const instancePhone = instanceQ.data?.phone_number ?? null;
 
   const counterpartPhone = useMemo(() => {
@@ -780,6 +804,30 @@ export function WhatsAppConversation({
             {waMsgsQ.isError && (
               <div className="mb-3 rounded-2xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-900">
                 Erro ao carregar conversa: {(waMsgsQ.error as any)?.message ?? ""}
+              </div>
+            )}
+
+            {/* BeeIA stuck/failed banner */}
+            {beeiaIsStuck && (
+              <div className={cn(
+                "mb-3 flex items-start gap-2 rounded-2xl border p-3 text-sm",
+                beeiaIsFailed
+                  ? "border-rose-200 bg-rose-50 text-rose-900"
+                  : "border-amber-200 bg-amber-50 text-amber-900"
+              )}>
+                <span className="text-base">{beeiaIsFailed ? "⚠️" : "🤖"}</span>
+                <div className="min-w-0">
+                  <div className="font-medium">
+                    {beeiaIsFailed
+                      ? "BeeIA — falha ao responder"
+                      : "BeeIA — processando resposta…"}
+                  </div>
+                  <div className="mt-0.5 text-xs opacity-75">
+                    {beeiaIsFailed
+                      ? "Ocorreu um erro ao gerar a resposta automática. Verifique as configurações da BeeIA ou responda manualmente."
+                      : "A BeeIA está demorando mais que o esperado. Se a resposta não chegar em breve, pode haver uma instabilidade."}
+                  </div>
+                </div>
               </div>
             )}
 
