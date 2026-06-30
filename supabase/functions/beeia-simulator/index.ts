@@ -209,7 +209,7 @@ Siga estas regras rigorosamente.`
           content: responseText
         });
       } else if (case_id) {
-        await supabaseAdmin.from("wa_messages").insert({
+        const { error: insErr } = await supabaseAdmin.from("wa_messages").insert({
           tenant_id,
           case_id,
           direction: "inbound", // use inbound so it acts as internal note
@@ -220,6 +220,7 @@ Siga estas regras rigorosamente.`
           payload_json: {},
           occurred_at: new Date().toISOString()
         });
+        if (insErr) throw insErr;
       }
     } else {
       if (session_id) {
@@ -230,7 +231,7 @@ Siga estas regras rigorosamente.`
           content: "AUTO-AVALIAÇÃO DA IA: " + responseText
         });
       } else if (case_id) {
-        await supabaseAdmin.from("wa_messages").insert({
+        const { error: insErr } = await supabaseAdmin.from("wa_messages").insert({
           tenant_id,
           case_id,
           direction: "inbound", // use inbound so it acts as internal note
@@ -241,6 +242,7 @@ Siga estas regras rigorosamente.`
           payload_json: {},
           occurred_at: new Date().toISOString()
         });
+        if (insErr) throw insErr;
       }
     }
 
