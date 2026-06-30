@@ -13,10 +13,10 @@ serve(async (req) => {
   try {
     const supabaseAdmin = createSupabaseAdmin();
     const body = await req.json();
-    const { tenant_id, session_id, message } = body;
+    const { tenant_id, session_id, message, action } = body;
 
-    if (!tenant_id || !session_id || !message) {
-      throw new Error("Missing tenant_id, session_id, or message");
+    if (!tenant_id || !session_id || (!message && action !== "evaluate_session")) {
+      throw new Error("Missing required fields");
     }
 
     // 2. Fetch System Prompt
@@ -39,17 +39,19 @@ serve(async (req) => {
       });
     }
 
-    // 3. Save User Message
-    const { error: insErr1 } = await supabaseAdmin
-      .from("beeia_simulations")
-      .insert({
-        tenant_id,
-        session_id,
-        role: "user",
-        content: message
-      });
+    // 3. Save User Message if not evaluating
+    if (action !== "evaluate_session") {
+      const { error: insErr1 } = await supabaseAdmin
+        .from("beeia_simulations")
+        .insert({
+          tenant_id,
+          session_id,
+          role: "user",
+          content: message
+        });
 
-    if (insErr1) throw insErr1;
+      if (insErr1) throw insErr1;
+    }
 
     // 4. Fetch History
     const { data: history, error: histErr } = await supabaseAdmin
@@ -64,17 +66,35 @@ serve(async (req) => {
 
     // 5. Prepare LLM Context
     const llmMessages: { role: "system" | "user" | "assistant"; content: string }[] = [];
-    llmMessages.push({
-      role: "system",
-      content: `${sysPrompt}\n\n[AMBIENTE DE SIMULAÇÃO] Você está conversando com o administrador do sistema que está testando suas regras. Aja exatamente como agiria com um cliente real. Se for hora de encerrar/qualificar, inclua a tag [STAGE_TRANSITION] no final da sua fala.`
-    });
-
-    history?.forEach((m) => {
-      llmMessages.push({
-        role: m.role as "user" | "assistant",
-        content: m.content
+    
+    if (action === "evaluate_session") {
+      // In evaluation mode, we feed the history first, then ask it to evaluate.
+      history?.forEach((m) => {
+        llmMessages.push({
+          role: m.role as "user" | "assistant",
+          content: m.content
+        });
       });
-    });
+      llmMessages.push({
+        role: "user",
+        content: `Aja como um auditor sênior de IA analisando a sua própria performance.
+        Aqui estão as regras originais do seu prompt:
+        "${sysPrompt}"
+        
+        Leia a conversa acima e liste 1 acerto claro e 1 erro/ponto de melhoria crítico que você cometeu na sua performance de qualificação comercial, comparado às regras originais. Seja direto, crítico e altamente analítico.`
+      });
+    } else {
+      llmMessages.push({
+        role: "system",
+        content: `${sysPrompt}\n\n[AMBIENTE DE SIMULAÇÃO] Você está conversando com o administrador do sistema que está testando suas regras. Aja exatamente como agiria com um cliente real. Se for hora de encerrar/qualificar, inclua a tag [STAGE_TRANSITION] no final da sua fala.`
+      });
+      history?.forEach((m) => {
+        llmMessages.push({
+          role: m.role as "user" | "assistant",
+          content: m.content
+        });
+      });
+    }
 
     // 6. Generate Response
     const llmRes = await generateText({
@@ -85,17 +105,26 @@ serve(async (req) => {
     const responseText = llmRes.text;
 
     if (llmRes.tokensUsed > 0) {
-      await logAITokenUsage(tenant_id, llmRes.tokensUsed, `Simulador BeeIA`, llmRes.provider, supabaseAdmin, "beeia_simulator", session_id);
+      await logAITokenUsage(
+        tenant_id, 
+        llmRes.tokensUsed, 
+        action === "evaluate_session" ? `Auto-Avaliação da Simulação BeeIA` : `Simulador BeeIA`, 
+        llmRes.provider, 
+        supabaseAdmin, 
+        action === "evaluate_session" ? "beeia_simulator_eval" : "beeia_simulator", 
+        session_id
+      );
     }
 
-    // 7. Save Assistant Message
+    // 7. Save Assistant/System Message
+    const isEval = action === "evaluate_session";
     const { error: insErr2 } = await supabaseAdmin
       .from("beeia_simulations")
       .insert({
         tenant_id,
         session_id,
-        role: "assistant",
-        content: responseText
+        role: isEval ? "system" : "assistant",
+        content: isEval ? "AUTO-AVALIAÇÃO DA IA:\n\n" + responseText : responseText
       });
 
     if (insErr2) throw insErr2;

@@ -9,7 +9,7 @@ import { Card } from "@/components/ui/card";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Textarea } from "@/components/ui/textarea";
 import { showError, showSuccess } from "@/utils/toast";
-import { Bot, User, Send, Plus, MessageSquare, ThumbsDown, Activity, CheckCircle2 } from "lucide-react";
+import { Bot, User, Send, Plus, MessageSquare, ThumbsDown, Activity, CheckCircle2, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type SimMessage = {
@@ -171,6 +171,28 @@ export function BeeIASimulator() {
     onError: (err: any) => showError("Erro ao avaliar sessão: " + err.message)
   });
 
+  const evaluateMut = useMutation({
+    mutationFn: async () => {
+      const { data, error } = await supabase.functions.invoke("beeia-simulator", {
+        body: {
+          tenant_id: activeTenantId,
+          session_id: activeSessionId,
+          action: "evaluate_session"
+        }
+      });
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (data) => {
+      showSuccess("Auto-avaliação concluída!");
+      qc.invalidateQueries({ queryKey: ["beeia_sim_messages", activeTenantId, activeSessionId] });
+      if (data?.tokensUsed) {
+        setSessionTokensUsed(prev => prev + data.tokensUsed);
+      }
+    },
+    onError: (err: any) => showError("Erro ao gerar auto-avaliação: " + err.message)
+  });
+
   const handleSend = () => {
     if (!inputValue.trim() || sendMut.isPending) return;
     sendMut.mutate(inputValue.trim());
@@ -239,29 +261,42 @@ export function BeeIASimulator() {
             </div>
           </div>
           
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button variant="outline" size="sm" className="h-7 text-xs gap-1.5 border-amber-200 hover:bg-amber-50 text-amber-700 dark:border-amber-900 dark:hover:bg-amber-900/30 dark:text-amber-400">
-                <CheckCircle2 className="h-3 w-3" />
-                Avaliar Sessão
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-80 p-4" align="end">
-              <h4 className="font-semibold text-sm mb-2">Feedback Geral da Simulação</h4>
-              <p className="text-xs text-slate-500 mb-3">Como a IA se saiu no geral durante essa conversa? Onde ela pode melhorar no fechamento/qualificação?</p>
-              <form onSubmit={e => {
-                e.preventDefault();
-                const form = e.target as HTMLFormElement;
-                const comment = (form.elements.namedItem("comment") as HTMLTextAreaElement).value;
-                if (comment) sessionFeedbackMut.mutate(comment);
-              }}>
-                <Textarea name="comment" className="min-h-[80px] text-sm mb-3" placeholder="Sua avaliação geral..." />
-                <Button type="submit" size="sm" className="w-full bg-amber-500 hover:bg-amber-600" disabled={sessionFeedbackMut.isPending}>
-                  Salvar Feedback
+          <div className="flex gap-2">
+            <Button 
+              variant="outline" 
+              size="sm" 
+              className="h-7 text-xs gap-1.5 border-indigo-200 hover:bg-indigo-50 text-indigo-700 dark:border-indigo-900 dark:hover:bg-indigo-900/30 dark:text-indigo-400"
+              onClick={() => evaluateMut.mutate()}
+              disabled={evaluateMut.isPending || msgs.length === 0}
+            >
+              <Sparkles className={cn("h-3 w-3", evaluateMut.isPending && "animate-pulse")} />
+              {evaluateMut.isPending ? "Avaliando..." : "Auto-Avaliação"}
+            </Button>
+            
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="outline" size="sm" className="h-7 text-xs gap-1.5 border-amber-200 hover:bg-amber-50 text-amber-700 dark:border-amber-900 dark:hover:bg-amber-900/30 dark:text-amber-400">
+                  <CheckCircle2 className="h-3 w-3" />
+                  Avaliar Sessão
                 </Button>
-              </form>
-            </PopoverContent>
-          </Popover>
+              </PopoverTrigger>
+              <PopoverContent className="w-80 p-4" align="end">
+                <h4 className="font-semibold text-sm mb-2">Feedback Geral da Simulação</h4>
+                <p className="text-xs text-slate-500 mb-3">Como a IA se saiu no geral durante essa conversa? Onde ela pode melhorar no fechamento/qualificação?</p>
+                <form onSubmit={e => {
+                  e.preventDefault();
+                  const form = e.target as HTMLFormElement;
+                  const comment = (form.elements.namedItem("comment") as HTMLTextAreaElement).value;
+                  if (comment) sessionFeedbackMut.mutate(comment);
+                }}>
+                  <Textarea name="comment" className="min-h-[80px] text-sm mb-3" placeholder="Sua avaliação geral..." />
+                  <Button type="submit" size="sm" className="w-full bg-amber-500 hover:bg-amber-600" disabled={sessionFeedbackMut.isPending}>
+                    Salvar Feedback
+                  </Button>
+                </form>
+              </PopoverContent>
+            </Popover>
+          </div>
         </div>
 
         <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-4 pt-16">
