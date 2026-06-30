@@ -1990,10 +1990,10 @@ serve(async (req: any) => {
             continue;
           }
 
-          // 4. Load the specific inbound message to get the sender's phone number
+          // 4. Load the specific inbound message to get the sender's phone number and timestamp
           const { data: inMsg, error: inMsgErr } = await supabase
             .from("wa_messages")
-            .select("from_phone")
+            .select("from_phone, occurred_at")
             .eq("id", messageId)
             .maybeSingle();
 
@@ -2001,6 +2001,51 @@ serve(async (req: any) => {
           const customerPhone = inMsg?.from_phone;
           if (!customerPhone) {
             throw new Error(`Inbound message ${messageId} does not have a from_phone`);
+          }
+
+          // 4b. Deduplication guard: if BeeIA already processed a job or sent an outbound
+          // message for this case AFTER the triggering message, skip. This prevents
+          // duplicate AI responses when multiple inbound messages arrive in rapid succession.
+          if (inMsg?.occurred_at) {
+            // Check if another BEEIA job was already completed for this case after this message
+            const { data: laterDoneJob } = await supabase
+              .from("job_queue")
+              .select("id")
+              .eq("tenant_id", tenantId)
+              .eq("type", "BEEIA_PROCESS_MESSAGE")
+              .eq("status", "done")
+              .contains("payload_json", { case_id: caseId })
+              .gt("updated_at", inMsg.occurred_at)
+              .neq("id", job.id)
+              .limit(1)
+              .maybeSingle();
+
+            if (laterDoneJob) {
+              console.log(`[BEEIA_PROCESS_MESSAGE] Another BEEIA job already completed after message ${messageId}, skipping duplicate`);
+              await supabase.from("job_queue").update({ status: "done" }).eq("id", job.id);
+              results.push({ id: job.id, ok: true, reason: "already_replied_after_this_message" });
+              continue;
+            }
+
+            // Also check if there's already an outbound message for this case after this message (within 10 min window)
+            const tenMinAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+            const { data: laterOutbound } = await supabase
+              .from("wa_messages")
+              .select("id")
+              .eq("tenant_id", tenantId)
+              .eq("case_id", caseId)
+              .eq("direction", "outbound")
+              .gt("occurred_at", inMsg.occurred_at)
+              .gt("occurred_at", tenMinAgo)
+              .limit(1)
+              .maybeSingle();
+
+            if (laterOutbound) {
+              console.log(`[BEEIA_PROCESS_MESSAGE] Outbound message already exists after message ${messageId}, skipping duplicate`);
+              await supabase.from("job_queue").update({ status: "done" }).eq("id", job.id);
+              results.push({ id: job.id, ok: true, reason: "outbound_already_sent_after_this_message" });
+              continue;
+            }
           }
 
           // 5. Load recent message history for this case
