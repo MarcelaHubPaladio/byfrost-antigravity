@@ -7,7 +7,7 @@ import { useChatInstanceAccess } from "@/hooks/useChatInstanceAccess";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { showError, showSuccess } from "@/utils/toast";
-import { Paperclip, Send, Image as ImageIcon, Mic, Users, MessagesSquare, MapPin } from "lucide-react";
+import { Paperclip, Send, Image as ImageIcon, Mic, Users, MessagesSquare, MapPin, Bot } from "lucide-react";
 
 type WaMessageRow = {
   id: string;
@@ -425,7 +425,7 @@ export function WhatsAppConversation({
     // Include mode in key to refetch when switching
     queryKey: ["wa_messages_case", activeTenantId, caseId, conversationMode, entityPhone, waGroupId],
     enabled: Boolean(activeTenantId && caseId),
-    refetchInterval: 12_000,
+    refetchInterval: 6_000,
     refetchOnWindowFocus: true,
     queryFn: async () => {
       let q = supabase
@@ -498,6 +498,53 @@ export function WhatsAppConversation({
   });
   const beeiaIsStuck = Boolean(beeiaStuckQ.data);
   const beeiaIsFailed = beeiaStuckQ.data?.status === "failed";
+
+  const [retakingAI, setRetakingAI] = useState(false);
+
+  const retakeAI = async () => {
+    if (!activeTenantId) return;
+    setRetakingAI(true);
+    try {
+      // Find the last inbound message for this case
+      const { data: lastMsg } = await supabase
+        .from("wa_messages")
+        .select("id, instance_id")
+        .eq("tenant_id", activeTenantId)
+        .eq("case_id", caseId)
+        .eq("direction", "inbound")
+        .order("occurred_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (!lastMsg) {
+        showError("Nenhuma mensagem inbound encontrada para retomar a IA.");
+        return;
+      }
+
+      const instanceId = lastMsg.instance_id ?? instanceQ.data?.id;
+      if (!instanceId) {
+        showError("Instância WhatsApp não encontrada.");
+        return;
+      }
+
+      const { error } = await supabase.from("job_queue").insert({
+        tenant_id: activeTenantId,
+        type: "BEEIA_PROCESS_MESSAGE",
+        idempotency_key: `BEEIA_MANUAL_RETAKE:${caseId}:${Date.now()}`,
+        payload_json: { case_id: caseId, tenant_id: activeTenantId, message_id: lastMsg.id, instance_id: instanceId },
+        status: "pending",
+        run_after: new Date().toISOString(),
+      });
+
+      if (error) throw error;
+      showSuccess("IA retomada! A resposta chegará em instantes.");
+      await qc.invalidateQueries({ queryKey: ["beeia_stuck_job", activeTenantId, caseId] });
+    } catch (e: any) {
+      showError(`Falha ao retomar IA: ${e?.message ?? "erro"}`);
+    } finally {
+      setRetakingAI(false);
+    }
+  };
 
   const instancePhone = instanceQ.data?.phone_number ?? null;
 
@@ -740,6 +787,20 @@ export function WhatsAppConversation({
               </button>
             </div>
           )}
+
+          {/* Retomar IA button */}
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            className="h-8 rounded-2xl px-3 gap-1.5 text-xs border-violet-200 bg-violet-50 text-violet-700 hover:bg-violet-100"
+            onClick={retakeAI}
+            disabled={retakingAI}
+            title="Reativar a BeeIA para responder a última mensagem"
+          >
+            <Bot className="h-3.5 w-3.5" />
+            {retakingAI ? "Retomando…" : "Retomar IA"}
+          </Button>
 
           <Button
             type="button"
