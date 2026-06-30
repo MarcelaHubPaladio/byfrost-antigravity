@@ -883,7 +883,7 @@ function BeeIAPage() {
 
         {/* Drawer/Sheet: WhatsApp Chat Viewer */}
         <Sheet open={Boolean(selectedCaseId)} onOpenChange={(open) => !open && setSelectedCaseId(null)}>
-          <SheetContent side="right" className="w-full sm:max-w-[550px] p-0 flex flex-col h-full rounded-l-[30px] border-slate-200 dark:border-slate-850">
+          <SheetContent side="right" className="w-full sm:max-w-[45vw] p-0 flex flex-col h-full rounded-l-[30px] border-slate-200 dark:border-slate-850">
             <div className="flex flex-col h-full">
               <SheetHeader className="p-4 border-b border-slate-100 dark:border-slate-850">
                 <div className="flex items-center justify-between">

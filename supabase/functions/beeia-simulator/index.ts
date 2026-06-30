@@ -13,7 +13,7 @@ serve(async (req) => {
   try {
     const supabaseAdmin = createSupabaseAdmin();
     const body = await req.json();
-    const { tenant_id, session_id, case_id, message, action } = body;
+    const { tenant_id, session_id, case_id, message, action, hours_limit } = body;
 
     if (!tenant_id || (!session_id && !case_id) || (!message && action !== "evaluate_session")) {
       throw new Error("Missing required fields");
@@ -99,13 +99,20 @@ serve(async (req) => {
       if (histErr) throw histErr;
       history = (hist ?? []).map(h => ({ role: h.role, content: h.content }));
     } else if (case_id) {
-      const { data: hist, error: histErr } = await supabaseAdmin
+      let q = supabaseAdmin
         .from("wa_messages")
         .select("direction, type, body_text")
         .eq("tenant_id", tenant_id)
-        .eq("case_id", case_id)
+        .eq("case_id", case_id);
+        
+      if (hours_limit) {
+        const minDate = new Date(Date.now() - Number(hours_limit) * 60 * 60 * 1000).toISOString();
+        q = q.gte("occurred_at", minDate);
+      }
+
+      const { data: hist, error: histErr } = await q
         .order("occurred_at", { ascending: true })
-        .limit(30);
+        .limit(100); // Increased limit since we rely on time window now
       if (histErr) throw histErr;
       
       history = (hist ?? [])

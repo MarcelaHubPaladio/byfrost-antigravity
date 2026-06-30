@@ -319,6 +319,7 @@ export function WhatsAppConversation({
   const [uploading, setUploading] = useState(false);
   const [transcribingById, setTranscribingById] = useState<Record<string, boolean>>({});
   const [isTrainerMode, setIsTrainerMode] = useState(false);
+  const [hoursLimit, setHoursLimit] = useState(24);
 
   const scrollerRef = useRef<HTMLDivElement | null>(null);
   const imageRef = useRef<HTMLInputElement | null>(null);
@@ -602,7 +603,8 @@ export function WhatsAppConversation({
           tenant_id: activeTenantId,
           case_id: caseId,
           message,
-          action
+          action,
+          hours_limit: hoursLimit
         }
       });
       if (error) throw error;
@@ -624,7 +626,8 @@ export function WhatsAppConversation({
         body: {
           tenant_id: activeTenantId,
           case_id: caseId,
-          action: "evaluate_session"
+          action: "evaluate_session",
+          hours_limit: hoursLimit
         }
       });
       if (error) throw error;
@@ -913,20 +916,35 @@ export function WhatsAppConversation({
             </Button>
           )}
 
-          {/* Auto-Avaliação Button */}
+          {/* Auto-Avaliação Button & Limit */}
           {!beeiaIsPaused && (
-            <Button
-              type="button"
-              variant="secondary"
-              size="sm"
-              className="h-8 rounded-2xl px-3 gap-1.5 text-xs border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100"
-              onClick={() => evaluateMut.mutate()}
-              disabled={evaluateMut.isPending}
-              title="A IA irá analisar essa conversa inteira e gerar um feedback"
-            >
-              <Sparkles className="h-3.5 w-3.5" />
-              {evaluateMut.isPending ? "Avaliando…" : "Auto-Avaliação"}
-            </Button>
+            <div className="flex items-center gap-1 border border-indigo-200 bg-indigo-50 rounded-2xl h-8 px-1">
+              <select
+                value={hoursLimit}
+                onChange={(e) => setHoursLimit(Number(e.target.value))}
+                className="bg-transparent text-indigo-700 text-[11px] outline-none cursor-pointer font-medium pl-2"
+                title="Janela de tempo do contexto"
+              >
+                <option value={1}>Última hora</option>
+                <option value={12}>Últimas 12h</option>
+                <option value={24}>Últimas 24h</option>
+                <option value={48}>Últimas 48h</option>
+                <option value={168}>Últimos 7 dias</option>
+              </select>
+              <div className="w-px h-4 bg-indigo-200 mx-1" />
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-6 rounded-xl px-2 gap-1.5 text-xs text-indigo-700 hover:bg-indigo-100 hover:text-indigo-800"
+                onClick={() => evaluateMut.mutate()}
+                disabled={evaluateMut.isPending}
+                title="A IA irá analisar essa janela de tempo e gerar um feedback"
+              >
+                <Sparkles className="h-3.5 w-3.5" />
+                {evaluateMut.isPending ? "Avaliando…" : "Auto-Avaliação"}
+              </Button>
+            </div>
           )}
 
           <Button
@@ -1065,26 +1083,27 @@ export function WhatsAppConversation({
                     )}
 
                     <div className={cn("max-w-[78%]", effectiveInbound ? "mr-auto" : "ml-auto")}>
-                      <div
-                        className={cn(
-                          "rounded-[20px] px-3 py-2 shadow-sm relative group",
-                          isSystemNote
-                            ? "bg-indigo-50 border border-indigo-200 text-indigo-900"
-                            : effectiveInbound
-                              ? "bg-white border border-slate-200 text-slate-900"
-                              : "bg-[hsl(var(--byfrost-accent))] text-white"
-                        )}
-                      >
+                      <div className="flex items-center gap-2 relative group">
                         {!effectiveInbound && !isSystemNote && (
                           <button
                             type="button"
                             onClick={() => setIsTrainerMode(true)}
-                            className="absolute -left-10 top-1/2 -translate-y-1/2 p-2 rounded-full bg-slate-100 text-slate-500 opacity-0 group-hover:opacity-100 hover:bg-slate-200 hover:text-slate-800 transition-all shadow-sm"
+                            className="p-1.5 rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200 hover:text-indigo-600 transition-all shadow-sm border border-slate-200"
                             title="Dar bronca na IA sobre essa resposta"
                           >
                             <GraduationCap className="h-4 w-4" />
                           </button>
                         )}
+                        <div
+                          className={cn(
+                            "rounded-[20px] px-3 py-2 shadow-sm",
+                            isSystemNote
+                              ? "bg-indigo-50 border border-indigo-200 text-indigo-900"
+                              : effectiveInbound
+                                ? "bg-white border border-slate-200 text-slate-900"
+                                : "bg-[hsl(var(--byfrost-accent))] text-white"
+                          )}
+                        >
                         {normalizedType === "image" && mediaUrl ? (
                           <div className="space-y-2">
                             <a href={mediaUrl} target="_blank" rel="noreferrer" className="block">
@@ -1302,6 +1321,7 @@ export function WhatsAppConversation({
                             {msgText || "(sem texto)"}
                           </div>
                         )}
+                        </div>
                       </div>
 
                       <div
