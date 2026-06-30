@@ -1910,9 +1910,12 @@ serve(async (req) => {
 
     // Enqueue BeeIA job if active
     if (direction === "inbound" && instance?.beeia_enabled && caseId && msgId) {
+      // Use a 30-second time block for the idempotency key to debounce rapid sequential messages.
+      // This prevents the AI from generating multiple replies and skipping messages due to race conditions.
+      const timeBlock = Math.floor(Date.now() / 30000);
       await enqueueJob(
         "BEEIA_PROCESS_MESSAGE",
-        `BEEIA_RESPOND:${caseId}:${msgId}`,
+        `BEEIA_RESPOND:${caseId}:${timeBlock}`,
         {
           case_id: caseId,
           tenant_id: instance.tenant_id,
