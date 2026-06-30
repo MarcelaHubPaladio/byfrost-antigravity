@@ -27,7 +27,22 @@ serve(async (req) => {
       .maybeSingle();
 
     if (cfgErr) throw cfgErr;
-    const sysPrompt = config?.system_prompt || "Você é a BeeIA, assistente virtual.";
+    let sysPrompt = config?.system_prompt || "Você é a BeeIA, assistente virtual.";
+
+    // 2a. Fetch Learnings
+    const { data: learnings, error: lrnErr } = await supabaseAdmin
+      .from("beeia_learnings")
+      .select("learning_text")
+      .eq("tenant_id", tenant_id);
+    
+    if (!lrnErr && learnings && learnings.length > 0) {
+      sysPrompt += "\n\n[REGRAS APRENDIDAS EM TREINAMENTOS ANTERIORES]:\n";
+      learnings.forEach((l, i) => {
+        sysPrompt += `${i + 1}. ${l.learning_text}\n`;
+      });
+    }
+
+
 
     // 2b. Check limits
     try {
@@ -98,7 +113,7 @@ serve(async (req) => {
       if (action === "trainer_message") {
         llmMessages.push({
           role: "system",
-          content: "Responda agora diretamente ao seu treinador/auditor (que acabou de mandar a mensagem acima). Agradeça o feedback e explique brevemente como você vai aplicar essa correção daqui pra frente."
+          content: "Responda agora diretamente ao seu treinador/auditor (que acabou de mandar a mensagem acima). Se você compreendeu o erro ou instrução, PERGUNTE ao treinador se você deve salvar esse aprendizado para as próximas conversas reais. Porém, se o treinador nesta ou na mensagem atual já AUTORIZOU (ex: 'sim', 'pode salvar', 'salve'), então confirme que salvou e OBRIGATORIAMENTE inclua na sua resposta a tag exata: [SAVE_LEARNING: resumo claro e direto da regra a ser aprendida]."
         });
       }
     }
@@ -109,7 +124,20 @@ serve(async (req) => {
       fallback: () => "Ocorreu um erro no simulador."
     });
 
-    const responseText = llmRes.text;
+    let responseText = llmRes.text;
+    
+    // Check for SAVE_LEARNING tag
+    const saveMatch = responseText.match(/\[SAVE_LEARNING:\s*([^\]]+)\]/i);
+    if (saveMatch && saveMatch[1]) {
+      const learningText = saveMatch[1].trim();
+      // Insert into beeia_learnings
+      await supabaseAdmin.from("beeia_learnings").insert({
+        tenant_id,
+        learning_text: learningText
+      });
+      // Optionally clean the tag from the UI response
+      responseText = responseText.replace(/\[SAVE_LEARNING:\s*[^\]]+\]/i, "\n\n*(✅ Aprendizado salvo na sua base de treinamento!)*");
+    }
 
     if (llmRes.tokensUsed > 0) {
       await logAITokenUsage(

@@ -1939,8 +1939,21 @@ serve(async (req: any) => {
           if (cfgErr) throw cfgErr;
           
           // Use default settings if none configured yet
-          const sysPrompt = config?.system_prompt || 'Você é a BeeIA, assistente virtual de atendimento da empresa. Responda educadamente às dúvidas do cliente sobre nossos produtos e serviços. Caso o cliente queira falar com um atendente humano ou demonstre interesse real em fechar negócio, finalize sua mensagem incluindo a tag [STAGE_TRANSITION] no final da sua resposta.';
+          let sysPrompt = config?.system_prompt || 'Você é a BeeIA, assistente virtual de atendimento da empresa. Responda educadamente às dúvidas do cliente sobre nossos produtos e serviços. Caso o cliente queira falar com um atendente humano ou demonstre interesse real em fechar negócio, finalize sua mensagem incluindo a tag [STAGE_TRANSITION] no final da sua resposta.';
           const targetStage = config?.target_stage || 'morno';
+
+          // 2a. Fetch Learnings
+          const { data: learnings, error: lrnErr } = await supabase
+            .from("beeia_learnings")
+            .select("learning_text")
+            .eq("tenant_id", tenantId);
+          
+          if (!lrnErr && learnings && learnings.length > 0) {
+            sysPrompt += "\n\n[REGRAS APRENDIDAS EM TREINAMENTOS ANTERIORES]:\n";
+            learnings.forEach((l, i) => {
+              sysPrompt += `${i + 1}. ${l.learning_text}\n`;
+            });
+          }
 
           // 3. Fetch wa_instance to verify beeia_enabled is true
           const { data: inst, error: instErr } = await supabase

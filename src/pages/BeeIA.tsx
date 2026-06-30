@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AppShell } from "@/components/AppShell";
 import { RequireAuth } from "@/components/RequireAuth";
 import { useTenant } from "@/providers/TenantProvider";
@@ -10,6 +10,7 @@ import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -26,6 +27,9 @@ import {
   PlusCircle,
   MessageSquare,
   HelpCircle,
+  BookOpen,
+  BrainCircuit,
+  Trash2,
 } from "lucide-react";
 import { WhatsAppConversation } from "@/components/case/WhatsAppConversation";
 import { BeeIASimulator } from "@/components/case/BeeIASimulator";
@@ -117,6 +121,21 @@ function BeeIAPage() {
     }
   }, [configQ.data]);
 
+  // Learnings Query
+  const learningsQ = useQuery({
+    queryKey: ["beeia_learnings", activeTenantId],
+    enabled: Boolean(activeTenantId),
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("beeia_learnings")
+        .select("*")
+        .eq("tenant_id", activeTenantId!)
+        .order("created_at", { ascending: true });
+      if (error) throw error;
+      return data || [];
+    }
+  });
+
   // 2. Fetch WhatsApp Instances
   const instancesQ = useQuery({
     queryKey: ["beeia_instances", activeTenantId],
@@ -140,7 +159,6 @@ function BeeIAPage() {
     enabled: Boolean(activeTenantId),
     refetchInterval: 10_000,
     queryFn: async () => {
-      // Get the journey id first
       const { data: journey } = await supabase
         .from("journeys")
         .select("id")
@@ -172,7 +190,6 @@ function BeeIAPage() {
 
       if (error) throw error;
 
-      // For each case, fetch the last message to show as preview
       const rows = (data ?? []) as any[];
       const enriched: CaseRow[] = await Promise.all(
         rows.map(async (c) => {
@@ -192,6 +209,21 @@ function BeeIAPage() {
 
       return enriched;
     },
+  });
+
+  const deleteLearningMut = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase
+        .from("beeia_learnings")
+        .delete()
+        .eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      showSuccess("Aprendizado removido com sucesso!");
+      qc.invalidateQueries({ queryKey: ["beeia_learnings", activeTenantId] });
+    },
+    onError: (err: any) => showError("Erro ao remover aprendizado: " + err.message)
   });
 
   // Toggle BeeIA on Instance
@@ -532,7 +564,48 @@ function BeeIAPage() {
                       </span>
                     </div>
 
-                    <div className="grid gap-4 sm:grid-cols-2">
+                    {/* Memória Contínua (Aprendizados do Simulador) */}
+                    <div className="flex flex-col gap-2 mt-2 bg-indigo-50/50 dark:bg-indigo-950/20 p-4 rounded-xl border border-indigo-100 dark:border-indigo-900/50">
+                      <div className="flex items-center gap-2 mb-1">
+                        <BrainCircuit className="h-4 w-4 text-indigo-500" />
+                        <label className="text-xs font-bold uppercase text-indigo-700 dark:text-indigo-400 tracking-wider">
+                          Memória de Treinamentos (Regras Adicionais)
+                        </label>
+                      </div>
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400 mb-2">
+                        Estes são aprendizados salvos automaticamente pela IA durante as simulações no Modo Treinador.
+                        Eles são adicionados ao final do Prompt de Sistema.
+                      </p>
+                      
+                      <div className="flex flex-col gap-2">
+                        {learningsQ.isLoading ? (
+                          <div className="text-xs text-slate-400">Carregando memória...</div>
+                        ) : learningsQ.data?.length === 0 ? (
+                          <div className="text-xs text-slate-400 italic">Nenhuma regra extra salva. Use o Simulador (Modo Treinador) para treinar a IA.</div>
+                        ) : (
+                          learningsQ.data?.map((l: any, i: number) => (
+                            <div key={l.id} className="flex items-start gap-2 bg-white dark:bg-slate-900 p-2.5 rounded-lg border border-slate-200 dark:border-slate-800 shadow-sm group">
+                              <span className="text-xs font-semibold text-indigo-400 mt-0.5 min-w-[20px]">{i + 1}.</span>
+                              <div className="flex-1 text-xs text-slate-700 dark:text-slate-300 leading-relaxed">
+                                {l.learning_text}
+                              </div>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30 -mt-1 -mr-1"
+                                onClick={() => deleteLearningMut.mutate(l.id)}
+                                disabled={deleteLearningMut.isPending}
+                                title="Esquecer esta regra"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </Button>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="grid gap-4 sm:grid-cols-2 mt-2">
                       <div className="flex flex-col gap-1.5">
                         <label className="text-[11px] font-bold uppercase text-slate-400 tracking-wider">
                           Etapa de Direcionamento (Próximo Passo)
