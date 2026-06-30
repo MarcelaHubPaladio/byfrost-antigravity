@@ -1941,7 +1941,7 @@ serve(async (req: any) => {
           // 1. Fetch case details and verify it is still open and in 'contato' state
           const { data: c, error: cErr } = await supabase
             .from("cases")
-            .select("id, status, state, customer_id, title")
+            .select("id, status, state, customer_id, title, beeia_paused")
             .eq("tenant_id", tenantId)
             .eq("id", caseId)
             .maybeSingle();
@@ -1958,6 +1958,14 @@ serve(async (req: any) => {
             console.log(`[BEEIA_PROCESS_MESSAGE] Case ${caseId} is not in 'open/contato' status/state (status=${c.status}, state=${c.state}), skipping`);
             await supabase.from("job_queue").update({ status: "done" }).eq("id", job.id);
             results.push({ id: job.id, ok: true, reason: "case_not_eligible" });
+            continue;
+          }
+
+          // 1b. Check if BeeIA is manually paused for this case
+          if ((c as any).beeia_paused === true) {
+            console.log(`[BEEIA_PROCESS_MESSAGE] Case ${caseId} has BeeIA paused by user, skipping`);
+            await supabase.from("job_queue").update({ status: "done" }).eq("id", job.id);
+            results.push({ id: job.id, ok: true, reason: "beeia_paused_by_user" });
             continue;
           }
 

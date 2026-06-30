@@ -7,7 +7,7 @@ import { useChatInstanceAccess } from "@/hooks/useChatInstanceAccess";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { showError, showSuccess } from "@/utils/toast";
-import { Paperclip, Send, Image as ImageIcon, Mic, Users, MessagesSquare, MapPin, Bot } from "lucide-react";
+import { Paperclip, Send, Image as ImageIcon, Mic, Users, MessagesSquare, MapPin, Bot, BotOff } from "lucide-react";
 
 type WaMessageRow = {
   id: string;
@@ -332,7 +332,7 @@ export function WhatsAppConversation({
     queryFn: async () => {
       const { data, error } = await supabase
         .from("cases")
-        .select("id,journey_id,customer_entity_id,meta_json")
+        .select("id,journey_id,customer_entity_id,meta_json,beeia_paused")
         .eq("tenant_id", activeTenantId!)
         .eq("id", caseId)
         .maybeSingle();
@@ -543,6 +543,31 @@ export function WhatsAppConversation({
       showError(`Falha ao retomar IA: ${e?.message ?? "erro"}`);
     } finally {
       setRetakingAI(false);
+    }
+  };
+
+  const beeiaIsPaused = (caseQ.data as any)?.beeia_paused === true;
+  const [togglingBeeIA, setTogglingBeeIA] = useState(false);
+
+  const toggleBeeIA = async () => {
+    if (!activeTenantId) return;
+    setTogglingBeeIA(true);
+    try {
+      const newPaused = !beeiaIsPaused;
+      const { error } = await supabase
+        .from("cases")
+        .update({ beeia_paused: newPaused })
+        .eq("tenant_id", activeTenantId)
+        .eq("id", caseId);
+
+      if (error) throw error;
+
+      await qc.invalidateQueries({ queryKey: ["case_lite_for_chat", activeTenantId, caseId] });
+      showSuccess(newPaused ? "BeeIA pausada para esta conversa." : "BeeIA reativada para esta conversa.");
+    } catch (e: any) {
+      showError(`Falha ao ${beeiaIsPaused ? "retomar" : "pausar"} BeeIA: ${e?.message ?? "erro"}`);
+    } finally {
+      setTogglingBeeIA(false);
     }
   };
 
@@ -788,19 +813,43 @@ export function WhatsAppConversation({
             </div>
           )}
 
-          {/* Retomar IA button */}
+          {/* BeeIA toggle: Pausar / Retomar IA */}
           <Button
             type="button"
             variant="secondary"
             size="sm"
-            className="h-8 rounded-2xl px-3 gap-1.5 text-xs border-violet-200 bg-violet-50 text-violet-700 hover:bg-violet-100"
-            onClick={retakeAI}
-            disabled={retakingAI}
-            title="Reativar a BeeIA para responder a última mensagem"
+            className={cn(
+              "h-8 rounded-2xl px-3 gap-1.5 text-xs transition-all",
+              beeiaIsPaused
+                ? "border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100"
+                : "border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100"
+            )}
+            onClick={toggleBeeIA}
+            disabled={togglingBeeIA}
+            title={beeiaIsPaused ? "BeeIA pausada — clique para retomar" : "Pausar BeeIA para esta conversa"}
           >
-            <Bot className="h-3.5 w-3.5" />
-            {retakingAI ? "Retomando…" : "Retomar IA"}
+            {beeiaIsPaused ? (
+              <><BotOff className="h-3.5 w-3.5" />{togglingBeeIA ? "Retomando…" : "IA pausada"}</>
+            ) : (
+              <><Bot className="h-3.5 w-3.5" />{togglingBeeIA ? "Pausando…" : "Pausar IA"}</>
+            )}
           </Button>
+
+          {/* Retomar IA (força reprocessamento da última msg) — só visível quando não pausada */}
+          {!beeiaIsPaused && (
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              className="h-8 rounded-2xl px-3 gap-1.5 text-xs border-violet-200 bg-violet-50 text-violet-700 hover:bg-violet-100"
+              onClick={retakeAI}
+              disabled={retakingAI}
+              title="Forçar a BeeIA a responder a última mensagem agora"
+            >
+              <Bot className="h-3.5 w-3.5" />
+              {retakingAI ? "Retomando…" : "Retomar IA"}
+            </Button>
+          )}
 
           <Button
             type="button"
