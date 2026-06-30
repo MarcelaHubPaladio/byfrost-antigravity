@@ -113,7 +113,11 @@ serve(async (req) => {
       if (action === "trainer_message") {
         llmMessages.push({
           role: "system",
-          content: "Responda agora diretamente ao seu treinador/auditor (que mandou a mensagem acima). Se você compreendeu o erro ou instrução recém-dada, elabore uma regra clara e curta sobre o aprendizado e PERGUNTE textualmente: 'Posso salvar no meu aprendizado a seguinte instrução: [sua regra]?'. Porém, se o treinador acabou de AUTORIZAR o salvamento de uma regra que você propôs na mensagem anterior (ex: 'sim', 'pode salvar'), então confirme que salvou e OBRIGATORIAMENTE inclua no final da sua resposta a tag exata: [SAVE_LEARNING: regra autorizada]."
+          content: `Responda agora diretamente ao seu treinador/auditor (que mandou a mensagem acima).
+REGRAS OBRIGATÓRIAS:
+1. Se a mensagem ACIMA do treinador for uma AUTORIZAÇÃO para salvar uma regra (ex: "sim", "pode salvar", "manda bala", "isso mesmo"), VOCÊ NÃO DEVE PERGUNTAR NOVAMENTE. Apenas confirme que salvou e OBRIGATORIAMENTE inclua a tag [SAVE_LEARNING: escreva a regra aqui] no final da sua resposta.
+2. Se a mensagem ACIMA do treinador for uma correção nova ou bronca, elabore uma regra curta sobre o que você aprendeu e PERGUNTE textualmente: "Posso salvar no meu aprendizado a seguinte instrução: [sua regra]?".
+Siga estas regras rigorosamente.`
         });
       }
     }
