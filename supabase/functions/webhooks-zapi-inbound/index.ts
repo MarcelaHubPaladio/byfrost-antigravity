@@ -602,7 +602,7 @@ serve(async (req) => {
       // zapi_instance_id. We'll pick the most recently updated ACTIVE row.
       const { data, error } = await supabase
         .from("wa_instances")
-        .select("id, tenant_id, name, webhook_secret, default_journey_id, phone_number, assigned_user_id, status, deleted_at, updated_at")
+        .select("id, tenant_id, name, webhook_secret, default_journey_id, phone_number, assigned_user_id, status, deleted_at, updated_at, beeia_enabled")
         .eq("zapi_instance_id", zapiInstanceId)
         .eq("status", "active")
         .is("deleted_at", null)
@@ -1629,7 +1629,19 @@ serve(async (req) => {
       .maybeSingle();
     if (soErr) console.error(`[${fn}] Failed to load journey sales_order`, { soErr });
 
-    if (instance.default_journey_id) {
+    if (instance.beeia_enabled) {
+      const { data: beeiaJ, error: beeiaErr } = await supabase
+        .from("journeys")
+        .select("id,key,name,is_crm,default_state_machine_json")
+        .eq("key", "beeia_crm")
+        .maybeSingle();
+      if (beeiaErr) console.error(`[${fn}] Failed to load journey beeia_crm`, { beeiaErr });
+      if (beeiaJ?.id) {
+        journey = beeiaJ as any;
+      }
+    }
+
+    if (!journey && instance.default_journey_id) {
       // Note: algumas instalações não têm deleted_at em journeys. Evite filtrar por deleted_at aqui.
       const { data: j, error: jErr } = await supabase
         .from("journeys")
@@ -1895,6 +1907,20 @@ serve(async (req) => {
         rpc_details: rpcDetails
       },
     });
+
+    // Enqueue BeeIA job if active
+    if (direction === "inbound" && instance?.beeia_enabled && caseId && msgId) {
+      await enqueueJob(
+        "BEEIA_PROCESS_MESSAGE",
+        `BEEIA_RESPOND:${caseId}:${msgId}`,
+        {
+          case_id: caseId,
+          tenant_id: instance.tenant_id,
+          message_id: msgId,
+          instance_id: instance.id,
+        }
+      );
+    }
 
     return new Response(JSON.stringify({
       ok: true,

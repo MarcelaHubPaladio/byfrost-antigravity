@@ -24,6 +24,7 @@ import { RequireLinkManagerEnabled } from "@/components/RequireLinkManagerEnable
 import { RequirePortalEnabled } from "@/components/RequirePortalEnabled";
 import { RequireCommunicationEnabled } from "@/components/chat/RequireCommunicationEnabled";
 import { RequireSmartCampaignsEnabled } from "@/components/RequireSmartCampaignsEnabled";
+import { RequireBeeiaEnabled } from "@/components/RequireBeeiaEnabled";
 import { GlobalErrorBoundary } from "@/components/GlobalErrorBoundary";
 import { lazyWithRetry } from "@/lib/lazyWithRetry";
 
@@ -112,6 +113,7 @@ const Reports = lazyWithRetry(() => import("@/pages/Reports"));
 const ReportDetail = lazyWithRetry(() => import("@/pages/ReportDetail"));
 const SmartCampaigns = lazyWithRetry(() => import("@/pages/SmartCampaigns"));
 const SmartCampaignDetail = lazyWithRetry(() => import("@/pages/SmartCampaignDetail"));
+const BeeIA = lazyWithRetry(() => import("@/pages/BeeIA"));
 const GlobalLoading = () => (
   <div className="flex h-screen w-full items-center justify-center bg-slate-50 dark:bg-slate-950">
     <div className="h-8 w-8 animate-spin rounded-full border-4 border-slate-200 border-t-blue-500 dark:border-slate-800" />
@@ -408,6 +410,17 @@ const App = () => (
                           <SmartCampaignDetail />
                         </RequireRouteAccess>
                       </RequireSmartCampaignsEnabled>
+                    }
+                  />
+
+                  <Route
+                    path="/app/beeia"
+                    element={
+                      <RequireBeeiaEnabled>
+                        <RequireRouteAccess routeKey="app.beeia">
+                          <BeeIA />
+                        </RequireRouteAccess>
+                      </RequireBeeiaEnabled>
                     }
                   />
 

@@ -5,6 +5,7 @@ import { fetchAsBase64, sha256Hex } from "../_shared/crypto.ts";
 import { publishContentPublication } from "../_shared/metaPublish.ts";
 import { collectContentMetricsSnapshot } from "../_shared/metaMetrics.ts";
 import { buildPerformanceReport } from "../_shared/performanceAnalyst.ts";
+import { generateText } from "../_shared/llm.ts";
 
 type JobRow = {
   id: string;
@@ -1924,6 +1925,180 @@ serve(async (req: any) => {
 
           await supabase.from("job_queue").update({ status: "done" }).eq("id", job.id);
           results.push({ id: job.id, ok: true, date: dateStr, inserted: inserts.length, cases: byCase.size });
+          continue;
+        }
+
+        if (job.type === "BEEIA_PROCESS_MESSAGE") {
+          const caseId = job.payload_json?.case_id;
+          const tenantId = job.payload_json?.tenant_id;
+          const messageId = job.payload_json?.message_id;
+          const instanceId = job.payload_json?.instance_id;
+
+          if (!caseId || !tenantId || !messageId || !instanceId) {
+            throw new Error(`Missing required fields: caseId=${caseId}, tenantId=${tenantId}, messageId=${messageId}, instanceId=${instanceId}`);
+          }
+
+          // 1. Fetch case details and verify it is still open and in 'contato' state
+          const { data: c, error: cErr } = await supabase
+            .from("cases")
+            .select("id, status, state, customer_id, title")
+            .eq("tenant_id", tenantId)
+            .eq("id", caseId)
+            .maybeSingle();
+
+          if (cErr) throw cErr;
+          if (!c) {
+            console.log(`[BEEIA_PROCESS_MESSAGE] Case ${caseId} not found, skipping`);
+            await supabase.from("job_queue").update({ status: "done" }).eq("id", job.id);
+            results.push({ id: job.id, ok: true, reason: "case_not_found" });
+            continue;
+          }
+
+          if (c.status !== "open" || c.state !== "contato") {
+            console.log(`[BEEIA_PROCESS_MESSAGE] Case ${caseId} is not in 'open/contato' status/state (status=${c.status}, state=${c.state}), skipping`);
+            await supabase.from("job_queue").update({ status: "done" }).eq("id", job.id);
+            results.push({ id: job.id, ok: true, reason: "case_not_eligible" });
+            continue;
+          }
+
+          // 2. Fetch BeeIA configs
+          const { data: config, error: cfgErr } = await supabase
+            .from("beeia_configs")
+            .select("system_prompt, target_stage")
+            .eq("tenant_id", tenantId)
+            .maybeSingle();
+
+          if (cfgErr) throw cfgErr;
+          
+          // Use default settings if none configured yet
+          const sysPrompt = config?.system_prompt || 'Você é a BeeIA, assistente virtual de atendimento da empresa. Responda educadamente às dúvidas do cliente sobre nossos produtos e serviços. Caso o cliente queira falar com um atendente humano ou demonstre interesse real em fechar negócio, finalize sua mensagem incluindo a tag [STAGE_TRANSITION] no final da sua resposta.';
+          const targetStage = config?.target_stage || 'morno';
+
+          // 3. Fetch wa_instance to verify beeia_enabled is true
+          const { data: inst, error: instErr } = await supabase
+            .from("wa_instances")
+            .select("id, beeia_enabled, zapi_instance_id, phone_number")
+            .eq("tenant_id", tenantId)
+            .eq("id", instanceId)
+            .maybeSingle();
+
+          if (instErr) throw instErr;
+          if (!inst || !inst.beeia_enabled) {
+            console.log(`[BEEIA_PROCESS_MESSAGE] Instance ${instanceId} not found or has BeeIA disabled, skipping`);
+            await supabase.from("job_queue").update({ status: "done" }).eq("id", job.id);
+            results.push({ id: job.id, ok: true, reason: "beeia_disabled_on_instance" });
+            continue;
+          }
+
+          // 4. Load the specific inbound message to get the sender's phone number
+          const { data: inMsg, error: inMsgErr } = await supabase
+            .from("wa_messages")
+            .select("from_phone")
+            .eq("id", messageId)
+            .maybeSingle();
+
+          if (inMsgErr) throw inMsgErr;
+          const customerPhone = inMsg?.from_phone;
+          if (!customerPhone) {
+            throw new Error(`Inbound message ${messageId} does not have a from_phone`);
+          }
+
+          // 5. Load recent message history for this case
+          const { data: msgs, error: msgsErr } = await supabase
+            .from("wa_messages")
+            .select("direction, body_text, type, occurred_at")
+            .eq("tenant_id", tenantId)
+            .eq("case_id", caseId)
+            .order("occurred_at", { ascending: true })
+            .limit(15);
+
+          if (msgsErr) throw msgsErr;
+
+          const history = (msgs ?? []).filter(m => m.type === "text" && m.body_text);
+
+          // 6. Construct prompt messages for LLM
+          const llmMessages: { role: "system" | "user" | "assistant"; content: string }[] = [];
+          llmMessages.push({
+            role: "system",
+            content: `${sysPrompt}\n\nINSTRUÇÕES DE SISTEMA IMPORTANTES:\n- Você deve responder o cliente de forma natural, curta e simpática.\n- Se o cliente demonstrou interesse real, deseja agendar, comprar ou solicitou atendimento humano (ex: falar com um atendente, suporte humano), encerre sua resposta incluindo exatamente o texto "[STAGE_TRANSITION]" no final da resposta.\n- Não inclua a tag se ele estiver apenas fazendo perguntas preliminares.\n- Nunca mencione a palavra "[STAGE_TRANSITION]" explicitamente para o cliente.`
+          });
+
+          history.forEach(m => {
+            llmMessages.push({
+              role: m.direction === "inbound" ? "user" : "assistant",
+              content: m.body_text!
+            });
+          });
+
+          // 7. Call LLM
+          const fallbackResponse = "Olá! Como posso ajudar você hoje?";
+          const llmRes = await generateText({
+            messages: llmMessages,
+            fallback: () => fallbackResponse
+          }).catch(e => {
+            console.error("[BEEIA] generateText failed, using fallback", e);
+            return { text: fallbackResponse, provider: "fallback" };
+          });
+
+          let responseText = llmRes.text.trim();
+          const shouldTransition = responseText.includes("[STAGE_TRANSITION]");
+
+          if (shouldTransition) {
+            // Clean tag
+            responseText = responseText.replace(/\[STAGE_TRANSITION\]/gi, "").trim();
+
+            // Update Case State & add timeline event
+            const { error: updateErr } = await supabase
+              .from("cases")
+              .update({ state: targetStage, updated_at: new Date().toISOString() })
+              .eq("id", caseId);
+
+            if (updateErr) {
+              console.error("[BEEIA] Failed to update case state to target_stage", updateErr);
+            } else {
+              await supabase.from("timeline_events").insert({
+                tenant_id: tenantId,
+                case_id: caseId,
+                event_type: "journey_transition",
+                actor_type: "ai",
+                message: `Lead qualificado pela BeeIA e movido para a etapa: ${targetStage}`,
+                occurred_at: new Date().toISOString()
+              });
+            }
+          }
+
+          // 8. Send reply via integrations-zapi-send Edge Function
+          const functionUrl = (Deno.env.get("SUPABASE_FUNCTION_URL") || "http://localhost:54321/functions/v1").replace(/\/$/, "");
+          const sendUrl = `${functionUrl}/integrations-zapi-send`;
+          const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+
+          console.log(`[BEEIA] Dispatching response to integrations-zapi-send: ${sendUrl}`);
+          const sendRes = await fetch(sendUrl, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${serviceRoleKey}`
+            },
+            body: JSON.stringify({
+              tenantId,
+              instanceId,
+              to: customerPhone,
+              type: "text",
+              text: responseText,
+              correlationId: `BEEIA_REPLY:${caseId}:${Date.now()}`
+            })
+          }).catch(err => {
+            console.error("[BEEIA] fetch integrations-zapi-send failed", err);
+            return null;
+          });
+
+          if (sendRes && !sendRes.ok) {
+            const errTxt = await sendRes.text().catch(() => "");
+            console.error(`[BEEIA] integrations-zapi-send failed with status ${sendRes.status}: ${errTxt}`);
+          }
+
+          await supabase.from("job_queue").update({ status: "done" }).eq("id", job.id);
+          results.push({ id: job.id, ok: true, transitioned: shouldTransition });
           continue;
         }
 

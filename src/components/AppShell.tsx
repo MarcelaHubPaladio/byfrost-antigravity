@@ -53,6 +53,7 @@ import {
   Bell,
   Calculator,
   BarChart3,
+  Sparkles,
 } from "lucide-react";
 import { SuperTasksPanel } from "@/components/super-tasks/SuperTasksPanel";
 import { UsageIndicator } from "@/components/admin/UsageIndicator";
@@ -411,6 +412,10 @@ function isSmartCampaignsEnabled(modulesJson: any) {
   return Boolean(modulesJson?.smart_campaigns_enabled === true);
 }
 
+function isBeeiaEnabled(modulesJson: any) {
+  return Boolean(modulesJson?.beeia_enabled === true);
+}
+
 function isProcessesEnabled(modulesJson: any) {
   return Boolean(modulesJson?.processes_enabled === true);
 }
@@ -602,6 +607,7 @@ export function AppShell({
   const mediaKitEnabledForTenant = isMediaKitEnabled(activeTenant?.modules_json);
   const communicationEnabledForTenant = isCommunicationEnabled(activeTenant?.modules_json);
   const smartCampaignsEnabledForTenant = isSmartCampaignsEnabled(activeTenant?.modules_json);
+  const beeiaEnabledForTenant = isBeeiaEnabled(activeTenant?.modules_json);
   const processesEnabledForTenant = isProcessesEnabled(activeTenant?.modules_json);
   const reportsEnabledForTenant = isReportsEnabled(activeTenant?.modules_json);
 
@@ -650,6 +656,7 @@ export function AppShell({
         "app.media_kit",
         "app.communication",
         "app.smart_campaigns",
+        "app.beeia",
         "app.processes",
         "app.financing_simulator",
       ];
@@ -1086,6 +1093,10 @@ export function AppShell({
 
                 {smartCampaignsEnabledForTenant && (
                   <NavTile to="/app/smart-campaigns" icon={Zap} label="Disparos" disabled={!can("app.smart_campaigns")} />
+                )}
+
+                {beeiaEnabledForTenant && (
+                  <NavTile to="/app/beeia" icon={Sparkles} label="BeeIA" disabled={!can("app.beeia")} />
                 )}
 
                 {/* Core (desktop): hover menu */}
@@ -1663,6 +1674,16 @@ export function AppShell({
                                 icon={Zap}
                                 label="Disparos"
                                 disabled={!can("app.smart_campaigns")}
+                                onNavigate={() => setMobileNavOpen(false)}
+                              />
+                            )}
+
+                            {beeiaEnabledForTenant && (
+                              <MobileNavItem
+                                to="/app/beeia"
+                                icon={Sparkles}
+                                label="BeeIA"
+                                disabled={!can("app.beeia")}
                                 onNavigate={() => setMobileNavOpen(false)}
                               />
                             )}

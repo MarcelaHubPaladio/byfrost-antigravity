@@ -54,6 +54,10 @@ function getSmartCampaignsEnabled(modulesJson: any) {
   return Boolean(modulesJson?.smart_campaigns_enabled === true);
 }
 
+function getBeeiaEnabled(modulesJson: any) {
+  return Boolean(modulesJson?.beeia_enabled === true);
+}
+
 function setModuleFlag(modulesJson: any, key: string, enabled: boolean) {
   const base = (modulesJson ?? {}) as any;
   return { ...base, [key]: enabled };
@@ -91,6 +95,7 @@ export function TenantModulesPanel() {
   const financingSimulatorEnabled = useMemo(() => getFinancingSimulatorEnabled(tenantQ.data?.modules_json), [tenantQ.data]);
   const reportsEnabled = useMemo(() => getReportsEnabled(tenantQ.data?.modules_json), [tenantQ.data]);
   const smartCampaignsEnabled = useMemo(() => getSmartCampaignsEnabled(tenantQ.data?.modules_json), [tenantQ.data]);
+  const beeiaEnabled = useMemo(() => getBeeiaEnabled(tenantQ.data?.modules_json), [tenantQ.data]);
 
   const toggleModule = async (key: string, next: boolean) => {
     if (!activeTenantId) return;
@@ -237,7 +242,19 @@ export function TenantModulesPanel() {
                 onCheckedChange={(v) => toggleModule("smart_campaigns_enabled", v)}
               />
             </div>
-
+            <div className="flex items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2">
+              <div>
+                <div className="text-xs font-semibold text-slate-900">BeeIA (Pré-atendimento inteligente)</div>
+                <div className="mt-0.5 text-[11px] text-slate-600">
+                  Habilita o atendimento automático com inteligência artificial via WhatsApp e o CRM qualificatório.
+                </div>
+              </div>
+              <Switch
+                checked={beeiaEnabled}
+                disabled={saving || tenantQ.isLoading}
+                onCheckedChange={(v) => toggleModule("beeia_enabled", v)}
+              />
+            </div>
             <div className="flex items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2">
               <div>
                 <div className="text-xs font-semibold text-slate-900">Módulo de Tarefas</div>

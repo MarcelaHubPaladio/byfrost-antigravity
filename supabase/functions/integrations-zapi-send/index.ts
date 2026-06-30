@@ -32,16 +32,33 @@ serve(async (req) => {
       });
     }
 
-    let to = normalizePhoneE164Like(String(rawTo));
+    let to = String(rawTo).trim();
 
-    // If it looks like a technical group ID but lacks the suffix, add it for Z-API
-    if (to && (to.includes("-") || (to.startsWith("1203") && to.length > 15)) && !to.includes("@")) {
-      to = `${to}@g.us`;
-    }
+    // 1. Detect if it is a Group ID
+    const isGroup = to.includes("@g.us") || to.includes("-group") || (to.replace(/\D/g, "").startsWith("1203") && to.length > 15);
 
-    // [HOTFIX] Remove "-group" suffix if present (seen in some malformed IDs)
-    if (to && to.includes("-group@")) {
-      to = to.replace("-group@", "@");
+    if (isGroup) {
+      // Format as ID-group
+      let cleanId = to;
+      if (cleanId.includes("@")) {
+        cleanId = cleanId.split("@")[0]; // Remove @g.us or any suffix after @
+      }
+      if (cleanId.includes("-group")) {
+        // Already has -group, do nothing
+      } else {
+        // Ensure it has -group
+        cleanId = `${cleanId}-group`;
+      }
+      to = cleanId;
+    } else {
+      // 2. Format as clean individual phone number (pure digits without + or other symbols)
+      // First normalize to E164-like to get country code prepended if missing
+      const normalized = normalizePhoneE164Like(to);
+      if (normalized) {
+        to = normalized.replace(/\D/g, ""); // Keep only digits (e.g. +5542991210813 -> 5542991210813)
+      } else {
+        to = to.replace(/\D/g, ""); // Fallback: just keep digits
+      }
     }
 
     if (!to) {
