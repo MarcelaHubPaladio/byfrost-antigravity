@@ -40,6 +40,7 @@ type CaseRow = {
   title: string | null;
   updated_at: string;
   meta_json?: any;
+  beeia_paused?: boolean;
 };
 
 type ReadRow = { case_id: string; last_seen_at: string };
@@ -114,6 +115,7 @@ export default function Chats() {
   const { user } = useSession();
 
   const [deleting, setDeleting] = useState(false);
+  const [listTab, setListTab] = useState<"active" | "paused">("active");
 
   const q = useMemo(() => {
     const sp = new URLSearchParams(loc.search);
@@ -213,7 +215,7 @@ export default function Chats() {
       // 2) Load only chat-marked cases (and rely on RLS for visibility)
       const { data: casesRows, error: caseErr } = await supabase
         .from("cases")
-        .select("id,title,updated_at,meta_json")
+        .select("id,title,updated_at,meta_json,beeia_paused")
         .eq("tenant_id", activeTenantId!)
         .eq("is_chat", true)
         .is("deleted_at", null)
@@ -370,15 +372,23 @@ export default function Chats() {
   const filteredChats = useMemo(() => {
     const qq = q.trim().toLowerCase();
     const rows = chatsQ.data ?? [];
-    if (!qq) return rows;
+    
+    // Filter by tab
+    const tabFiltered = rows.filter((c) => {
+      const isPaused = c.beeia_paused === true;
+      if (listTab === "paused") return isPaused;
+      return !isPaused; // active tab shows only non-paused
+    });
 
-    return rows.filter((c) => {
+    if (!qq) return tabFiltered;
+
+    return tabFiltered.filter((c) => {
       const phone = phoneByCase.get(c.id) ?? getMetaPhone(c.meta_json) ?? "";
       const title = c.title ?? "";
       const blob = `${title} ${phone}`.toLowerCase();
       return blob.includes(qq);
     });
-  }, [chatsQ.data, phoneByCase, q]);
+  }, [chatsQ.data, phoneByCase, q, listTab]);
 
   const sortedChats = useMemo(() => {
     const rows = [...filteredChats];
@@ -556,6 +566,32 @@ export default function Chats() {
                   </div>
                 </div>
               )}
+
+              {/* Tabs */}
+              <div className="px-4 pb-3 flex gap-2">
+                <button
+                  onClick={() => setListTab("active")}
+                  className={cn(
+                    "flex-1 rounded-xl py-1.5 text-xs font-semibold transition-colors",
+                    listTab === "active"
+                      ? "bg-slate-800 text-white"
+                      : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                  )}
+                >
+                  Ativas
+                </button>
+                <button
+                  onClick={() => setListTab("paused")}
+                  className={cn(
+                    "flex-1 rounded-xl py-1.5 text-xs font-semibold transition-colors",
+                    listTab === "paused"
+                      ? "bg-amber-100 text-amber-800 border border-amber-200"
+                      : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                  )}
+                >
+                  Pausadas
+                </button>
+              </div>
 
               <div className="px-4 pb-3">
                 <div className="relative">
