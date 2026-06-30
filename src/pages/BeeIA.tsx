@@ -280,6 +280,32 @@ function BeeIAPage() {
     }
   };
 
+  // Toggle Master Switch instantly
+  const handleToggleGlobalSwitch = async (newVal: boolean) => {
+    setIsActive(newVal);
+    try {
+      const { error } = await supabase
+        .from("beeia_configs")
+        .upsert(
+          {
+            tenant_id: activeTenantId!,
+            system_prompt: systemPrompt,
+            target_stage: targetStage,
+            is_active: newVal,
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: "tenant_id" }
+        );
+      
+      if (error) throw error;
+      showSuccess(`IA Global ${newVal ? "Ativada" : "Desativada"}!`);
+      await qc.invalidateQueries({ queryKey: ["beeia_config", activeTenantId] });
+    } catch (e: any) {
+      showError(`Falha ao alterar status global: ${e.message}`);
+      setIsActive(!newVal); // revert
+    }
+  };
+
   // Save Config
   const handleSaveConfig = async () => {
     setSavingConfig(true);
@@ -557,7 +583,7 @@ function BeeIAPage() {
                     <div className="flex items-center gap-2">
                       <Switch 
                         checked={isActive} 
-                        onCheckedChange={setIsActive} 
+                        onCheckedChange={handleToggleGlobalSwitch} 
                         className="data-[state=checked]:bg-amber-500" 
                       />
                     </div>
