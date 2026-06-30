@@ -85,7 +85,7 @@ serve(async (req) => {
     const responseText = llmRes.text;
 
     if (llmRes.tokensUsed > 0) {
-      await logAITokenUsage(tenant_id, llmRes.tokensUsed, `Simulador BeeIA`, llmRes.provider, supabaseAdmin);
+      await logAITokenUsage(tenant_id, llmRes.tokensUsed, `Simulador BeeIA`, llmRes.provider, supabaseAdmin, "beeia_simulator", session_id);
     }
 
     // 7. Save Assistant Message
@@ -101,7 +101,7 @@ serve(async (req) => {
     if (insErr2) throw insErr2;
 
     // 8. Return response
-    return new Response(JSON.stringify({ response: responseText }), {
+    return new Response(JSON.stringify({ response: responseText, tokensUsed: llmRes.tokensUsed || 0 }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
       status: 200,
     });

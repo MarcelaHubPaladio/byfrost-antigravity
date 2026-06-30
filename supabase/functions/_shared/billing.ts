@@ -59,7 +59,9 @@ export async function logAITokenUsage(
   tokensUsed: number,
   description: string,
   model: string,
-  supabaseAdmin: SupabaseClient
+  supabaseAdmin: SupabaseClient,
+  refType: string = "guardiao_insight",
+  refId: string | null = null
 ) {
   if (tokensUsed <= 0) return;
 
@@ -68,8 +70,8 @@ export async function logAITokenUsage(
     tenant_id: tenantId,
     type: "ai_token",
     qty: tokensUsed,
-    ref_type: "guardiao_insight",
-    ref_id: null,
+    ref_type: refType,
+    ref_id: refId,
     occurred_at: new Date().toISOString(),
     meta_json: {
       description,
