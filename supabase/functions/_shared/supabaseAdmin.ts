@@ -1,13 +1,14 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 
-export function createSupabaseAdmin(token: string) {
+export function createSupabaseAdmin(token?: string) {
   const url = Deno.env.get("SUPABASE_URL") ?? "";
+  const key = token ?? Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 
-  if (!url || !token) {
+  if (!url || !key) {
     throw new Error("Missing SUPABASE_URL or token");
   }
 
-  return createClient(url, token, {
+  return createClient(url, key, {
     auth: { persistSession: false },
   });
 }
