@@ -28,6 +28,7 @@ import {
   HelpCircle,
 } from "lucide-react";
 import { WhatsAppConversation } from "@/components/case/WhatsAppConversation";
+import { BeeIASimulator } from "@/components/case/BeeIASimulator";
 
 type CaseRow = {
   id: string;
@@ -348,9 +349,12 @@ function BeeIAPage() {
 
         {/* Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="mb-4 grid w-full max-w-[400px] grid-cols-2 rounded-2xl bg-slate-100 p-1 dark:bg-slate-900">
+          <TabsList className="mb-4 grid w-full max-w-[600px] grid-cols-3 rounded-2xl bg-slate-100 p-1 dark:bg-slate-900">
             <TabsTrigger value="crm" className="rounded-xl py-2 text-xs font-semibold">
               Fluxo CRM
+            </TabsTrigger>
+            <TabsTrigger value="simulador" className="rounded-xl py-2 text-xs font-semibold">
+              Simulador
             </TabsTrigger>
             <TabsTrigger value="settings" className="rounded-xl py-2 text-xs font-semibold">
               Configurações & Treino
@@ -648,6 +652,11 @@ function BeeIAPage() {
                 </Card>
               </div>
             </div>
+          </TabsContent>
+
+          {/* Tab Content: Simulador */}
+          <TabsContent value="simulador" className="mt-0">
+            <BeeIASimulator />
           </TabsContent>
         </Tabs>
 
