@@ -1994,7 +1994,7 @@ serve(async (req: any) => {
           // 4b. Deduplication guard: if BeeIA already processed a job or sent an outbound
           // message for this case AFTER the triggering message, skip. This prevents
           // duplicate AI responses when multiple inbound messages arrive in rapid succession.
-          if (inMsg?.occurred_at) {
+          if (inMsg?.occurred_at && !job.payload_json?.manual_retake) {
             // Check if another BEEIA job was already completed for this case after this message
             const { data: laterDoneJob } = await supabase
               .from("job_queue")

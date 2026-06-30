@@ -531,7 +531,7 @@ export function WhatsAppConversation({
         tenant_id: activeTenantId,
         type: "BEEIA_PROCESS_MESSAGE",
         idempotency_key: `BEEIA_MANUAL_RETAKE:${caseId}:${Date.now()}`,
-        payload_json: { case_id: caseId, tenant_id: activeTenantId, message_id: lastMsg.id, instance_id: instanceId },
+        payload_json: { case_id: caseId, tenant_id: activeTenantId, message_id: lastMsg.id, instance_id: instanceId, manual_retake: true },
         status: "pending",
         run_after: new Date().toISOString(),
       });
