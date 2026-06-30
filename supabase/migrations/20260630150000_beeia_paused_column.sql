@@ -1,0 +1,1 @@
+ALTER TABLE public.cases ADD COLUMN IF NOT EXISTS beeia_paused boolean not null default false;
