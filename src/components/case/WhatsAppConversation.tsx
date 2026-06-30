@@ -268,6 +268,35 @@ function pickBestMediaUrl(m: { media_url: string | null; payload_json: any }) {
   return `data:${mime};base64,${base64}`;
 }
 
+/** Renders an audio player without crossOrigin (avoids CORS errors with Backblaze/temp URLs)
+ *  and gracefully degrades to an "expirado" state on 404/error. */
+function AudioPlayerWithFallback({ src, inbound }: { src: string; inbound: boolean }) {
+  const [errored, setErrored] = useState(false);
+
+  if (errored) {
+    return (
+      <div
+        className={cn(
+          "flex items-center gap-2 rounded-2xl px-3 py-2 text-sm",
+          inbound ? "bg-slate-100 text-slate-500" : "bg-white/10 text-white/60"
+        )}
+      >
+        <span>🎤</span>
+        <span>Áudio expirado ou indisponível</span>
+      </div>
+    );
+  }
+
+  return (
+    <audio
+      controls
+      src={src}
+      className="w-full"
+      onError={() => setErrored(true)}
+    />
+  );
+}
+
 export function WhatsAppConversation({
   caseId,
   className,
@@ -961,7 +990,10 @@ export function WhatsAppConversation({
                             </div>
 
                             {mediaUrl ? (
-                              <audio controls src={mediaUrl} className="w-full" crossOrigin="anonymous" />
+                              <AudioPlayerWithFallback
+                                src={mediaUrl}
+                                inbound={effectiveInbound}
+                              />
                             ) : (
                               <div className={cn("text-sm", effectiveInbound ? "text-slate-600" : "text-white/90")}>
                                 (sem URL do áudio)
