@@ -41,13 +41,14 @@ serve(async (req) => {
 
     // 3. Save User Message if not evaluating
     if (action !== "evaluate_session") {
+      const isTrainer = action === "trainer_message";
       const { error: insErr1 } = await supabaseAdmin
         .from("beeia_simulations")
         .insert({
           tenant_id,
           session_id,
-          role: "user",
-          content: message
+          role: isTrainer ? "system" : "user",
+          content: isTrainer ? `[MENSAGEM DO SEU TREINADOR]: ${message}` : message
         });
 
       if (insErr1) throw insErr1;
@@ -71,7 +72,7 @@ serve(async (req) => {
       // In evaluation mode, we feed the history first, then ask it to evaluate.
       history?.forEach((m) => {
         llmMessages.push({
-          role: m.role as "user" | "assistant",
+          role: m.role as "user" | "assistant" | "system",
           content: m.content
         });
       });
@@ -90,10 +91,16 @@ serve(async (req) => {
       });
       history?.forEach((m) => {
         llmMessages.push({
-          role: m.role as "user" | "assistant",
+          role: m.role as "user" | "assistant" | "system",
           content: m.content
         });
       });
+      if (action === "trainer_message") {
+        llmMessages.push({
+          role: "system",
+          content: "Responda agora diretamente ao seu treinador/auditor (que acabou de mandar a mensagem acima). Agradeça o feedback e explique brevemente como você vai aplicar essa correção daqui pra frente."
+        });
+      }
     }
 
     // 6. Generate Response
@@ -117,14 +124,14 @@ serve(async (req) => {
     }
 
     // 7. Save Assistant/System Message
-    const isEval = action === "evaluate_session";
+    const isEvalOrTrainer = action === "evaluate_session" || action === "trainer_message";
     const { error: insErr2 } = await supabaseAdmin
       .from("beeia_simulations")
       .insert({
         tenant_id,
         session_id,
-        role: isEval ? "system" : "assistant",
-        content: isEval ? "AUTO-AVALIAÇÃO DA IA:\n\n" + responseText : responseText
+        role: isEvalOrTrainer ? "system" : "assistant",
+        content: action === "evaluate_session" ? "AUTO-AVALIAÇÃO DA IA:\n\n" + responseText : responseText
       });
 
     if (insErr2) throw insErr2;

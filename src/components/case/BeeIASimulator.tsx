@@ -9,7 +9,7 @@ import { Card } from "@/components/ui/card";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Textarea } from "@/components/ui/textarea";
 import { showError, showSuccess } from "@/utils/toast";
-import { Bot, User, Send, Plus, MessageSquare, ThumbsDown, Activity, CheckCircle2, Sparkles } from "lucide-react";
+import { Bot, User, Send, Plus, MessageSquare, ThumbsDown, Activity, CheckCircle2, Sparkles, GraduationCap } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type SimMessage = {
@@ -32,6 +32,7 @@ export function BeeIASimulator() {
   const { activeTenantId } = useTenant();
   const [activeSessionId, setActiveSessionId] = useState<string>(crypto.randomUUID());
   const [inputValue, setInputValue] = useState("");
+  const [isTrainerMode, setIsTrainerMode] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Radar State
@@ -109,12 +110,13 @@ export function BeeIASimulator() {
   }, [messagesQ.data]);
 
   const sendMut = useMutation({
-    mutationFn: async (msg: string) => {
+    mutationFn: async ({ message, action }: { message: string, action?: string }) => {
       const { data, error } = await supabase.functions.invoke("beeia-simulator", {
         body: {
           tenant_id: activeTenantId,
           session_id: activeSessionId,
-          message: msg
+          message,
+          action
         }
       });
       if (error) throw error;
@@ -195,7 +197,10 @@ export function BeeIASimulator() {
 
   const handleSend = () => {
     if (!inputValue.trim() || sendMut.isPending) return;
-    sendMut.mutate(inputValue.trim());
+    sendMut.mutate({ 
+      message: inputValue.trim(), 
+      action: isTrainerMode ? "trainer_message" : undefined 
+    });
   };
 
   const startNewSession = () => {
@@ -377,20 +382,41 @@ export function BeeIASimulator() {
 
         {/* Input Area */}
         <div className="bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 p-4 flex gap-2 relative z-10">
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={() => setIsTrainerMode(!isTrainerMode)}
+            className={cn(
+              "rounded-full w-10 h-10 transition-colors",
+              isTrainerMode 
+                ? "bg-indigo-100 text-indigo-700 border-indigo-200 hover:bg-indigo-200 dark:bg-indigo-900/50 dark:text-indigo-400 dark:border-indigo-800" 
+                : "text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+            )}
+            title={isTrainerMode ? "Modo Treinador Ativado" : "Ativar Modo Treinador"}
+          >
+            <GraduationCap className="h-4 w-4" />
+          </Button>
+
           <Input
-            placeholder="Digite uma mensagem..."
+            placeholder={isTrainerMode ? "Dê um feedback direto para a IA..." : "Digite uma mensagem..."}
             value={inputValue}
             onChange={e => setInputValue(e.target.value)}
             onKeyDown={e => {
               if (e.key === "Enter") handleSend();
             }}
-            className="flex-1 rounded-full bg-slate-100 border-transparent focus-visible:ring-amber-500 dark:bg-slate-800"
+            className={cn(
+              "flex-1 rounded-full border-transparent focus-visible:ring-amber-500",
+              isTrainerMode ? "bg-indigo-50 dark:bg-indigo-950/20" : "bg-slate-100 dark:bg-slate-800"
+            )}
             disabled={sendMut.isPending}
           />
           <Button 
             onClick={handleSend} 
             disabled={!inputValue.trim() || sendMut.isPending}
-            className="rounded-full bg-amber-500 hover:bg-amber-600 w-10 h-10 p-0"
+            className={cn(
+              "rounded-full w-10 h-10 p-0",
+              isTrainerMode ? "bg-indigo-500 hover:bg-indigo-600" : "bg-amber-500 hover:bg-amber-600"
+            )}
           >
             <Send className="h-4 w-4" />
           </Button>
