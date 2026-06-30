@@ -47,6 +47,7 @@ type CaseRow = {
     body_text: string | null;
     occurred_at: string;
   }[];
+  beeia_paused?: boolean;
 };
 
 type WaInstanceRow = {
@@ -159,6 +160,7 @@ function BeeIAPage() {
           updated_at,
           assigned_user_id,
           meta_json,
+          beeia_paused,
           customer_accounts:customer_id(name, phone_e164)
         `)
         .eq("tenant_id", activeTenantId!)
@@ -286,6 +288,7 @@ function BeeIAPage() {
   // Kanban Columns
   const columns = [
     { key: "contato", label: "1º Contato", color: "border-t-amber-400 bg-amber-500/5" },
+    { key: "pausadas", label: "Pausadas", color: "border-t-yellow-600 bg-yellow-500/5" },
     { key: "morno", label: "Morno", color: "border-t-orange-400 bg-orange-500/5" },
     { key: "quente", label: "Quente", color: "border-t-rose-500 bg-rose-500/5" },
     { key: "frio", label: "Frio", color: "border-t-slate-400 bg-slate-500/5" },
@@ -295,12 +298,15 @@ function BeeIAPage() {
     const list = casesQ.data ?? [];
     const map: Record<string, CaseRow[]> = {
       contato: [],
+      pausadas: [],
       morno: [],
       quente: [],
       frio: [],
     };
     list.forEach((c) => {
-      if (map[c.state]) {
+      if (c.beeia_paused) {
+        map.pausadas.push(c);
+      } else if (map[c.state]) {
         map[c.state].push(c);
       } else {
         map.contato.push(c);
