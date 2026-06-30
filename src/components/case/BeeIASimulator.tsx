@@ -162,7 +162,7 @@ export function BeeIASimulator() {
       </div>
 
       {/* Chat Area */}
-      <div className="flex w-2/3 flex-col bg-[url('https://i.imgur.com/3q1p3z2.png')] bg-repeat bg-center">
+      <div className="flex w-2/3 flex-col bg-[#efeae2] dark:bg-slate-900/80">
         
         <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-4">
           {msgs.length === 0 ? (
