@@ -7,7 +7,8 @@ import { useChatInstanceAccess } from "@/hooks/useChatInstanceAccess";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { showError, showSuccess } from "@/utils/toast";
-import { Paperclip, Send, Image as ImageIcon, Mic, Users, MessagesSquare, MapPin, Bot, BotOff } from "lucide-react";
+import { Paperclip, Send, Image as ImageIcon, Mic, Users, MessagesSquare, MapPin, Bot, BotOff, Sparkles, GraduationCap } from "lucide-react";
+import { useMutation } from "@tanstack/react-query";
 
 type WaMessageRow = {
   id: string;
@@ -317,6 +318,7 @@ export function WhatsAppConversation({
   const [sending, setSending] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [transcribingById, setTranscribingById] = useState<Record<string, boolean>>({});
+  const [isTrainerMode, setIsTrainerMode] = useState(false);
 
   const scrollerRef = useRef<HTMLDivElement | null>(null);
   const imageRef = useRef<HTMLInputElement | null>(null);
@@ -467,11 +469,12 @@ export function WhatsAppConversation({
       }
 
       const { data, error } = await q
-        .order("occurred_at", { ascending: true })
+        .order("occurred_at", { ascending: false })
         .limit(200);
 
       if (error) throw error;
-      return (data ?? []) as WaMessageRow[];
+      const rows = (data ?? []) as WaMessageRow[];
+      return rows.reverse();
     },
   });
 
@@ -591,6 +594,49 @@ export function WhatsAppConversation({
     return candidate || entityPhone;
   }, [waMsgsQ.data, instancePhone, conversationMode, waGroupId, entityPhone]);
 
+  // Trainer Mutations
+  const sendTrainerMut = useMutation({
+    mutationFn: async ({ message, action }: { message: string, action?: string }) => {
+      const { data, error } = await supabase.functions.invoke("beeia-simulator", {
+        body: {
+          tenant_id: activeTenantId,
+          case_id: caseId,
+          message,
+          action
+        }
+      });
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["wa_messages_case", activeTenantId, caseId, conversationMode, entityPhone, waGroupId] });
+      setText("");
+      setIsTrainerMode(false);
+    },
+    onError: (err: any) => {
+      showError("Erro ao processar mensagem do treinador: " + err.message);
+    }
+  });
+
+  const evaluateMut = useMutation({
+    mutationFn: async () => {
+      const { data, error } = await supabase.functions.invoke("beeia-simulator", {
+        body: {
+          tenant_id: activeTenantId,
+          case_id: caseId,
+          action: "evaluate_session"
+        }
+      });
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      showSuccess("Auto-avaliação concluída! Verifique as notas na conversa.");
+      qc.invalidateQueries({ queryKey: ["wa_messages_case", activeTenantId, caseId, conversationMode, entityPhone, waGroupId] });
+    },
+    onError: (err: any) => showError("Erro ao gerar auto-avaliação: " + err.message)
+  });
+
   // ... (participants, logTimeline - keep as is) ...
   const participants = useMemo(() => {
     const s = new Set<string>();
@@ -673,6 +719,22 @@ export function WhatsAppConversation({
 
   const sendText = async () => {
     if (!activeTenantId) return;
+
+    if (isTrainerMode) {
+      const trimmed = text.trim();
+      if (!trimmed) return;
+      setSending(true);
+      try {
+        await sendTrainerMut.mutateAsync({ message: trimmed, action: "trainer_message" });
+        showSuccess("Feedback enviado à IA.");
+      } catch (e: any) {
+        showError(`Falha ao enviar feedback: ${e?.message ?? "erro"}`);
+      } finally {
+        setSending(false);
+      }
+      return;
+    }
+
     const inst = instanceQ.data;
 
     // Determine destination
@@ -851,6 +913,22 @@ export function WhatsAppConversation({
             </Button>
           )}
 
+          {/* Auto-Avaliação Button */}
+          {!beeiaIsPaused && (
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              className="h-8 rounded-2xl px-3 gap-1.5 text-xs border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100"
+              onClick={() => evaluateMut.mutate()}
+              disabled={evaluateMut.isPending}
+              title="A IA irá analisar essa conversa inteira e gerar um feedback"
+            >
+              <Sparkles className="h-3.5 w-3.5" />
+              {evaluateMut.isPending ? "Avaliando…" : "Auto-Avaliação"}
+            </Button>
+          )}
+
           <Button
             type="button"
             variant={tab === "messages" ? "default" : "secondary"}
@@ -967,9 +1045,10 @@ export function WhatsAppConversation({
                     ? getBestText(m)
                     : "";
 
-                const msgText = normalizedType === "text" ? getBestText(m) : "";
+                const msgText = (normalizedType === "text" || normalizedType === "system_note") ? getBestText(m) : "";
 
                 const inboundLabel = senderIsVendor ? "Vendedor" : "Cliente";
+                const isSystemNote = m.type === "system_note";
 
                 return (
                   <div
@@ -988,12 +1067,24 @@ export function WhatsAppConversation({
                     <div className={cn("max-w-[78%]", effectiveInbound ? "mr-auto" : "ml-auto")}>
                       <div
                         className={cn(
-                          "rounded-[20px] px-3 py-2 shadow-sm",
-                          effectiveInbound
-                            ? "bg-white border border-slate-200 text-slate-900"
-                            : "bg-[hsl(var(--byfrost-accent))] text-white"
+                          "rounded-[20px] px-3 py-2 shadow-sm relative group",
+                          isSystemNote
+                            ? "bg-indigo-50 border border-indigo-200 text-indigo-900"
+                            : effectiveInbound
+                              ? "bg-white border border-slate-200 text-slate-900"
+                              : "bg-[hsl(var(--byfrost-accent))] text-white"
                         )}
                       >
+                        {!effectiveInbound && !isSystemNote && (
+                          <button
+                            type="button"
+                            onClick={() => setIsTrainerMode(true)}
+                            className="absolute -left-10 top-1/2 -translate-y-1/2 p-2 rounded-full bg-slate-100 text-slate-500 opacity-0 group-hover:opacity-100 hover:bg-slate-200 hover:text-slate-800 transition-all shadow-sm"
+                            title="Dar bronca na IA sobre essa resposta"
+                          >
+                            <GraduationCap className="h-4 w-4" />
+                          </button>
+                        )}
                         {normalizedType === "image" && mediaUrl ? (
                           <div className="space-y-2">
                             <a href={mediaUrl} target="_blank" rel="noreferrer" className="block">
@@ -1201,7 +1292,11 @@ export function WhatsAppConversation({
                           <div
                             className={cn(
                               "text-sm leading-relaxed whitespace-pre-wrap break-words",
-                              effectiveInbound ? "text-slate-900" : "text-white"
+                              isSystemNote
+                                ? "text-indigo-900 font-medium"
+                                : effectiveInbound
+                                  ? "text-slate-900"
+                                  : "text-white"
                             )}
                           >
                             {msgText || "(sem texto)"}
@@ -1215,7 +1310,7 @@ export function WhatsAppConversation({
                           effectiveInbound ? "text-slate-500" : "text-slate-500 text-right"
                         )}
                       >
-                        {effectiveInbound ? `${inboundLabel}${m.from_phone ? ` • ${m.from_phone}` : ""}` : "Painel"} • {fmtTime(m.occurred_at)}
+                        {isSystemNote ? "Sistema (Interno)" : (effectiveInbound ? `${inboundLabel}${m.from_phone ? ` • ${m.from_phone}` : ""}` : "Painel")} • {fmtTime(m.occurred_at)}
                       </div>
                     </div>
                   </div>
@@ -1302,16 +1397,25 @@ export function WhatsAppConversation({
                 </Button>
               </div>
 
-              <div className="flex-1">
+              <div className="flex-1 flex flex-col gap-1 relative">
+                {isTrainerMode && (
+                  <div className="absolute -top-7 left-2 right-2 flex items-center justify-between bg-indigo-100 text-indigo-800 text-xs font-semibold px-3 py-1 rounded-t-lg shadow-sm border border-b-0 border-indigo-200">
+                    <span className="flex items-center gap-1"><GraduationCap className="h-3.5 w-3.5" /> Modo Treinador Ativo</span>
+                    <button onClick={() => setIsTrainerMode(false)} className="hover:text-indigo-950 font-bold px-2">Cancelar</button>
+                  </div>
+                )}
                 <textarea
                   value={text}
                   onChange={(e) => setText(e.target.value)}
-                  placeholder={uploading ? "Enviando arquivo…" : "Escreva sua mensagem…"}
+                  placeholder={isTrainerMode ? "Dê uma instrução clara ou corrija um erro da IA..." : uploading ? "Enviando arquivo…" : "Escreva sua mensagem…"}
                   disabled={uploading}
                   className={cn(
-                    "h-10 w-full resize-none rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm text-slate-800 shadow-sm outline-none",
-                    "placeholder:text-slate-400 focus:border-[hsl(var(--byfrost-accent)/0.45)]",
-                    uploading && "opacity-50"
+                    "h-10 w-full resize-none rounded-2xl border px-4 py-2 text-sm shadow-sm outline-none transition-all relative z-10",
+                    isTrainerMode
+                      ? "border-indigo-400 bg-indigo-50 text-indigo-900 placeholder:text-indigo-400 focus:border-indigo-500"
+                      : "border-slate-200 bg-white text-slate-800 placeholder:text-slate-400 focus:border-[hsl(var(--byfrost-accent)/0.45)]",
+                    uploading && "opacity-50",
+                    isTrainerMode && "rounded-tl-none"
                   )}
                   onKeyDown={(e) => {
                     if (e.key === "Enter" && !e.shiftKey) {
@@ -1324,12 +1428,17 @@ export function WhatsAppConversation({
 
               <Button
                 type="button"
-                className="h-10 w-11 rounded-2xl bg-[hsl(var(--byfrost-accent))] p-0 text-white shadow-sm hover:bg-[hsl(var(--byfrost-accent)/0.92)]"
+                className={cn(
+                  "h-10 w-11 rounded-2xl p-0 text-white shadow-sm transition-all",
+                  isTrainerMode 
+                    ? "bg-indigo-600 hover:bg-indigo-700" 
+                    : "bg-[hsl(var(--byfrost-accent))] hover:bg-[hsl(var(--byfrost-accent)/0.92)]"
+                )}
                 onClick={sendText}
                 disabled={sending || uploading || !text.trim()}
-                title="Enviar"
+                title={isTrainerMode ? "Enviar Feedback" : "Enviar"}
               >
-                <Send className="h-4 w-4" />
+                {isTrainerMode ? <GraduationCap className="h-4 w-4" /> : <Send className="h-4 w-4" />}
               </Button>
             </div>
 

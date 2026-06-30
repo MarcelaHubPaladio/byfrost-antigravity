@@ -13,9 +13,9 @@ serve(async (req) => {
   try {
     const supabaseAdmin = createSupabaseAdmin();
     const body = await req.json();
-    const { tenant_id, session_id, message, action } = body;
+    const { tenant_id, session_id, case_id, message, action } = body;
 
-    if (!tenant_id || !session_id || (!message && action !== "evaluate_session")) {
+    if (!tenant_id || (!session_id && !case_id) || (!message && action !== "evaluate_session")) {
       throw new Error("Missing required fields");
     }
 
@@ -57,28 +57,64 @@ serve(async (req) => {
     // 3. Save User Message if not evaluating
     if (action !== "evaluate_session") {
       const isTrainer = action === "trainer_message";
-      const { error: insErr1 } = await supabaseAdmin
-        .from("beeia_simulations")
-        .insert({
-          tenant_id,
-          session_id,
-          role: isTrainer ? "system" : "user",
-          content: isTrainer ? `[MENSAGEM DO SEU TREINADOR]: ${message}` : message
-        });
-
-      if (insErr1) throw insErr1;
+      
+      if (session_id) {
+        const { error: insErr1 } = await supabaseAdmin
+          .from("beeia_simulations")
+          .insert({
+            tenant_id,
+            session_id,
+            role: isTrainer ? "system" : "user",
+            content: isTrainer ? `[MENSAGEM DO SEU TREINADOR]: ${message}` : message
+          });
+        if (insErr1) throw insErr1;
+      } else if (case_id) {
+        // Save as system_note in wa_messages so it appears in chat but doesn't get sent to Z-API
+        const { error: insErrCase } = await supabaseAdmin
+          .from("wa_messages")
+          .insert({
+            tenant_id,
+            case_id,
+            direction: "inbound",
+            type: "system_note",
+            from_phone: "system",
+            to_phone: "system",
+            body_text: isTrainer ? `[MENSAGEM DO SEU TREINADOR]: ${message}` : message,
+            occurred_at: new Date().toISOString()
+          });
+        if (insErrCase) throw insErrCase;
+      }
     }
 
     // 4. Fetch History
-    const { data: history, error: histErr } = await supabaseAdmin
-      .from("beeia_simulations")
-      .select("role, content")
-      .eq("tenant_id", tenant_id)
-      .eq("session_id", session_id)
-      .order("created_at", { ascending: true })
-      .limit(20);
-
-    if (histErr) throw histErr;
+    let history: { role: string; content: string }[] = [];
+    if (session_id) {
+      const { data: hist, error: histErr } = await supabaseAdmin
+        .from("beeia_simulations")
+        .select("role, content")
+        .eq("tenant_id", tenant_id)
+        .eq("session_id", session_id)
+        .order("created_at", { ascending: true })
+        .limit(30);
+      if (histErr) throw histErr;
+      history = (hist ?? []).map(h => ({ role: h.role, content: h.content }));
+    } else if (case_id) {
+      const { data: hist, error: histErr } = await supabaseAdmin
+        .from("wa_messages")
+        .select("direction, type, body_text")
+        .eq("tenant_id", tenant_id)
+        .eq("case_id", case_id)
+        .order("occurred_at", { ascending: true })
+        .limit(30);
+      if (histErr) throw histErr;
+      
+      history = (hist ?? [])
+        .filter(m => (m.type === "text" || m.type === "system_note") && m.body_text)
+        .map(h => ({
+          role: h.type === "system_note" ? "system" : (h.direction === "inbound" ? "user" : "assistant"),
+          content: h.body_text!
+        }));
+    }
 
     // 5. Prepare LLM Context
     const llmMessages: { role: "system" | "user" | "assistant"; content: string }[] = [];
@@ -155,23 +191,56 @@ Siga estas regras rigorosamente.`
       );
     }
 
-    // 7. Save Assistant/System Message
-    const isEvalOrTrainer = action === "evaluate_session" || action === "trainer_message";
-    const { error: insErr2 } = await supabaseAdmin
-      .from("beeia_simulations")
-      .insert({
-        tenant_id,
-        session_id,
-        role: isEvalOrTrainer ? "system" : "assistant",
-        content: action === "evaluate_session" ? "AUTO-AVALIAÇÃO DA IA:\n\n" + responseText : responseText
-      });
-
-    if (insErr2) throw insErr2;
+    // 7. Save Assistant Response
+    if (action !== "evaluate_session") {
+      if (session_id) {
+        await supabaseAdmin.from("beeia_simulations").insert({
+          tenant_id,
+          session_id,
+          role: "assistant",
+          content: responseText
+        });
+      } else if (case_id) {
+        await supabaseAdmin.from("wa_messages").insert({
+          tenant_id,
+          case_id,
+          direction: "inbound", // use inbound so it acts as internal note
+          type: "system_note",
+          from_phone: "system",
+          to_phone: "system",
+          body_text: responseText,
+          occurred_at: new Date().toISOString()
+        });
+      }
+    } else {
+      if (session_id) {
+        await supabaseAdmin.from("beeia_simulations").insert({
+          tenant_id,
+          session_id,
+          role: "system",
+          content: "AUTO-AVALIAÇÃO DA IA: " + responseText
+        });
+      } else if (case_id) {
+        await supabaseAdmin.from("wa_messages").insert({
+          tenant_id,
+          case_id,
+          direction: "inbound", // use inbound so it acts as internal note
+          type: "system_note",
+          from_phone: "system",
+          to_phone: "system",
+          body_text: "AUTO-AVALIAÇÃO DA IA: " + responseText,
+          occurred_at: new Date().toISOString()
+        });
+      }
+    }
 
     // 8. Return response
-    return new Response(JSON.stringify({ response: responseText, tokensUsed: llmRes.tokensUsed || 0 }), {
+    return new Response(JSON.stringify({ 
+      ok: true, 
+      response: responseText, 
+      tokensUsed: llmRes.tokensUsed 
+    }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
-      status: 200,
     });
   } catch (error: any) {
     console.error("Error in beeia-simulator:", error);
