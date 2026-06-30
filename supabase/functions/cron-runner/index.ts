@@ -38,7 +38,14 @@ serve(async (req) => {
     // 1) Kick job processor (best-effort)
     let jobsProcessor: any = null;
     try {
-      const res = await fetch(JOBS_PROCESSOR_URL, { method: "POST" });
+      const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+      const res = await fetch(JOBS_PROCESSOR_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${serviceRoleKey}`,
+        },
+      });
       jobsProcessor = {
         ok: res.ok,
         status: res.status,
@@ -95,9 +102,10 @@ serve(async (req) => {
     }
 
     // 2) Escalate overdue vendor pendencies (>4h by due_at)
+    // pendencies has no tenant_id — join via cases
     const { data: overdue, error: oErr } = await supabase
       .from("pendencies")
-      .select("id, tenant_id, case_id, due_at, question_text")
+      .select("id, case_id, due_at, question_text, cases!inner(tenant_id)")
       .eq("status", "open")
       .eq("assigned_to_role", "vendor")
       .not("due_at", "is", null)
@@ -105,28 +113,26 @@ serve(async (req) => {
       .limit(100);
 
     if (oErr) {
-      console.error(`[${fn}] Failed to read overdue pendencies`, { oErr });
-      return new Response(JSON.stringify({ ok: false, error: "Failed to read overdue pendencies" }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      console.warn(`[${fn}] Failed to read overdue pendencies (skipping escalation)`, { oErr });
     }
 
     let escalated = 0;
 
     for (const p of overdue ?? []) {
       // Avoid duplicate alerts per pendency
+      const tenantId = ((p as any).cases?.tenant_id ?? (p as any).tenant_id) as string;
+      if (!tenantId) continue;
+
       const { data: existing } = await supabase
         .from("alerts")
         .select("id")
-        .eq("tenant_id", (p as any).tenant_id)
+        .eq("tenant_id", tenantId)
         .eq("status", "open")
         .contains("meta_json", { pendency_id: (p as any).id })
         .limit(1);
 
       if (existing?.length) continue;
 
-      const tenantId = (p as any).tenant_id as string;
       const caseId = (p as any).case_id as string;
 
       const { data: leader } = await supabase
