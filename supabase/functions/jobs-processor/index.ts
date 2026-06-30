@@ -2047,7 +2047,7 @@ serve(async (req: any) => {
 
           if (msgsErr) throw msgsErr;
 
-          const history = (msgs ?? []).filter(m => m.type === "text" && m.body_text);
+          const history = (msgs ?? []).filter(m => m.body_text);
 
           // 6. Construct prompt messages for LLM
           const llmMessages: { role: "system" | "user" | "assistant"; content: string }[] = [];
@@ -2057,8 +2057,16 @@ serve(async (req: any) => {
           });
 
           history.forEach(m => {
+            let role: "system" | "user" | "assistant" = "user";
+            
+            if (m.type === "system_note") {
+              role = "system";
+            } else {
+              role = m.direction === "inbound" ? "user" : "assistant";
+            }
+
             llmMessages.push({
-              role: m.direction === "inbound" ? "user" : "assistant",
+              role,
               content: m.body_text!
             });
           });
