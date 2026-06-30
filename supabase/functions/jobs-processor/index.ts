@@ -1932,11 +1932,18 @@ serve(async (req: any) => {
           // 2. Fetch BeeIA configs
           const { data: config, error: cfgErr } = await supabase
             .from("beeia_configs")
-            .select("system_prompt, target_stage")
+            .select("system_prompt, target_stage, is_active")
             .eq("tenant_id", tenantId)
             .maybeSingle();
 
           if (cfgErr) throw cfgErr;
+          
+          if (config && config.is_active === false) {
+            console.log(`[BEEIA_PROCESS_MESSAGE] BeeIA is globally disabled for tenant ${tenantId}, skipping`);
+            await supabase.from("job_queue").update({ status: "done" }).eq("id", job.id);
+            results.push({ id: job.id, ok: true, reason: "beeia_globally_disabled" });
+            continue;
+          }
           
           // Use default settings if none configured yet
           let sysPrompt = config?.system_prompt || 'Você é a BeeIA, assistente virtual de atendimento da empresa. Responda educadamente às dúvidas do cliente sobre nossos produtos e serviços. Caso o cliente queira falar com um atendente humano ou demonstre interesse real em fechar negócio, finalize sua mensagem incluindo a tag [STAGE_TRANSITION] no final da sua resposta.';

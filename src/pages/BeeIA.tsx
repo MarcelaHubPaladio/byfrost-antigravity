@@ -67,6 +67,7 @@ type WaInstanceRow = {
 type BeeiaConfig = {
   system_prompt: string;
   target_stage: string;
+  is_active?: boolean;
 };
 
 export default function BeeIA() {
@@ -83,6 +84,7 @@ function BeeIAPage() {
   const [activeTab, setActiveTab] = useState("crm");
 
   // State for config
+  const [isActive, setIsActive] = useState(true);
   const [systemPrompt, setSystemPrompt] = useState("");
   const [targetStage, setTargetStage] = useState("morno");
   const [savingConfig, setSavingConfig] = useState(false);
@@ -105,7 +107,7 @@ function BeeIAPage() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("beeia_configs")
-        .select("system_prompt, target_stage")
+        .select("system_prompt, target_stage, is_active")
         .eq("tenant_id", activeTenantId!)
         .maybeSingle();
 
@@ -116,6 +118,7 @@ function BeeIAPage() {
 
   useEffect(() => {
     if (configQ.data) {
+      setIsActive(configQ.data.is_active ?? true);
       setSystemPrompt(configQ.data.system_prompt);
       setTargetStage(configQ.data.target_stage);
     }
@@ -288,6 +291,7 @@ function BeeIAPage() {
             tenant_id: activeTenantId!,
             system_prompt: systemPrompt,
             target_stage: targetStage,
+            is_active: isActive,
             updated_at: new Date().toISOString(),
           },
           { onConflict: "tenant_id" }
@@ -529,8 +533,37 @@ function BeeIAPage() {
           {/* Tab Content: Settings & Training */}
           <TabsContent value="settings" className="mt-0">
             <div className="grid gap-6 lg:grid-cols-3">
-              {/* AI Instructions & Training */}
+              
+              {/* Global Toggle & AI Instructions */}
               <div className="lg:col-span-2 flex flex-col gap-4">
+                {/* Master Switch */}
+                <Card className="rounded-[22px] border-slate-200/80 p-5 dark:border-slate-800 bg-white dark:bg-slate-900">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <span className={`flex h-10 w-10 items-center justify-center rounded-xl transition-colors ${isActive ? 'bg-amber-500/10 text-amber-500' : 'bg-slate-100 text-slate-400 dark:bg-slate-800'}`}>
+                        <BrainCircuit className="h-5 w-5" />
+                      </span>
+                      <div>
+                        <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">
+                          Status Global da BeeIA
+                        </h2>
+                        <p className="text-xs text-slate-500">
+                          {isActive 
+                            ? "A IA está ativa e responderá automaticamente em novas mensagens." 
+                            : "A IA está desativada. Nenhuma mensagem automática será enviada."}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Switch 
+                        checked={isActive} 
+                        onCheckedChange={setIsActive} 
+                        className="data-[state=checked]:bg-amber-500" 
+                      />
+                    </div>
+                  </div>
+                </Card>
+
                 <Card className="rounded-[22px] border-slate-200/80 p-5 dark:border-slate-800">
                   <div className="flex items-center gap-2 border-b border-slate-100 pb-3 dark:border-slate-850">
                     <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-amber-500/10 text-amber-500">
