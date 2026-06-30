@@ -80,6 +80,7 @@ serve(async (req) => {
             from_phone: "system",
             to_phone: "system",
             body_text: isTrainer ? `[MENSAGEM DO SEU TREINADOR]: ${message}` : message,
+            payload_json: {},
             occurred_at: new Date().toISOString()
           });
         if (insErrCase) throw insErrCase;
@@ -216,6 +217,7 @@ Siga estas regras rigorosamente.`
           from_phone: "system",
           to_phone: "system",
           body_text: responseText,
+          payload_json: {},
           occurred_at: new Date().toISOString()
         });
       }
@@ -236,6 +238,7 @@ Siga estas regras rigorosamente.`
           from_phone: "system",
           to_phone: "system",
           body_text: "AUTO-AVALIAÇÃO DA IA: " + responseText,
+          payload_json: {},
           occurred_at: new Date().toISOString()
         });
       }
