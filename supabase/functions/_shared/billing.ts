@@ -1,4 +1,4 @@
-import { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.39.8";
+import { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 
 export async function checkTenantAILimits(tenantId: string, supabaseAdmin: SupabaseClient): Promise<void> {
   // 1. Fetch current plan limit

@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { corsHeaders } from "../_shared/cors.ts";
-import { supabaseAdmin } from "../_shared/supabaseAdmin.ts";
+import { createSupabaseAdmin } from "../_shared/supabaseAdmin.ts";
 import { generateText } from "../_shared/llm.ts";
 import { checkTenantAILimits, logAITokenUsage } from "../_shared/billing.ts";
 
@@ -11,6 +11,7 @@ serve(async (req) => {
   }
 
   try {
+    const supabaseAdmin = createSupabaseAdmin();
     const body = await req.json();
     const { tenant_id, session_id, message } = body;
 
