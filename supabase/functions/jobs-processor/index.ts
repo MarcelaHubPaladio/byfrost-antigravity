@@ -6,6 +6,7 @@ import { publishContentPublication } from "../_shared/metaPublish.ts";
 import { collectContentMetricsSnapshot } from "../_shared/metaMetrics.ts";
 import { buildPerformanceReport } from "../_shared/performanceAnalyst.ts";
 import { generateText } from "../_shared/llm.ts";
+import { checkTenantAILimits, logAITokenUsage } from "../_shared/billing.ts";
 
 type JobRow = {
   id: string;
@@ -1449,6 +1450,14 @@ ${contextText}`;
   let content = "{}";
   let tokensUsed = 0;
 
+  // 0. Verifica Limites
+  try {
+    await checkTenantAILimits(tenantId, supabase);
+  } catch (err: any) {
+    console.log(`[processGuardiaoInsightsGenerateJob] Skipping: ${err.message}`);
+    return;
+  }
+
   if (model === "gemini") {
     const apiKey = Deno.env.get("GEMINI_API_KEY") ?? "";
     if (!apiKey) throw new Error("GEMINI_API_KEY is not set");
@@ -1526,57 +1535,8 @@ ${contextText}`;
 
   // Update usage_counters for the current month
   if (tokensUsed > 0) {
-    const costUsd = tokensUsed * 0.0000003;
-    const { error: usageErr } = await supabase.from("usage_events").insert({
-      tenant_id: tenantId,
-      type: "ai_token",
-      qty: tokensUsed,
-      ref_type: "guardiao_insight",
-      ref_id: null,
-      occurred_at: new Date().toISOString(),
-      meta_json: {
-        description: journeyId === "GLOBAL" ? "Guardião: Análise Global (Financeiro e Tarefas)" : `Guardião: Insights da Jornada (ID: ${journeyId})`,
-        cost_usd: costUsd,
-        model: model
-      }
-    });
-    if (usageErr) {
-      console.error("[processGuardiaoInsightsGenerateJob] Failed to insert usage_event:", usageErr);
-    }
-
-    const periodStart = new Date();
-    periodStart.setDate(1);
-    const periodStartDate = periodStart.toISOString().slice(0, 10);
-
-    const { data: counter } = await supabase
-      .from("usage_counters")
-      .select("id, metrics_json")
-      .eq("tenant_id", tenantId)
-      .eq("period_start", periodStartDate)
-      .maybeSingle();
-
-    if (counter) {
-      const currentTokens = Number((counter.metrics_json as any)?.ai_tokens || 0);
-      await supabase
-        .from("usage_counters")
-        .update({
-          metrics_json: { ...counter.metrics_json, ai_tokens: currentTokens + tokensUsed }
-        })
-        .eq("id", counter.id);
-    } else {
-      // Calculate last day of the month
-      const periodEnd = new Date(periodStart.getFullYear(), periodStart.getMonth() + 1, 0);
-      const periodEndDate = periodEnd.toISOString().slice(0, 10);
-      
-      await supabase
-        .from("usage_counters")
-        .insert({
-          tenant_id: tenantId,
-          period_start: periodStartDate,
-          period_end: periodEndDate,
-          metrics_json: { ai_tokens: tokensUsed }
-        });
-    }
+    const desc = journeyId === "GLOBAL" ? "Guardião: Análise Global (Financeiro e Tarefas)" : `Guardião: Insights da Jornada (ID: ${journeyId})`;
+    await logAITokenUsage(tenantId, tokensUsed, desc, model, supabase);
   }
 }
 
@@ -2083,6 +2043,30 @@ serve(async (req: any) => {
             });
           });
 
+          // 6.5. Verifica Limites
+          try {
+            await checkTenantAILimits(tenantId, supabase);
+          } catch (err: any) {
+            console.log(`[BEEIA_PROCESS_MESSAGE] Skipping: ${err.message}`);
+            
+            // Pausa a IA no case e avisa no CRM internamente
+            await supabase.from("cases").update({ beeia_paused: true }).eq("id", caseId);
+            
+            await supabase.from("timeline_events").insert({
+              tenant_id: tenantId,
+              case_id: caseId,
+              event_type: "beeia_limit_exceeded",
+              actor_type: "system",
+              actor_id: null,
+              message: "A IA foi pausada automaticamente porque o limite de tokens do seu plano foi atingido.",
+              occurred_at: new Date().toISOString()
+            });
+
+            await supabase.from("job_queue").update({ status: "done" }).eq("id", job.id);
+            results.push({ id: job.id, ok: true, reason: "plan_limit_exceeded" });
+            continue;
+          }
+
           // 7. Call LLM
           const fallbackResponse = "Olá! Como posso ajudar você hoje?";
           const llmRes = await generateText({
@@ -2090,8 +2074,12 @@ serve(async (req: any) => {
             fallback: () => fallbackResponse
           }).catch(e => {
             console.error("[BEEIA] generateText failed, using fallback", e);
-            return { text: fallbackResponse, provider: "fallback" };
+            return { text: fallbackResponse, provider: "fallback", tokensUsed: 0 };
           });
+
+          if (llmRes.tokensUsed > 0) {
+            await logAITokenUsage(tenantId, llmRes.tokensUsed, `BeeIA: Resposta para ${customerPhone}`, llmRes.provider, supabase);
+          }
 
           let responseText = llmRes.text.trim();
           const shouldTransition = responseText.includes("[STAGE_TRANSITION]");

@@ -18,7 +18,7 @@ async function openAIChat({
   messages: ChatMessage[];
   model: string;
   temperature: number;
-}): Promise<string> {
+}): Promise<{ text: string; tokensUsed: number }> {
   const apiKey = Deno.env.get("OPENAI_API_KEY") ?? "";
   if (!apiKey) throw new Error("Missing OPENAI_API_KEY");
 
@@ -41,8 +41,9 @@ async function openAIChat({
   }
 
   const text = json?.choices?.[0]?.message?.content;
+  const tokensUsed = json?.usage?.total_tokens || 1000;
   if (!text || typeof text !== "string") throw new Error("OpenAI chat: invalid response");
-  return text;
+  return { text, tokensUsed };
 }
 
 export async function generateText({
@@ -51,20 +52,20 @@ export async function generateText({
 }: {
   messages: ChatMessage[];
   fallback: () => string;
-}): Promise<{ text: string; provider: string }>
+}): Promise<{ text: string; provider: string; tokensUsed: number }>
 {
-  const provider = (Deno.env.get("AI_PROVIDER") ?? "").toLowerCase();
+  const provider = (Deno.env.get("AI_PROVIDER") ?? "openai").toLowerCase();
 
   if (provider === "openai") {
     const model = Deno.env.get("AI_MODEL") ?? "gpt-4o-mini";
     const temperature = Number(Deno.env.get("AI_TEMPERATURE") ?? 0.6);
-    const text = await openAIChat({ messages, model, temperature });
-    return { text, provider: "openai" };
+    const { text, tokensUsed } = await openAIChat({ messages, model, temperature });
+    return { text, provider: "openai", tokensUsed };
   }
 
   // Deterministic fallback: keeps product usable without keys.
   const txt = fallback();
-  return { text: txt, provider: provider || "fallback" };
+  return { text: txt, provider: provider || "fallback", tokensUsed: 0 };
 }
 
 export function fallbackCaption({
