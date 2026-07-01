@@ -111,6 +111,10 @@ function BeeIAPage() {
   const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
   const [savingPermissions, setSavingPermissions] = useState(false);
 
+  // Prompt versioning state
+  const [changeDescription, setChangeDescription] = useState("");
+  const [selectedVersion, setSelectedVersion] = useState<any | null>(null);
+
   // 1. Fetch BeeIA Config
   const configQ = useQuery({
     queryKey: ["beeia_config", activeTenantId],
@@ -206,6 +210,44 @@ function BeeIAPage() {
       setSavingPermissions(false);
     }
   };
+
+  // 2.5 Fetch Prompt Versions
+  const promptVersionsQ = useQuery({
+    queryKey: ["beeia_prompt_versions", activeTenantId],
+    enabled: Boolean(activeTenantId),
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("beeia_prompt_versions")
+        .select("id, version, prompt_text, description, created_at, created_by")
+        .eq("tenant_id", activeTenantId!)
+        .order("version", { ascending: false });
+
+      if (error) throw error;
+      return data ?? [];
+    }
+  });
+
+  // Bootstrap prompt version 1 if config exists but no versions yet
+  useEffect(() => {
+    if (
+      activeTenantId &&
+      configQ.data?.system_prompt &&
+      promptVersionsQ.isSuccess &&
+      promptVersionsQ.data.length === 0
+    ) {
+      supabase
+        .from("beeia_prompt_versions")
+        .insert({
+          tenant_id: activeTenantId,
+          prompt_text: configQ.data.system_prompt,
+          version: 1,
+          description: "Prompt inicial (importado automaticamente)",
+        })
+        .then(() => {
+          qc.invalidateQueries({ queryKey: ["beeia_prompt_versions", activeTenantId] });
+        });
+    }
+  }, [activeTenantId, configQ.data?.system_prompt, promptVersionsQ.isSuccess, promptVersionsQ.data?.length]);
 
   // 3. Fetch cases in the beeia_crm journey
   const casesQ = useQuery({
@@ -529,8 +571,29 @@ function BeeIAPage() {
         );
 
       if (error) throw error;
-      showSuccess("Configurações da BeeIA salvas com sucesso!");
-      await qc.invalidateQueries({ queryKey: ["beeia_config", activeTenantId] });
+
+      // Save prompt version
+      const currentVersions = promptVersionsQ.data || [];
+      const nextVersion = currentVersions.length > 0 ? Math.max(...currentVersions.map((v: any) => v.version)) + 1 : 1;
+
+      const { error: versionErr } = await supabase
+        .from("beeia_prompt_versions")
+        .insert({
+          tenant_id: activeTenantId!,
+          prompt_text: systemPrompt,
+          version: nextVersion,
+          description: changeDescription.trim() || `Alteração da versão ${nextVersion}`,
+        });
+
+      if (versionErr) throw versionErr;
+
+      setChangeDescription("");
+      showSuccess("Configurações e versão do prompt salvas com sucesso!");
+      
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ["beeia_config", activeTenantId] }),
+        qc.invalidateQueries({ queryKey: ["beeia_prompt_versions", activeTenantId] }),
+      ]);
     } catch (e: any) {
       showError(`Falha ao salvar configurações: ${e.message}`);
     } finally {
@@ -922,15 +985,84 @@ function BeeIAPage() {
                         </span>
                       </div>
                     </div>
+                    
+                    <div className="mt-4 flex flex-col gap-2 border-t border-slate-100 pt-4 dark:border-slate-850">
+                      <label className="text-[11px] font-bold uppercase text-slate-400 tracking-wider">
+                        O que mudou nesta versão?
+                      </label>
+                      <div className="flex gap-2 items-center">
+                        <Input
+                          value={changeDescription}
+                          onChange={(e) => setChangeDescription(e.target.value)}
+                          placeholder="Ex: Ajustei as regras de precificação / Mudei tom de voz..."
+                          className="rounded-xl border-slate-200 text-xs dark:border-slate-850 flex-1 focus:border-amber-400 focus:ring-amber-400"
+                        />
+                        <Button
+                          onClick={handleSaveConfig}
+                          disabled={savingConfig}
+                          className="rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-semibold text-xs px-4"
+                        >
+                          <Save className="mr-1.5 h-3.5 w-3.5" /> Salvar Versão
+                        </Button>
+                      </div>
+                    </div>
 
-                    <div className="mt-2 flex justify-end">
-                      <Button
-                        onClick={handleSaveConfig}
-                        disabled={savingConfig}
-                        className="rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-semibold text-xs px-4"
-                      >
-                        <Save className="mr-1.5 h-3.5 w-3.5" /> Salvar Configurações
-                      </Button>
+                    {/* Histórico de Prompts */}
+                    <div className="flex flex-col gap-2 mt-4 bg-slate-50 dark:bg-slate-900/50 p-4 rounded-xl border border-slate-200 dark:border-slate-800">
+                      <div className="flex items-center gap-2 mb-1">
+                        <BookOpen className="h-4 w-4 text-amber-500" />
+                        <label className="text-xs font-bold uppercase text-slate-700 dark:text-slate-300 tracking-wider">
+                          Histórico & Versões do Prompt
+                        </label>
+                      </div>
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400 mb-2">
+                        Visualize ou restaure versões anteriores do prompt criadas por sua equipe.
+                      </p>
+
+                      <div className="max-h-[220px] overflow-y-auto flex flex-col gap-2">
+                        {promptVersionsQ.isLoading ? (
+                          <div className="text-xs text-slate-400">Carregando histórico...</div>
+                        ) : (promptVersionsQ.data ?? []).length === 0 ? (
+                          <div className="text-xs text-slate-400 italic">Nenhuma versão salva no histórico ainda.</div>
+                        ) : (
+                          (promptVersionsQ.data ?? []).map((v: any) => (
+                            <div key={v.id} className="flex items-center justify-between bg-white dark:bg-slate-900 p-2.5 rounded-lg border border-slate-200 dark:border-slate-800 shadow-sm">
+                              <div className="min-w-0 flex-1">
+                                <div className="text-xs font-semibold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+                                  <span className="bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300 text-[9px] font-bold px-1.5 py-0.5 rounded-md">
+                                    V{v.version}
+                                  </span>
+                                  <span className="truncate">{v.description}</span>
+                                </div>
+                                <div className="text-[10px] text-slate-400 mt-0.5">
+                                  {new Date(v.created_at).toLocaleString("pt-BR")}
+                                </div>
+                              </div>
+                              <div className="flex gap-1.5 ml-2">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => setSelectedVersion(v)}
+                                  className="h-7 px-2 text-[10px] font-semibold text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800"
+                                >
+                                  Visualizar
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => {
+                                    setSystemPrompt(v.prompt_text);
+                                    showSuccess(`Prompt restaurado da V${v.version} na caixa de texto. Lembre-se de clicar em salvar para publicar!`);
+                                  }}
+                                  className="h-7 px-2 text-[10px] font-semibold text-amber-600 hover:bg-amber-50 hover:text-amber-700 dark:text-amber-400 dark:hover:bg-amber-950/20"
+                                >
+                                  Restaurar
+                                </Button>
+                              </div>
+                            </div>
+                          ))
+                        )}
+                      </div>
                     </div>
                   </div>
                 </Card>
@@ -1394,6 +1526,59 @@ function BeeIAPage() {
                     {savingPermissions ? "Salvando…" : "Salvar Permissões"}
                   </Button>
                 </div>
+              </div>
+            </Card>
+          </div>
+        )}
+
+        {/* Modal: View Prompt Version */}
+        {selectedVersion && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4">
+            <Card className="w-full max-w-[650px] rounded-[22px] border-slate-200/80 p-5 shadow-lg animate-in fade-in zoom-in-95 duration-150 dark:border-slate-800 bg-white dark:bg-slate-900 flex flex-col max-h-[85vh]">
+              <div className="mb-4 flex items-center justify-between border-b border-slate-100 pb-3 dark:border-slate-850">
+                <div>
+                  <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                    <span className="bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300 text-[10px] font-bold px-1.5 py-0.5 rounded-md">
+                      Versão {selectedVersion.version}
+                    </span>
+                    Visualizar Prompt
+                  </h3>
+                  <p className="text-[11px] text-slate-500 mt-0.5">
+                    {selectedVersion.description || "Sem descrição"} • {new Date(selectedVersion.created_at).toLocaleString("pt-BR")}
+                  </p>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setSelectedVersion(null)}
+                  className="h-8 rounded-xl px-2 text-xs text-slate-400 hover:bg-slate-100"
+                >
+                  Fechar
+                </Button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto bg-slate-50 dark:bg-slate-950 p-4 rounded-xl border border-slate-200 dark:border-slate-850 font-mono text-xs text-slate-700 dark:text-slate-300 whitespace-pre-wrap leading-relaxed select-all">
+                {selectedVersion.prompt_text}
+              </div>
+
+              <div className="border-t border-slate-100 pt-3 mt-4 flex justify-end gap-2 dark:border-slate-850">
+                <Button
+                  variant="outline"
+                  onClick={() => setSelectedVersion(null)}
+                  className="rounded-xl text-xs font-semibold"
+                >
+                  Voltar
+                </Button>
+                <Button
+                  onClick={() => {
+                    setSystemPrompt(selectedVersion.prompt_text);
+                    setSelectedVersion(null);
+                    showSuccess(`Prompt restaurado da V${selectedVersion.version} na caixa de texto. Lembre-se de salvar!`);
+                  }}
+                  className="rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-semibold text-xs px-4"
+                >
+                  Restaurar esta Versão
+                </Button>
               </div>
             </Card>
           </div>
