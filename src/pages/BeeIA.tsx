@@ -220,6 +220,8 @@ function BeeIAPage() {
   });
 
   // 4. Fetch AI billing logs
+  const [selectedSimulatorSessionId, setSelectedSimulatorSessionId] = useState<string | null>(null);
+
   const billingQ = useQuery({
     queryKey: ["beeia_billing", activeTenantId],
     enabled: Boolean(activeTenantId),
@@ -227,15 +229,31 @@ function BeeIAPage() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("usage_events")
-        .select("id, qty, ref_id, meta_json, occurred_at")
+        .select("id, qty, ref_id, ref_type, meta_json, occurred_at")
         .eq("tenant_id", activeTenantId!)
         .eq("type", "ai_token")
         .order("occurred_at", { ascending: false });
 
       if (error) throw error;
       
-      const uniqueCaseIds = Array.from(new Set((data ?? []).map(row => row.ref_id).filter(Boolean))) as string[];
+      const uniqueCaseIds = Array.from(new Set(
+        (data ?? [])
+          .filter(row => row.ref_type !== "beeia_simulation" && row.ref_id)
+          .map(row => row.ref_id)
+      )) as string[];
+      
+      const phoneNumbersToLookup = new Set<string>();
+      (data ?? []).forEach(row => {
+        if (!row.ref_id && String(row.meta_json?.description ?? "").startsWith("BeeIA: Resposta para")) {
+          const match = String(row.meta_json?.description || "").match(/Resposta para (\+?\d+)/);
+          if (match) {
+            phoneNumbersToLookup.add(match[1]);
+          }
+        }
+      });
+      
       const casesMap = new Map<string, { title: string, name: string, phone: string }>();
+      const phoneToCaseMap = new Map<string, { caseId: string, name: string, phone: string, title: string }>();
 
       if (uniqueCaseIds.length > 0) {
         const { data: casesData } = await supabase
@@ -251,6 +269,27 @@ function BeeIAPage() {
           });
         });
       }
+
+      if (phoneNumbersToLookup.size > 0) {
+        const phoneList = Array.from(phoneNumbersToLookup);
+        const { data: customers } = await supabase
+          .from("customer_accounts")
+          .select("id, name, phone_e164, cases(id, title)")
+          .eq("tenant_id", activeTenantId!)
+          .in("phone_e164", phoneList);
+
+        customers?.forEach((cust: any) => {
+          const latestCase = cust.cases?.[0];
+          if (latestCase) {
+            phoneToCaseMap.set(cust.phone_e164, {
+              caseId: latestCase.id,
+              name: cust.name || "",
+              phone: cust.phone_e164,
+              title: latestCase.title || "",
+            });
+          }
+        });
+      }
       
       const groups: Record<string, {
         caseId: string | null;
@@ -261,6 +300,7 @@ function BeeIAPage() {
         title?: string;
         name?: string;
         phone?: string;
+        isSimulation: boolean;
       }> = {};
 
       let grandTotalTokens = 0;
@@ -271,29 +311,56 @@ function BeeIAPage() {
         const isBeeia = description.startsWith("BeeIA:") || description === "Simulador BeeIA";
         if (!isBeeia) continue;
 
-        const refId = row.ref_id || "global_insights";
+        const isSimulation = row.ref_type === "beeia_simulation" || description === "Simulador BeeIA";
         const tokens = row.qty || 0;
         const costUsd = Number(row.meta_json?.cost_usd || (tokens * 0.0000003));
         
         grandTotalTokens += tokens;
         grandTotalCostUsd += costUsd;
 
-        if (!groups[refId]) {
-          const caseInfo = row.ref_id ? casesMap.get(row.ref_id) : null;
-          groups[refId] = {
-            caseId: row.ref_id,
+        let refId = row.ref_id;
+        let caseInfo = null;
+
+        if (isSimulation) {
+          refId = row.ref_id || "simulation_fallback";
+        } else {
+          if (refId) {
+            caseInfo = casesMap.get(refId);
+          } else {
+            const match = description.match(/Resposta para (\+?\d+)/);
+            if (match) {
+              const phone = match[1];
+              const resolved = phoneToCaseMap.get(phone);
+              if (resolved) {
+                refId = resolved.caseId;
+                caseInfo = {
+                  title: resolved.title,
+                  name: resolved.name,
+                  phone: resolved.phone,
+                };
+              }
+            }
+          }
+        }
+
+        const groupKey = refId || `unknown_${row.id}`;
+
+        if (!groups[groupKey]) {
+          groups[groupKey] = {
+            caseId: refId,
             totalTokens: 0,
             totalCostUsd: 0,
             lastOccurred: row.occurred_at,
             description: row.meta_json?.description || "Análise/Outro",
             title: caseInfo?.title,
             name: caseInfo?.name,
-            phone: caseInfo?.phone,
+            phone: caseInfo?.phone || (description.match(/Resposta para (\+?\d+)/)?.[1]),
+            isSimulation,
           };
         }
 
-        groups[refId].totalTokens += tokens;
-        groups[refId].totalCostUsd += costUsd;
+        groups[groupKey].totalTokens += tokens;
+        groups[groupKey].totalCostUsd += costUsd;
       }
 
       const details = Object.values(groups).sort((a, b) => b.totalTokens - a.totalTokens);
@@ -913,7 +980,10 @@ function BeeIAPage() {
 
           {/* Tab Content: Simulador */}
           <TabsContent value="simulador" className="mt-0">
-            <BeeIASimulator />
+            <BeeIASimulator 
+              sessionId={selectedSimulatorSessionId || undefined} 
+              onSelectSession={(id) => setSelectedSimulatorSessionId(id)}
+            />
           </TabsContent>
 
           {/* Tab Content: Fatura */}
@@ -1040,15 +1110,31 @@ function BeeIAPage() {
                                 {formattedDate}
                               </td>
                               <td className="py-3 px-3 text-right">
-                                {detail.caseId && detail.caseId !== "global_insights" && (
+                                {detail.isSimulation ? (
                                   <Button
                                     variant="ghost"
                                     size="sm"
-                                    onClick={() => setSelectedCaseId(detail.caseId)}
+                                    onClick={() => {
+                                      if (detail.caseId && detail.caseId !== "simulation_fallback") {
+                                        setSelectedSimulatorSessionId(detail.caseId);
+                                      }
+                                      setActiveTab("simulador");
+                                    }}
                                     className="h-7 rounded-lg text-[10px] font-semibold text-amber-600 hover:bg-amber-50 hover:text-amber-700 dark:text-amber-400 dark:hover:bg-amber-950/20"
                                   >
-                                    Abrir Conversa
+                                    Abrir Simulador
                                   </Button>
+                                ) : (
+                                  detail.caseId && detail.caseId !== "global_insights" && (
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => setSelectedCaseId(detail.caseId)}
+                                      className="h-7 rounded-lg text-[10px] font-semibold text-amber-600 hover:bg-amber-50 hover:text-amber-700 dark:text-amber-400 dark:hover:bg-amber-950/20"
+                                    >
+                                      Abrir Conversa
+                                    </Button>
+                                  )
                                 )}
                               </td>
                             </tr>

@@ -27,13 +27,20 @@ type SimSession = {
   last_message: string;
 };
 
-export function BeeIASimulator() {
+export function BeeIASimulator({ sessionId, onSelectSession }: { sessionId?: string; onSelectSession?: (id: string) => void }) {
   const qc = useQueryClient();
   const { activeTenantId } = useTenant();
-  const [activeSessionId, setActiveSessionId] = useState<string>(crypto.randomUUID());
+  const [activeSessionId, setActiveSessionId] = useState<string>(sessionId || crypto.randomUUID());
   const [inputValue, setInputValue] = useState("");
   const [isTrainerMode, setIsTrainerMode] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Sync activeSessionId with sessionId prop when changed by parent
+  useEffect(() => {
+    if (sessionId && sessionId !== activeSessionId) {
+      setActiveSessionId(sessionId);
+    }
+  }, [sessionId]);
 
   // Radar State
   const [sessionTokensUsed, setSessionTokensUsed] = useState(0);
@@ -204,7 +211,9 @@ export function BeeIASimulator() {
   };
 
   const startNewSession = () => {
-    setActiveSessionId(crypto.randomUUID());
+    const newId = crypto.randomUUID();
+    setActiveSessionId(newId);
+    onSelectSession?.(newId);
     setSessionTokensUsed(0);
   };
 
@@ -234,7 +243,10 @@ export function BeeIASimulator() {
             sessionsQ.data?.map(s => (
               <div
                 key={s.session_id}
-                onClick={() => setActiveSessionId(s.session_id)}
+                onClick={() => {
+                  setActiveSessionId(s.session_id);
+                  onSelectSession?.(s.session_id);
+                }}
                 className={cn(
                   "cursor-pointer rounded-xl p-3 mb-1 transition-colors border",
                   activeSessionId === s.session_id
