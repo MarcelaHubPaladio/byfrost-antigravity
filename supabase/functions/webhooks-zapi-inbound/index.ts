@@ -142,6 +142,92 @@ function normalizePresenceCommand(
   return null;
 }
 
+function isRealPhone(phone: string, cleanLid: string): boolean {
+  if (!phone || phone.length < 5) return false;
+  if (phone.includes(cleanLid)) return false;
+  
+  const normalized = phone.replace("+", "");
+  if (
+    normalized.startsWith("2338") ||
+    normalized.startsWith("2128") ||
+    normalized.startsWith("9693") ||
+    normalized.startsWith("552338") ||
+    normalized.startsWith("552128") ||
+    normalized.startsWith("559693")
+  ) {
+    return false;
+  }
+  return true;
+}
+
+async function resolveLidToPhone(
+  supabase: any,
+  tenantId: string | null | undefined,
+  phoneOrLid: string | null,
+  payload: any
+): Promise<string | null> {
+  try {
+    if (!phoneOrLid || !tenantId) return null;
+
+    const rawLid = pickFirst(
+      payload?.chatLid,
+      payload?.data?.chatLid,
+      payload?.phone?.includes("@lid") ? payload.phone : null,
+      payload?.data?.phone?.includes("@lid") ? payload.data.phone : null,
+      phoneOrLid.includes("@lid") ? phoneOrLid : null
+    );
+
+    const cleanLid = rawLid
+      ? String(rawLid).replace("@lid", "").trim()
+      : phoneOrLid.replace("@lid", "").replace("+", "").trim();
+
+    if (!cleanLid || cleanLid.length < 10) return null;
+
+    const isLid =
+      Boolean(rawLid) ||
+      phoneOrLid.includes("@lid") ||
+      phoneOrLid.startsWith("+2338") ||
+      phoneOrLid.startsWith("+2128") ||
+      phoneOrLid.startsWith("+9693") ||
+      phoneOrLid.startsWith("+559693") ||
+      phoneOrLid.startsWith("+552128") ||
+      phoneOrLid.startsWith("+552338");
+
+    if (!isLid) return null;
+
+    const { data, error } = await supabase
+      .from("wa_messages")
+      .select("from_phone, to_phone, payload_json")
+      .eq("tenant_id", tenantId)
+      .or(`payload_json->>'chatLid'.eq.${cleanLid},payload_json->>'chatLid'.eq.${cleanLid}@lid,payload_json->>'phone'.eq.${cleanLid},payload_json->>'phone'.eq.${cleanLid}@lid`)
+      .order("occurred_at", { ascending: false })
+      .limit(10);
+
+    if (error || !data) return null;
+
+    for (const row of data) {
+      const rawPhone = row.payload_json?.phone;
+      if (rawPhone && !rawPhone.includes("@lid") && rawPhone.length > 5) {
+        const norm = normalizePhoneE164Like(rawPhone);
+        if (norm && isRealPhone(norm, cleanLid)) {
+          return norm;
+        }
+      }
+
+      if (row.from_phone && isRealPhone(row.from_phone, cleanLid)) {
+        return row.from_phone;
+      }
+
+      if (row.to_phone && isRealPhone(row.to_phone, cleanLid)) {
+        return row.to_phone;
+      }
+    }
+  } catch (err) {
+    console.warn("[resolveLidToPhone] Error resolving LID", err);
+  }
+  return null;
+}
+
 function detectCallEvent(payload: any, rawTypeLower: string) {
   // Providers vary. IMPORTANT: avoid false-positives like "receivedcallback" (contains "call").
   // Only mark as call when we have explicit evidence.
@@ -817,6 +903,22 @@ serve(async (req) => {
         meta_json: { url: req.url, forced_direction: forced ?? null },
       });
       return new Response("Unknown instance", { status: 404, headers: corsHeaders });
+    }
+
+    // Resolve LIDs to real phone numbers when possible
+    if (normalized.from) {
+      const resolved = await resolveLidToPhone(supabase, instance.tenant_id, normalized.from, payload);
+      if (resolved) {
+        console.log(`[${fn}] Resolved 'from' LID ${normalized.from} to real phone ${resolved}`);
+        normalized.from = resolved;
+      }
+    }
+    if (normalized.to) {
+      const resolved = await resolveLidToPhone(supabase, instance.tenant_id, normalized.to, payload);
+      if (resolved) {
+        console.log(`[${fn}] Resolved 'to' LID ${normalized.to} to real phone ${resolved}`);
+        normalized.to = resolved;
+      }
     }
 
     // If this is a call event, we want to ensure we attach it to the "other" phone (caller/callee),
