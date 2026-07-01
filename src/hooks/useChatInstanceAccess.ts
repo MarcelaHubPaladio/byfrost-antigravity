@@ -70,24 +70,33 @@ export function useChatInstanceAccess(opts?: UseChatInstanceAccessOptions) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("wa_instances")
-        .select("id,phone_number,assigned_user_id")
+        .select("id,phone_number,assigned_user_id,allowed_user_ids")
         .eq("tenant_id", activeTenantId!)
         .eq("status", "active")
         .is("deleted_at", null)
         .limit(200);
       if (error) throw error;
 
-      const rows = (data ?? []) as any as WaInstanceLite[];
+      const rows = (data ?? []) as any[];
+      
+      // Filter rows based on strict allowed_user_ids list first
+      const permittedRows = rows.filter((r) => {
+        if (r.allowed_user_ids && Array.isArray(r.allowed_user_ids) && r.allowed_user_ids.length > 0) {
+          return effectiveUserId && r.allowed_user_ids.includes(effectiveUserId);
+        }
+        return true; // No restriction, proceed to standard checks
+      });
+
       const isTenantAdmin = activeTenant?.role === "admin";
 
       // Super-admin ou Tenant Admin: por padrão pode ver tudo; se escolheu um usuário para "ver como", filtra.
       if ((isSuperAdmin || isTenantAdmin) && !isImpersonatingOtherUser) {
-        return rows;
+        return permittedRows;
       }
 
       if (isSuperAdmin || isTenantAdmin) {
-        if (!effectiveUserId) return rows;
-        return rows.filter((r) => {
+        if (!effectiveUserId) return permittedRows;
+        return permittedRows.filter((r) => {
           if (r.assigned_user_id && r.assigned_user_id === effectiveUserId) return true;
           if (!effectiveUserPhone) return false;
           return samePhoneLoose(r.phone_number, effectiveUserPhone);
@@ -95,7 +104,7 @@ export function useChatInstanceAccess(opts?: UseChatInstanceAccessOptions) {
       }
 
       // Usuário normal (ou gestor "vendo como"): filtra pelas instâncias vinculadas.
-      return rows.filter((r) => {
+      return permittedRows.filter((r) => {
         if (r.assigned_user_id && effectiveUserId && r.assigned_user_id === effectiveUserId) return true;
         if (!effectiveUserPhone) return false;
         return samePhoneLoose(r.phone_number, effectiveUserPhone);

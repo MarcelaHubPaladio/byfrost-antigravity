@@ -65,6 +65,7 @@ type WaInstanceRow = {
   phone_number: string | null;
   zapi_instance_id: string;
   beeia_enabled: boolean;
+  allowed_user_ids: string[] | null;
 };
 
 type BeeiaConfig = {
@@ -104,6 +105,11 @@ function BeeIAPage() {
   const [newZapiToken, setNewZapiToken] = useState("");
   const [newPhone, setNewPhone] = useState("");
   const [addingNumber, setAddingNumber] = useState(false);
+
+  // Access control permissions state
+  const [permissionsInstance, setPermissionsInstance] = useState<WaInstanceRow | null>(null);
+  const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
+  const [savingPermissions, setSavingPermissions] = useState(false);
 
   // 1. Fetch BeeIA Config
   const configQ = useQuery({
@@ -151,7 +157,7 @@ function BeeIAPage() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("wa_instances")
-        .select("id, name, status, phone_number, zapi_instance_id, beeia_enabled")
+        .select("id, name, status, phone_number, zapi_instance_id, beeia_enabled, allowed_user_ids")
         .eq("tenant_id", activeTenantId!)
         .is("deleted_at", null)
         .order("created_at", { ascending: false });
@@ -160,6 +166,46 @@ function BeeIAPage() {
       return (data ?? []) as WaInstanceRow[];
     },
   });
+
+  // Fetch tenant users profile
+  const tenantUsersQ = useQuery({
+    queryKey: ["beeia_tenant_users", activeTenantId],
+    enabled: Boolean(activeTenantId),
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("users_profile")
+        .select("user_id, display_name, email, role")
+        .eq("tenant_id", activeTenantId!)
+        .is("deleted_at", null)
+        .order("display_name", { ascending: true });
+      if (error) throw error;
+      return data ?? [];
+    }
+  });
+
+  // Handle saving access permissions
+  const handleSavePermissions = async () => {
+    if (!permissionsInstance) return;
+    setSavingPermissions(true);
+    try {
+      const { error } = await supabase
+        .from("wa_instances")
+        .update({
+          allowed_user_ids: selectedUserIds.length > 0 ? selectedUserIds : null,
+          updated_at: new Date().toISOString()
+        })
+        .eq("id", permissionsInstance.id);
+
+      if (error) throw error;
+      showSuccess("Permissões de acesso atualizadas com sucesso!");
+      setPermissionsInstance(null);
+      await instancesQ.refetch();
+    } catch (e: any) {
+      showError(`Falha ao salvar permissões: ${e.message}`);
+    } finally {
+      setSavingPermissions(false);
+    }
+  };
 
   // 3. Fetch cases in the beeia_crm journey
   const casesQ = useQuery({
@@ -960,14 +1006,40 @@ function BeeIAPage() {
                             </div>
                           </div>
 
-                          <div className="flex flex-col items-end gap-1">
-                            <span className="text-[9px] font-bold uppercase text-slate-400 tracking-wider">
-                              BeeIA
-                            </span>
-                            <Switch
-                              checked={inst.beeia_enabled}
-                              onCheckedChange={(val) => toggleBeeiaOnInstance(inst.id, val)}
-                            />
+                          <div className="flex items-center gap-3">
+                            <div className="flex flex-col items-end gap-1">
+                              <span className="text-[9px] font-bold uppercase text-slate-400 tracking-wider">
+                                Acesso
+                              </span>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-7 rounded-lg px-2 text-[10px] font-semibold text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-800"
+                                onClick={() => {
+                                  setPermissionsInstance(inst);
+                                  setSelectedUserIds(inst.allowed_user_ids || []);
+                                }}
+                                title="Configurar privacidade de acesso"
+                              >
+                                {inst.allowed_user_ids && inst.allowed_user_ids.length > 0 ? (
+                                  <span className="text-rose-500 font-bold flex items-center gap-1">
+                                    <span className="h-1.5 w-1.5 rounded-full bg-rose-500" /> Restrito ({inst.allowed_user_ids.length})
+                                  </span>
+                                ) : (
+                                  "Público"
+                                )}
+                              </Button>
+                            </div>
+
+                            <div className="flex flex-col items-end gap-1">
+                              <span className="text-[9px] font-bold uppercase text-slate-400 tracking-wider">
+                                BeeIA
+                              </span>
+                              <Switch
+                                checked={inst.beeia_enabled}
+                                onCheckedChange={(val) => toggleBeeiaOnInstance(inst.id, val)}
+                              />
+                            </div>
                           </div>
                         </div>
                       ))
@@ -1231,6 +1303,95 @@ function BeeIAPage() {
                     className="rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-semibold text-xs"
                   >
                     {addingNumber ? "Salvando…" : "Cadastrar Número"}
+                  </Button>
+                </div>
+              </div>
+            </Card>
+          </div>
+        )}
+
+        {/* Modal: Zangão Access Permissions */}
+        {permissionsInstance && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4">
+            <Card className="w-full max-w-[450px] rounded-[22px] border-slate-200/80 p-5 shadow-lg animate-in fade-in zoom-in-95 duration-150 dark:border-slate-800 bg-white dark:bg-slate-900">
+              <div className="mb-4 flex items-center justify-between border-b border-slate-100 pb-3 dark:border-slate-850">
+                <div>
+                  <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+                    Privacidade do Número
+                  </h3>
+                  <p className="text-[11px] text-slate-500">
+                    Selecione quais usuários podem ver as conversas de {permissionsInstance.name}.
+                  </p>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setPermissionsInstance(null)}
+                  className="h-8 rounded-xl px-2 text-xs text-slate-400 hover:bg-slate-100"
+                >
+                  Fechar
+                </Button>
+              </div>
+
+              <div className="max-h-[300px] overflow-y-auto flex flex-col gap-2 my-4">
+                {tenantUsersQ.isLoading ? (
+                  <div className="flex h-20 items-center justify-center">
+                    <div className="h-5 w-5 animate-spin rounded-full border-2 border-slate-200 border-t-amber-500" />
+                  </div>
+                ) : (tenantUsersQ.data ?? []).length === 0 ? (
+                  <div className="text-center text-xs text-slate-400 py-6">
+                    Nenhum outro usuário no tenant.
+                  </div>
+                ) : (
+                  (tenantUsersQ.data ?? []).map((usr: any) => {
+                    const isChecked = selectedUserIds.includes(usr.user_id);
+                    return (
+                      <div
+                        key={usr.user_id}
+                        className="flex items-center justify-between p-2.5 rounded-xl border border-slate-100 hover:bg-slate-55/40 dark:border-slate-800 dark:hover:bg-slate-900/40"
+                      >
+                        <div className="min-w-0 flex-1">
+                          <div className="text-xs font-semibold text-slate-800 dark:text-slate-200 truncate">
+                            {usr.display_name || "Usuário sem nome"}
+                          </div>
+                          <div className="text-[10px] text-slate-400 font-mono truncate">
+                            {usr.email} • <span className="uppercase text-[9px] font-bold">{usr.role}</span>
+                          </div>
+                        </div>
+                        <Switch
+                          checked={isChecked}
+                          onCheckedChange={(checked) => {
+                            if (checked) {
+                              setSelectedUserIds([...selectedUserIds, usr.user_id]);
+                            } else {
+                              setSelectedUserIds(selectedUserIds.filter(id => id !== usr.user_id));
+                            }
+                          }}
+                        />
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+
+              <div className="border-t border-slate-100 pt-3 flex items-center justify-between dark:border-slate-850">
+                <span className="text-[10px] text-slate-400 italic">
+                  * Se nenhum for marcado, todos (Admin/Super-Admin) terão acesso.
+                </span>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    onClick={() => setPermissionsInstance(null)}
+                    className="rounded-xl text-xs font-semibold"
+                  >
+                    Cancelar
+                  </Button>
+                  <Button
+                    onClick={handleSavePermissions}
+                    disabled={savingPermissions}
+                    className="rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-semibold text-xs"
+                  >
+                    {savingPermissions ? "Salvando…" : "Salvar Permissões"}
                   </Button>
                 </div>
               </div>
