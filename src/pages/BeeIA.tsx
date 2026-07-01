@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { cn } from "@/lib/utils";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AppShell } from "@/components/AppShell";
 import { RequireAuth } from "@/components/RequireAuth";
@@ -33,6 +34,13 @@ import {
   Trash2,
   CreditCard,
   Coins,
+  Search,
+  Calendar,
+  ChevronDown,
+  LayoutGrid,
+  List,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import { WhatsAppConversation } from "@/components/case/WhatsAppConversation";
 import { BeeIASimulator } from "@/components/case/BeeIASimulator";
@@ -114,6 +122,37 @@ function BeeIAPage() {
   // Prompt versioning state
   const [changeDescription, setChangeDescription] = useState("");
   const [selectedVersion, setSelectedVersion] = useState<any | null>(null);
+
+  // Persistent Filter states
+  const [searchQuery, setSearchQuery] = useState(() => localStorage.getItem("beeia_filter_search") || "");
+  const [viewMode, setViewMode] = useState<"kanban" | "list">(() => (localStorage.getItem("beeia_filter_view") as "kanban" | "list") || "kanban");
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [datePreset, setDatePreset] = useState<string>(() => localStorage.getItem("beeia_filter_preset") || "todo_periodo");
+  const [startDate, setStartDate] = useState<Date | null>(() => {
+    const val = localStorage.getItem("beeia_filter_start");
+    return val ? new Date(val) : null;
+  });
+  const [endDate, setEndDate] = useState<Date | null>(() => {
+    const val = localStorage.getItem("beeia_filter_end");
+    return val ? new Date(val) : null;
+  });
+  const [calendarMonth, setCalendarMonth] = useState<Date>(() => new Date());
+
+  useEffect(() => {
+    localStorage.setItem("beeia_filter_search", searchQuery);
+    localStorage.setItem("beeia_filter_view", viewMode);
+    localStorage.setItem("beeia_filter_preset", datePreset);
+    if (startDate) {
+      localStorage.setItem("beeia_filter_start", startDate.toISOString());
+    } else {
+      localStorage.removeItem("beeia_filter_start");
+    }
+    if (endDate) {
+      localStorage.setItem("beeia_filter_end", endDate.toISOString());
+    } else {
+      localStorage.removeItem("beeia_filter_end");
+    }
+  }, [searchQuery, viewMode, datePreset, startDate, endDate]);
 
   // 1. Fetch BeeIA Config
   const configQ = useQuery({
@@ -634,8 +673,219 @@ function BeeIAPage() {
     { key: "pausadas", label: "Pausadas", color: "border-t-yellow-600 bg-yellow-500/5" },
   ];
 
+  // Helper to check if two dates are same calendar day
+  const isSameDay = (d1: Date | null, d2: Date | null) => {
+    if (!d1 || !d2) return false;
+    return d1.getFullYear() === d2.getFullYear() && d1.getMonth() === d2.getMonth() && d1.getDate() === d2.getDate();
+  };
+
+  // Helper to check if day is inside date range
+  const isBetweenDays = (day: Date, start: Date | null, end: Date | null) => {
+    if (!start || !end) return false;
+    const dTime = new Date(day.getFullYear(), day.getMonth(), day.getDate()).getTime();
+    const sTime = new Date(start.getFullYear(), start.getMonth(), start.getDate()).getTime();
+    const eTime = new Date(end.getFullYear(), end.getMonth(), end.getDate()).getTime();
+    return dTime >= sTime && dTime <= eTime;
+  };
+
+  // Helper to generate calendar days for date picker
+  const getDaysInMonth = (date: Date) => {
+    const year = date.getFullYear();
+    const month = date.getMonth();
+    const firstDay = new Date(year, month, 1);
+    const lastDay = new Date(year, month + 1, 0);
+    const days: Date[] = [];
+    const startOffset = firstDay.getDay();
+
+    const prevMonthLastDay = new Date(year, month, 0).getDate();
+    for (let i = startOffset - 1; i >= 0; i--) {
+      days.push(new Date(year, month - 1, prevMonthLastDay - i));
+    }
+
+    for (let d = 1; d <= lastDay.getDate(); d++) {
+      days.push(new Date(year, month, d));
+    }
+
+    const totalCells = Math.ceil(days.length / 7) * 7;
+    const remaining = totalCells - days.length;
+    for (let d = 1; d <= remaining; d++) {
+      days.push(new Date(year, month + 1, d));
+    }
+    return days;
+  };
+
+  const applyPreset = (preset: string) => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
+    let start: Date | null = null;
+    let end: Date | null = null;
+
+    if (preset === "hoje") {
+      start = new Date(today);
+      end = new Date(today);
+      end.setHours(23, 59, 59, 999);
+    } else if (preset === "ontem") {
+      const yesterday = new Date(today);
+      yesterday.setDate(yesterday.getDate() - 1);
+      start = new Date(yesterday);
+      end = new Date(yesterday);
+      end.setHours(23, 59, 59, 999);
+    } else if (preset === "7_dias") {
+      start = new Date(today);
+      start.setDate(start.getDate() - 6);
+      end = new Date(today);
+      end.setHours(23, 59, 59, 999);
+    } else if (preset === "30_dias") {
+      start = new Date(today);
+      start.setDate(start.getDate() - 29);
+      end = new Date(today);
+      end.setHours(23, 59, 59, 999);
+    } else if (preset === "mes_atual") {
+      start = new Date(today.getFullYear(), today.getMonth(), 1);
+      end = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+      end.setHours(23, 59, 59, 999);
+    } else if (preset === "mes_passado") {
+      start = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+      end = new Date(today.getFullYear(), today.getMonth(), 0);
+      end.setHours(23, 59, 59, 999);
+    } else if (preset === "todo_periodo") {
+      start = null;
+      end = null;
+    }
+
+    setStartDate(start);
+    setEndDate(end);
+    setDatePreset(preset);
+  };
+
+  const getPresetLabel = () => {
+    if (datePreset === "hoje") return "Hoje";
+    if (datePreset === "ontem") return "Ontem";
+    if (datePreset === "7_dias") return "Últimos 7 Dias";
+    if (datePreset === "30_dias") return "Últimos 30 Dias";
+    if (datePreset === "mes_atual") return "Mês Atual";
+    if (datePreset === "mes_passado") return "Mês Passado";
+    if (datePreset === "todo_periodo") return "Todo o Período";
+    if (startDate && endDate) {
+      return `${startDate.toLocaleDateString("pt-BR")} - ${endDate.toLocaleDateString("pt-BR")}`;
+    }
+    return "Filtrar por Período";
+  };
+
+  const prevCalendarMonth = () => {
+    const prev = new Date(calendarMonth);
+    prev.setMonth(prev.getMonth() - 1);
+    setCalendarMonth(prev);
+  };
+
+  const nextCalendarMonth = () => {
+    const next = new Date(calendarMonth);
+    next.setMonth(next.getMonth() + 1);
+    setCalendarMonth(next);
+  };
+
+  const handleDayClick = (day: Date) => {
+    if (!startDate || (startDate && endDate)) {
+      setStartDate(day);
+      setEndDate(null);
+    } else {
+      if (day < startDate) {
+        setStartDate(day);
+      } else {
+        const endOfDay = new Date(day);
+        endOfDay.setHours(23, 59, 59, 999);
+        setEndDate(endOfDay);
+        setShowDatePicker(false);
+      }
+    }
+    setDatePreset("custom");
+  };
+
+  const renderMonthCalendar = (monthDate: Date) => {
+    const days = getDaysInMonth(monthDate);
+    const monthName = monthDate.toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
+    const weekDays = ["dom", "seg", "ter", "qua", "qui", "sex", "sab"];
+
+    return (
+      <div className="flex-1 min-w-[220px]">
+        <div className="text-center text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider mb-3">
+          {monthName}
+        </div>
+        <div className="grid grid-cols-7 gap-1 text-center text-[9px] font-bold text-slate-400 mb-1 uppercase">
+          {weekDays.map((d, idx) => (
+            <div key={idx} className="h-6 w-6 flex items-center justify-center">{d}</div>
+          ))}
+        </div>
+        <div className="grid grid-cols-7 gap-1">
+          {days.map((day, idx) => {
+            const isCurrentMonth = day.getMonth() === monthDate.getMonth();
+            const isSelected = isSameDay(day, startDate) || isSameDay(day, endDate);
+            const isBetween = isBetweenDays(day, startDate, endDate);
+            
+            return (
+              <button
+                key={idx}
+                type="button"
+                onClick={() => handleDayClick(day)}
+                className={cn(
+                  "h-7 w-7 rounded-lg text-[11px] font-semibold flex items-center justify-center transition-all",
+                  !isCurrentMonth 
+                    ? "text-slate-355 text-slate-300 dark:text-slate-700 pointer-events-none opacity-45" 
+                    : "text-slate-700 dark:text-slate-350 hover:bg-slate-100 dark:hover:bg-slate-900/50",
+                  isSelected && "bg-amber-500 text-white hover:bg-amber-600 font-bold shadow-xs",
+                  isBetween && !isSelected && "bg-amber-50 dark:bg-amber-950/20 text-amber-800 dark:text-amber-300 font-medium rounded-none"
+                )}
+              >
+                {day.getDate()}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    );
+  };
+
+  // Filtered cases list based on search query & date range (last message / session activity)
+  const filteredCases = useMemo(() => {
+    let list = casesQ.data ?? [];
+
+    // Search filter
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase().trim();
+      list = list.filter((c) => {
+        const name = (c.customer_accounts?.name || "").toLowerCase();
+        const phone = (c.customer_accounts?.phone_e164 || "").toLowerCase();
+        const lastMsgText = (c.wa_messages?.[0]?.body_text || "").toLowerCase();
+        return name.includes(q) || phone.includes(q) || lastMsgText.includes(q);
+      });
+    }
+
+    // Date range filter based on last conversation activity
+    if (startDate || endDate) {
+      list = list.filter((c) => {
+        const activityTime = c.wa_messages?.[0]?.occurred_at 
+          ? new Date(c.wa_messages[0].occurred_at) 
+          : new Date(c.updated_at);
+        
+        if (startDate && endDate) {
+          return activityTime >= startDate && activityTime <= endDate;
+        } else if (startDate) {
+          return activityTime >= startDate;
+        } else if (endDate) {
+          return activityTime <= endDate;
+        }
+        return true;
+      });
+    }
+
+    return list;
+  }, [casesQ.data, searchQuery, startDate, endDate]);
+
   const casesByColumn = useMemo(() => {
-    const list = casesQ.data ?? [];
+    const list = filteredCases;
     const map: Record<string, CaseRow[]> = {
       contato: [],
       pausadas: [],
@@ -653,7 +903,7 @@ function BeeIAPage() {
       }
     });
     return map;
-  }, [casesQ.data]);
+  }, [filteredCases]);
 
   return (
     <AppShell>
@@ -710,149 +960,417 @@ function BeeIAPage() {
                 <div className="h-8 w-8 animate-spin rounded-full border-4 border-slate-200 border-t-amber-500 dark:border-slate-800" />
               </div>
             ) : (
-              <div className="grid h-full min-h-[500px] gap-4 sm:grid-cols-2 lg:grid-cols-5">
-                {columns.map((col) => {
-                  const colCases = casesByColumn[col.key] ?? [];
-                  return (
-                    <div
-                      key={col.key}
-                      className={`flex flex-col rounded-[22px] border border-slate-200/80 border-t-4 p-4 dark:border-slate-800 ${col.color}`}
-                      onDragOver={(e) => e.preventDefault()}
-                      onDrop={(e) => {
-                        const cid = e.dataTransfer.getData("text/caseId");
-                        if (cid) handleMoveState(cid, col.key);
-                      }}
-                    >
-                      {/* Column Header */}
-                      <div className="mb-3 flex items-center justify-between">
-                        <span className="text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-400">
-                          {col.label}
-                        </span>
-                        <span className="flex h-5 w-5 items-center justify-center rounded-full bg-slate-100 text-[10px] font-bold text-slate-700 dark:bg-slate-850 dark:text-slate-300">
-                          {colCases.length}
-                        </span>
-                      </div>
-
-                      {/* Cases list */}
-                      <div className="flex flex-1 flex-col gap-2 overflow-y-auto max-h-[70vh]">
-                        {colCases.length === 0 ? (
-                          <div className="flex flex-1 flex-col items-center justify-center rounded-2xl border border-dashed border-slate-200/50 p-6 text-center text-slate-400 dark:border-slate-800/40">
-                            <Bot className="mb-2 h-5 w-5 opacity-40" />
-                            <p className="text-[10px]">Sem leads nesta etapa</p>
-                          </div>
-                        ) : (
-                          colCases.map((c) => {
-                            const lastMsg = c.wa_messages?.[0];
-                            const phone = c.customer_accounts?.phone_e164 ?? "";
-                            const name = c.customer_accounts?.name ?? "Contato sem nome";
-
-                            return (
-                              <Card
-                                key={c.id}
-                                draggable
-                                onDragStart={(e) => {
-                                  e.dataTransfer.setData("text/caseId", c.id);
-                                  e.dataTransfer.effectAllowed = "move";
-                                }}
-                                className="group relative flex cursor-grab active:cursor-grabbing flex-col rounded-2xl border-slate-200/60 p-3.5 hover:border-amber-200 hover:shadow-sm dark:border-slate-850 dark:hover:border-amber-950/60"
-                                onClick={() => setSelectedCaseId(c.id)}
-                              >
-                                <div className="flex items-start justify-between gap-2">
-                                  <div className="font-semibold text-xs text-slate-800 dark:text-slate-200 group-hover:text-amber-600 dark:group-hover:text-amber-400">
-                                    {name}
-                                  </div>
-                                  {c.state === "contato" && !c.beeia_paused && (
-                                    <span className="flex h-2 w-2 rounded-full bg-amber-400 animate-pulse" title="IA ativamente respondendo" />
-                                  )}
-                                </div>
-                                <div className="mt-1 text-[10px] text-slate-400 font-mono">
-                                  {phone}
-                                </div>
-
-                                {lastMsg ? (
-                                  <div className="mt-2 line-clamp-2 text-[11px] text-slate-600 dark:text-slate-400">
-                                    {lastMsg.body_text}
-                                  </div>
-                                ) : (
-                                  <div className="mt-2 text-[10px] italic text-slate-400">
-                                    Sem mensagens gravadas
-                                  </div>
-                                )}
-
-                                {/* Card Footer / Movement controls */}
-                                <div className="mt-3.5 flex items-center justify-between border-t border-slate-100 pt-2 dark:border-slate-850">
-                                  <div className="text-[9px] text-slate-400">
-                                    {new Date(c.updated_at).toLocaleDateString("pt-BR", {
-                                      hour: "2-digit",
-                                      minute: "2-digit",
-                                    })}
-                                  </div>
-                                  <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
-                                    {col.key === "contato" && (
-                                      <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        className="h-6 w-6 rounded-lg hover:bg-amber-100 dark:hover:bg-amber-950/40 hover:text-amber-700"
-                                        onClick={() => handleMoveState(c.id, "morno")}
-                                        title="Mover para Morno"
-                                      >
-                                        <ArrowRight className="h-3 w-3" />
-                                      </Button>
-                                    )}
-                                    {col.key === "morno" && (
-                                      <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        className="h-6 w-6 rounded-lg hover:bg-orange-100 dark:hover:bg-orange-950/40 hover:text-orange-700"
-                                        onClick={() => handleMoveState(c.id, "quente")}
-                                        title="Mover para Quente"
-                                      >
-                                        <ArrowRight className="h-3 w-3" />
-                                      </Button>
-                                    )}
-                                    {col.key === "quente" && (
-                                      <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        className="h-6 w-6 rounded-lg hover:bg-rose-100 dark:hover:bg-rose-950/40 hover:text-rose-700"
-                                        onClick={() => handleMoveState(c.id, "frio")}
-                                        title="Mover para Frio"
-                                      >
-                                        <ArrowRight className="h-3 w-3" />
-                                      </Button>
-                                    )}
-                                    {col.key === "frio" && (
-                                      <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        className="h-6 w-6 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-700"
-                                        onClick={() => handleMoveState(c.id, "pausadas")}
-                                        title="Mover para Pausadas"
-                                      >
-                                        <ArrowRight className="h-3 w-3" />
-                                      </Button>
-                                    )}
-                                    {col.key === "pausadas" && (
-                                      <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        className="h-6 w-6 rounded-lg hover:bg-amber-100 dark:hover:bg-amber-950/40 hover:text-amber-700"
-                                        onClick={() => handleMoveState(c.id, "contato")}
-                                        title="Reiniciar em Contato"
-                                      >
-                                        <RefreshCw className="h-3 w-3" />
-                                      </Button>
-                                    )}
-                                  </div>
-                                </div>
-                              </Card>
-                            );
-                          })
-                        )}
-                      </div>
+              <div className="flex flex-col gap-4">
+                {/* Filters Row */}
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between bg-white dark:bg-slate-900 p-4 rounded-[22px] border border-slate-200/80 dark:border-slate-800 shadow-xs relative">
+                  <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center flex-1">
+                    {/* Search Input */}
+                    <div className="relative w-full sm:w-[280px]">
+                      <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-slate-400" />
+                      <Input
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        placeholder="Buscar lead, telefone ou msg..."
+                        className="rounded-xl border-slate-200 text-xs dark:border-slate-850 pl-9 focus:border-amber-400 focus:ring-amber-400 w-full"
+                      />
                     </div>
-                  );
-                })}
+
+                    {/* Date Picker Trigger */}
+                    <div className="relative">
+                      <Button
+                        variant="outline"
+                        onClick={() => setShowDatePicker(!showDatePicker)}
+                        className="rounded-xl text-xs border-slate-200 dark:border-slate-850 px-3.5 h-9 flex items-center gap-2 hover:bg-slate-50 dark:hover:bg-slate-800/50 w-full sm:w-auto justify-between"
+                      >
+                        <div className="flex items-center gap-2">
+                          <Calendar className="h-3.5 w-3.5 text-slate-500" />
+                          <span>{getPresetLabel()}</span>
+                        </div>
+                        <ChevronDown className="h-3.5 w-3.5 text-slate-400" />
+                      </Button>
+
+                      {/* Custom Date Range Popover */}
+                      {showDatePicker && (
+                        <div className="absolute left-0 sm:left-auto top-10 z-50 flex flex-col sm:flex-row bg-white dark:bg-slate-950 p-4 rounded-[22px] border border-slate-200 dark:border-slate-800 shadow-xl min-w-[320px] sm:min-w-[620px] max-w-full overflow-x-auto mt-2">
+                          {/* Left Sidebar Presets */}
+                          <div className="flex flex-col gap-1 border-b sm:border-b-0 sm:border-r border-slate-100 dark:border-slate-850 pb-3 sm:pb-0 pr-0 sm:pr-4 mr-0 sm:mr-4 min-w-[150px]">
+                            {[
+                              { key: "todo_periodo", label: "TODO PERÍODO" },
+                              { key: "hoje", label: "HOJE" },
+                              { key: "ontem", label: "ONTEM" },
+                              { key: "7_dias", label: "ÚLTIMOS 7 DIAS" },
+                              { key: "30_dias", label: "ÚLTIMOS 30 DIAS" },
+                              { key: "mes_atual", label: "MÊS ATUAL" },
+                              { key: "mes_passado", label: "MÊS PASSADO" },
+                            ].map((preset) => (
+                              <button
+                                key={preset.key}
+                                type="button"
+                                onClick={() => {
+                                  applyPreset(preset.key);
+                                  if (preset.key !== "custom") {
+                                    setShowDatePicker(false);
+                                  }
+                                }}
+                                className={cn(
+                                  "w-full text-left px-3 py-2 rounded-xl text-[10px] font-bold tracking-wider transition-all",
+                                  datePreset === preset.key
+                                    ? "bg-amber-50 text-amber-700 dark:bg-amber-950/20 dark:text-amber-400"
+                                    : "text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-900"
+                                )}
+                              >
+                                {preset.label}
+                              </button>
+                            ))}
+                          </div>
+
+                          {/* Right Calendars grid */}
+                          <div className="flex-1 flex flex-col gap-3 mt-3 sm:mt-0">
+                            {/* Month navigation header */}
+                            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-850 pb-2 mb-2">
+                              <button
+                                type="button"
+                                onClick={prevCalendarMonth}
+                                className="h-7 w-7 rounded-full border border-slate-200 dark:border-slate-800 flex items-center justify-center text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-900"
+                              >
+                                <ChevronLeft className="h-4 w-4" />
+                              </button>
+                              <span className="text-xs font-bold text-slate-600 dark:text-slate-400">
+                                Selecionar Período
+                              </span>
+                              <button
+                                type="button"
+                                onClick={nextCalendarMonth}
+                                className="h-7 w-7 rounded-full border border-slate-200 dark:border-slate-800 flex items-center justify-center text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-900"
+                              >
+                                <ChevronRight className="h-4 w-4" />
+                              </button>
+                            </div>
+
+                            {/* Calendar sheets side-by-side */}
+                            <div className="flex flex-col sm:flex-row gap-6">
+                              {renderMonthCalendar(calendarMonth)}
+                              {renderMonthCalendar(new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1, 1))}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* View mode toggle: Kanban vs List */}
+                  <div className="flex items-center gap-1.5 self-end sm:self-auto border-t sm:border-t-0 pt-2 sm:pt-0 border-slate-100 dark:border-slate-800">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => setViewMode("kanban")}
+                      className={cn(
+                        "h-8 w-8 rounded-xl",
+                        viewMode === "kanban" 
+                          ? "bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-200" 
+                          : "text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-850"
+                      )}
+                      title="Modo Kanban"
+                    >
+                      <LayoutGrid className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => setViewMode("list")}
+                      className={cn(
+                        "h-8 w-8 rounded-xl",
+                        viewMode === "list" 
+                          ? "bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-200" 
+                          : "text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-850"
+                      )}
+                      title="Modo Lista"
+                    >
+                      <List className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Active Filters Warning */}
+                {(searchQuery.trim() !== "" || datePreset !== "todo_periodo") && (
+                  <div className="flex items-center justify-between rounded-xl bg-amber-500/10 border border-amber-500/20 px-4 py-2 text-xs text-amber-800 dark:text-amber-400">
+                    <div className="flex items-center gap-2">
+                      <span className="flex h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse" />
+                      <span>
+                        <strong>Filtros ativos:</strong> {searchQuery && `Busca por "${searchQuery}"`} {datePreset !== "todo_periodo" && `${searchQuery ? " • " : ""}Período (${getPresetLabel()})`}.
+                      </span>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        setSearchQuery("");
+                        applyPreset("todo_periodo");
+                      }}
+                      className="h-6 rounded-lg text-[10px] font-bold text-amber-800 hover:bg-amber-100 dark:text-amber-300 dark:hover:bg-amber-950/20 px-2"
+                    >
+                      Limpar Filtros
+                    </Button>
+                  </div>
+                )}
+
+                {/* Main Content Area: List View vs Kanban Grid */}
+                {viewMode === "list" ? (
+                  <Card className="rounded-[22px] border-slate-200/80 p-5 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xs">
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left border-collapse">
+                        <thead>
+                          <tr className="border-b border-slate-150 dark:border-slate-850">
+                            <th className="pb-3 text-[10px] font-bold uppercase tracking-wider text-slate-400">Lead</th>
+                            <th className="pb-3 text-[10px] font-bold uppercase tracking-wider text-slate-400">Estágio</th>
+                            <th className="pb-3 text-[10px] font-bold uppercase tracking-wider text-slate-400">Última Mensagem</th>
+                            <th className="pb-3 text-[10px] font-bold uppercase tracking-wider text-slate-400">Última Atividade</th>
+                            <th className="pb-3 text-[10px] font-bold uppercase tracking-wider text-slate-400">Status IA</th>
+                            <th className="pb-3 text-[10px] font-bold uppercase tracking-wider text-slate-400 text-right">Ações</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100 dark:divide-slate-850">
+                          {filteredCases.length === 0 ? (
+                            <tr>
+                              <td colSpan={6} className="py-8 text-center text-xs text-slate-400 italic">
+                                Nenhum lead encontrado com os filtros ativos.
+                              </td>
+                            </tr>
+                          ) : (
+                            filteredCases.map((c) => {
+                              const lastMsg = c.wa_messages?.[0];
+                              const phone = c.customer_accounts?.phone_e164 ?? "";
+                              const name = c.customer_accounts?.name ?? "Contato sem nome";
+                              
+                              // Stage Badge Styling
+                              let stageLabel = "1º Contato";
+                              let stageColor = "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300";
+                              if (c.beeia_paused) {
+                                stageLabel = "Pausada";
+                                stageColor = "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-300";
+                              } else if (c.state === "morno") {
+                                stageLabel = "Morno";
+                                stageColor = "bg-orange-100 text-orange-800 dark:bg-orange-900/40 dark:text-orange-300";
+                              } else if (c.state === "quente") {
+                                stageLabel = "Quente";
+                                stageColor = "bg-rose-100 text-rose-800 dark:bg-rose-900/40 dark:text-rose-300";
+                              } else if (c.state === "frio") {
+                                stageLabel = "Frio";
+                                stageColor = "bg-slate-100 text-slate-850 dark:bg-slate-800 dark:text-slate-300";
+                              }
+
+                              return (
+                                <tr 
+                                  key={c.id} 
+                                  className="group hover:bg-slate-50/50 dark:hover:bg-slate-900/20 transition-all cursor-pointer"
+                                  onClick={() => setSelectedCaseId(c.id)}
+                                >
+                                  <td className="py-3.5">
+                                    <div className="text-xs font-semibold text-slate-800 dark:text-slate-200 group-hover:text-amber-600 dark:group-hover:text-amber-400">
+                                      {name}
+                                    </div>
+                                    <div className="text-[10px] text-slate-400 font-mono mt-0.5">{phone}</div>
+                                  </td>
+                                  <td className="py-3.5">
+                                    <span className={`inline-flex items-center rounded-md px-2 py-0.5 text-[10px] font-medium ${stageColor}`}>
+                                      {stageLabel}
+                                    </span>
+                                  </td>
+                                  <td className="py-3.5 max-w-[300px]">
+                                    {lastMsg ? (
+                                      <div className="text-xs text-slate-600 dark:text-slate-400 truncate">
+                                        {lastMsg.body_text}
+                                      </div>
+                                    ) : (
+                                      <div className="text-[10px] italic text-slate-450">Sem mensagens gravadas</div>
+                                    )}
+                                  </td>
+                                  <td className="py-3.5 text-xs text-slate-500 dark:text-slate-400">
+                                    {new Date(c.updated_at).toLocaleString("pt-BR", {
+                                      day: "2-digit",
+                                      month: "2-digit",
+                                      hour: "2-digit",
+                                      minute: "2-digit"
+                                    })}
+                                  </td>
+                                  <td className="py-3.5">
+                                    {c.beeia_paused ? (
+                                      <span className="text-[10px] text-rose-500 font-semibold flex items-center gap-1">
+                                        <span className="h-1.5 w-1.5 rounded-full bg-rose-500" /> Pausada
+                                      </span>
+                                    ) : (
+                                      <span className="text-[10px] text-emerald-500 font-semibold flex items-center gap-1">
+                                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" /> Ativa
+                                      </span>
+                                    )}
+                                  </td>
+                                  <td className="py-3.5 text-right">
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className="h-7 text-xs rounded-lg hover:bg-slate-100"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setSelectedCaseId(c.id);
+                                      }}
+                                    >
+                                      Abrir Conversa
+                                    </Button>
+                                  </td>
+                                </tr>
+                              );
+                            })
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </Card>
+                ) : (
+                  <div className="grid h-full min-h-[500px] gap-4 sm:grid-cols-2 lg:grid-cols-5">
+                    {columns.map((col) => {
+                      const colCases = casesByColumn[col.key] ?? [];
+                      return (
+                        <div
+                          key={col.key}
+                          className={`flex flex-col rounded-[22px] border border-slate-200/80 border-t-4 p-4 dark:border-slate-800 ${col.color}`}
+                          onDragOver={(e) => e.preventDefault()}
+                          onDrop={(e) => {
+                            const cid = e.dataTransfer.getData("text/caseId");
+                            if (cid) handleMoveState(cid, col.key);
+                          }}
+                        >
+                          {/* Column Header */}
+                          <div className="mb-3 flex items-center justify-between">
+                            <span className="text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-400">
+                              {col.label}
+                            </span>
+                            <span className="flex h-5 w-5 items-center justify-center rounded-full bg-slate-100 text-[10px] font-bold text-slate-700 dark:bg-slate-850 dark:text-slate-300">
+                              {colCases.length}
+                            </span>
+                          </div>
+
+                          {/* Cases list */}
+                          <div className="flex flex-1 flex-col gap-2 overflow-y-auto max-h-[70vh]">
+                            {colCases.length === 0 ? (
+                              <div className="flex flex-1 flex-col items-center justify-center rounded-2xl border border-dashed border-slate-200/50 p-6 text-center text-slate-400 dark:border-slate-800/40">
+                                <Bot className="mb-2 h-5 w-5 opacity-40" />
+                                <p className="text-[10px]">Sem leads nesta etapa</p>
+                              </div>
+                            ) : (
+                              colCases.map((c) => {
+                                const lastMsg = c.wa_messages?.[0];
+                                const phone = c.customer_accounts?.phone_e164 ?? "";
+                                const name = c.customer_accounts?.name ?? "Contato sem nome";
+
+                                return (
+                                  <Card
+                                    key={c.id}
+                                    draggable
+                                    onDragStart={(e) => {
+                                      e.dataTransfer.setData("text/caseId", c.id);
+                                      e.dataTransfer.effectAllowed = "move";
+                                    }}
+                                    className="group relative flex cursor-grab active:cursor-grabbing flex-col rounded-2xl border-slate-200/60 p-3.5 hover:border-amber-200 hover:shadow-sm dark:border-slate-850 dark:hover:border-amber-950/60"
+                                    onClick={() => setSelectedCaseId(c.id)}
+                                  >
+                                    <div className="flex items-start justify-between gap-2">
+                                      <div className="font-semibold text-xs text-slate-800 dark:text-slate-200 group-hover:text-amber-600 dark:group-hover:text-amber-400">
+                                        {name}
+                                      </div>
+                                      {c.state === "contato" && !c.beeia_paused && (
+                                        <span className="flex h-2 w-2 rounded-full bg-amber-400 animate-pulse" title="IA ativamente respondendo" />
+                                      )}
+                                    </div>
+                                    <div className="mt-1 text-[10px] text-slate-400 font-mono">
+                                      {phone}
+                                    </div>
+
+                                    {lastMsg ? (
+                                      <div className="mt-2 line-clamp-2 text-[11px] text-slate-600 dark:text-slate-400">
+                                        {lastMsg.body_text}
+                                      </div>
+                                    ) : (
+                                      <div className="mt-2 text-[10px] italic text-slate-400">
+                                        Sem mensagens gravadas
+                                      </div>
+                                    )}
+
+                                    {/* Card Footer / Movement controls */}
+                                    <div className="mt-3.5 flex items-center justify-between border-t border-slate-100 pt-2 dark:border-slate-850">
+                                      <div className="text-[9px] text-slate-400">
+                                        {new Date(c.updated_at).toLocaleDateString("pt-BR", {
+                                          hour: "2-digit",
+                                          minute: "2-digit",
+                                        })}
+                                      </div>
+                                      <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
+                                        {col.key === "contato" && (
+                                          <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            className="h-6 w-6 rounded-lg hover:bg-amber-100 dark:hover:bg-amber-950/40 hover:text-amber-700"
+                                            onClick={() => handleMoveState(c.id, "morno")}
+                                            title="Mover para Morno"
+                                          >
+                                            <ArrowRight className="h-3 w-3" />
+                                          </Button>
+                                        )}
+                                        {col.key === "morno" && (
+                                          <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            className="h-6 w-6 rounded-lg hover:bg-orange-100 dark:hover:bg-orange-950/40 hover:text-orange-700"
+                                            onClick={() => handleMoveState(c.id, "quente")}
+                                            title="Mover para Quente"
+                                          >
+                                            <ArrowRight className="h-3 w-3" />
+                                          </Button>
+                                        )}
+                                        {col.key === "quente" && (
+                                          <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            className="h-6 w-6 rounded-lg hover:bg-rose-100 dark:hover:bg-rose-950/40 hover:text-rose-700"
+                                            onClick={() => handleMoveState(c.id, "frio")}
+                                            title="Mover para Frio"
+                                          >
+                                            <ArrowRight className="h-3 w-3" />
+                                          </Button>
+                                        )}
+                                        {col.key === "frio" && (
+                                          <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            className="h-6 w-6 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-700"
+                                            onClick={() => handleMoveState(c.id, "pausadas")}
+                                            title="Mover para Pausadas"
+                                          >
+                                            <ArrowRight className="h-3 w-3" />
+                                          </Button>
+                                        )}
+                                        {col.key === "pausadas" && (
+                                          <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            className="h-6 w-6 rounded-lg hover:bg-amber-100 dark:hover:bg-amber-950/40 hover:text-amber-700"
+                                            onClick={() => handleMoveState(c.id, "contato")}
+                                            title="Reiniciar em Contato"
+                                          >
+                                            <RefreshCw className="h-3 w-3" />
+                                          </Button>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </Card>
+                                );
+                              })
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             )}
           </TabsContent>
