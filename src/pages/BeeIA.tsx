@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AppShell } from "@/components/AppShell";
 import { RequireAuth } from "@/components/RequireAuth";
 import { useTenant } from "@/providers/TenantProvider";
+import { useSession } from "@/providers/SessionProvider";
 import { supabase } from "@/lib/supabase";
 import { showError, showSuccess } from "@/utils/toast";
 import { Card } from "@/components/ui/card";
@@ -83,6 +84,8 @@ export default function BeeIA() {
 function BeeIAPage() {
   const qc = useQueryClient();
   const { activeTenantId } = useTenant();
+  const { user } = useSession();
+  const isSuperAdmin = (user as any)?.app_metadata?.role === "super-admin";
   const [activeTab, setActiveTab] = useState("crm");
 
   // State for config
@@ -264,6 +267,10 @@ function BeeIAPage() {
       let grandTotalCostUsd = 0;
 
       for (const row of (data ?? [])) {
+        const description = String(row.meta_json?.description ?? "");
+        const isBeeia = description.startsWith("BeeIA:") || description === "Simulador BeeIA";
+        if (!isBeeia) continue;
+
         const refId = row.ref_id || "global_insights";
         const tokens = row.qty || 0;
         const costUsd = Number(row.meta_json?.cost_usd || (tokens * 0.0000003));
@@ -913,7 +920,7 @@ function BeeIAPage() {
           <TabsContent value="fatura" className="mt-0">
             <div className="flex flex-col gap-6">
               {/* Summary Cards */}
-              <div className="grid gap-4 sm:grid-cols-3">
+              <div className={`grid gap-4 ${isSuperAdmin ? "sm:grid-cols-3" : "sm:grid-cols-2"}`}>
                 <Card className="rounded-[22px] border-slate-200/80 p-5 bg-white shadow-sm flex items-center gap-4 dark:border-slate-800 dark:bg-slate-900">
                   <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-amber-500/10 text-amber-500">
                     <BrainCircuit className="h-6 w-6" />
@@ -926,26 +933,28 @@ function BeeIAPage() {
                   </div>
                 </Card>
 
-                <Card className="rounded-[22px] border-slate-200/80 p-5 bg-white shadow-sm flex items-center gap-4 dark:border-slate-800 dark:bg-slate-900">
-                  <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-500/10 text-emerald-500">
-                    <Coins className="h-6 w-6" />
-                  </span>
-                  <div>
-                    <h3 className="text-[11px] font-bold uppercase text-slate-400 tracking-wider">Custo Estimado (USD)</h3>
-                    <p className="text-2xl font-black text-slate-800 dark:text-slate-100">
-                      ${billingQ.data?.grandTotalCostUsd.toLocaleString("en-US", { minimumFractionDigits: 4, maximumFractionDigits: 4 }) ?? "0.0000"}
-                    </p>
-                  </div>
-                </Card>
+                {isSuperAdmin && (
+                  <Card className="rounded-[22px] border-slate-200/80 p-5 bg-white shadow-sm flex items-center gap-4 dark:border-slate-800 dark:bg-slate-900">
+                    <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-500/10 text-emerald-500">
+                      <Coins className="h-6 w-6" />
+                    </span>
+                    <div>
+                      <h3 className="text-[11px] font-bold uppercase text-slate-400 tracking-wider">Custo Estimado (USD)</h3>
+                      <p className="text-2xl font-black text-slate-800 dark:text-slate-100">
+                        ${billingQ.data?.grandTotalCostUsd.toLocaleString("en-US", { minimumFractionDigits: 4, maximumFractionDigits: 4 }) ?? "0.0000"}
+                      </p>
+                    </div>
+                  </Card>
+                )}
 
                 <Card className="rounded-[22px] border-slate-200/80 p-5 bg-white shadow-sm flex items-center gap-4 dark:border-slate-800 dark:bg-slate-900">
                   <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-500/10 text-blue-500">
                     <CreditCard className="h-6 w-6" />
                   </span>
                   <div>
-                    <h3 className="text-[11px] font-bold uppercase text-slate-400 tracking-wider">Custo Convertido (BRL)</h3>
+                    <h3 className="text-[11px] font-bold uppercase text-slate-400 tracking-wider">Valor Fatura (BRL)</h3>
                     <p className="text-2xl font-black text-slate-800 dark:text-slate-100">
-                      R$ {((billingQ.data?.grandTotalCostUsd ?? 0) * 5.6).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      R$ {((billingQ.data?.grandTotalCostUsd ?? 0) * 5.0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </p>
                   </div>
                 </Card>
@@ -979,7 +988,8 @@ function BeeIAPage() {
                         <th className="py-2.5 px-3">Conversa / Contato</th>
                         <th className="py-2.5 px-3">Telefone</th>
                         <th className="py-2.5 px-3 text-right">Tokens Consumidos</th>
-                        <th className="py-2.5 px-3 text-right">Custo Estimado</th>
+                        {isSuperAdmin && <th className="py-2.5 px-3 text-right">Custo USD</th>}
+                        <th className="py-2.5 px-3 text-right">Custo BRL</th>
                         <th className="py-2.5 px-3">Última Interação</th>
                         <th className="py-2.5 px-3 text-right">Ações</th>
                       </tr>
@@ -987,7 +997,7 @@ function BeeIAPage() {
                     <tbody>
                       {billingQ.isLoading ? (
                         <tr>
-                          <td colSpan={6} className="py-8 text-center">
+                          <td colSpan={isSuperAdmin ? 7 : 6} className="py-8 text-center">
                             <div className="flex items-center justify-center">
                               <div className="h-5 w-5 animate-spin rounded-full border-2 border-slate-200 border-t-amber-500" />
                             </div>
@@ -995,7 +1005,7 @@ function BeeIAPage() {
                         </tr>
                       ) : (billingQ.data?.details ?? []).length === 0 ? (
                         <tr>
-                          <td colSpan={6} className="py-8 text-center text-slate-400 italic">
+                          <td colSpan={isSuperAdmin ? 7 : 6} className="py-8 text-center text-slate-400 italic">
                             Nenhum consumo de token registrado até o momento.
                           </td>
                         </tr>
@@ -1018,8 +1028,13 @@ function BeeIAPage() {
                               <td className="py-3 px-3 text-right font-medium">
                                 {detail.totalTokens.toLocaleString()}
                               </td>
+                              {isSuperAdmin && (
+                                <td className="py-3 px-3 text-right font-mono text-slate-500">
+                                  ${detail.totalCostUsd.toLocaleString("en-US", { minimumFractionDigits: 4, maximumFractionDigits: 4 })}
+                                </td>
+                              )}
                               <td className="py-3 px-3 text-right font-semibold text-emerald-600 dark:text-emerald-400">
-                                R$ {(detail.totalCostUsd * 5.6).toLocaleString("pt-BR", { minimumFractionDigits: 4, maximumFractionDigits: 4 })}
+                                R$ {(detail.totalCostUsd * 5.0).toLocaleString("pt-BR", { minimumFractionDigits: 4, maximumFractionDigits: 4 })}
                               </td>
                               <td className="py-3 px-3 text-slate-500">
                                 {formattedDate}

@@ -873,7 +873,7 @@ export function WhatsAppConversation({
           {tokensQ.data && tokensQ.data.totalTokens > 0 && (
             <div className="flex items-center gap-1.5 rounded-full bg-emerald-50 border border-emerald-200/80 px-2.5 py-1 text-[10px] font-semibold text-emerald-800 dark:bg-emerald-950/40 dark:border-emerald-900/60 dark:text-emerald-400">
               <span className="flex h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-              Radar Financeiro: {tokensQ.data.totalTokens.toLocaleString()} tokens (~R$ {(tokensQ.data.totalCostUsd * 5.6).toLocaleString("pt-BR", { minimumFractionDigits: 4, maximumFractionDigits: 4 })})
+              Radar Financeiro: {tokensQ.data.totalTokens.toLocaleString()} tokens (~R$ {(tokensQ.data.totalCostUsd * 5.0).toLocaleString("pt-BR", { minimumFractionDigits: 4, maximumFractionDigits: 4 })})
             </div>
           )}
 
