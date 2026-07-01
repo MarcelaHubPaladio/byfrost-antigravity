@@ -30,6 +30,8 @@ import {
   BookOpen,
   BrainCircuit,
   Trash2,
+  CreditCard,
+  Coins,
 } from "lucide-react";
 import { WhatsAppConversation } from "@/components/case/WhatsAppConversation";
 import { BeeIASimulator } from "@/components/case/BeeIASimulator";
@@ -212,6 +214,89 @@ function BeeIAPage() {
 
       return enriched;
     },
+  });
+
+  // 4. Fetch AI billing logs
+  const billingQ = useQuery({
+    queryKey: ["beeia_billing", activeTenantId],
+    enabled: Boolean(activeTenantId),
+    refetchInterval: 30_000,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("usage_events")
+        .select("id, qty, ref_id, meta_json, occurred_at")
+        .eq("tenant_id", activeTenantId!)
+        .eq("type", "ai_token")
+        .order("occurred_at", { ascending: false });
+
+      if (error) throw error;
+      
+      const uniqueCaseIds = Array.from(new Set((data ?? []).map(row => row.ref_id).filter(Boolean))) as string[];
+      const casesMap = new Map<string, { title: string, name: string, phone: string }>();
+
+      if (uniqueCaseIds.length > 0) {
+        const { data: casesData } = await supabase
+          .from("cases")
+          .select("id, title, customer_accounts:customer_id(name, phone_e164)")
+          .in("id", uniqueCaseIds);
+        
+        casesData?.forEach((c: any) => {
+          casesMap.set(c.id, {
+            title: c.title || "",
+            name: c.customer_accounts?.name || "",
+            phone: c.customer_accounts?.phone_e164 || "",
+          });
+        });
+      }
+      
+      const groups: Record<string, {
+        caseId: string | null;
+        totalTokens: number;
+        totalCostUsd: number;
+        lastOccurred: string;
+        description: string;
+        title?: string;
+        name?: string;
+        phone?: string;
+      }> = {};
+
+      let grandTotalTokens = 0;
+      let grandTotalCostUsd = 0;
+
+      for (const row of (data ?? [])) {
+        const refId = row.ref_id || "global_insights";
+        const tokens = row.qty || 0;
+        const costUsd = Number(row.meta_json?.cost_usd || (tokens * 0.0000003));
+        
+        grandTotalTokens += tokens;
+        grandTotalCostUsd += costUsd;
+
+        if (!groups[refId]) {
+          const caseInfo = row.ref_id ? casesMap.get(row.ref_id) : null;
+          groups[refId] = {
+            caseId: row.ref_id,
+            totalTokens: 0,
+            totalCostUsd: 0,
+            lastOccurred: row.occurred_at,
+            description: row.meta_json?.description || "Análise/Outro",
+            title: caseInfo?.title,
+            name: caseInfo?.name,
+            phone: caseInfo?.phone,
+          };
+        }
+
+        groups[refId].totalTokens += tokens;
+        groups[refId].totalCostUsd += costUsd;
+      }
+
+      const details = Object.values(groups).sort((a, b) => b.totalTokens - a.totalTokens);
+
+      return {
+        grandTotalTokens,
+        grandTotalCostUsd,
+        details
+      };
+    }
   });
 
   const deleteLearningMut = useMutation({
@@ -420,7 +505,7 @@ function BeeIAPage() {
 
         {/* Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="mb-4 grid w-full max-w-[600px] grid-cols-3 rounded-2xl bg-slate-100 p-1 dark:bg-slate-900">
+          <TabsList className="mb-4 grid w-full max-w-[800px] grid-cols-4 rounded-2xl bg-slate-100 p-1 dark:bg-slate-900">
             <TabsTrigger value="crm" className="rounded-xl py-2 text-xs font-semibold">
               Fluxo CRM
             </TabsTrigger>
@@ -429,6 +514,9 @@ function BeeIAPage() {
             </TabsTrigger>
             <TabsTrigger value="settings" className="rounded-xl py-2 text-xs font-semibold">
               Configurações & Treino
+            </TabsTrigger>
+            <TabsTrigger value="fatura" className="rounded-xl py-2 text-xs font-semibold">
+              Fatura
             </TabsTrigger>
           </TabsList>
 
@@ -819,6 +907,144 @@ function BeeIAPage() {
           {/* Tab Content: Simulador */}
           <TabsContent value="simulador" className="mt-0">
             <BeeIASimulator />
+          </TabsContent>
+
+          {/* Tab Content: Fatura */}
+          <TabsContent value="fatura" className="mt-0">
+            <div className="flex flex-col gap-6">
+              {/* Summary Cards */}
+              <div className="grid gap-4 sm:grid-cols-3">
+                <Card className="rounded-[22px] border-slate-200/80 p-5 bg-white shadow-sm flex items-center gap-4 dark:border-slate-800 dark:bg-slate-900">
+                  <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-amber-500/10 text-amber-500">
+                    <BrainCircuit className="h-6 w-6" />
+                  </span>
+                  <div>
+                    <h3 className="text-[11px] font-bold uppercase text-slate-400 tracking-wider">Total de Tokens</h3>
+                    <p className="text-2xl font-black text-slate-800 dark:text-slate-100">
+                      {billingQ.data?.grandTotalTokens.toLocaleString() ?? 0}
+                    </p>
+                  </div>
+                </Card>
+
+                <Card className="rounded-[22px] border-slate-200/80 p-5 bg-white shadow-sm flex items-center gap-4 dark:border-slate-800 dark:bg-slate-900">
+                  <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-500/10 text-emerald-500">
+                    <Coins className="h-6 w-6" />
+                  </span>
+                  <div>
+                    <h3 className="text-[11px] font-bold uppercase text-slate-400 tracking-wider">Custo Estimado (USD)</h3>
+                    <p className="text-2xl font-black text-slate-800 dark:text-slate-100">
+                      ${billingQ.data?.grandTotalCostUsd.toLocaleString("en-US", { minimumFractionDigits: 4, maximumFractionDigits: 4 }) ?? "0.0000"}
+                    </p>
+                  </div>
+                </Card>
+
+                <Card className="rounded-[22px] border-slate-200/80 p-5 bg-white shadow-sm flex items-center gap-4 dark:border-slate-800 dark:bg-slate-900">
+                  <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-500/10 text-blue-500">
+                    <CreditCard className="h-6 w-6" />
+                  </span>
+                  <div>
+                    <h3 className="text-[11px] font-bold uppercase text-slate-400 tracking-wider">Custo Convertido (BRL)</h3>
+                    <p className="text-2xl font-black text-slate-800 dark:text-slate-100">
+                      R$ {((billingQ.data?.grandTotalCostUsd ?? 0) * 5.6).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </p>
+                  </div>
+                </Card>
+              </div>
+
+              {/* Billing Details Table */}
+              <Card className="rounded-[22px] border-slate-200/80 p-5 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
+                <div className="mb-4 flex items-center justify-between border-b border-slate-100 pb-3 dark:border-slate-850">
+                  <div>
+                    <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+                      Consumo por Conversa
+                    </h2>
+                    <p className="text-[11px] text-slate-500">
+                      Detalhamento do consumo de tokens da IA e custos calculados para cada lead atendido.
+                    </p>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => billingQ.refetch()}
+                    className="rounded-xl text-xs font-semibold"
+                  >
+                    <RefreshCw className="mr-1.5 h-3 w-3" /> Atualizar Fatura
+                  </Button>
+                </div>
+
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs text-slate-600 dark:text-slate-400">
+                    <thead>
+                      <tr className="border-b border-slate-100 dark:border-slate-850 text-[10px] font-bold uppercase text-slate-400 tracking-wider">
+                        <th className="py-2.5 px-3">Conversa / Contato</th>
+                        <th className="py-2.5 px-3">Telefone</th>
+                        <th className="py-2.5 px-3 text-right">Tokens Consumidos</th>
+                        <th className="py-2.5 px-3 text-right">Custo Estimado</th>
+                        <th className="py-2.5 px-3">Última Interação</th>
+                        <th className="py-2.5 px-3 text-right">Ações</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {billingQ.isLoading ? (
+                        <tr>
+                          <td colSpan={6} className="py-8 text-center">
+                            <div className="flex items-center justify-center">
+                              <div className="h-5 w-5 animate-spin rounded-full border-2 border-slate-200 border-t-amber-500" />
+                            </div>
+                          </td>
+                        </tr>
+                      ) : (billingQ.data?.details ?? []).length === 0 ? (
+                        <tr>
+                          <td colSpan={6} className="py-8 text-center text-slate-400 italic">
+                            Nenhum consumo de token registrado até o momento.
+                          </td>
+                        </tr>
+                      ) : (
+                        (billingQ.data?.details ?? []).map((detail, idx) => {
+                          const displayName = detail.name || detail.title || detail.description || "Análise/Global";
+                          const formattedDate = new Date(detail.lastOccurred).toLocaleString("pt-BR", {
+                            dateStyle: "short",
+                            timeStyle: "short",
+                          });
+
+                          return (
+                            <tr key={detail.caseId || idx} className="border-b border-slate-100 hover:bg-slate-50/50 dark:border-slate-850 dark:hover:bg-slate-900/40">
+                              <td className="py-3 px-3 font-semibold text-slate-850 dark:text-slate-200">
+                                {displayName}
+                              </td>
+                              <td className="py-3 px-3 font-mono text-[11px] text-slate-500">
+                                {detail.phone || "-"}
+                              </td>
+                              <td className="py-3 px-3 text-right font-medium">
+                                {detail.totalTokens.toLocaleString()}
+                              </td>
+                              <td className="py-3 px-3 text-right font-semibold text-emerald-600 dark:text-emerald-400">
+                                R$ {(detail.totalCostUsd * 5.6).toLocaleString("pt-BR", { minimumFractionDigits: 4, maximumFractionDigits: 4 })}
+                              </td>
+                              <td className="py-3 px-3 text-slate-500">
+                                {formattedDate}
+                              </td>
+                              <td className="py-3 px-3 text-right">
+                                {detail.caseId && detail.caseId !== "global_insights" && (
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => setSelectedCaseId(detail.caseId)}
+                                    className="h-7 rounded-lg text-[10px] font-semibold text-amber-600 hover:bg-amber-50 hover:text-amber-700 dark:text-amber-400 dark:hover:bg-amber-950/20"
+                                  >
+                                    Abrir Conversa
+                                  </Button>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </Card>
+            </div>
           </TabsContent>
         </Tabs>
 

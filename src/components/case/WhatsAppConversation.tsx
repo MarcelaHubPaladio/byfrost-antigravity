@@ -345,6 +345,27 @@ export function WhatsAppConversation({
     },
   });
 
+  const tokensQ = useQuery({
+    queryKey: ["case_tokens", caseId],
+    enabled: Boolean(caseId),
+    staleTime: 10_000,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("usage_events")
+        .select("qty, meta_json")
+        .eq("type", "ai_token")
+        .eq("ref_id", caseId);
+
+      if (error) throw error;
+      
+      const totalTokens = (data ?? []).reduce((acc: number, curr: any) => acc + (curr.qty || 0), 0);
+      const totalCostUsd = (data ?? []).reduce((acc: number, curr: any) => acc + (Number(curr.meta_json?.cost_usd || (curr.qty * 0.0000003)) || 0), 0);
+      
+      return { totalTokens, totalCostUsd };
+    },
+    refetchInterval: 15_000,
+  });
+
   const isValidEntityId = Boolean(
     caseQ.data?.customer_entity_id &&
     typeof caseQ.data.customer_entity_id === 'string' &&
@@ -848,6 +869,14 @@ export function WhatsAppConversation({
         </div>
 
         <div className="flex items-center gap-2">
+          {/* Radar Financeiro */}
+          {tokensQ.data && tokensQ.data.totalTokens > 0 && (
+            <div className="flex items-center gap-1.5 rounded-full bg-emerald-50 border border-emerald-200/80 px-2.5 py-1 text-[10px] font-semibold text-emerald-800 dark:bg-emerald-950/40 dark:border-emerald-900/60 dark:text-emerald-400">
+              <span className="flex h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              Radar Financeiro: {tokensQ.data.totalTokens.toLocaleString()} tokens (~R$ {(tokensQ.data.totalCostUsd * 5.6).toLocaleString("pt-BR", { minimumFractionDigits: 4, maximumFractionDigits: 4 })})
+            </div>
+          )}
+
           {/* Conversation Mode Toggles */}
           {waGroupId && (
             <div className="flex bg-slate-100 rounded-lg p-1 mr-2">
