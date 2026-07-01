@@ -336,9 +336,18 @@ function BeeIAPage() {
   // Move manual state
   const handleMoveState = async (caseId: string, nextState: string) => {
     try {
+      const updatePayload: any = { updated_at: new Date().toISOString() };
+      
+      if (nextState === "pausadas") {
+        updatePayload.beeia_paused = true;
+      } else {
+        updatePayload.beeia_paused = false;
+        updatePayload.state = nextState;
+      }
+
       const { error } = await supabase
         .from("cases")
-        .update({ state: nextState, updated_at: new Date().toISOString() })
+        .update(updatePayload)
         .eq("id", caseId);
 
       if (error) throw error;
@@ -351,10 +360,10 @@ function BeeIAPage() {
   // Kanban Columns
   const columns = [
     { key: "contato", label: "1º Contato", color: "border-t-amber-400 bg-amber-500/5" },
-    { key: "pausadas", label: "Pausadas", color: "border-t-yellow-600 bg-yellow-500/5" },
     { key: "morno", label: "Morno", color: "border-t-orange-400 bg-orange-500/5" },
     { key: "quente", label: "Quente", color: "border-t-rose-500 bg-rose-500/5" },
     { key: "frio", label: "Frio", color: "border-t-slate-400 bg-slate-500/5" },
+    { key: "pausadas", label: "Pausadas", color: "border-t-yellow-600 bg-yellow-500/5" },
   ];
 
   const casesByColumn = useMemo(() => {
@@ -430,13 +439,18 @@ function BeeIAPage() {
                 <div className="h-8 w-8 animate-spin rounded-full border-4 border-slate-200 border-t-amber-500 dark:border-slate-800" />
               </div>
             ) : (
-              <div className="grid h-full min-h-[500px] gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              <div className="grid h-full min-h-[500px] gap-4 sm:grid-cols-2 lg:grid-cols-5">
                 {columns.map((col) => {
                   const colCases = casesByColumn[col.key] ?? [];
                   return (
                     <div
                       key={col.key}
                       className={`flex flex-col rounded-[22px] border border-slate-200/80 border-t-4 p-4 dark:border-slate-800 ${col.color}`}
+                      onDragOver={(e) => e.preventDefault()}
+                      onDrop={(e) => {
+                        const cid = e.dataTransfer.getData("text/caseId");
+                        if (cid) handleMoveState(cid, col.key);
+                      }}
                     >
                       {/* Column Header */}
                       <div className="mb-3 flex items-center justify-between">
@@ -464,14 +478,19 @@ function BeeIAPage() {
                             return (
                               <Card
                                 key={c.id}
-                                className="group relative flex cursor-pointer flex-col rounded-2xl border-slate-200/60 p-3.5 hover:border-amber-200 hover:shadow-sm dark:border-slate-850 dark:hover:border-amber-950/60"
+                                draggable
+                                onDragStart={(e) => {
+                                  e.dataTransfer.setData("text/caseId", c.id);
+                                  e.dataTransfer.effectAllowed = "move";
+                                }}
+                                className="group relative flex cursor-grab active:cursor-grabbing flex-col rounded-2xl border-slate-200/60 p-3.5 hover:border-amber-200 hover:shadow-sm dark:border-slate-850 dark:hover:border-amber-950/60"
                                 onClick={() => setSelectedCaseId(c.id)}
                               >
                                 <div className="flex items-start justify-between gap-2">
                                   <div className="font-semibold text-xs text-slate-800 dark:text-slate-200 group-hover:text-amber-600 dark:group-hover:text-amber-400">
                                     {name}
                                   </div>
-                                  {c.state === "contato" && (
+                                  {c.state === "contato" && !c.beeia_paused && (
                                     <span className="flex h-2 w-2 rounded-full bg-amber-400 animate-pulse" title="IA ativamente respondendo" />
                                   )}
                                 </div>
@@ -532,6 +551,17 @@ function BeeIAPage() {
                                       </Button>
                                     )}
                                     {col.key === "frio" && (
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-6 w-6 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-700"
+                                        onClick={() => handleMoveState(c.id, "pausadas")}
+                                        title="Mover para Pausadas"
+                                      >
+                                        <ArrowRight className="h-3 w-3" />
+                                      </Button>
+                                    )}
+                                    {col.key === "pausadas" && (
                                       <Button
                                         variant="ghost"
                                         size="icon"
