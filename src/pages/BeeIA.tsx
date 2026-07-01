@@ -1123,6 +1123,7 @@ function BeeIAPage() {
                           <tr className="border-b border-slate-150 dark:border-slate-850">
                             <th className="pb-3 text-[10px] font-bold uppercase tracking-wider text-slate-400">Lead</th>
                             <th className="pb-3 text-[10px] font-bold uppercase tracking-wider text-slate-400">Estágio</th>
+                            <th className="pb-3 text-[10px] font-bold uppercase tracking-wider text-slate-400">Custo da Conversa</th>
                             <th className="pb-3 text-[10px] font-bold uppercase tracking-wider text-slate-400">Última Mensagem</th>
                             <th className="pb-3 text-[10px] font-bold uppercase tracking-wider text-slate-400">Última Atividade</th>
                             <th className="pb-3 text-[10px] font-bold uppercase tracking-wider text-slate-400">Status IA</th>
@@ -1132,7 +1133,7 @@ function BeeIAPage() {
                         <tbody className="divide-y divide-slate-100 dark:divide-slate-850">
                           {filteredCases.length === 0 ? (
                             <tr>
-                              <td colSpan={6} className="py-8 text-center text-xs text-slate-400 italic">
+                              <td colSpan={7} className="py-8 text-center text-xs text-slate-400 italic">
                                 Nenhum lead encontrado com os filtros ativos.
                               </td>
                             </tr>
@@ -1142,22 +1143,9 @@ function BeeIAPage() {
                               const phone = c.customer_accounts?.phone_e164 ?? "";
                               const name = c.customer_accounts?.name ?? "Contato sem nome";
                               
-                              // Stage Badge Styling
-                              let stageLabel = "1º Contato";
-                              let stageColor = "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300";
-                              if (c.beeia_paused) {
-                                stageLabel = "Pausada";
-                                stageColor = "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-300";
-                              } else if (c.state === "morno") {
-                                stageLabel = "Morno";
-                                stageColor = "bg-orange-100 text-orange-800 dark:bg-orange-900/40 dark:text-orange-300";
-                              } else if (c.state === "quente") {
-                                stageLabel = "Quente";
-                                stageColor = "bg-rose-100 text-rose-800 dark:bg-rose-900/40 dark:text-rose-300";
-                              } else if (c.state === "frio") {
-                                stageLabel = "Frio";
-                                stageColor = "bg-slate-100 text-slate-850 dark:bg-slate-800 dark:text-slate-300";
-                              }
+                              // Calculate conversation cost
+                              const caseBilling = (billingQ.data?.details ?? []).find(d => d.caseId === c.id);
+                              const costBrl = caseBilling ? caseBilling.totalCostUsd * 5.0 : 0;
 
                               return (
                                 <tr 
@@ -1172,9 +1160,26 @@ function BeeIAPage() {
                                     <div className="text-[10px] text-slate-400 font-mono mt-0.5">{phone}</div>
                                   </td>
                                   <td className="py-3.5">
-                                    <span className={`inline-flex items-center rounded-md px-2 py-0.5 text-[10px] font-medium ${stageColor}`}>
-                                      {stageLabel}
-                                    </span>
+                                    <div onClick={(e) => e.stopPropagation()}>
+                                      <Select
+                                        value={c.beeia_paused ? "pausadas" : (c.state || "contato")}
+                                        onValueChange={(val) => handleMoveState(c.id, val)}
+                                      >
+                                        <SelectTrigger className="h-7 w-[110px] rounded-lg text-[11px] font-semibold border-slate-200 focus:ring-1 focus:ring-amber-500">
+                                          <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent className="rounded-lg">
+                                          <SelectItem value="contato" className="text-[11px] font-sans">1º Contato</SelectItem>
+                                          <SelectItem value="morno" className="text-[11px] font-sans">Morno</SelectItem>
+                                          <SelectItem value="quente" className="text-[11px] font-sans">Quente</SelectItem>
+                                          <SelectItem value="frio" className="text-[11px] font-sans">Frio</SelectItem>
+                                          <SelectItem value="pausadas" className="text-[11px] font-sans">Pausadas</SelectItem>
+                                        </SelectContent>
+                                      </Select>
+                                    </div>
+                                  </td>
+                                  <td className="py-3.5 font-semibold text-xs text-slate-700 dark:text-slate-350">
+                                    R$ {costBrl.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 4 })}
                                   </td>
                                   <td className="py-3.5 max-w-[300px]">
                                     {lastMsg ? (
@@ -1194,15 +1199,33 @@ function BeeIAPage() {
                                     })}
                                   </td>
                                   <td className="py-3.5">
-                                    {c.beeia_paused ? (
-                                      <span className="text-[10px] text-rose-500 font-semibold flex items-center gap-1">
-                                        <span className="h-1.5 w-1.5 rounded-full bg-rose-500" /> Pausada
+                                    <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                                      <Switch
+                                        checked={!c.beeia_paused}
+                                        onCheckedChange={async (checked) => {
+                                          try {
+                                            const { error } = await supabase
+                                              .from("cases")
+                                              .update({
+                                                beeia_paused: !checked,
+                                                updated_at: new Date().toISOString()
+                                              })
+                                              .eq("id", c.id);
+                                            if (error) throw error;
+                                            showSuccess(`IA ${checked ? "Ativada" : "Pausada"} para esta conversa!`);
+                                            await qc.invalidateQueries({ queryKey: ["beeia_cases", activeTenantId] });
+                                          } catch (e: any) {
+                                            showError(`Erro ao alterar status da IA: ${e.message}`);
+                                          }
+                                        }}
+                                      />
+                                      <span className={cn(
+                                        "text-[10px] font-semibold flex items-center gap-1",
+                                        c.beeia_paused ? "text-rose-500" : "text-emerald-500"
+                                      )}>
+                                        {c.beeia_paused ? "Pausada" : "Ativa"}
                                       </span>
-                                    ) : (
-                                      <span className="text-[10px] text-emerald-500 font-semibold flex items-center gap-1">
-                                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" /> Ativa
-                                      </span>
-                                    )}
+                                    </div>
                                   </td>
                                   <td className="py-3.5 text-right">
                                     <Button
