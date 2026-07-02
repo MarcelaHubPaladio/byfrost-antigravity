@@ -41,6 +41,7 @@ import {
   List,
   ChevronLeft,
   ChevronRight,
+  Copy,
 } from "lucide-react";
 import { WhatsAppConversation } from "@/components/case/WhatsAppConversation";
 import { BeeIASimulator } from "@/components/case/BeeIASimulator";
@@ -1676,6 +1677,30 @@ function BeeIAPage() {
                               <span className="text-[9px] uppercase tracking-wider text-slate-400 font-bold">
                                 {inst.status === "active" ? "Conectado" : "Pausado/Erro"}
                               </span>
+                            </div>
+                            {/* Copy webhook URL */}
+                            <div className="mt-2 flex items-center gap-1 bg-slate-100 dark:bg-slate-850 p-1 px-1.5 rounded-lg border border-slate-150 dark:border-slate-800 max-w-[280px]">
+                              <span className="text-[8px] font-bold text-slate-400 uppercase flex-shrink-0">
+                                Webhook:
+                              </span>
+                              <input
+                                readOnly
+                                value={`https://pryoirzeghatrgecwrci.supabase.co/functions/v1/webhooks-zapi-inbound/${inst.zapi_instance_id}/${activeTenantId}`}
+                                className="text-[9px] font-mono bg-transparent outline-none text-slate-500 truncate flex-1 select-all cursor-text"
+                              />
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-4 w-4 p-0 rounded hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-400 hover:text-amber-500"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  navigator.clipboard.writeText(`https://pryoirzeghatrgecwrci.supabase.co/functions/v1/webhooks-zapi-inbound/${inst.zapi_instance_id}/${activeTenantId}`);
+                                  showSuccess("Webhook copiado!");
+                                }}
+                                title="Copiar URL do Webhook"
+                              >
+                                <Copy className="h-2.5 w-2.5" />
+                              </Button>
                             </div>
                           </div>
 
