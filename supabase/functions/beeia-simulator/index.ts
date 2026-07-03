@@ -257,6 +257,7 @@ serve(async (req) => {
         const customInstructions = simPlug.config_json?.custom_instructions || "";
 
         sysPrompt += `\n[INTEGRAÇÃO - SIMULADOR DE FINANCIAMENTO]:\n`;
+        sysPrompt += `- OBRIGATÓRIO: Assim que tiver as informações necessárias (valor do imóvel e valor da entrada), realize o cálculo e entregue o resultado da simulação IMEDIATAMENTE na mesma mensagem. Nunca peça para o cliente aguardar ("um momento", "vou calcular") sem exibir os valores simulados.\n`;
         if (allowUseBankRules) {
           const { data: bankRules } = await supabaseAdmin
             .from("financing_bank_rules")
