@@ -2212,6 +2212,15 @@ serve(async (req: any) => {
 
               sysPrompt += `\n[INTEGRAÇÃO - SIMULADOR DE FINANCIAMENTO]:\n`;
               sysPrompt += `- OBRIGATÓRIO: Assim que tiver as informações necessárias (valor do imóvel e valor da entrada), realize o cálculo e entregue o resultado da simulação IMEDIATAMENTE na mesma mensagem. Nunca peça para o cliente aguardar ("um momento", "vou calcular") sem exibir os valores simulados.\n`;
+              sysPrompt += `- FORMATO E DIAGRAMAÇÃO: Apresente os resultados de forma extremamente organizada, bonita e legível para o WhatsApp. Use quebras de linha duplas entre os blocos, emojis e marcadores. Estruture assim:
+  * Exiba o resumo em tópicos (Valor do Imóvel, Entrada, Valor Financiado).
+  * Exiba cada banco/opção como um bloco separado por uma linha em branco.
+  * Para cada banco use negrito para destacar as informações fundamentais, por exemplo:
+    🏦 **Caixa Econômica Federal (CEF)**
+    - **Taxa:** 4,75% a.a.
+    - **Prazo:** 420 meses
+    - **Parcela Estimada:** R$ 2.305,00
+  * Nunca junte tudo em um único parágrafo corrido.\n`;
               if (allowUseBankRules) {
                 const { data: bankRules } = await supabase
                   .from("financing_bank_rules")
