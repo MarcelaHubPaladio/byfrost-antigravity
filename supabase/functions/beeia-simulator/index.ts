@@ -49,7 +49,7 @@ serve(async (req) => {
       .eq("tenant_id", tenant_id)
       .eq("is_enabled", true);
 
-    let crmTargetStage = target_stage;
+    let crmTargetStage = config?.target_stage || "morno";
     let crmAssigneeId = null;
 
     if (!plugsErr && plugs && plugs.length > 0) {
@@ -58,7 +58,7 @@ serve(async (req) => {
       // 1. CRM Plugue
       const crmPlug = plugs.find(p => p.plug_key === "crm_journeys");
       if (crmPlug) {
-        crmTargetStage = crmPlug.config_json?.target_stage || target_stage;
+        crmTargetStage = crmPlug.config_json?.target_stage || config?.target_stage || "morno";
         crmAssigneeId = crmPlug.config_json?.assigned_user_id || null;
         sysPrompt += `- CRM & Encaminhamento: A IA qualificará os leads interessados e os moverá para a etapa "${crmTargetStage}".\n`;
       }
@@ -90,16 +90,21 @@ serve(async (req) => {
         }
 
         if (!propEntity && message) {
-          const words = message.toLowerCase().match(/[a-zA-Z0-9]+/g) || [];
+          const words = message.match(/[a-zA-Z0-9]+/g) || [];
           const cleanWords = words.map(w => w.replace(/[^a-zA-Z0-9]/g, "")).filter(Boolean);
           if (cleanWords.length > 0) {
+            const searchTerms = Array.from(new Set([
+              ...cleanWords,
+              ...cleanWords.map(w => w.toUpperCase()),
+              ...cleanWords.map(w => w.toLowerCase())
+            ]));
             const { data: matchedEnt } = await supabaseAdmin
               .from("core_entities")
               .select("*")
               .eq("tenant_id", tenant_id)
               .eq("entity_type", "offering")
               .is("deleted_at", null)
-              .or(`internal_code.in.(${cleanWords.join(",")}),legacy_id.in.(${cleanWords.join(",")})`)
+              .or(`internal_code.in.(${searchTerms.join(",")}),legacy_id.in.(${searchTerms.join(",")})`)
               .limit(1)
               .maybeSingle();
             
@@ -112,6 +117,9 @@ serve(async (req) => {
         if (propEntity) {
           sysPrompt += `\n[IMÓVEL DE INTERESSE DO CLIENTE]:\n`;
           sysPrompt += `- Código Interno: ${propEntity.internal_code || "Sem código"}\n`;
+          if (propEntity.legacy_id) {
+            sysPrompt += `- Código Legado / ID no sistema: ${propEntity.legacy_id}\n`;
+          }
           sysPrompt += `- Título/Nome: ${propEntity.display_name}\n`;
           
           const meta = propEntity.metadata || {};

@@ -2018,16 +2018,21 @@ serve(async (req: any) => {
               }
 
               if (!propEntity && lastInboundMsg) {
-                const words = lastInboundMsg.toLowerCase().match(/[a-zA-Z0-9]+/g) || [];
+                const words = lastInboundMsg.match(/[a-zA-Z0-9]+/g) || [];
                 const cleanWords = words.map(w => w.replace(/[^a-zA-Z0-9]/g, "")).filter(Boolean);
                 if (cleanWords.length > 0) {
+                  const searchTerms = Array.from(new Set([
+                    ...cleanWords,
+                    ...cleanWords.map(w => w.toUpperCase()),
+                    ...cleanWords.map(w => w.toLowerCase())
+                  ]));
                   const { data: matchedEnt } = await supabase
                     .from("core_entities")
                     .select("*")
                     .eq("tenant_id", tenantId)
                     .eq("entity_type", "offering")
                     .is("deleted_at", null)
-                    .or(`internal_code.in.(${cleanWords.join(",")}),legacy_id.in.(${cleanWords.join(",")})`)
+                    .or(`internal_code.in.(${searchTerms.join(",")}),legacy_id.in.(${searchTerms.join(",")})`)
                     .limit(1)
                     .maybeSingle();
                   
@@ -2040,6 +2045,9 @@ serve(async (req: any) => {
               if (propEntity) {
                 sysPrompt += `\n[IMÓVEL DE INTERESSE DO CLIENTE]:\n`;
                 sysPrompt += `- Código Interno: ${propEntity.internal_code || "Sem código"}\n`;
+                if (propEntity.legacy_id) {
+                  sysPrompt += `- Código Legado / ID no sistema: ${propEntity.legacy_id}\n`;
+                }
                 sysPrompt += `- Título/Nome: ${propEntity.display_name}\n`;
                 
                 const meta = propEntity.metadata || {};
