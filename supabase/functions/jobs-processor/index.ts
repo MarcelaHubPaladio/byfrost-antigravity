@@ -1962,6 +1962,61 @@ serve(async (req: any) => {
             });
           }
 
+          // 2b. Fetch active Plugs
+          const { data: plugs, error: plugsErr } = await supabase
+            .from("beeia_plugs")
+            .select("plug_key, config_json")
+            .eq("tenant_id", tenantId)
+            .eq("is_enabled", true);
+
+          if (!plugsErr && plugs && plugs.length > 0) {
+            sysPrompt += "\n\n[INTEGRAÇÕES E RECURSOS DO SISTEMA ATIVOS]:\n";
+            plugs.forEach(p => {
+              const cfg = (p.config_json || {}) as any;
+              if (p.plug_key === "crm_journeys") {
+                sysPrompt += `- CRM & Jornadas: A IA está qualificada para conduzir conversas e guiar o cliente até uma etapa de interesse comercial no funil. Estágio alvo configurado: "${cfg.target_stage || 'morno'}".`;
+                if (cfg.allowed_journeys && Array.isArray(cfg.allowed_journeys) && cfg.allowed_journeys.length > 0) {
+                  sysPrompt += ` A IA está autorizada a atuar nas seguintes jornadas de vendas: ${cfg.allowed_journeys.join(", ")}.`;
+                }
+                sysPrompt += "\n";
+              } else if (p.plug_key === "financing_simulator") {
+                sysPrompt += `- Simulador de Financiamento de Imóveis: A IA está autorizada a fazer simulações. Taxa de juros padrão: ${cfg.default_interest_rate || 9.5}% a.a. Percentual máximo financiável: ${cfg.max_financing_percent || 80}%.`;
+                if (cfg.custom_instructions) {
+                  sysPrompt += ` Instruções específicas de financiamento: "${cfg.custom_instructions}".`;
+                }
+                sysPrompt += "\n";
+              } else if (p.plug_key === "link_manager") {
+                sysPrompt += "- Gerenciador de Links: A IA está autorizada a compartilhar links oficiais com o cliente. Links autorizados:\n";
+                if (cfg.allowed_links && Array.isArray(cfg.allowed_links)) {
+                  cfg.allowed_links.forEach((link: any) => {
+                    if (link.label && link.url) {
+                      sysPrompt += `  * ${link.label}: ${link.url}\n`;
+                    }
+                  });
+                }
+              } else if (p.plug_key === "processes_repository") {
+                sysPrompt += "- Repositório de Processos (Script Comercial / Scripts de Atendimento):\n";
+                if (cfg.commercial_script) {
+                  sysPrompt += `  * Script Comercial: "${cfg.commercial_script}"\n`;
+                }
+                if (cfg.allowed_processes && Array.isArray(cfg.allowed_processes) && cfg.allowed_processes.length > 0) {
+                  sysPrompt += `  * Processos de referência autorizados para consulta da IA: ${cfg.allowed_processes.join(", ")}\n`;
+                }
+              } else if (p.plug_key === "financial_billing") {
+                sysPrompt += `- Módulo Financeiro & Cobrança: A IA está autorizada a falar sobre formas de pagamento e chaves PIX de recebimento. Chave PIX oficial para pagamentos: "${cfg.pix_key || 'Não informada'}".`;
+                if (cfg.allow_billing_negotiation) {
+                  sysPrompt += " A IA está autorizada a negociar faturas pendentes ou propor parcelamento.";
+                } else {
+                  sysPrompt += " A IA NÃO está autorizada a conceder descontos ou parcelamentos sem aprovação humana.";
+                }
+                if (cfg.billing_instructions) {
+                  sysPrompt += ` Diretrizes adicionais de cobrança: "${cfg.billing_instructions}".`;
+                }
+                sysPrompt += "\n";
+              }
+            });
+          }
+
           // 3. Fetch wa_instance to verify beeia_enabled is true
           const { data: inst, error: instErr } = await supabase
             .from("wa_instances")
@@ -2106,7 +2161,7 @@ serve(async (req: any) => {
           });
 
           if (llmRes.tokensUsed > 0) {
-            await logAITokenUsage(tenantId, llmRes.tokensUsed, `BeeIA: Resposta para ${customerPhone}`, llmRes.provider, supabase);
+            await logAITokenUsage(tenantId, llmRes.tokensUsed, `BeeIA: Resposta para ${customerPhone}`, llmRes.provider, supabase, "case", caseId);
           }
 
           let responseText = llmRes.text.trim();

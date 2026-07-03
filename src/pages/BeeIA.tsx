@@ -194,6 +194,86 @@ function BeeIAPage() {
     }
   });
 
+  // Plugs, Journeys, Processes, and Link Groups Queries/Mutations
+  const plugsQ = useQuery({
+    queryKey: ["beeia_plugs", activeTenantId],
+    enabled: Boolean(activeTenantId),
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("beeia_plugs")
+        .select("*")
+        .eq("tenant_id", activeTenantId!);
+      if (error) throw error;
+      return data || [];
+    }
+  });
+
+  const savePlugMut = useMutation({
+    mutationFn: async ({ plugKey, isEnabled, configJson }: { plugKey: string, isEnabled: boolean, configJson: any }) => {
+      const { error } = await supabase
+        .from("beeia_plugs")
+        .upsert({
+          tenant_id: activeTenantId!,
+          plug_key: plugKey,
+          is_enabled: isEnabled,
+          config_json: configJson,
+          updated_at: new Date().toISOString()
+        }, { onConflict: "tenant_id,plug_key" });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      showSuccess("Configurações do plugue salvas com sucesso!");
+      qc.invalidateQueries({ queryKey: ["beeia_plugs", activeTenantId] });
+    },
+    onError: (err: any) => {
+      showError("Erro ao salvar plugue: " + err.message);
+    }
+  });
+
+  const journeysOptionsQ = useQuery({
+    queryKey: ["beeia_journeys_options", activeTenantId],
+    enabled: Boolean(activeTenantId),
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("journeys")
+        .select("id, name, key")
+        .is("deleted_at", null)
+        .order("name", { ascending: true });
+      if (error) throw error;
+      return data || [];
+    }
+  });
+
+  const linkGroupsOptionsQ = useQuery({
+    queryKey: ["beeia_link_groups_options", activeTenantId],
+    enabled: Boolean(activeTenantId),
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("link_manager_groups")
+        .select("id, name, slug")
+        .eq("tenant_id", activeTenantId!)
+        .is("deleted_at", null)
+        .order("name", { ascending: true });
+      if (error) throw error;
+      return data || [];
+    }
+  });
+
+  const processesOptionsQ = useQuery({
+    queryKey: ["beeia_processes_options", activeTenantId],
+    enabled: Boolean(activeTenantId),
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("processes")
+        .select("id, title")
+        .eq("tenant_id", activeTenantId!)
+        .is("deleted_at", null)
+        .order("title", { ascending: true });
+      if (error) throw error;
+      return data || [];
+    }
+  });
+
   // 2. Fetch WhatsApp Instances
   const instancesQ = useQuery({
     queryKey: ["beeia_instances", activeTenantId],
@@ -939,12 +1019,15 @@ function BeeIAPage() {
 
         {/* Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="mb-4 grid w-full max-w-[800px] grid-cols-4 rounded-2xl bg-slate-100 p-1 dark:bg-slate-900">
+          <TabsList className="mb-4 grid w-full max-w-[850px] grid-cols-5 rounded-2xl bg-slate-100 p-1 dark:bg-slate-900">
             <TabsTrigger value="crm" className="rounded-xl py-2 text-xs font-semibold">
               Fluxo CRM
             </TabsTrigger>
             <TabsTrigger value="simulador" className="rounded-xl py-2 text-xs font-semibold">
               Simulador
+            </TabsTrigger>
+            <TabsTrigger value="plugues" className="rounded-xl py-2 text-xs font-semibold">
+              Plugues
             </TabsTrigger>
             <TabsTrigger value="settings" className="rounded-xl py-2 text-xs font-semibold">
               Configurações & Treino
@@ -1917,6 +2000,20 @@ function BeeIAPage() {
               </Card>
             </div>
           </TabsContent>
+
+          <TabsContent value="plugues" className="mt-0">
+            <BeeIAPlugsTab
+              tenantId={activeTenantId!}
+              plugs={plugsQ.data || []}
+              onSave={(plugKey, isEnabled, configJson) =>
+                savePlugMut.mutate({ plugKey, isEnabled, configJson })
+              }
+              journeys={journeysOptionsQ.data || []}
+              linkGroups={linkGroupsOptionsQ.data || []}
+              processes={processesOptionsQ.data || []}
+              isSaving={savePlugMut.isPending}
+            />
+          </TabsContent>
         </Tabs>
 
         {/* Modal: Add WhatsApp Number */}
@@ -2174,3 +2271,682 @@ function BeeIAPage() {
     </AppShell>
   );
 }
+
+// -----------------------------------------------------------------------------
+// Componente de Plugues (Integrações da IA)
+// -----------------------------------------------------------------------------
+interface PlugRow {
+  plug_key: string;
+  is_enabled: boolean;
+  config_json: any;
+}
+
+interface JourneyOption {
+  id: string;
+  name: string;
+  key: string;
+}
+
+interface LinkGroupOption {
+  id: string;
+  name: string;
+  slug: string;
+}
+
+interface ProcessOption {
+  id: string;
+  title: string;
+}
+
+interface BeeIAPlugsTabProps {
+  tenantId: string;
+  plugs: PlugRow[];
+  onSave: (plugKey: string, isEnabled: boolean, configJson: any) => void;
+  journeys: JourneyOption[];
+  linkGroups: LinkGroupOption[];
+  processes: ProcessOption[];
+  isSaving: boolean;
+}
+
+function BeeIAPlugsTab({
+  plugs,
+  onSave,
+  journeys,
+  linkGroups,
+  processes,
+  isSaving,
+}: BeeIAPlugsTabProps) {
+  // Local States for forms
+  const [crmTargetStage, setCrmTargetStage] = useState("morno");
+  const [crmAllowedJourneys, setCrmAllowedJourneys] = useState<string[]>([]);
+
+  const [simInterestRate, setSimInterestRate] = useState(9.5);
+  const [simMaxPercent, setSimMaxPercent] = useState(80);
+  const [simCustomInstructions, setSimCustomInstructions] = useState("");
+
+  const [linkAllowedGroups, setLinkAllowedGroups] = useState<string[]>([]);
+  const [linkAllowedLinks, setLinkAllowedLinks] = useState<{ label: string; url: string }[]>([]);
+  const [newLinkLabel, setNewLinkLabel] = useState("");
+  const [newLinkUrl, setNewLinkUrl] = useState("");
+
+  const [procAllowedProcesses, setProcAllowedProcesses] = useState<string[]>([]);
+  const [procCommercialScript, setProcCommercialScript] = useState("");
+
+  const [finPixKey, setFinPixKey] = useState("");
+  const [finAllowNegotiation, setFinAllowNegotiation] = useState(false);
+  const [finBillingInstructions, setFinBillingInstructions] = useState("");
+
+  // Sync with loaded plugs data
+  useEffect(() => {
+    if (plugs && plugs.length > 0) {
+      const crmPlug = plugs.find((p) => p.plug_key === "crm_journeys");
+      if (crmPlug) {
+        setCrmTargetStage(crmPlug.config_json?.target_stage || "morno");
+        setCrmAllowedJourneys(crmPlug.config_json?.allowed_journeys || []);
+      }
+
+      const simPlug = plugs.find((p) => p.plug_key === "financing_simulator");
+      if (simPlug) {
+        setSimInterestRate(simPlug.config_json?.default_interest_rate ?? 9.5);
+        setSimMaxPercent(simPlug.config_json?.max_financing_percent ?? 80);
+        setSimCustomInstructions(simPlug.config_json?.custom_instructions || "");
+      }
+
+      const linkPlug = plugs.find((p) => p.plug_key === "link_manager");
+      if (linkPlug) {
+        setLinkAllowedGroups(linkPlug.config_json?.allowed_groups || []);
+        setLinkAllowedLinks(linkPlug.config_json?.allowed_links || []);
+      }
+
+      const procPlug = plugs.find((p) => p.plug_key === "processes_repository");
+      if (procPlug) {
+        setProcAllowedProcesses(procPlug.config_json?.allowed_processes || []);
+        setProcCommercialScript(procPlug.config_json?.commercial_script || "");
+      }
+
+      const finPlug = plugs.find((p) => p.plug_key === "financial_billing");
+      if (finPlug) {
+        setFinPixKey(finPlug.config_json?.pix_key || "");
+        setFinAllowNegotiation(finPlug.config_json?.allow_billing_negotiation ?? false);
+        setFinBillingInstructions(finPlug.config_json?.billing_instructions || "");
+      }
+    }
+  }, [plugs]);
+
+  const isPlugEnabled = (key: string) => {
+    return plugs.find((p) => p.plug_key === key)?.is_enabled ?? false;
+  };
+
+  const getPlugConfig = (key: string) => {
+    return plugs.find((p) => p.plug_key === key)?.config_json ?? {};
+  };
+
+  const handleTogglePlug = (key: string, enabled: boolean) => {
+    onSave(key, enabled, getPlugConfig(key));
+  };
+
+  const handleSaveCrm = () => {
+    onSave("crm_journeys", isPlugEnabled("crm_journeys"), {
+      target_stage: crmTargetStage,
+      allowed_journeys: crmAllowedJourneys,
+    });
+  };
+
+  const handleSaveSim = () => {
+    onSave("financing_simulator", isPlugEnabled("financing_simulator"), {
+      default_interest_rate: Number(simInterestRate),
+      max_financing_percent: Number(simMaxPercent),
+      custom_instructions: simCustomInstructions,
+    });
+  };
+
+  const handleSaveLinks = () => {
+    onSave("link_manager", isPlugEnabled("link_manager"), {
+      allowed_groups: linkAllowedGroups,
+      allowed_links: linkAllowedLinks,
+    });
+  };
+
+  const handleAddLink = () => {
+    if (!newLinkLabel.trim() || !newLinkUrl.trim()) return;
+    const updated = [...linkAllowedLinks, { label: newLinkLabel.trim(), url: newLinkUrl.trim() }];
+    setLinkAllowedLinks(updated);
+    setNewLinkLabel("");
+    setNewLinkUrl("");
+    onSave("link_manager", isPlugEnabled("link_manager"), {
+      allowed_groups: linkAllowedGroups,
+      allowed_links: updated,
+    });
+  };
+
+  const handleRemoveLink = (index: number) => {
+    const updated = linkAllowedLinks.filter((_, i) => i !== index);
+    setLinkAllowedLinks(updated);
+    onSave("link_manager", isPlugEnabled("link_manager"), {
+      allowed_groups: linkAllowedGroups,
+      allowed_links: updated,
+    });
+  };
+
+  const handleSaveProcesses = () => {
+    onSave("processes_repository", isPlugEnabled("processes_repository"), {
+      allowed_processes: procAllowedProcesses,
+      commercial_script: procCommercialScript,
+    });
+  };
+
+  const handleSaveFinancial = () => {
+    onSave("financial_billing", isPlugEnabled("financial_billing"), {
+      pix_key: finPixKey,
+      allow_billing_negotiation: finAllowNegotiation,
+      billing_instructions: finBillingInstructions,
+    });
+  };
+
+  return (
+    <div className="flex flex-col gap-6">
+      <div className="bg-amber-500/10 border border-amber-500/20 text-amber-900 dark:text-amber-300 p-4 rounded-[22px] flex items-start gap-3">
+        <Sparkles className="h-5 w-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+        <div>
+          <h3 className="text-xs font-bold uppercase tracking-wider">Integre a BeeIA com o Sistema</h3>
+          <p className="text-[11px] text-slate-650 dark:text-slate-400 mt-1 leading-relaxed">
+            Ative os plugues abaixo para injetar novos recursos e integrações de dados contextuais diretamente no robô de inteligência artificial. Quando ativado, o robô passa a conhecer as regras, links, processos e simulações do seu tenant.
+          </p>
+        </div>
+      </div>
+
+      <div className="flex flex-col gap-5">
+        {/* Plug 1: CRM & Journeys */}
+        <Card className="rounded-[22px] border-slate-200/80 p-5 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900 transition-all hover:border-slate-350 dark:hover:border-slate-700">
+          <div className="flex items-center justify-between gap-4 border-b border-slate-100 pb-3 dark:border-slate-850">
+            <div className="flex items-center gap-3">
+              <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-100 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400">
+                <LayoutGrid className="h-5 w-5" />
+              </span>
+              <div>
+                <h3 className="text-sm font-bold text-slate-900 dark:text-slate-150">
+                  CRM & Qualificação de Leads (Jornadas)
+                </h3>
+                <p className="text-[11px] text-slate-500 mt-0.5">
+                  Permite que a IA atue em funis de venda específicos e encaminhe o lead automaticamente.
+                </p>
+              </div>
+            </div>
+            <Switch
+              checked={isPlugEnabled("crm_journeys")}
+              disabled={isSaving}
+              onCheckedChange={(checked) => handleTogglePlug("crm_journeys", checked)}
+            />
+          </div>
+
+          {isPlugEnabled("crm_journeys") && (
+            <div className="mt-4 flex flex-col gap-4 animate-in fade-in slide-in-from-top-2 duration-200">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="flex flex-col gap-1.5">
+                  <Label className="text-[10px] font-bold uppercase text-slate-400 tracking-wider">
+                    Estágio de Destino para Qualificação
+                  </Label>
+                  <Select value={crmTargetStage} onValueChange={setCrmTargetStage}>
+                    <SelectTrigger className="rounded-xl border-slate-200 text-xs dark:border-slate-850">
+                      <SelectValue placeholder="Selecione o estágio" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="contato">1º Contato</SelectItem>
+                      <SelectItem value="morno">Morno</SelectItem>
+                      <SelectItem value="quente">Quente</SelectItem>
+                      <SelectItem value="frio">Frio</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="flex flex-col gap-1.5">
+                  <Label className="text-[10px] font-bold uppercase text-slate-400 tracking-wider">
+                    Funis / Jornadas Autorizadas
+                  </Label>
+                  <div className="flex flex-wrap gap-2 max-h-[120px] overflow-y-auto p-1.5 border border-slate-200 dark:border-slate-850 rounded-xl bg-slate-50 dark:bg-slate-950">
+                    {journeys.length === 0 ? (
+                      <p className="text-[11px] text-slate-400 italic p-1">Nenhuma jornada cadastrada.</p>
+                    ) : (
+                      journeys.map((j) => {
+                        const isChecked = crmAllowedJourneys.includes(j.name);
+                        return (
+                          <label
+                            key={j.id}
+                            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-medium border cursor-pointer transition-all ${
+                              isChecked
+                                ? "bg-amber-50 border-amber-300 text-amber-800 dark:bg-amber-950/20 dark:border-amber-900 dark:text-amber-300"
+                                : "bg-white border-slate-200 text-slate-650 hover:bg-slate-50 dark:bg-slate-900 dark:border-slate-800 dark:text-slate-400"
+                            }`}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={isChecked}
+                              onChange={() => {
+                                const next = isChecked
+                                  ? crmAllowedJourneys.filter((id) => id !== j.name)
+                                  : [...crmAllowedJourneys, j.name];
+                                setCrmAllowedJourneys(next);
+                              }}
+                              className="hidden"
+                            />
+                            {j.name}
+                          </label>
+                        );
+                      })
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex justify-end border-t border-slate-100 pt-3 dark:border-slate-850">
+                <Button
+                  size="sm"
+                  onClick={handleSaveCrm}
+                  disabled={isSaving}
+                  className="rounded-xl bg-slate-900 text-white font-semibold text-xs px-4 dark:bg-slate-50 dark:text-slate-950"
+                >
+                  <Save className="mr-1.5 h-3.5 w-3.5" /> Salvar Configurações
+                </Button>
+              </div>
+            </div>
+          )}
+        </Card>
+
+        {/* Plug 2: Financing Simulator */}
+        <Card className="rounded-[22px] border-slate-200/80 p-5 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900 transition-all hover:border-slate-350 dark:hover:border-slate-700">
+          <div className="flex items-center justify-between gap-4 border-b border-slate-100 pb-3 dark:border-slate-850">
+            <div className="flex items-center gap-3">
+              <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-100 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400">
+                <Coins className="h-5 w-5" />
+              </span>
+              <div>
+                <h3 className="text-sm font-bold text-slate-900 dark:text-slate-150">
+                  Simulador de Financiamento de Imóveis
+                </h3>
+                <p className="text-[11px] text-slate-500 mt-0.5">
+                  Permite à IA calcular parcelas, taxas de juros e simular financiamentos SAC/Price para o cliente.
+                </p>
+              </div>
+            </div>
+            <Switch
+              checked={isPlugEnabled("financing_simulator")}
+              disabled={isSaving}
+              onCheckedChange={(checked) => handleTogglePlug("financing_simulator", checked)}
+            />
+          </div>
+
+          {isPlugEnabled("financing_simulator") && (
+            <div className="mt-4 flex flex-col gap-4 animate-in fade-in slide-in-from-top-2 duration-200">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="flex flex-col gap-1.5">
+                  <Label className="text-[10px] font-bold uppercase text-slate-400 tracking-wider">
+                    Taxa de Juros Padrão (% a.a.)
+                  </Label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    value={simInterestRate}
+                    onChange={(e) => setSimInterestRate(Number(e.target.value))}
+                    className="rounded-xl border-slate-200 text-xs dark:border-slate-850"
+                  />
+                </div>
+
+                <div className="flex flex-col gap-1.5">
+                  <Label className="text-[10px] font-bold uppercase text-slate-400 tracking-wider">
+                    Percentual Máximo Financiável (%)
+                  </Label>
+                  <Input
+                    type="number"
+                    value={simMaxPercent}
+                    onChange={(e) => setSimMaxPercent(Number(e.target.value))}
+                    className="rounded-xl border-slate-200 text-xs dark:border-slate-850"
+                  />
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <Label className="text-[10px] font-bold uppercase text-slate-400 tracking-wider">
+                  Instruções Adicionais de Cálculo ou Mensagem
+                </Label>
+                <Textarea
+                  value={simCustomInstructions}
+                  onChange={(e) => setSimCustomInstructions(e.target.value)}
+                  placeholder="Ex: Ofereça sempre a simulação SAC prioritariamente. Lembre de mencionar que precisamos do holerite..."
+                  className="rounded-xl border-slate-200 text-xs dark:border-slate-850 min-h-[70px] resize-y"
+                />
+              </div>
+
+              <div className="flex justify-end border-t border-slate-100 pt-3 dark:border-slate-850">
+                <Button
+                  size="sm"
+                  onClick={handleSaveSim}
+                  disabled={isSaving}
+                  className="rounded-xl bg-slate-900 text-white font-semibold text-xs px-4 dark:bg-slate-50 dark:text-slate-950"
+                >
+                  <Save className="mr-1.5 h-3.5 w-3.5" /> Salvar Configurações
+                </Button>
+              </div>
+            </div>
+          )}
+        </Card>
+
+        {/* Plug 3: Link Manager */}
+        <Card className="rounded-[22px] border-slate-200/80 p-5 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900 transition-all hover:border-slate-350 dark:hover:border-slate-700">
+          <div className="flex items-center justify-between gap-4 border-b border-slate-100 pb-3 dark:border-slate-850">
+            <div className="flex items-center gap-3">
+              <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-100 text-blue-600 dark:bg-blue-950/40 dark:text-blue-400">
+                <Copy className="h-5 w-5" />
+              </span>
+              <div>
+                <h3 className="text-sm font-bold text-slate-900 dark:text-slate-150">
+                  Gerenciador de Links (LinkTree)
+                </h3>
+                <p className="text-[11px] text-slate-500 mt-0.5">
+                  Permite à IA compartilhar links oficiais (Catálogos, Site, Endereço) diretamente com o cliente.
+                </p>
+              </div>
+            </div>
+            <Switch
+              checked={isPlugEnabled("link_manager")}
+              disabled={isSaving}
+              onCheckedChange={(checked) => handleTogglePlug("link_manager", checked)}
+            />
+          </div>
+
+          {isPlugEnabled("link_manager") && (
+            <div className="mt-4 flex flex-col gap-4 animate-in fade-in slide-in-from-top-2 duration-200">
+              <div className="grid gap-4 sm:grid-cols-2">
+                {/* System link groups */}
+                <div className="flex flex-col gap-1.5">
+                  <Label className="text-[10px] font-bold uppercase text-slate-400 tracking-wider">
+                    Grupos de Links Autorizados do Sistema
+                  </Label>
+                  <div className="flex flex-wrap gap-2 max-h-[120px] overflow-y-auto p-1.5 border border-slate-200 dark:border-slate-850 rounded-xl bg-slate-50 dark:bg-slate-950">
+                    {linkGroups.length === 0 ? (
+                      <p className="text-[11px] text-slate-400 italic p-1">Nenhum grupo cadastrado.</p>
+                    ) : (
+                      linkGroups.map((g) => {
+                        const isChecked = linkAllowedGroups.includes(g.name);
+                        return (
+                          <label
+                            key={g.id}
+                            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-medium border cursor-pointer transition-all ${
+                              isChecked
+                                ? "bg-amber-50 border-amber-300 text-amber-800 dark:bg-amber-950/20 dark:border-amber-900 dark:text-amber-300"
+                                : "bg-white border-slate-200 text-slate-650 hover:bg-slate-50 dark:bg-slate-900 dark:border-slate-800 dark:text-slate-400"
+                            }`}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={isChecked}
+                              onChange={() => {
+                                const next = isChecked
+                                  ? linkAllowedGroups.filter((n) => n !== g.name)
+                                  : [...linkAllowedGroups, g.name];
+                                setLinkAllowedGroups(next);
+                              }}
+                              className="hidden"
+                            />
+                            {g.name}
+                          </label>
+                        );
+                      })
+                    )}
+                  </div>
+                </div>
+
+                {/* Additional manual links list */}
+                <div className="flex flex-col gap-1.5">
+                  <Label className="text-[10px] font-bold uppercase text-slate-400 tracking-wider">
+                    Links Adicionais para IA
+                  </Label>
+                  <div className="flex flex-col gap-1.5 max-h-[120px] overflow-y-auto p-1.5 border border-slate-200 dark:border-slate-850 rounded-xl bg-slate-50 dark:bg-slate-950">
+                    {linkAllowedLinks.length === 0 ? (
+                      <p className="text-[11px] text-slate-400 italic p-1">Nenhum link adicional cadastrado.</p>
+                    ) : (
+                      linkAllowedLinks.map((link, idx) => (
+                        <div key={idx} className="flex items-center justify-between gap-2 bg-white dark:bg-slate-900 p-1.5 rounded-lg border border-slate-100 dark:border-slate-850">
+                          <div className="truncate flex-1">
+                            <span className="text-[10px] font-bold text-slate-800 dark:text-slate-200 block truncate">{link.label}</span>
+                            <span className="text-[9px] text-slate-450 block truncate font-mono">{link.url}</span>
+                          </div>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            type="button"
+                            onClick={() => handleRemoveLink(idx)}
+                            className="h-6 w-6 rounded-md p-0 text-rose-500 hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-950/20"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Add manual link form */}
+              <div className="border border-slate-100 dark:border-slate-850 bg-slate-50/50 dark:bg-slate-950/20 rounded-xl p-3 flex flex-col sm:flex-row items-end gap-3">
+                <div className="flex-1 flex flex-col gap-1 w-full">
+                  <Label className="text-[9px] font-bold uppercase text-slate-400 tracking-wider">
+                    Nome / Título do Link
+                  </Label>
+                  <Input
+                    value={newLinkLabel}
+                    onChange={(e) => setNewLinkLabel(e.target.value)}
+                    placeholder="Ex: Catálogo PDF, Localização..."
+                    className="rounded-xl border-slate-200 text-xs dark:border-slate-850 h-8"
+                  />
+                </div>
+                <div className="flex-1 flex flex-col gap-1 w-full">
+                  <Label className="text-[9px] font-bold uppercase text-slate-400 tracking-wider">
+                    Endereço URL do Link
+                  </Label>
+                  <Input
+                    value={newLinkUrl}
+                    onChange={(e) => setNewLinkUrl(e.target.value)}
+                    placeholder="https://..."
+                    className="rounded-xl border-slate-200 text-xs dark:border-slate-850 h-8"
+                  />
+                </div>
+                <Button
+                  size="sm"
+                  type="button"
+                  onClick={handleAddLink}
+                  className="rounded-xl bg-blue-500 hover:bg-blue-600 text-white font-semibold text-xs px-4 h-8 shrink-0 w-full sm:w-auto"
+                >
+                  <Plus className="mr-1.5 h-3.5 w-3.5" /> Adicionar Link
+                </Button>
+              </div>
+
+              <div className="flex justify-end border-t border-slate-100 pt-3 dark:border-slate-850">
+                <Button
+                  size="sm"
+                  onClick={handleSaveLinks}
+                  disabled={isSaving}
+                  className="rounded-xl bg-slate-900 text-white font-semibold text-xs px-4 dark:bg-slate-50 dark:text-slate-950"
+                >
+                  <Save className="mr-1.5 h-3.5 w-3.5" /> Salvar Configurações
+                </Button>
+              </div>
+            </div>
+          )}
+        </Card>
+
+        {/* Plug 4: Processes & Scripts */}
+        <Card className="rounded-[22px] border-slate-200/80 p-5 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900 transition-all hover:border-slate-350 dark:hover:border-slate-700">
+          <div className="flex items-center justify-between gap-4 border-b border-slate-100 pb-3 dark:border-slate-850">
+            <div className="flex items-center gap-3">
+              <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-purple-100 text-purple-600 dark:bg-purple-950/40 dark:text-purple-400">
+                <BookOpen className="h-5 w-5" />
+              </span>
+              <div>
+                <h3 className="text-sm font-bold text-slate-900 dark:text-slate-150">
+                  Processos & Script Comercial (Base de Conhecimento)
+                </h3>
+                <p className="text-[11px] text-slate-500 mt-0.5">
+                  Injete processos operacionais do tenant e scripts de vendas como contexto de treinamento para a IA.
+                </p>
+              </div>
+            </div>
+            <Switch
+              checked={isPlugEnabled("processes_repository")}
+              disabled={isSaving}
+              onCheckedChange={(checked) => handleTogglePlug("processes_repository", checked)}
+            />
+          </div>
+
+          {isPlugEnabled("processes_repository") && (
+            <div className="mt-4 flex flex-col gap-4 animate-in fade-in slide-in-from-top-2 duration-200">
+              <div className="flex flex-col gap-1.5">
+                <Label className="text-[10px] font-bold uppercase text-slate-400 tracking-wider">
+                  Script Comercial Oficial
+                </Label>
+                <Textarea
+                  value={procCommercialScript}
+                  onChange={(e) => setProcCommercialScript(e.target.value)}
+                  placeholder="Descreva o roteiro comercial de atendimento de leads: que perguntas fazer, tom de voz específico, argumentos de quebra de objeção..."
+                  className="rounded-xl border-slate-200 text-xs dark:border-slate-850 min-h-[100px] resize-y"
+                />
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <Label className="text-[10px] font-bold uppercase text-slate-400 tracking-wider">
+                  Processos / Manuais Vinculados do Sistema
+                </Label>
+                <div className="flex flex-wrap gap-2 max-h-[120px] overflow-y-auto p-1.5 border border-slate-200 dark:border-slate-850 rounded-xl bg-slate-50 dark:bg-slate-950">
+                  {processes.length === 0 ? (
+                    <p className="text-[11px] text-slate-400 italic p-1">Nenhum processo cadastrado.</p>
+                  ) : (
+                    processes.map((p) => {
+                      const isChecked = procAllowedProcesses.includes(p.title);
+                      return (
+                        <label
+                          key={p.id}
+                          className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-medium border cursor-pointer transition-all ${
+                            isChecked
+                              ? "bg-amber-50 border-amber-300 text-amber-800 dark:bg-amber-950/20 dark:border-amber-900 dark:text-amber-300"
+                              : "bg-white border-slate-200 text-slate-650 hover:bg-slate-50 dark:bg-slate-900 dark:border-slate-800 dark:text-slate-400"
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={() => {
+                              const next = isChecked
+                                ? procAllowedProcesses.filter((t) => t !== p.title)
+                                : [...procAllowedProcesses, p.title];
+                              setProcAllowedProcesses(next);
+                            }}
+                            className="hidden"
+                          />
+                          {p.title}
+                        </label>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+
+              <div className="flex justify-end border-t border-slate-100 pt-3 dark:border-slate-850">
+                <Button
+                  size="sm"
+                  onClick={handleSaveProcesses}
+                  disabled={isSaving}
+                  className="rounded-xl bg-slate-900 text-white font-semibold text-xs px-4 dark:bg-slate-50 dark:text-slate-950"
+                >
+                  <Save className="mr-1.5 h-3.5 w-3.5" /> Salvar Configurações
+                </Button>
+              </div>
+            </div>
+          )}
+        </Card>
+
+        {/* Plug 5: Financial Billing */}
+        <Card className="rounded-[22px] border-slate-200/80 p-5 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900 transition-all hover:border-slate-350 dark:hover:border-slate-700">
+          <div className="flex items-center justify-between gap-4 border-b border-slate-100 pb-3 dark:border-slate-850">
+            <div className="flex items-center gap-3">
+              <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-rose-100 text-rose-600 dark:bg-rose-950/40 dark:text-rose-400">
+                <CreditCard className="h-5 w-5" />
+              </span>
+              <div>
+                <h3 className="text-sm font-bold text-slate-900 dark:text-slate-150">
+                  Módulo Financeiro & Cobrança (Faturas / Pagamentos)
+                </h3>
+                <p className="text-[11px] text-slate-500 mt-0.5">
+                  Configure a IA para tirar dúvidas de faturas, repassar chaves PIX oficiais e realizar negociações básicas.
+                </p>
+              </div>
+            </div>
+            <Switch
+              checked={isPlugEnabled("financial_billing")}
+              disabled={isSaving}
+              onCheckedChange={(checked) => handleTogglePlug("financial_billing", checked)}
+            />
+          </div>
+
+          {isPlugEnabled("financial_billing") && (
+            <div className="mt-4 flex flex-col gap-4 animate-in fade-in slide-in-from-top-2 duration-200">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="flex flex-col gap-1.5">
+                  <Label className="text-[10px] font-bold uppercase text-slate-400 tracking-wider">
+                    Chave PIX Oficial de Recebimento
+                  </Label>
+                  <Input
+                    value={finPixKey}
+                    onChange={(e) => setFinPixKey(e.target.value)}
+                    placeholder="CNPJ, E-mail, Celular ou Chave Aleatória"
+                    className="rounded-xl border-slate-200 text-xs dark:border-slate-850"
+                  />
+                </div>
+
+                <div className="flex flex-col gap-2 justify-center">
+                  <Label className="text-[10px] font-bold uppercase text-slate-400 tracking-wider">
+                    Permissões de Negociação
+                  </Label>
+                  <div className="flex items-center gap-2 border border-slate-200 dark:border-slate-850 rounded-xl p-2.5 bg-slate-50 dark:bg-slate-950">
+                    <input
+                      type="checkbox"
+                      id="allow_neg"
+                      checked={finAllowNegotiation}
+                      onChange={(e) => setFinAllowNegotiation(e.target.checked)}
+                      className="rounded border-slate-200 text-amber-500 focus:ring-amber-500 cursor-pointer h-4 w-4"
+                    />
+                    <label htmlFor="allow_neg" className="text-[11px] font-medium text-slate-650 dark:text-slate-400 cursor-pointer select-none">
+                      Autorizar IA a negociar faturas em aberto e propor acordos.
+                    </label>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <Label className="text-[10px] font-bold uppercase text-slate-400 tracking-wider">
+                  Instruções e Regras de Negociação / Faturamento
+                </Label>
+                <Textarea
+                  value={finBillingInstructions}
+                  onChange={(e) => setFinBillingInstructions(e.target.value)}
+                  placeholder="Ex: Se o cliente reclamar de boleto vencido, diga que podemos prorrogar por 2 dias. Nunca dê descontos acima de 5%..."
+                  className="rounded-xl border-slate-200 text-xs dark:border-slate-850 min-h-[70px] resize-y"
+                />
+              </div>
+
+              <div className="flex justify-end border-t border-slate-100 pt-3 dark:border-slate-850">
+                <Button
+                  size="sm"
+                  onClick={handleSaveFinancial}
+                  disabled={isSaving}
+                  className="rounded-xl bg-slate-900 text-white font-semibold text-xs px-4 dark:bg-slate-50 dark:text-slate-950"
+                >
+                  <Save className="mr-1.5 h-3.5 w-3.5" /> Salvar Configurações
+                </Button>
+              </div>
+            </div>
+          )}
+        </Card>
+      </div>
+    </div>
+  );
+}
+
