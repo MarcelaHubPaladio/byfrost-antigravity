@@ -1965,56 +1965,205 @@ serve(async (req: any) => {
           // 2b. Fetch active Plugs
           const { data: plugs, error: plugsErr } = await supabase
             .from("beeia_plugs")
-            .select("plug_key, config_json")
+            .select("plug_key, is_enabled, config_json")
             .eq("tenant_id", tenantId)
             .eq("is_enabled", true);
 
+          let crmTargetStage = targetStage;
+          let crmAssigneeId = null;
+
           if (!plugsErr && plugs && plugs.length > 0) {
             sysPrompt += "\n\n[INTEGRAÇÕES E RECURSOS DO SISTEMA ATIVOS]:\n";
-            plugs.forEach(p => {
-              const cfg = (p.config_json || {}) as any;
-              if (p.plug_key === "crm_journeys") {
-                sysPrompt += `- CRM & Jornadas: A IA está qualificada para conduzir conversas e guiar o cliente até uma etapa de interesse comercial no funil. Estágio alvo configurado: "${cfg.target_stage || 'morno'}".`;
-                if (cfg.allowed_journeys && Array.isArray(cfg.allowed_journeys) && cfg.allowed_journeys.length > 0) {
-                  sysPrompt += ` A IA está autorizada a atuar nas seguintes jornadas de vendas: ${cfg.allowed_journeys.join(", ")}.`;
-                }
-                sysPrompt += "\n";
-              } else if (p.plug_key === "financing_simulator") {
-                sysPrompt += `- Simulador de Financiamento de Imóveis: A IA está autorizada a fazer simulações. Taxa de juros padrão: ${cfg.default_interest_rate || 9.5}% a.a. Percentual máximo financiável: ${cfg.max_financing_percent || 80}%.`;
-                if (cfg.custom_instructions) {
-                  sysPrompt += ` Instruções específicas de financiamento: "${cfg.custom_instructions}".`;
-                }
-                sysPrompt += "\n";
-              } else if (p.plug_key === "link_manager") {
-                sysPrompt += "- Gerenciador de Links: A IA está autorizada a compartilhar links oficiais com o cliente. Links autorizados:\n";
-                if (cfg.allowed_links && Array.isArray(cfg.allowed_links)) {
-                  cfg.allowed_links.forEach((link: any) => {
-                    if (link.label && link.url) {
-                      sysPrompt += `  * ${link.label}: ${link.url}\n`;
-                    }
-                  });
-                }
-              } else if (p.plug_key === "processes_repository") {
-                sysPrompt += "- Repositório de Processos (Script Comercial / Scripts de Atendimento):\n";
-                if (cfg.commercial_script) {
-                  sysPrompt += `  * Script Comercial: "${cfg.commercial_script}"\n`;
-                }
-                if (cfg.allowed_processes && Array.isArray(cfg.allowed_processes) && cfg.allowed_processes.length > 0) {
-                  sysPrompt += `  * Processos de referência autorizados para consulta da IA: ${cfg.allowed_processes.join(", ")}\n`;
-                }
-              } else if (p.plug_key === "financial_billing") {
-                sysPrompt += `- Módulo Financeiro & Cobrança: A IA está autorizada a falar sobre formas de pagamento e chaves PIX de recebimento. Chave PIX oficial para pagamentos: "${cfg.pix_key || 'Não informada'}".`;
-                if (cfg.allow_billing_negotiation) {
-                  sysPrompt += " A IA está autorizada a negociar faturas pendentes ou propor parcelamento.";
-                } else {
-                  sysPrompt += " A IA NÃO está autorizada a conceder descontos ou parcelamentos sem aprovação humana.";
-                }
-                if (cfg.billing_instructions) {
-                  sysPrompt += ` Diretrizes adicionais de cobrança: "${cfg.billing_instructions}".`;
-                }
-                sysPrompt += "\n";
+            
+            // 1. CRM Plugue
+            const crmPlug = plugs.find(p => p.plug_key === "crm_journeys");
+            if (crmPlug) {
+              crmTargetStage = crmPlug.config_json?.target_stage || targetStage;
+              crmAssigneeId = crmPlug.config_json?.assigned_user_id || null;
+              sysPrompt += `- CRM & Encaminhamento: A IA qualificará os leads interessados e os moverá para a etapa "${crmTargetStage}".\n`;
+            }
+
+            // 2. Entidades Catalog Plugue
+            const coreEntPlug = plugs.find(p => p.plug_key === "core_entities");
+            if (coreEntPlug) {
+              const allowedFields = coreEntPlug.config_json?.allowed_fields || [];
+              const limitInstructions = coreEntPlug.config_json?.limit_instructions || "";
+
+              // Query Case Items offering linked to this case
+              const { data: propItem } = await supabase
+                .from("case_items")
+                .select("offering_entity_id")
+                .eq("case_id", caseId)
+                .limit(1)
+                .maybeSingle();
+
+              let propEntity = null;
+              if (propItem?.offering_entity_id) {
+                const { data: ent } = await supabase
+                  .from("core_entities")
+                  .select("*")
+                  .eq("id", propItem.offering_entity_id)
+                  .maybeSingle();
+                propEntity = ent;
               }
-            });
+
+              if (propEntity) {
+                sysPrompt += `\n[IMÓVEL DE INTERESSE DO CLIENTE]:\n`;
+                sysPrompt += `- Código Interno: ${propEntity.internal_code || "Sem código"}\n`;
+                sysPrompt += `- Título/Nome: ${propEntity.display_name}\n`;
+                
+                const meta = propEntity.metadata || {};
+                if (allowedFields.includes("price") && (meta.price || propEntity.business_type)) {
+                  sysPrompt += `- Preço: R$ ${meta.price || "Sob consulta"} (${propEntity.business_type === "rent" ? "Locação" : "Venda"})\n`;
+                }
+                if (allowedFields.includes("description") && meta.description) {
+                  sysPrompt += `- Descrição Comercial: ${meta.description}\n`;
+                }
+                if (allowedFields.includes("area")) {
+                  if (propEntity.total_area) sysPrompt += `- Área Total: ${propEntity.total_area} m²\n`;
+                  if (propEntity.useful_area) sysPrompt += `- Área Útil: ${propEntity.useful_area} m²\n`;
+                }
+                if (allowedFields.includes("rooms")) {
+                  if (meta.rooms) sysPrompt += `- Quartos: ${meta.rooms}\n`;
+                  if (meta.bathrooms) sysPrompt += `- Banheiros: ${meta.bathrooms}\n`;
+                  if (meta.suites) sysPrompt += `- Suítes: ${meta.suites}\n`;
+                  if (meta.garage) sysPrompt += `- Vagas: ${meta.garage}\n`;
+                }
+                if (allowedFields.includes("location") && propEntity.location_json) {
+                  const loc = propEntity.location_json;
+                  sysPrompt += `- Localização: Bairro ${loc.neighborhood || ""}, ${loc.city || ""}-${loc.state || ""}\n`;
+                }
+                if (allowedFields.includes("photos")) {
+                  const { data: photos } = await supabase
+                    .from("core_entity_photos")
+                    .select("url, room_type")
+                    .eq("entity_id", propEntity.id)
+                    .eq("tenant_id", tenantId)
+                    .is("deleted_at", null);
+                  if (photos && photos.length > 0) {
+                    sysPrompt += `- Fotos oficiais para enviar ao cliente:\n`;
+                    photos.forEach(ph => {
+                      sysPrompt += `  * Foto (${ph.room_type || 'Geral'}): ${ph.url}\n`;
+                    });
+                  }
+                }
+              }
+
+              // Load up to 5 other active properties/offerings
+              const { data: otherProps } = await supabase
+                .from("core_entities")
+                .select("id, internal_code, display_name, metadata, business_type")
+                .eq("tenant_id", tenantId)
+                .eq("entity_type", "offering")
+                .eq("status", "active")
+                .is("deleted_at", null)
+                .neq("id", propEntity?.id || "00000000-0000-0000-0000-000000000000")
+                .limit(5);
+
+              if (otherProps && otherProps.length > 0) {
+                sysPrompt += `\n[OUTROS IMÓVEIS DISPONÍVEIS NO PORTFÓLIO]:\n`;
+                otherProps.forEach(op => {
+                  const opMeta = op.metadata || {};
+                  sysPrompt += `- Cód: ${op.internal_code || "N/A"} | ${op.display_name} | Preço: R$ ${opMeta.price || "Sob consulta"} | Negócio: ${op.business_type === "rent" ? "Locação" : "Venda"}\n`;
+                });
+              }
+
+              if (limitInstructions) {
+                sysPrompt += `\n[DIRETRIZES E LIMITES DE INFORMAÇÕES DE IMÓVEIS]:\n${limitInstructions}\n`;
+              }
+            }
+
+            // 3. Financeiro & Cobrança Plugue
+            const finBillingPlug = plugs.find(p => p.plug_key === "financial_billing");
+            if (finBillingPlug) {
+              const pixKey = finBillingPlug.config_json?.pix_key || "";
+              const allowCheckReceivables = finBillingPlug.config_json?.allow_check_receivables ?? false;
+              const billingInstructions = finBillingPlug.config_json?.billing_instructions || "";
+
+              sysPrompt += `\n[INTEGRAÇÃO FINANCEIRA - FATURAS E PAGAMENTOS]:\n`;
+              if (pixKey) {
+                sysPrompt += `- Chave PIX Oficial para Recebimento: "${pixKey}"\n`;
+              }
+
+              if (allowCheckReceivables) {
+                // Get customer account entity_id
+                const { data: caseWithCust } = await supabase
+                  .from("cases")
+                  .select("customer_id")
+                  .eq("id", caseId)
+                  .maybeSingle();
+
+                if (caseWithCust?.customer_id) {
+                  const { data: custAcc } = await supabase
+                    .from("customer_accounts")
+                    .select("entity_id")
+                    .eq("id", caseWithCust.customer_id)
+                    .maybeSingle();
+
+                  if (custAcc?.entity_id) {
+                    // Fetch unpaid receivables
+                    const { data: receivables } = await supabase
+                      .from("financial_receivables")
+                      .select("description, amount, due_date, status")
+                      .eq("entity_id", custAcc.entity_id)
+                      .neq("status", "paid")
+                      .is("deleted_at", null)
+                      .order("due_date", { ascending: true });
+
+                    if (receivables && receivables.length > 0) {
+                      sysPrompt += `- Faturas/Recebíveis em Aberto do Cliente Atual:\n`;
+                      receivables.forEach(r => {
+                        const due = r.due_date ? new Date(r.due_date).toLocaleDateString("pt-BR") : "Não definida";
+                        sysPrompt += `  * "${r.description || 'Fatura'}" | Valor: R$ ${r.amount} | Vencimento: ${due} | Status: ${r.status}\n`;
+                      });
+                    } else {
+                      sysPrompt += `- O cliente atual NÃO possui faturas em aberto no momento.\n`;
+                    }
+                  }
+                }
+              }
+
+              if (billingInstructions) {
+                sysPrompt += `- Regras de Faturamento e Cobrança: ${billingInstructions}\n`;
+              }
+            }
+
+            // 4. Simulador de Financiamento Plugue
+            const simPlug = plugs.find(p => p.plug_key === "financing_simulator");
+            if (simPlug) {
+              const allowUseBankRules = simPlug.config_json?.allow_use_bank_rules ?? false;
+              const customInstructions = simPlug.config_json?.custom_instructions || "";
+
+              sysPrompt += `\n[INTEGRAÇÃO - SIMULADOR DE FINANCIAMENTO]:\n`;
+              if (allowUseBankRules) {
+                const { data: bankRules } = await supabase
+                  .from("financing_bank_rules")
+                  .select("bank_name, bank_code, base_rate_pct, max_term_months, tac_json, min_loan_value, max_loan_value")
+                  .eq("tenant_id", tenantId)
+                  .eq("is_active", true)
+                  .is("deleted_at", null);
+
+                if (bankRules && bankRules.length > 0) {
+                  sysPrompt += `Você está integrado ao Simulador de Financiamento Imobiliário oficial. Use os parâmetros reais de taxas por banco:\n`;
+                  bankRules.forEach(br => {
+                    sysPrompt += `- Banco: ${br.bank_name} (${br.bank_code}) | Taxa anual: ${br.base_rate_pct}% a.a. | Prazo máximo: ${br.max_term_months || 420} meses\n`;
+                  });
+                  
+                  sysPrompt += `\nInstruções de Cálculo de Financiamento:\n`;
+                  sysPrompt += `- Valor Financiado = Valor Imóvel - Entrada\n`;
+                  sysPrompt += `- SAC (Sistema de Amortização Constante):\n`;
+                  sysPrompt += `  * Amortização Mensal = Valor Financiado / Prazo (meses)\n`;
+                  sysPrompt += `  * Juros Mensais = Saldo Devedor * (Taxa Anual / 12 / 100)\n`;
+                  sysPrompt += `  * Seguro Estimado = (Saldo Devedor / 1000) * 0.28\n`;
+                  sysPrompt += `  * Parcela Mensal = Amortização + Juros + Seguro\n`;
+                  sysPrompt += `- PRICE (Parcelas Fixas): Calcule parcelas fixas brutas padrão de financiamento mensal usando fórmula PRICE padrão adicionando o seguro estimado.\n`;
+                }
+              }
+
+              if (customInstructions) {
+                sysPrompt += `- Regras de Financiamento: ${customInstructions}\n`;
+              }
+            }
           }
 
           // 3. Fetch wa_instance to verify beeia_enabled is true
@@ -2171,21 +2320,38 @@ serve(async (req: any) => {
             // Clean tag
             responseText = responseText.replace(/\[STAGE_TRANSITION\]/gi, "").trim();
 
-            // Update Case State & add timeline event
+             // Update Case State & add timeline event
+            const caseUpdatePayload: any = { state: crmTargetStage, updated_at: new Date().toISOString() };
+            if (crmAssigneeId) {
+              caseUpdatePayload.assigned_user_id = crmAssigneeId;
+            }
+
             const { error: updateErr } = await supabase
               .from("cases")
-              .update({ state: targetStage, updated_at: new Date().toISOString() })
+              .update(caseUpdatePayload)
               .eq("id", caseId);
 
             if (updateErr) {
               console.error("[BEEIA] Failed to update case state to target_stage", updateErr);
             } else {
+              let transitionMsg = `Lead qualificado pela BeeIA e movido para a etapa: ${crmTargetStage}`;
+              if (crmAssigneeId) {
+                const { data: userProf } = await supabase
+                  .from("users_profile")
+                  .select("display_name")
+                  .eq("user_id", crmAssigneeId)
+                  .maybeSingle();
+                if (userProf?.display_name) {
+                  transitionMsg += ` (atribuído para ${userProf.display_name})`;
+                }
+              }
+
               await supabase.from("timeline_events").insert({
                 tenant_id: tenantId,
                 case_id: caseId,
                 event_type: "journey_transition",
                 actor_type: "ai",
-                message: `Lead qualificado pela BeeIA e movido para a etapa: ${targetStage}`,
+                message: transitionMsg,
                 occurred_at: new Date().toISOString()
               });
             }
