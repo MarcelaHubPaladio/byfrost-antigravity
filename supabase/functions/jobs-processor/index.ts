@@ -2017,27 +2017,65 @@ serve(async (req: any) => {
                 propEntity = ent;
               }
 
-              if (!propEntity && lastInboundMsg) {
-                const words = lastInboundMsg.match(/[a-zA-Z0-9]+/g) || [];
-                const cleanWords = words.map(w => w.replace(/[^a-zA-Z0-9]/g, "")).filter(Boolean);
-                if (cleanWords.length > 0) {
-                  const searchTerms = Array.from(new Set([
-                    ...cleanWords,
-                    ...cleanWords.map(w => w.toUpperCase()),
-                    ...cleanWords.map(w => w.toLowerCase())
-                  ]));
-                  const { data: matchedEnt } = await supabase
-                    .from("core_entities")
-                    .select("*")
-                    .eq("tenant_id", tenantId)
-                    .eq("entity_type", "offering")
-                    .is("deleted_at", null)
-                    .or(`internal_code.in.(${searchTerms.join(",")}),legacy_id.in.(${searchTerms.join(",")})`)
-                    .limit(1)
-                    .maybeSingle();
-                  
-                  if (matchedEnt) {
-                    propEntity = matchedEnt;
+              if (!propEntity) {
+                let messagesToScan: string[] = [];
+                if (lastInboundMsg) messagesToScan.push(lastInboundMsg);
+                if (msgs && msgs.length > 0) {
+                  const inboundHistory = msgs
+                    .filter(m => m.direction === "inbound" && m.body_text)
+                    .map(m => m.body_text!);
+                  messagesToScan = [...messagesToScan, ...inboundHistory.reverse()];
+                }
+
+                for (const msgToScan of messagesToScan) {
+                  const words = msgToScan.match(/[a-zA-Z0-9]+/g) || [];
+                  const cleanWords = words.map(w => w.replace(/[^a-zA-Z0-9]/g, "")).filter(Boolean);
+                  if (cleanWords.length > 0) {
+                    const searchTerms = Array.from(new Set([
+                      ...cleanWords,
+                      ...cleanWords.map(w => w.toUpperCase()),
+                      ...cleanWords.map(w => w.toLowerCase())
+                    ]));
+                    const { data: matchedEnt } = await supabase
+                      .from("core_entities")
+                      .select("*")
+                      .eq("tenant_id", tenantId)
+                      .eq("entity_type", "offering")
+                      .is("deleted_at", null)
+                      .or(`internal_code.in.(${searchTerms.join(",")}),legacy_id.in.(${searchTerms.join(",")})`)
+                      .limit(1)
+                      .maybeSingle();
+                    
+                    if (matchedEnt) {
+                      propEntity = matchedEnt;
+                      
+                      // Auto-link property to case_items to persist in the database
+                      try {
+                        const { data: maxItem } = await supabase
+                          .from("case_items")
+                          .select("line_no")
+                          .eq("case_id", caseId)
+                          .order("line_no", { ascending: false })
+                          .limit(1)
+                          .maybeSingle();
+                        const nextLineNo = (maxItem?.line_no || 0) + 1;
+                        
+                        await supabase
+                          .from("case_items")
+                          .insert({
+                            tenant_id: tenantId,
+                            case_id: caseId,
+                            offering_entity_id: matchedEnt.id,
+                            line_no: nextLineNo,
+                            qty: 1,
+                            confidence_json: { source: "beeia_detection" }
+                          });
+                      } catch (errLink) {
+                        console.warn("[BEEIA] Failed to link offering to case_items", errLink);
+                      }
+                      
+                      break;
+                    }
                   }
                 }
               }

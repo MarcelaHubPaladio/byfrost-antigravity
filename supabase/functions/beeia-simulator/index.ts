@@ -89,27 +89,39 @@ serve(async (req) => {
           }
         }
 
-        if (!propEntity && message) {
-          const words = message.match(/[a-zA-Z0-9]+/g) || [];
-          const cleanWords = words.map(w => w.replace(/[^a-zA-Z0-9]/g, "")).filter(Boolean);
-          if (cleanWords.length > 0) {
-            const searchTerms = Array.from(new Set([
-              ...cleanWords,
-              ...cleanWords.map(w => w.toUpperCase()),
-              ...cleanWords.map(w => w.toLowerCase())
-            ]));
-            const { data: matchedEnt } = await supabaseAdmin
-              .from("core_entities")
-              .select("*")
-              .eq("tenant_id", tenant_id)
-              .eq("entity_type", "offering")
-              .is("deleted_at", null)
-              .or(`internal_code.in.(${searchTerms.join(",")}),legacy_id.in.(${searchTerms.join(",")})`)
-              .limit(1)
-              .maybeSingle();
-            
-            if (matchedEnt) {
-              propEntity = matchedEnt;
+        if (!propEntity) {
+          let messagesToScan: string[] = [];
+          if (message) messagesToScan.push(message);
+          if (history && history.length > 0) {
+            const userHistory = history
+              .filter(h => h.role === "user" && h.content)
+              .map(h => h.content);
+            messagesToScan = [...messagesToScan, ...userHistory.reverse()];
+          }
+
+          for (const msgToScan of messagesToScan) {
+            const words = msgToScan.match(/[a-zA-Z0-9]+/g) || [];
+            const cleanWords = words.map(w => w.replace(/[^a-zA-Z0-9]/g, "")).filter(Boolean);
+            if (cleanWords.length > 0) {
+              const searchTerms = Array.from(new Set([
+                ...cleanWords,
+                ...cleanWords.map(w => w.toUpperCase()),
+                ...cleanWords.map(w => w.toLowerCase())
+              ]));
+              const { data: matchedEnt } = await supabaseAdmin
+                .from("core_entities")
+                .select("*")
+                .eq("tenant_id", tenant_id)
+                .eq("entity_type", "offering")
+                .is("deleted_at", null)
+                .or(`internal_code.in.(${searchTerms.join(",")}),legacy_id.in.(${searchTerms.join(",")})`)
+                .limit(1)
+                .maybeSingle();
+              
+              if (matchedEnt) {
+                propEntity = matchedEnt;
+                break;
+              }
             }
           }
         }
