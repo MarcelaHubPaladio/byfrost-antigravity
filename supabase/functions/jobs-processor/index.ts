@@ -1997,6 +1997,16 @@ serve(async (req: any) => {
                 .limit(1)
                 .maybeSingle();
 
+              let lastInboundMsg = "";
+              if (messageId) {
+                const { data: tempMsg } = await supabase
+                  .from("wa_messages")
+                  .select("body_text")
+                  .eq("id", messageId)
+                  .maybeSingle();
+                lastInboundMsg = tempMsg?.body_text || "";
+              }
+
               let propEntity = null;
               if (propItem?.offering_entity_id) {
                 const { data: ent } = await supabase
@@ -2005,6 +2015,26 @@ serve(async (req: any) => {
                   .eq("id", propItem.offering_entity_id)
                   .maybeSingle();
                 propEntity = ent;
+              }
+
+              if (!propEntity && lastInboundMsg) {
+                const words = lastInboundMsg.toLowerCase().match(/[a-zA-Z0-9]+/g) || [];
+                const cleanWords = words.map(w => w.replace(/[^a-zA-Z0-9]/g, "")).filter(Boolean);
+                if (cleanWords.length > 0) {
+                  const { data: matchedEnt } = await supabase
+                    .from("core_entities")
+                    .select("*")
+                    .eq("tenant_id", tenantId)
+                    .eq("entity_type", "offering")
+                    .is("deleted_at", null)
+                    .or(`internal_code.in.(${cleanWords.join(",")}),legacy_id.in.(${cleanWords.join(",")})`)
+                    .limit(1)
+                    .maybeSingle();
+                  
+                  if (matchedEnt) {
+                    propEntity = matchedEnt;
+                  }
+                }
               }
 
               if (propEntity) {

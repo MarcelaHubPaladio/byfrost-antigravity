@@ -89,6 +89,26 @@ serve(async (req) => {
           }
         }
 
+        if (!propEntity && message) {
+          const words = message.toLowerCase().match(/[a-zA-Z0-9]+/g) || [];
+          const cleanWords = words.map(w => w.replace(/[^a-zA-Z0-9]/g, "")).filter(Boolean);
+          if (cleanWords.length > 0) {
+            const { data: matchedEnt } = await supabaseAdmin
+              .from("core_entities")
+              .select("*")
+              .eq("tenant_id", tenant_id)
+              .eq("entity_type", "offering")
+              .is("deleted_at", null)
+              .or(`internal_code.in.(${cleanWords.join(",")}),legacy_id.in.(${cleanWords.join(",")})`)
+              .limit(1)
+              .maybeSingle();
+            
+            if (matchedEnt) {
+              propEntity = matchedEnt;
+            }
+          }
+        }
+
         if (propEntity) {
           sysPrompt += `\n[IMÓVEL DE INTERESSE DO CLIENTE]:\n`;
           sysPrompt += `- Código Interno: ${propEntity.internal_code || "Sem código"}\n`;
