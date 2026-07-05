@@ -199,7 +199,7 @@ async function resolveLidToPhone(
       .from("wa_messages")
       .select("from_phone, to_phone, payload_json")
       .eq("tenant_id", tenantId)
-      .or(`payload_json->>'chatLid'.eq.${cleanLid},payload_json->>'chatLid'.eq.${cleanLid}@lid,payload_json->>'phone'.eq.${cleanLid},payload_json->>'phone'.eq.${cleanLid}@lid`)
+      .or(`payload_json->>chatLid.eq.${cleanLid},payload_json->>chatLid.eq.${cleanLid}@lid,payload_json->>phone.eq.${cleanLid},payload_json->>phone.eq.${cleanLid}@lid,payload_json->data->>chatLid.eq.${cleanLid},payload_json->data->>chatLid.eq.${cleanLid}@lid,payload_json->data->>phone.eq.${cleanLid},payload_json->data->>phone.eq.${cleanLid}@lid`)
       .order("occurred_at", { ascending: false })
       .limit(10);
 

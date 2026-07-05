@@ -395,6 +395,7 @@ async function processFinancialIngestion(opts: {
     const occurrence = (occurrenceMap.get(baseKey) ?? 0) + 1;
     occurrenceMap.set(baseKey, occurrence);
 
+    const isUuidFitid = row.fitid && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(row.fitid);
     const fingerprint = await sha256Hex(
       JSON.stringify({
         tenant_id: tenantId,
@@ -403,7 +404,7 @@ async function processFinancialIngestion(opts: {
         amount: Number(amt.toFixed(2)),
         description: descNorm,
         occurrence,
-        fitid: row.fitid || undefined,
+        fitid: isUuidFitid ? undefined : (row.fitid || undefined),
       })
     );
 

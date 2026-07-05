@@ -775,6 +775,7 @@ async function processFinancialIngestionJob(opts: {
     const occurrence = (occurrenceMap.get(baseKey) ?? 0) + 1;
     occurrenceMap.set(baseKey, occurrence);
 
+    const isUuidFitid = row.fitid && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(row.fitid);
     const fingerprint = await sha256Hex(
       JSON.stringify({
         tenant_id: tenantId,
@@ -783,7 +784,7 @@ async function processFinancialIngestionJob(opts: {
         amount: Number(amt.toFixed(2)),
         description: descNorm,
         occurrence,
-        fitid: row.fitid || undefined,
+        fitid: isUuidFitid ? undefined : (row.fitid || undefined),
       })
     );
 
@@ -1929,6 +1930,17 @@ serve(async (req: any) => {
             continue;
           }
 
+          // 1c. Fetch case message history early so it can be used for plugs scanning and prompts
+          const { data: msgs, error: msgsErr } = await supabase
+            .from("wa_messages")
+            .select("direction, body_text, type, occurred_at")
+            .eq("tenant_id", tenantId)
+            .eq("case_id", caseId)
+            .order("occurred_at", { ascending: true })
+            .limit(15);
+
+          if (msgsErr) throw msgsErr;
+
           // 2. Fetch BeeIA configs
           const { data: config, error: cfgErr } = await supabase
             .from("beeia_configs")
@@ -2327,16 +2339,6 @@ serve(async (req: any) => {
           }
 
           // 5. Load recent message history for this case
-          const { data: msgs, error: msgsErr } = await supabase
-            .from("wa_messages")
-            .select("direction, body_text, type, occurred_at")
-            .eq("tenant_id", tenantId)
-            .eq("case_id", caseId)
-            .order("occurred_at", { ascending: true })
-            .limit(15);
-
-          if (msgsErr) throw msgsErr;
-
           const history = (msgs ?? []).filter(m => m.body_text);
 
           // 6. Construct prompt messages for LLM

@@ -42,6 +42,90 @@ serve(async (req) => {
       });
     }
 
+
+
+
+
+    // 2b. Check limits
+    try {
+      await checkTenantAILimits(tenant_id, supabaseAdmin);
+    } catch (err: any) {
+      return new Response(JSON.stringify({ error: "Limite de Tokens do seu plano atingido." }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 402,
+      });
+    }
+
+    // 3. Save User Message if not evaluating
+    if (action !== "evaluate_session") {
+      const isTrainer = action === "trainer_message";
+      
+      if (session_id) {
+        const { error: insErr1 } = await supabaseAdmin
+          .from("beeia_simulations")
+          .insert({
+            tenant_id,
+            session_id,
+            role: isTrainer ? "system" : "user",
+            content: isTrainer ? `[MENSAGEM DO SEU TREINADOR]: ${message}` : message
+          });
+        if (insErr1) throw insErr1;
+      } else if (case_id) {
+        // Save as system_note in wa_messages so it appears in chat but doesn't get sent to Z-API
+        const { error: insErrCase } = await supabaseAdmin
+          .from("wa_messages")
+          .insert({
+            tenant_id,
+            case_id,
+            direction: "inbound",
+            type: "system_note",
+            from_phone: "system",
+            to_phone: "system",
+            body_text: isTrainer ? `[MENSAGEM DO SEU TREINADOR]: ${message}` : message,
+            payload_json: {},
+            occurred_at: new Date().toISOString()
+          });
+        if (insErrCase) throw insErrCase;
+      }
+    }
+
+    // 4. Fetch History
+    let history: { role: string; content: string }[] = [];
+    if (session_id) {
+      const { data: hist, error: histErr } = await supabaseAdmin
+        .from("beeia_simulations")
+        .select("role, content")
+        .eq("tenant_id", tenant_id)
+        .eq("session_id", session_id)
+        .order("created_at", { ascending: true })
+        .limit(30);
+      if (histErr) throw histErr;
+      history = (hist ?? []).map(h => ({ role: h.role, content: h.content }));
+    } else if (case_id) {
+      let q = supabaseAdmin
+        .from("wa_messages")
+        .select("direction, type, body_text")
+        .eq("tenant_id", tenant_id)
+        .eq("case_id", case_id);
+        
+      if (hours_limit) {
+        const minDate = new Date(Date.now() - Number(hours_limit) * 60 * 60 * 1000).toISOString();
+        q = q.gte("occurred_at", minDate);
+      }
+
+      const { data: hist, error: histErr } = await q
+        .order("occurred_at", { ascending: true })
+        .limit(100); // Increased limit since we rely on time window now
+      if (histErr) throw histErr;
+      
+      history = (hist ?? [])
+        .filter(m => (m.type === "text" || m.type === "system_note") && m.body_text)
+        .map(h => ({
+          role: h.type === "system_note" ? "system" : (h.direction === "inbound" ? "user" : "assistant"),
+          content: h.body_text!
+        }));
+    }
+
     // 2b. Fetch active Plugs
     const { data: plugs, error: plugsErr } = await supabaseAdmin
       .from("beeia_plugs")
@@ -296,88 +380,6 @@ serve(async (req) => {
           sysPrompt += `- Regras de Financiamento: ${customInstructions}\n`;
         }
       }
-    }
-
-
-
-    // 2b. Check limits
-    try {
-      await checkTenantAILimits(tenant_id, supabaseAdmin);
-    } catch (err: any) {
-      return new Response(JSON.stringify({ error: "Limite de Tokens do seu plano atingido." }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-        status: 402,
-      });
-    }
-
-    // 3. Save User Message if not evaluating
-    if (action !== "evaluate_session") {
-      const isTrainer = action === "trainer_message";
-      
-      if (session_id) {
-        const { error: insErr1 } = await supabaseAdmin
-          .from("beeia_simulations")
-          .insert({
-            tenant_id,
-            session_id,
-            role: isTrainer ? "system" : "user",
-            content: isTrainer ? `[MENSAGEM DO SEU TREINADOR]: ${message}` : message
-          });
-        if (insErr1) throw insErr1;
-      } else if (case_id) {
-        // Save as system_note in wa_messages so it appears in chat but doesn't get sent to Z-API
-        const { error: insErrCase } = await supabaseAdmin
-          .from("wa_messages")
-          .insert({
-            tenant_id,
-            case_id,
-            direction: "inbound",
-            type: "system_note",
-            from_phone: "system",
-            to_phone: "system",
-            body_text: isTrainer ? `[MENSAGEM DO SEU TREINADOR]: ${message}` : message,
-            payload_json: {},
-            occurred_at: new Date().toISOString()
-          });
-        if (insErrCase) throw insErrCase;
-      }
-    }
-
-    // 4. Fetch History
-    let history: { role: string; content: string }[] = [];
-    if (session_id) {
-      const { data: hist, error: histErr } = await supabaseAdmin
-        .from("beeia_simulations")
-        .select("role, content")
-        .eq("tenant_id", tenant_id)
-        .eq("session_id", session_id)
-        .order("created_at", { ascending: true })
-        .limit(30);
-      if (histErr) throw histErr;
-      history = (hist ?? []).map(h => ({ role: h.role, content: h.content }));
-    } else if (case_id) {
-      let q = supabaseAdmin
-        .from("wa_messages")
-        .select("direction, type, body_text")
-        .eq("tenant_id", tenant_id)
-        .eq("case_id", case_id);
-        
-      if (hours_limit) {
-        const minDate = new Date(Date.now() - Number(hours_limit) * 60 * 60 * 1000).toISOString();
-        q = q.gte("occurred_at", minDate);
-      }
-
-      const { data: hist, error: histErr } = await q
-        .order("occurred_at", { ascending: true })
-        .limit(100); // Increased limit since we rely on time window now
-      if (histErr) throw histErr;
-      
-      history = (hist ?? [])
-        .filter(m => (m.type === "text" || m.type === "system_note") && m.body_text)
-        .map(h => ({
-          role: h.type === "system_note" ? "system" : (h.direction === "inbound" ? "user" : "assistant"),
-          content: h.body_text!
-        }));
     }
 
     // 5. Prepare LLM Context

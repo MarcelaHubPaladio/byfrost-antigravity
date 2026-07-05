@@ -75,6 +75,7 @@ type WaInstanceRow = {
   zapi_instance_id: string;
   beeia_enabled: boolean;
   allowed_user_ids: string[] | null;
+  webhook_secret: string | null;
 };
 
 type BeeiaConfig = {
@@ -281,7 +282,7 @@ function BeeIAPage() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("wa_instances")
-        .select("id, name, status, phone_number, zapi_instance_id, beeia_enabled, allowed_user_ids")
+        .select("id, name, status, phone_number, zapi_instance_id, beeia_enabled, allowed_user_ids, webhook_secret")
         .eq("tenant_id", activeTenantId!)
         .is("deleted_at", null)
         .order("created_at", { ascending: false });
@@ -1768,7 +1769,7 @@ function BeeIAPage() {
                               </span>
                               <input
                                 readOnly
-                                value={`https://pryoirzeghatrgecwrci.supabase.co/functions/v1/webhooks-zapi-inbound/${inst.zapi_instance_id}/${activeTenantId}`}
+                                value={`https://pryoirzeghatrgecwrci.supabase.co/functions/v1/webhooks-zapi-inbound/${inst.zapi_instance_id}/${inst.webhook_secret || ""}`}
                                 className="text-[9px] font-mono bg-transparent outline-none text-slate-500 truncate flex-1 select-all cursor-text"
                               />
                               <Button
@@ -1777,7 +1778,7 @@ function BeeIAPage() {
                                 className="h-4 w-4 p-0 rounded hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-400 hover:text-amber-500"
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  navigator.clipboard.writeText(`https://pryoirzeghatrgecwrci.supabase.co/functions/v1/webhooks-zapi-inbound/${inst.zapi_instance_id}/${activeTenantId}`);
+                                  navigator.clipboard.writeText(`https://pryoirzeghatrgecwrci.supabase.co/functions/v1/webhooks-zapi-inbound/${inst.zapi_instance_id}/${inst.webhook_secret || ""}`);
                                   showSuccess("Webhook copiado!");
                                 }}
                                 title="Copiar URL do Webhook"
