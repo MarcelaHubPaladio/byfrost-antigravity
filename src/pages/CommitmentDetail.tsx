@@ -1237,11 +1237,7 @@ export default function CommitmentDetail() {
                                       "text-xs font-black",
                                       isFullyDone ? "text-emerald-600" : "text-slate-600"
                                     )}>
-                                      {(() => {
-                                        const countTotal = group.length;
-                                        const started = group.filter(d => (d.cases || []).length > 0).length;
-                                        return <span>{started}/{countTotal}</span>;
-                                      })()}
+                                      <span>{completed}/{total}</span>
                                     </p>
                                     <div className="mt-1 h-1 w-16 overflow-hidden rounded-full bg-slate-100">
                                       <div 
