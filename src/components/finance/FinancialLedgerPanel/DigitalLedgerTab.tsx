@@ -450,7 +450,7 @@ export function DigitalLedgerTab() {
               </TableBody>
             </Table>
             <div className="p-4 bg-emerald-50/20 dark:bg-emerald-950/5 border-t border-slate-200/60 dark:border-slate-800/60 flex items-center justify-between text-xs">
-              <span className="font-medium text-emerald-800 dark:text-emerald-400">Total de Entradas (Pagas)</span>
+              <span className="font-medium text-emerald-800 dark:text-emerald-400">Total (Recebido / Total)</span>
               <span className="font-bold text-emerald-700 dark:text-emerald-300 text-sm">
                 {formatCurrency(totalEntradasPagas)} / {formatCurrency(totalEntradas)}
               </span>
@@ -558,7 +558,7 @@ export function DigitalLedgerTab() {
               </TableBody>
             </Table>
             <div className="p-4 bg-rose-50/20 dark:bg-rose-950/5 border-t border-slate-200/60 dark:border-slate-800/60 flex items-center justify-between text-xs">
-              <span className="font-medium text-rose-800 dark:text-rose-400">Total de Saídas (Pagas)</span>
+              <span className="font-medium text-rose-800 dark:text-rose-400">Total (Pago / Total)</span>
               <span className="font-bold text-rose-700 dark:text-rose-300 text-sm">
                 {formatCurrency(totalSaidasPagas)} / {formatCurrency(totalSaidas)}
               </span>
@@ -576,26 +576,27 @@ export function DigitalLedgerTab() {
             </div>
             <div>
               <span className="font-semibold text-slate-800 dark:text-slate-200 text-sm">Resumo do Mês</span>
+              <span className="text-[10px] text-slate-400 dark:text-slate-500 block sm:inline sm:ml-2 font-medium">(Efetivo / Total)</span>
             </div>
           </div>
 
           <div className="flex flex-wrap items-center gap-4 md:gap-8 text-xs font-semibold text-slate-600 dark:text-slate-400">
             <div className="flex flex-col gap-0.5">
-              <span className="text-[10px] uppercase tracking-wider text-slate-400">Entradas (Pagas)</span>
+              <span className="text-[10px] uppercase tracking-wider text-slate-450 dark:text-slate-500">Entradas</span>
               <span className="text-sm font-bold text-emerald-600 dark:text-emerald-400">
                 {formatCurrency(totalEntradasPagas)} <span className="text-slate-400 font-normal">/</span> {formatCurrency(totalEntradas)}
               </span>
             </div>
             <div className="text-slate-300 dark:text-slate-700 text-lg hidden sm:block">-</div>
             <div className="flex flex-col gap-0.5">
-              <span className="text-[10px] uppercase tracking-wider text-slate-400">Saídas (Pagas)</span>
+              <span className="text-[10px] uppercase tracking-wider text-slate-450 dark:text-slate-500">Saídas</span>
               <span className="text-sm font-bold text-rose-600 dark:text-rose-400">
                 {formatCurrency(totalSaidasPagas)} <span className="text-slate-400 font-normal">/</span> {formatCurrency(totalSaidas)}
               </span>
             </div>
             <div className="text-slate-300 dark:text-slate-700 text-lg hidden sm:block">=</div>
             <div className="flex flex-col gap-0.5 bg-white dark:bg-slate-950 p-2 px-4 rounded-xl border border-slate-200/40 dark:border-slate-800/40">
-              <span className="text-[10px] uppercase tracking-wider text-slate-400">Saldo (Pago)</span>
+              <span className="text-[10px] uppercase tracking-wider text-slate-450 dark:text-slate-500">Saldo</span>
               <span className={`text-base font-bold ${saldo >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"}`}>
                 {formatCurrency(saldoPago)} <span className="text-slate-400 font-normal text-xs">/</span> {formatCurrency(saldo)}
               </span>
