@@ -82,6 +82,37 @@ export function DigitalLedgerTab() {
   const totalSaidas = saidas.reduce((acc, curr) => acc + Number(curr.amount), 0);
   const saldo = totalEntradas - totalSaidas;
 
+  const totalEntradasPagas = entradas.filter(e => e.is_paid).reduce((acc, curr) => acc + Number(curr.amount), 0);
+  const totalSaidasPagas = saidas.filter(e => e.is_paid).reduce((acc, curr) => acc + Number(curr.amount), 0);
+  const saldoPago = totalEntradasPagas - totalSaidasPagas;
+
+  // Selection states & calculations
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    setSelectedIds(new Set());
+  }, [currentMonth]);
+
+  const handleToggleSelect = (id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
+
+  const selectedEntries = entries.filter(e => selectedIds.has(e.id));
+  const selectedEntradas = selectedEntries.filter(e => e.type === "income");
+  const selectedSaidas = selectedEntries.filter(e => e.type === "expense");
+
+  const selectedTotalEntradas = selectedEntradas.reduce((acc, curr) => acc + Number(curr.amount), 0);
+  const selectedTotalSaidas = selectedSaidas.reduce((acc, curr) => acc + Number(curr.amount), 0);
+  const selectedSaldo = selectedTotalEntradas - selectedTotalSaidas;
+
   // CRUD Dialog States
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingEntry, setEditingEntry] = useState<DigitalLedgerEntry | null>(null);
@@ -210,7 +241,7 @@ export function DigitalLedgerTab() {
   const formatDate = (dateStr: string) => {
     try {
       const [year, month, day] = dateStr.split("-");
-      return `${day}/${month}/${year}`;
+      return `${day}/${month}`;
     } catch (e) {
       return dateStr;
     }
@@ -340,7 +371,8 @@ export function DigitalLedgerTab() {
             <Table>
               <TableHeader className="bg-slate-50/50 dark:bg-slate-900/50">
                 <TableRow className="border-b border-slate-100 dark:border-slate-800">
-                  <TableHead className="w-[100px] text-xs font-medium text-slate-500 dark:text-slate-400 pl-4 py-3">Data</TableHead>
+                  <TableHead className="w-[40px] pl-4 py-3"></TableHead>
+                  <TableHead className="w-[100px] text-xs font-medium text-slate-500 dark:text-slate-400 py-3">Data</TableHead>
                   <TableHead className="text-xs font-medium text-slate-500 dark:text-slate-400 py-3">Descrição</TableHead>
                   <TableHead className="text-xs font-medium text-slate-500 dark:text-slate-400 py-3 text-right">Valor</TableHead>
                   <TableHead className="w-[80px] text-xs font-medium text-slate-500 dark:text-slate-400 py-3 text-center pr-4">Pago</TableHead>
@@ -349,14 +381,26 @@ export function DigitalLedgerTab() {
               <TableBody>
                 {entradas.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={4} className="h-32 text-center text-slate-400 dark:text-slate-500 text-xs py-8 pl-4 pr-4">
+                    <TableCell colSpan={5} className="h-32 text-center text-slate-400 dark:text-slate-500 text-xs py-8 pl-4 pr-4">
                       Nenhuma entrada anotada neste mês.
                     </TableCell>
                   </TableRow>
                 ) : (
                   entradas.map(entry => (
-                    <TableRow key={entry.id} className="group border-b border-slate-100 dark:border-slate-800/50 hover:bg-slate-50/30 dark:hover:bg-slate-900/20 transition-colors">
-                      <TableCell className="py-2.5 font-medium text-xs text-slate-600 dark:text-slate-300 pl-4">
+                    <TableRow key={entry.id} className={`group border-b border-slate-100 dark:border-slate-800/50 hover:bg-slate-50/30 dark:hover:bg-slate-900/20 transition-colors ${selectedIds.has(entry.id) ? "bg-indigo-50/25 dark:bg-indigo-950/15" : ""}`}>
+                      <TableCell className="py-2.5 pl-4 w-[40px] text-center">
+                        <button
+                          onClick={() => handleToggleSelect(entry.id)}
+                          className={`w-4 h-4 rounded border flex items-center justify-center transition-all ${
+                            selectedIds.has(entry.id)
+                              ? "bg-indigo-600 border-indigo-600 text-white"
+                              : "border-slate-300 dark:border-slate-600 hover:border-indigo-500"
+                          }`}
+                        >
+                          {selectedIds.has(entry.id) && <Check className="h-2.5 w-2.5 stroke-[3]" />}
+                        </button>
+                      </TableCell>
+                      <TableCell className="py-2.5 font-medium text-xs text-slate-600 dark:text-slate-300">
                         {formatDate(entry.entry_date)}
                       </TableCell>
                       <TableCell className="py-2.5 text-xs text-slate-800 dark:text-slate-200">
@@ -406,8 +450,10 @@ export function DigitalLedgerTab() {
               </TableBody>
             </Table>
             <div className="p-4 bg-emerald-50/20 dark:bg-emerald-950/5 border-t border-slate-200/60 dark:border-slate-800/60 flex items-center justify-between text-xs">
-              <span className="font-medium text-emerald-800 dark:text-emerald-400">Total de Entradas</span>
-              <span className="font-bold text-emerald-700 dark:text-emerald-300 text-sm">{formatCurrency(totalEntradas)}</span>
+              <span className="font-medium text-emerald-800 dark:text-emerald-400">Total de Entradas (Pagas)</span>
+              <span className="font-bold text-emerald-700 dark:text-emerald-300 text-sm">
+                {formatCurrency(totalEntradasPagas)} / {formatCurrency(totalEntradas)}
+              </span>
             </div>
           </CardContent>
         </Card>
@@ -433,7 +479,8 @@ export function DigitalLedgerTab() {
             <Table>
               <TableHeader className="bg-slate-50/50 dark:bg-slate-900/50">
                 <TableRow className="border-b border-slate-100 dark:border-slate-800">
-                  <TableHead className="w-[100px] text-xs font-medium text-slate-500 dark:text-slate-400 pl-4 py-3">Data</TableHead>
+                  <TableHead className="w-[40px] pl-4 py-3"></TableHead>
+                  <TableHead className="w-[100px] text-xs font-medium text-slate-500 dark:text-slate-400 py-3">Data</TableHead>
                   <TableHead className="text-xs font-medium text-slate-500 dark:text-slate-400 py-3">Descrição</TableHead>
                   <TableHead className="text-xs font-medium text-slate-500 dark:text-slate-400 py-3 text-right">Valor</TableHead>
                   <TableHead className="w-[80px] text-xs font-medium text-slate-500 dark:text-slate-400 py-3 text-center pr-4">Pago</TableHead>
@@ -442,14 +489,26 @@ export function DigitalLedgerTab() {
               <TableBody>
                 {saidas.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={4} className="h-32 text-center text-slate-400 dark:text-slate-500 text-xs py-8 pl-4 pr-4">
+                    <TableCell colSpan={5} className="h-32 text-center text-slate-400 dark:text-slate-500 text-xs py-8 pl-4 pr-4">
                       Nenhuma saída anotada neste mês.
                     </TableCell>
                   </TableRow>
                 ) : (
                   saidas.map(entry => (
-                    <TableRow key={entry.id} className="group border-b border-slate-100 dark:border-slate-800/50 hover:bg-slate-50/30 dark:hover:bg-slate-900/20 transition-colors">
-                      <TableCell className="py-2.5 font-medium text-xs text-slate-600 dark:text-slate-300 pl-4">
+                    <TableRow key={entry.id} className={`group border-b border-slate-100 dark:border-slate-800/50 hover:bg-slate-50/30 dark:hover:bg-slate-900/20 transition-colors ${selectedIds.has(entry.id) ? "bg-indigo-50/25 dark:bg-indigo-950/15" : ""}`}>
+                      <TableCell className="py-2.5 pl-4 w-[40px] text-center">
+                        <button
+                          onClick={() => handleToggleSelect(entry.id)}
+                          className={`w-4 h-4 rounded border flex items-center justify-center transition-all ${
+                            selectedIds.has(entry.id)
+                              ? "bg-indigo-600 border-indigo-600 text-white"
+                              : "border-slate-300 dark:border-slate-600 hover:border-indigo-500"
+                          }`}
+                        >
+                          {selectedIds.has(entry.id) && <Check className="h-2.5 w-2.5 stroke-[3]" />}
+                        </button>
+                      </TableCell>
+                      <TableCell className="py-2.5 font-medium text-xs text-slate-600 dark:text-slate-300">
                         {formatDate(entry.entry_date)}
                       </TableCell>
                       <TableCell className="py-2.5 text-xs text-slate-800 dark:text-slate-200">
@@ -499,8 +558,10 @@ export function DigitalLedgerTab() {
               </TableBody>
             </Table>
             <div className="p-4 bg-rose-50/20 dark:bg-rose-950/5 border-t border-slate-200/60 dark:border-slate-800/60 flex items-center justify-between text-xs">
-              <span className="font-medium text-rose-800 dark:text-rose-400">Total de Saídas</span>
-              <span className="font-bold text-rose-700 dark:text-rose-300 text-sm">{formatCurrency(totalSaidas)}</span>
+              <span className="font-medium text-rose-800 dark:text-rose-400">Total de Saídas (Pagas)</span>
+              <span className="font-bold text-rose-700 dark:text-rose-300 text-sm">
+                {formatCurrency(totalSaidasPagas)} / {formatCurrency(totalSaidas)}
+              </span>
             </div>
           </CardContent>
         </Card>
@@ -520,19 +581,23 @@ export function DigitalLedgerTab() {
 
           <div className="flex flex-wrap items-center gap-4 md:gap-8 text-xs font-semibold text-slate-600 dark:text-slate-400">
             <div className="flex flex-col gap-0.5">
-              <span className="text-[10px] uppercase tracking-wider text-slate-400">Entradas</span>
-              <span className="text-sm font-bold text-emerald-600 dark:text-emerald-400">{formatCurrency(totalEntradas)}</span>
+              <span className="text-[10px] uppercase tracking-wider text-slate-400">Entradas (Pagas)</span>
+              <span className="text-sm font-bold text-emerald-600 dark:text-emerald-400">
+                {formatCurrency(totalEntradasPagas)} <span className="text-slate-400 font-normal">/</span> {formatCurrency(totalEntradas)}
+              </span>
             </div>
             <div className="text-slate-300 dark:text-slate-700 text-lg hidden sm:block">-</div>
             <div className="flex flex-col gap-0.5">
-              <span className="text-[10px] uppercase tracking-wider text-slate-400">Saídas</span>
-              <span className="text-sm font-bold text-rose-600 dark:text-rose-400">{formatCurrency(totalSaidas)}</span>
+              <span className="text-[10px] uppercase tracking-wider text-slate-400">Saídas (Pagas)</span>
+              <span className="text-sm font-bold text-rose-600 dark:text-rose-400">
+                {formatCurrency(totalSaidasPagas)} <span className="text-slate-400 font-normal">/</span> {formatCurrency(totalSaidas)}
+              </span>
             </div>
             <div className="text-slate-300 dark:text-slate-700 text-lg hidden sm:block">=</div>
             <div className="flex flex-col gap-0.5 bg-white dark:bg-slate-950 p-2 px-4 rounded-xl border border-slate-200/40 dark:border-slate-800/40">
-              <span className="text-[10px] uppercase tracking-wider text-slate-400">Saldo</span>
+              <span className="text-[10px] uppercase tracking-wider text-slate-400">Saldo (Pago)</span>
               <span className={`text-base font-bold ${saldo >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"}`}>
-                {formatCurrency(saldo)}
+                {formatCurrency(saldoPago)} <span className="text-slate-400 font-normal text-xs">/</span> {formatCurrency(saldo)}
               </span>
             </div>
           </div>
@@ -664,6 +729,47 @@ export function DigitalLedgerTab() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Floating Selection Banner */}
+      {selectedIds.size > 0 && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-slate-900 dark:bg-slate-950 text-white p-4 px-6 rounded-2xl shadow-xl flex items-center gap-6 border border-slate-800 dark:border-slate-800 animate-in fade-in slide-in-from-bottom-4 duration-300">
+          <div className="flex items-center gap-2 border-r border-slate-800 dark:border-slate-800 pr-6">
+            <span className="text-xs font-semibold text-slate-300">
+              {selectedIds.size} {selectedIds.size === 1 ? "selecionado" : "selecionados"}
+            </span>
+          </div>
+
+          <div className="flex items-center gap-6 text-xs font-semibold">
+            {selectedTotalEntradas > 0 && (
+              <div className="flex flex-col">
+                <span className="text-[10px] text-slate-400 uppercase tracking-wider">Soma Entradas</span>
+                <span className="text-emerald-400 font-bold">{formatCurrency(selectedTotalEntradas)}</span>
+              </div>
+            )}
+            {selectedTotalSaidas > 0 && (
+              <div className="flex flex-col">
+                <span className="text-[10px] text-slate-400 uppercase tracking-wider">Soma Saídas</span>
+                <span className="text-rose-400 font-bold">{formatCurrency(selectedTotalSaidas)}</span>
+              </div>
+            )}
+            <div className="flex flex-col">
+              <span className="text-[10px] text-slate-400 uppercase tracking-wider">Total Selecionado</span>
+              <span className={`font-bold ${selectedSaldo >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
+                {formatCurrency(selectedSaldo)}
+              </span>
+            </div>
+          </div>
+
+          <Button
+            variant="ghost"
+            size="sm"
+            className="text-xs text-slate-400 hover:text-white hover:bg-slate-800 dark:hover:bg-slate-800 rounded-lg h-8 ml-2 border border-slate-800 dark:border-slate-800"
+            onClick={() => setSelectedIds(new Set())}
+          >
+            Limpar
+          </Button>
+        </div>
+      )}
     </div>
   );
 }
