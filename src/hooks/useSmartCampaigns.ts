@@ -167,16 +167,41 @@ export function useSmartCampaigns() {
           if (!zapiData?.ok) throw new Error(zapiData?.error || "Falha no envio da mensagem de texto");
           waResult = zapiData;
 
+          // Fetch campaign details to resolve entity files
+          const { data: campaign } = await supabase
+            .from("smart_campaigns")
+            .select("audience_config_json")
+            .eq("id", payload.campaign_id)
+            .single();
+
+          const allAttachments = [...payload.attachments];
+
+          if (campaign?.audience_config_json?.entities) {
+            for (const ent of campaign.audience_config_json.entities) {
+              if (ent.file_path) {
+                const { data: signedData, error: signedError } = await supabase.storage
+                  .from("entity-files")
+                  .createSignedUrl(ent.file_path, 3600);
+
+                if (!signedError && signedData?.signedUrl) {
+                  allAttachments.push(signedData.signedUrl);
+                } else {
+                  console.error(`Erro ao criar URL assinada para ${ent.file_path}:`, signedError);
+                }
+              }
+            }
+          }
+
           // Envia anexos se houver
-          if (payload.attachments && payload.attachments.length > 0) {
-            for (const attUrl of payload.attachments) {
+          if (allAttachments.length > 0) {
+            for (const attUrl of allAttachments) {
               const urlLower = attUrl.toLowerCase();
               let attType = "document";
-              if (/\.(png|jpg|jpeg|webp|gif)$/i.test(urlLower)) {
+              if (/\.(png|jpg|jpeg|webp|gif)/i.test(urlLower)) {
                 attType = "image";
-              } else if (/\.(mp3|wav|ogg|m4a)$/i.test(urlLower)) {
+              } else if (/\.(mp3|wav|ogg|m4a)/i.test(urlLower)) {
                 attType = "audio";
-              } else if (/\.(mp4|mov|avi|mpeg)$/i.test(urlLower)) {
+              } else if (/\.(mp4|mov|avi|mpeg)/i.test(urlLower)) {
                 attType = "video";
               }
 

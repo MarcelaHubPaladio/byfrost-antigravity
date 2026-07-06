@@ -219,30 +219,41 @@ export default function SmartCampaignDetail() {
       return;
     }
     
-    // Save draft first if new to get an ID
+    // Save/update draft first to get an ID and ensure database is synced
     let currentId = id;
-    if (isNew) {
-      if (!name) { toast.error("Preencha o nome do disparo primeiro."); return; }
-      
-      let audiencePayload: any = { type: audienceType };
-      if (audienceType === "manual") {
-        audiencePayload.numbers = manualNumbersText.split(/[\s,;\n]+/).map(n => n.trim()).filter(n => n.length > 0);
-      } else if (audienceType === "entities") {
-        audiencePayload.entities = selectedEntities;
-      }
+    
+    let audiencePayload: any = { type: audienceType };
+    if (audienceType === "manual") {
+      audiencePayload.numbers = manualNumbersText.split(/[\s,;\n]+/).map(n => n.trim()).filter(n => n.length > 0);
+    } else if (audienceType === "entities") {
+      audiencePayload.entities = selectedEntities;
+    }
 
-      const newCampaign = await createCampaign.mutateAsync({
-        name,
-        campaign_type: type,
-        wa_instance_id: instanceId || instances?.[0]?.id || '',
-        message_template: message,
-        audience_config_json: audiencePayload,
-        attachments_json: attachments,
-        channels_json: channels,
-        status: 'draft',
-        parent_campaign_id: cloneId || null
-      });
-      currentId = newCampaign.id;
+    const payload = {
+      name: name || "Teste de Envio",
+      campaign_type: type,
+      wa_instance_id: instanceId || instances?.[0]?.id || '',
+      message_template: message,
+      audience_config_json: audiencePayload,
+      attachments_json: attachments,
+      channels_json: channels,
+      status: 'draft' as const,
+      parent_campaign_id: cloneId || null
+    };
+
+    try {
+      if (isNew) {
+        if (!name) { toast.error("Preencha o nome do disparo primeiro."); return; }
+        const newCampaign = await createCampaign.mutateAsync(payload);
+        currentId = newCampaign.id;
+        navigate(`/app/smart-campaigns/${newCampaign.id}`, { replace: true });
+      } else {
+        await updateCampaign.mutateAsync({ id: currentId!, ...payload });
+      }
+    } catch (err) {
+      console.error("Erro ao salvar rascunho antes do teste:", err);
+      toast.error("Erro ao salvar rascunho. O teste não pôde ser enviado.");
+      return;
     }
 
     if (!currentId) return;
@@ -498,7 +509,7 @@ export default function SmartCampaignDetail() {
                                 </div>
                               </div>
                               <div className="flex items-center gap-2">
-                                {type === "boleto" && (
+                                {(type === "comunicado" || type === "boleto") && (
                                   <EntityFileSelector 
                                     tenantId={activeTenantId!} 
                                     entityId={ent.id} 
