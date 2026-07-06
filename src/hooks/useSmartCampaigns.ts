@@ -1,7 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
-import { toast } from "sonner";
 import { useTenant } from "@/providers/TenantProvider";
 import { useSession } from "@/providers/SessionProvider";
 
@@ -147,23 +146,97 @@ export function useSmartCampaigns() {
         
       if (testError) throw testError;
 
-      // TODO: Aqui idealmente chamariamos uma Edge Function que faz o disparo real na Z-API
-      // Simulando sucesso por enquanto
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
+      const channels = payload.channels_json || ["whatsapp"];
+      let waError: any = null;
+      let waResult: any = null;
+
+      if (channels.includes("whatsapp") && payload.test_phone_e164 && payload.test_phone_e164 !== "email_only") {
+        try {
+          // Envia o texto da mensagem
+          const { data: zapiData, error: zapiError } = await supabase.functions.invoke("integrations-zapi-send", {
+            body: {
+              tenantId: activeTenantId,
+              instanceId: payload.wa_instance_id,
+              to: payload.test_phone_e164,
+              type: "text",
+              text: payload.message,
+            }
+          });
+
+          if (zapiError) throw zapiError;
+          if (!zapiData?.ok) throw new Error(zapiData?.error || "Falha no envio da mensagem de texto");
+          waResult = zapiData;
+
+          // Envia anexos se houver
+          if (payload.attachments && payload.attachments.length > 0) {
+            for (const attUrl of payload.attachments) {
+              const urlLower = attUrl.toLowerCase();
+              let attType = "document";
+              if (/\.(png|jpg|jpeg|webp|gif)$/i.test(urlLower)) {
+                attType = "image";
+              } else if (/\.(mp3|wav|ogg|m4a)$/i.test(urlLower)) {
+                attType = "audio";
+              } else if (/\.(mp4|mov|avi|mpeg)$/i.test(urlLower)) {
+                attType = "video";
+              }
+
+              let fileName = "arquivo.pdf";
+              try {
+                const parsedUrl = new URL(attUrl);
+                fileName = parsedUrl.pathname.split("/").pop() || "arquivo.pdf";
+              } catch (e) {}
+
+              const ext = fileName.split(".").pop() || "pdf";
+
+              const { data: attData, error: attError } = await supabase.functions.invoke("integrations-zapi-send", {
+                body: {
+                  tenantId: activeTenantId,
+                  instanceId: payload.wa_instance_id,
+                  to: payload.test_phone_e164,
+                  type: attType,
+                  mediaUrl: attUrl,
+                  meta: { fileName, extension: ext }
+                }
+              });
+
+              if (attError) {
+                console.error(`Erro ao enviar anexo ${attUrl}:`, attError);
+              } else if (!attData?.ok) {
+                console.error(`Erro Z-API ao enviar anexo ${attUrl}:`, attData?.error);
+              }
+            }
+          }
+        } catch (err: any) {
+          waError = err.message || err;
+          console.error("Erro no envio do teste de WhatsApp:", err);
+        }
+      }
+
+      const testStatus = waError ? 'error' : 'sent';
+      const logJson = {
+        result: waError ? 'Error sending' : 'Success',
+        wa_result: waResult,
+        wa_error: waError ? String(waError) : null,
+        email_simulated: channels.includes("email") ? "Email testing is simulated." : undefined
+      };
+
       await supabase
         .from('smart_campaign_tests')
-        .update({ status: 'sent', log_json: { result: 'Simulated success' } })
+        .update({ status: testStatus, log_json: logJson })
         .eq('id', testRecord.id);
+
+      if (waError) {
+        throw new Error(waError);
+      }
 
       return true;
     },
     onSuccess: () => {
       toast.success("Teste enviado com sucesso!");
     },
-    onError: (error) => {
+    onError: (error: any) => {
       console.error(error);
-      toast.error("Erro ao enviar teste.");
+      toast.error(`Erro ao enviar teste: ${error.message || "Erro desconhecido"}`);
     }
   });
 
