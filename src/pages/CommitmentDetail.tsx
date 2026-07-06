@@ -34,6 +34,7 @@ import {
   BarChart3,
   ChevronLeft,
   ChevronRight,
+  Trash2,
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import {
@@ -115,6 +116,35 @@ export default function CommitmentDetail() {
   const [newDeliverableName, setNewDeliverableName] = useState("");
   const [selectedOfferingId, setSelectedOfferingId] = useState("");
   const [newDeliverableQty, setNewDeliverableQty] = useState(1);
+  const [isEditingStart, setIsEditingStart] = useState(false);
+  const [newStartDate, setNewStartDate] = useState("");
+
+  const updateStartDate = async (dateStr: string) => {
+    if (!dateStr) return;
+    setSaving(true);
+    try {
+      const parsedDate = new Date(dateStr + "T12:00:00");
+      if (isNaN(parsedDate.getTime())) {
+        throw new Error("Data inválida");
+      }
+      
+      const { error } = await supabase
+        .from("commercial_commitments")
+        .update({ created_at: parsedDate.toISOString() })
+        .eq("id", commitmentId);
+
+      if (error) throw error;
+      
+      showSuccess("Data de início atualizada com sucesso");
+      setIsEditingStart(false);
+      qc.invalidateQueries({ queryKey: ["commitment", activeTenantId, commitmentId] });
+    } catch (err: any) {
+      showError(err.message ?? "Erro ao atualizar a data");
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const qc = useQueryClient();
 
   const offeringsQ = useQuery({
@@ -501,6 +531,44 @@ export default function CommitmentDetail() {
       nav("/app/commitments");
     } catch (err: any) {
       showError(err.message ?? "Erro ao excluir");
+      setSaving(false);
+    }
+  };
+
+  const deleteItem = async (itemId: string) => {
+    if (!window.confirm("Deseja realmente excluir este item? Isso pode desajustar os entregáveis gerados.")) return;
+    setSaving(true);
+    try {
+      const { error } = await supabase
+        .from("commitment_items")
+        .update({ deleted_at: new Date().toISOString() })
+        .eq("tenant_id", activeTenantId!)
+        .eq("id", itemId);
+      if (error) throw error;
+      showSuccess("Item excluído com sucesso.");
+      itemsQ.refetch();
+    } catch (err: any) {
+      showError(err.message ?? "Erro ao excluir item");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const deleteDeliverable = async (deliverableId: string) => {
+    if (!window.confirm("Deseja realmente excluir este entregável?")) return;
+    setSaving(true);
+    try {
+      const { error } = await supabase
+        .from("deliverables")
+        .update({ deleted_at: new Date().toISOString() })
+        .eq("tenant_id", activeTenantId!)
+        .eq("id", deliverableId);
+      if (error) throw error;
+      showSuccess("Entregável excluído com sucesso.");
+      deliverablesQ.refetch();
+    } catch (err: any) {
+      showError(err.message ?? "Erro ao excluir entregável");
+    } finally {
       setSaving(false);
     }
   };
@@ -901,7 +969,39 @@ export default function CommitmentDetail() {
                       <div className="mt-2 flex justify-between text-[9px] uppercase font-bold text-slate-300">
                         <div className="flex flex-col">
                           <span className="opacity-50">Início</span>
-                          <span>{startDateStr}</span>
+                          {isEditingStart ? (
+                            <input
+                              type="date"
+                              className="bg-slate-800 text-white border border-slate-700 rounded px-1.5 py-0.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 w-28 mt-0.5"
+                              value={newStartDate}
+                              onChange={(e) => setNewStartDate(e.target.value)}
+                              onBlur={() => updateStartDate(newStartDate)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  updateStartDate(newStartDate);
+                                } else if (e.key === 'Escape') {
+                                  setIsEditingStart(false);
+                                }
+                              }}
+                              autoFocus
+                            />
+                          ) : (
+                            <span 
+                              className="cursor-pointer hover:underline hover:text-blue-300 transition-colors"
+                              onClick={() => {
+                                if (commitmentQ.data?.created_at) {
+                                  const d = new Date(commitmentQ.data.created_at);
+                                  const year = d.getFullYear();
+                                  const month = String(d.getMonth() + 1).padStart(2, '0');
+                                  const day = String(d.getDate()).padStart(2, '0');
+                                  setNewStartDate(`${year}-${month}-${day}`);
+                                }
+                                setIsEditingStart(true);
+                              }}
+                            >
+                              {startDateStr}
+                            </span>
+                          )}
                         </div>
                         <div className="flex flex-col text-center">
                           <span className="opacity-50">Hoje</span>
@@ -957,7 +1057,18 @@ export default function CommitmentDetail() {
                         </div>
                         {it.price && <div className="text-[10px] text-slate-500">Preço: {Number(it.price).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</div>}
                       </div>
-                      <div className="shrink-0 text-sm font-bold text-slate-700">x{it.quantity}</div>
+                      <div className="flex items-center gap-3 shrink-0">
+                        <div className="text-sm font-bold text-slate-700">x{it.quantity}</div>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 w-7 p-0 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded-lg"
+                          onClick={() => deleteItem(it.id)}
+                          disabled={saving}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
                     </div>
                   ))}
                   {(itemsQ.data ?? []).length === 0 ? <div className="text-sm text-slate-600">Sem itens.</div> : null}
@@ -1075,18 +1186,32 @@ export default function CommitmentDetail() {
                                           </div>
                                         </div>
                                       </div>
-                                      <Button
-                                        size="sm"
-                                        variant={d.status === 'completed' ? 'default' : 'outline'}
-                                        className={cn("h-6 text-[9px] font-bold uppercase rounded-full px-3 transition-colors", d.status === 'completed' ? 'bg-emerald-500 hover:bg-emerald-600 border-none' : 'text-slate-500 border-slate-200 hover:bg-slate-100 hover:text-slate-800')}
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          toggleDeliverableStatus(d.id, d.status === 'completed' ? 'pending' : 'completed');
-                                        }}
-                                        disabled={saving}
-                                      >
-                                        {d.status === 'completed' ? 'Concluído' : 'Marcar Concluído'}
-                                      </Button>
+                                      <div className="flex items-center gap-2">
+                                        <Button
+                                          size="sm"
+                                          variant={d.status === 'completed' ? 'default' : 'outline'}
+                                          className={cn("h-6 text-[9px] font-bold uppercase rounded-full px-3 transition-colors", d.status === 'completed' ? 'bg-emerald-500 hover:bg-emerald-600 border-none' : 'text-slate-500 border-slate-200 hover:bg-slate-100 hover:text-slate-800')}
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            toggleDeliverableStatus(d.id, d.status === 'completed' ? 'pending' : 'completed');
+                                          }}
+                                          disabled={saving}
+                                        >
+                                          {d.status === 'completed' ? 'Concluído' : 'Marcar Concluído'}
+                                        </Button>
+                                        <Button
+                                          size="sm"
+                                          variant="ghost"
+                                          className="h-6 w-6 p-0 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded-lg"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            deleteDeliverable(d.id);
+                                          }}
+                                          disabled={saving || (d.cases && d.cases.filter((c:any) => !c.deleted_at).length > 0)}
+                                        >
+                                          <Trash2 className="h-3.5 w-3.5" />
+                                        </Button>
+                                      </div>
                                     </div>
 
                                     {/* Linked Cases per occurrence */}
