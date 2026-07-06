@@ -672,7 +672,7 @@ export default function SmartCampaignDetail() {
                       <div className="space-y-1.5">
                         <Label className="text-xs text-slate-500">Selecionar Número Salvo</Label>
                         <Select
-                          value=""
+                          value={testPhones.find(p => p.phone_e164 === testPhone || p.phone_e164 === testPhone.replace(/\D/g, ""))?.id || ""}
                           onValueChange={(val) => {
                             const selected = testPhones.find(p => p.id === val);
                             if (selected) {
