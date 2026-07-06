@@ -67,7 +67,7 @@ type ContractWithProgress = {
   created_at: string;
   customer: { id: string; display_name: string; metadata?: any } | null;
   items: { quantity: number | null }[];
-  deliverables: { id: string; status: string | null; deleted_at: string | null }[];
+  deliverables: { id: string; name?: string; status: string | null; template_id?: string | null; deleted_at: string | null }[];
 };
 
 type ViewMode = "grid" | "list" | "kanban";
@@ -105,7 +105,7 @@ export default function Contracts() {
           created_at,
           customer:core_entities!commercial_commitments_customer_fk(id, display_name, metadata),
           items:commitment_items(quantity),
-          deliverables(id, status, deleted_at)
+          deliverables(id, name, status, template_id, deleted_at)
         `)
         .eq("commitment_type", "contract")
         .eq("tenant_id", activeTenantId!)
@@ -152,9 +152,33 @@ export default function Contracts() {
       const progressRatio = totalDeliverables > 0 ? (completedDeliverablescount / totalDeliverables) : 0;
       const percentage = Math.round(progressRatio * 100);
 
+      // Group deliverables by template_id or name
+      const groups: Record<string, { total: number; completed: number }> = {};
+      deliverables.forEach(d => {
+        const key = d.name || d.template_id || 'unnamed';
+        const isCompleted = String(d.status || '').toLowerCase() === 'completed' || 
+                            String(d.status || '').toLowerCase() === 'done' ||
+                            String(d.status || '').toLowerCase() === 'entregue';
+        if (!groups[key]) {
+          groups[key] = { total: 0, completed: 0 };
+        }
+        groups[key].total += 1;
+        if (isCompleted) {
+          groups[key].completed += 1;
+        }
+      });
+
+      const uniqueGroups = Object.values(groups);
+      const totalGroups = uniqueGroups.length;
+      const completedGroups = uniqueGroups.reduce((acc, g) => acc + (g.completed / g.total), 0);
+      
+      const groupedProgressRatio = totalGroups > 0 ? (completedGroups / totalGroups) : 0;
+      const groupedPercentage = Math.round(groupedProgressRatio * 100);
+
       // --- Ritmo do Contrato ---
       let contractMonths = 0;
       let expectedCompleted = 0;
+      let expectedCompletedGrouped = 0;
       let monthsElapsed = 0;
       let isOnTime = true;
       let isLate = false;
@@ -186,8 +210,13 @@ export default function Contracts() {
         // Pode não fazer sentido cobrar além do total
         expectedCompleted = Math.min(expectedCompleted, totalDeliverables);
 
+        // Expectativa com agrupados
+        expectedCompletedGrouped = (totalGroups / contractMonths) * monthsElapsed;
+        expectedCompletedGrouped = Math.min(expectedCompletedGrouped, totalGroups);
+
         // Se os concluídos forem menores do que o esperado (com margem de 0.5 pra não ser tão rigoroso)
-        if (completedDeliverablescount < (expectedCompleted - 0.5)) {
+        // Usamos as métricas agrupadas para a lógica de prazo/atrasado
+        if (completedGroups < (expectedCompletedGrouped - 0.5)) {
           isOnTime = false;
           isLate = true;
         }
@@ -198,12 +227,15 @@ export default function Contracts() {
         metrics: {
           total: totalDeliverables,
           completed: completedDeliverablescount,
-          percentage,
+          percentage: groupedPercentage,
           total_units: totalUnits,
           total_deliverables: totalDeliverables,
           hasTermData,
           contractMonths,
           expectedCompleted,
+          expectedCompletedGrouped,
+          totalGroups,
+          completedGroups,
           isOnTime,
           isLate
         }
@@ -293,17 +325,17 @@ export default function Contracts() {
     const activeCount = list.filter(c => c.status === 'active').length;
     const completedCount = list.filter(c => c.status === 'completed' || c.metrics.percentage === 100).length;
     
-    const activeWithDeliverables = list.filter(c => c.status === 'active' && c.metrics.total_deliverables > 0);
+    const activeWithDeliverables = list.filter(c => c.status === 'active' && c.metrics.totalGroups > 0);
     
     let totalRealized = 0;
     let totalExpected = 0;
     let totalDeliverables = 0;
     
     activeWithDeliverables.forEach(c => {
-      totalRealized += c.metrics.completed;
-      totalDeliverables += c.metrics.total_deliverables;
+      totalRealized += c.metrics.completedGroups;
+      totalDeliverables += c.metrics.totalGroups;
       if (c.metrics.hasTermData) {
-        totalExpected += c.metrics.expectedCompleted;
+        totalExpected += c.metrics.expectedCompletedGrouped;
       }
     });
 
