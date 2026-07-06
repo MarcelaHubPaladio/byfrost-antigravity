@@ -720,26 +720,28 @@ export default function CommitmentDetail() {
     }
   }
 
-  if (contractMonths > 0 && commitmentQ.data) {
-    hasTermData = true;
+  if (commitmentQ.data) {
     const start = new Date(commitmentQ.data.created_at);
     startDateStr = start.toLocaleDateString('pt-BR');
     
-    const end = new Date(start);
-    end.setMonth(end.getMonth() + contractMonths);
-    endDateStr = end.toLocaleDateString('pt-BR');
+    if (contractMonths > 0) {
+      hasTermData = true;
+      const end = new Date(start);
+      end.setMonth(end.getMonth() + contractMonths);
+      endDateStr = end.toLocaleDateString('pt-BR');
 
-    const now = new Date();
-    const diffTime = now.getTime() - start.getTime();
-    const diffDays = Math.max(0, diffTime / (1000 * 3600 * 24));
-    monthsElapsed = diffDays / 30;
+      const now = new Date();
+      const diffTime = now.getTime() - start.getTime();
+      const diffDays = Math.max(0, diffTime / (1000 * 3600 * 24));
+      monthsElapsed = diffDays / 30;
 
-    expectedCompleted = (totalDeliverables / contractMonths) * monthsElapsed;
-    expectedCompleted = Math.min(expectedCompleted, totalDeliverables);
+      expectedCompleted = (totalDeliverables / contractMonths) * monthsElapsed;
+      expectedCompleted = Math.min(expectedCompleted, totalDeliverables);
 
-    if (completedDeliverables < (expectedCompleted - 0.5)) {
-      isOnTime = false;
-      isLate = true;
+      if (completedDeliverables < (expectedCompleted - 0.5)) {
+        isOnTime = false;
+        isLate = true;
+      }
     }
   }
 
@@ -965,7 +967,7 @@ export default function CommitmentDetail() {
                         style={{ width: `${Math.round(((deliverablesQ.data ?? []).filter(d => d.status === 'completed').length / Math.max((deliverablesQ.data ?? []).length, 1)) * 100)}%` }}
                       />
                     </div>
-                    {hasTermData && (
+                    {startDateStr && (
                       <div className="mt-2 flex justify-between text-[9px] uppercase font-bold text-slate-300">
                         <div className="flex flex-col">
                           <span className="opacity-50">Início</span>
@@ -1007,10 +1009,17 @@ export default function CommitmentDetail() {
                           <span className="opacity-50">Hoje</span>
                           <span className="text-blue-300">{currentDateStr}</span>
                         </div>
-                        <div className="flex flex-col text-right">
-                          <span className="opacity-50">Fim (previsto)</span>
-                          <span>{endDateStr}</span>
-                        </div>
+                        {hasTermData ? (
+                          <div className="flex flex-col text-right">
+                            <span className="opacity-50">Fim (previsto)</span>
+                            <span>{endDateStr}</span>
+                          </div>
+                        ) : (
+                          <div className="flex flex-col text-right opacity-0 pointer-events-none select-none">
+                            <span className="opacity-50">Fim (previsto)</span>
+                            <span>00/00/0000</span>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
