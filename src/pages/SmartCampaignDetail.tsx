@@ -10,7 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { AppShell } from "@/components/AppShell";
-import { useSmartCampaigns, useSmartCampaign, CampaignType } from "@/hooks/useSmartCampaigns";
+import { useSmartCampaigns, useSmartCampaign, CampaignType, useSmartCampaignTestPhones } from "@/hooks/useSmartCampaigns";
 import { useSmartCampaignTemplates } from "@/hooks/useSmartCampaignTemplates";
 import { toast } from "sonner";
 import { supabase } from "@/lib/supabase";
@@ -93,6 +93,11 @@ export default function SmartCampaignDetail() {
   const [newAttachment, setNewAttachment] = useState("");
 
   const [saveAsTemplateName, setSaveAsTemplateName] = useState("");
+
+  const { testPhones, addTestPhone, deleteTestPhone } = useSmartCampaignTestPhones();
+  const [showAddTestPhone, setShowAddTestPhone] = useState(false);
+  const [newTestPhoneName, setNewTestPhoneName] = useState("");
+  const [newTestPhoneNumber, setNewTestPhoneNumber] = useState("");
 
   // Search entities
   useEffect(() => {
@@ -662,17 +667,140 @@ export default function SmartCampaignDetail() {
               </CardHeader>
               <CardContent className="space-y-4">
                 {channels.includes("whatsapp") && (
-                  <div className="space-y-2">
-                    <Label>Telefone de Teste</Label>
-                    <div className="relative">
-                      <Phone className="w-4 h-4 absolute left-3 top-3 text-slate-400" />
-                      <Input 
-                        className="pl-9"
-                        placeholder="Ex: 5511999999999" 
-                        value={testPhone}
-                        onChange={e => setTestPhone(e.target.value)}
-                      />
+                  <div className="space-y-4">
+                    {testPhones && testPhones.length > 0 && (
+                      <div className="space-y-1.5">
+                        <Label className="text-xs text-slate-500">Selecionar Número Salvo</Label>
+                        <Select
+                          value=""
+                          onValueChange={(val) => {
+                            const selected = testPhones.find(p => p.id === val);
+                            if (selected) {
+                              setTestPhone(selected.phone_e164);
+                            }
+                          }}
+                        >
+                          <SelectTrigger className="h-8 text-xs bg-white dark:bg-slate-900">
+                            <SelectValue placeholder="Escolha um número de teste..." />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {testPhones.map(p => (
+                              <SelectItem key={p.id} value={p.id}>
+                                {p.name} ({p.phone_e164})
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
+
+                    <div className="space-y-2">
+                      <Label>Telefone de Teste</Label>
+                      <div className="flex gap-2">
+                        <div className="relative flex-1">
+                          <Phone className="w-4 h-4 absolute left-3 top-3 text-slate-400" />
+                          <Input 
+                            className="pl-9"
+                            placeholder="Ex: 5511999999999" 
+                            value={testPhone}
+                            onChange={e => setTestPhone(e.target.value)}
+                          />
+                        </div>
+                        {testPhone && (
+                          <Button 
+                            variant="outline" 
+                            size="icon" 
+                            className="shrink-0 animate-in fade-in zoom-in-95 duration-150"
+                            title="Salvar este número"
+                            onClick={() => {
+                              setNewTestPhoneNumber(testPhone);
+                              setShowAddTestPhone(true);
+                            }}
+                          >
+                            <Plus className="w-4 h-4" />
+                          </Button>
+                        )}
+                      </div>
                     </div>
+
+                    {showAddTestPhone && (
+                      <div className="p-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md space-y-3 animate-in slide-in-from-top-2 duration-200">
+                        <div className="text-xs font-semibold text-slate-700 dark:text-slate-300">Salvar Número de Teste</div>
+                        <div className="space-y-2">
+                          <Input 
+                            placeholder="Nome (ex: João Celular)" 
+                            value={newTestPhoneName} 
+                            onChange={e => setNewTestPhoneName(e.target.value)}
+                            className="h-8 text-xs"
+                          />
+                          <Input 
+                            placeholder="Telefone" 
+                            value={newTestPhoneNumber} 
+                            onChange={e => setNewTestPhoneNumber(e.target.value)}
+                            className="h-8 text-xs"
+                          />
+                        </div>
+                        <div className="flex justify-end gap-2">
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            className="h-7 text-xs" 
+                            onClick={() => {
+                              setShowAddTestPhone(false);
+                              setNewTestPhoneName("");
+                              setNewTestPhoneNumber("");
+                            }}
+                          >
+                            Cancelar
+                          </Button>
+                          <Button 
+                            size="sm" 
+                            className="h-7 text-xs bg-blue-600 hover:bg-blue-700 text-white" 
+                            disabled={!newTestPhoneName || !newTestPhoneNumber}
+                            onClick={async () => {
+                              await addTestPhone.mutateAsync({
+                                name: newTestPhoneName,
+                                phone_e164: newTestPhoneNumber.replace(/\D/g, "")
+                              });
+                              setShowAddTestPhone(false);
+                              setNewTestPhoneName("");
+                              setNewTestPhoneNumber("");
+                            }}
+                          >
+                            Salvar
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+
+                    {testPhones && testPhones.length > 0 && (
+                      <div className="border-t border-blue-100 dark:border-blue-900/50 pt-2">
+                        <details className="group">
+                          <summary className="text-[11px] text-blue-700 dark:text-blue-400 font-medium cursor-pointer list-none flex items-center justify-between">
+                            <span>Gerenciar números salvos ({testPhones.length})</span>
+                            <span className="transition group-open:rotate-180">▼</span>
+                          </summary>
+                          <div className="mt-2 space-y-1.5 max-h-32 overflow-y-auto pr-1">
+                            {testPhones.map(p => (
+                              <div key={p.id} className="flex justify-between items-center text-xs bg-white dark:bg-slate-900/50 p-1.5 rounded border border-slate-100 dark:border-slate-800">
+                                <span className="font-medium text-slate-700 dark:text-slate-300 truncate max-w-[140px]" title={p.name}>
+                                  {p.name}
+                                </span>
+                                <span className="text-slate-500 font-mono text-[10px]">
+                                  {p.phone_e164}
+                                </span>
+                                <button 
+                                  onClick={() => deleteTestPhone.mutate(p.id)}
+                                  className="text-red-500 hover:text-red-700 text-[10px] ml-1"
+                                >
+                                  Excluir
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        </details>
+                      </div>
+                    )}
                   </div>
                 )}
                 

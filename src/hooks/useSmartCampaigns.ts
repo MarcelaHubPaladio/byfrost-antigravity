@@ -258,7 +258,8 @@ export function useSmartCampaigns() {
               let fileName = "arquivo.pdf";
               try {
                 const parsedUrl = new URL(attUrl);
-                fileName = parsedUrl.pathname.split("/").pop() || "arquivo.pdf";
+                const rawName = parsedUrl.pathname.split("/").pop() || "arquivo.pdf";
+                fileName = decodeURIComponent(rawName);
               } catch (e) {}
 
               const ext = fileName.split(".").pop() || "pdf";
@@ -343,4 +344,86 @@ export function useSmartCampaign(id?: string) {
   });
 
   return { campaign, isLoading };
+}
+
+export interface TestPhone {
+  id: string;
+  tenant_id: string;
+  name: string;
+  phone_e164: string;
+  created_at: string;
+}
+
+export function useSmartCampaignTestPhones() {
+  const { activeTenantId } = useTenant();
+  const { user } = useSession();
+  const queryClient = useQueryClient();
+
+  const { data: testPhones, isLoading } = useQuery({
+    queryKey: ['smart_campaign_test_phones', activeTenantId],
+    queryFn: async () => {
+      if (!activeTenantId) return [];
+      const { data, error } = await supabase
+        .from('smart_campaign_test_phones')
+        .select('*')
+        .eq('tenant_id', activeTenantId)
+        .order('name', { ascending: true });
+
+      if (error) throw error;
+      return data as TestPhone[];
+    },
+    enabled: !!activeTenantId,
+  });
+
+  const addTestPhone = useMutation({
+    mutationFn: async (payload: { name: string; phone_e164: string }) => {
+      const { data, error } = await supabase
+        .from('smart_campaign_test_phones')
+        .insert({
+          ...payload,
+          tenant_id: activeTenantId!,
+          created_by: user?.id,
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['smart_campaign_test_phones', activeTenantId] });
+      toast.success("Telefone de teste adicionado.");
+    },
+    onError: (err: any) => {
+      console.error(err);
+      toast.error(`Erro ao adicionar telefone: ${err.message || "Erro desconhecido"}`);
+    }
+  });
+
+  const deleteTestPhone = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase
+        .from('smart_campaign_test_phones')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+      return id;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['smart_campaign_test_phones', activeTenantId] });
+      toast.success("Telefone de teste removido.");
+    },
+    onError: (err: any) => {
+      console.error(err);
+      toast.error("Erro ao remover telefone de teste.");
+    }
+  });
+
+  return {
+    testPhones,
+    isLoading,
+    addTestPhone,
+    deleteTestPhone
+  };
 }
