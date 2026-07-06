@@ -215,8 +215,8 @@ export default function Contracts() {
         expectedCompletedGrouped = Math.min(expectedCompletedGrouped, totalGroups);
 
         // Se os concluídos forem menores do que o esperado (com margem de 0.5 pra não ser tão rigoroso)
-        // Usamos as métricas agrupadas para a lógica de prazo/atrasado
-        if (completedGroups < (expectedCompletedGrouped - 0.5)) {
+        // Usamos as métricas brutas (originais) para a lógica de prazo/atrasado do contrato
+        if (completedDeliverablescount < (expectedCompleted - 0.5)) {
           isOnTime = false;
           isLate = true;
         }
@@ -227,7 +227,7 @@ export default function Contracts() {
         metrics: {
           total: totalDeliverables,
           completed: completedDeliverablescount,
-          percentage: groupedPercentage,
+          percentage,
           total_units: totalUnits,
           total_deliverables: totalDeliverables,
           hasTermData,
@@ -325,17 +325,17 @@ export default function Contracts() {
     const activeCount = list.filter(c => c.status === 'active').length;
     const completedCount = list.filter(c => c.status === 'completed' || c.metrics.percentage === 100).length;
     
-    const activeWithDeliverables = list.filter(c => c.status === 'active' && c.metrics.totalGroups > 0);
+    const activeWithDeliverables = list.filter(c => c.status === 'active' && c.metrics.total_deliverables > 0);
     
     let totalRealized = 0;
     let totalExpected = 0;
     let totalDeliverables = 0;
     
     activeWithDeliverables.forEach(c => {
-      totalRealized += c.metrics.completedGroups;
-      totalDeliverables += c.metrics.totalGroups;
+      totalRealized += c.metrics.completed;
+      totalDeliverables += c.metrics.total_deliverables;
       if (c.metrics.hasTermData) {
-        totalExpected += c.metrics.expectedCompletedGrouped;
+        totalExpected += c.metrics.expectedCompleted;
       }
     });
 
@@ -343,8 +343,67 @@ export default function Contracts() {
     const avgExpected = totalDeliverables > 0 ? Math.round((totalExpected / totalDeliverables) * 100) : 0;
     const onTimeCount = list.filter(c => c.status === 'active' && c.metrics.hasTermData && !c.metrics.isLate).length;
     const lateCount = list.filter(c => c.status === 'active' && c.metrics.hasTermData && c.metrics.isLate).length;
-    
     return { activeCount, completedCount, avgProgress, avgExpected, onTimeCount, lateCount };
+  }, [baseProcessedContracts]);
+
+  const categoryStats = useMemo(() => {
+    const list = baseProcessedContracts.filter(c => c.status === 'active');
+    
+    const categories = [
+      {
+        key: 'videos',
+        label: 'Vídeos',
+        pattern: /video|vídeo|promocional/i,
+      },
+      {
+        key: 'postagens',
+        label: 'Calendário + Postagens',
+        pattern: /postage|calendá|calendari/i,
+      },
+      {
+        key: 'trafego',
+        label: 'Tráfego Pago',
+        pattern: /tráfego|trafego|ads/i,
+      },
+      {
+        key: 'whatsapp',
+        label: 'Acompanhamento WhatsApp',
+        pattern: /whatsapp|wpp|whats/i,
+      }
+    ];
+
+    return categories.map(cat => {
+      let total = 0;
+      let completed = 0;
+      let expected = 0;
+
+      list.forEach(c => {
+        const deliverables = (c.deliverables || []).filter(d => d.deleted_at === null);
+        const catDeliverables = deliverables.filter(d => cat.pattern.test(d.name || ''));
+        const totalCat = catDeliverables.length;
+        
+        if (totalCat > 0) {
+          total += totalCat;
+          const contractProgressPct = c.metrics.percentage;
+          const contractExpectedPct = c.metrics.total_deliverables > 0 
+            ? (c.metrics.expectedCompleted / c.metrics.total_deliverables) * 100 
+            : 0;
+
+          completed += totalCat * (contractProgressPct / 100);
+          expected += totalCat * (contractExpectedPct / 100);
+        }
+      });
+
+      const avgProgress = total > 0 ? Math.round((completed / total) * 100) : 0;
+      const avgExpected = total > 0 ? Math.round((expected / total) * 100) : 0;
+
+      return {
+        ...cat,
+        total,
+        avgProgress,
+        avgExpected
+      };
+    });
   }, [baseProcessedContracts]);
 
   return (
@@ -507,6 +566,49 @@ export default function Contracts() {
                   </button>
                 </div>
               </Card>
+            </div>
+
+            {/* Repeating Deliverables Indicators */}
+            <div className="mb-8">
+              <h2 className="text-lg font-bold text-slate-800 dark:text-slate-200 mb-4 flex items-center gap-2">
+                <Activity className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                Métricas por Entregável Recorrente
+              </h2>
+              <div className="grid grid-cols-1 gap-6 sm:grid-cols-4">
+                {categoryStats.map(cat => (
+                  <Card key={cat.key} className="border-slate-200/60 bg-white/50 p-6 backdrop-blur-sm dark:border-slate-800 dark:bg-slate-950/50 shadow-sm flex flex-col justify-between">
+                    <div>
+                      <p className="text-sm font-semibold text-slate-700 dark:text-slate-300">{cat.label}</p>
+                      <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-0.5">{cat.total} entregáveis no total</p>
+                    </div>
+                    <div className="mt-4 flex items-end justify-between">
+                      <div className="flex flex-col gap-1">
+                        <h3 className="text-3xl font-bold text-slate-900 dark:text-white flex items-baseline gap-2">
+                          {cat.avgProgress}%
+                          <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Realizado</span>
+                        </h3>
+                      </div>
+                      <div className="flex flex-col items-end gap-1">
+                        <span className="text-sm font-bold text-slate-400">{cat.avgExpected}%</span>
+                        <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Esperado</span>
+                      </div>
+                    </div>
+                    <div className="relative mt-4 h-2.5 w-full overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
+                      <div 
+                        className={cn(
+                          "absolute top-0 bottom-0 left-0 transition-all duration-1000", 
+                          cat.avgProgress >= cat.avgExpected ? "bg-emerald-500" : "bg-amber-500"
+                        )} 
+                        style={{ width: `${cat.avgProgress}%` }}
+                      />
+                      <div 
+                        className="absolute top-0 bottom-0 border-r-2 border-slate-900 dark:border-slate-200 z-10"
+                        style={{ left: `${cat.avgExpected}%`, width: '1px' }}
+                      />
+                    </div>
+                  </Card>
+                ))}
+              </div>
             </div>
 
             {/* Contracts Board */}
