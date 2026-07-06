@@ -14,6 +14,7 @@ import { format, startOfMonth, endOfMonth, subMonths, addMonths } from "date-fns
 import { ptBR } from "date-fns/locale";
 import { BookOpen, ChevronLeft, ChevronRight, Plus, Pencil, Trash2, Calendar, Wallet, Check, Cloud, ArrowDownCircle, ArrowUpCircle } from "lucide-react";
 import { showError, showSuccess } from "@/utils/toast";
+import { ComposedChart, Line, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, Cell } from "recharts";
 
 interface DigitalLedgerEntry {
   id: string;
@@ -112,6 +113,73 @@ export function DigitalLedgerTab() {
   const selectedTotalEntradas = selectedEntradas.reduce((acc, curr) => acc + Number(curr.amount), 0);
   const selectedTotalSaidas = selectedSaidas.reduce((acc, curr) => acc + Number(curr.amount), 0);
   const selectedSaldo = selectedTotalEntradas - selectedTotalSaidas;
+
+  // Daily cash flow data
+  const chartData = React.useMemo(() => {
+    const daysInMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 0).getDate();
+    const data = [];
+    let runningBalance = 0;
+
+    for (let day = 1; day <= daysInMonth; day++) {
+      const dayStr = String(day).padStart(2, "0");
+      const monthStr = String(currentMonth.getMonth() + 1).padStart(2, "0");
+      const yearStr = currentMonth.getFullYear();
+      const dateKey = `${yearStr}-${monthStr}-${dayStr}`;
+
+      const dayEntries = entries.filter(e => e.entry_date === dateKey);
+      const dayEntradas = dayEntries.filter(e => e.type === "income").reduce((acc, curr) => acc + Number(curr.amount), 0);
+      const daySaidas = dayEntries.filter(e => e.type === "expense").reduce((acc, curr) => acc + Number(curr.amount), 0);
+      const dayNet = dayEntradas - daySaidas;
+      runningBalance += dayNet;
+
+      data.push({
+        date: dateKey,
+        label: `${dayStr}/${monthStr}`,
+        entradas: dayEntradas,
+        saidas: daySaidas,
+        saldoDia: dayNet,
+        saldoAcumulado: runningBalance
+      });
+    }
+    return data;
+  }, [entries, currentMonth]);
+
+  const CustomTooltip = ({ active, payload }: any) => {
+    if (active && payload && payload.length) {
+      const data = payload[0].payload;
+      return (
+        <div className="bg-slate-900 text-white p-3 rounded-xl border border-slate-850 text-xs shadow-xl flex flex-col gap-1.5 min-w-[180px]">
+          <p className="font-semibold text-slate-450">
+            {format(new Date(data.date + "T00:00:00"), "dd 'de' MMMM", { locale: ptBR })}
+          </p>
+          <div className="flex flex-col gap-1">
+            <div className="flex items-center justify-between gap-4">
+              <span className="text-slate-400">Entradas:</span>
+              <span className="text-emerald-450 font-bold">{formatCurrency(data.entradas)}</span>
+            </div>
+            <div className="flex items-center justify-between gap-4">
+              <span className="text-slate-400">Saídas:</span>
+              <span className="text-rose-450 font-bold">{formatCurrency(data.saidas)}</span>
+            </div>
+            <div className="border-t border-slate-800 my-1"></div>
+            <div className="flex items-center justify-between gap-4">
+              <span className="text-slate-450 font-medium">Saldo do Dia:</span>
+              <span className={`font-bold ${data.saldoDia >= 0 ? "text-emerald-450" : "text-rose-450"}`}>
+                {formatCurrency(data.saldoDia)}
+              </span>
+            </div>
+            <div className="flex items-center justify-between gap-4">
+              <span className="text-slate-450 font-medium">Saldo Acumulado:</span>
+              <span className={`font-bold ${data.saldoAcumulado >= 0 ? "text-emerald-450" : "text-rose-450"}`}>
+                {formatCurrency(data.saldoAcumulado)}
+              </span>
+            </div>
+          </div>
+        </div>
+      );
+    }
+    return null;
+  };
 
   // CRUD Dialog States
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -346,6 +414,53 @@ export function DigitalLedgerTab() {
           </div>
         </div>
       </div>
+
+      {/* Fluxo de Caixa Chart */}
+      <Card className="rounded-2xl border border-slate-200/60 dark:border-slate-800/60 overflow-hidden shadow-xs bg-white dark:bg-slate-900">
+        <div className="p-5 border-b border-slate-200/60 dark:border-slate-800/60">
+          <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-200">
+            Fluxo de Caixa Diário
+          </h3>
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+            Evolução do saldo acumulado (linha roxa) e saldo diário (barras representam o saldo líquido de cada dia).
+          </p>
+        </div>
+        <div className="p-5 pl-2">
+          <ResponsiveContainer width="100%" height={220}>
+            <ComposedChart data={chartData} margin={{ top: 10, right: 10, left: 10, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" className="dark:stroke-slate-800/40" />
+              <XAxis 
+                dataKey="label" 
+                tickLine={false} 
+                axisLine={false}
+                tick={{ fill: '#94a3b8', fontSize: 9 }}
+                dy={8}
+              />
+              <YAxis 
+                tickLine={false} 
+                axisLine={false}
+                tickFormatter={(val) => `R$ ${val.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}`}
+                tick={{ fill: '#94a3b8', fontSize: 9 }}
+                dx={-8}
+              />
+              <RechartsTooltip content={<CustomTooltip />} />
+              <Bar dataKey="saldoDia" radius={[3, 3, 0, 0]}>
+                {chartData.map((entry, index) => (
+                  <Cell key={`cell-${index}`} fill={entry.saldoDia >= 0 ? '#10b981' : '#f43f5e'} opacity={0.85} />
+                ))}
+              </Bar>
+              <Line 
+                type="monotone" 
+                dataKey="saldoAcumulado" 
+                stroke="#6366f1" 
+                strokeWidth={2} 
+                dot={false}
+                activeDot={{ r: 4 }}
+              />
+            </ComposedChart>
+          </ResponsiveContainer>
+        </div>
+      </Card>
 
       {/* Inputs and Outputs Table Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
