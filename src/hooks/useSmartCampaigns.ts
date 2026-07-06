@@ -224,19 +224,52 @@ export function useSmartCampaigns() {
           if (!zapiData?.ok) throw new Error(zapiData?.error || "Falha no envio da mensagem de texto");
           waResult = zapiData;
 
-          const allAttachments = [...payload.attachments];
+          const allAttachments: { url: string; fileName: string }[] = [];
+
+          // Add global attachments
+          if (payload.attachments && payload.attachments.length > 0) {
+            for (const attUrl of payload.attachments) {
+              let fileName = "arquivo.pdf";
+              try {
+                const parsedUrl = new URL(attUrl);
+                const rawName = parsedUrl.pathname.split("/").pop() || "arquivo.pdf";
+                fileName = decodeURIComponent(rawName);
+              } catch (e) {}
+              allAttachments.push({ url: attUrl, fileName });
+            }
+          }
 
           if (campaign?.audience_config_json?.entities) {
-            for (const ent of campaign.audience_config_json.entities) {
-              if (ent.file_path) {
-                const { data: signedData, error: signedError } = await supabase.storage
-                  .from("entity-files")
-                  .createSignedUrl(ent.file_path, 3600);
+            const filePaths = campaign.audience_config_json.entities
+              .map((ent: any) => ent.file_path)
+              .filter(Boolean);
 
-                if (!signedError && signedData?.signedUrl) {
-                  allAttachments.push(signedData.signedUrl);
-                } else {
-                  console.error(`Erro ao criar URL assinada para ${ent.file_path}:`, signedError);
+            if (filePaths.length > 0) {
+              const { data: dbFiles } = await supabase
+                .from("core_entity_files")
+                .select("storage_path, original_filename")
+                .in("storage_path", filePaths);
+
+              // Map storage_path to original_filename
+              const nameMap: Record<string, string> = {};
+              if (dbFiles) {
+                for (const f of dbFiles) {
+                  nameMap[f.storage_path] = f.original_filename;
+                }
+              }
+
+              for (const ent of campaign.audience_config_json.entities) {
+                if (ent.file_path) {
+                  const { data: signedData, error: signedError } = await supabase.storage
+                    .from("entity-files")
+                    .createSignedUrl(ent.file_path, 3600);
+
+                  if (!signedError && signedData?.signedUrl) {
+                    const originalName = nameMap[ent.file_path] || ent.file_path.split("/").pop() || "arquivo.pdf";
+                    allAttachments.push({ url: signedData.signedUrl, fileName: originalName });
+                  } else {
+                    console.error(`Erro ao criar URL assinada para ${ent.file_path}:`, signedError);
+                  }
                 }
               }
             }
@@ -244,8 +277,8 @@ export function useSmartCampaigns() {
 
           // Envia anexos se houver
           if (allAttachments.length > 0) {
-            for (const attUrl of allAttachments) {
-              const urlLower = attUrl.toLowerCase();
+            for (const att of allAttachments) {
+              const urlLower = att.url.toLowerCase();
               let attType = "document";
               if (/\.(png|jpg|jpeg|webp|gif)/i.test(urlLower)) {
                 attType = "image";
@@ -255,14 +288,7 @@ export function useSmartCampaigns() {
                 attType = "video";
               }
 
-              let fileName = "arquivo.pdf";
-              try {
-                const parsedUrl = new URL(attUrl);
-                const rawName = parsedUrl.pathname.split("/").pop() || "arquivo.pdf";
-                fileName = decodeURIComponent(rawName);
-              } catch (e) {}
-
-              const ext = fileName.split(".").pop() || "pdf";
+              const ext = att.fileName.split(".").pop() || "pdf";
 
               const { data: attData, error: attError } = await supabase.functions.invoke("integrations-zapi-send", {
                 body: {
@@ -270,15 +296,15 @@ export function useSmartCampaigns() {
                   instanceId: payload.wa_instance_id,
                   to: payload.test_phone_e164,
                   type: attType,
-                  mediaUrl: attUrl,
-                  meta: { fileName, extension: ext }
+                  mediaUrl: att.url,
+                  meta: { fileName: att.fileName, extension: ext }
                 }
               });
 
               if (attError) {
-                console.error(`Erro ao enviar anexo ${attUrl}:`, attError);
+                console.error(`Erro ao enviar anexo ${att.url}:`, attError);
               } else if (!attData?.ok) {
-                console.error(`Erro Z-API ao enviar anexo ${attUrl}:`, attData?.error);
+                console.error(`Erro Z-API ao enviar anexo ${att.url}:`, attData?.error);
               }
             }
           }
