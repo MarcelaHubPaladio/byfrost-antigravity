@@ -145,6 +145,59 @@ export default function CommitmentDetail() {
     }
   };
 
+  const [isEditingTerm, setIsEditingTerm] = useState(false);
+  const [newTermMonths, setNewTermMonths] = useState(12);
+
+  const updateContractTerm = async (months: number) => {
+    if (months <= 0) return;
+    setSaving(true);
+    try {
+      const proposals = (proposalsQ.data ?? []) as any[];
+      let linkedProposal = proposals.length > 0 ? proposals[0] : null;
+
+      if (!linkedProposal) {
+        if (!commitmentQ.data?.customer_entity_id) {
+          throw new Error("Cliente não vinculado a este compromisso.");
+        }
+        const { data: newProp, error: insertErr } = await supabase
+          .from("party_proposals")
+          .insert({
+            tenant_id: activeTenantId,
+            party_entity_id: commitmentQ.data.customer_entity_id,
+            token: "CC-" + commitmentId.slice(0, 8),
+            selected_commitment_ids: [commitmentId],
+            status: "approved",
+            approval_json: { contract_term: `${months} meses` }
+          })
+          .select()
+          .single();
+
+        if (insertErr) throw insertErr;
+        linkedProposal = newProp;
+      } else {
+        const updatedApprovalJson = {
+          ...(linkedProposal.approval_json || {}),
+          contract_term: `${months} meses`
+        };
+
+        const { error: updateErr } = await supabase
+          .from("party_proposals")
+          .update({ approval_json: updatedApprovalJson })
+          .eq("id", linkedProposal.id);
+
+        if (updateErr) throw updateErr;
+      }
+
+      showSuccess("Prazo do contrato atualizado com sucesso");
+      setIsEditingTerm(false);
+      proposalsQ.refetch();
+    } catch (err: any) {
+      showError(err.message ?? "Erro ao atualizar o prazo");
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const qc = useQueryClient();
 
   const offeringsQ = useQuery({
@@ -720,6 +773,10 @@ export default function CommitmentDetail() {
     }
   }
 
+  if (contractMonths === 0) {
+    contractMonths = 12; // Default to 12 months if not specified
+  }
+
   if (commitmentQ.data) {
     const start = new Date(commitmentQ.data.created_at);
     startDateStr = start.toLocaleDateString('pt-BR');
@@ -1011,8 +1068,35 @@ export default function CommitmentDetail() {
                         </div>
                         {hasTermData ? (
                           <div className="flex flex-col text-right">
-                            <span className="opacity-50">Fim (previsto)</span>
-                            <span>{endDateStr}</span>
+                            <span className="opacity-50">Fim (previsto) ({contractMonths}m)</span>
+                            {isEditingTerm ? (
+                              <input
+                                type="number"
+                                min="1"
+                                className="bg-slate-800 text-white border border-slate-700 rounded px-1.5 py-0.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 w-16 mt-0.5 text-right ml-auto"
+                                value={newTermMonths}
+                                onChange={(e) => setNewTermMonths(parseInt(e.target.value, 10) || 12)}
+                                onBlur={() => updateContractTerm(newTermMonths)}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') {
+                                    updateContractTerm(newTermMonths);
+                                  } else if (e.key === 'Escape') {
+                                    setIsEditingTerm(false);
+                                  }
+                                }}
+                                autoFocus
+                              />
+                            ) : (
+                              <span 
+                                className="cursor-pointer hover:underline hover:text-blue-300 transition-colors"
+                                onClick={() => {
+                                  setNewTermMonths(contractMonths || 12);
+                                  setIsEditingTerm(true);
+                                }}
+                              >
+                                {endDateStr}
+                              </span>
+                            )}
                           </div>
                         ) : (
                           <div className="flex flex-col text-right opacity-0 pointer-events-none select-none">

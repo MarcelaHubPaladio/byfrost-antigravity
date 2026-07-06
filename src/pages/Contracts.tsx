@@ -195,6 +195,10 @@ export default function Contracts() {
         }
       }
 
+      if (contractMonths === 0) {
+        contractMonths = 12; // Default to 12 months if not specified
+      }
+
       if (contractMonths > 0) {
         hasTermData = true;
         const start = new Date(c.created_at);
