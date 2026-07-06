@@ -26,6 +26,15 @@ export interface SmartCampaign {
   wa_instance?: { name: string, phone_number: string };
 }
 
+function replaceVariables(template: string, vars: Record<string, string>): string {
+  let message = template;
+  for (const [key, val] of Object.entries(vars)) {
+    const regex = new RegExp(`\\{\\{\\s*${key}\\s*\\}\\}`, 'gi');
+    message = message.replace(regex, val || '');
+  }
+  return message;
+}
+
 export function useSmartCampaigns() {
   const { activeTenantId } = useTenant();
   const { user } = useSession();
@@ -152,6 +161,54 @@ export function useSmartCampaigns() {
 
       if (channels.includes("whatsapp") && payload.test_phone_e164 && payload.test_phone_e164 !== "email_only") {
         try {
+          // Fetch campaign details to resolve entity files and variables
+          const { data: campaign } = await supabase
+            .from("smart_campaigns")
+            .select("audience_config_json")
+            .eq("id", payload.campaign_id)
+            .single();
+
+          // Obter dados do Tenant para preencher {{nome_empresa}}
+          const { data: tenant } = await supabase
+            .from("tenants")
+            .select("name")
+            .eq("id", activeTenantId)
+            .single();
+          const nomeEmpresa = tenant?.name || "Empresa de Teste";
+
+          // Obter o primeiro cliente se houver na configuração da campanha
+          let nomeCliente = "Fulano de Tal (Teste)";
+          let telefoneCliente = "(11) 99999-9999";
+          let emailCliente = "teste@cliente.com";
+
+          if (campaign?.audience_config_json?.entities && campaign.audience_config_json.entities.length > 0) {
+            const firstEntity = campaign.audience_config_json.entities[0];
+            if (firstEntity.name) nomeCliente = firstEntity.name;
+            if (firstEntity.phone) telefoneCliente = firstEntity.phone;
+            if (firstEntity.email) emailCliente = firstEntity.email;
+          }
+
+          // Variáveis padrão para o teste
+          const vars: Record<string, string> = {
+            nome_empresa: nomeEmpresa,
+            nome_cliente: nomeCliente,
+            telefone_cliente: telefoneCliente,
+            email_cliente: emailCliente,
+            valor_boleto: "R$ 2.600,00",
+            vencimento_boleto: "25/07/2026",
+            link_boleto: "https://exemplo.com/boleto-teste.pdf",
+            numero_boleto: "34191.79001 01043.513184 91020.150008 7 97880000260000",
+            numero_nf: "12345",
+            valor_nf: "R$ 2.600,00",
+            data_emissao_nf: "06/07/2026",
+            link_nf: "https://exemplo.com/nota-fiscal-teste.pdf",
+            nome_video: "Vídeo Institucional M30",
+            link_video: "https://exemplo.com/video-teste.mp4",
+            prazo_aprovacao: "48 horas",
+          };
+
+          const finalMessage = replaceVariables(payload.message, vars);
+
           // Envia o texto da mensagem
           const { data: zapiData, error: zapiError } = await supabase.functions.invoke("integrations-zapi-send", {
             body: {
@@ -159,20 +216,13 @@ export function useSmartCampaigns() {
               instanceId: payload.wa_instance_id,
               to: payload.test_phone_e164,
               type: "text",
-              text: payload.message,
+              text: finalMessage,
             }
           });
 
           if (zapiError) throw zapiError;
           if (!zapiData?.ok) throw new Error(zapiData?.error || "Falha no envio da mensagem de texto");
           waResult = zapiData;
-
-          // Fetch campaign details to resolve entity files
-          const { data: campaign } = await supabase
-            .from("smart_campaigns")
-            .select("audience_config_json")
-            .eq("id", payload.campaign_id)
-            .single();
 
           const allAttachments = [...payload.attachments];
 
