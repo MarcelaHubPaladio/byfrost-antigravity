@@ -147,9 +147,10 @@ serve(async (req) => {
       bodyPayload.video = mediaUrl;
       if (text) bodyPayload.caption = text;
     } else if (type === "document") {
-      endpoint = "send-document/pdf";
+      const ext = meta?.extension ?? "pdf";
+      endpoint = `send-document/${ext}`;
       bodyPayload.document = mediaUrl;
-      bodyPayload.extension = meta?.extension ?? "pdf";
+      bodyPayload.fileName = meta?.fileName ?? `Documento.${ext}`;
       if (text) bodyPayload.caption = text;
     } else if (type === "location") {
       endpoint = "send-location";
