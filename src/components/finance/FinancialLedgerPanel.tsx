@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Landmark, PieChart, UploadCloud, AlertTriangle } from "lucide-react";
+import { Landmark, PieChart, UploadCloud, AlertTriangle, BookOpen } from "lucide-react";
 import { TransactionsTab } from "./FinancialLedgerPanel/TransactionsTab";
 import { CategoriesTab } from "./FinancialLedgerPanel/CategoriesTab";
 import { BanksTab } from "./FinancialLedgerPanel/BanksTab";
@@ -12,6 +12,7 @@ import { FinanceControlTowerPanel } from "./FinanceControlTowerPanel";
 import { FinancialDecisionBoard } from "./FinancialDecisionBoard";
 import { FinancialLogsPanel } from "./FinancialLogsPanel";
 import { CommissionsTab } from "./FinancialLedgerPanel/CommissionsTab";
+import { DigitalLedgerTab } from "./FinancialLedgerPanel/DigitalLedgerTab";
 import { ClipboardList, KanbanSquare, HandCoins } from "lucide-react";
 
 export function FinancialLedgerPanel() {
@@ -21,7 +22,7 @@ export function FinancialLedgerPanel() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const t = params.get("tab");
-    if (t && ["overview", "transactions", "categories", "banks", "dre", "planning", "control_tower", "decisions", "logs"].includes(t)) {
+    if (t && ["overview", "transactions", "categories", "banks", "dre", "planning", "control_tower", "decisions", "logs", "commissions", "digital_ledger"].includes(t)) {
       setActiveTab(t);
     }
   }, []);
@@ -45,6 +46,13 @@ export function FinancialLedgerPanel() {
             className="rounded-xl flex-1 whitespace-nowrap data-[state=active]:bg-indigo-600 data-[state=active]:text-white data-[state=active]:shadow-md transition-all duration-300 px-4"
           >
             Lançamentos
+          </TabsTrigger>
+          <TabsTrigger 
+            value="digital_ledger" 
+            className="rounded-xl flex-1 whitespace-nowrap data-[state=active]:bg-indigo-600 data-[state=active]:text-white data-[state=active]:shadow-md transition-all duration-300 px-4 flex items-center gap-2"
+          >
+            <BookOpen className="h-4 w-4" />
+            Caderneta
           </TabsTrigger>
           <TabsTrigger 
             value="dre" 
@@ -103,6 +111,10 @@ export function FinancialLedgerPanel() {
 
         <TabsContent value="transactions" className="outline-none">
           <TransactionsTab />
+        </TabsContent>
+
+        <TabsContent value="digital_ledger" className="grid gap-4 outline-none">
+          <DigitalLedgerTab />
         </TabsContent>
 
         <TabsContent value="categories" className="grid gap-4 outline-none">
