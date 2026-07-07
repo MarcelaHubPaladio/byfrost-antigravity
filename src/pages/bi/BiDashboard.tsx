@@ -2,30 +2,49 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { BiOverviewTab } from "./tabs/BiOverviewTab";
 import { BiFinanceTab } from "./tabs/BiFinanceTab";
 import { BiCrmTab } from "./tabs/BiCrmTab";
-import { CalendarDays, Download, Filter, LineChart } from "lucide-react";
+import { CalendarDays, Download, Filter, LineChart, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useNavigate } from "react-router-dom";
+import { TooltipProvider } from "@/components/ui/tooltip";
 
 export default function BiDashboard() {
+  const nav = useNavigate();
   return (
     <div className="flex h-[calc(100vh-64px)] w-full flex-col overflow-hidden bg-slate-50/50 dark:bg-[#0B0F19]">
       {/* Background Decorativo Global */}
       <div className="fixed inset-0 pointer-events-none">
-        <div className="absolute top-0 left-1/4 h-[500px] w-[500px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-indigo-500/10 blur-[100px] dark:bg-indigo-500/5" />
+        <div className="absolute top-0 left-1/4 h-[500px] w-[500px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-[hsl(var(--byfrost-accent)/0.15)] blur-[100px]" />
         <div className="absolute bottom-0 right-1/4 h-[400px] w-[400px] translate-x-1/2 translate-y-1/2 rounded-full bg-rose-500/10 blur-[100px] dark:bg-rose-500/5" />
       </div>
 
-      <div className="relative z-10 flex h-full flex-col p-6">
-        {/* Header do BI */}
-        <div className="mb-8 flex flex-col justify-between gap-4 md:flex-row md:items-center">
-          <div className="flex items-center gap-3">
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-600 dark:bg-indigo-500/10 dark:text-indigo-400 border border-indigo-100 dark:border-indigo-500/20 shadow-sm">
-              <LineChart className="h-6 w-6" />
+      <TooltipProvider delayDuration={200}>
+        <div className="relative z-10 flex h-full flex-col p-6">
+          {/* Header do BI */}
+          <div className="mb-8 flex flex-col justify-between gap-4 md:flex-row md:items-center">
+            <div className="flex items-center gap-3">
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                onClick={() => nav("/app")}
+                className="h-10 w-10 shrink-0 rounded-full hover:bg-slate-200/50 dark:hover:bg-slate-800/50"
+              >
+                <ArrowLeft className="h-5 w-5 text-slate-600 dark:text-slate-300" />
+              </Button>
+              <div 
+                className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl shadow-sm border" 
+                style={{
+                  backgroundColor: 'hsl(var(--byfrost-accent)/0.1)',
+                  borderColor: 'hsl(var(--byfrost-accent)/0.2)',
+                  color: 'hsl(var(--byfrost-accent))'
+                }}
+              >
+                <LineChart className="h-6 w-6" />
+              </div>
+              <div className="ml-1">
+                <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white leading-tight">Business Intelligence</h1>
+                <p className="text-sm text-slate-500 dark:text-slate-400">Análise de dados unificada do tenant</p>
+              </div>
             </div>
-            <div>
-              <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">Business Intelligence</h1>
-              <p className="text-sm text-slate-500 dark:text-slate-400">Análise de dados unificada do tenant</p>
-            </div>
-          </div>
           
           <div className="flex items-center gap-2">
             <Button variant="outline" className="h-10 gap-2 rounded-xl border-slate-200 bg-white/60 backdrop-blur-sm dark:border-slate-800 dark:bg-slate-950/40">
@@ -36,7 +55,7 @@ export default function BiDashboard() {
               <Filter className="h-4 w-4 text-slate-500" />
               <span>Filtros</span>
             </Button>
-            <Button className="h-10 gap-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm dark:bg-indigo-600 dark:hover:bg-indigo-500">
+            <Button className="h-10 gap-2 rounded-xl text-white shadow-sm" style={{ backgroundColor: 'hsl(var(--byfrost-accent))' }}>
               <Download className="h-4 w-4" />
               <span>Exportar</span>
             </Button>
@@ -80,7 +99,7 @@ export default function BiDashboard() {
             </TabsContent>
           </Tabs>
         </div>
-      </div>
+      </TooltipProvider>
     </div>
   );
 }

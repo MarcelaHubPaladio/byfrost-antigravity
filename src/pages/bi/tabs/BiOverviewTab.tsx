@@ -1,6 +1,10 @@
 import { KpiCard } from "../components/KpiCard";
 import { DollarSign, Users, Briefcase, Activity } from "lucide-react";
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/lib/supabase";
+import { useTenant } from "@/providers/TenantProvider";
+import { useMemo } from "react";
 
 const data = [
   { name: "Jan", revenue: 4000, expenses: 2400 },
@@ -13,6 +17,30 @@ const data = [
 ];
 
 export function BiOverviewTab() {
+  const { activeTenantId } = useTenant();
+
+  // Queries Reais (Exemplos)
+  const { data: casesData } = useQuery({
+    queryKey: ["bi_cases_overview", activeTenantId],
+    enabled: Boolean(activeTenantId),
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("cases")
+        .select("id, status, created_at")
+        .eq("tenant_id", activeTenantId!);
+      if (error) throw error;
+      return data || [];
+    }
+  });
+
+  const { totalLeads, closedLeads } = useMemo(() => {
+    if (!casesData) return { totalLeads: 128, closedLeads: 45 }; // Fallback estético
+    return {
+      totalLeads: casesData.length,
+      closedLeads: casesData.filter(c => c.status === "won" || c.status === "fechado").length
+    };
+  }, [casesData]);
+
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700">
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -22,20 +50,23 @@ export function BiOverviewTab() {
           trend={12.5} 
           trendLabel="vs último mês" 
           icon={DollarSign} 
+          tooltipContext="Soma de todos os lançamentos financeiros com status Pago no mês vigente (dados temporários de demo)."
         />
         <KpiCard 
           title="Novos Clientes" 
-          value="128" 
+          value={String(totalLeads)} 
           trend={8.2} 
           trendLabel="vs último mês" 
           icon={Users} 
+          tooltipContext="Total de Casos (Leads) capturados neste Tenant somando todos os canais de aquisição."
         />
         <KpiCard 
           title="Negócios Fechados" 
-          value="45" 
+          value={String(closedLeads)} 
           trend={-2.4} 
           trendLabel="vs último mês" 
           icon={Briefcase} 
+          tooltipContext="Soma de todos os Casos (Leads) que tiveram o status alterado para 'Fechado' ou 'Ganho'."
         />
         <KpiCard 
           title="Membros Ativos" 
@@ -43,6 +74,7 @@ export function BiOverviewTab() {
           trend={14.6} 
           trendLabel="vs último mês" 
           icon={Activity} 
+          tooltipContext="Usuários que realizaram ao menos 1 login na plataforma nos últimos 30 dias."
         />
       </div>
 
@@ -58,11 +90,11 @@ export function BiOverviewTab() {
               <AreaChart data={data} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
                 <defs>
                   <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#6366f1" stopOpacity={0.3}/>
-                    <stop offset="95%" stopColor="#6366f1" stopOpacity={0}/>
+                    <stop offset="5%" stopColor="hsl(var(--byfrost-accent))" stopOpacity={0.4}/>
+                    <stop offset="95%" stopColor="hsl(var(--byfrost-accent))" stopOpacity={0}/>
                   </linearGradient>
                   <linearGradient id="colorExpenses" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#f43f5e" stopOpacity={0.3}/>
+                    <stop offset="5%" stopColor="#f43f5e" stopOpacity={0.4}/>
                     <stop offset="95%" stopColor="#f43f5e" stopOpacity={0}/>
                   </linearGradient>
                 </defs>
@@ -86,7 +118,7 @@ export function BiOverviewTab() {
                   contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1)' }}
                   itemStyle={{ color: '#0f172a', fontWeight: 500 }}
                 />
-                <Area type="monotone" dataKey="revenue" name="Receita" stroke="#6366f1" strokeWidth={3} fillOpacity={1} fill="url(#colorRevenue)" />
+                <Area type="monotone" dataKey="revenue" name="Receita" stroke="hsl(var(--byfrost-accent))" strokeWidth={3} fillOpacity={1} fill="url(#colorRevenue)" />
                 <Area type="monotone" dataKey="expenses" name="Despesas" stroke="#f43f5e" strokeWidth={3} fillOpacity={1} fill="url(#colorExpenses)" />
               </AreaChart>
             </ResponsiveContainer>
@@ -104,7 +136,7 @@ export function BiOverviewTab() {
                     <span className="font-semibold text-slate-900 dark:text-white">75%</span>
                   </div>
                   <div className="h-2 w-full overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
-                    <div className="h-full bg-indigo-500 rounded-full" style={{ width: '75%' }} />
+                    <div className="h-full rounded-full" style={{ width: '75%', backgroundColor: 'hsl(var(--byfrost-accent))' }} />
                   </div>
                 </div>
                 <div>

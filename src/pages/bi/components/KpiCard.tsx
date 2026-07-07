@@ -1,5 +1,6 @@
-import { ArrowDownRight, ArrowUpRight } from "lucide-react";
+import { ArrowDownRight, ArrowUpRight, Info } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface KpiCardProps {
   title: string;
@@ -7,18 +8,40 @@ interface KpiCardProps {
   trend?: number; // porcentagem (positiva ou negativa)
   trendLabel?: string;
   icon: React.ElementType;
+  tooltipContext?: string;
   className?: string;
 }
 
-export function KpiCard({ title, value, trend, trendLabel, icon: Icon, className }: KpiCardProps) {
+export function KpiCard({ title, value, trend, trendLabel, tooltipContext, icon: Icon, className }: KpiCardProps) {
   const isPositive = trend && trend > 0;
   const isNegative = trend && trend < 0;
 
   return (
     <div className={cn("relative overflow-hidden rounded-2xl border border-slate-200/60 bg-white/60 p-6 shadow-sm backdrop-blur-md transition-all hover:shadow-md dark:border-slate-800/60 dark:bg-slate-950/40", className)}>
       <div className="flex items-center justify-between">
-        <span className="text-sm font-medium text-slate-500 dark:text-slate-400">{title}</span>
-        <div className="rounded-xl bg-indigo-50/50 p-2.5 text-indigo-500 dark:bg-indigo-500/10 dark:text-indigo-400">
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-medium text-slate-500 dark:text-slate-400">{title}</span>
+          {tooltipContext && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button type="button" className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors">
+                  <Info className="h-4 w-4" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="top" className="max-w-[250px] text-center">
+                <p>{tooltipContext}</p>
+              </TooltipContent>
+            </Tooltip>
+          )}
+        </div>
+        <div 
+          className="rounded-xl p-2.5 shadow-sm border"
+          style={{
+            backgroundColor: 'hsl(var(--byfrost-accent)/0.1)',
+            borderColor: 'hsl(var(--byfrost-accent)/0.15)',
+            color: 'hsl(var(--byfrost-accent))'
+          }}
+        >
           <Icon className="h-5 w-5" />
         </div>
       </div>
@@ -52,7 +75,10 @@ export function KpiCard({ title, value, trend, trendLabel, icon: Icon, className
       )}
       
       {/* Decorative background flare */}
-      <div className="absolute -right-12 -top-12 -z-10 h-32 w-32 rounded-full bg-indigo-500/5 blur-[40px] dark:bg-indigo-500/10" />
+      <div 
+        className="absolute -right-12 -top-12 -z-10 h-32 w-32 rounded-full blur-[40px]" 
+        style={{ backgroundColor: 'hsl(var(--byfrost-accent)/0.15)' }}
+      />
     </div>
   );
 }
