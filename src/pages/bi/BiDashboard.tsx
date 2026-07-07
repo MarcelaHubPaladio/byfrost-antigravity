@@ -99,6 +99,7 @@ export default function BiDashboard() {
             </TabsContent>
           </Tabs>
         </div>
+        </div>
       </TooltipProvider>
     </div>
   );
