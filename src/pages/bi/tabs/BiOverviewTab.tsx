@@ -1,5 +1,5 @@
 import { KpiCard } from "../components/KpiCard";
-import { DollarSign, Users, Briefcase, Activity, Sparkles, Brain, Loader2 } from "lucide-react";
+import { DollarSign, Users, Briefcase, Activity, Sparkles, Brain, Loader2, PieChart } from "lucide-react";
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
@@ -107,8 +107,8 @@ export function BiOverviewTab({ dateRange }: BiOverviewTabProps) {
 
   // Dados financeiros calculados em useMemo já cobrem o resto
 
-  const { totalRevenue, chartData } = useMemo(() => {
-    if (!finData) return { totalRevenue: 0, chartData: [] };
+  const { totalRevenue, totalExpenses, chartData } = useMemo(() => {
+    if (!finData) return { totalRevenue: 0, totalExpenses: 0, chartData: [] };
 
     const monthMap: Record<string, { name: string; revenue: number; expenses: number }> = {};
     
@@ -130,6 +130,7 @@ export function BiOverviewTab({ dateRange }: BiOverviewTabProps) {
     }
 
     let revenueSum = 0;
+    let expensesSum = 0;
 
     finData.forEach(t => {
       const d = new Date(t.transaction_date || Date.now());
@@ -141,6 +142,10 @@ export function BiOverviewTab({ dateRange }: BiOverviewTabProps) {
       // Soma Receita: Lançamentos sincronizados e categorizados, NÃO conciliados.
       if (t.type === "credit" && isCategorized && !isConciliated) {
         revenueSum += Number(t.amount);
+      }
+      // Soma Despesa
+      if (t.type === "debit" && isCategorized && !isConciliated) {
+        expensesSum += Number(t.amount);
       }
 
       if (monthMap[k]) {
@@ -162,6 +167,7 @@ export function BiOverviewTab({ dateRange }: BiOverviewTabProps) {
 
     return {
       totalRevenue: revenueSum,
+      totalExpenses: expensesSum,
       chartData: sortedData
     };
   }, [finData, dateRange]);
@@ -169,6 +175,7 @@ export function BiOverviewTab({ dateRange }: BiOverviewTabProps) {
   const totalCustomers = customersData?.length || 0;
   const totalClosedOrders = closedOrdersData?.length || 0;
   const ticketMedio = totalClosedOrders > 0 ? (totalRevenue / totalClosedOrders) : 0;
+  const marginPercent = totalRevenue > 0 ? ((totalRevenue - totalExpenses) / totalRevenue) * 100 : 0;
 
   const guardiaoList = Array.isArray(insightsData?.insights_json) 
     ? insightsData.insights_json 
@@ -176,7 +183,7 @@ export function BiOverviewTab({ dateRange }: BiOverviewTabProps) {
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700">
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
         <KpiCard 
           title="Receita Total" 
           value={new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalRevenue)} 
@@ -208,6 +215,14 @@ export function BiOverviewTab({ dateRange }: BiOverviewTabProps) {
           trendLabel="no período" 
           icon={Activity} 
           tooltipContext="Receita Total dividida pela quantidade de Negócios Fechados."
+        />
+        <KpiCard 
+          title="Margem de Lucro" 
+          value={`${marginPercent.toFixed(1).replace('.', ',')}%`} 
+          trend={0} 
+          trendLabel="no período" 
+          icon={PieChart} 
+          tooltipContext="Relação entre Receitas e Despesas categorizadas. Calculado como: (Receita - Despesa) / Receita."
         />
       </div>
 
