@@ -16,15 +16,41 @@ interface BiOverviewTabProps {
 export function BiOverviewTab({ dateRange }: BiOverviewTabProps) {
   const { activeTenantId } = useTenant();
 
-  // Queries Reais (Casos/Leads)
-  const { data: casesData } = useQuery({
-    queryKey: ["bi_cases_overview", activeTenantId, dateRange],
+  // Queries Reais (Clientes/Entities)
+  const { data: customersData } = useQuery({
+    queryKey: ["bi_customers_overview", activeTenantId, dateRange],
+    enabled: Boolean(activeTenantId),
+    queryFn: async () => {
+      let q = supabase
+        .from("core_entities")
+        .select("id")
+        .eq("tenant_id", activeTenantId!)
+        // ByFrost Entity Model: Party / Customer
+        .in("entity_type", ["party", "customer"]);
+      
+      if (dateRange?.from) q = q.gte("created_at", dateRange.from.toISOString());
+      if (dateRange?.to) {
+        const endDay = new Date(dateRange.to);
+        endDay.setHours(23, 59, 59, 999);
+        q = q.lte("created_at", endDay.toISOString());
+      }
+
+      const { data, error } = await q;
+      if (error) throw error;
+      return data || [];
+    }
+  });
+
+  // Queries Reais (Negócios Fechados/Orders)
+  const { data: closedOrdersData } = useQuery({
+    queryKey: ["bi_orders_overview", activeTenantId, dateRange],
     enabled: Boolean(activeTenantId),
     queryFn: async () => {
       let q = supabase
         .from("cases")
         .select("id, status, created_at")
-        .eq("tenant_id", activeTenantId!);
+        .eq("tenant_id", activeTenantId!)
+        .in("status", ["concluído", "concluido", "faturado", "fechado", "won"]);
       
       if (dateRange?.from) q = q.gte("created_at", dateRange.from.toISOString());
       if (dateRange?.to) {
@@ -46,7 +72,7 @@ export function BiOverviewTab({ dateRange }: BiOverviewTabProps) {
     queryFn: async () => {
       let q = supabase
         .from("financial_transactions")
-        .select("id, amount, type, transaction_date, status")
+        .select("id, amount, type, transaction_date, status, category_id")
         .eq("tenant_id", activeTenantId!);
 
       if (dateRange?.from) q = q.gte("transaction_date", dateRange.from.toISOString());
@@ -115,8 +141,11 @@ export function BiOverviewTab({ dateRange }: BiOverviewTabProps) {
       const d = new Date(t.transaction_date || Date.now());
       const k = format(d, "yyyy-MM");
 
-      // O período exato vem do dateRange, então somamos tudo que veio de Credit Paid na query do DB.
-      if (t.type === "credit" && t.status === "paid") {
+      const isCategorized = t.category_id !== null && t.category_id !== undefined;
+      const isConciliated = t.status === "reconciled" || t.status === "conciled" || t.status === "conciliado";
+
+      // Soma Receita: Lançamentos sincronizados e categorizados, NÃO conciliados.
+      if (t.type === "credit" && isCategorized && !isConciliated) {
         revenueSum += Number(t.amount);
       }
 
@@ -124,7 +153,6 @@ export function BiOverviewTab({ dateRange }: BiOverviewTabProps) {
         if (t.type === "credit") monthMap[k].revenue += Number(t.amount);
         if (t.type === "debit") monthMap[k].expenses += Number(t.amount);
       } else {
-        // Se a transação for de um mês que não foi inicializado (fallback/etc), a gente cria
         const name = format(d, "MMM", { locale: ptBR });
         monthMap[k] = { 
           name: name.charAt(0).toUpperCase() + name.slice(1), 
@@ -134,7 +162,6 @@ export function BiOverviewTab({ dateRange }: BiOverviewTabProps) {
       }
     });
 
-    // Ordenar as chaves antes de retornar pra garantir cronologia
     const sortedData = Object.keys(monthMap)
       .sort()
       .map(k => monthMap[k]);
@@ -144,6 +171,10 @@ export function BiOverviewTab({ dateRange }: BiOverviewTabProps) {
       chartData: sortedData
     };
   }, [finData, dateRange]);
+
+  const totalCustomers = customersData?.length || 0;
+  const totalClosedOrders = closedOrdersData?.length || 0;
+  const ticketMedio = totalClosedOrders > 0 ? (totalRevenue / totalClosedOrders) : 0;
 
   const guardiaoList = Array.isArray(insightsData?.insights_json) 
     ? insightsData.insights_json 
@@ -158,31 +189,31 @@ export function BiOverviewTab({ dateRange }: BiOverviewTabProps) {
           trend={0} 
           trendLabel="no período" 
           icon={DollarSign} 
-          tooltipContext="Soma real de todos os lançamentos de Crédito (Receitas) com status 'Pago' dentro do período selecionado."
+          tooltipContext="Soma real de todos os lançamentos sincronizados e categorizados, sem incluir os conciliados."
         />
         <KpiCard 
           title="Novos Clientes" 
-          value={String(totalLeads)} 
-          trend={8.2} 
-          trendLabel="vs último mês" 
+          value={String(totalCustomers)} 
+          trend={0} 
+          trendLabel="no período" 
           icon={Users} 
-          tooltipContext="Total de Casos (Leads) capturados neste Tenant somando todos os canais de aquisição."
+          tooltipContext="Total de entidades classificadas como Clientes neste período."
         />
         <KpiCard 
           title="Negócios Fechados" 
-          value={String(closedLeads)} 
-          trend={-2.4} 
-          trendLabel="vs último mês" 
+          value={String(totalClosedOrders)} 
+          trend={0} 
+          trendLabel="no período" 
           icon={Briefcase} 
-          tooltipContext="Soma de todos os Casos (Leads) que tiveram o status alterado para 'Fechado' ou 'Ganho'."
+          tooltipContext="Pedidos (Orders) registrados com o status 'Concluído' ou 'Faturado'."
         />
         <KpiCard 
-          title="Membros Ativos" 
-          value="2.405" 
-          trend={14.6} 
-          trendLabel="vs último mês" 
+          title="Ticket Médio" 
+          value={new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(ticketMedio)} 
+          trend={0} 
+          trendLabel="no período" 
           icon={Activity} 
-          tooltipContext="Usuários que realizaram ao menos 1 login na plataforma nos últimos 30 dias."
+          tooltipContext="Receita Total dividida pela quantidade de Negócios Fechados."
         />
       </div>
 
