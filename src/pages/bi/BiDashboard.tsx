@@ -34,9 +34,10 @@ import { BiCrmTab } from "./tabs/BiCrmTab";
 import { Download, Filter, LineChart, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { useTenant } from "@/providers/TenantProvider";
 
 export default function BiDashboard() {
-  const navigate = useNavigate();
+  const { activeTenant } = useTenant();
   const nav = useNavigate();
   const [dateRange, setDateRange] = useState<DateRange | undefined>({
     from: subMonths(new Date(), 6),
