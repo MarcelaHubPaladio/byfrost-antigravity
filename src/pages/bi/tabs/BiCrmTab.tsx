@@ -101,9 +101,10 @@ export function BiCrmTab({ dateRange }: BiCrmTabProps) {
     enabled: Boolean(activeTenantId),
     queryFn: async () => {
       const { data, error } = await supabase
-        .from("tenant_users")
-        .select("user_id, users_profile(display_name)")
-        .eq("tenant_id", activeTenantId!);
+        .from("users_profile")
+        .select("user_id, display_name")
+        .eq("tenant_id", activeTenantId!)
+        .is("deleted_at", null);
       if (error) throw error;
       return data ?? [];
     }
@@ -235,7 +236,7 @@ export function BiCrmTab({ dateRange }: BiCrmTabProps) {
       if (u.user_id) {
         uMap.set(u.user_id, { 
           id: u.user_id, 
-          name: (u.users_profile as any)?.display_name || "Usuário", 
+          name: u.display_name || "Usuário", 
           events: 0, 
           lastUsed: null 
         });
