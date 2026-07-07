@@ -16,41 +16,16 @@ interface BiOverviewTabProps {
 export function BiOverviewTab({ dateRange }: BiOverviewTabProps) {
   const { activeTenantId } = useTenant();
 
-  // Queries Reais (Clientes/Entities)
-  const { data: customersData } = useQuery({
-    queryKey: ["bi_customers_overview", activeTenantId, dateRange],
-    enabled: Boolean(activeTenantId),
-    queryFn: async () => {
-      let q = supabase
-        .from("core_entities")
-        .select("id")
-        .eq("tenant_id", activeTenantId!)
-        // ByFrost Entity Model: Party / Customer
-        .in("entity_type", ["party", "customer"]);
-      
-      if (dateRange?.from) q = q.gte("created_at", dateRange.from.toISOString());
-      if (dateRange?.to) {
-        const endDay = new Date(dateRange.to);
-        endDay.setHours(23, 59, 59, 999);
-        q = q.lte("created_at", endDay.toISOString());
-      }
-
-      const { data, error } = await q;
-      if (error) throw error;
-      return data || [];
-    }
-  });
-
-  // Queries Reais (Negócios Fechados/Orders)
-  const { data: closedOrdersData } = useQuery({
-    queryKey: ["bi_orders_overview", activeTenantId, dateRange],
+  // Queries Reais (Orders / Negócios / Clientes vinculados)
+  const { data: ordersData } = useQuery({
+    queryKey: ["bi_orders_and_customers", activeTenantId, dateRange],
     enabled: Boolean(activeTenantId),
     queryFn: async () => {
       let q = supabase
         .from("cases")
-        .select("id, status, created_at")
+        .select("id, status, state, customer_id, created_at, journeys!inner(key)")
         .eq("tenant_id", activeTenantId!)
-        .in("status", ["concluído", "concluido", "faturado", "fechado", "won"]);
+        .eq("journeys.key", "orders");
       
       if (dateRange?.from) q = q.gte("created_at", dateRange.from.toISOString());
       if (dateRange?.to) {
@@ -172,8 +147,23 @@ export function BiOverviewTab({ dateRange }: BiOverviewTabProps) {
     };
   }, [finData, dateRange]);
 
-  const totalCustomers = customersData?.length || 0;
-  const totalClosedOrders = closedOrdersData?.length || 0;
+  const { totalCustomers, totalClosedOrders } = useMemo(() => {
+    if (!ordersData) return { totalCustomers: 0, totalClosedOrders: 0 };
+    
+    const uniqueCustomers = new Set(ordersData.map((o: any) => o.customer_id).filter(Boolean));
+    
+    const closed = ordersData.filter((o: any) => {
+      const st = String(o.state || "").toLowerCase();
+      const status = String(o.status || "").toLowerCase();
+      return st === "faturado" || st === "concluído" || st === "concluido" || st === "fechado" || status === "won";
+    });
+
+    return {
+      totalCustomers: uniqueCustomers.size,
+      totalClosedOrders: closed.length
+    };
+  }, [ordersData]);
+
   const ticketMedio = totalClosedOrders > 0 ? (totalRevenue / totalClosedOrders) : 0;
   const marginPercent = totalRevenue > 0 ? ((totalRevenue - totalExpenses) / totalRevenue) * 100 : 0;
 
@@ -193,12 +183,12 @@ export function BiOverviewTab({ dateRange }: BiOverviewTabProps) {
           tooltipContext="Soma real de todos os lançamentos sincronizados e categorizados, sem incluir os conciliados."
         />
         <KpiCard 
-          title="Novos Clientes" 
+          title="Clientes Atendidos" 
           value={String(totalCustomers)} 
           trend={0} 
           trendLabel="no período" 
           icon={Users} 
-          tooltipContext="Total de entidades classificadas como Clientes neste período."
+          tooltipContext="Total de clientes únicos com pedidos registrados neste período."
         />
         <KpiCard 
           title="Negócios Fechados" 
