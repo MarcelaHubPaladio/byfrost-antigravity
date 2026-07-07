@@ -587,10 +587,14 @@ export default function PortalEditor() {
                 .replace(/\s*([{}:;,])\s*/g, '$1')
                 .trim();
 
+            const payload = agroforteData
+                ? [agroforteData]
+                : sections;
+
             const { error } = await supabase
                 .from("portal_pages")
                 .update({
-                    content_json: sections,
+                    content_json: payload,
                     is_published: true,
                     published_html: html,
                     published_css: styles,
