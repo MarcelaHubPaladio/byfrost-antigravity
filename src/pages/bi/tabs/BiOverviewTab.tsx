@@ -28,7 +28,7 @@ export function BiOverviewTab({ dateRange }: BiOverviewTabProps) {
           journeys!inner(key)
         `)
         .eq("tenant_id", activeTenantId!)
-        .eq("journeys.key", "orders");
+        .eq("journeys.key", "sales_order");
       
       if (dateRange?.from) q = q.gte("created_at", dateRange.from.toISOString());
       if (dateRange?.to) {
