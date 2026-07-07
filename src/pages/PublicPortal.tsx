@@ -17,6 +17,8 @@ import {
     ArrowRight
 } from "lucide-react";
 import { useState, useEffect } from "react";
+import { AgroForteRenderer } from "@/components/portal/AgroForteRenderer";
+import { AGROFORTE_DEFAULT } from "@/components/portal/agroforte-types";
 
 type BlockType = 'header' | 'hero' | 'text' | 'image' | 'links' | 'divider' | 'html' | 'slider' | 'info-cards' | 'grid' | 'gallery';
 
@@ -406,7 +408,15 @@ export default function PublicPortal() {
 
     const isPremium = portal.page_settings?.layout === 'sidebar';
     const content = portal.content_json || [];
-    const sections: Section[] = (Array.isArray(content) && content.length > 0 && !content[0].blocks) 
+
+    // ─── AgroForte template detection ───────────────────────────────────────
+    if (Array.isArray(content) && content.length > 0 && content[0]?._template === 'agroforte') {
+        const agroData = { ...AGROFORTE_DEFAULT, ...content[0] };
+        return <AgroForteRenderer data={agroData} />;
+    }
+    // ────────────────────────────────────────────────────────────────────────
+
+    const sections: Section[] = (Array.isArray(content) && content.length > 0 && !content[0].blocks)
         ? [{ id: 'migrated', settings: { paddingY: '12' }, blocks: content as Block[] }]
         : content as Section[];
 

@@ -46,6 +46,9 @@ import {
 import { ImageUpload } from "@/components/portal/ImageUpload";
 import { Slider } from "@/components/ui/slider";
 import { RichTextEditor } from "@/components/RichTextEditor";
+import { AgroForteEditor } from "@/components/portal/AgroForteEditor";
+import { AgroForteRenderer } from "@/components/portal/AgroForteRenderer";
+import { AGROFORTE_DEFAULT, type AgroForteData } from "@/components/portal/agroforte-types";
 import { useTenant } from "@/providers/TenantProvider";
 import { 
     DndContext, 
@@ -132,6 +135,7 @@ export default function PortalEditor() {
     const navigate = useNavigate();
     const queryClient = useQueryClient();
     const [sections, setSections] = useState<Section[]>([]);
+    const [agroforteData, setAgroforteData] = useState<AgroForteData | null>(null);
     const [previewMode, setPreviewMode] = useState<'desktop' | 'mobile'>('desktop');
     const [activeSectionId, setActiveSectionId] = useState<string | null>(null);
     const [activeId, setActiveId] = useState<string | null>(null);
@@ -167,6 +171,12 @@ export default function PortalEditor() {
     useEffect(() => {
         if (page?.content_json) {
             const content = page.content_json;
+            // Detect AgroForte template
+            if (Array.isArray(content) && content.length > 0 && content[0]?._template === 'agroforte') {
+                setAgroforteData({ ...AGROFORTE_DEFAULT, ...content[0] });
+                return;
+            }
+            setAgroforteData(null);
             // Migration for old structure if necessary
             if (Array.isArray(content) && content.length > 0 && !content[0].blocks) {
                 setSections([{
@@ -415,8 +425,19 @@ export default function PortalEditor() {
     };
 
     const handleSave = () => {
+        const payload = agroforteData
+            ? [agroforteData]
+            : sections;
         saveM.mutate({
-            content_json: sections,
+            content_json: payload,
+            updated_at: new Date().toISOString(),
+        });
+    };
+
+    const handleAgroforteSave = (data: AgroForteData) => {
+        setAgroforteData(data);
+        saveM.mutate({
+            content_json: [data],
             updated_at: new Date().toISOString(),
         });
     };
@@ -589,6 +610,89 @@ export default function PortalEditor() {
     });
 
     if (isLoading) return <div className="p-20"><Skeleton className="h-full w-full rounded-3xl" /></div>;
+
+    // ─── AgroForte No-Code Editor ───────────────────────────────────────────
+    if (agroforteData) {
+        return (
+            <div className="flex h-screen bg-slate-50 dark:bg-slate-950 overflow-hidden">
+                {/* AgroForte Sidebar */}
+                <div className="w-[340px] border-r border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex flex-col">
+                    <div className="p-4 border-b border-slate-100 dark:border-slate-800 flex items-center gap-3">
+                        <Button variant="ghost" size="icon" className="rounded-full h-8 w-8" onClick={() => navigate('/app/portal')}>
+                            <ChevronLeft className="h-4 w-4" />
+                        </Button>
+                        <div>
+                            <h2 className="font-semibold text-sm leading-none">Editor de Portal</h2>
+                            <p className="text-[10px] text-green-600 font-semibold mt-0.5">🌿 Template AgroForte</p>
+                        </div>
+                    </div>
+                    <div className="flex-1 overflow-y-auto p-4">
+                        <AgroForteEditor
+                            data={agroforteData}
+                            onChange={(d) => setAgroforteData(d)}
+                        />
+                    </div>
+                    <div className="p-4 border-t border-slate-100 dark:border-slate-800 space-y-2">
+                        <Button
+                            className="w-full rounded-xl gap-2 h-11 bg-green-700 hover:bg-green-800 text-white"
+                            onClick={() => handleAgroforteSave(agroforteData)}
+                            disabled={saveM.isPending}
+                        >
+                            <Save className="h-4 w-4" />
+                            {saveM.isPending ? 'Salvando...' : 'Salvar Alterações'}
+                        </Button>
+                        <Button
+                            className="w-full rounded-xl gap-2 h-11 bg-blue-600 hover:bg-blue-700 text-white font-bold"
+                            onClick={() => publishM.mutate()}
+                            disabled={publishM.isPending}
+                        >
+                            <Globe className="h-4 w-4" />
+                            {publishM.isPending ? 'Publicando...' : 'Publicar Site'}
+                        </Button>
+                    </div>
+                </div>
+
+                {/* AgroForte Preview */}
+                <div className="flex-1 flex flex-col overflow-hidden">
+                    <div className="h-16 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex items-center justify-between px-8">
+                        <div className="flex items-center gap-2">
+                            <Button
+                                variant={previewMode === 'desktop' ? 'secondary' : 'ghost'}
+                                size="sm" className="rounded-lg h-9"
+                                onClick={() => setPreviewMode('desktop')}
+                            >
+                                <Monitor className="h-4 w-4 mr-2" /> Desktop
+                            </Button>
+                            <Button
+                                variant={previewMode === 'mobile' ? 'secondary' : 'ghost'}
+                                size="sm" className="rounded-lg h-9"
+                                onClick={() => setPreviewMode('mobile')}
+                            >
+                                <Smartphone className="h-4 w-4 mr-2" /> Mobile
+                            </Button>
+                        </div>
+                        <div className="flex items-center gap-3">
+                            <span className="text-sm text-slate-500 font-medium">{page?.title}</span>
+                            <Button variant="outline" size="sm" className="rounded-lg h-9 gap-2" onClick={() => window.open(`/l/${page?.slug}`, '_blank')}>
+                                <Eye className="h-4 w-4" /> Visualizar
+                            </Button>
+                        </div>
+                    </div>
+                    <div className="flex-1 overflow-y-auto p-8 bg-slate-100 dark:bg-slate-950 flex justify-center">
+                        <div className={cn(
+                            "transition-all duration-500 bg-white shadow-2xl min-h-[800px] overflow-hidden",
+                            previewMode === 'desktop' ? "w-full max-w-[95%] rounded-[32px]" : "w-[375px] rounded-[48px] border-[10px] border-slate-800"
+                        )}>
+                            <div id="editor-stage">
+                                <AgroForteRenderer data={agroforteData} />
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+    // ────────────────────────────────────────────────────────────────────────
 
     return (
         <DndContext 
