@@ -7,9 +7,9 @@ export function isBiEnabled(modulesJson: any) {
 }
 
 export function RequireBiEnabled({ children }: { children: React.ReactNode }) {
-  const { activeTenant, isLoading } = useTenant();
+  const { activeTenant, loading } = useTenant();
 
-  if (isLoading) {
+  if (loading) {
     return (
       <div className="flex h-screen w-full items-center justify-center bg-slate-50 dark:bg-slate-950">
         <div className="flex flex-col items-center gap-4">
