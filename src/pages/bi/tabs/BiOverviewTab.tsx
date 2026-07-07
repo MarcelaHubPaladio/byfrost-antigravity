@@ -105,13 +105,7 @@ export function BiOverviewTab({ dateRange }: BiOverviewTabProps) {
     }
   });
 
-  const { totalLeads, closedLeads } = useMemo(() => {
-    if (!casesData) return { totalLeads: 0, closedLeads: 0 }; 
-    return {
-      totalLeads: casesData.length,
-      closedLeads: casesData.filter(c => c.status === "won" || c.status === "fechado").length
-    };
-  }, [casesData]);
+  // Dados financeiros calculados em useMemo já cobrem o resto
 
   const { totalRevenue, chartData } = useMemo(() => {
     if (!finData) return { totalRevenue: 0, chartData: [] };
