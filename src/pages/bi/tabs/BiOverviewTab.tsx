@@ -25,9 +25,7 @@ export function BiOverviewTab({ dateRange }: BiOverviewTabProps) {
         .from("cases")
         .select(`
           id, status, state, customer_id, created_at, 
-          journeys!inner(key),
-          case_items ( total ),
-          case_fields ( key, value_text )
+          journeys!inner(key)
         `)
         .eq("tenant_id", activeTenantId!)
         .eq("journeys.key", "orders");
@@ -41,7 +39,52 @@ export function BiOverviewTab({ dateRange }: BiOverviewTabProps) {
 
       const { data, error } = await q;
       if (error) throw error;
-      return data || [];
+      if (!data || data.length === 0) return [];
+
+      const caseIds = data.map((c: any) => c.id);
+      const CHUNK_SIZE = 100;
+      const chunks: string[][] = [];
+      for (let i = 0; i < caseIds.length; i += CHUNK_SIZE) {
+        chunks.push(caseIds.slice(i, i + CHUNK_SIZE));
+      }
+
+      const allFields: any[] = [];
+      const allItems: any[] = [];
+
+      await Promise.all(chunks.map(async (chunk) => {
+        const [fRes, iRes] = await Promise.all([
+          supabase
+            .from("case_fields")
+            .select("case_id,key,value_text")
+            .in("case_id", chunk)
+            .in("key", ["billing_status", "partial_paid_value", "total_value_raw"]),
+          supabase
+            .from("case_items")
+            .select("case_id,total")
+            .in("case_id", chunk)
+        ]);
+        if (fRes.data) allFields.push(...fRes.data);
+        if (iRes.data) allItems.push(...iRes.data);
+      }));
+
+      const fieldMap = new Map<string, any[]>();
+      const itemMap = new Map<string, any[]>();
+      
+      allFields.forEach(f => {
+        if (!fieldMap.has(f.case_id)) fieldMap.set(f.case_id, []);
+        fieldMap.get(f.case_id)!.push(f);
+      });
+      
+      allItems.forEach(i => {
+        if (!itemMap.has(i.case_id)) itemMap.set(i.case_id, []);
+        itemMap.get(i.case_id)!.push(i);
+      });
+
+      return data.map((c: any) => ({
+        ...c,
+        case_fields: fieldMap.get(c.id) || [],
+        case_items: itemMap.get(c.id) || []
+      }));
     }
   });
 
