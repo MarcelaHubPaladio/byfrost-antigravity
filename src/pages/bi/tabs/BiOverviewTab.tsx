@@ -6,7 +6,7 @@ import { supabase } from "@/lib/supabase";
 import { useTenant } from "@/providers/TenantProvider";
 import { useMemo, useState } from "react";
 import { DateRange } from "react-day-picker";
-import { eachMonthOfInterval, format, startOfMonth, endOfMonth, isWithinInterval } from "date-fns";
+import { eachMonthOfInterval, eachDayOfInterval, differenceInDays, format, startOfMonth, endOfMonth, isWithinInterval } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
 interface BiOverviewTabProps {
@@ -128,112 +128,125 @@ export function BiOverviewTab({ dateRange }: BiOverviewTabProps) {
     }
   });
 
-  // Dados financeiros calculados em useMemo já cobrem o resto
-
   const { revenueSum, expensesSum, monthMap } = useMemo(() => {
     if (!finData) return { revenueSum: 0, expensesSum: 0, monthMap: {} as Record<string, { name: string; revenue: number; expenses: number; invoiced: number }> };
 
-    const monthMap: Record<string, { name: string; revenue: number; expenses: number }> = {};
+    const map: Record<string, { name: string; revenue: number; expenses: number; invoiced: number }> = {};
     
-    // Gerar chaves dos meses no intervalo escolhido
+    // Se o periodo for menor que 60 dias, agrupa por dia. Se maior, por mes.
+    const isMonthly = dateRange?.from && dateRange?.to ? differenceInDays(dateRange.to, dateRange.from) > 60 : true;
+
+    // Gerar chaves no intervalo escolhido
     if (dateRange?.from) {
       const start = dateRange.from;
       const end = dateRange.to || new Date();
       
       try {
-        const monthsInInterval = eachMonthOfInterval({ start, end });
-        monthsInInterval.forEach(m => {
-          const k = format(m, "yyyy-MM");
-        const name = format(m, "MMM", { locale: ptBR });
-        monthMap[k] = { name: name.charAt(0).toUpperCase() + name.slice(1), revenue: 0, expenses: 0, invoiced: 0 };
-      });
-    } catch (e) {
-      console.warn("Invalid interval", e);
-    }
-  }
-
-  let revenueSum = 0;
-  let expensesSum = 0;
-
-  finData.forEach(t => {
-    const d = new Date(t.transaction_date || Date.now());
-    const k = format(d, "yyyy-MM");
-
-    const isCategorized = t.category_id !== null && t.category_id !== undefined;
-    const isConciliated = t.status === "reconciled" || t.status === "conciled" || t.status === "conciliado";
-
-    if (t.type === "credit" && isCategorized && !isConciliated) {
-      revenueSum += Number(t.amount);
-    }
-    if (t.type === "debit" && isCategorized && !isConciliated) {
-      expensesSum += Number(t.amount);
+        if (isMonthly) {
+          const monthsInInterval = eachMonthOfInterval({ start, end });
+          monthsInInterval.forEach(m => {
+            const k = format(m, "yyyy-MM");
+            const name = format(m, "MMM", { locale: ptBR });
+            map[k] = { name: name.charAt(0).toUpperCase() + name.slice(1), revenue: 0, expenses: 0, invoiced: 0 };
+          });
+        } else {
+          const daysInInterval = eachDayOfInterval({ start, end });
+          daysInInterval.forEach(d => {
+            const k = format(d, "yyyy-MM-dd");
+            const name = format(d, "dd/MMM", { locale: ptBR });
+            map[k] = { name, revenue: 0, expenses: 0, invoiced: 0 };
+          });
+        }
+      } catch (e) {
+        console.warn("Invalid interval", e);
+      }
     }
 
-    if (!monthMap[k]) {
-      const name = format(d, "MMM", { locale: ptBR });
-      monthMap[k] = { name: name.charAt(0).toUpperCase() + name.slice(1), revenue: 0, expenses: 0, invoiced: 0 };
-    }
-    if (t.type === "credit") monthMap[k].revenue += Number(t.amount);
-    if (t.type === "debit") monthMap[k].expenses += Number(t.amount);
-  });
+    let revSum = 0;
+    let expSum = 0;
 
-  return { revenueSum, expensesSum, monthMap };
-}, [finData, dateRange]);
+    finData.forEach(t => {
+      const d = new Date(t.transaction_date || Date.now());
+      const k = isMonthly ? format(d, "yyyy-MM") : format(d, "yyyy-MM-dd");
 
-const { totalCustomers, totalClosedOrders, totalValueOrders, invoicedValueOrders, monthMapWithOrders } = useMemo(() => {
-  const map = { ...monthMap };
-  if (!ordersData) return { totalCustomers: 0, totalClosedOrders: 0, totalValueOrders: 0, invoicedValueOrders: 0, monthMapWithOrders: map };
-  
-  let totalVal = 0;
-  let invoicedVal = 0;
-  let closedCount = 0;
+      const isCategorized = t.category_id !== null && t.category_id !== undefined;
+      const isConciliated = t.status === "reconciled" || t.status === "conciled" || t.status === "conciliado";
 
-  const uniqueCustomers = new Set(ordersData.map((o: any) => o.customer_id).filter(Boolean));
-  
-  ordersData.forEach((o: any) => {
-    const d = new Date(o.created_at || Date.now());
-    const k = format(d, "yyyy-MM");
-    if (!map[k]) {
-      const name = format(d, "MMM", { locale: ptBR });
-      map[k] = { name: name.charAt(0).toUpperCase() + name.slice(1), revenue: 0, expenses: 0, invoiced: 0 };
-    }
+      if (t.type === "credit" && isCategorized && !isConciliated) {
+        revSum += Number(t.amount);
+      }
+      if (t.type === "debit" && isCategorized && !isConciliated) {
+        expSum += Number(t.amount);
+      }
 
-    // Calcula o total do case baseado no case_items
-    const caseTotal = (o.case_items || []).reduce((acc: number, itm: any) => acc + Number(itm.total || 0), 0);
-    totalVal += caseTotal;
+      if (!map[k]) {
+        const name = isMonthly ? format(d, "MMM", { locale: ptBR }) : format(d, "dd/MMM", { locale: ptBR });
+        map[k] = { name: isMonthly ? name.charAt(0).toUpperCase() + name.slice(1) : name, revenue: 0, expenses: 0, invoiced: 0 };
+      }
+      if (t.type === "credit") map[k].revenue += Number(t.amount);
+      if (t.type === "debit") map[k].expenses += Number(t.amount);
+    });
 
-    // Acha os fields de billing
-    const fields = o.case_fields || [];
-    const billingStatusField = fields.find((f: any) => f.key === "billing_status")?.value_text || "Pendente";
-    const partialVal = Number(fields.find((f: any) => f.key === "partial_paid_value")?.value_text || 0);
+    return { revenueSum: revSum, expensesSum: expSum, monthMap: map };
+  }, [finData, dateRange]);
 
-    const bState = billingStatusField.toLowerCase();
+  const { totalCustomers, totalClosedOrders, totalValueOrders, invoicedValueOrders, monthMapWithOrders } = useMemo(() => {
+    // Clonagem profunda (DEEP COPY) previne que ordersData mute repetidas vezes o memo anterior
+    const map = JSON.parse(JSON.stringify(monthMap));
+    if (!ordersData) return { totalCustomers: 0, totalClosedOrders: 0, totalValueOrders: 0, invoicedValueOrders: 0, monthMapWithOrders: map };
     
-    let thisCaseInvoiced = 0;
-    if (bState.includes("pago") || bState.includes("faturado")) {
-      thisCaseInvoiced = caseTotal;
-    } else if (bState.includes("parcial")) {
-      thisCaseInvoiced = partialVal;
-    }
+    let totalVal = 0;
+    let invoicedVal = 0;
+    let closedCount = 0;
+
+    const uniqueCustomers = new Set(ordersData.map((o: any) => o.customer_id).filter(Boolean));
+    const isMonthly = dateRange?.from && dateRange?.to ? differenceInDays(dateRange.to, dateRange.from) > 60 : true;
     
-    invoicedVal += thisCaseInvoiced;
-    map[k].invoiced += thisCaseInvoiced;
+    ordersData.forEach((o: any) => {
+      const d = new Date(o.created_at || Date.now());
+      const k = isMonthly ? format(d, "yyyy-MM") : format(d, "yyyy-MM-dd");
+      
+      if (!map[k]) {
+        const name = isMonthly ? format(d, "MMM", { locale: ptBR }) : format(d, "dd/MMM", { locale: ptBR });
+        map[k] = { name: isMonthly ? name.charAt(0).toUpperCase() + name.slice(1) : name, revenue: 0, expenses: 0, invoiced: 0 };
+      }
 
-    const st = String(o.state || "").toLowerCase();
-    const status = String(o.status || "").toLowerCase();
-    if (st === "faturado" || st === "concluído" || st === "concluido" || st === "fechado" || status === "won") {
-      closedCount++;
-    }
-  });
+      // Calcula o total do case baseado no case_items
+      const caseTotal = (o.case_items || []).reduce((acc: number, itm: any) => acc + Number(itm.total || 0), 0);
+      totalVal += caseTotal;
 
-  return {
-    totalCustomers: uniqueCustomers.size,
-    totalClosedOrders: closedCount,
-    totalValueOrders: totalVal,
-    invoicedValueOrders: invoicedVal,
-    monthMapWithOrders: map
-  };
-}, [ordersData, monthMap]);
+      // Acha os fields de billing
+      const fields = o.case_fields || [];
+      const billingStatusField = fields.find((f: any) => f.key === "billing_status")?.value_text || "Pendente";
+      const partialVal = Number(fields.find((f: any) => f.key === "partial_paid_value")?.value_text || 0);
+
+      const bState = billingStatusField.toLowerCase();
+      
+      let thisCaseInvoiced = 0;
+      if (bState.includes("pago") || bState.includes("faturado")) {
+        thisCaseInvoiced = caseTotal;
+      } else if (bState.includes("parcial")) {
+        thisCaseInvoiced = partialVal;
+      }
+      
+      invoicedVal += thisCaseInvoiced;
+      map[k].invoiced += thisCaseInvoiced;
+
+      const st = String(o.state || "").toLowerCase();
+      const status = String(o.status || "").toLowerCase();
+      if (st === "faturado" || st === "concluído" || st === "concluido" || st === "fechado" || status === "won") {
+        closedCount++;
+      }
+    });
+
+    return {
+      totalCustomers: uniqueCustomers.size,
+      totalClosedOrders: closedCount,
+      totalValueOrders: totalVal,
+      invoicedValueOrders: invoicedVal,
+      monthMapWithOrders: map
+    };
+  }, [ordersData, monthMap, dateRange]);
 
 const chartData = useMemo(() => {
   return Object.keys(monthMapWithOrders).sort().map(k => monthMapWithOrders[k]);
