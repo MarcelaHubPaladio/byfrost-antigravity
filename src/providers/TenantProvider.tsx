@@ -101,9 +101,14 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
         if (mapped.length === 1) {
           setActiveTenantId(mapped[0].id);
         } else if (mapped.length > 1) {
-          if (activeTenantId && !mapped.some((t) => t.id === activeTenantId)) {
-            localStorage.removeItem(LS_KEY);
-            setActiveTenantIdState(null);
+          const savedTenantId = localStorage.getItem(LS_KEY) || activeTenantId;
+          if (savedTenantId) {
+            if (mapped.some((t) => t.id === savedTenantId)) {
+              if (activeTenantId !== savedTenantId) setActiveTenantIdState(savedTenantId);
+            } else {
+              localStorage.removeItem(LS_KEY);
+              setActiveTenantIdState(null);
+            }
           }
         }
         return;
@@ -156,10 +161,14 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
       if (mapped.length === 1) {
         setActiveTenantId(mapped[0].id);
       } else if (mapped.length > 1) {
-        // If stored tenant is no longer accessible, clear it.
-        if (activeTenantId && !mapped.some((t) => t.id === activeTenantId)) {
-          localStorage.removeItem(LS_KEY);
-          setActiveTenantIdState(null);
+        const savedTenantId = localStorage.getItem(LS_KEY) || activeTenantId;
+        if (savedTenantId) {
+          if (mapped.some((t) => t.id === savedTenantId)) {
+            if (activeTenantId !== savedTenantId) setActiveTenantIdState(savedTenantId);
+          } else {
+            localStorage.removeItem(LS_KEY);
+            setActiveTenantIdState(null);
+          }
         }
       }
     } finally {
