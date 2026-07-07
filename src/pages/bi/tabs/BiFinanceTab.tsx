@@ -202,24 +202,28 @@ export function BiFinanceTab({ dateRange }: BiFinanceTabProps) {
           value={new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(saldoPeriodo)} 
           icon={PiggyBank} 
           className={saldoPeriodo >= 0 ? "text-emerald-500" : "text-rose-500"}
+          tooltipContext="Soma das Entradas menos a soma das Saídas no período filtrado."
         />
         <KpiCard 
           title="Total Entradas" 
           value={new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalReceitas)} 
           icon={TrendingUp} 
           className="text-blue-500" 
+          tooltipContext="Soma de todas as transações financeiras categorizadas como entrada ou receita no período."
         />
         <KpiCard 
           title="Total Saídas" 
           value={new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalDespesas)} 
           icon={TrendingDown} 
           className="text-rose-500" 
+          tooltipContext="Soma de todas as transações financeiras categorizadas como saída ou despesa no período."
         />
         <KpiCard 
           title="Margem Livre (Caixa)" 
           value={`${margem.toFixed(1)}%`} 
           icon={Coins} 
           className={margem >= 0 ? "text-emerald-500" : "text-amber-500"}
+          tooltipContext="Percentual do saldo restante em relação ao total de entradas (Saldo / Entradas)."
         />
       </div>
 

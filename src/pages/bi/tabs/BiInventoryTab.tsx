@@ -152,18 +152,21 @@ export function BiInventoryTab({ dateRange }: BiInventoryTabProps) {
           value={totalStock.toLocaleString("pt-BR")} 
           icon={Boxes} 
           trend={0} 
+          tooltipContext="Soma total das quantidades em estoque (físico + consignado) de todos os produtos."
         />
         <KpiCard 
           title="Produtos/Serviços" 
           value={totalProducts.toLocaleString("pt-BR")} 
           icon={PackageSearch} 
           trend={0} 
+          tooltipContext="Quantidade total de produtos e serviços ativos cadastrados no sistema."
         />
         <KpiCard 
           title="Itens Vendidos" 
           value={totalItemsSold.toLocaleString("pt-BR")} 
           icon={ShoppingCart} 
           trend={0} 
+          tooltipContext="Soma total de unidades (quantidade) de produtos que saíram em pedidos no período filtrado."
         />
       </div>
 
