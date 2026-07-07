@@ -31,7 +31,7 @@ export function BiInventoryTab({ dateRange }: BiInventoryTabProps) {
       let q = supabase
         .from("cases")
         .select(`
-          id, number, created_at,
+          id, title, created_at,
           journeys!inner(key)
         `)
         .eq("tenant_id", activeTenantId!)
@@ -94,9 +94,9 @@ export function BiInventoryTab({ dateRange }: BiInventoryTabProps) {
       prodMap.set(p.id, { id: p.id, name: p.display_name, stock, qtySold: 0, revenue: 0 });
     });
 
-    const orderMap = new Map<string, { id: string, number: string, qtySold: number, revenue: number }>();
+    const orderMap = new Map<string, { id: string, title: string, qtySold: number, revenue: number }>();
     data.cases.forEach(c => {
-      orderMap.set(c.id, { id: c.id, number: c.number || "Sem Número", qtySold: 0, revenue: 0 });
+      orderMap.set(c.id, { id: c.id, title: c.title || "Sem Título", qtySold: 0, revenue: 0 });
     });
 
     data.items.forEach(i => {
@@ -250,7 +250,7 @@ export function BiInventoryTab({ dateRange }: BiInventoryTabProps) {
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="truncate text-sm font-medium text-slate-700 dark:text-slate-300">
-                    Pedido #{o.number}
+                    {o.title}
                   </p>
                 </div>
                 <div className="shrink-0 text-right">
