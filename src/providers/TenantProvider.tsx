@@ -34,7 +34,7 @@ const Ctx = createContext<TenantState | null>(null);
 const LS_KEY = "byfrost.activeTenantId";
 
 export function TenantProvider({ children }: { children: React.ReactNode }) {
-  const { user } = useSession();
+  const { user, loading: sessionLoading } = useSession();
   const [tenants, setTenants] = useState<TenantInfo[]>([]);
   const [activeTenantId, setActiveTenantIdState] = useState<string | null>(
     localStorage.getItem(LS_KEY)
@@ -54,10 +54,13 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
 
   const refresh = React.useCallback(async () => {
     if (!user) {
-      setTenants([]);
-      setActiveTenantIdState(null);
-      setMembershipHint({ type: "none" });
-      setLoading(false);
+      // Only clear tenant state if session loading has finished and there's genuinely no user
+      if (!sessionLoading) {
+        setTenants([]);
+        setActiveTenantIdState(null);
+        setMembershipHint({ type: "none" });
+        setLoading(false);
+      }
       return;
     }
 
@@ -178,9 +181,12 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
   }, [user?.id, isSuperAdmin, activeTenantId]);
 
   useEffect(() => {
-    refresh();
+    // Only refresh if session has finished loading
+    if (!sessionLoading) {
+      refresh();
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.id, isSuperAdmin]);
+  }, [user?.id, isSuperAdmin, sessionLoading]);
 
   const activeTenant = useMemo(
     () => tenants.find((t) => t.id === activeTenantId) ?? null,
@@ -192,7 +198,7 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
       tenants,
       activeTenantId,
       activeTenant,
-      loading,
+      loading: loading || sessionLoading,
       setActiveTenantId,
       refresh,
       isSuperAdmin,
