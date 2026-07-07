@@ -87,8 +87,8 @@ export function BiOverviewTab({ dateRange }: BiOverviewTabProps) {
 
   // Dados financeiros calculados em useMemo já cobrem o resto
 
-  const { totalRevenue, totalExpenses, chartData: oldChartData } = useMemo(() => {
-    if (!finData) return { totalRevenue: 0, totalExpenses: 0, chartData: [] };
+  const { revenueSum, expensesSum, monthMap } = useMemo(() => {
+    if (!finData) return { revenueSum: 0, expensesSum: 0, monthMap: {} as Record<string, { name: string; revenue: number; expenses: number; invoiced: number }> };
 
     const monthMap: Record<string, { name: string; revenue: number; expenses: number }> = {};
     
