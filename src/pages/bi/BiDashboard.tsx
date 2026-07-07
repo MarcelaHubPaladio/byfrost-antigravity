@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DateRangePickerCustom } from "@/components/ui/date-range-picker-custom";
@@ -12,10 +12,37 @@ import { Button } from "@/components/ui/button";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useTenant } from "@/providers/TenantProvider";
 
+function useDateRangeSession(key: string, initialValue: DateRange | undefined) {
+  const [state, setState] = useState<DateRange | undefined>(() => {
+    try {
+      const item = sessionStorage.getItem(key);
+      if (item) {
+        const parsed = JSON.parse(item);
+        if (parsed.from) parsed.from = new Date(parsed.from);
+        if (parsed.to) parsed.to = new Date(parsed.to);
+        return parsed;
+      }
+    } catch (e) {
+      console.warn("Failed to parse DateRange from session", e);
+    }
+    return initialValue;
+  });
+
+  useEffect(() => {
+    if (state) {
+      sessionStorage.setItem(key, JSON.stringify(state));
+    } else {
+      sessionStorage.removeItem(key);
+    }
+  }, [key, state]);
+
+  return [state, setState] as const;
+}
+
 export default function BiDashboard() {
   const { activeTenant } = useTenant();
   const nav = useNavigate();
-  const [dateRange, setDateRange] = useState<DateRange | undefined>({
+  const [dateRange, setDateRange] = useDateRangeSession("bi_dashboard_date_range", {
     from: subMonths(new Date(), 6),
     to: new Date()
   });
@@ -103,11 +130,11 @@ export default function BiDashboard() {
             </TabsContent>
 
             <TabsContent value="finance" className="mt-0 outline-none">
-              <BiFinanceTab />
+              <BiFinanceTab dateRange={dateRange} />
             </TabsContent>
 
             <TabsContent value="crm" className="mt-0 outline-none">
-              <BiCrmTab />
+              <BiCrmTab dateRange={dateRange} />
             </TabsContent>
           </Tabs>
         </div>
