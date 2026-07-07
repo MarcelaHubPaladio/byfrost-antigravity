@@ -196,6 +196,8 @@ const chartData = useMemo(() => {
   return Object.keys(monthMapWithOrders).sort().map(k => monthMapWithOrders[k]);
 }, [monthMapWithOrders]);
 
+const totalRevenue = revenueSum || 0;
+const totalExpenses = expensesSum || 0;
 const ticketMedio = totalClosedOrders > 0 ? (totalRevenue / totalClosedOrders) : 0;
 const marginPercent = totalRevenue > 0 ? ((totalRevenue - totalExpenses) / totalRevenue) * 100 : 0;
 
