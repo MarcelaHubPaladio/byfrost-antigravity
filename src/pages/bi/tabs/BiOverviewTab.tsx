@@ -104,7 +104,9 @@ export function BiOverviewTab() {
     };
   }, [finData]);
 
-  const guardiaoList = (insightsData?.insights_json as any[]) || [];
+  const guardiaoList = Array.isArray(insightsData?.insights_json) 
+    ? insightsData.insights_json 
+    : [];
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700">
