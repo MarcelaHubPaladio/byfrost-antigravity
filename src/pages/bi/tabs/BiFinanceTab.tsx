@@ -112,7 +112,7 @@ export function BiFinanceTab({ dateRange }: BiFinanceTabProps) {
     const catCustosMap = new Map<string, number>();
     const fornMap = new Map<string, number>();
     
-    const isMonthly = dateRange?.from && dateRange?.to && differenceInDays(dateRange.to, dateRange.from) > 60;
+    const isMonthly = dateRange?.from && dateRange?.to ? differenceInDays(dateRange.to, dateRange.from) > 60 : true;
     const timeMap = new Map<string, { name: string, entrada: number, saida: number, saldoAcumulado: number, dt: Date }>();
     
     if (dateRange?.from) {
@@ -150,6 +150,10 @@ export function BiFinanceTab({ dateRange }: BiFinanceTabProps) {
 
       const d = new Date(t.transaction_date || Date.now());
       const k = isMonthly ? format(d, "yyyy-MM") : format(d, "yyyy-MM-dd");
+      
+      if (dateRange?.from && !timeMap.has(k)) {
+        return;
+      }
       
       if (!timeMap.has(k)) {
          const name = isMonthly ? format(d, "MMM/yy", { locale: ptBR }) : format(d, "dd MMM", { locale: ptBR });
