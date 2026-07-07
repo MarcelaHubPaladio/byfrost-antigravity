@@ -416,6 +416,10 @@ function isBeeiaEnabled(modulesJson: any) {
   return Boolean(modulesJson?.beeia_enabled === true);
 }
 
+function isBiEnabled(modulesJson: any) {
+  return Boolean(modulesJson?.bi_enabled === true);
+}
+
 function isProcessesEnabled(modulesJson: any) {
   return Boolean(modulesJson?.processes_enabled === true);
 }
@@ -608,6 +612,7 @@ export function AppShell({
   const communicationEnabledForTenant = isCommunicationEnabled(activeTenant?.modules_json);
   const smartCampaignsEnabledForTenant = isSmartCampaignsEnabled(activeTenant?.modules_json);
   const beeiaEnabledForTenant = isBeeiaEnabled(activeTenant?.modules_json);
+  const biEnabledForTenant = isBiEnabled(activeTenant?.modules_json);
   const processesEnabledForTenant = isProcessesEnabled(activeTenant?.modules_json);
   const reportsEnabledForTenant = isReportsEnabled(activeTenant?.modules_json);
 
@@ -657,6 +662,7 @@ export function AppShell({
         "app.communication",
         "app.smart_campaigns",
         "app.beeia",
+        "app.bi",
         "app.processes",
         "app.financing_simulator",
       ];
@@ -1097,6 +1103,10 @@ export function AppShell({
 
                 {beeiaEnabledForTenant && (
                   <NavTile to="/app/beeia" icon={Sparkles} label="BeeIA" disabled={!can("app.beeia")} />
+                )}
+
+                {biEnabledForTenant && (
+                  <NavTile to="/app/bi" icon={LineChart} label="BI" disabled={!can("app.bi")} />
                 )}
 
                 {/* Core (desktop): hover menu */}
@@ -1684,6 +1694,16 @@ export function AppShell({
                                 icon={Sparkles}
                                 label="BeeIA"
                                 disabled={!can("app.beeia")}
+                                onNavigate={() => setMobileNavOpen(false)}
+                              />
+                            )}
+
+                            {biEnabledForTenant && (
+                              <MobileNavItem
+                                to="/app/bi"
+                                icon={LineChart}
+                                label="Business Intelligence"
+                                disabled={!can("app.bi")}
                                 onNavigate={() => setMobileNavOpen(false)}
                               />
                             )}

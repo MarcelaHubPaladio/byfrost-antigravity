@@ -58,6 +58,10 @@ function getBeeiaEnabled(modulesJson: any) {
   return Boolean(modulesJson?.beeia_enabled === true);
 }
 
+function getBiEnabled(modulesJson: any) {
+  return Boolean(modulesJson?.bi_enabled === true);
+}
+
 function setModuleFlag(modulesJson: any, key: string, enabled: boolean) {
   const base = (modulesJson ?? {}) as any;
   return { ...base, [key]: enabled };
@@ -96,6 +100,7 @@ export function TenantModulesPanel() {
   const reportsEnabled = useMemo(() => getReportsEnabled(tenantQ.data?.modules_json), [tenantQ.data]);
   const smartCampaignsEnabled = useMemo(() => getSmartCampaignsEnabled(tenantQ.data?.modules_json), [tenantQ.data]);
   const beeiaEnabled = useMemo(() => getBeeiaEnabled(tenantQ.data?.modules_json), [tenantQ.data]);
+  const biEnabled = useMemo(() => getBiEnabled(tenantQ.data?.modules_json), [tenantQ.data]);
 
   const toggleModule = async (key: string, next: boolean) => {
     if (!activeTenantId) return;
@@ -255,6 +260,21 @@ export function TenantModulesPanel() {
                 onCheckedChange={(v) => toggleModule("beeia_enabled", v)}
               />
             </div>
+
+            <div className="flex items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2">
+              <div>
+                <div className="text-xs font-semibold text-slate-900">Business Intelligence (BI)</div>
+                <div className="mt-0.5 text-[11px] text-slate-600">
+                  Habilita o módulo centralizado de BI, com painéis gerenciais e cruzamento de dados.
+                </div>
+              </div>
+              <Switch
+                checked={biEnabled}
+                disabled={saving || tenantQ.isLoading}
+                onCheckedChange={(v) => toggleModule("bi_enabled", v)}
+              />
+            </div>
+
             <div className="flex items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2">
               <div>
                 <div className="text-xs font-semibold text-slate-900">Módulo de Tarefas</div>
