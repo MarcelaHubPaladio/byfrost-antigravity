@@ -7,6 +7,7 @@ import { subMonths } from "date-fns";
 import { BiOverviewTab } from "./tabs/BiOverviewTab";
 import { BiFinanceTab } from "./tabs/BiFinanceTab";
 import { BiCrmTab } from "./tabs/BiCrmTab";
+import { BiInventoryTab } from "./tabs/BiInventoryTab";
 import { Download, Filter, LineChart, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -123,6 +124,12 @@ export default function BiDashboard() {
               >
                 Vendas & CRM
               </TabsTrigger>
+              <TabsTrigger 
+                value="inventory" 
+                className="rounded-xl px-6 py-2 text-sm font-medium transition-all data-[state=active]:bg-white data-[state=active]:text-indigo-600 data-[state=active]:shadow-sm dark:data-[state=active]:bg-slate-800 dark:data-[state=active]:text-indigo-400"
+              >
+                Inventário
+              </TabsTrigger>
             </TabsList>
 
             <TabsContent value="overview" className="mt-0 outline-none">
@@ -135,6 +142,10 @@ export default function BiDashboard() {
 
             <TabsContent value="crm" className="mt-0 outline-none">
               <BiCrmTab dateRange={dateRange} />
+            </TabsContent>
+
+            <TabsContent value="inventory" className="mt-0 outline-none">
+              <BiInventoryTab dateRange={dateRange} />
             </TabsContent>
           </Tabs>
         </div>
