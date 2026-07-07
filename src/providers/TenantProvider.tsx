@@ -2,6 +2,30 @@ import React, { createContext, useContext, useEffect, useMemo, useState } from "
 import { supabase } from "@/lib/supabase";
 import { useSession } from "@/providers/SessionProvider";
 
+function hexToRgb(hex: string) {
+  const h = hex.replace("#", "").trim();
+  if (h.length === 3) return { r: parseInt(h[0] + h[0], 16), g: parseInt(h[1] + h[1], 16), b: parseInt(h[2] + h[2], 16) };
+  if (h.length !== 6) return null;
+  return { r: parseInt(h.slice(0, 2), 16), g: parseInt(h.slice(2, 4), 16), b: parseInt(h.slice(4, 6), 16) };
+}
+
+function rgbToHsl(r: number, g: number, b: number) {
+  r /= 255; g /= 255; b /= 255;
+  const max = Math.max(r, g, b), min = Math.min(r, g, b);
+  let h = 0, s = 0, l = (max + min) / 2;
+  if (max !== min) {
+    const d = max - min;
+    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+    switch (max) {
+      case r: h = (g - b) / d + (g < b ? 6 : 0); break;
+      case g: h = (b - r) / d + 2; break;
+      case b: h = (r - g) / d + 4; break;
+    }
+    h /= 6;
+  }
+  return { h: Math.round(h * 360), s: Math.round(s * 100), l: Math.round(l * 100) };
+}
+
 type TenantRole = string;
 
 type TenantInfo = {
@@ -192,6 +216,19 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
     () => tenants.find((t) => t.id === activeTenantId) ?? null,
     [tenants, activeTenantId]
   );
+
+  const palettePrimaryHex = activeTenant?.branding_json?.palette_primary;
+  
+  useEffect(() => {
+    let accent = { h: 252, s: 86, l: 62 };
+    
+    if (palettePrimaryHex) {
+      const rgb = hexToRgb(palettePrimaryHex);
+      if (rgb) accent = rgbToHsl(rgb.r, rgb.g, rgb.b);
+    }
+    
+    document.documentElement.style.setProperty("--tenant-accent", `${accent.h} ${accent.s}% ${accent.l}%`);
+  }, [palettePrimaryHex]);
 
   const value = useMemo<TenantState>(
     () => ({

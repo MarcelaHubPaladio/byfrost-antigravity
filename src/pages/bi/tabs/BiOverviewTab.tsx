@@ -23,7 +23,12 @@ export function BiOverviewTab({ dateRange }: BiOverviewTabProps) {
     queryFn: async () => {
       let q = supabase
         .from("cases")
-        .select("id, status, state, customer_id, created_at, journeys!inner(key)")
+        .select(`
+          id, status, state, customer_id, created_at, 
+          journeys!inner(key),
+          case_items ( total ),
+          case_fields ( key, value_text )
+        `)
         .eq("tenant_id", activeTenantId!)
         .eq("journeys.key", "orders");
       
@@ -82,7 +87,7 @@ export function BiOverviewTab({ dateRange }: BiOverviewTabProps) {
 
   // Dados financeiros calculados em useMemo já cobrem o resto
 
-  const { totalRevenue, totalExpenses, chartData } = useMemo(() => {
+  const { totalRevenue, totalExpenses, chartData: oldChartData } = useMemo(() => {
     if (!finData) return { totalRevenue: 0, totalExpenses: 0, chartData: [] };
 
     const monthMap: Record<string, { name: string; revenue: number; expenses: number }> = {};
@@ -96,91 +101,142 @@ export function BiOverviewTab({ dateRange }: BiOverviewTabProps) {
         const monthsInInterval = eachMonthOfInterval({ start, end });
         monthsInInterval.forEach(m => {
           const k = format(m, "yyyy-MM");
-          const name = format(m, "MMM", { locale: ptBR });
-          monthMap[k] = { name: name.charAt(0).toUpperCase() + name.slice(1), revenue: 0, expenses: 0 };
-        });
-      } catch (e) {
-        console.warn("Invalid interval", e);
-      }
+        const name = format(m, "MMM", { locale: ptBR });
+        monthMap[k] = { name: name.charAt(0).toUpperCase() + name.slice(1), revenue: 0, expenses: 0, invoiced: 0 };
+      });
+    } catch (e) {
+      console.warn("Invalid interval", e);
+    }
+  }
+
+  let revenueSum = 0;
+  let expensesSum = 0;
+
+  finData.forEach(t => {
+    const d = new Date(t.transaction_date || Date.now());
+    const k = format(d, "yyyy-MM");
+
+    const isCategorized = t.category_id !== null && t.category_id !== undefined;
+    const isConciliated = t.status === "reconciled" || t.status === "conciled" || t.status === "conciliado";
+
+    if (t.type === "credit" && isCategorized && !isConciliated) {
+      revenueSum += Number(t.amount);
+    }
+    if (t.type === "debit" && isCategorized && !isConciliated) {
+      expensesSum += Number(t.amount);
     }
 
-    let revenueSum = 0;
-    let expensesSum = 0;
+    if (!monthMap[k]) {
+      const name = format(d, "MMM", { locale: ptBR });
+      monthMap[k] = { name: name.charAt(0).toUpperCase() + name.slice(1), revenue: 0, expenses: 0, invoiced: 0 };
+    }
+    if (t.type === "credit") monthMap[k].revenue += Number(t.amount);
+    if (t.type === "debit") monthMap[k].expenses += Number(t.amount);
+  });
 
-    finData.forEach(t => {
-      const d = new Date(t.transaction_date || Date.now());
-      const k = format(d, "yyyy-MM");
+  return { revenueSum, expensesSum, monthMap };
+}, [finData, dateRange]);
 
-      const isCategorized = t.category_id !== null && t.category_id !== undefined;
-      const isConciliated = t.status === "reconciled" || t.status === "conciled" || t.status === "conciliado";
+const { totalCustomers, totalClosedOrders, totalValueOrders, invoicedValueOrders, monthMapWithOrders } = useMemo(() => {
+  const map = { ...monthMap };
+  if (!ordersData) return { totalCustomers: 0, totalClosedOrders: 0, totalValueOrders: 0, invoicedValueOrders: 0, monthMapWithOrders: map };
+  
+  let totalVal = 0;
+  let invoicedVal = 0;
+  let closedCount = 0;
 
-      // Soma Receita: Lançamentos sincronizados e categorizados, NÃO conciliados.
-      if (t.type === "credit" && isCategorized && !isConciliated) {
-        revenueSum += Number(t.amount);
-      }
-      // Soma Despesa
-      if (t.type === "debit" && isCategorized && !isConciliated) {
-        expensesSum += Number(t.amount);
-      }
+  const uniqueCustomers = new Set(ordersData.map((o: any) => o.customer_id).filter(Boolean));
+  
+  ordersData.forEach((o: any) => {
+    const d = new Date(o.created_at || Date.now());
+    const k = format(d, "yyyy-MM");
+    if (!map[k]) {
+      const name = format(d, "MMM", { locale: ptBR });
+      map[k] = { name: name.charAt(0).toUpperCase() + name.slice(1), revenue: 0, expenses: 0, invoiced: 0 };
+    }
 
-      if (monthMap[k]) {
-        if (t.type === "credit") monthMap[k].revenue += Number(t.amount);
-        if (t.type === "debit") monthMap[k].expenses += Number(t.amount);
-      } else {
-        const name = format(d, "MMM", { locale: ptBR });
-        monthMap[k] = { 
-          name: name.charAt(0).toUpperCase() + name.slice(1), 
-          revenue: t.type === "credit" ? Number(t.amount) : 0, 
-          expenses: t.type === "debit" ? Number(t.amount) : 0 
-        };
-      }
-    });
+    // Calcula o total do case baseado no case_items
+    const caseTotal = (o.case_items || []).reduce((acc: number, itm: any) => acc + Number(itm.total || 0), 0);
+    totalVal += caseTotal;
 
-    const sortedData = Object.keys(monthMap)
-      .sort()
-      .map(k => monthMap[k]);
+    // Acha os fields de billing
+    const fields = o.case_fields || [];
+    const billingStatusField = fields.find((f: any) => f.key === "billing_status")?.value_text || "Pendente";
+    const partialVal = Number(fields.find((f: any) => f.key === "partial_paid_value")?.value_text || 0);
 
-    return {
-      totalRevenue: revenueSum,
-      totalExpenses: expensesSum,
-      chartData: sortedData
-    };
-  }, [finData, dateRange]);
-
-  const { totalCustomers, totalClosedOrders } = useMemo(() => {
-    if (!ordersData) return { totalCustomers: 0, totalClosedOrders: 0 };
+    const bState = billingStatusField.toLowerCase();
     
-    const uniqueCustomers = new Set(ordersData.map((o: any) => o.customer_id).filter(Boolean));
+    let thisCaseInvoiced = 0;
+    if (bState.includes("pago") || bState.includes("faturado")) {
+      thisCaseInvoiced = caseTotal;
+    } else if (bState.includes("parcial")) {
+      thisCaseInvoiced = partialVal;
+    }
     
-    const closed = ordersData.filter((o: any) => {
-      const st = String(o.state || "").toLowerCase();
-      const status = String(o.status || "").toLowerCase();
-      return st === "faturado" || st === "concluído" || st === "concluido" || st === "fechado" || status === "won";
-    });
+    invoicedVal += thisCaseInvoiced;
+    map[k].invoiced += thisCaseInvoiced;
 
-    return {
-      totalCustomers: uniqueCustomers.size,
-      totalClosedOrders: closed.length
-    };
-  }, [ordersData]);
+    const st = String(o.state || "").toLowerCase();
+    const status = String(o.status || "").toLowerCase();
+    if (st === "faturado" || st === "concluído" || st === "concluido" || st === "fechado" || status === "won") {
+      closedCount++;
+    }
+  });
 
-  const ticketMedio = totalClosedOrders > 0 ? (totalRevenue / totalClosedOrders) : 0;
-  const marginPercent = totalRevenue > 0 ? ((totalRevenue - totalExpenses) / totalRevenue) * 100 : 0;
+  return {
+    totalCustomers: uniqueCustomers.size,
+    totalClosedOrders: closedCount,
+    totalValueOrders: totalVal,
+    invoicedValueOrders: invoicedVal,
+    monthMapWithOrders: map
+  };
+}, [ordersData, monthMap]);
 
-  const guardiaoList = Array.isArray(insightsData?.insights_json) 
-    ? insightsData.insights_json 
-    : [];
+const chartData = useMemo(() => {
+  return Object.keys(monthMapWithOrders).sort().map(k => monthMapWithOrders[k]);
+}, [monthMapWithOrders]);
+
+const ticketMedio = totalClosedOrders > 0 ? (totalRevenue / totalClosedOrders) : 0;
+const marginPercent = totalRevenue > 0 ? ((totalRevenue - totalExpenses) / totalRevenue) * 100 : 0;
+
+const guardiaoList = Array.isArray(insightsData?.insights_json) 
+  ? insightsData.insights_json 
+  : [];
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700">
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
+      
+      {/* VENDAS / CRM */}
+      <div className="mb-2">
+        <h2 className="text-xl font-black text-slate-800 dark:text-slate-100 flex items-center gap-2">
+          <Briefcase className="h-5 w-5 text-[hsl(var(--tenant-accent))]" /> Regime de Competência (Vendas & CRM)
+        </h2>
+        <p className="text-sm text-slate-500 dark:text-slate-400">Desempenho e volume de negócios realizados no período.</p>
+      </div>
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <KpiCard 
-          title="Receita Total" 
-          value={new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalRevenue)} 
+          title="Total em Pedidos (Vendido)" 
+          value={new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalValueOrders)} 
           trend={0} 
           trendLabel="no período" 
-          icon={DollarSign} 
-          tooltipContext="Soma real de todos os lançamentos sincronizados e categorizados, sem incluir os conciliados."
+          icon={Briefcase} 
+          tooltipContext="Somatório de todos os pedidos realizados, faturados ou não."
+        />
+        <KpiCard 
+          title="Faturado (Aprovado)" 
+          value={new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(invoicedValueOrders)} 
+          trend={0} 
+          trendLabel="no período" 
+          icon={Activity} 
+          tooltipContext="Parcela do total de vendas que foi confirmada/faturada no sistema."
+        />
+        <KpiCard 
+          title="Ticket Médio" 
+          value={new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(ticketMedio)} 
+          trend={0} 
+          trendLabel="no período" 
+          icon={Sparkles} 
+          tooltipContext="Receita faturada dividida pela quantidade de negócios fechados."
         />
         <KpiCard 
           title="Clientes Atendidos" 
@@ -190,29 +246,47 @@ export function BiOverviewTab({ dateRange }: BiOverviewTabProps) {
           icon={Users} 
           tooltipContext="Total de clientes únicos com pedidos registrados neste período."
         />
+      </div>
+
+      {/* FINANCEIRO / CAIXA */}
+      <div className="mt-8 mb-2 pt-4 border-t border-slate-200 dark:border-slate-800">
+        <h2 className="text-xl font-black text-slate-800 dark:text-slate-100 flex items-center gap-2">
+          <DollarSign className="h-5 w-5 text-[hsl(var(--tenant-accent))]" /> Fato de Caixa (Financeiro)
+        </h2>
+        <p className="text-sm text-slate-500 dark:text-slate-400">Entradas e saídas efetivas na conta bancária.</p>
+      </div>
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <KpiCard 
-          title="Negócios Fechados" 
-          value={String(totalClosedOrders)} 
+          title="Receita Efetiva" 
+          value={new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalRevenue)} 
           trend={0} 
           trendLabel="no período" 
-          icon={Briefcase} 
-          tooltipContext="Pedidos (Orders) registrados com o status 'Concluído' ou 'Faturado'."
+          icon={DollarSign} 
+          tooltipContext="Soma de todos os lançamentos de crédito sincronizados (dinheiro em conta)."
         />
         <KpiCard 
-          title="Ticket Médio" 
-          value={new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(ticketMedio)} 
+          title="Despesas Efetivas" 
+          value={new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalExpenses)} 
           trend={0} 
           trendLabel="no período" 
           icon={Activity} 
-          tooltipContext="Receita Total dividida pela quantidade de Negócios Fechados."
+          tooltipContext="Soma de todos os lançamentos de débito sincronizados."
         />
         <KpiCard 
-          title="Margem de Lucro" 
+          title="Margem Livre" 
           value={`${marginPercent.toFixed(1).replace('.', ',')}%`} 
           trend={0} 
           trendLabel="no período" 
           icon={PieChart} 
-          tooltipContext="Relação entre Receitas e Despesas categorizadas. Calculado como: (Receita - Despesa) / Receita."
+          tooltipContext="Relação entre Receita Efetiva e Despesas Efetivas (Lucratividade do mês)."
+        />
+        <KpiCard 
+          title="A Receber (Inadimplência)" 
+          value={new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Math.max(0, invoicedValueOrders - totalRevenue))} 
+          trend={0} 
+          trendLabel="no período" 
+          icon={Brain} 
+          tooltipContext="Diferença entre o que foi Faturado nas Vendas e o que efetivamente pingou na conta (Receita Efetiva)."
         />
       </div>
 
@@ -228,12 +302,16 @@ export function BiOverviewTab({ dateRange }: BiOverviewTabProps) {
               <AreaChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
                 <defs>
                   <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="hsl(var(--byfrost-accent))" stopOpacity={0.4}/>
-                    <stop offset="95%" stopColor="hsl(var(--byfrost-accent))" stopOpacity={0}/>
+                    <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.4}/>
+                    <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
                   </linearGradient>
                   <linearGradient id="colorExpenses" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor="#f43f5e" stopOpacity={0.4}/>
                     <stop offset="95%" stopColor="#f43f5e" stopOpacity={0}/>
+                  </linearGradient>
+                  <linearGradient id="colorInvoiced" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="hsl(var(--tenant-accent))" stopOpacity={0.4}/>
+                    <stop offset="95%" stopColor="hsl(var(--tenant-accent))" stopOpacity={0}/>
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="currentColor" className="text-slate-200 dark:text-slate-800" />
@@ -257,8 +335,34 @@ export function BiOverviewTab({ dateRange }: BiOverviewTabProps) {
                   itemStyle={{ color: '#0f172a', fontWeight: 500 }}
                   formatter={(val: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val)}
                 />
-                <Area type="monotone" dataKey="revenue" name="Receita" stroke="hsl(var(--byfrost-accent))" strokeWidth={3} fillOpacity={1} fill="url(#colorRevenue)" />
-                <Area type="monotone" dataKey="expenses" name="Despesas" stroke="#f43f5e" strokeWidth={3} fillOpacity={1} fill="url(#colorExpenses)" />
+                <Area 
+                  type="monotone" 
+                  dataKey="invoiced" 
+                  name="Faturamento (Vendas)"
+                  stroke="hsl(var(--tenant-accent))" 
+                  strokeWidth={3}
+                  strokeDasharray="5 5"
+                  fillOpacity={1} 
+                  fill="url(#colorInvoiced)" 
+                />
+                <Area 
+                  type="monotone" 
+                  dataKey="revenue" 
+                  name="Receita (Caixa)"
+                  stroke="#3b82f6" 
+                  strokeWidth={3}
+                  fillOpacity={1} 
+                  fill="url(#colorRevenue)" 
+                />
+                <Area 
+                  type="monotone" 
+                  dataKey="expenses" 
+                  name="Despesas"
+                  stroke="#f43f5e" 
+                  strokeWidth={2}
+                  fillOpacity={1} 
+                  fill="url(#colorExpenses)" 
+                />
               </AreaChart>
             </ResponsiveContainer>
           </div>
