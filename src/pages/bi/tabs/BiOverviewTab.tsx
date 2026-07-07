@@ -5,20 +5,35 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { useTenant } from "@/providers/TenantProvider";
 import { useMemo, useState } from "react";
-import { Button } from "@/components/ui/button";
+import { DateRange } from "react-day-picker";
+import { eachMonthOfInterval, format, startOfMonth, endOfMonth, isWithinInterval } from "date-fns";
+import { ptBR } from "date-fns/locale";
 
-export function BiOverviewTab() {
+interface BiOverviewTabProps {
+  dateRange?: DateRange;
+}
+
+export function BiOverviewTab({ dateRange }: BiOverviewTabProps) {
   const { activeTenantId } = useTenant();
 
   // Queries Reais (Casos/Leads)
   const { data: casesData } = useQuery({
-    queryKey: ["bi_cases_overview", activeTenantId],
+    queryKey: ["bi_cases_overview", activeTenantId, dateRange],
     enabled: Boolean(activeTenantId),
     queryFn: async () => {
-      const { data, error } = await supabase
+      let q = supabase
         .from("cases")
         .select("id, status, created_at")
         .eq("tenant_id", activeTenantId!);
+      
+      if (dateRange?.from) q = q.gte("created_at", dateRange.from.toISOString());
+      if (dateRange?.to) {
+        const endDay = new Date(dateRange.to);
+        endDay.setHours(23, 59, 59, 999);
+        q = q.lte("created_at", endDay.toISOString());
+      }
+
+      const { data, error } = await q;
       if (error) throw error;
       return data || [];
     }
@@ -26,13 +41,22 @@ export function BiOverviewTab() {
 
   // Queries Reais (Finanças)
   const { data: finData } = useQuery({
-    queryKey: ["bi_fin_overview", activeTenantId],
+    queryKey: ["bi_fin_overview", activeTenantId, dateRange],
     enabled: Boolean(activeTenantId),
     queryFn: async () => {
-      const { data, error } = await supabase
+      let q = supabase
         .from("financial_transactions")
         .select("id, amount, type, transaction_date, status")
         .eq("tenant_id", activeTenantId!);
+
+      if (dateRange?.from) q = q.gte("transaction_date", dateRange.from.toISOString());
+      if (dateRange?.to) {
+        const endDay = new Date(dateRange.to);
+        endDay.setHours(23, 59, 59, 999);
+        q = q.lte("transaction_date", endDay.toISOString());
+      }
+
+      const { data, error } = await q;
       if (error) throw error;
       return data || [];
     }
@@ -66,43 +90,60 @@ export function BiOverviewTab() {
   const { totalRevenue, chartData } = useMemo(() => {
     if (!finData) return { totalRevenue: 0, chartData: [] };
 
-    // Gráfico de Receita vs Despesa Histórico
     const monthMap: Record<string, { name: string; revenue: number; expenses: number }> = {};
-    const months = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
     
-    // Inicializar os últimos 6 meses até o atual para ficar bonito
-    const today = new Date();
-    for (let i = 5; i >= 0; i--) {
-      const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
-      const k = `${d.getFullYear()}-${d.getMonth()}`;
-      monthMap[k] = { name: months[d.getMonth()], revenue: 0, expenses: 0 };
+    // Gerar chaves dos meses no intervalo escolhido
+    if (dateRange?.from) {
+      const start = dateRange.from;
+      const end = dateRange.to || new Date();
+      
+      try {
+        const monthsInInterval = eachMonthOfInterval({ start, end });
+        monthsInInterval.forEach(m => {
+          const k = format(m, "yyyy-MM");
+          const name = format(m, "MMM", { locale: ptBR });
+          monthMap[k] = { name: name.charAt(0).toUpperCase() + name.slice(1), revenue: 0, expenses: 0 };
+        });
+      } catch (e) {
+        console.warn("Invalid interval", e);
+      }
     }
 
     let revenueSum = 0;
 
     finData.forEach(t => {
-      // KPI de Receita Mensal: somamos apenas as receitas que estão "paid" no mês atual
       const d = new Date(t.transaction_date || Date.now());
-      const k = `${d.getFullYear()}-${d.getMonth()}`;
+      const k = format(d, "yyyy-MM");
 
-      if (d.getMonth() === today.getMonth() && d.getFullYear() === today.getFullYear()) {
-        if (t.type === "credit" && t.status === "paid") {
-          revenueSum += Number(t.amount);
-        }
+      // O período exato vem do dateRange, então somamos tudo que veio de Credit Paid na query do DB.
+      if (t.type === "credit" && t.status === "paid") {
+        revenueSum += Number(t.amount);
       }
 
-      // Adicionamos no chart, independentemente do status para dar volume de fluxo (ou só paid)
       if (monthMap[k]) {
         if (t.type === "credit") monthMap[k].revenue += Number(t.amount);
         if (t.type === "debit") monthMap[k].expenses += Number(t.amount);
+      } else {
+        // Se a transação for de um mês que não foi inicializado (fallback/etc), a gente cria
+        const name = format(d, "MMM", { locale: ptBR });
+        monthMap[k] = { 
+          name: name.charAt(0).toUpperCase() + name.slice(1), 
+          revenue: t.type === "credit" ? Number(t.amount) : 0, 
+          expenses: t.type === "debit" ? Number(t.amount) : 0 
+        };
       }
     });
 
+    // Ordenar as chaves antes de retornar pra garantir cronologia
+    const sortedData = Object.keys(monthMap)
+      .sort()
+      .map(k => monthMap[k]);
+
     return {
       totalRevenue: revenueSum,
-      chartData: Object.values(monthMap)
+      chartData: sortedData
     };
-  }, [finData]);
+  }, [finData, dateRange]);
 
   const guardiaoList = Array.isArray(insightsData?.insights_json) 
     ? insightsData.insights_json 
@@ -115,9 +156,9 @@ export function BiOverviewTab() {
           title="Receita Total" 
           value={new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalRevenue)} 
           trend={0} 
-          trendLabel="Mês Atual" 
+          trendLabel="no período" 
           icon={DollarSign} 
-          tooltipContext="Soma real de todos os lançamentos de Crédito (Receitas) com status 'Pago' dentro do mês corrente."
+          tooltipContext="Soma real de todos os lançamentos de Crédito (Receitas) com status 'Pago' dentro do período selecionado."
         />
         <KpiCard 
           title="Novos Clientes" 

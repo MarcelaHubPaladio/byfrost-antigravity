@@ -1,14 +1,23 @@
+import { useState } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { DateRangePickerCustom } from "@/components/ui/date-range-picker-custom";
+import { DateRange } from "react-day-picker";
+import { subMonths } from "date-fns";
 import { BiOverviewTab } from "./tabs/BiOverviewTab";
 import { BiFinanceTab } from "./tabs/BiFinanceTab";
 import { BiCrmTab } from "./tabs/BiCrmTab";
-import { CalendarDays, Download, Filter, LineChart, ArrowLeft } from "lucide-react";
+import { Download, Filter, LineChart, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
 import { TooltipProvider } from "@/components/ui/tooltip";
 
 export default function BiDashboard() {
-  const nav = useNavigate();
+  const navigate = useNavigate();
+  const [dateRange, setDateRange] = useState<DateRange | undefined>({
+    from: subMonths(new Date(), 6),
+    to: new Date()
+  });
+
   return (
     <div className="flex h-[calc(100vh-64px)] w-full flex-col overflow-hidden bg-slate-50/50 dark:bg-[#0B0F19]">
       {/* Background Decorativo Global */}
@@ -47,10 +56,11 @@ export default function BiDashboard() {
             </div>
           
           <div className="flex items-center gap-2">
-            <Button variant="outline" className="h-10 gap-2 rounded-xl border-slate-200 bg-white/60 backdrop-blur-sm dark:border-slate-800 dark:bg-slate-950/40">
-              <CalendarDays className="h-4 w-4 text-slate-500" />
-              <span>Últimos 7 meses</span>
-            </Button>
+            <DateRangePickerCustom
+              date={dateRange}
+              onDateChange={setDateRange}
+              className="bg-white/60 border-slate-200 dark:border-slate-800 dark:bg-slate-950/40 h-10 w-64"
+            />
             <Button variant="outline" className="h-10 gap-2 rounded-xl border-slate-200 bg-white/60 backdrop-blur-sm dark:border-slate-800 dark:bg-slate-950/40">
               <Filter className="h-4 w-4 text-slate-500" />
               <span>Filtros</span>
@@ -87,7 +97,7 @@ export default function BiDashboard() {
             </TabsList>
 
             <TabsContent value="overview" className="mt-0 outline-none">
-              <BiOverviewTab />
+              <BiOverviewTab dateRange={dateRange} />
             </TabsContent>
 
             <TabsContent value="finance" className="mt-0 outline-none">
