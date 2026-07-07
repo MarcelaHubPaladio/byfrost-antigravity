@@ -67,6 +67,48 @@ export function BiCrmTab({ dateRange }: BiCrmTabProps) {
     }
   });
 
+  // Query CRM Usage (Timeline Events)
+  const { data: usageData, isLoading: usageLoading } = useQuery({
+    queryKey: ["bi_crm_usage", activeTenantId, dateRange?.from?.toISOString(), dateRange?.to?.toISOString()],
+    enabled: Boolean(activeTenantId),
+    queryFn: async () => {
+      let q = supabase
+        .from("timeline_events")
+        .select(`
+          actor_id, occurred_at,
+          cases!inner(journeys!inner(is_crm))
+        `)
+        .eq("tenant_id", activeTenantId!)
+        .eq("actor_type", "user")
+        .eq("cases.journeys.is_crm", true);
+
+      if (dateRange?.from) q = q.gte("occurred_at", dateRange.from.toISOString());
+      if (dateRange?.to) {
+        const endDay = new Date(dateRange.to);
+        endDay.setHours(23, 59, 59, 999);
+        q = q.lte("occurred_at", endDay.toISOString());
+      }
+
+      const { data, error } = await q;
+      if (error) throw error;
+      return data ?? [];
+    }
+  });
+
+  // Query Users for Bottom 10 (to include users with 0 events)
+  const { data: usersData, isLoading: usersLoading } = useQuery({
+    queryKey: ["bi_crm_users", activeTenantId],
+    enabled: Boolean(activeTenantId),
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("tenant_users")
+        .select("user_id, users_profile(display_name)")
+        .eq("tenant_id", activeTenantId!);
+      if (error) throw error;
+      return data ?? [];
+    }
+  });
+
   const {
     totalLeads,
     novosCadastros,
@@ -157,10 +199,13 @@ export function BiCrmTab({ dateRange }: BiCrmTabProps) {
 
   const {
     topVendorsOrders,
-    topVendorsRevenue
+    topVendorsRevenue,
+    topUsage,
+    bottomUsage
   } = useMemo(() => {
-    if (!salesData) return { topVendorsOrders: [], topVendorsRevenue: [] };
+    if (!salesData) return { topVendorsOrders: [], topVendorsRevenue: [], topUsage: [], bottomUsage: [] };
 
+    // Sales calculations
     const vMap = new Map<string, { id: string, name: string, orders: number, revenue: number }>();
 
     salesData.forEach(c => {
@@ -183,13 +228,47 @@ export function BiCrmTab({ dateRange }: BiCrmTabProps) {
 
     const arr = Array.from(vMap.values());
     
+    // Usage calculations
+    const uMap = new Map<string, { id: string, name: string, events: number, lastUsed: string | null }>();
+    
+    usersData?.forEach(u => {
+      if (u.user_id) {
+        uMap.set(u.user_id, { 
+          id: u.user_id, 
+          name: (u.users_profile as any)?.display_name || "Usuário", 
+          events: 0, 
+          lastUsed: null 
+        });
+      }
+    });
+
+    usageData?.forEach(evt => {
+      const uid = evt.actor_id;
+      if (!uid) return;
+      
+      if (!uMap.has(uid)) {
+        uMap.set(uid, { id: uid, name: "Usuário Removido", events: 0, lastUsed: null });
+      }
+      
+      const u = uMap.get(uid)!;
+      u.events++;
+      
+      if (!u.lastUsed || new Date(evt.occurred_at) > new Date(u.lastUsed)) {
+        u.lastUsed = evt.occurred_at;
+      }
+    });
+
+    const uArr = Array.from(uMap.values()).filter(u => u.name !== "Usuário Removido");
+
     return {
       topVendorsOrders: [...arr].sort((a, b) => b.orders - a.orders).slice(0, 10),
-      topVendorsRevenue: [...arr].sort((a, b) => b.revenue - a.revenue).slice(0, 10)
+      topVendorsRevenue: [...arr].sort((a, b) => b.revenue - a.revenue).slice(0, 10),
+      topUsage: [...uArr].sort((a, b) => b.events - a.events).slice(0, 10),
+      bottomUsage: [...uArr].sort((a, b) => a.events - b.events).slice(0, 10),
     };
-  }, [salesData]);
+  }, [salesData, usageData, usersData]);
 
-  if (crmLoading || salesLoading) {
+  if (crmLoading || salesLoading || usageLoading || usersLoading) {
     return (
       <div className="flex h-64 items-center justify-center">
         <div className="h-8 w-8 animate-spin rounded-full border-4 border-slate-300 border-t-indigo-600"></div>
@@ -323,6 +402,49 @@ export function BiCrmTab({ dateRange }: BiCrmTabProps) {
                 </div>
               </div>
             )) : <p className="text-sm text-slate-500">Nenhum produto em leads.</p>}
+          </div>
+        </div>
+
+        <div className="col-span-1 rounded-2xl border border-slate-200/60 bg-white/60 p-6 shadow-sm backdrop-blur-md dark:border-slate-800/60 dark:bg-slate-950/40">
+          <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-4">Top 10 Utilizam o CRM</h3>
+          <div className="space-y-4">
+            {topUsage.length > 0 ? topUsage.map((u, i) => (
+              <div key={u.id} className="flex items-center gap-3">
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-50 text-xs font-bold text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400">
+                  {i + 1}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="truncate text-sm font-medium text-slate-700 dark:text-slate-300">{u.name}</p>
+                </div>
+                <div className="shrink-0 text-right">
+                  <p className="text-sm font-bold text-slate-900 dark:text-white">{u.events} interações</p>
+                </div>
+              </div>
+            )) : <p className="text-sm text-slate-500">Nenhum uso registrado.</p>}
+          </div>
+        </div>
+
+        <div className="col-span-1 rounded-2xl border border-slate-200/60 bg-white/60 p-6 shadow-sm backdrop-blur-md dark:border-slate-800/60 dark:bg-slate-950/40">
+          <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-4">Top 10 Menos Utilizam o CRM</h3>
+          <div className="space-y-4">
+            {bottomUsage.length > 0 ? bottomUsage.map((u, i) => (
+              <div key={u.id} className="flex items-center gap-3">
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-rose-50 text-xs font-bold text-rose-600 dark:bg-rose-500/10 dark:text-rose-400">
+                  {i + 1}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="truncate text-sm font-medium text-slate-700 dark:text-slate-300">{u.name}</p>
+                </div>
+                <div className="shrink-0 text-right flex flex-col items-end">
+                  <p className="text-sm font-bold text-slate-900 dark:text-white">{u.events} interações</p>
+                  {u.lastUsed ? (
+                    <p className="text-[10px] text-slate-400">Último: {new Date(u.lastUsed).toLocaleDateString('pt-BR')}</p>
+                  ) : (
+                    <p className="text-[10px] text-slate-400">Nunca usou</p>
+                  )}
+                </div>
+              </div>
+            )) : <p className="text-sm text-slate-500">Nenhum uso registrado.</p>}
           </div>
         </div>
 
