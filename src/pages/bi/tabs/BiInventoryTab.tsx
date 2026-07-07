@@ -75,28 +75,23 @@ export function BiInventoryTab({ dateRange }: BiInventoryTabProps) {
     totalItemsSold,
     topSoldProducts,
     topUnmovedProducts,
-    topOrders
+    topFrequentProducts
   } = useMemo(() => {
     if (!data) return {
       totalStock: 0, totalProducts: 0, totalItemsSold: 0,
-      topSoldProducts: [], topUnmovedProducts: [], topOrders: []
+      topSoldProducts: [], topUnmovedProducts: [], topFrequentProducts: []
     };
 
     let tStock = 0;
     const tProducts = data.products.length;
     let tItemsSold = 0;
 
-    const prodMap = new Map<string, { id: string, name: string, stock: number, qtySold: number, revenue: number }>();
+    const prodMap = new Map<string, { id: string, name: string, stock: number, qtySold: number, revenue: number, orderSet: Set<string> }>();
     
     data.products.forEach(p => {
       const stock = Number((p.metadata as any)?.estoque_total || (p.metadata as any)?.estoque_loja || 0);
       tStock += stock;
-      prodMap.set(p.id, { id: p.id, name: p.display_name, stock, qtySold: 0, revenue: 0 });
-    });
-
-    const orderMap = new Map<string, { id: string, title: string, qtySold: number, revenue: number }>();
-    data.cases.forEach(c => {
-      orderMap.set(c.id, { id: c.id, title: c.title || "Sem Título", qtySold: 0, revenue: 0 });
+      prodMap.set(p.id, { id: p.id, name: p.display_name, stock, qtySold: 0, revenue: 0, orderSet: new Set() });
     });
 
     data.items.forEach(i => {
@@ -109,12 +104,7 @@ export function BiInventoryTab({ dateRange }: BiInventoryTabProps) {
         const p = prodMap.get(i.offering_entity_id)!;
         p.qtySold += qty;
         p.revenue += val;
-      }
-
-      if (orderMap.has(i.case_id)) {
-        const o = orderMap.get(i.case_id)!;
-        o.qtySold += qty;
-        o.revenue += val;
+        p.orderSet.add(i.case_id);
       }
     });
 
@@ -130,10 +120,10 @@ export function BiInventoryTab({ dateRange }: BiInventoryTabProps) {
       .sort((a, b) => b.stock - a.stock)
       .slice(0, 10);
 
-    // Top 10 pedidos (por qtySold)
-    const topOrders = Array.from(orderMap.values())
-      .filter(o => o.qtySold > 0)
-      .sort((a, b) => b.qtySold - a.qtySold)
+    // Top 10 mais frequentes
+    const topFrequentProducts = Array.from(prodMap.values())
+      .filter(p => p.orderSet.size > 0)
+      .sort((a, b) => b.orderSet.size - a.orderSet.size)
       .slice(0, 10);
 
     return {
@@ -142,7 +132,7 @@ export function BiInventoryTab({ dateRange }: BiInventoryTabProps) {
       totalItemsSold: tItemsSold,
       topSoldProducts,
       topUnmovedProducts,
-      topOrders
+      topFrequentProducts
     };
   }, [data]);
 
@@ -236,31 +226,31 @@ export function BiInventoryTab({ dateRange }: BiInventoryTabProps) {
           </div>
         </div>
 
-        {/* Top 10 Pedidos com Maior Saída */}
+        {/* Top 10 Produtos Mais Frequentes */}
         <div className="col-span-1 rounded-2xl border border-slate-200/60 bg-white/60 p-6 shadow-sm backdrop-blur-md dark:border-slate-800/60 dark:bg-slate-950/40">
           <div className="mb-4 flex items-center gap-2 text-emerald-600 dark:text-emerald-400">
             <ShoppingCart className="h-5 w-5" />
-            <h3 className="text-lg font-semibold text-slate-900 dark:text-white">Top 10 Pedidos (Saídas)</h3>
+            <h3 className="text-lg font-semibold text-slate-900 dark:text-white">Mais Frequentes (Pedidos)</h3>
           </div>
           <div className="space-y-4">
-            {topOrders.length > 0 ? topOrders.map((o, i) => (
-              <div key={o.id} className="group relative flex items-center gap-3">
+            {topFrequentProducts.length > 0 ? topFrequentProducts.map((p, i) => (
+              <div key={p.id} className="group relative flex items-center gap-3">
                 <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-50 text-xs font-bold text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400">
                   {i + 1}
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="truncate text-sm font-medium text-slate-700 dark:text-slate-300">
-                    {o.title}
+                    {p.name}
                   </p>
                 </div>
                 <div className="shrink-0 text-right">
                   <p className="text-sm font-bold text-slate-900 dark:text-white">
-                    {o.qtySold} itens
+                    {p.orderSet.size} {p.orderSet.size === 1 ? "pedido" : "pedidos"}
                   </p>
                 </div>
               </div>
             )) : (
-              <p className="text-sm text-slate-500">Nenhum pedido registrado no período.</p>
+              <p className="text-sm text-slate-500">Nenhuma venda registrada no período.</p>
             )}
           </div>
         </div>
