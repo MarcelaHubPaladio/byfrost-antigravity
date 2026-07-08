@@ -42,7 +42,9 @@ import {
   ChevronLeft,
   ChevronRight,
   Copy,
+  Download,
 } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
 import { WhatsAppConversation } from "@/components/case/WhatsAppConversation";
 import { BeeIASimulator } from "@/components/case/BeeIASimulator";
 
@@ -107,6 +109,10 @@ function BeeIAPage() {
 
   // State for active case drawer
   const [selectedCaseId, setSelectedCaseId] = useState<string | null>(null);
+
+  // Feature: selection, export and learning extraction
+  const [selectedCaseIds, setSelectedCaseIds] = useState<string[]>([]);
+  const [extractingLearnings, setExtractingLearnings] = useState(false);
 
   // Modal to add new Z-API Instance
   const [showAddNumber, setShowAddNumber] = useState(false);
@@ -987,6 +993,98 @@ function BeeIAPage() {
     return map;
   }, [filteredCases]);
 
+  const handleExportConversations = async (casesToExport: CaseRow[]) => {
+    try {
+      if (casesToExport.length === 0) return;
+      let text = "EXPORTAÇÃO DE CONVERSAS BEEIA\n\n";
+
+      for (const c of casesToExport) {
+        const name = c.customer_accounts?.name || "Sem Nome";
+        const phone = c.customer_accounts?.phone_e164 || "Sem Telefone";
+        text += `=== LEAD: ${name} (${phone}) - STATUS: ${c.state} ===\n`;
+        
+        const { data: messages } = await supabase
+          .from("wa_messages")
+          .select("direction, body_text, occurred_at")
+          .eq("case_id", c.id)
+          .order("occurred_at", { ascending: true });
+        
+        if (messages && messages.length > 0) {
+          messages.forEach(m => {
+            const date = new Date(m.occurred_at).toLocaleString("pt-BR");
+            const sender = m.direction === "inbound" ? "Cliente" : "Empresa/IA";
+            if (m.body_text) {
+              text += `[${date}] ${sender}:\n${m.body_text}\n\n`;
+            }
+          });
+        } else {
+          text += "Sem mensagens registradas.\n\n";
+        }
+        text += "\n-----------------------------------------\n\n";
+      }
+
+      const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `conversas_beeia_${new Date().getTime()}.txt`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      showSuccess("Conversas exportadas com sucesso!");
+    } catch (e: any) {
+      showError("Erro ao exportar conversas: " + e.message);
+    }
+  };
+
+  const handleExtractLearning = async (casesToExtract: CaseRow[]) => {
+    try {
+      if (casesToExtract.length === 0) return;
+      setExtractingLearnings(true);
+
+      const caseIds = casesToExtract.map(c => c.id);
+      
+      const { data, error } = await supabase.functions.invoke("beeia-extract-learnings", {
+        body: { tenant_id: activeTenantId, case_ids: caseIds }
+      });
+
+      if (error) throw error;
+
+      if (data?.count > 0) {
+        showSuccess(`Análise concluída! ${data.count} novo(s) aprendizado(s) registrado(s).`);
+        qc.invalidateQueries({ queryKey: ["beeia_learnings", activeTenantId] });
+        setSelectedCaseIds([]); // clear selection after success
+      } else {
+        showSuccess("Análise concluída, mas nenhuma nova regra relevante foi extraída.");
+      }
+    } catch (e: any) {
+      showError("Erro ao extrair aprendizados: " + e.message);
+    } finally {
+      setExtractingLearnings(false);
+    }
+  };
+
+  const toggleCaseSelection = (caseId: string) => {
+    setSelectedCaseIds(prev => 
+      prev.includes(caseId) ? prev.filter(id => id !== caseId) : [...prev, caseId]
+    );
+  };
+
+  const toggleColumnSelection = (colCases: CaseRow[]) => {
+    const colIds = colCases.map(c => c.id);
+    const allSelected = colIds.every(id => selectedCaseIds.includes(id));
+    if (allSelected) {
+      setSelectedCaseIds(prev => prev.filter(id => !colIds.includes(id)));
+    } else {
+      setSelectedCaseIds(prev => {
+        const next = new Set(prev);
+        colIds.forEach(id => next.add(id));
+        return Array.from(next);
+      });
+    }
+  };
+
   return (
     <AppShell>
       <div className="flex flex-col gap-6 p-6">
@@ -1349,12 +1447,49 @@ function BeeIAPage() {
                         >
                           {/* Column Header */}
                           <div className="mb-3 flex items-center justify-between">
-                            <span className="text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-400">
-                              {col.label}
-                            </span>
-                            <span className="flex h-5 w-5 items-center justify-center rounded-full bg-slate-100 text-[10px] font-bold text-slate-700 dark:bg-slate-850 dark:text-slate-300">
-                              {colCases.length}
-                            </span>
+                            <div className="flex items-center gap-2">
+                              <Checkbox
+                                checked={colCases.length > 0 && colCases.every(c => selectedCaseIds.includes(c.id))}
+                                onCheckedChange={() => toggleColumnSelection(colCases)}
+                                disabled={colCases.length === 0}
+                                className="h-4 w-4"
+                              />
+                              <span className="text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-400">
+                                {col.label}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                              {colCases.some(c => selectedCaseIds.includes(c.id)) && (
+                                <div className="flex items-center gap-1 mr-1 animate-in fade-in zoom-in duration-200">
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => handleExportConversations(colCases.filter(c => selectedCaseIds.includes(c.id)))}
+                                    className="h-6 w-6 text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
+                                    title="Exportar conversas selecionadas"
+                                  >
+                                    <Download className="h-3.5 w-3.5" />
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    disabled={extractingLearnings}
+                                    onClick={() => handleExtractLearning(colCases.filter(c => selectedCaseIds.includes(c.id)))}
+                                    className="h-6 w-6 text-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-950/40"
+                                    title="Aprender contexto (IA)"
+                                  >
+                                    {extractingLearnings ? (
+                                      <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-indigo-500 border-t-transparent" />
+                                    ) : (
+                                      <BrainCircuit className="h-3.5 w-3.5" />
+                                    )}
+                                  </Button>
+                                </div>
+                              )}
+                              <span className="flex h-5 w-5 items-center justify-center rounded-full bg-slate-100 text-[10px] font-bold text-slate-700 dark:bg-slate-850 dark:text-slate-300">
+                                {colCases.length}
+                              </span>
+                            </div>
                           </div>
 
                           {/* Cases list */}
@@ -1378,18 +1513,33 @@ function BeeIAPage() {
                                       e.dataTransfer.setData("text/caseId", c.id);
                                       e.dataTransfer.effectAllowed = "move";
                                     }}
-                                    className="group relative flex cursor-grab active:cursor-grabbing flex-col rounded-2xl border-slate-200/60 p-3.5 hover:border-amber-200 hover:shadow-sm dark:border-slate-850 dark:hover:border-amber-950/60"
+                                    className={cn(
+                                      "group relative flex cursor-grab active:cursor-grabbing flex-col rounded-2xl border-slate-200/60 p-3.5 hover:border-amber-200 hover:shadow-sm dark:border-slate-850 dark:hover:border-amber-950/60 transition-colors",
+                                      selectedCaseIds.includes(c.id) && "border-amber-300 bg-amber-50/50 dark:border-amber-500/50 dark:bg-amber-950/20 shadow-sm"
+                                    )}
                                     onClick={() => setSelectedCaseId(c.id)}
                                   >
                                     <div className="flex items-start justify-between gap-2">
-                                      <div className="font-semibold text-xs text-slate-800 dark:text-slate-200 group-hover:text-amber-600 dark:group-hover:text-amber-400">
-                                        {name}
+                                      <div className="flex items-start gap-2">
+                                        <div onClick={(e) => e.stopPropagation()} className="pt-0.5">
+                                          <Checkbox
+                                            checked={selectedCaseIds.includes(c.id)}
+                                            onCheckedChange={() => toggleCaseSelection(c.id)}
+                                            className={cn(
+                                              "h-3.5 w-3.5 transition-opacity rounded-sm",
+                                              !selectedCaseIds.includes(c.id) && "opacity-0 group-hover:opacity-100"
+                                            )}
+                                          />
+                                        </div>
+                                        <div className="font-semibold text-xs text-slate-800 dark:text-slate-200 group-hover:text-amber-600 dark:group-hover:text-amber-400">
+                                          {name}
+                                        </div>
                                       </div>
                                       {c.state === "contato" && !c.beeia_paused && (
                                         <span className="flex h-2 w-2 rounded-full bg-amber-400 animate-pulse" title="IA ativamente respondendo" />
                                       )}
                                     </div>
-                                    <div className="mt-1 text-[10px] text-slate-400 font-mono">
+                                    <div className="mt-1 pl-5 text-[10px] text-slate-400 font-mono">
                                       {phone}
                                     </div>
 
