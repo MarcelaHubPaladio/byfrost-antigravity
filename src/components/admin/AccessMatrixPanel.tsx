@@ -61,6 +61,7 @@ const DEFAULT_ROUTES: RouteRow[] = [
   { key: "app.case_detail", name: "Detalhe do case", category: "App", path_pattern: "/app/cases/:id", description: "Detalhe do case (WhatsApp + timeline)" },
   { key: "app.crm", name: "CRM", category: "App", path_pattern: "/app/crm", description: "Lista/visão CRM" },
   { key: "app.bi", name: "Business Intelligence", category: "App", path_pattern: "/app/bi", description: "Módulo de painéis analíticos (BI)" },
+  { key: "app.beeia", name: "BeeIA", category: "App", path_pattern: "/app/beeia", description: "Configuração e testes do BeeIA" },
   {
     key: "crm.case_detail",
     name: "CRM • Detalhe do case",

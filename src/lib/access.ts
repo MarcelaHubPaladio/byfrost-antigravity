@@ -13,6 +13,7 @@ export const CANDIDATE_ROUTES: CandidateRoute[] = [
   { key: "app.chat", path: "/app/chat", label: "Chat" },
   { key: "app.crm", path: "/app/crm", label: "CRM" },
   { key: "app.bi", path: "/app/bi", label: "BI" },
+  { key: "app.beeia", path: "/app/beeia", label: "BeeIA" },
   { key: "app.content", path: "/app/content", label: "Conteúdo" },
   { key: "app.presence", path: "/app/presence", label: "Ponto" },
   { key: "app.simulator", path: "/app/simulator", label: "Simulador" },
