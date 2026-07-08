@@ -105,17 +105,8 @@ IMPORTANTE:
       console.error("Failed to parse LLM JSON:", llmRes.text);
     }
 
-    // Insert the learnings
-    let insertedCount = 0;
-    for (const learning of extractedLearnings) {
-      if (typeof learning === "string" && learning.length > 5) {
-        const { error: insErr } = await supabaseAdmin.from("beeia_learnings").insert({
-          tenant_id,
-          learning_text: learning
-        });
-        if (!insErr) insertedCount++;
-      }
-    }
+    // Filter valid strings
+    const validLearnings = extractedLearnings.filter(l => typeof l === "string" && l.length > 5);
 
     // Log Usage
     if (llmRes.tokensUsed > 0) {
@@ -130,7 +121,7 @@ IMPORTANTE:
       );
     }
 
-    return new Response(JSON.stringify({ ok: true, count: insertedCount }), {
+    return new Response(JSON.stringify({ ok: true, learnings: validLearnings }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
 

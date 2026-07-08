@@ -43,8 +43,10 @@ import {
   ChevronRight,
   Copy,
   Download,
+  X,
 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { WhatsAppConversation } from "@/components/case/WhatsAppConversation";
 import { BeeIASimulator } from "@/components/case/BeeIASimulator";
 
@@ -113,6 +115,8 @@ function BeeIAPage() {
   // Feature: selection, export and learning extraction
   const [selectedCaseIds, setSelectedCaseIds] = useState<string[]>([]);
   const [extractingLearnings, setExtractingLearnings] = useState(false);
+  const [showLearningsDialog, setShowLearningsDialog] = useState(false);
+  const [proposedLearnings, setProposedLearnings] = useState<string[]>([]);
 
   // Modal to add new Z-API Instance
   const [showAddNumber, setShowAddNumber] = useState(false);
@@ -1051,10 +1055,9 @@ function BeeIAPage() {
 
       if (error) throw error;
 
-      if (data?.count > 0) {
-        showSuccess(`Análise concluída! ${data.count} novo(s) aprendizado(s) registrado(s).`);
-        qc.invalidateQueries({ queryKey: ["beeia_learnings", activeTenantId] });
-        setSelectedCaseIds([]); // clear selection after success
+      if (data?.learnings && Array.isArray(data.learnings) && data.learnings.length > 0) {
+        setProposedLearnings(data.learnings);
+        setShowLearningsDialog(true);
       } else {
         showSuccess("Análise concluída, mas nenhuma nova regra relevante foi extraída.");
       }
@@ -1062,6 +1065,31 @@ function BeeIAPage() {
       showError("Erro ao extrair aprendizados: " + e.message);
     } finally {
       setExtractingLearnings(false);
+    }
+  };
+
+  const handleSaveProposedLearnings = async () => {
+    try {
+      const validLearnings = proposedLearnings.filter(l => l.trim().length > 5);
+      if (validLearnings.length === 0) {
+        showError("Adicione pelo menos um aprendizado válido antes de salvar.");
+        return;
+      }
+      
+      const rows = validLearnings.map(l => ({
+        tenant_id: activeTenantId,
+        learning_text: l.trim()
+      }));
+
+      const { error } = await supabase.from("beeia_learnings").insert(rows);
+      if (error) throw error;
+
+      showSuccess(`${validLearnings.length} novo(s) aprendizado(s) salvo(s)!`);
+      qc.invalidateQueries({ queryKey: ["beeia_learnings", activeTenantId] });
+      setShowLearningsDialog(false);
+      setSelectedCaseIds([]); // Clear selection on success
+    } catch (e: any) {
+      showError("Erro ao salvar aprendizados: " + e.message);
     }
   };
 
@@ -2417,6 +2445,80 @@ function BeeIAPage() {
           </SheetContent>
         </Sheet>
       </div>
+      {/* Learned rules review dialog */}
+      <Dialog open={showLearningsDialog} onOpenChange={setShowLearningsDialog}>
+        <DialogContent className="max-w-2xl max-h-[85vh] overflow-hidden flex flex-col p-6 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
+          <DialogHeader className="flex flex-col gap-1.5 pb-2">
+            <DialogTitle className="flex items-center gap-2 text-xl">
+              <BrainCircuit className="h-5 w-5 text-indigo-500" />
+              Revisar Aprendizados Extraídos
+            </DialogTitle>
+            <DialogDescription className="text-slate-500 text-left">
+              A Inteligência Artificial extraiu os seguintes padrões das conversas selecionadas. Você pode alterar os textos, excluir o que não faz sentido ou adicionar novos antes de salvar.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="flex-1 overflow-y-auto pr-2 py-4 flex flex-col gap-3 custom-scrollbar">
+            {proposedLearnings.length === 0 ? (
+              <div className="text-center p-6 text-slate-500 italic text-sm">
+                Nenhuma regra sugerida. Você pode adicionar manualmente.
+              </div>
+            ) : (
+              proposedLearnings.map((learning, idx) => (
+                <div key={idx} className="relative group flex flex-col gap-1 bg-slate-50 dark:bg-slate-900/50 p-3 rounded-xl border border-slate-200 dark:border-slate-800 focus-within:border-indigo-300 transition-colors">
+                  <div className="flex justify-between items-center px-1 mb-1">
+                    <span className="text-xs font-semibold text-slate-500">Regra #{idx + 1}</span>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-6 w-6 text-rose-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity"
+                      onClick={() => setProposedLearnings(prev => prev.filter((_, i) => i !== idx))}
+                      title="Remover esta regra"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                  <Textarea
+                    value={learning}
+                    onChange={(e) => {
+                      const newVal = e.target.value;
+                      setProposedLearnings(prev => {
+                        const next = [...prev];
+                        next[idx] = newVal;
+                        return next;
+                      });
+                    }}
+                    className="min-h-[80px] bg-white dark:bg-slate-950 border-0 resize-y text-sm focus-visible:ring-0 shadow-none p-2"
+                    placeholder="Descreva o ensinamento..."
+                  />
+                </div>
+              ))
+            )}
+            
+            <Button
+              variant="outline"
+              onClick={() => setProposedLearnings(prev => [...prev, ""])}
+              className="mt-2 rounded-xl border-dashed border-slate-300 text-slate-500 hover:text-slate-700 hover:border-slate-400 bg-transparent h-12"
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              Adicionar nova regra
+            </Button>
+          </div>
+
+          <DialogFooter className="pt-4 border-t border-slate-100 dark:border-slate-800">
+            <Button variant="ghost" onClick={() => setShowLearningsDialog(false)} className="rounded-xl">
+              Cancelar
+            </Button>
+            <Button 
+              onClick={handleSaveProposedLearnings} 
+              className="rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white"
+            >
+              <Save className="h-4 w-4 mr-2" />
+              Salvar Aprendizados
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </AppShell>
   );
 }
