@@ -44,6 +44,8 @@ import {
   Copy,
   Download,
   X,
+  Webhook,
+  Bell
 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
@@ -2681,6 +2683,10 @@ function BeeIAPlugsTab({
   const [simAllowRules, setSimAllowRules] = useState(false);
   const [simCustomInstructions, setSimCustomInstructions] = useState("");
 
+  const [discordWebhookUrl, setDiscordWebhookUrl] = useState("");
+  const [discordTriggerInstructions, setDiscordTriggerInstructions] = useState("");
+  const [discordNotificationTemplate, setDiscordNotificationTemplate] = useState("");
+
   // Sync with loaded plugs data
   useEffect(() => {
     if (plugs && plugs.length > 0) {
@@ -2707,6 +2713,13 @@ function BeeIAPlugsTab({
       if (simPlug) {
         setSimAllowRules(simPlug.config_json?.allow_use_bank_rules ?? false);
         setSimCustomInstructions(simPlug.config_json?.custom_instructions || "");
+      }
+
+      const discordPlug = plugs.find((p) => p.plug_key === "discord_notifications");
+      if (discordPlug) {
+        setDiscordWebhookUrl(discordPlug.config_json?.webhook_url || "");
+        setDiscordTriggerInstructions(discordPlug.config_json?.trigger_instructions || "");
+        setDiscordNotificationTemplate(discordPlug.config_json?.notification_template || "");
       }
     }
   }, [plugs]);
@@ -2752,6 +2765,14 @@ function BeeIAPlugsTab({
     });
   };
 
+  const handleSaveDiscord = () => {
+    onSave("discord_notifications", isPlugEnabled("discord_notifications"), {
+      webhook_url: discordWebhookUrl,
+      trigger_instructions: discordTriggerInstructions,
+      notification_template: discordNotificationTemplate,
+    });
+  };
+
   const handleToggleField = (field: string) => {
     if (entAllowedFields.includes(field)) {
       setEntAllowedFields(entAllowedFields.filter((f) => f !== field));
@@ -2759,6 +2780,19 @@ function BeeIAPlugsTab({
       setEntAllowedFields([...entAllowedFields, field]);
     }
   };
+
+  const pingDiscordMut = useMutation({
+    mutationFn: async () => {
+      if (!discordWebhookUrl) throw new Error("A URL do Webhook é obrigatória para o ping.");
+      const { data, error } = await supabase.functions.invoke("integrations-discord-ping", {
+        body: { webhook_url: discordWebhookUrl }
+      });
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => showSuccess("Ping enviado com sucesso para o Discord!"),
+    onError: (err: any) => showError("Erro ao enviar ping: " + err.message)
+  });
 
   return (
     <div className="flex flex-col gap-6">
@@ -3083,6 +3117,91 @@ function BeeIAPlugsTab({
             </div>
           )}
         </Card>
+
+        {/* Plug 5: Discord Notifications */}
+        <Card className="rounded-[22px] border-slate-200/80 p-5 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900 transition-all hover:border-slate-350 dark:hover:border-slate-700">
+          <div className="flex items-center justify-between gap-4 border-b border-slate-100 pb-3 dark:border-slate-850">
+            <div className="flex items-center gap-3">
+              <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#5865F2]/10 text-[#5865F2] dark:bg-[#5865F2]/20">
+                <Webhook className="h-5 w-5" />
+              </span>
+              <div>
+                <h4 className="font-semibold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+                  Notificações Discord <span className="text-[10px] font-bold bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full dark:bg-amber-900/50 dark:text-amber-400">NOVO</span>
+                </h4>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                  Permite à IA disparar alertas automáticos no Discord sempre que uma regra definida for atingida na conversa.
+                </p>
+              </div>
+            </div>
+            <Switch
+              checked={isPlugEnabled("discord_notifications")}
+              disabled={isSaving}
+              onCheckedChange={(checked) => handleTogglePlug("discord_notifications", checked)}
+            />
+          </div>
+
+          {isPlugEnabled("discord_notifications") && (
+            <div className="mt-4 flex flex-col gap-4 animate-in fade-in slide-in-from-top-2 duration-200">
+              <div className="flex flex-col gap-1.5">
+                <Label className="text-[10px] font-bold uppercase text-slate-400 tracking-wider">
+                  Webhook URL (Discord)
+                </Label>
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="https://discord.com/api/webhooks/..."
+                    value={discordWebhookUrl}
+                    onChange={(e) => setDiscordWebhookUrl(e.target.value)}
+                    className="border-slate-200 bg-slate-50 focus-visible:ring-amber-500 dark:border-slate-800 dark:bg-slate-950/50"
+                  />
+                  <Button 
+                    variant="outline" 
+                    onClick={() => pingDiscordMut.mutate()} 
+                    disabled={pingDiscordMut.isPending || !discordWebhookUrl}
+                    className="shrink-0 gap-2 text-[#5865F2] border-[#5865F2]/30 hover:bg-[#5865F2]/10"
+                  >
+                    <Bell className="h-4 w-4" />
+                    Ping de Teste
+                  </Button>
+                </div>
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="flex flex-col gap-1.5">
+                  <Label className="text-[10px] font-bold uppercase text-slate-400 tracking-wider flex items-center gap-2">
+                    Regra de Disparo (Quando notificar?)
+                  </Label>
+                  <Textarea
+                    placeholder="Ex: Dispare uma notificação quando o cliente afirmar que quer agendar uma visita ou perguntar sobre os valores das parcelas."
+                    value={discordTriggerInstructions}
+                    onChange={(e) => setDiscordTriggerInstructions(e.target.value)}
+                    className="min-h-[100px] border-slate-200 bg-slate-50 focus-visible:ring-amber-500 dark:border-slate-800 dark:bg-slate-950/50"
+                  />
+                </div>
+
+                <div className="flex flex-col gap-1.5">
+                  <Label className="text-[10px] font-bold uppercase text-slate-400 tracking-wider flex items-center gap-2">
+                    Formato da Mensagem (Template)
+                  </Label>
+                  <Textarea
+                    placeholder="Ex: 🚨 Novo Lead Interessado! O cliente (telefone: {telefone}) solicitou os preços do imóvel."
+                    value={discordNotificationTemplate}
+                    onChange={(e) => setDiscordNotificationTemplate(e.target.value)}
+                    className="min-h-[100px] border-slate-200 bg-slate-50 focus-visible:ring-amber-500 dark:border-slate-800 dark:bg-slate-950/50 font-mono text-xs"
+                  />
+                </div>
+              </div>
+
+              <div className="flex justify-end pt-2">
+                <Button onClick={handleSaveDiscord} disabled={isSaving} className="gap-2 bg-slate-800 hover:bg-slate-700 text-white dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-slate-200 shadow-sm rounded-xl px-6">
+                  <Save className="h-4 w-4" />
+                  Salvar Configuração do Discord
+                </Button>
+              </div>
+            </div>
+          )}
+        </Card>
+
       </div>
     </div>
   );

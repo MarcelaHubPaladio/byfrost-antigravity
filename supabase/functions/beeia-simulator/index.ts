@@ -380,6 +380,18 @@ serve(async (req) => {
           sysPrompt += `- Regras de Financiamento: ${customInstructions}\n`;
         }
       }
+      // 5. Discord Notifications Plugue
+      const discordPlug = plugs.find(p => p.plug_key === "discord_notifications");
+      if (discordPlug) {
+        const trigger = discordPlug.config_json?.trigger_instructions || "";
+        const tmpl = discordPlug.config_json?.notification_template || "";
+        if (trigger && tmpl) {
+          sysPrompt += `\n[INTEGRAÇÃO - NOTIFICAÇÃO DISCORD]:\n`;
+          sysPrompt += `- REGRA DE DISPARO: ${trigger}\n`;
+          sysPrompt += `- AÇÃO EXIGIDA: Quando a regra acima for atingida, você OBRIGATORIAMENTE deve incluir no final da sua resposta a tag exata: [DISCORD_NOTIFY: texto da notificacao]\n`;
+          sysPrompt += `- FORMATO DO TEXTO (substitua as variaveis pelos dados reais da conversa): ${tmpl}\n`;
+        }
+      }
     }
 
     // 5. Prepare LLM Context
@@ -432,6 +444,27 @@ Siga estas regras rigorosamente.`
 
     let responseText = llmRes.text;
     
+    // Check for Discord Notifications
+    const discordMatch = responseText.match(/\[DISCORD_NOTIFY:\s*([^\]]+)\]/i);
+    if (discordMatch && discordMatch[1]) {
+      const discordText = discordMatch[1].trim();
+      responseText = responseText.replace(/\[DISCORD_NOTIFY:\s*[^\]]+\]/gi, "").trim();
+      
+      const dp = plugs?.find(p => p.plug_key === "discord_notifications");
+      const webhookUrl = dp?.config_json?.webhook_url;
+      if (webhookUrl) {
+        fetch(webhookUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            content: `[TESTE DO SIMULADOR] ${discordText}`,
+            username: "BeeIA Notificações",
+            avatar_url: "https://github.com/marcelahubpaladio.png"
+          })
+        }).catch(err => console.error("[BEEIA] Failed to send Discord notification in simulator", err));
+      }
+    }
+
     // Check for SAVE_LEARNING tag
     const saveMatch = responseText.match(/\[SAVE_LEARNING:\s*([^\]]+)\]/i);
     if (saveMatch && saveMatch[1]) {
