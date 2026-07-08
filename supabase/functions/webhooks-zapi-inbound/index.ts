@@ -688,7 +688,7 @@ serve(async (req) => {
       // zapi_instance_id. We'll pick the most recently updated ACTIVE row.
       const { data, error } = await supabase
         .from("wa_instances")
-        .select("id, tenant_id, name, webhook_secret, default_journey_id, phone_number, assigned_user_id, status, deleted_at, updated_at, beeia_enabled")
+        .select("id, tenant_id, name, webhook_secret, default_journey_id, phone_number, assigned_user_id, status, deleted_at, updated_at, beeia_enabled, beeia_test_numbers")
         .eq("zapi_instance_id", zapiInstanceId)
         .eq("status", "active")
         .is("deleted_at", null)
@@ -1130,6 +1130,54 @@ serve(async (req) => {
         return new Response(JSON.stringify({ ok: true, correlation_id: correlationId, duplicate: true }), {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
+      }
+    }
+
+    // -------------------- BeeIA Real Test Numbers --------------------
+    if (direction === "inbound" && instance.beeia_test_numbers && Array.isArray(instance.beeia_test_numbers) && instance.beeia_test_numbers.length > 0) {
+      const cleanFrom = normalized.from ? normalized.from.replace(/\D/g, "") : "";
+      if (cleanFrom && instance.beeia_test_numbers.includes(cleanFrom) && normalized.type === "text" && normalized.text) {
+        console.log(`[${fn}] beeia_real_test_intercepted for phone:`, cleanFrom);
+
+        // Deterministic Session ID for simulator (uuid v4 format fake)
+        const paddedFrom = cleanFrom.padStart(12, "0").slice(-12);
+        const simSessionId = `00000000-0000-4000-8000-${paddedFrom}`;
+
+        try {
+          const { data: simRes, error: simErr } = await supabase.functions.invoke("beeia-simulator", {
+            body: {
+              tenant_id: instance.tenant_id,
+              session_id: simSessionId,
+              message: normalized.text
+            }
+          });
+
+          if (simErr) throw simErr;
+          
+          if (simRes?.reply) {
+            await supabase.functions.invoke("integrations-zapi-send", {
+              body: {
+                tenantId: instance.tenant_id,
+                instanceId: instance.id,
+                to: normalized.from,
+                type: "text",
+                text: simRes.reply
+              }
+            });
+          }
+          
+          await logInbox({
+            instance,
+            ok: true,
+            http_status: 200,
+            reason: "beeia_real_test",
+            direction
+          });
+          
+          return new Response(JSON.stringify({ ok: true, test: true }), { headers: corsHeaders });
+        } catch (simErr: any) {
+          console.error(`[${fn}] BeeIA Test failed`, simErr);
+        }
       }
     }
 

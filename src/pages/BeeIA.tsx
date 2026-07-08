@@ -78,6 +78,7 @@ type WaInstanceRow = {
   phone_number: string | null;
   zapi_instance_id: string;
   beeia_enabled: boolean;
+  beeia_test_numbers?: string[] | null;
   allowed_user_ids: string[] | null;
   webhook_secret: string | null;
 };
@@ -130,6 +131,11 @@ function BeeIAPage() {
   const [permissionsInstance, setPermissionsInstance] = useState<WaInstanceRow | null>(null);
   const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
   const [savingPermissions, setSavingPermissions] = useState(false);
+
+  // Test numbers state
+  const [testNumbersInstance, setTestNumbersInstance] = useState<WaInstanceRow | null>(null);
+  const [testNumbersInput, setTestNumbersInput] = useState("");
+  const [savingTestNumbers, setSavingTestNumbers] = useState(false);
 
   // Prompt versioning state
   const [changeDescription, setChangeDescription] = useState("");
@@ -292,7 +298,7 @@ function BeeIAPage() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("wa_instances")
-        .select("id, name, status, phone_number, zapi_instance_id, beeia_enabled, allowed_user_ids, webhook_secret")
+        .select("id, name, status, phone_number, zapi_instance_id, beeia_enabled, beeia_test_numbers, allowed_user_ids, webhook_secret")
         .eq("tenant_id", activeTenantId!)
         .is("deleted_at", null)
         .order("created_at", { ascending: false });
@@ -339,6 +345,34 @@ function BeeIAPage() {
       showError(`Falha ao salvar permissões: ${e.message}`);
     } finally {
       setSavingPermissions(false);
+    }
+  };
+
+  const handleSaveTestNumbers = async () => {
+    if (!testNumbersInstance) return;
+    setSavingTestNumbers(true);
+    try {
+      const numbers = testNumbersInput
+        .split(",")
+        .map(n => n.trim().replace(/\D/g, ""))
+        .filter(n => n.length >= 10);
+
+      const { error } = await supabase
+        .from("wa_instances")
+        .update({
+          beeia_test_numbers: numbers,
+          updated_at: new Date().toISOString()
+        })
+        .eq("id", testNumbersInstance.id);
+
+      if (error) throw error;
+      showSuccess("Números de teste atualizados com sucesso!");
+      setTestNumbersInstance(null);
+      await instancesQ.refetch();
+    } catch (e: any) {
+      showError(`Falha ao salvar números de teste: ${e.message}`);
+    } finally {
+      setSavingTestNumbers(false);
     }
   };
 
@@ -1995,10 +2029,30 @@ function BeeIAPage() {
                               <span className="text-[9px] font-bold uppercase text-slate-400 tracking-wider">
                                 BeeIA
                               </span>
-                              <Switch
-                                checked={inst.beeia_enabled}
-                                onCheckedChange={(val) => toggleBeeiaOnInstance(inst.id, val)}
-                              />
+                              <div className="flex items-center gap-2">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-7 px-2 text-[10px] font-semibold text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-800"
+                                  onClick={() => {
+                                    setTestNumbersInstance(inst);
+                                    setTestNumbersInput((inst.beeia_test_numbers || []).join(", "));
+                                  }}
+                                  title="Configurar números de teste real"
+                                >
+                                  {inst.beeia_test_numbers && inst.beeia_test_numbers.length > 0 ? (
+                                    <span className="text-indigo-500 font-bold flex items-center gap-1">
+                                      Testes ({inst.beeia_test_numbers.length})
+                                    </span>
+                                  ) : (
+                                    "Sem testes"
+                                  )}
+                                </Button>
+                                <Switch
+                                  checked={inst.beeia_enabled}
+                                  onCheckedChange={(val) => toggleBeeiaOnInstance(inst.id, val)}
+                                />
+                              </div>
                             </div>
                           </div>
                         </div>
@@ -2366,6 +2420,67 @@ function BeeIAPage() {
                     {savingPermissions ? "Salvando…" : "Salvar Permissões"}
                   </Button>
                 </div>
+              </div>
+            </Card>
+          </div>
+        )}
+
+        {/* Modal: Test Numbers */}
+        {testNumbersInstance && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4">
+            <Card className="w-full max-w-[450px] rounded-[22px] border-slate-200/80 p-5 shadow-lg animate-in fade-in zoom-in-95 duration-150 dark:border-slate-800 bg-white dark:bg-slate-900">
+              <div className="mb-4 flex items-center justify-between border-b border-slate-100 pb-3 dark:border-slate-850">
+                <div>
+                  <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                    <Smartphone className="h-4 w-4 text-indigo-500" />
+                    Números de Teste Real
+                  </h3>
+                  <p className="text-[11px] text-slate-500 mt-1">
+                    Esses números acionarão o simulador da BeeIA mesmo que ela esteja globalmente desativada. As conversas cairão direto na aba Simulador.
+                  </p>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 w-8 rounded-full p-0 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                  onClick={() => setTestNumbersInstance(null)}
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+
+              <div className="flex flex-col gap-3 py-2">
+                <Label className="text-xs font-semibold text-slate-600 dark:text-slate-300">Telefones permitidos (separados por vírgula):</Label>
+                <Textarea
+                  value={testNumbersInput}
+                  onChange={e => setTestNumbersInput(e.target.value)}
+                  placeholder="Ex: 5547999999999, 5511888888888"
+                  className="min-h-[80px] text-xs resize-none"
+                />
+              </div>
+
+              <div className="mt-4 flex justify-end gap-2 border-t border-slate-100 pt-3 dark:border-slate-850">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setTestNumbersInstance(null)}
+                  className="rounded-xl text-xs"
+                >
+                  Cancelar
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={handleSaveTestNumbers}
+                  disabled={savingTestNumbers}
+                  className="rounded-xl bg-indigo-600 text-white font-semibold text-xs px-4 hover:bg-indigo-700"
+                >
+                  {savingTestNumbers ? (
+                    <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white/40 border-t-white mr-1.5" />
+                  ) : (
+                    <Save className="mr-1.5 h-3.5 w-3.5" />
+                  )}
+                  Salvar
+                </Button>
               </div>
             </Card>
           </div>
