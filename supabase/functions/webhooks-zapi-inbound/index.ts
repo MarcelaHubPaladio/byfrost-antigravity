@@ -1136,7 +1136,19 @@ serve(async (req) => {
     // -------------------- BeeIA Real Test Numbers --------------------
     if (direction === "inbound" && instance.beeia_test_numbers && Array.isArray(instance.beeia_test_numbers) && instance.beeia_test_numbers.length > 0) {
       const cleanFrom = normalized.from ? normalized.from.replace(/\D/g, "") : "";
-      if (cleanFrom && instance.beeia_test_numbers.includes(cleanFrom) && normalized.type === "text" && normalized.text) {
+      
+      const isTestMatch = instance.beeia_test_numbers.some((tn: string) => {
+        const cleanTn = tn.replace(/\D/g, "");
+        if (!cleanTn || !cleanFrom) return false;
+        if (cleanTn === cleanFrom) return true;
+        // Brazil 9 digit issue or tail matching (last 8 digits is usually safe)
+        if (cleanTn.length >= 8 && cleanFrom.length >= 8) {
+          return cleanTn.slice(-8) === cleanFrom.slice(-8);
+        }
+        return false;
+      });
+
+      if (isTestMatch && normalized.type === "text" && normalized.text) {
         console.log(`[${fn}] beeia_real_test_intercepted for phone:`, cleanFrom);
 
         // Deterministic Session ID for simulator (uuid v4 format fake)
@@ -1154,14 +1166,14 @@ serve(async (req) => {
 
           if (simErr) throw simErr;
           
-          if (simRes?.reply) {
+          if (simRes?.response) {
             await supabase.functions.invoke("integrations-zapi-send", {
               body: {
                 tenantId: instance.tenant_id,
                 instanceId: instance.id,
                 to: normalized.from,
                 type: "text",
-                text: simRes.reply
+                text: simRes.response
               }
             });
           }
