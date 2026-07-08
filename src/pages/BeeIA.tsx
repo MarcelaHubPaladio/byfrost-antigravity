@@ -48,6 +48,7 @@ import {
   Bell
 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { WhatsAppConversation } from "@/components/case/WhatsAppConversation";
 import { BeeIASimulator } from "@/components/case/BeeIASimulator";
@@ -792,6 +793,32 @@ function BeeIAPage() {
     }
   };
 
+  const handleMassMoveState = async (caseIds: string[], nextState: string) => {
+    try {
+      if (!caseIds.length) return;
+      const updatePayload: any = { updated_at: new Date().toISOString() };
+      
+      if (nextState === "pausadas") {
+        updatePayload.beeia_paused = true;
+      } else {
+        updatePayload.beeia_paused = false;
+        updatePayload.state = nextState;
+      }
+
+      const { error } = await supabase
+        .from("cases")
+        .update(updatePayload)
+        .in("id", caseIds);
+
+      if (error) throw error;
+      setSelectedCaseIds([]);
+      showSuccess(`${caseIds.length} leads movidos com sucesso!`);
+      await qc.invalidateQueries({ queryKey: ["beeia_cases", activeTenantId] });
+    } catch (e: any) {
+      showError(`Falha ao mover estágios em massa: ${e.message}`);
+    }
+  };
+
   // Kanban Columns
   const columns = [
     { key: "contato", label: "1º Contato", color: "border-t-amber-400 bg-amber-500/5" },
@@ -1525,6 +1552,36 @@ function BeeIAPage() {
                             <div className="flex items-center gap-1.5">
                               {colCases.some(c => selectedCaseIds.includes(c.id)) && (
                                 <div className="flex items-center gap-1 mr-1 animate-in fade-in zoom-in duration-200">
+                                  <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-6 w-6 text-slate-500 hover:text-amber-600 dark:hover:text-amber-400"
+                                        title="Mover selecionados para outra etapa"
+                                      >
+                                        <ArrowRight className="h-3.5 w-3.5" />
+                                      </Button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent align="end" className="w-48">
+                                      <div className="px-2 py-1.5 text-[10px] font-semibold text-slate-500 uppercase tracking-wider">
+                                        Mover para...
+                                      </div>
+                                      {columns.filter(c => c.key !== col.key).map(targetCol => (
+                                        <DropdownMenuItem
+                                          key={targetCol.key}
+                                          onClick={() => handleMassMoveState(
+                                            colCases.filter(c => selectedCaseIds.includes(c.id)).map(c => c.id),
+                                            targetCol.key
+                                          )}
+                                          className="text-xs cursor-pointer flex items-center gap-2"
+                                        >
+                                          <div className={`h-2 w-2 rounded-full ${targetCol.color.split(' ')[1]}`} />
+                                          {targetCol.label}
+                                        </DropdownMenuItem>
+                                      ))}
+                                    </DropdownMenuContent>
+                                  </DropdownMenu>
                                   <Button
                                     variant="ghost"
                                     size="icon"

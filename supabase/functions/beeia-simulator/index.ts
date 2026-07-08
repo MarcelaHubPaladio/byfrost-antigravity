@@ -13,7 +13,8 @@ serve(async (req) => {
   try {
     const supabaseAdmin = createSupabaseAdmin();
     const body = await req.json();
-    const { tenant_id, session_id, case_id, message, action, hours_limit } = body;
+    const { tenant_id, session_id, message, action, case_id, hours_limit, customer_phone, customer_name } = body;
+    const isTrainer = action === "trainer_message";
 
     if (!tenant_id || (!session_id && !case_id) || (!message && action !== "evaluate_session")) {
       throw new Error("Missing required fields");
@@ -28,6 +29,10 @@ serve(async (req) => {
 
     if (cfgErr) throw cfgErr;
     let sysPrompt = config?.system_prompt || "Você é a BeeIA, assistente virtual.";
+
+    if (customer_phone) {
+      sysPrompt += `\n[DADOS DO LEAD ATUAL]\n- Telefone: ${customer_phone}\n- Nome: ${customer_name || "Não informado"}\n`;
+    }
 
     // 2a. Fetch Learnings
     const { data: learnings, error: lrnErr } = await supabaseAdmin
@@ -457,7 +462,7 @@ Siga estas regras rigorosamente.`
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            content: `[TESTE DO SIMULADOR] ${discordText}`,
+            content: `[TESTE DO SIMULADOR] ${discordText.replace(/\\n/g, '\n')}`,
             username: "BeeIA Notificações",
             avatar_url: "https://github.com/marcelahubpaladio.png"
           })

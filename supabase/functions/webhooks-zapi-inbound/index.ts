@@ -1160,7 +1160,9 @@ serve(async (req) => {
             body: {
               tenant_id: instance.tenant_id,
               session_id: simSessionId,
-              message: normalized.text
+              message: normalized.text,
+              customer_phone: normalized.from,
+              customer_name: normalized.senderName
             }
           });
 

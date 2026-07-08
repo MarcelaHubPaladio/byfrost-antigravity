@@ -2306,6 +2306,19 @@ serve(async (req: any) => {
             throw new Error(`Inbound message ${messageId} does not have a from_phone`);
           }
 
+          let customerName = "Não informado";
+          const { data: contact } = await supabase
+            .from("wa_contacts")
+            .select("name")
+            .eq("tenant_id", tenantId)
+            .eq("phone_number", customerPhone)
+            .maybeSingle();
+          if (contact && contact.name) {
+            customerName = contact.name;
+          }
+
+          sysPrompt += `\n[DADOS DO LEAD ATUAL]\n- Telefone: ${customerPhone}\n- Nome: ${customerName}\n`;
+
           // 4b. Deduplication guard: if BeeIA already processed a job or sent an outbound
           // message for this case AFTER the triggering message, skip. This prevents
           // duplicate AI responses when multiple inbound messages arrive in rapid succession.
@@ -2429,7 +2442,7 @@ serve(async (req: any) => {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
-                  content: discordText,
+                  content: discordText.replace(/\\n/g, '\n'),
                   username: "BeeIA Notificações",
                   avatar_url: "https://github.com/marcelahubpaladio.png"
                 })
