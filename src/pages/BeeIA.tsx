@@ -2169,7 +2169,7 @@ function BeeIAPage() {
                   <div>
                     <h3 className="text-[11px] font-bold uppercase text-slate-400 tracking-wider">Valor Fatura (BRL)</h3>
                     <p className="text-2xl font-black text-slate-800 dark:text-slate-100">
-                      R$ {((billingQ.data?.grandTotalCostUsd ?? 0) * 5.0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      R$ {((billingQ.data?.grandTotalCostUsd ?? 0) * 5.0 * 3.0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </p>
                   </div>
                 </Card>
@@ -2249,7 +2249,7 @@ function BeeIAPage() {
                                 </td>
                               )}
                               <td className="py-3 px-3 text-right font-semibold text-emerald-600 dark:text-emerald-400">
-                                R$ {(detail.totalCostUsd * 5.0).toLocaleString("pt-BR", { minimumFractionDigits: 4, maximumFractionDigits: 4 })}
+                                R$ {(detail.totalCostUsd * 5.0 * 3.0).toLocaleString("pt-BR", { minimumFractionDigits: 4, maximumFractionDigits: 4 })}
                               </td>
                               <td className="py-3 px-3 text-slate-500">
                                 {formattedDate}
