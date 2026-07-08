@@ -12,6 +12,7 @@ export const CANDIDATE_ROUTES: CandidateRoute[] = [
   { key: "app.dashboard", path: "/app/trello", label: "Tarefas" },
   { key: "app.chat", path: "/app/chat", label: "Chat" },
   { key: "app.crm", path: "/app/crm", label: "CRM" },
+  { key: "app.bi", path: "/app/bi", label: "BI" },
   { key: "app.content", path: "/app/content", label: "Conteúdo" },
   { key: "app.presence", path: "/app/presence", label: "Ponto" },
   { key: "app.simulator", path: "/app/simulator", label: "Simulador" },

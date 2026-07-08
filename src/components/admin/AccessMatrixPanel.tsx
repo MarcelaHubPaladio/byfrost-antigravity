@@ -58,14 +58,9 @@ const DEFAULT_ROUTES: RouteRow[] = [
     description: "Visão de quadros/trello para tarefas",
   },
   { key: "app.chat", name: "Chat", category: "App", path_pattern: "/app/chat", description: "Chat do painel" },
-  {
-    key: "app.case_detail",
-    name: "Detalhe do case",
-    category: "App",
-    path_pattern: "/app/cases/:id",
-    description: "Detalhe do case (WhatsApp + timeline)",
-  },
+  { key: "app.case_detail", name: "Detalhe do case", category: "App", path_pattern: "/app/cases/:id", description: "Detalhe do case (WhatsApp + timeline)" },
   { key: "app.crm", name: "CRM", category: "App", path_pattern: "/app/crm", description: "Lista/visão CRM" },
+  { key: "app.bi", name: "Business Intelligence", category: "App", path_pattern: "/app/bi", description: "Módulo de painéis analíticos (BI)" },
   {
     key: "crm.case_detail",
     name: "CRM • Detalhe do case",
