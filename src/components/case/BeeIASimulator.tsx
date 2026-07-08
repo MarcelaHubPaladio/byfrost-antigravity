@@ -9,7 +9,7 @@ import { Card } from "@/components/ui/card";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Textarea } from "@/components/ui/textarea";
 import { showError, showSuccess } from "@/utils/toast";
-import { Bot, User, Send, Plus, MessageSquare, ThumbsDown, Activity, CheckCircle2, Sparkles, GraduationCap } from "lucide-react";
+import { Bot, User, Send, Plus, MessageSquare, ThumbsDown, Activity, CheckCircle2, Sparkles, GraduationCap, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type SimMessage = {
@@ -202,6 +202,24 @@ export function BeeIASimulator({ sessionId, onSelectSession }: { sessionId?: str
     onError: (err: any) => showError("Erro ao gerar auto-avaliação: " + err.message)
   });
 
+  const deleteSessionMut = useMutation({
+    mutationFn: async () => {
+      const { error } = await supabase
+        .from("beeia_simulations")
+        .delete()
+        .eq("tenant_id", activeTenantId!)
+        .eq("session_id", activeSessionId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      showSuccess("Sessão limpa com sucesso!");
+      qc.invalidateQueries({ queryKey: ["beeia_sim_messages", activeTenantId, activeSessionId] });
+      qc.invalidateQueries({ queryKey: ["beeia_sim_sessions", activeTenantId] });
+      setSessionTokensUsed(0);
+    },
+    onError: (err: any) => showError("Erro ao limpar sessão: " + err.message)
+  });
+
   const handleSend = () => {
     if (!inputValue.trim() || sendMut.isPending) return;
     sendMut.mutate({ 
@@ -279,6 +297,21 @@ export function BeeIASimulator({ sessionId, onSelectSession }: { sessionId?: str
           </div>
           
           <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 text-xs gap-1.5 border-rose-200 hover:bg-rose-50 text-rose-700 dark:border-rose-900 dark:hover:bg-rose-900/30 dark:text-rose-400"
+              onClick={() => {
+                if (window.confirm("Tem certeza que deseja limpar o histórico desta conversa? O próximo teste neste número começará do zero.")) {
+                  deleteSessionMut.mutate();
+                }
+              }}
+              disabled={deleteSessionMut.isPending || msgs.length === 0}
+            >
+              <Trash2 className="h-3 w-3" />
+              Limpar
+            </Button>
+            
             <Button 
               variant="outline" 
               size="sm" 
