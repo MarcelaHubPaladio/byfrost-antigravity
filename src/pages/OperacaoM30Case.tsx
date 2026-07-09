@@ -1500,15 +1500,15 @@ export default function OperacaoM30Case() {
         `;
 
         subtasks.forEach((st: any, idx: number) => {
-            html += \`<div class="script">
-                <h2>\${idx + 1}. \${st.title}</h2>\`;
+            html += `<div class="script">
+                <h2>${idx + 1}. ${st.title}</h2>`;
             if (st.description) {
-                html += \`<div class="description">\${st.description}</div>\`;
+                html += `<div class="description">${st.description}</div>`;
             }
             if (st.script_raw) {
-                html += \`<div class="content">\${st.script_raw}</div>\`;
+                html += `<div class="content">${st.script_raw}</div>`;
             }
-            html += \`</div>\`;
+            html += `</div>`;
         });
 
         html += `
