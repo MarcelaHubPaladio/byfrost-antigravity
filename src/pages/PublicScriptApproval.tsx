@@ -4,7 +4,7 @@ import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { CheckCircle2, FileText, ListChecks, Loader2, AlertCircle, Mic, Square, Trash, Image as ImageIcon, Camera } from "lucide-react";
+import { CheckCircle2, FileText, ListChecks, Loader2, AlertCircle, Mic, Square, Trash, Image as ImageIcon, Camera, Save } from "lucide-react";
 import { useRef } from "react";
 import { showSuccess, showError } from "@/utils/toast";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
@@ -21,6 +21,7 @@ export default function PublicScriptApproval() {
     const [alreadyApproved, setAlreadyApproved] = useState(false);
     const [subtaskData, setSubtaskData] = useState<Record<number, any>>({});
     const [recordingIdx, setRecordingIdx] = useState<number | null>(null);
+    const [savingItem, setSavingItem] = useState<{subIdx: number, itemIdx: number} | null>(null);
     const mediaRecorderRef = useRef<MediaRecorder | null>(null);
     const audioChunksRef = useRef<Blob[]>([]);
 
@@ -170,6 +171,28 @@ export default function PublicScriptApproval() {
         );
         
         setSubtaskData(newData);
+    };
+
+    const handleSaveComment = async (subIdx: number, itemIdx: number) => {
+        setSavingItem({ subIdx, itemIdx });
+        
+        const newData = { ...subtaskData };
+        if (!newData[subIdx]) newData[subIdx] = { ...subtasks[subIdx] };
+        if (!newData[subIdx].script_items) newData[subIdx].script_items = [];
+        
+        const now = new Date().toISOString();
+        newData[subIdx].script_items = newData[subIdx].script_items.map((it: any, i: number) => 
+            i === itemIdx ? { ...it, comment_saved_at: now } : it
+        );
+        
+        setSubtaskData(newData);
+
+        if (token) {
+            const payload = { ...subtasks[subIdx], ...newData[subIdx] };
+            await supabase.rpc('update_public_m30_subtask_meta', { p_token: token, p_idx: subIdx, p_subtask: payload });
+        }
+        
+        setSavingItem(null);
     };
 
     const saveSubtaskData = async (subIdx: number) => {
@@ -395,7 +418,7 @@ export default function PublicScriptApproval() {
                                                             </div>
                                                             
                                                             {!isGravacaoCase && !st.is_approved && (
-                                                                <div className="pl-8 pt-1">
+                                                                <div className="pl-8 pt-1 flex flex-col gap-2">
                                                                     <textarea
                                                                         className="w-full bg-slate-900 border border-slate-800/80 p-3 rounded-xl text-sm text-slate-300 placeholder:text-slate-600 resize-none outline-none min-h-[60px] focus:border-primary/50 transition-colors"
                                                                         placeholder="O que você gostaria de mudar neste trecho? (Opcional)"
@@ -403,6 +426,20 @@ export default function PublicScriptApproval() {
                                                                         onChange={(e) => handleItemCommentChange(idx, i, e.target.value)}
                                                                         onBlur={() => saveSubtaskData(idx)}
                                                                     />
+                                                                    <div className="flex items-center justify-between">
+                                                                        <div className="text-[11px] text-slate-500 font-medium italic">
+                                                                            {item.comment_saved_at ? `Salvo às ${new Date(item.comment_saved_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}` : ''}
+                                                                        </div>
+                                                                        <Button 
+                                                                            size="sm" 
+                                                                            className="h-7 text-[10px] px-3 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors"
+                                                                            onClick={() => handleSaveComment(idx, i)}
+                                                                            disabled={savingItem?.subIdx === idx && savingItem?.itemIdx === i}
+                                                                        >
+                                                                            {savingItem?.subIdx === idx && savingItem?.itemIdx === i ? <Loader2 className="h-3 w-3 animate-spin mr-1.5" /> : <Save className="h-3 w-3 mr-1.5" />}
+                                                                            Salvar observação
+                                                                        </Button>
+                                                                    </div>
                                                                 </div>
                                                             )}
                                                             {!isGravacaoCase && st.is_approved && item.comment && (
