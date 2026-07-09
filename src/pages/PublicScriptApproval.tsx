@@ -160,6 +160,26 @@ export default function PublicScriptApproval() {
         setSubtaskData(newData);
     };
 
+    const handleItemCommentChange = (subIdx: number, itemIdx: number, text: string) => {
+        const newData = { ...subtaskData };
+        if (!newData[subIdx]) newData[subIdx] = { ...subtasks[subIdx] };
+        if (!newData[subIdx].script_items) newData[subIdx].script_items = [];
+        
+        newData[subIdx].script_items = newData[subIdx].script_items.map((it: any, i: number) => 
+            i === itemIdx ? { ...it, comment: text } : it
+        );
+        
+        setSubtaskData(newData);
+    };
+
+    const saveSubtaskData = async (subIdx: number) => {
+        if (!token) return;
+        if (subtaskData[subIdx]) {
+            const payload = { ...subtasks[subIdx], ...subtaskData[subIdx] };
+            await supabase.rpc('update_public_m30_subtask_meta', { p_token: token, p_idx: subIdx, p_subtask: payload });
+        }
+    };
+
     const handleObsChange = (subIdx: number, text: string) => {
         const newData = { ...subtaskData };
         if (!newData[subIdx]) newData[subIdx] = { ...subtasks[subIdx] };
@@ -358,17 +378,40 @@ export default function PublicScriptApproval() {
                                                         return (
                                                         <div 
                                                             key={i} 
-                                                            onClick={() => isGravacaoCase && !st.is_approved ? handleCheckItem(idx, i) : null}
-                                                            className={`flex gap-3 p-4 bg-slate-950 border border-slate-800 rounded-2xl social-item shadow-sm ${isGravacaoCase && !st.is_approved ? 'cursor-pointer hover:border-slate-600 transition-colors' : ''} ${isChecked ? 'opacity-60' : ''}`}
+                                                            className={`flex flex-col gap-2 p-4 bg-slate-950 border border-slate-800 rounded-2xl social-item shadow-sm ${isChecked ? 'opacity-60' : ''}`}
                                                         >
-                                                            {isGravacaoCase ? (
-                                                                <div className={`h-5 w-5 rounded border-2 mt-0.5 shrink-0 flex items-center justify-center transition-colors ${isChecked ? 'bg-primary border-primary text-white' : 'border-slate-700'}`}>
-                                                                    {isChecked && <CheckCircle2 className="h-3 w-3" />}
+                                                            <div 
+                                                                onClick={() => isGravacaoCase && !st.is_approved ? handleCheckItem(idx, i) : null}
+                                                                className={`flex gap-3 ${isGravacaoCase && !st.is_approved ? 'cursor-pointer hover:opacity-80 transition-opacity' : ''}`}
+                                                            >
+                                                                {isGravacaoCase ? (
+                                                                    <div className={`h-5 w-5 rounded border-2 mt-0.5 shrink-0 flex items-center justify-center transition-colors ${isChecked ? 'bg-primary border-primary text-white' : 'border-slate-700'}`}>
+                                                                        {isChecked && <CheckCircle2 className="h-3 w-3" />}
+                                                                    </div>
+                                                                ) : (
+                                                                    <div className="h-5 w-5 rounded-full border-2 border-slate-700 mt-0.5 shrink-0" />
+                                                                )}
+                                                                <span className={`text-sm font-medium text-slate-300 leading-relaxed flex-1 ${isChecked ? 'line-through text-slate-500' : ''}`}>{item.text}</span>
+                                                            </div>
+                                                            
+                                                            {!isGravacaoCase && !st.is_approved && (
+                                                                <div className="pl-8 pt-1">
+                                                                    <textarea
+                                                                        className="w-full bg-slate-900 border border-slate-800/80 p-3 rounded-xl text-sm text-slate-300 placeholder:text-slate-600 resize-none outline-none min-h-[60px] focus:border-primary/50 transition-colors"
+                                                                        placeholder="O que você gostaria de mudar neste trecho? (Opcional)"
+                                                                        value={item.comment || ''}
+                                                                        onChange={(e) => handleItemCommentChange(idx, i, e.target.value)}
+                                                                        onBlur={() => saveSubtaskData(idx)}
+                                                                    />
                                                                 </div>
-                                                            ) : (
-                                                                <div className="h-5 w-5 rounded-full border-2 border-slate-700 mt-0.5 shrink-0" />
                                                             )}
-                                                            <span className={`text-sm font-medium text-slate-300 leading-relaxed ${isChecked ? 'line-through text-slate-500' : ''}`}>{item.text}</span>
+                                                            {!isGravacaoCase && st.is_approved && item.comment && (
+                                                                <div className="pl-8 pt-1">
+                                                                    <div className="p-3 bg-slate-900/50 border border-slate-800/80 rounded-xl text-sm text-slate-400 italic">
+                                                                        {item.comment}
+                                                                    </div>
+                                                                </div>
+                                                            )}
                                                         </div>
                                                     )})}
                                                 </div>
