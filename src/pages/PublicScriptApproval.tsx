@@ -39,7 +39,7 @@ export default function PublicScriptApproval() {
             } else {
                 const c = data[0];
                 setCaseData(c);
-                if (c.state !== "aprovar_roteiro" && c.journey_name?.includes("M30")) {
+                if (c.state !== "aprovar_roteiro" && c.state !== "planejamento" && c.journey_name?.includes("M30")) {
                     setAlreadyApproved(true);
                 }
 
