@@ -67,6 +67,7 @@ import {
     Loader2,
     PackageCheck,
     Pencil,
+    Printer,
     Plus,
     PlusCircle,
     RefreshCw,
@@ -1464,6 +1465,69 @@ export default function OperacaoM30Case() {
         );
     }
 
+    const handleDownloadScriptsAsPDF = () => {
+        const subtasks = (caseQ.data?.meta_json as any)?.pending_subtasks || [];
+        if (subtasks.length === 0) {
+            showError("Nenhum roteiro encontrado.");
+            return;
+        }
+
+        const win = window.open('', '_blank');
+        if (!win) {
+            showError("Bloqueador de pop-up impediu a abertura do PDF.");
+            return;
+        }
+
+        let html = `
+            <html>
+            <head>
+                <title>${caseQ.data?.title || "Roteiros"}</title>
+                <style>
+                    body { font-family: sans-serif; padding: 20px; line-height: 1.6; color: #333; }
+                    h1 { text-align: center; color: #111; margin-bottom: 32px; }
+                    .script { border: 1px solid #ddd; border-radius: 8px; padding: 16px; margin-bottom: 24px; page-break-inside: avoid; }
+                    .script h2 { margin-top: 0; color: #4f46e5; font-size: 18px; }
+                    .content { white-space: pre-wrap; font-size: 14px; margin-top: 12px; }
+                    .description { font-style: italic; color: #666; margin-bottom: 12px; font-size: 13px; }
+                    @media print { 
+                        body { padding: 0; }
+                        .script { border: none; border-bottom: 1px solid #ccc; border-radius: 0; padding: 0; padding-bottom: 16px; }
+                    }
+                </style>
+            </head>
+            <body>
+                <h1>${caseQ.data?.title || "Roteiros"}</h1>
+        `;
+
+        subtasks.forEach((st: any, idx: number) => {
+            html += \`<div class="script">
+                <h2>\${idx + 1}. \${st.title}</h2>\`;
+            if (st.description) {
+                html += \`<div class="description">\${st.description}</div>\`;
+            }
+            if (st.script_raw) {
+                html += \`<div class="content">\${st.script_raw}</div>\`;
+            }
+            html += \`</div>\`;
+        });
+
+        html += `
+            </body>
+            <script>
+                window.onload = () => {
+                    setTimeout(() => {
+                        window.print();
+                        setTimeout(() => window.close(), 500);
+                    }, 500);
+                };
+            </script>
+            </html>
+        `;
+
+        win.document.write(html);
+        win.document.close();
+    };
+
     const c = caseQ.data;
 
     return (
@@ -1749,16 +1813,27 @@ export default function OperacaoM30Case() {
                                                 Subtarefas de Produção
                                             </h3>
 
-                                            {caseQ.data?.state === "gravao" && (
+                                            <div className="flex items-center gap-2">
                                                 <Button 
                                                     size="sm" 
-                                                    className="h-8 rounded-xl bg-orange-600 hover:bg-orange-700 text-[10px] font-bold shadow-lg shadow-orange-100"
-                                                    onClick={handleCreateProductionTasks}
-                                                    disabled={creatingTasks}
+                                                    variant="outline"
+                                                    className="h-8 rounded-xl text-[10px] font-bold shadow-sm"
+                                                    onClick={handleDownloadScriptsAsPDF}
                                                 >
-                                                    🚀 Criar Tarefas em Decupagem + Upload
+                                                    <Printer className="h-3 w-3 mr-2" />
+                                                    Exportar PDF
                                                 </Button>
-                                            )}
+                                                {caseQ.data?.state === "gravao" && (
+                                                    <Button 
+                                                        size="sm" 
+                                                        className="h-8 rounded-xl bg-orange-600 hover:bg-orange-700 text-[10px] font-bold shadow-lg shadow-orange-100"
+                                                        onClick={handleCreateProductionTasks}
+                                                        disabled={creatingTasks}
+                                                    >
+                                                        🚀 Criar Tarefas em Decupagem + Upload
+                                                    </Button>
+                                                )}
+                                            </div>
                                         </div>
                                         <div className="space-y-4">
                                             <Accordion type="multiple" className="space-y-2">
