@@ -125,6 +125,8 @@ export default function Inventory() {
                     property_type,
                     total_area,
                     useful_area,
+                    internal_code,
+                    legacy_id,
                     core_entity_tags(tag)
                 `)
                 .eq("tenant_id", activeTenantId!)
@@ -134,7 +136,7 @@ export default function Inventory() {
 
             if (q.trim().length >= 2) {
                 const term = `%${q.trim()}%`;
-                base = base.or(`display_name.ilike.${term},metadata->>internal_code.ilike.${term}`);
+                base = base.or(`display_name.ilike.${term},internal_code.ilike.${term},legacy_id.ilike.${term},metadata->>internal_code.ilike.${term},metadata->>legacy_id.ilike.${term}`);
             }
 
             const { data, error } = await base;
@@ -266,9 +268,10 @@ export default function Inventory() {
         }
 
         try {
-            const headers = ["Codigo", "Nome", "Estoque", "Link da Foto"];
+            const headers = ["Codigo", "ID Legado", "Nome", "Estoque", "Link da Foto"];
             const rows = items.map(item => [
-                item.metadata?.internal_code || "",
+                item.internal_code || item.metadata?.internal_code || "",
+                item.legacy_id || item.metadata?.legacy_id || "",
                 item.display_name.replace(/,/g, " "),
                 item.metadata?.stock_quantity !== undefined ? item.metadata.stock_quantity : "—",
                 item.metadata?.photo_url || ""
@@ -884,7 +887,10 @@ export default function Inventory() {
                                                         </div>
                                                     </td>
                                                     <td className="px-6 py-3 font-mono text-xs text-slate-400">
-                                                        {item.metadata?.internal_code || "—"}
+                                                        <div className="flex flex-col">
+                                                            {item.internal_code || item.metadata?.internal_code ? <span>{item.internal_code || item.metadata?.internal_code}</span> : <span>—</span>}
+                                                            {(item.legacy_id || item.metadata?.legacy_id) && <span className="text-[10px] text-slate-300">Legado: {item.legacy_id || item.metadata?.legacy_id}</span>}
+                                                        </div>
                                                     </td>
                                                     <td className="px-6 py-3">
                                                         <div className="flex flex-wrap gap-1 max-w-[200px]">
