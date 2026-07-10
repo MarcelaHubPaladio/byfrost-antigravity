@@ -224,8 +224,10 @@ serve(async (req) => {
           sysPrompt += `- Título/Nome: ${propEntity.display_name}\n`;
           
           const meta = propEntity.metadata || {};
-          if (allowedFields.includes("price") && (meta.price || propEntity.business_type)) {
-            sysPrompt += `- Preço: R$ ${meta.price || "Sob consulta"} (${propEntity.business_type === "rent" ? "Locação" : "Venda"})\n`;
+          if (allowedFields.includes("price")) {
+            const pVal = propEntity.business_type === "rent" ? (meta.price_rent || meta.price_sale || meta.price) : (meta.price_sale || meta.price);
+            const pStr = meta.price_consult || !pVal ? "Sob consulta" : Number(pVal).toLocaleString("pt-BR", { minimumFractionDigits: 2 });
+            sysPrompt += `- Preço: R$ ${pStr} (${propEntity.business_type === "rent" ? "Locação" : "Venda"})\n`;
           }
           if (allowedFields.includes("description") && meta.description) {
             sysPrompt += `- Descrição Comercial: ${meta.description}\n`;
@@ -275,7 +277,9 @@ serve(async (req) => {
           sysPrompt += `\n[OUTROS IMÓVEIS DISPONÍVEIS NO PORTFÓLIO]:\n`;
           otherProps.forEach(op => {
             const opMeta = op.metadata || {};
-            sysPrompt += `- Cód: ${op.internal_code || "N/A"} | ${op.display_name} | Preço: R$ ${opMeta.price || "Sob consulta"} | Negócio: ${op.business_type === "rent" ? "Locação" : "Venda"}\n`;
+            const opVal = op.business_type === "rent" ? (opMeta.price_rent || opMeta.price_sale || opMeta.price) : (opMeta.price_sale || opMeta.price);
+            const opStr = opMeta.price_consult || !opVal ? "Sob consulta" : Number(opVal).toLocaleString("pt-BR", { minimumFractionDigits: 2 });
+            sysPrompt += `- Cód: ${op.internal_code || "N/A"} | ${op.display_name} | Preço: R$ ${opStr} | Negócio: ${op.business_type === "rent" ? "Locação" : "Venda"}\n`;
           });
         }
 
