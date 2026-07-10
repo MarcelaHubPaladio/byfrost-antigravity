@@ -1467,12 +1467,27 @@ export default function OperacaoM30Case() {
         );
     }
 
-    if (caseQ.isLoading) {
+    if (caseQ.isPending || !activeTenantId) {
         return (
             <RequireAuth>
                 <AppShell>
                     <div className="flex h-64 items-center justify-center">
                         <RefreshCw className="h-6 w-6 animate-spin text-slate-400" />
+                    </div>
+                </AppShell>
+            </RequireAuth>
+        );
+    }
+
+    if (caseQ.isError || !caseQ.data) {
+        return (
+            <RequireAuth>
+                <AppShell>
+                    <div className="flex h-[60vh] flex-col items-center justify-center gap-4">
+                        <AlertCircle className="h-12 w-12 text-rose-500" />
+                        <h2 className="text-2xl font-black text-slate-800 tracking-tight">Caso não encontrado</h2>
+                        <p className="text-sm text-slate-500 max-w-sm text-center">Este caso foi excluído, não existe ou você não tem permissão para acessá-lo na área de trabalho atual.</p>
+                        <Button className="mt-4 rounded-xl" onClick={() => nav("/app/operacao-m30")}>Voltar para a Lista</Button>
                     </div>
                 </AppShell>
             </RequireAuth>
