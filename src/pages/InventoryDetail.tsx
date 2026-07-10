@@ -782,7 +782,7 @@ export default function InventoryDetail() {
                     </Button>
                 </div>
             ) : (
-                <div className="max-w-4xl mx-auto space-y-6">
+                <div className="w-full space-y-6">
                     <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
                     <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-3xl border shadow-sm">
                         <div className="flex items-center gap-4">
