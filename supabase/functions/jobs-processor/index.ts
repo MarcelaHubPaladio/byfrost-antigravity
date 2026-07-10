@@ -2272,8 +2272,40 @@ serve(async (req: any) => {
             if (trigger && tmpl) {
               sysPrompt += `\n[INTEGRAÇÃO - NOTIFICAÇÃO DISCORD]:\n`;
               sysPrompt += `- REGRA DE DISPARO: ${trigger}\n`;
-              sysPrompt += `- AÇÃO EXIGIDA: Quando a regra acima for atingida, você OBRIGATORIAMENTE deve incluir no final da sua resposta a tag exata: [DISCORD_NOTIFY: texto da notificacao]\n`;
-              sysPrompt += `- FORMATO DO TEXTO (substitua as variaveis pelos dados reais da conversa): ${tmpl}\n`;
+              sysPrompt += `- AÇÃO EXIGIDA: Quando a regra acima for atingida, você OBRIGATORIAMENTE deve incluir no final da sua resposta a notificação envolvida nas tags XML <DISCORD_NOTIFY> e </DISCORD_NOTIFY>. Preserve as quebras de linha exatas do template!\n`;
+              sysPrompt += `- FORMATO DO TEXTO (substitua as variaveis pelos dados reais da conversa):\n<DISCORD_NOTIFY>\n${tmpl}\n</DISCORD_NOTIFY>\n`;
+            }
+          }
+
+          // 6. Consulting Schedule Plugue
+          const consultingPlug = plugs.find(p => p.plug_key === "consulting_schedule");
+          if (consultingPlug) {
+            const schedulingRules = consultingPlug.config_json?.scheduling_rules || "";
+            if (schedulingRules) {
+              sysPrompt += `\n[INTEGRAÇÃO - AGENDA DE CONSULTORIA]:\n`;
+              sysPrompt += `- REGRAS DE AGENDAMENTO (disponibilidade, horários, dias da semana, duração): ${schedulingRules}\n`;
+              
+              // Buscar compromissos futuros
+              const { data: scheduledEvents } = await supabase
+                .from("timeline_events")
+                .select("meta_json")
+                .eq("tenant_id", tenantId)
+                .eq("event_type", "consulting_scheduled")
+                .gte("occurred_at", new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString());
+                
+              if (scheduledEvents && scheduledEvents.length > 0) {
+                const bookedTimes = scheduledEvents
+                  .map(e => e.meta_json?.scheduled_for)
+                  .filter(Boolean)
+                  .join(", ");
+                if (bookedTimes) {
+                  sysPrompt += `- HORÁRIOS JÁ OCUPADOS (INDISPONÍVEIS): ${bookedTimes}\n`;
+                }
+              } else {
+                sysPrompt += `- HORÁRIOS JÁ OCUPADOS (INDISPONÍVEIS): Nenhum.\n`;
+              }
+              
+              sysPrompt += `- AÇÃO EXIGIDA: Sugira horários livres baseando-se nas REGRAS DE AGENDAMENTO e evite rigorosamente os HORÁRIOS JÁ OCUPADOS. Quando o cliente confirmar o horário escolhido, VOCÊ DEVE OBRIGATORIAMENTE incluir no final da sua resposta a tag exata: [AGENDAR_CONSULTORIA: YYYY-MM-DD HH:MM] substituindo pelo dia e hora escolhidos.\n`;
             }
           }
 
@@ -2430,10 +2462,10 @@ serve(async (req: any) => {
           let responseText = llmRes.text.trim();
           
           // Check for Discord Notifications
-          const discordMatch = responseText.match(/\[DISCORD_NOTIFY:\s*([^\]]+)\]/i);
+          const discordMatch = responseText.match(/<DISCORD_NOTIFY>([\s\S]*?)<\/DISCORD_NOTIFY>/i);
           if (discordMatch && discordMatch[1]) {
             const discordText = discordMatch[1].trim();
-            responseText = responseText.replace(/\[DISCORD_NOTIFY:\s*[^\]]+\]/gi, "").trim();
+            responseText = responseText.replace(/<DISCORD_NOTIFY>[\s\S]*?<\/DISCORD_NOTIFY>/gi, "").trim();
             
             const dp = plugs.find(p => p.plug_key === "discord_notifications");
             const webhookUrl = dp?.config_json?.webhook_url;
@@ -2491,6 +2523,23 @@ serve(async (req: any) => {
                 occurred_at: new Date().toISOString()
               });
             }
+          }
+
+          // Check for Consulting Schedule Booking
+          const scheduleMatch = responseText.match(/\[AGENDAR_CONSULTORIA:\s*(.+?)\]/i);
+          if (scheduleMatch && scheduleMatch[1]) {
+            const scheduledDateTime = scheduleMatch[1].trim();
+            responseText = responseText.replace(/\[AGENDAR_CONSULTORIA:[\s\S]*?\]/gi, "").trim();
+
+            await supabase.from("timeline_events").insert({
+              tenant_id: tenantId,
+              case_id: caseId,
+              event_type: "consulting_scheduled",
+              actor_type: "ai",
+              message: `Consultoria agendada pela BeeIA para: ${scheduledDateTime}`,
+              meta_json: { scheduled_for: scheduledDateTime },
+              occurred_at: new Date().toISOString()
+            });
           }
 
           // 8. Send reply via integrations-zapi-send Edge Function

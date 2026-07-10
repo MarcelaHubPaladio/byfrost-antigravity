@@ -2768,6 +2768,8 @@ function BeeIAPlugsTab({
   const [discordTriggerInstructions, setDiscordTriggerInstructions] = useState("");
   const [discordNotificationTemplate, setDiscordNotificationTemplate] = useState("");
 
+  const [consultingRules, setConsultingRules] = useState("");
+
   // Sync with loaded plugs data
   useEffect(() => {
     if (plugs && plugs.length > 0) {
@@ -2801,6 +2803,11 @@ function BeeIAPlugsTab({
         setDiscordWebhookUrl(discordPlug.config_json?.webhook_url || "");
         setDiscordTriggerInstructions(discordPlug.config_json?.trigger_instructions || "");
         setDiscordNotificationTemplate(discordPlug.config_json?.notification_template || "");
+      }
+
+      const consultingPlug = plugs.find((p) => p.plug_key === "consulting_schedule");
+      if (consultingPlug) {
+        setConsultingRules(consultingPlug.config_json?.scheduling_rules || "");
       }
     }
   }, [plugs]);
@@ -2851,6 +2858,12 @@ function BeeIAPlugsTab({
       webhook_url: discordWebhookUrl,
       trigger_instructions: discordTriggerInstructions,
       notification_template: discordNotificationTemplate,
+    });
+  };
+
+  const handleSaveConsulting = () => {
+    onSave("consulting_schedule", isPlugEnabled("consulting_schedule"), {
+      scheduling_rules: consultingRules,
     });
   };
 
@@ -3277,6 +3290,57 @@ function BeeIAPlugsTab({
                 <Button onClick={handleSaveDiscord} disabled={isSaving} className="gap-2 bg-slate-800 hover:bg-slate-700 text-white dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-slate-200 shadow-sm rounded-xl px-6">
                   <Save className="h-4 w-4" />
                   Salvar Configuração do Discord
+                </Button>
+              </div>
+            </div>
+          )}
+        </Card>
+
+        {/* Plug 6: Consulting Schedule */}
+        <Card className="rounded-[22px] border-slate-200/80 p-5 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900 transition-all hover:border-slate-350 dark:hover:border-slate-700">
+          <div className="flex items-center justify-between gap-4 border-b border-slate-100 pb-3 dark:border-slate-850">
+            <div className="flex items-center gap-3">
+              <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-100 text-blue-600 dark:bg-blue-950/40 dark:text-blue-400">
+                <Calendar className="h-5 w-5" />
+              </span>
+              <div>
+                <h4 className="font-semibold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+                  Agenda de Consultoria <span className="text-[10px] font-bold bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full dark:bg-amber-900/50 dark:text-amber-400">NOVO</span>
+                </h4>
+                <p className="text-[11px] text-slate-500 mt-0.5">
+                  Permite que a IA visualize horários ocupados, sugira horários livres e faça agendamentos diretos.
+                </p>
+              </div>
+            </div>
+            <Switch
+              checked={isPlugEnabled("consulting_schedule")}
+              disabled={isSaving}
+              onCheckedChange={(checked) => handleTogglePlug("consulting_schedule", checked)}
+            />
+          </div>
+
+          {isPlugEnabled("consulting_schedule") && (
+            <div className="mt-4 flex flex-col gap-4 animate-in fade-in slide-in-from-top-2 duration-200">
+              <div className="flex flex-col gap-1.5">
+                <Label className="text-[10px] font-bold uppercase text-slate-400 tracking-wider">
+                  Regras de Agendamento
+                </Label>
+                <Textarea
+                  value={consultingRules}
+                  onChange={(e) => setConsultingRules(e.target.value)}
+                  placeholder="Ex: Atendimentos ocorrem de Segunda a Sexta, das 9h às 18h. A duração padrão de uma consultoria é de 1 hora."
+                  className="rounded-xl border-slate-200 text-xs dark:border-slate-850 min-h-[90px] resize-y"
+                />
+              </div>
+
+              <div className="flex justify-end border-t border-slate-100 pt-3 dark:border-slate-850">
+                <Button
+                  size="sm"
+                  onClick={handleSaveConsulting}
+                  disabled={isSaving}
+                  className="rounded-xl bg-slate-900 text-white font-semibold text-xs px-4 dark:bg-slate-50 dark:text-slate-950"
+                >
+                  <Save className="mr-1.5 h-3.5 w-3.5" /> Salvar Configurações
                 </Button>
               </div>
             </div>
