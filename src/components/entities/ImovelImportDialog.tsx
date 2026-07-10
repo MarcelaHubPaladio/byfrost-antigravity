@@ -83,7 +83,32 @@ export function ImovelImportDialog({
       const normalize = (s: string) => s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/ç/g, "c");
       const headerRaw = lines[0];
       const delimiter = headerRaw.includes(";") ? ";" : ",";
-      const headers = headerRaw.split(delimiter).map(h => normalize(h.trim().replace(/^"|"$/g, '')));
+
+      const parseCsvLine = (lineStr: string) => {
+        const result: string[] = [];
+        let curr = "";
+        let inQuotes = false;
+        for (let j = 0; j < lineStr.length; j++) {
+          const char = lineStr[j];
+          if (char === '"') {
+            if (inQuotes && lineStr[j + 1] === '"') {
+              curr += '"';
+              j++;
+            } else {
+              inQuotes = !inQuotes;
+            }
+          } else if (char === delimiter && !inQuotes) {
+            result.push(curr.trim().replace(/^"|"$/g, ''));
+            curr = "";
+          } else {
+            curr += char;
+          }
+        }
+        result.push(curr.trim().replace(/^"|"$/g, ''));
+        return result;
+      };
+
+      const headers = parseCsvLine(headerRaw).map(h => normalize(h));
       
       const idxName = headers.findIndex(h => h.includes("nome") || h.includes("name") || h.includes("titulo"));
       const idxLegacy = headers.findIndex(h => h.includes("id") || h.includes("legado") || h.includes("legacy") || h.includes("codigo"));
@@ -99,7 +124,7 @@ export function ImovelImportDialog({
       for (let i = 1; i < lines.length; i++) {
         const line = lines[i].trim();
         if (!line) continue;
-        const cols = line.split(delimiter).map(c => c.trim().replace(/^"|"$/g, ''));
+        const cols = parseCsvLine(line);
         
         const name = idxName >= 0 ? cols[idxName] || "" : "";
         const priceStr = idxPrice >= 0 ? cols[idxPrice] || "" : "";
