@@ -133,7 +133,8 @@ export default function Inventory() {
                 .order("display_name", { ascending: true });
 
             if (q.trim().length >= 2) {
-                base = base.ilike("display_name", `%${q.trim()}%`);
+                const term = `%${q.trim()}%`;
+                base = base.or(`display_name.ilike.${term},metadata->>internal_code.ilike.${term}`);
             }
 
             const { data, error } = await base;
