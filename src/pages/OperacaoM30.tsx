@@ -49,7 +49,7 @@ import { NewOperacaoM30CardDialog } from "@/components/operacao_m30/NewOperacaoM
 import { DateRangePickerCustom } from "@/components/ui/date-range-picker-custom";
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, getDay, isSameMonth, isToday, addMonths, subMonths } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, ClipboardList } from "lucide-react";
+import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, ClipboardList, MessageSquareWarning } from "lucide-react";
 
 const DASHBOARD_VIEW_MODE_KEY_PREFIX = "dashboard_view_mode_v1:";
 
@@ -1428,6 +1428,13 @@ export default function OperacaoM30() {
                                     {locks[c.id] && (
                                       <div className="flex items-center gap-1 rounded bg-rose-50 px-1.5 py-0.5 text-[10px] uppercase font-bold text-rose-600 ring-1 ring-inset ring-rose-500/20" title={`Sendo editado por ${locks[c.id].userName}`}>
                                         <Lock className="h-3 w-3" /> Em Edição
+                                      </div>
+                                    )}
+                                    {((c.meta_json as any)?.pending_subtasks || []).some((st: any) => 
+                                      st.script_items?.some((it: any) => it.comment && it.comment.trim() !== "")
+                                    ) && (
+                                      <div className="flex items-center gap-1 rounded bg-amber-50 px-1.5 py-0.5 text-[10px] uppercase font-bold text-amber-600 ring-1 ring-inset ring-amber-500/20" title="Cliente solicitou revisão no roteiro">
+                                        <MessageSquareWarning className="h-3 w-3" /> Revisão
                                       </div>
                                     )}
                                   </div>

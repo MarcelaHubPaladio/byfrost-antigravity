@@ -65,6 +65,7 @@ import {
     Link as LinkIcon,
     ListChecks,
     Loader2,
+    MessageSquareWarning,
     PackageCheck,
     Pencil,
     Printer,
@@ -267,30 +268,43 @@ function SubtaskItemContent({
 
                 <div className="flex-1 space-y-3">
                     <div className="flex items-start justify-between gap-4">
-                        <div className="flex items-start gap-3 flex-1">
-                            <Checkbox 
-                                id={`check-${it.id}`}
-                                checked={it.checked}
-                                onCheckedChange={() => toggleItem(it.id)}
-                                className="mt-1 rounded-full w-5 h-5 border-2 data-[state=checked]:bg-indigo-600 data-[state=checked]:border-indigo-600"
-                            />
-                            {editingId === it.id ? (
-                                <Textarea 
-                                    value={editingText}
-                                    onChange={(e) => setEditingText(e.target.value)}
-                                    className="min-h-[80px] text-sm focus:ring-indigo-600 rounded-xl"
-                                    autoFocus
+                        <div className="flex flex-col gap-2 flex-1 min-w-0 pr-4">
+                            <div className="flex items-start gap-3 w-full">
+                                <Checkbox 
+                                    id={`check-${it.id}`}
+                                    checked={it.checked}
+                                    onCheckedChange={() => toggleItem(it.id)}
+                                    className="mt-1 rounded-full w-5 h-5 border-2 data-[state=checked]:bg-indigo-600 data-[state=checked]:border-indigo-600 shrink-0"
                                 />
-                            ) : (
-                                <label 
-                                    htmlFor={`check-${it.id}`} 
-                                    className={cn(
-                                        "text-sm font-medium leading-relaxed cursor-pointer transition-colors pt-0.5",
-                                        it.checked ? "text-slate-400 line-through" : "text-slate-700 hover:text-slate-900"
-                                    )}
-                                >
-                                    {it.text}
-                                </label>
+                                {editingId === it.id ? (
+                                    <Textarea 
+                                        value={editingText}
+                                        onChange={(e) => setEditingText(e.target.value)}
+                                        className="min-h-[80px] text-sm focus:ring-indigo-600 rounded-xl w-full"
+                                        autoFocus
+                                    />
+                                ) : (
+                                    <label 
+                                        htmlFor={`check-${it.id}`} 
+                                        className={cn(
+                                            "text-sm font-medium leading-relaxed cursor-pointer transition-colors pt-0.5 break-words min-w-0",
+                                            it.checked ? "text-slate-400 line-through" : "text-slate-700 hover:text-slate-900"
+                                        )}
+                                    >
+                                        {it.text}
+                                    </label>
+                                )}
+                            </div>
+                            
+                            {it.comment && (
+                                <div className="ml-8 p-3 bg-amber-50 border border-amber-200 rounded-xl w-full mr-4">
+                                    <p className="text-[10px] font-bold text-amber-700 uppercase tracking-wider mb-1 flex items-center gap-1">
+                                        <AlertCircle className="h-3 w-3" />
+                                        Observação do Cliente
+                                        {it.comment_saved_at && <span className="font-medium text-amber-600/70 ml-2 normal-case truncate">({new Date(it.comment_saved_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })})</span>}
+                                    </p>
+                                    <p className="text-sm text-amber-900 whitespace-pre-wrap break-words">{it.comment}</p>
+                                </div>
                             )}
                         </div>
                         <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
@@ -1856,6 +1870,11 @@ export default function OperacaoM30Case() {
                                                                     {st.is_approved && (
                                                                         <Badge className="bg-emerald-500 text-white border-none h-4 px-1.5 text-[8px] font-black animate-in fade-in zoom-in duration-300">
                                                                             APROVADO PELO CLIENTE
+                                                                        </Badge>
+                                                                    )}
+                                                                    {st.script_items?.some((it: any) => it.comment && it.comment.trim() !== "") && (
+                                                                        <Badge className="bg-amber-500 hover:bg-amber-600 text-white border-none h-4 px-1.5 text-[8px] font-black animate-in fade-in zoom-in duration-300">
+                                                                            <MessageSquareWarning className="h-2.5 w-2.5 mr-1" /> OBSERVAÇÃO DO CLIENTE
                                                                         </Badge>
                                                                     )}
                                                                     {st.linked_case_id && (
