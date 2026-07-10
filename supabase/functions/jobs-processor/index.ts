@@ -2168,6 +2168,12 @@ serve(async (req: any) => {
               if (limitInstructions) {
                 sysPrompt += `\n[DIRETRIZES E LIMITES DE INFORMAÇÕES DE IMÓVEIS]:\n${limitInstructions}\n`;
               }
+
+              sysPrompt += `\n[DIRETRIZES IMPORTANTES PARA APRESENTAÇÃO DE IMÓVEIS]:
+- Liste APENAS as informações e características que possuem valor preenchido. NUNCA mostre campos vazios ou sem informação (ex: se não tem quartos informados, não escreva "Quartos:").
+- Sempre inclua o "Link do Anúncio" no final da apresentação de cada imóvel, se a URL estiver disponível.
+- Para enviar fotos, retorne EXATAMENTE no formato Markdown: ![Descrição](URL). O sistema interceptará e enviará a imagem real no WhatsApp.
+`;
             }
 
             // 3. Financeiro & Cobrança Plugue
@@ -2558,32 +2564,77 @@ serve(async (req: any) => {
           const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 
           console.log(`[BEEIA] Dispatching response to integrations-zapi-send: ${sendUrl}`);
-          const sendRes = await fetch(sendUrl, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${serviceRoleKey}`
-            },
-            body: JSON.stringify({
+
+          // Parse markdown images and split into multiple messages if needed
+          const msgParts: Array<{ type: string; content?: string; caption?: string; mediaUrl?: string }> = [];
+          const mdImgRegex = /!\[([^\]]*)\]\(([^)]+)\)/g;
+          let lastIdx = 0;
+          let mdMatch;
+
+          while ((mdMatch = mdImgRegex.exec(responseText)) !== null) {
+            const textBefore = responseText.substring(lastIdx, mdMatch.index).trim();
+            if (textBefore) {
+              msgParts.push({ type: "text", content: textBefore });
+            }
+            msgParts.push({ type: "image", caption: mdMatch[1], mediaUrl: mdMatch[2] });
+            lastIdx = mdImgRegex.lastIndex;
+          }
+
+          const textAfter = responseText.substring(lastIdx).trim();
+          if (textAfter) {
+            msgParts.push({ type: "text", content: textAfter });
+          }
+
+          if (msgParts.length === 0) {
+             msgParts.push({ type: "text", content: responseText });
+          }
+
+          let anyError = false;
+          let delayMs = 0;
+
+          for (const part of msgParts) {
+            if (delayMs > 0) {
+               await new Promise(resolve => setTimeout(resolve, delayMs));
+            }
+            
+            const payload: any = {
               tenantId,
               instanceId,
               to: customerPhone,
-              type: "text",
-              text: responseText,
+              type: part.type,
               correlationId: `BEEIA_REPLY:${caseId}:${Date.now()}`
-            })
-          }).catch(err => {
-            console.error("[BEEIA] fetch integrations-zapi-send failed", err);
-            return null;
-          });
+            };
+            
+            if (part.type === "text") {
+              payload.text = part.content;
+            } else if (part.type === "image") {
+              payload.mediaUrl = part.mediaUrl;
+              payload.text = ""; // ZAPI uses caption, integrations-zapi-send maps text -> caption if type=image
+            }
 
-          if (sendRes && !sendRes.ok) {
-            const errTxt = await sendRes.text().catch(() => "");
-            console.error(`[BEEIA] integrations-zapi-send failed with status ${sendRes.status}: ${errTxt}`);
+            const sendRes = await fetch(sendUrl, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${serviceRoleKey}`
+              },
+              body: JSON.stringify(payload)
+            }).catch(err => {
+              console.error("[BEEIA] fetch integrations-zapi-send failed", err);
+              return null;
+            });
+
+            if (sendRes && !sendRes.ok) {
+              const errTxt = await sendRes.text().catch(() => "");
+              console.error(`[BEEIA] integrations-zapi-send failed with status ${sendRes.status}: ${errTxt}`);
+              anyError = true;
+            }
+            
+            delayMs = 1500; // delay between messages to keep order in whatsapp
           }
 
           await supabase.from("job_queue").update({ status: "done" }).eq("id", job.id);
-          results.push({ id: job.id, ok: true, transitioned: shouldTransition });
+          results.push({ id: job.id, ok: !anyError, transitioned: shouldTransition });
           continue;
         }
 
