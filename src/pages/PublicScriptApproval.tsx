@@ -189,7 +189,15 @@ export default function PublicScriptApproval() {
 
         if (token) {
             const payload = { ...subtasks[subIdx], ...newData[subIdx] };
-            await supabase.rpc('update_public_m30_subtask_meta', { p_token: token, p_idx: subIdx, p_subtask: payload });
+            console.log("PAYLOAD SENDING:", payload);
+            const { error, data } = await supabase.rpc('update_public_m30_subtask_meta', { p_token: token, p_idx: subIdx, p_subtask: payload });
+            if (error) {
+                console.error("Erro ao salvar:", error);
+                showError("Erro ao salvar observação.");
+            } else if (data === false) {
+                console.error("RPC retornou false");
+                showError("Não foi possível salvar a observação.");
+            }
         }
         
         setSavingItem(null);
@@ -199,7 +207,8 @@ export default function PublicScriptApproval() {
         if (!token) return;
         if (subtaskData[subIdx]) {
             const payload = { ...subtasks[subIdx], ...subtaskData[subIdx] };
-            await supabase.rpc('update_public_m30_subtask_meta', { p_token: token, p_idx: subIdx, p_subtask: payload });
+            const { error, data } = await supabase.rpc('update_public_m30_subtask_meta', { p_token: token, p_idx: subIdx, p_subtask: payload });
+            if (error) console.error("Auto-save erro:", error);
         }
     };
 
