@@ -25,6 +25,7 @@ import { ArrowLeft, Loader2, Package, Image as ImageIcon, Upload, Trash2, Info, 
 import { DeliverableTemplateUpsertDialog } from "@/components/core/DeliverableTemplateUpsertDialog";
 import { useAcquireProductLock } from "@/hooks/useProductPresence";
 import { Separator } from "@/components/ui/separator";
+import { RoomPhotoManager } from "@/components/entities/RoomPhotoManager";
 import { Label } from "@/components/ui/label";
 
 const formSchema = z.object({
@@ -33,6 +34,7 @@ const formSchema = z.object({
     description: z.string().optional(),
     photo_url: z.string().optional(),
     internal_code: z.string().optional(),
+    legacy_id: z.string().optional(),
     price_sale: z.coerce.number().min(0, "Preço não pode ser negativo"),
     price_cost: z.coerce.number().min(0, "Custo não pode ser negativo"),
     price_consult: z.boolean().optional().default(false),
@@ -363,6 +365,7 @@ export default function InventoryDetail() {
             description: "",
             photo_url: "",
             internal_code: "",
+            legacy_id: "",
             price_sale: 0,
             price_cost: 0,
             price_consult: false,
@@ -384,7 +387,8 @@ export default function InventoryDetail() {
                 subtype: itemQ.data.subtype || "",
                 description: itemQ.data.metadata?.description || "",
                 photo_url: itemQ.data.metadata?.photo_url || "",
-                internal_code: itemQ.data.metadata?.internal_code || "",
+                internal_code: itemQ.data.internal_code || itemQ.data.metadata?.internal_code || "",
+                legacy_id: itemQ.data.legacy_id || itemQ.data.metadata?.legacy_id || "",
                 price_sale: itemQ.data.metadata?.price_sale || 0,
                 price_cost: itemQ.data.metadata?.price_cost || 0,
                 price_consult: !!itemQ.data.metadata?.price_consult,
@@ -401,79 +405,6 @@ export default function InventoryDetail() {
             setProductConsignments(itemQ.data.metadata?.consignments || []);
         }
     }, [itemQ.data, form]);
-
-    const entityPhotosQ = useQuery({
-        queryKey: ["entity_photos", id, activeTenantId],
-        enabled: isEdit && !!activeTenantId,
-        queryFn: async () => {
-            const { data, error } = await supabase
-                .from("core_entity_photos")
-                .select("*")
-                .eq("entity_id", id!)
-                .eq("tenant_id", activeTenantId!)
-                .is("deleted_at", null)
-                .order("created_at", { ascending: true });
-            if (error) throw error;
-            return data || [];
-        }
-    });
-
-    const [uploadingExtra, setUploadingExtra] = useState(false);
-
-    const handleExtraFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        const files = Array.from(e.target.files || []);
-        if (!files.length || !activeTenantId || !id) return;
-
-        setUploadingExtra(true);
-        try {
-            for (const file of files) {
-                const options = {
-                    maxSizeMB: 1,
-                    maxWidthOrHeight: 1920,
-                    useWebWorker: true,
-                    initialQuality: 0.8,
-                };
-                const compressedFile = await imageCompression(file, options);
-                const fileExt = file.name.split('.').pop() || "jpg";
-                const fileName = `${activeTenantId}/${crypto.randomUUID()}.${fileExt}`;
-                
-                const { error: uploadError } = await supabase.storage
-                    .from('inventory')
-                    .upload(fileName, compressedFile);
-                if (uploadError) throw uploadError;
-
-                const { data: { publicUrl } } = supabase.storage
-                    .from('inventory')
-                    .getPublicUrl(fileName);
-
-                await supabase.from("core_entity_photos").insert({
-                    tenant_id: activeTenantId,
-                    entity_id: id,
-                    room_type: "Geral",
-                    url: publicUrl,
-                    is_main: false,
-                });
-            }
-            showSuccess("Imagens adicionadas com sucesso!");
-            qc.invalidateQueries({ queryKey: ["entity_photos", id, activeTenantId] });
-        } catch (err: any) {
-            showError(err.message || "Erro ao enviar imagens");
-        } finally {
-            setUploadingExtra(false);
-            e.target.value = ''; // reset input
-        }
-    };
-
-    const handleDeleteExtraPhoto = async (photoId: string) => {
-        if (!confirm("Remover esta imagem?")) return;
-        try {
-            await supabase.from("core_entity_photos").update({ deleted_at: new Date().toISOString() }).eq("id", photoId);
-            qc.invalidateQueries({ queryKey: ["entity_photos", id, activeTenantId] });
-            showSuccess("Imagem removida");
-        } catch(err: any) {
-            showError("Erro ao remover imagem");
-        }
-    };
 
     const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -583,6 +514,8 @@ export default function InventoryDetail() {
                     .update({
                         display_name: values.display_name,
                         subtype: values.subtype,
+                        internal_code: values.internal_code || null,
+                        legacy_id: values.legacy_id || null,
                         metadata,
                     })
                     .eq("id", id!)
@@ -635,6 +568,8 @@ export default function InventoryDetail() {
                     subtype: values.subtype,
                     display_name: values.display_name,
                     status: "active",
+                    internal_code: values.internal_code || null,
+                    legacy_id: values.legacy_id || null,
                     metadata,
                 }).select("id").single();
                 
@@ -995,59 +930,19 @@ export default function InventoryDetail() {
                                 </Card>
 
                                 {form.watch("subtype")?.toLowerCase().includes("imovel") && (
-                                    <Card className="p-4 rounded-3xl border shadow-sm bg-white overflow-hidden">
-                                        <div className="flex items-center justify-between mb-4">
-                                            <h3 className="text-sm font-black text-slate-800 flex items-center gap-2">
-                                                <ImageIcon className="w-4 h-4 text-indigo-600" />
-                                                Fotos Adicionais
-                                            </h3>
-                                            {isEdit && (
-                                                <div className="relative">
-                                                    <Button type="button" size="sm" variant="outline" className="h-8 rounded-lg cursor-pointer" disabled={uploadingExtra}>
-                                                        {uploadingExtra ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Upload className="w-4 h-4 mr-2" />}
-                                                        Upload
-                                                    </Button>
-                                                    <input
-                                                        type="file"
-                                                        accept="image/*"
-                                                        multiple
-                                                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                                                        onChange={handleExtraFileUpload}
-                                                        disabled={uploadingExtra}
-                                                    />
-                                                </div>
-                                            )}
-                                        </div>
-                                        {!isEdit && (
+                                    <div className="space-y-4">
+                                        <h3 className="text-sm font-black text-slate-800 flex items-center gap-2">
+                                            <ImageIcon className="w-4 h-4 text-indigo-600" />
+                                            Fotos e Ambientes do Imóvel
+                                        </h3>
+                                        {!isEdit ? (
                                             <div className="text-center p-4 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
-                                                <p className="text-xs text-slate-500 font-medium">Salve o imóvel primeiro para adicionar fotos.</p>
+                                                <p className="text-xs text-slate-500 font-medium">Salve o imóvel primeiro para adicionar fotos aos ambientes.</p>
                                             </div>
+                                        ) : (
+                                            <RoomPhotoManager tenantId={activeTenantId!} entityId={id!} />
                                         )}
-                                        {isEdit && entityPhotosQ.isLoading && (
-                                            <div className="flex justify-center p-4">
-                                                <Loader2 className="w-5 h-5 text-indigo-500 animate-spin" />
-                                            </div>
-                                        )}
-                                        {isEdit && entityPhotosQ.data && entityPhotosQ.data.length > 0 && (
-                                            <div className="grid grid-cols-2 gap-2 mt-2">
-                                                {entityPhotosQ.data.filter((p: any) => p.url !== form.watch("photo_url")).map((photo: any) => (
-                                                    <div key={photo.id} className="relative aspect-square rounded-xl overflow-hidden group border border-slate-200">
-                                                        <img src={photo.url} className="w-full h-full object-cover" />
-                                                        <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                                                            <Button type="button" size="icon" variant="destructive" className="h-8 w-8 rounded-full" onClick={() => handleDeleteExtraPhoto(photo.id)}>
-                                                                <Trash2 className="w-4 h-4" />
-                                                            </Button>
-                                                        </div>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        )}
-                                        {isEdit && entityPhotosQ.data && entityPhotosQ.data.filter((p: any) => p.url !== form.watch("photo_url")).length === 0 && !entityPhotosQ.isLoading && (
-                                            <div className="text-center p-4 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
-                                                <p className="text-[10px] text-slate-400 font-medium uppercase tracking-wider">Nenhuma foto extra</p>
-                                            </div>
-                                        )}
-                                    </Card>
+                                    </div>
                                 )}
                             </div>
 
@@ -1099,6 +994,27 @@ export default function InventoryDetail() {
                                                 </FormItem>
                                             )}
                                         />
+
+                                        <FormField
+                                            control={form.control}
+                                            name="legacy_id"
+                                            render={({ field }) => (
+                                                <FormItem>
+                                                    <FormLabel className="text-xs font-black text-slate-400 uppercase tracking-wider">ID Legado</FormLabel>
+                                                    <FormControl>
+                                                        <Input placeholder="Ex: 12345" {...field} className="h-11 rounded-xl font-mono uppercase" />
+                                                    </FormControl>
+                                                    <FormMessage />
+                                                </FormItem>
+                                            )}
+                                        />
+
+                                        {isEdit && (
+                                            <div className="md:col-span-2">
+                                                <FormLabel className="text-xs font-black text-slate-400 uppercase tracking-wider">ID Automático (Sistema)</FormLabel>
+                                                <Input value={id} readOnly className="h-11 rounded-xl font-mono text-slate-500 bg-slate-50 cursor-not-allowed mt-2" />
+                                            </div>
+                                        )}
 
                                         <FormField
                                             control={form.control}
