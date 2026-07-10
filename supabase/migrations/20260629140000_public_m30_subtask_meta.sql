@@ -36,3 +36,7 @@ BEGIN
     RETURN TRUE;
 END;
 $$;
+
+GRANT EXECUTE ON FUNCTION public.update_public_m30_subtask_meta(uuid, int, jsonb) TO anon;
+GRANT EXECUTE ON FUNCTION public.update_public_m30_subtask_meta(uuid, int, jsonb) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.update_public_m30_subtask_meta(uuid, int, jsonb) TO service_role;
