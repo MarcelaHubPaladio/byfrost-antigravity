@@ -8,7 +8,7 @@ DECLARE
 BEGIN
     SELECT id, meta_json INTO v_case_id, v_meta
     FROM public.cases
-    WHERE share_token = p_token AND deleted_at IS NULL;
+    WHERE (share_token = p_token OR id = p_token) AND deleted_at IS NULL;
 
     IF v_case_id IS NULL THEN
         RETURN FALSE;
