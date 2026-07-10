@@ -1139,21 +1139,19 @@ export default function InventoryDetail() {
                                     </div>
                                 </Card>
 
-                                {form.watch("subtype")?.toLowerCase().includes("imovel") && (
-                                    <Card className="p-6 rounded-3xl border shadow-sm bg-white space-y-4">
-                                        <h3 className="text-sm font-black text-slate-800 flex items-center gap-2">
-                                            <ImageIcon className="w-4 h-4 text-indigo-600" />
-                                            Fotos e Ambientes do Imóvel
-                                        </h3>
-                                        {!isEdit ? (
-                                            <div className="text-center p-4 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
-                                                <p className="text-xs text-slate-500 font-medium">Salve o imóvel primeiro para adicionar fotos aos ambientes.</p>
-                                            </div>
-                                        ) : (
-                                            <RoomPhotoManager tenantId={activeTenantId!} entityId={id!} />
-                                        )}
-                                    </Card>
-                                )}
+                                <Card className="p-6 rounded-3xl border shadow-sm bg-white space-y-4">
+                                    <h3 className="text-sm font-black text-slate-800 flex items-center gap-2">
+                                        <ImageIcon className="w-4 h-4 text-indigo-600" />
+                                        Fotos Adicionais / Ambientes
+                                    </h3>
+                                    {!isEdit ? (
+                                        <div className="text-center p-4 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
+                                            <p className="text-xs text-slate-500 font-medium">Salve o produto primeiro para adicionar mais fotos.</p>
+                                        </div>
+                                    ) : (
+                                        <RoomPhotoManager tenantId={activeTenantId!} entityId={id!} />
+                                    )}
+                                </Card>
 
                                 {/* Stock Levels Section */}
                                 {!hasConfigurations ? (
