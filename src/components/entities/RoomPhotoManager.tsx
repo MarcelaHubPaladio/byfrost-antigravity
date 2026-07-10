@@ -57,44 +57,53 @@ export function RoomPhotoManager({ tenantId, entityId }: { tenantId: string; ent
   });
 
   const uploadMutation = useMutation({
-    mutationFn: async (file: File) => {
+    mutationFn: async (files: File[]) => {
       setUploading(true);
-      setProgress(10);
+      setProgress(0);
       
       const options = {
         maxSizeMB: 1,
         maxWidthOrHeight: 1920,
-        useWebWorker: true
+        useWebWorker: true,
+        initialQuality: 0.8
       };
       
-      const compressed = await imageCompression(file, options);
-      setProgress(40);
-      
-      const ext = file.name.split(".").pop();
-      const path = `${tenantId}/${entityId}/${crypto.randomUUID()}.${ext}`;
-      
-      const { error: upErr } = await supabase.storage
-        .from("media_kit_assets") 
-        .upload(path, compressed);
+      const total = files.length;
+      for (let i = 0; i < total; i++) {
+        const file = files[i];
+        const baseProgress = (i / total) * 100;
+        const step = 100 / total;
         
-      if (upErr) throw upErr;
-      setProgress(80);
-      
-      const { data: { publicUrl } } = supabase.storage
-        .from("media_kit_assets")
-        .getPublicUrl(path);
+        setProgress(baseProgress + (step * 0.1));
+        const compressed = await imageCompression(file, options);
+        setProgress(baseProgress + (step * 0.4));
         
-      const { error: insErr } = await supabase
-        .from("core_entity_photos")
-        .insert({
-          tenant_id: tenantId,
-          entity_id: entityId,
-          room_type: selectedRoom,
-          url: publicUrl,
-        });
+        const ext = file.name.split(".").pop();
+        const path = `${tenantId}/${entityId}/${crypto.randomUUID()}.${ext}`;
         
-      if (insErr) throw insErr;
-      setProgress(100);
+        const { error: upErr } = await supabase.storage
+          .from("media_kit_assets") 
+          .upload(path, compressed);
+          
+        if (upErr) throw upErr;
+        setProgress(baseProgress + (step * 0.8));
+        
+        const { data: { publicUrl } } = supabase.storage
+          .from("media_kit_assets")
+          .getPublicUrl(path);
+          
+        const { error: insErr } = await supabase
+          .from("core_entity_photos")
+          .insert({
+            tenant_id: tenantId,
+            entity_id: entityId,
+            room_type: selectedRoom,
+            url: publicUrl,
+          });
+          
+        if (insErr) throw insErr;
+        setProgress(baseProgress + step);
+      }
     },
     onSuccess: () => {
       showSuccess("Foto adicionada!");
@@ -203,10 +212,14 @@ export function RoomPhotoManager({ tenantId, entityId }: { tenantId: string; ent
               <input 
                 type="file" 
                 accept="image/*" 
+                multiple
                 className="absolute inset-0 opacity-0 cursor-pointer" 
                 onChange={e => {
-                  const f = e.target.files?.[0];
-                  if (f) uploadMutation.mutate(f);
+                  const files = Array.from(e.target.files || []);
+                  if (files.length > 0) {
+                    uploadMutation.mutate(files);
+                  }
+                  e.target.value = '';
                 }}
               />
             </Button>
