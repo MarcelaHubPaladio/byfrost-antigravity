@@ -22,7 +22,12 @@ serve(async (req) => {
     const body = await req.json().catch(() => null);
     if (!body) return new Response(JSON.stringify({ ok: false, error: "Invalid JSON" }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
-    const { tenantId, instanceId, to: rawTo, type = "text", text = null, mediaUrl = null, meta = {} } = body;
+    let { tenantId, instanceId, to: rawTo, type = "text", text = null, mediaUrl = null, meta = {} } = body;
+    
+    // Fix markdown bold for WhatsApp
+    if (text && typeof text === "string") {
+      text = text.replace(/\*\*([^*]+)\*\*/g, '*$1*');
+    }
     correlationId = body.correlationId ?? correlationId;
 
     if (!tenantId || !instanceId || !rawTo) {
