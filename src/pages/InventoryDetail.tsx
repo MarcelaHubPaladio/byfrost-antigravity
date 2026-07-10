@@ -43,6 +43,7 @@ const formSchema = z.object({
     estoque_loja: z.coerce.number().min(0, "Estoque não pode ser negativo"),
     estoque_consignado: z.coerce.number().min(0, "Estoque não pode ser negativo"),
     commission_category_id: z.string().optional(),
+    ad_url: z.string().optional(),
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -372,6 +373,7 @@ export default function InventoryDetail() {
             estoque_loja: 0,
             estoque_consignado: 0,
             commission_category_id: "",
+            ad_url: "",
         },
     });
 
@@ -393,11 +395,85 @@ export default function InventoryDetail() {
                 estoque_loja: itemQ.data.metadata?.estoque_loja || 0,
                 estoque_consignado: itemQ.data.metadata?.estoque_consignado || 0,
                 commission_category_id: itemQ.data.metadata?.commission_category_id || "none",
+                ad_url: itemQ.data.metadata?.ad_url || "",
             });
             setConfigurations(itemQ.data.metadata?.configurations || []);
             setProductConsignments(itemQ.data.metadata?.consignments || []);
         }
     }, [itemQ.data, form]);
+
+    const entityPhotosQ = useQuery({
+        queryKey: ["entity_photos", id, activeTenantId],
+        enabled: isEdit && !!activeTenantId,
+        queryFn: async () => {
+            const { data, error } = await supabase
+                .from("core_entity_photos")
+                .select("*")
+                .eq("entity_id", id!)
+                .eq("tenant_id", activeTenantId!)
+                .is("deleted_at", null)
+                .order("created_at", { ascending: true });
+            if (error) throw error;
+            return data || [];
+        }
+    });
+
+    const [uploadingExtra, setUploadingExtra] = useState(false);
+
+    const handleExtraFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const files = Array.from(e.target.files || []);
+        if (!files.length || !activeTenantId || !id) return;
+
+        setUploadingExtra(true);
+        try {
+            for (const file of files) {
+                const options = {
+                    maxSizeMB: 1,
+                    maxWidthOrHeight: 1920,
+                    useWebWorker: true,
+                    initialQuality: 0.8,
+                };
+                const compressedFile = await imageCompression(file, options);
+                const fileExt = file.name.split('.').pop() || "jpg";
+                const fileName = `${activeTenantId}/${crypto.randomUUID()}.${fileExt}`;
+                
+                const { error: uploadError } = await supabase.storage
+                    .from('inventory')
+                    .upload(fileName, compressedFile);
+                if (uploadError) throw uploadError;
+
+                const { data: { publicUrl } } = supabase.storage
+                    .from('inventory')
+                    .getPublicUrl(fileName);
+
+                await supabase.from("core_entity_photos").insert({
+                    tenant_id: activeTenantId,
+                    entity_id: id,
+                    room_type: "Geral",
+                    url: publicUrl,
+                    is_main: false,
+                });
+            }
+            showSuccess("Imagens adicionadas com sucesso!");
+            qc.invalidateQueries({ queryKey: ["entity_photos", id, activeTenantId] });
+        } catch (err: any) {
+            showError(err.message || "Erro ao enviar imagens");
+        } finally {
+            setUploadingExtra(false);
+            e.target.value = ''; // reset input
+        }
+    };
+
+    const handleDeleteExtraPhoto = async (photoId: string) => {
+        if (!confirm("Remover esta imagem?")) return;
+        try {
+            await supabase.from("core_entity_photos").update({ deleted_at: new Date().toISOString() }).eq("id", photoId);
+            qc.invalidateQueries({ queryKey: ["entity_photos", id, activeTenantId] });
+            showSuccess("Imagem removida");
+        } catch(err: any) {
+            showError("Erro ao remover imagem");
+        }
+    };
 
     const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -486,7 +562,8 @@ export default function InventoryDetail() {
                 stock_quantity: stock_quantity,
                 commission_category_id: (!values.commission_category_id || values.commission_category_id === "none") ? null : values.commission_category_id,
                 configurations: values.has_configurations ? configurations : [],
-                consignments: values.has_configurations ? [] : productConsignments
+                consignments: values.has_configurations ? [] : productConsignments,
+                ad_url: values.ad_url || ""
             };
 
             // Se for novo produto, vamos registrar a entrada inicial no estoque se for maior que zero
@@ -916,6 +993,62 @@ export default function InventoryDetail() {
                                         )}
                                     </div>
                                 </Card>
+
+                                {form.watch("subtype")?.toLowerCase().includes("imovel") && (
+                                    <Card className="p-4 rounded-3xl border shadow-sm bg-white overflow-hidden">
+                                        <div className="flex items-center justify-between mb-4">
+                                            <h3 className="text-sm font-black text-slate-800 flex items-center gap-2">
+                                                <ImageIcon className="w-4 h-4 text-indigo-600" />
+                                                Fotos Adicionais
+                                            </h3>
+                                            {isEdit && (
+                                                <div className="relative">
+                                                    <Button type="button" size="sm" variant="outline" className="h-8 rounded-lg cursor-pointer" disabled={uploadingExtra}>
+                                                        {uploadingExtra ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Upload className="w-4 h-4 mr-2" />}
+                                                        Upload
+                                                    </Button>
+                                                    <input
+                                                        type="file"
+                                                        accept="image/*"
+                                                        multiple
+                                                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                                                        onChange={handleExtraFileUpload}
+                                                        disabled={uploadingExtra}
+                                                    />
+                                                </div>
+                                            )}
+                                        </div>
+                                        {!isEdit && (
+                                            <div className="text-center p-4 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
+                                                <p className="text-xs text-slate-500 font-medium">Salve o imóvel primeiro para adicionar fotos.</p>
+                                            </div>
+                                        )}
+                                        {isEdit && entityPhotosQ.isLoading && (
+                                            <div className="flex justify-center p-4">
+                                                <Loader2 className="w-5 h-5 text-indigo-500 animate-spin" />
+                                            </div>
+                                        )}
+                                        {isEdit && entityPhotosQ.data && entityPhotosQ.data.length > 0 && (
+                                            <div className="grid grid-cols-2 gap-2 mt-2">
+                                                {entityPhotosQ.data.filter((p: any) => p.url !== form.watch("photo_url")).map((photo: any) => (
+                                                    <div key={photo.id} className="relative aspect-square rounded-xl overflow-hidden group border border-slate-200">
+                                                        <img src={photo.url} className="w-full h-full object-cover" />
+                                                        <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                                            <Button type="button" size="icon" variant="destructive" className="h-8 w-8 rounded-full" onClick={() => handleDeleteExtraPhoto(photo.id)}>
+                                                                <Trash2 className="w-4 h-4" />
+                                                            </Button>
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+                                        {isEdit && entityPhotosQ.data && entityPhotosQ.data.filter((p: any) => p.url !== form.watch("photo_url")).length === 0 && !entityPhotosQ.isLoading && (
+                                            <div className="text-center p-4 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
+                                                <p className="text-[10px] text-slate-400 font-medium uppercase tracking-wider">Nenhuma foto extra</p>
+                                            </div>
+                                        )}
+                                    </Card>
+                                )}
                             </div>
 
                             {/* Main Content: Info and Details */}
@@ -1084,6 +1217,25 @@ export default function InventoryDetail() {
                                                 </FormItem>
                                             )}
                                         />
+
+                                        {form.watch("subtype")?.toLowerCase().includes("imovel") && (
+                                            <FormField
+                                                control={form.control}
+                                                name="ad_url"
+                                                render={({ field }) => (
+                                                    <FormItem className="md:col-span-2">
+                                                        <FormLabel className="text-xs font-black text-slate-400 uppercase tracking-wider text-indigo-600">Link do Anúncio Completo (URL)</FormLabel>
+                                                        <FormControl>
+                                                            <Input placeholder="Ex: https://meusite.com.br/imovel/123" {...field} className="h-11 rounded-xl" />
+                                                        </FormControl>
+                                                        <FormDescription className="text-[10px] text-slate-500 mt-1">
+                                                            Pode ser enviado ao cliente para ver mais detalhes.
+                                                        </FormDescription>
+                                                        <FormMessage />
+                                                    </FormItem>
+                                                )}
+                                            />
+                                        )}
                                     </div>
                                 </Card>
 
