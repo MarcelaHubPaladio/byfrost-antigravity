@@ -259,7 +259,7 @@ serve(async (req) => {
             if (photos && photos.length > 0) {
               sysPrompt += `- Fotos oficiais para enviar ao cliente:\n`;
               photos.forEach(ph => {
-                sysPrompt += `  * Foto (${ph.room_type || 'Geral'}): ${ph.url}\n`;
+                sysPrompt += `  * ![Foto ${ph.room_type || 'Geral'}](${ph.url})\n`;
               });
             }
           }

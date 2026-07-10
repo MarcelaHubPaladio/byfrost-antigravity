@@ -1155,6 +1155,39 @@ serve(async (req) => {
         const paddedFrom = cleanFrom.padStart(12, "0").slice(-12);
         const simSessionId = `00000000-0000-4000-8000-${paddedFrom}`;
 
+        // Reset Simulator Command
+        const lowerText = normalized.text.trim().toLowerCase();
+        if (lowerText === "reset" || lowerText === "reiniciar" || lowerText === "limpar") {
+          await supabase.from("beeia_simulations").delete().eq("session_id", simSessionId);
+          await supabase.functions.invoke("integrations-zapi-send", {
+            body: {
+              tenantId: instance.tenant_id,
+              instanceId: instance.id,
+              to: normalized.from,
+              type: "text",
+              text: "✅ O histórico do simulador foi resetado para este número. Pode começar um novo teste!"
+            }
+          });
+          return new Response(JSON.stringify({ ok: true, test: true, reset: true }), { headers: corsHeaders });
+        }
+
+        // Deduplication: prevent double execution if the same text was sent in the last 30 seconds
+        const { data: dupCheck } = await supabase
+          .from("beeia_simulations")
+          .select("id")
+          .eq("tenant_id", instance.tenant_id)
+          .eq("session_id", simSessionId)
+          .eq("role", "user")
+          .eq("content", normalized.text)
+          .gte("created_at", new Date(Date.now() - 30_000).toISOString())
+          .limit(1)
+          .maybeSingle();
+
+        if (dupCheck?.id) {
+          console.log(`[${fn}] beeia_real_test deduplicated (ignoring repeated text within 30s)`);
+          return new Response(JSON.stringify({ ok: true, test: true, duplicate: true }), { headers: corsHeaders });
+        }
+
         try {
           const { data: simRes, error: simErr } = await supabase.functions.invoke("beeia-simulator", {
             body: {
@@ -1169,15 +1202,56 @@ serve(async (req) => {
           if (simErr) throw simErr;
           
           if (simRes?.response) {
-            await supabase.functions.invoke("integrations-zapi-send", {
-              body: {
+            const mdImgRegex = /!\[([^\]]*)\]\(([^)]+)\)/g;
+            const msgParts: Array<{ type: string; content?: string; caption?: string; mediaUrl?: string }> = [];
+            let lastIdx = 0;
+            let mdMatch;
+            const responseText = simRes.response;
+
+            while ((mdMatch = mdImgRegex.exec(responseText)) !== null) {
+              const textBefore = responseText.substring(lastIdx, mdMatch.index).trim();
+              if (textBefore) {
+                msgParts.push({ type: "text", content: textBefore });
+              }
+              msgParts.push({ type: "image", caption: mdMatch[1], mediaUrl: mdMatch[2] });
+              lastIdx = mdImgRegex.lastIndex;
+            }
+
+            const textAfter = responseText.substring(lastIdx).trim();
+            if (textAfter) {
+              msgParts.push({ type: "text", content: textAfter });
+            }
+
+            if (msgParts.length === 0) {
+              msgParts.push({ type: "text", content: responseText });
+            }
+
+            let delayMs = 0;
+            for (const part of msgParts) {
+              if (delayMs > 0) {
+                await new Promise(resolve => setTimeout(resolve, delayMs));
+              }
+
+              const payload: any = {
                 tenantId: instance.tenant_id,
                 instanceId: instance.id,
                 to: normalized.from,
-                type: "text",
-                text: simRes.response
+                type: part.type
+              };
+
+              if (part.type === "text") {
+                payload.text = part.content;
+              } else if (part.type === "image") {
+                payload.mediaUrl = part.mediaUrl;
+                payload.text = ""; // ZAPI uses caption mapping
               }
-            });
+
+              await supabase.functions.invoke("integrations-zapi-send", {
+                body: payload
+              });
+              
+              delayMs = 1500;
+            }
           }
           
           await logInbox({
