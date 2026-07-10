@@ -232,6 +232,9 @@ serve(async (req) => {
           if (allowedFields.includes("description") && meta.description) {
             sysPrompt += `- Descrição Comercial: ${meta.description}\n`;
           }
+          if (meta.ad_url) {
+            sysPrompt += `- Link do Anúncio (Mais detalhes): ${meta.ad_url}\n`;
+          }
           if (allowedFields.includes("area")) {
             if (propEntity.total_area) sysPrompt += `- Área Total: ${propEntity.total_area} m²\n`;
             if (propEntity.useful_area) sysPrompt += `- Área Útil: ${propEntity.useful_area} m²\n`;
@@ -279,7 +282,9 @@ serve(async (req) => {
             const opMeta = op.metadata || {};
             const opVal = op.business_type === "rent" ? (opMeta.price_rent || opMeta.price_sale || opMeta.price) : (opMeta.price_sale || opMeta.price);
             const opStr = opMeta.price_consult || !opVal ? "Sob consulta" : Number(opVal).toLocaleString("pt-BR", { minimumFractionDigits: 2 });
-            sysPrompt += `- Cód: ${op.internal_code || "N/A"} | ${op.display_name} | Preço: R$ ${opStr} | Negócio: ${op.business_type === "rent" ? "Locação" : "Venda"}\n`;
+            sysPrompt += `- Cód: ${op.internal_code || "N/A"} | ${op.display_name} | Preço: R$ ${opStr} | Negócio: ${op.business_type === "rent" ? "Locação" : "Venda"}`;
+            if (opMeta.ad_url) sysPrompt += ` | Link: ${opMeta.ad_url}`;
+            sysPrompt += `\n`;
           });
         }
 
