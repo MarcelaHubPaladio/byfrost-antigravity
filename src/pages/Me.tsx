@@ -13,7 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Link2, LayoutGrid, Camera, Loader2 } from "lucide-react";
+import { Link2, LayoutGrid, Camera, Loader2, Calendar } from "lucide-react";
 import { CANDIDATE_ROUTES } from "@/lib/access";
 import {
   Select,
@@ -136,6 +136,19 @@ export default function Me() {
         .eq("enabled", true);
       if (error) throw error;
       return (data ?? []) as any[];
+    },
+  });
+
+  const integrationsQ = useQuery({
+    queryKey: ["user_integrations", user?.id],
+    enabled: Boolean(user?.id),
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("user_integrations")
+        .select("*")
+        .eq("user_id", user!.id);
+      if (error) throw error;
+      return data || [];
     },
   });
 
@@ -265,6 +278,41 @@ export default function Me() {
     }
   };
 
+  const handleConnectCalendar = async () => {
+    setBusy(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("google-oauth", {
+        body: { action: "url", redirect_uri: `${window.location.origin}/app/oauth/google/callback` },
+      });
+      if (error) throw error;
+      if (data?.url) {
+        window.location.href = data.url;
+      }
+    } catch (e: any) {
+      showError(`Erro ao iniciar integração: ${e.message}`);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleDisconnectCalendar = async () => {
+    setBusy(true);
+    try {
+      const { error } = await supabase.functions.invoke("google-oauth", {
+        body: { action: "disconnect" },
+      });
+      if (error) throw error;
+      qc.invalidateQueries({ queryKey: ["user_integrations", user?.id] });
+      showSuccess("Google Agenda desconectado.");
+    } catch (e: any) {
+      showError(`Erro ao desconectar: ${e.message}`);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const googleIntegration = integrationsQ.data?.find(i => i.provider === "google_calendar");
+
   return (
     <RequireAuth>
       <AppShell>
@@ -372,6 +420,35 @@ export default function Me() {
                     </Button>
                     <div className="mt-2 text-[11px] text-slate-500 dark:text-slate-400">
                       Requer Google provider habilitado e "Manual linking" ativo no Supabase Auth.
+                    </div>
+                  </div>
+
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-800 dark:bg-slate-950/40">
+                    <div className="flex items-center gap-2 text-[11px] font-semibold text-slate-700 dark:text-slate-200">
+                      <Calendar className="h-3.5 w-3.5" />
+                      Integrações Externas
+                    </div>
+                    <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
+                      Conecte serviços externos para usar com a BeeIA.
+                    </p>
+                    <div className="mt-3 flex items-center justify-between gap-2 p-3 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800">
+                      <div className="flex flex-col">
+                        <span className="text-sm font-semibold text-slate-900 dark:text-slate-100">Google Agenda</span>
+                        {googleIntegration ? (
+                          <span className="text-xs text-emerald-600 dark:text-emerald-400">Conectado: {googleIntegration.provider_account_id}</span>
+                        ) : (
+                          <span className="text-xs text-slate-500">Não conectado</span>
+                        )}
+                      </div>
+                      <Button
+                        onClick={googleIntegration ? handleDisconnectCalendar : handleConnectCalendar}
+                        disabled={busy}
+                        variant={googleIntegration ? "outline" : "default"}
+                        size="sm"
+                        className="rounded-xl h-8"
+                      >
+                        {googleIntegration ? "Desconectar" : "Conectar"}
+                      </Button>
                     </div>
                   </div>
 

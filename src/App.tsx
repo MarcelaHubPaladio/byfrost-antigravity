@@ -35,6 +35,7 @@ const NotFound = lazyWithRetry(() => import("@/pages/NotFound"));
 const Login = lazyWithRetry(() => import("@/pages/Login"));
 const TenantSelect = lazyWithRetry(() => import("@/pages/TenantSelect"));
 const AuthCallback = lazyWithRetry(() => import("@/pages/AuthCallback"));
+const GoogleOAuthCallback = lazyWithRetry(() => import("@/pages/GoogleOAuthCallback"));
 const ResetPassword = lazyWithRetry(() => import("@/pages/ResetPassword"));
 const Dashboard = lazyWithRetry(() => import("@/pages/Dashboard"));
 const Trello = lazyWithRetry(() => import("@/pages/Trello"));
@@ -160,6 +161,7 @@ const App = () => (
                   <Route path="/login" element={<Login />} />
                   <Route path="/tenants" element={<TenantSelect />} />
                   <Route path="/auth/callback" element={<AuthCallback />} />
+                  <Route path="/app/oauth/google/callback" element={<GoogleOAuthCallback />} />
                   <Route path="/auth/reset" element={<ResetPassword />} />
 
                   {/* Public proposal (no auth) */}

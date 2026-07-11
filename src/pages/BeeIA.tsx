@@ -2750,6 +2750,7 @@ function BeeIAPlugsTab({
   users,
   isSaving,
 }: BeeIAPlugsTabProps) {
+  const { activeTenantId } = useTenant();
   // Local States for forms
   const [crmTargetStage, setCrmTargetStage] = useState("morno");
   const [crmAssignedUser, setCrmAssignedUser] = useState("");
@@ -2769,6 +2770,21 @@ function BeeIAPlugsTab({
   const [discordNotificationTemplate, setDiscordNotificationTemplate] = useState("");
 
   const [consultingRules, setConsultingRules] = useState("");
+  const [googleCalendarId, setGoogleCalendarId] = useState("");
+
+  const googleCalendarsQ = useQuery({
+    queryKey: ["google_calendars"],
+    queryFn: async () => {
+      const { data, error } = await supabase.functions.invoke("google-oauth", {
+        body: { action: "calendars" }
+      });
+      if (error) throw error;
+      return data.calendars || [];
+    },
+    // Only fetch if the plug is enabled or the user opens the section
+    enabled: true,
+    retry: false
+  });
 
   // Sync with loaded plugs data
   useEffect(() => {
@@ -2808,6 +2824,7 @@ function BeeIAPlugsTab({
       const consultingPlug = plugs.find((p) => p.plug_key === "consulting_schedule");
       if (consultingPlug) {
         setConsultingRules(consultingPlug.config_json?.scheduling_rules || "");
+        setGoogleCalendarId(consultingPlug.config_json?.google_calendar_id || "");
       }
     }
   }, [plugs]);
@@ -2864,6 +2881,7 @@ function BeeIAPlugsTab({
   const handleSaveConsulting = () => {
     onSave("consulting_schedule", isPlugEnabled("consulting_schedule"), {
       scheduling_rules: consultingRules,
+      google_calendar_id: googleCalendarId,
     });
   };
 
@@ -3331,6 +3349,37 @@ function BeeIAPlugsTab({
                   placeholder="Ex: Atendimentos ocorrem de Segunda a Sexta, das 9h às 18h. A duração padrão de uma consultoria é de 1 hora."
                   className="rounded-xl border-slate-200 text-xs dark:border-slate-850 min-h-[90px] resize-y"
                 />
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <Label className="text-[10px] font-bold uppercase text-slate-400 tracking-wider">
+                  Agenda do Google (Sincronização)
+                </Label>
+                {googleCalendarsQ.isLoading ? (
+                  <div className="text-xs text-slate-500 flex items-center gap-2">
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" /> Carregando agendas...
+                  </div>
+                ) : googleCalendarsQ.isError ? (
+                  <div className="text-xs text-red-500">
+                    Erro ao carregar agendas. Verifique se o seu usuário vinculou o Google Agenda em 'Meu usuário'.
+                  </div>
+                ) : (
+                  <Select
+                    value={googleCalendarId}
+                    onValueChange={setGoogleCalendarId}
+                  >
+                    <SelectTrigger className="h-10 rounded-xl border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-950/50">
+                      <SelectValue placeholder="Selecione uma agenda" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {googleCalendarsQ.data?.map((cal: any) => (
+                        <SelectItem key={cal.id} value={cal.id}>
+                          {cal.summary} {cal.primary ? "(Principal)" : ""}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
               </div>
 
               <div className="flex justify-end border-t border-slate-100 pt-3 dark:border-slate-850">
