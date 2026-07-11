@@ -1,22 +1,32 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { corsHeaders } from "../_shared/cors.ts";
-import { getSupabaseAdmin } from "../_shared/supabaseAdmin.ts";
+import { createSupabaseAdmin } from "../_shared/supabaseAdmin.ts";
 
 const GOOGLE_CLIENT_ID = Deno.env.get("GOOGLE_CLIENT_ID") || "";
 const GOOGLE_CLIENT_SECRET = Deno.env.get("GOOGLE_CLIENT_SECRET") || "";
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
+    return new Response("ok", { headers: corsHeaders });
   }
 
   try {
     const url = new URL(req.url);
-    const action = url.searchParams.get("action");
+    let action = url.searchParams.get("action");
+    let reqBody: any = {};
+    
+    if (req.method === "POST") {
+      try {
+        reqBody = await req.json();
+        if (reqBody.action) action = reqBody.action;
+      } catch (e) {
+        // Ignore json parse error if empty body
+      }
+    }
 
     // 1. Generate OAuth URL
     if (action === "url") {
-      const redirectUri = url.searchParams.get("redirect_uri");
+      const redirectUri = reqBody.redirect_uri || url.searchParams.get("redirect_uri");
       if (!redirectUri) throw new Error("Missing redirect_uri parameter");
 
       const scopes = [
@@ -31,14 +41,14 @@ serve(async (req) => {
 
     // 2. Handle Callback (Exchange code for tokens)
     if (action === "callback") {
-      const { code, redirect_uri } = await req.json();
+      const { code, redirect_uri } = reqBody;
       if (!code || !redirect_uri) throw new Error("Missing code or redirect_uri");
 
       // Verify the user making the request
       const authHeader = req.headers.get("Authorization");
       if (!authHeader) throw new Error("Missing Authorization header");
 
-      const supabase = getSupabaseAdmin();
+      const supabase = createSupabaseAdmin();
       const { data: { user }, error: userError } = await supabase.auth.getUser(authHeader.replace("Bearer ", ""));
       if (userError || !user) throw new Error("Unauthorized");
 
@@ -111,7 +121,7 @@ serve(async (req) => {
       const authHeader = req.headers.get("Authorization");
       if (!authHeader) throw new Error("Missing Authorization header");
 
-      const supabase = getSupabaseAdmin();
+      const supabase = createSupabaseAdmin();
       const { data: { user }, error: userError } = await supabase.auth.getUser(authHeader.replace("Bearer ", ""));
       if (userError || !user) throw new Error("Unauthorized");
 
@@ -177,7 +187,7 @@ serve(async (req) => {
       const authHeader = req.headers.get("Authorization");
       if (!authHeader) throw new Error("Missing Authorization header");
 
-      const supabase = getSupabaseAdmin();
+      const supabase = createSupabaseAdmin();
       const { data: { user }, error: userError } = await supabase.auth.getUser(authHeader.replace("Bearer ", ""));
       if (userError || !user) throw new Error("Unauthorized");
       
