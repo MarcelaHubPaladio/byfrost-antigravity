@@ -258,7 +258,6 @@ function BeeIAPage() {
       const { data, error } = await supabase
         .from("journeys")
         .select("id, name, key")
-        .is("deleted_at", null)
         .order("name", { ascending: true });
       if (error) throw error;
       return data || [];
