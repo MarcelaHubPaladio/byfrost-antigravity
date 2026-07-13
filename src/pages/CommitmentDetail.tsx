@@ -1393,78 +1393,7 @@ export default function CommitmentDetail() {
                                     <div className="mt-3 space-y-1.5">
                                       {d.cases && d.cases.filter((c:any) => !c.deleted_at).length > 0 ? (
                                         d.cases.filter((c:any) => !c.deleted_at).map((c: any) => (
-                                          <Link 
-                                            key={c.id} 
-                                            to={`/app/operacao-m30/${c.id}`}
-                                            className="flex items-center justify-between rounded-lg bg-white p-2 text-xs shadow-sm ring-1 ring-slate-200 transition hover:ring-blue-300"
-                                          >
-                                            <div className="flex items-center gap-2 truncate">
-                                              <KanbanSquare className="h-3 w-3 text-blue-500/70" />
-                                              <span className="truncate font-medium text-slate-700">{c.title || "Tarefa sem nome"}</span>
-                                              {/* Labels on case */}
-                                              {((c.meta_json as any)?.labels || []).length > 0 && (
-                                                <div className="flex gap-1 items-center ml-2">
-                                                  {((c.meta_json as any)?.labels || []).map((lblId: string) => {
-                                                    const lbl = clientLabels.find(l => l.id === lblId);
-                                                    if (!lbl) return null;
-                                                    return (
-                                                      <span key={lbl.id} className="text-[9px] font-bold px-1.5 py-0.5 rounded-sm" style={{ backgroundColor: lbl.color, color: '#fff' }}>
-                                                        {lbl.name}
-                                                      </span>
-                                                    );
-                                                  })}
-                                                </div>
-                                              )}
-                                            </div>
-                                            <div className="flex items-center gap-2">
-                                              <DropdownMenu>
-                                                <DropdownMenuTrigger asChild onClick={e => e.stopPropagation()}>
-                                                  <Button variant="ghost" size="icon" className="h-6 w-6 hover:bg-slate-100">
-                                                    <Tag className="h-3 w-3 text-slate-400" />
-                                                  </Button>
-                                                </DropdownMenuTrigger>
-                                                <DropdownMenuContent align="end" className="w-48" onClick={e => e.stopPropagation()}>
-                                                  <DropdownMenuLabel className="text-[10px] text-slate-500 uppercase">Etiquetas</DropdownMenuLabel>
-                                                  <DropdownMenuSeparator />
-                                                  {clientLabels.length === 0 && (
-                                                    <div className="text-[10px] px-2 py-1 text-slate-400">Nenhuma etiqueta cadastrada.</div>
-                                                  )}
-                                                  {clientLabels.map(lbl => {
-                                                    const isSelected = ((c.meta_json as any)?.labels || []).includes(lbl.id);
-                                                    return (
-                                                      <DropdownMenuCheckboxItem
-                                                        key={lbl.id}
-                                                        checked={isSelected}
-                                                        onCheckedChange={async () => {
-                                                          try {
-                                                            const currentLabels = (c.meta_json as any)?.labels || [];
-                                                            let newLabels = [...currentLabels];
-                                                            if (isSelected) newLabels = newLabels.filter((id: string) => id !== lbl.id);
-                                                            else newLabels.push(lbl.id);
-                                                            
-                                                            const newMeta = { ...(c.meta_json || {}), labels: newLabels };
-                                                            await supabase.from("cases").update({ meta_json: newMeta }).eq("id", c.id);
-                                                            deliverablesQ.refetch();
-                                                            m30CasesQ.refetch();
-                                                          } catch (err) {
-                                                            console.error(err);
-                                                          }
-                                                        }}
-                                                      >
-                                                        <div className="flex items-center gap-2">
-                                                          <span className="w-2 h-2 rounded-full" style={{ backgroundColor: lbl.color }} />
-                                                          <span className="text-xs">{lbl.name}</span>
-                                                        </div>
-                                                      </DropdownMenuCheckboxItem>
-                                                    )
-                                                  })}
-                                                </DropdownMenuContent>
-                                              </DropdownMenu>
-                                              <Badge variant="outline" className="h-4 px-1 text-[9px] bg-slate-50">
-                                                {c.state}
-                                              </Badge>
-                                            </div>
-                                          </Link>
+                                          <DeliverableCaseCard key={c.id} c={c} clientLabels={clientLabels} onRefetch={() => { deliverablesQ.refetch(); m30CasesQ.refetch(); }} />
                                         ))
                                       ) : (
                                         <div className="text-[10px] text-slate-400 italic bg-white/50 rounded-lg p-2 border border-dashed">
@@ -1565,45 +1494,7 @@ export default function CommitmentDetail() {
                         col.items.length > 0 ? "bg-white/40 border border-slate-200/50" : "bg-slate-100/30 border border-dashed border-slate-200"
                       )}>
                         {col.items.map((c) => (
-                          <Link
-                            key={c.id}
-                            to={`/app/operacao-m30/${c.id}`}
-                            className={cn(
-                              "block rounded-xl border bg-white p-3 shadow-sm transition-all hover:shadow-md hover:border-indigo-300 group",
-                              (c.meta_json as any)?.commitment_id === commitmentId ? "ring-2 ring-indigo-500/10 border-indigo-200" : "border-slate-200"
-                            )}
-                          >
-                            <div className="flex items-start justify-between gap-2">
-                              <p className="text-xs font-bold text-slate-900 line-clamp-2 leading-tight group-hover:text-indigo-600 transition-colors">
-                                {c.title || "Sem título"}
-                              </p>
-                              {(c.meta_json as any)?.priority && (
-                                <AlertCircle className="h-3 w-3 text-rose-500 shrink-0" />
-                              )}
-                            </div>
-                            
-                            {/* Render labels on card */}
-                            {((c.meta_json as any)?.labels || []).length > 0 && (
-                              <div className="mt-2 flex flex-wrap gap-1">
-                                {((c.meta_json as any)?.labels || []).map((lblId: string) => {
-                                  const lbl = clientLabels.find(l => l.id === lblId);
-                                  if (!lbl) return null;
-                                  return (
-                                    <span key={lbl.id} className="text-[8px] font-bold px-1.5 py-0.5 rounded-sm" style={{ backgroundColor: lbl.color, color: '#fff' }}>
-                                      {lbl.name}
-                                    </span>
-                                  );
-                                })}
-                              </div>
-                            )}
-
-                            <div className="mt-2 flex items-center justify-between text-[9px] font-medium text-slate-400">
-                              <span className="truncate">{new Date(c.updated_at).toLocaleDateString()}</span>
-                              {(c.meta_json as any)?.commitment_id === commitmentId && (
-                                <Badge variant="outline" className="h-3.5 px-1 py-0 text-[8px] border-indigo-200 text-indigo-500 bg-indigo-50">ESTE CONTRATO</Badge>
-                              )}
-                            </div>
-                          </Link>
+                           <M30KanbanCaseCard key={c.id} c={c} clientLabels={clientLabels} commitmentId={commitmentId} onRefetch={() => { m30CasesQ.refetch(); deliverablesQ.refetch(); }} />
                         ))}
                         {col.items.length === 0 && (
                           <div className="text-[9px] text-slate-400 text-center py-4 italic">Sem cards nesta etapa</div>
@@ -1956,3 +1847,121 @@ export default function CommitmentDetail() {
     </RequireAuth>
   );
 }
+
+function DeliverableCaseCard({ c, clientLabels, onRefetch }: { c: any, clientLabels: any[], onRefetch: () => void }) {
+  return (
+    <Link 
+      key={c.id} 
+      to={`/app/operacao-m30/${c.id}`}
+      className="flex items-center justify-between rounded-lg bg-white p-2 text-xs shadow-sm ring-1 ring-slate-200 transition hover:ring-blue-300"
+    >
+      <div className="flex items-center gap-2 truncate">
+        <KanbanSquare className="h-3 w-3 text-blue-500/70" />
+        <span className="truncate font-medium text-slate-700">{c.title || "Tarefa sem nome"}</span>
+        {/* Labels on case */}
+        {((c.meta_json as any)?.labels || []).length > 0 && (
+          <div className="flex gap-1 items-center ml-2">
+            {((c.meta_json as any)?.labels || []).map((lblId: string) => {
+              const lbl = clientLabels.find(l => l.id === lblId);
+              if (!lbl) return null;
+              return (
+                <span key={lbl.id} className="text-[9px] font-bold px-1.5 py-0.5 rounded-sm" style={{ backgroundColor: lbl.color, color: '#fff' }}>
+                  {lbl.name}
+                </span>
+              );
+            })}
+          </div>
+        )}
+      </div>
+      <div className="flex items-center gap-2">
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild onClick={e => e.stopPropagation()}>
+            <Button variant="ghost" size="icon" className="h-6 w-6 hover:bg-slate-100">
+              <Tag className="h-3 w-3 text-slate-400" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-48" onClick={e => e.stopPropagation()}>
+            <DropdownMenuLabel className="text-[10px] text-slate-500 uppercase">Etiquetas</DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            {clientLabels.length === 0 && (
+              <div className="text-[10px] px-2 py-1 text-slate-400">Nenhuma etiqueta cadastrada.</div>
+            )}
+            {clientLabels.map(lbl => {
+              const isSelected = ((c.meta_json as any)?.labels || []).includes(lbl.id);
+              return (
+                <DropdownMenuCheckboxItem
+                  key={lbl.id}
+                  checked={isSelected}
+                  onCheckedChange={async () => {
+                    try {
+                      const currentLabels = (c.meta_json as any)?.labels || [];
+                      let newLabels = [...currentLabels];
+                      if (isSelected) newLabels = newLabels.filter((id: string) => id !== lbl.id);
+                      else newLabels.push(lbl.id);
+                      
+                      const newMeta = { ...(c.meta_json || {}), labels: newLabels };
+                      await supabase.from("cases").update({ meta_json: newMeta }).eq("id", c.id);
+                      onRefetch();
+                    } catch (err) {
+                      console.error(err);
+                    }
+                  }}
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full" style={{ backgroundColor: lbl.color }} />
+                    <span className="text-xs">{lbl.name}</span>
+                  </div>
+                </DropdownMenuCheckboxItem>
+              )
+            })}
+          </DropdownMenuContent>
+        </DropdownMenu>
+        <Badge variant="outline" className="h-4 px-1 text-[9px] bg-slate-50">
+          {c.state}
+        </Badge>
+      </div>
+    </Link>
+  );
+}
+
+function M30KanbanCaseCard({ c, clientLabels, commitmentId, onRefetch }: { c: any, clientLabels: any[], commitmentId: string, onRefetch: () => void }) {
+  return (
+    <Link 
+      key={c.id} 
+      to={`/app/operacao-m30/${c.id}`}
+      className={cn(
+        "block rounded-xl border bg-white p-3 shadow-sm transition-all hover:shadow-md hover:border-indigo-300 group",
+        (c.meta_json as any)?.commitment_id === commitmentId ? "ring-2 ring-indigo-500/10 border-indigo-200" : "border-slate-200"
+      )}
+    >
+      <div className="flex items-start justify-between gap-2">
+        <p className="text-xs font-bold text-slate-900 line-clamp-2 leading-tight group-hover:text-indigo-600 transition-colors">
+          {c.title || "Sem título"}
+        </p>
+        {(c.meta_json as any)?.priority && (
+          <AlertCircle className="h-3 w-3 text-rose-500 shrink-0" />
+        )}
+      </div>
+      
+      <div className="mt-2 flex flex-wrap gap-1">
+        {((c.meta_json as any)?.labels || []).map((lblId: string) => {
+          const lbl = clientLabels.find(l => l.id === lblId);
+          if (!lbl) return null;
+          return (
+            <span key={lbl.id} className="text-[8px] font-bold px-1.5 py-0.5 rounded-sm" style={{ backgroundColor: lbl.color, color: '#fff' }}>
+              {lbl.name}
+            </span>
+          );
+        })}
+      </div>
+
+      <div className="mt-2 flex items-center justify-between text-[9px] font-medium text-slate-400">
+        <span className="truncate">{new Date(c.updated_at).toLocaleDateString()}</span>
+        {(c.meta_json as any)?.commitment_id === commitmentId && (
+          <Badge variant="outline" className="h-3.5 px-1 py-0 text-[8px] border-indigo-200 text-indigo-500 bg-indigo-50">ESTE CONTRATO</Badge>
+        )}
+      </div>
+    </Link>
+  );
+}
+
