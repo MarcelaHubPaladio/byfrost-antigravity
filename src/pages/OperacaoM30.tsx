@@ -1502,7 +1502,7 @@ export default function OperacaoM30() {
                   ))}
                 </div>
               ) : tab === "calendar" ? (
-                <M30CalendarView cases={filteredRows} date={calendarDate} onChangeDate={setCalendarDate} />
+                <M30CalendarView cases={filteredRows} date={calendarDate} onChangeDate={setCalendarDate} locks={locks} />
               ) : tab === "contracts" ? (
                 <div className="space-y-8 animate-in fade-in duration-500 pb-10">
                   {Object.entries(groupedM30Contracts).map(([entityId, contracts]) => (
