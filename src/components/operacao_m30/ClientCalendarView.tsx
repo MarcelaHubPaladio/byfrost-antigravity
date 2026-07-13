@@ -12,6 +12,7 @@ import { CalendarIcon } from "lucide-react";
 export function ClientCalendarView({
   cases,
   defaultPostingDays = [],
+  clientLabels,
   onUpdate
 }: { 
   cases: any[],
