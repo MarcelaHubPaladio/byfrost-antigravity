@@ -1,4 +1,5 @@
 import type { AgroForteData } from './agroforte-types';
+import { useState, useEffect } from 'react';
 
 interface AgroForteRendererProps {
   data: AgroForteData;
@@ -20,7 +21,9 @@ const AGROFORTE_CSS = `
   .afr-nav-links a:hover{color:#8bc34a}
   .afr-nav-cta{background:#4caf50;color:#fff!important;border:none;padding:10px 22px;border-radius:24px;font-size:14px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:6px;transition:background .2s;font-family:inherit;text-decoration:none}
   .afr-nav-cta:hover{background:#43a047}
-  .afr-hero{background:linear-gradient(135deg,#0d2b0e 0%,#1a3a1f 40%,#2d5a1e 100%);min-height:520px;display:flex;align-items:center;position:relative;overflow:hidden;padding:60px 5%}
+  .afr-hero{background:linear-gradient(135deg,#0d2b0e 0%,#1a3a1f 40%,#2d5a1e 100%);min-height:520px;position:relative;overflow:hidden}
+  .afr-hero-slide{position:absolute;inset:0;opacity:0;transition:opacity 0.8s ease;display:flex;align-items:center;padding:60px 5%;pointer-events:none}
+  .afr-hero-slide.active{opacity:1;z-index:1;pointer-events:auto}
   .afr-hero-bg{position:absolute;right:0;top:0;width:55%;height:100%;object-fit:cover;opacity:.35}
   .afr-hero-content{position:relative;z-index:2;max-width:600px}
   .afr-hero-content h1{font-size:52px;font-weight:900;color:#fff;line-height:1.1;margin:0 0 16px;font-family:inherit}
@@ -125,6 +128,15 @@ const AGROFORTE_CSS = `
 
 export function AgroForteRenderer({ data }: AgroForteRendererProps) {
   const { brand, hero, featuredProducts, catalogs, footer } = data;
+  const [currentSlide, setCurrentSlide] = useState(0);
+  
+  useEffect(() => {
+    if (!hero.autoPlay || hero.banners.length <= 1) return;
+    const timer = setInterval(() => {
+      setCurrentSlide(c => (c + 1) % hero.banners.length);
+    }, Math.max(1, hero.interval) * 1000);
+    return () => clearInterval(timer);
+  }, [hero.autoPlay, hero.interval, hero.banners.length]);
   
   // Parse brand name: last uppercase word gets green color
   const nameParts = brand.name.split(/(?=[A-Z][^A-Z]+$)/);
@@ -138,20 +150,26 @@ export function AgroForteRenderer({ data }: AgroForteRendererProps) {
       {/* NAV */}
       <nav className="afr-nav">
         <div className="afr-logo">
-          <div className="afr-logo-icon">
-            <svg viewBox="0 0 24 24"><path d="M12 2C9 2 6 4 5 7C4 10 5 13 7 15C9 17 11 17 11 20H13C13 17 15 17 17 15C19 13 20 10 19 7C18 4 15 2 12 2Z"/><rect x="10" y="20" width="4" height="3" rx="1"/></svg>
-          </div>
-          <div>
-            <span className="afr-logo-name">{brandFirst}<em>{brandSecond}</em></span>
-            <span className="afr-logo-tag">{brand.tagline}</span>
-          </div>
+          {brand.logoImage ? (
+            <img src={brand.logoImage} alt={brand.name} style={{ height: '36px', width: 'auto', objectFit: 'contain' }} />
+          ) : (
+            <>
+              <div className="afr-logo-icon">
+                <svg viewBox="0 0 24 24"><path d="M12 2C9 2 6 4 5 7C4 10 5 13 7 15C9 17 11 17 11 20H13C13 17 15 17 17 15C19 13 20 10 19 7C18 4 15 2 12 2Z"/><rect x="10" y="20" width="4" height="3" rx="1"/></svg>
+              </div>
+              <div>
+                <span className="afr-logo-name">{brandFirst}<em>{brandSecond}</em></span>
+                <span className="afr-logo-tag">{brand.tagline}</span>
+              </div>
+            </>
+          )}
         </div>
         <ul className="afr-nav-links">
-          {['Início', 'Produtos', 'Serviços', 'Sobre Nós', 'Contato'].map(l => (
-            <li key={l}><a href="#">{l}</a></li>
+          {brand.navLinks.map((link, idx) => (
+            <li key={idx}><a href={link.url}>{link.label}</a></li>
           ))}
         </ul>
-        <a href="#contato" className="afr-nav-cta">
+        <a href={brand.navCtaUrl || '#contato'} className="afr-nav-cta">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 014.47 11.5a19.79 19.79 0 01-3.07-8.67A2 2 0 013.38 1h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L7.91 8.96a16 16 0 006.07 6.07l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z"/></svg>
           {brand.navCta}
         </a>
@@ -159,27 +177,42 @@ export function AgroForteRenderer({ data }: AgroForteRendererProps) {
 
       {/* HERO */}
       <section className="afr-hero">
-        <img className="afr-hero-bg" src={hero.bgImage} alt="" />
-        <div className="afr-hero-content">
-          <h1>
-            {hero.headline} <em>{hero.headlineHighlight}</em><br/>
-            Colhendo<br/>Soluções.
-          </h1>
-          <p>{hero.subtitle}</p>
-          <a href={hero.ctaUrl} className="afr-hero-cta">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
-            {hero.ctaText}
-          </a>
-        </div>
-        <div className="afr-hero-badge">
-          <div className="afr-hero-badge-icon">
-            <svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+        {hero.banners.map((banner, i) => (
+          <div key={i} className={`afr-hero-slide ${i === currentSlide ? 'active' : ''}`}>
+            <img className="afr-hero-bg" src={banner.bgImage} alt="" />
+            <div className="afr-hero-content">
+              <h1>
+                {banner.headline} <em>{banner.headlineHighlight}</em><br/>
+                Colhendo<br/>Soluções.
+              </h1>
+              <p>{banner.subtitle}</p>
+              <a href={banner.ctaUrl} className="afr-hero-cta">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+                {banner.ctaText}
+              </a>
+            </div>
+            <div className="afr-hero-badge">
+              <div className="afr-hero-badge-icon">
+                <svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+              </div>
+              <div>
+                <strong>{banner.badgeTitle}</strong>
+                <span>{banner.badgeText}</span>
+              </div>
+            </div>
           </div>
-          <div>
-            <strong>{hero.badgeTitle}</strong>
-            <span>{hero.badgeText}</span>
+        ))}
+        {hero.banners.length > 1 && (
+          <div style={{ position: 'absolute', bottom: '20px', left: '5%', zIndex: 3, display: 'flex', gap: '8px' }}>
+            {hero.banners.map((_, i) => (
+              <button
+                key={i}
+                onClick={() => setCurrentSlide(i)}
+                style={{ width: '8px', height: '8px', borderRadius: '50%', border: 'none', cursor: 'pointer', background: i === currentSlide ? '#4caf50' : 'rgba(255,255,255,0.3)' }}
+              />
+            ))}
           </div>
-        </div>
+        )}
       </section>
 
       {/* CATEGORIAS */}
@@ -313,7 +346,7 @@ export function AgroForteRenderer({ data }: AgroForteRendererProps) {
           </div>
           <div className="afr-footer-col">
             <h4>NAVEGAÇÃO</h4>
-            <ul>{['Início', 'Produtos', 'Serviços', 'Sobre Nós', 'Contato'].map(l => <li key={l}><a href="#">{l}</a></li>)}</ul>
+            <ul>{brand.navLinks.map((link, idx) => <li key={idx}><a href={link.url}>{link.label}</a></li>)}</ul>
           </div>
           <div className="afr-footer-col">
             <h4>PRODUTOS</h4>

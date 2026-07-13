@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ChevronDown, ChevronRight, Leaf, Image as ImageIcon, Package, Sprout, Cpu, AlignLeft, Phone } from 'lucide-react';
+import { ChevronDown, ChevronRight, Leaf, Image as ImageIcon, Package, Sprout, Cpu, AlignLeft, Phone, Plus, Trash2 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { ImageUpload } from './ImageUpload';
@@ -160,6 +160,11 @@ export function AgroForteEditor({ data, onChange }: AgroForteEditorProps) {
 
       {/* IDENTIDADE */}
       <Section title="Identidade & Navegação" icon={<Leaf className="h-4 w-4" />} defaultOpen>
+        <ImageUpload
+          value={data.brand.logoImage || ''}
+          onChange={url => setBrand({ logoImage: url })}
+          label="Logo (Opcional, substitui o texto se preenchido)"
+        />
         <Field label="Nome do Logo">
           <Input
             value={data.brand.name}
@@ -176,76 +181,204 @@ export function AgroForteEditor({ data, onChange }: AgroForteEditorProps) {
             className="h-8 text-sm"
           />
         </Field>
-        <Field label="Botão do Menu">
-          <Input
-            value={data.brand.navCta}
-            onChange={e => setBrand({ navCta: e.target.value })}
-            placeholder="Fale Conosco"
-            className="h-8 text-sm"
-          />
-        </Field>
+        <div className="pt-2 border-t border-slate-200 dark:border-slate-800">
+          <Field label="Links do Menu">
+            <div className="space-y-2 mt-2">
+              {data.brand.navLinks.map((link, i) => (
+                <div key={i} className="flex gap-2">
+                  <Input value={link.label} onChange={e => {
+                    const newLinks = [...data.brand.navLinks];
+                    newLinks[i].label = e.target.value;
+                    setBrand({ navLinks: newLinks });
+                  }} placeholder="Rótulo" className="h-8 text-sm flex-1" />
+                  <Input value={link.url} onChange={e => {
+                    const newLinks = [...data.brand.navLinks];
+                    newLinks[i].url = e.target.value;
+                    setBrand({ navLinks: newLinks });
+                  }} placeholder="URL ou #ancora" className="h-8 text-sm flex-1" />
+                  <button onClick={() => {
+                    const newLinks = [...data.brand.navLinks];
+                    newLinks.splice(i, 1);
+                    setBrand({ navLinks: newLinks });
+                  }} className="h-8 w-8 flex items-center justify-center text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-md">
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </div>
+              ))}
+              <button onClick={() => {
+                setBrand({ navLinks: [...data.brand.navLinks, { label: 'Novo Link', url: '#' }] });
+              }} className="w-full flex items-center justify-center gap-2 text-sm text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20 py-2 rounded-md transition-colors border border-dashed border-green-200 dark:border-green-900/40">
+                <Plus className="h-4 w-4" /> Adicionar Link
+              </button>
+            </div>
+          </Field>
+        </div>
+        <div className="flex gap-2 pt-2 border-t border-slate-200 dark:border-slate-800">
+          <div className="flex-1">
+            <Field label="Botão do Menu (Texto)">
+              <Input
+                value={data.brand.navCta}
+                onChange={e => setBrand({ navCta: e.target.value })}
+                placeholder="Fale Conosco"
+                className="h-8 text-sm"
+              />
+            </Field>
+          </div>
+          <div className="flex-1">
+            <Field label="Botão do Menu (Link)">
+              <Input
+                value={data.brand.navCtaUrl}
+                onChange={e => setBrand({ navCtaUrl: e.target.value })}
+                placeholder="#contato"
+                className="h-8 text-sm"
+              />
+            </Field>
+          </div>
+        </div>
       </Section>
 
       {/* HERO */}
-      <Section title="Hero (Destaque Principal)" icon={<ImageIcon className="h-4 w-4" />} defaultOpen>
-        <ImageUpload
-          value={data.hero.bgImage}
-          onChange={url => setHero({ bgImage: url })}
-          label="Imagem de Fundo"
-        />
-        <div className="flex gap-2">
-          <Field label="Título">
-            <Input
-              value={data.hero.headline}
-              onChange={e => setHero({ headline: e.target.value })}
-              placeholder="Cultivando"
-              className="h-8 text-sm"
-            />
-          </Field>
-          <Field label="Palavra em destaque (verde)">
-            <Input
-              value={data.hero.headlineHighlight}
-              onChange={e => setHero({ headlineHighlight: e.target.value })}
-              placeholder="Confiança,"
-              className="h-8 text-sm text-green-700 font-bold"
-            />
+      <Section title="Carrossel Hero (Banners)" icon={<ImageIcon className="h-4 w-4" />} defaultOpen>
+        <div className="flex gap-4 mb-4 pb-4 border-b border-slate-200 dark:border-slate-800">
+          <label className="flex items-center gap-2 text-sm">
+            <input type="checkbox" checked={data.hero.autoPlay} onChange={e => setHero({ autoPlay: e.target.checked })} />
+            Rotação automática
+          </label>
+          <Field label="Intervalo (segundos)">
+            <Input type="number" value={data.hero.interval} onChange={e => setHero({ interval: Number(e.target.value) })} className="h-8 text-sm w-24" />
           </Field>
         </div>
-        <Field label="Subtítulo">
-          <Textarea
-            value={data.hero.subtitle}
-            onChange={e => setHero({ subtitle: e.target.value })}
-            placeholder="Descreva o que a empresa oferece..."
-            className="text-sm resize-none"
-            rows={2}
-          />
-        </Field>
-        <Field label="Texto do Botão CTA">
-          <Input
-            value={data.hero.ctaText}
-            onChange={e => setHero({ ctaText: e.target.value })}
-            placeholder="Conheça Nossas Soluções"
-            className="h-8 text-sm"
-          />
-        </Field>
-        <div className="pt-1 border-t border-slate-200 dark:border-slate-700 space-y-3">
-          <p className="text-[10px] uppercase font-bold text-slate-400">Badge de Qualidade</p>
-          <Field label="Título do Badge">
-            <Input
-              value={data.hero.badgeTitle}
-              onChange={e => setHero({ badgeTitle: e.target.value })}
-              placeholder="QUALIDADE GARANTIDA"
-              className="h-8 text-sm"
-            />
-          </Field>
-          <Field label="Texto do Badge">
-            <Input
-              value={data.hero.badgeText}
-              onChange={e => setHero({ badgeText: e.target.value })}
-              placeholder="Produtos selecionados..."
-              className="h-8 text-sm"
-            />
-          </Field>
+        
+        <div className="space-y-6">
+          {data.hero.banners.map((banner, i) => (
+            <div key={i} className="space-y-3 bg-slate-50 dark:bg-slate-900/50 p-3 rounded-lg border border-slate-200 dark:border-slate-800 relative">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[11px] uppercase font-bold text-slate-500">Banner {i + 1}</span>
+                {data.hero.banners.length > 1 && (
+                  <button onClick={() => {
+                    const newBanners = [...data.hero.banners];
+                    newBanners.splice(i, 1);
+                    setHero({ banners: newBanners });
+                  }} className="text-red-500 hover:text-red-600 p-1">
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                )}
+              </div>
+              <ImageUpload
+                value={banner.bgImage}
+                onChange={url => {
+                  const newBanners = [...data.hero.banners];
+                  newBanners[i] = { ...banner, bgImage: url };
+                  setHero({ banners: newBanners });
+                }}
+                label="Imagem de Fundo"
+              />
+              <div className="flex gap-2">
+                <Field label="Título">
+                  <Input
+                    value={banner.headline}
+                    onChange={e => {
+                      const newBanners = [...data.hero.banners];
+                      newBanners[i] = { ...banner, headline: e.target.value };
+                      setHero({ banners: newBanners });
+                    }}
+                    placeholder="Cultivando"
+                    className="h-8 text-sm"
+                  />
+                </Field>
+                <Field label="Destaque (verde)">
+                  <Input
+                    value={banner.headlineHighlight}
+                    onChange={e => {
+                      const newBanners = [...data.hero.banners];
+                      newBanners[i] = { ...banner, headlineHighlight: e.target.value };
+                      setHero({ banners: newBanners });
+                    }}
+                    placeholder="Confiança,"
+                    className="h-8 text-sm text-green-700 font-bold"
+                  />
+                </Field>
+              </div>
+              <Field label="Subtítulo">
+                <Textarea
+                  value={banner.subtitle}
+                  onChange={e => {
+                    const newBanners = [...data.hero.banners];
+                    newBanners[i] = { ...banner, subtitle: e.target.value };
+                    setHero({ banners: newBanners });
+                  }}
+                  placeholder="Descreva..."
+                  className="text-sm resize-none"
+                  rows={2}
+                />
+              </Field>
+              <div className="flex gap-2">
+                <div className="flex-1">
+                  <Field label="Texto CTA">
+                    <Input
+                      value={banner.ctaText}
+                      onChange={e => {
+                        const newBanners = [...data.hero.banners];
+                        newBanners[i] = { ...banner, ctaText: e.target.value };
+                        setHero({ banners: newBanners });
+                      }}
+                      className="h-8 text-sm"
+                    />
+                  </Field>
+                </div>
+                <div className="flex-1">
+                  <Field label="Link CTA">
+                    <Input
+                      value={banner.ctaUrl}
+                      onChange={e => {
+                        const newBanners = [...data.hero.banners];
+                        newBanners[i] = { ...banner, ctaUrl: e.target.value };
+                        setHero({ banners: newBanners });
+                      }}
+                      className="h-8 text-sm"
+                    />
+                  </Field>
+                </div>
+              </div>
+              <div className="pt-2 border-t border-slate-200 dark:border-slate-700 space-y-3 mt-3">
+                <p className="text-[10px] uppercase font-bold text-slate-400">Badge de Qualidade</p>
+                <div className="flex gap-2">
+                  <div className="flex-1">
+                    <Field label="Título do Badge">
+                      <Input
+                        value={banner.badgeTitle}
+                        onChange={e => {
+                          const newBanners = [...data.hero.banners];
+                          newBanners[i] = { ...banner, badgeTitle: e.target.value };
+                          setHero({ banners: newBanners });
+                        }}
+                        className="h-8 text-sm"
+                      />
+                    </Field>
+                  </div>
+                  <div className="flex-[2]">
+                    <Field label="Texto do Badge">
+                      <Input
+                        value={banner.badgeText}
+                        onChange={e => {
+                          const newBanners = [...data.hero.banners];
+                          newBanners[i] = { ...banner, badgeText: e.target.value };
+                          setHero({ banners: newBanners });
+                        }}
+                        className="h-8 text-sm"
+                      />
+                    </Field>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ))}
+          <button onClick={() => {
+            const newBanners = [...data.hero.banners, data.hero.banners[0]]; // copy first banner as template
+            setHero({ banners: newBanners });
+          }} className="w-full flex items-center justify-center gap-2 text-sm text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20 py-2 rounded-md transition-colors border border-dashed border-green-200 dark:border-green-900/40">
+            <Plus className="h-4 w-4" /> Adicionar Banner
+          </button>
         </div>
       </Section>
 

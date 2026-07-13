@@ -13,16 +13,23 @@ export interface AgroForteData {
     name: string;
     tagline: string;
     navCta: string;
+    navCtaUrl: string;
+    logoImage?: string;
+    navLinks: { label: string; url: string }[];
   };
   hero: {
-    headline: string;
-    headlineHighlight: string;
-    subtitle: string;
-    bgImage: string;
-    ctaText: string;
-    ctaUrl: string;
-    badgeTitle: string;
-    badgeText: string;
+    autoPlay: boolean;
+    interval: number;
+    banners: {
+      headline: string;
+      headlineHighlight: string;
+      subtitle: string;
+      bgImage: string;
+      ctaText: string;
+      ctaUrl: string;
+      badgeTitle: string;
+      badgeText: string;
+    }[];
   };
   featuredProducts: AgroForteProduct[];
   catalogs: {
@@ -44,16 +51,31 @@ export const AGROFORTE_DEFAULT: AgroForteData = {
     name: 'AgroFORTE',
     tagline: 'Soluções Agrícolas',
     navCta: 'Fale Conosco',
+    navCtaUrl: '#contato',
+    logoImage: '',
+    navLinks: [
+      { label: 'Início', url: '#' },
+      { label: 'Produtos', url: '#produtos' },
+      { label: 'Serviços', url: '#servicos' },
+      { label: 'Sobre Nós', url: '#sobre' },
+      { label: 'Contato', url: '#contato' },
+    ],
   },
   hero: {
-    headline: 'Cultivando',
-    headlineHighlight: 'Confiança,',
-    subtitle: 'Soluções completas para o campo, com qualidade, tecnologia e atendimento que faz a diferença.',
-    bgImage: 'https://images.unsplash.com/photo-1416879595882-3373a0480b5b?w=800&q=80',
-    ctaText: 'Conheça Nossas Soluções',
-    ctaUrl: '#',
-    badgeTitle: 'QUALIDADE GARANTIDA',
-    badgeText: 'Produtos selecionados e parceiros de confiança para o melhor resultado no campo.',
+    autoPlay: true,
+    interval: 5,
+    banners: [
+      {
+        headline: 'Cultivando',
+        headlineHighlight: 'Confiança,',
+        subtitle: 'Soluções completas para o campo, com qualidade, tecnologia e atendimento que faz a diferença.',
+        bgImage: 'https://images.unsplash.com/photo-1416879595882-3373a0480b5b?w=800&q=80',
+        ctaText: 'Conheça Nossas Soluções',
+        ctaUrl: '#',
+        badgeTitle: 'QUALIDADE GARANTIDA',
+        badgeText: 'Produtos selecionados e parceiros de confiança para o melhor resultado no campo.',
+      }
+    ]
   },
   featuredProducts: [
     { name: 'Semente do Milho', price: 'R$ 245,00', unit: '/saca', image: 'https://images.unsplash.com/photo-1557682250-9af12b8e7db1?w=300&q=80' },
