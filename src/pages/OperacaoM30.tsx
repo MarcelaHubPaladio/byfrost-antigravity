@@ -1471,11 +1471,11 @@ export default function OperacaoM30() {
           {selectedKey && (
             <div className="mt-4 overflow-x-auto pb-1">
               {tab === "kanban" && viewMode === "kanban" ? (
-                <div className="flex min-w-[980px] gap-4">
+                <div className="flex min-w-[980px] gap-4 h-[calc(100vh-280px)] min-h-[500px]">
                   {columns.map((col, idx) => (
                     <div
                       key={col.key}
-                      className="w-[320px] flex-shrink-0"
+                      className="w-[320px] flex-shrink-0 flex flex-col h-full"
                       onDragOver={(e) => {
                         if (col.key === "__other__") return;
                         e.preventDefault();
@@ -1512,7 +1512,7 @@ export default function OperacaoM30() {
 
                       <div
                         className={cn(
-                          "flex flex-col gap-2 overflow-y-auto max-h-[70vh] p-2 mt-2 rounded-[24px]",
+                          "flex flex-col gap-2 overflow-y-auto flex-1 p-2 mt-2 rounded-[24px]",
                           col.key !== "__other__" 
                             ? idx % 2 === 0 
                               ? "bg-slate-50/60 border border-dashed border-slate-200" 
