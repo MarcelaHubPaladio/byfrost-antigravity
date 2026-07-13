@@ -6,6 +6,7 @@ import { RequireAuth } from "@/components/RequireAuth";
 import { DeliverablesPipelineChart } from "@/components/case/DeliverablesPipelineChart";
 import { M30ClientUsersPanel } from "@/components/operacao_m30/M30ClientUsersPanel";
 import { ClientCalendarView } from "@/components/operacao_m30/ClientCalendarView";
+import { EntityFilesTab } from "@/components/entities/EntityFilesTab";
 import { RequireRouteAccess } from "@/components/RequireRouteAccess";
 import { RequireTenantRole } from "@/components/RequireTenantRole";
 import { useTenant } from "@/providers/TenantProvider";
@@ -966,7 +967,7 @@ export default function CommitmentDetail() {
                 <TabsTrigger value="overview" className="rounded-xl data-[state=active]:bg-white data-[state=active]:shadow-sm text-[10px] font-bold uppercase">Visão Geral</TabsTrigger>
                 {isM30Journey && <TabsTrigger value="operation" className="rounded-xl data-[state=active]:bg-white data-[state=active]:shadow-sm text-[10px] font-bold uppercase">Operação / Casos</TabsTrigger>}
                 {isM30Journey && <TabsTrigger value="calendar" className="rounded-xl data-[state=active]:bg-white data-[state=active]:shadow-sm text-[10px] font-bold uppercase">Calendário</TabsTrigger>}
-                <TabsTrigger value="financial" className="rounded-xl data-[state=active]:bg-white data-[state=active]:shadow-sm text-[10px] font-bold uppercase">Financeiro</TabsTrigger>
+                <TabsTrigger value="financial" className="rounded-xl data-[state=active]:bg-white data-[state=active]:shadow-sm text-[10px] font-bold uppercase">Financeiro & Arquivos</TabsTrigger>
                 <TabsTrigger value="settings" className="rounded-xl data-[state=active]:bg-white data-[state=active]:shadow-sm text-[10px] font-bold uppercase">Config. & Observações</TabsTrigger>
               </TabsList>
               
@@ -1522,6 +1523,14 @@ export default function CommitmentDetail() {
                     </div>
                   </div>
                 </Card>
+
+                {/* Arquivos do Cliente */}
+                {activeTenantId && commitmentQ.data?.customer_entity_id && (
+                  <Card className="rounded-2xl border-slate-200 p-6 mt-4">
+                    <h3 className="text-sm font-bold uppercase tracking-wider text-slate-800 mb-4">Arquivos da Entidade</h3>
+                    <EntityFilesTab tenantId={activeTenantId} entityId={commitmentQ.data.customer_entity_id} />
+                  </Card>
+                )}
               </TabsContent>
 
               <TabsContent value="settings" className="space-y-4 outline-none">

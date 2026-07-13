@@ -5,8 +5,19 @@ import { ChevronLeft, ChevronRight, Lock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { Link } from "react-router-dom";
+import { supabase } from "@/lib/supabase";
+import { toast } from "sonner";
+import { CalendarIcon } from "lucide-react";
 
-export function ClientCalendarView({ cases }: { cases: any[] }) {
+export function ClientCalendarView({ 
+  cases,
+  defaultPostingDays = [],
+  onUpdate
+}: { 
+  cases: any[],
+  defaultPostingDays?: number[],
+  onUpdate?: () => void
+}) {
   const [date, setDate] = useState(new Date());
   
   const monthStart = startOfMonth(date);
@@ -33,7 +44,55 @@ export function ClientCalendarView({ cases }: { cases: any[] }) {
     const arr = casesByDay.get(dayKey) ?? [];
     arr.push(c);
     casesByDay.set(dayKey, arr);
+    casesByDay.set(dayKey, arr);
   }
+
+  const autoDistributeDates = async () => {
+    if (!defaultPostingDays || defaultPostingDays.length === 0) {
+      toast.error("Configure os dias padrões de postagem primeiro!");
+      return;
+    }
+    
+    // Encontrar casos sem data
+    const casesWithoutDate = cases.filter(c => !(c.meta_json as any)?.due_at);
+    if (casesWithoutDate.length === 0) {
+      toast.info("Nenhum caso sem data para distribuir.");
+      return;
+    }
+
+    // Achar os próximos dias disponíveis a partir de hoje
+    let currentDate = new Date();
+    const datesToAssign: Date[] = [];
+    
+    // Gerar datas suficientes para todos os casos
+    while (datesToAssign.length < casesWithoutDate.length) {
+      currentDate = addMonths(currentDate, 0); // clone avoiding mutation issues
+      currentDate.setDate(currentDate.getDate() + 1);
+      if (defaultPostingDays.includes(getDay(currentDate))) {
+        datesToAssign.push(new Date(currentDate));
+      }
+    }
+
+    toast.loading("Distribuindo datas automaticamente...");
+    let updatedCount = 0;
+
+    for (let i = 0; i < casesWithoutDate.length; i++) {
+      const c = casesWithoutDate[i];
+      const newDate = datesToAssign[i];
+      const newMeta = { ...(c.meta_json || {}), due_at: newDate.toISOString() };
+      
+      const { error } = await supabase
+        .from("cases")
+        .update({ meta_json: newMeta })
+        .eq("id", c.id);
+        
+      if (!error) updatedCount++;
+    }
+
+    toast.dismiss();
+    toast.success(`Datas atribuídas a ${updatedCount} caso(s)!`);
+    if (onUpdate) onUpdate();
+  };
 
   const weekDays = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 
@@ -44,6 +103,11 @@ export function ClientCalendarView({ cases }: { cases: any[] }) {
           {format(date, 'MMMM yyyy', { locale: ptBR })}
         </h3>
         <div className="flex items-center gap-2">
+          {defaultPostingDays.length > 0 && (
+            <Button variant="outline" size="sm" className="rounded-xl h-8 text-xs font-semibold gap-1 text-indigo-600 border-indigo-200 bg-indigo-50 hover:bg-indigo-100 mr-2" onClick={autoDistributeDates}>
+              <CalendarIcon className="w-3.5 h-3.5" /> Auto-distribuir
+            </Button>
+          )}
           <Button variant="outline" size="sm" className="rounded-xl h-8 text-xs font-semibold" onClick={() => setDate(new Date())}>
             Hoje
           </Button>
