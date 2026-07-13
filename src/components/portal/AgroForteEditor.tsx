@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ChevronDown, ChevronRight, Leaf, Image as ImageIcon, Package, Sprout, Cpu, AlignLeft, Phone, Plus, Trash2 } from 'lucide-react';
+import { ChevronDown, ChevronRight, Leaf, Image as ImageIcon, Package, Sprout, Cpu, AlignLeft, Phone, Plus, Trash2, Copy } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { ImageUpload } from './ImageUpload';
@@ -300,15 +300,24 @@ export function AgroForteEditor({ data, onChange }: AgroForteEditorProps) {
             <div key={i} className="space-y-3 bg-slate-50 dark:bg-slate-900/50 p-3 rounded-lg border border-slate-200 dark:border-slate-800 relative">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-[11px] uppercase font-bold text-slate-500">Banner {i + 1}</span>
-                {safeBanners.length > 1 && (
+                <div className="flex gap-1">
                   <button onClick={() => {
                     const newBanners = [...safeBanners];
-                    newBanners.splice(i, 1);
+                    newBanners.splice(i + 1, 0, { ...banner });
                     setHero({ banners: newBanners });
-                  }} className="text-red-500 hover:text-red-600 p-1">
-                    <Trash2 className="h-4 w-4" />
+                  }} className="text-blue-500 hover:text-blue-600 p-1" title="Duplicar">
+                    <Copy className="h-4 w-4" />
                   </button>
-                )}
+                  {safeBanners.length > 1 && (
+                    <button onClick={() => {
+                      const newBanners = [...safeBanners];
+                      newBanners.splice(i, 1);
+                      setHero({ banners: newBanners });
+                    }} className="text-red-500 hover:text-red-600 p-1" title="Excluir">
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  )}
+                </div>
               </div>
               <ImageUpload
                 value={banner.bgImage}
