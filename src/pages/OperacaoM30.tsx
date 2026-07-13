@@ -1576,7 +1576,7 @@ export default function OperacaoM30() {
                                         className="h-3.5 w-3.5 border-slate-300 data-[state=checked]:bg-indigo-600 data-[state=checked]:border-indigo-600"
                                       />
                                     </div>
-                                    <div className="truncate text-sm font-semibold text-slate-900">{titlePrimary}</div>
+                                    <div className="truncate text-sm font-semibold text-slate-900" title={titlePrimary}>{titlePrimary}</div>
                                     {locks[c.id] && (
                                       <div className="flex items-center gap-1 rounded bg-rose-50 px-1.5 py-0.5 text-[10px] uppercase font-bold text-rose-600 ring-1 ring-inset ring-rose-500/20" title={`Sendo editado por ${locks[c.id].userName}`}>
                                         <Lock className="h-3 w-3" /> Em Edição
@@ -1603,8 +1603,16 @@ export default function OperacaoM30() {
                                     
                                     return (
                                       <div 
-                                        className="mt-1 inline-block truncate max-w-full rounded bg-indigo-50 px-1.5 py-0.5 text-[10px] uppercase tracking-wider font-bold text-indigo-700 ring-1 ring-inset ring-indigo-700/10"
-                                        title={entityFullName}
+                                        onClick={(e) => {
+                                          e.preventDefault();
+                                          e.stopPropagation();
+                                          const commitmentId = (c.meta_json as any)?.commitment_id;
+                                          if (commitmentId) {
+                                            nav(`/app/commitments/${commitmentId}`);
+                                          }
+                                        }}
+                                        className="mt-1 inline-block cursor-pointer hover:bg-indigo-100 transition-colors truncate max-w-full rounded bg-indigo-50 px-1.5 py-0.5 text-[10px] uppercase tracking-wider font-bold text-indigo-700 ring-1 ring-inset ring-indigo-700/10"
+                                        title={`${entityFullName} (Ver Contrato)`}
                                       >
                                         {entityDisplayName}
                                       </div>
