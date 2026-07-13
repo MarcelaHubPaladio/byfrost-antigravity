@@ -75,7 +75,8 @@ import {
     Rocket,
     Save,
     Trash2,
-    X
+    X,
+    Tag
 } from "lucide-react";
 
 const CheckIcon = Check;
@@ -890,7 +891,7 @@ export default function OperacaoM30Case() {
             const cid = (caseQ.data?.meta_json as any)?.commitment_id || deliverableQ.data?.commitment_id;
             const { data, error } = await supabase
                 .from("commercial_commitments")
-                .select("id, commitment_type, status, customer_entity_id, core_entities(display_name)")
+                .select("id, commitment_type, status, customer_entity_id, meta_json, core_entities(display_name)")
                 .eq("id", cid!)
                 .single();
             if (error) throw error;
@@ -1761,6 +1762,51 @@ export default function OperacaoM30Case() {
                                                     Ver Contrato
                                                 </Link>
                                             )}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* SELETOR DE LABELS DO CONTRATO */}
+                                {commitmentQ.data?.meta_json?.labels && commitmentQ.data.meta_json.labels.length > 0 && (
+                                    <div className="rounded-[22px] border border-slate-200 bg-white p-4">
+                                        <h4 className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-3 flex items-center gap-2">
+                                            <Tag className="w-3 h-3"/> Etiquetas do Cliente
+                                        </h4>
+                                        <div className="flex flex-wrap gap-2">
+                                            {commitmentQ.data.meta_json.labels.map((lbl: any) => {
+                                                const caseLabels = (caseQ.data?.meta_json as any)?.labels || [];
+                                                const isSelected = caseLabels.includes(lbl.id);
+                                                return (
+                                                    <button
+                                                        key={lbl.id}
+                                                        disabled={saving}
+                                                        onClick={async () => {
+                                                            setSaving(true);
+                                                            let newLabels = [...caseLabels];
+                                                            if (isSelected) {
+                                                                newLabels = newLabels.filter((id: string) => id !== lbl.id);
+                                                            } else {
+                                                                newLabels.push(lbl.id);
+                                                            }
+                                                            const newMeta = { ...(caseQ.data?.meta_json || {}), labels: newLabels };
+                                                            await supabase.from("cases").update({ meta_json: newMeta }).eq("id", id!);
+                                                            await caseQ.refetch();
+                                                            setSaving(false);
+                                                        }}
+                                                        className={cn(
+                                                            "px-3 py-1.5 rounded-full text-xs font-bold transition-all border",
+                                                            isSelected ? "ring-2 ring-offset-1 ring-slate-400" : "opacity-60 hover:opacity-100"
+                                                        )}
+                                                        style={{
+                                                            backgroundColor: isSelected ? lbl.color : 'transparent',
+                                                            color: isSelected ? '#fff' : lbl.color,
+                                                            borderColor: lbl.color
+                                                        }}
+                                                    >
+                                                        {lbl.name}
+                                                    </button>
+                                                );
+                                            })}
                                         </div>
                                     </div>
                                 )}
