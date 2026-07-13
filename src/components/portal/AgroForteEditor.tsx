@@ -120,10 +120,15 @@ export function AgroForteEditor({ data, onChange }: AgroForteEditorProps) {
     headlineHighlight: (data.hero as any).headlineHighlight || 'Confiança,',
     subtitle: (data.hero as any).subtitle || 'Soluções completas para o campo...',
     bgImage: (data.hero as any).bgImage || 'https://images.unsplash.com/photo-1416879595882-3373a0480b5b?w=800&q=80',
+    imagePosition: (data.hero as any).imagePosition || 'center',
+    imageFit: (data.hero as any).imageFit || 'cover',
+    overlayGradient: (data.hero as any).overlayGradient || 'linear-gradient(135deg, #0d2b0e 0%, #1a3a1f 40%, #2d5a1e 100%)',
     ctaText: (data.hero as any).ctaText || 'Conheça Nossas Soluções',
     ctaUrl: (data.hero as any).ctaUrl || '#',
+    showBadge: (data.hero as any).showBadge !== false,
     badgeTitle: (data.hero as any).badgeTitle || 'QUALIDADE GARANTIDA',
     badgeText: (data.hero as any).badgeText || 'Produtos selecionados e parceiros de confiança...',
+    badgeIcon: (data.hero as any).badgeIcon || 'Shield',
   }];
 
   const set = <K extends keyof AgroForteData>(key: K, value: AgroForteData[K]) =>
@@ -315,6 +320,56 @@ export function AgroForteEditor({ data, onChange }: AgroForteEditorProps) {
                 label="Imagem de Fundo"
               />
               <div className="flex gap-2">
+                <div className="flex-1">
+                  <Field label="Posição (object-position)">
+                    <select
+                      value={banner.imagePosition || 'center'}
+                      onChange={e => {
+                        const newBanners = [...safeBanners];
+                        newBanners[i] = { ...banner, imagePosition: e.target.value };
+                        setHero({ banners: newBanners });
+                      }}
+                      className="w-full h-8 px-2 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm"
+                    >
+                      <option value="center">Centro</option>
+                      <option value="top">Topo</option>
+                      <option value="bottom">Base</option>
+                      <option value="left">Esquerda</option>
+                      <option value="right">Direita</option>
+                    </select>
+                  </Field>
+                </div>
+                <div className="flex-1">
+                  <Field label="Preenchimento (object-fit)">
+                    <select
+                      value={banner.imageFit || 'cover'}
+                      onChange={e => {
+                        const newBanners = [...safeBanners];
+                        newBanners[i] = { ...banner, imageFit: e.target.value };
+                        setHero({ banners: newBanners });
+                      }}
+                      className="w-full h-8 px-2 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm"
+                    >
+                      <option value="cover">Cover (Cobre)</option>
+                      <option value="contain">Contain (Inteira)</option>
+                      <option value="fill">Fill (Estica)</option>
+                    </select>
+                  </Field>
+                </div>
+              </div>
+              <Field label="Fundo / Gradiente (CSS)">
+                <Input
+                  value={banner.overlayGradient || 'linear-gradient(135deg, #0d2b0e 0%, #1a3a1f 40%, #2d5a1e 100%)'}
+                  onChange={e => {
+                    const newBanners = [...safeBanners];
+                    newBanners[i] = { ...banner, overlayGradient: e.target.value };
+                    setHero({ banners: newBanners });
+                  }}
+                  className="h-8 text-sm"
+                  placeholder="linear-gradient(...) ou #cor"
+                />
+              </Field>
+              <div className="flex gap-2">
                 <Field label="Título">
                   <Input
                     value={banner.headline}
@@ -382,35 +437,66 @@ export function AgroForteEditor({ data, onChange }: AgroForteEditorProps) {
                 </div>
               </div>
               <div className="pt-2 border-t border-slate-200 dark:border-slate-700 space-y-3 mt-3">
-                <p className="text-[10px] uppercase font-bold text-slate-400">Badge de Qualidade</p>
-                <div className="flex gap-2">
-                  <div className="flex-1">
-                    <Field label="Título do Badge">
-                      <Input
-                        value={banner.badgeTitle}
-                        onChange={e => {
-                          const newBanners = [...safeBanners];
-                          newBanners[i] = { ...banner, badgeTitle: e.target.value };
-                          setHero({ banners: newBanners });
-                        }}
-                        className="h-8 text-sm"
-                      />
-                    </Field>
-                  </div>
-                  <div className="flex-[2]">
-                    <Field label="Texto do Badge">
-                      <Input
-                        value={banner.badgeText}
-                        onChange={e => {
-                          const newBanners = [...safeBanners];
-                          newBanners[i] = { ...banner, badgeText: e.target.value };
-                          setHero({ banners: newBanners });
-                        }}
-                        className="h-8 text-sm"
-                      />
-                    </Field>
-                  </div>
+                <div className="flex items-center justify-between">
+                  <p className="text-[10px] uppercase font-bold text-slate-400">Badge de Qualidade</p>
+                  <label className="flex items-center gap-1.5 text-xs text-slate-500 cursor-pointer">
+                    <input type="checkbox" checked={banner.showBadge !== false} onChange={e => {
+                      const newBanners = [...safeBanners];
+                      newBanners[i] = { ...banner, showBadge: e.target.checked };
+                      setHero({ banners: newBanners });
+                    }} /> Mostrar badge
+                  </label>
                 </div>
+                {banner.showBadge !== false && (
+                  <div className="space-y-2">
+                    <Field label="Ícone">
+                      <select
+                        value={banner.badgeIcon || 'Shield'}
+                        onChange={e => {
+                          const newBanners = [...safeBanners];
+                          newBanners[i] = { ...banner, badgeIcon: e.target.value };
+                          setHero({ banners: newBanners });
+                        }}
+                        className="w-full h-8 px-2 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm"
+                      >
+                        <option value="Shield">Escudo (Shield)</option>
+                        <option value="CheckCircle">Check (CheckCircle)</option>
+                        <option value="Leaf">Folha (Leaf)</option>
+                        <option value="Star">Estrela (Star)</option>
+                        <option value="Heart">Coração (Heart)</option>
+                        <option value="Award">Prêmio (Award)</option>
+                      </select>
+                    </Field>
+                    <div className="flex gap-2">
+                      <div className="flex-1">
+                        <Field label="Título do Badge">
+                          <Input
+                            value={banner.badgeTitle}
+                            onChange={e => {
+                              const newBanners = [...safeBanners];
+                              newBanners[i] = { ...banner, badgeTitle: e.target.value };
+                              setHero({ banners: newBanners });
+                            }}
+                            className="h-8 text-sm"
+                          />
+                        </Field>
+                      </div>
+                      <div className="flex-[2]">
+                        <Field label="Texto do Badge">
+                          <Input
+                            value={banner.badgeText}
+                            onChange={e => {
+                              const newBanners = [...safeBanners];
+                              newBanners[i] = { ...banner, badgeText: e.target.value };
+                              setHero({ banners: newBanners });
+                            }}
+                            className="h-8 text-sm"
+                          />
+                        </Field>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           ))}

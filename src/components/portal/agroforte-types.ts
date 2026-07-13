@@ -27,10 +27,15 @@ export interface AgroForteData {
       headlineHighlight: string;
       subtitle: string;
       bgImage: string;
+      imagePosition?: string;
+      imageFit?: string;
+      overlayGradient?: string;
       ctaText: string;
       ctaUrl: string;
+      showBadge?: boolean;
       badgeTitle: string;
       badgeText: string;
+      badgeIcon?: string;
     }[];
   };
   featuredProducts: AgroForteProduct[];
@@ -74,10 +79,15 @@ export const AGROFORTE_DEFAULT: AgroForteData = {
         headlineHighlight: 'Confiança,',
         subtitle: 'Soluções completas para o campo, com qualidade, tecnologia e atendimento que faz a diferença.',
         bgImage: 'https://images.unsplash.com/photo-1416879595882-3373a0480b5b?w=800&q=80',
+        imagePosition: 'center',
+        imageFit: 'cover',
+        overlayGradient: 'linear-gradient(135deg, #0d2b0e 0%, #1a3a1f 40%, #2d5a1e 100%)',
         ctaText: 'Conheça Nossas Soluções',
         ctaUrl: '#',
+        showBadge: true,
         badgeTitle: 'QUALIDADE GARANTIDA',
         badgeText: 'Produtos selecionados e parceiros de confiança para o melhor resultado no campo.',
+        badgeIcon: 'Shield',
       }
     ]
   },

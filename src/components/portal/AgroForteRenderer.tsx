@@ -1,5 +1,10 @@
 import type { AgroForteData } from './agroforte-types';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import { Shield, CheckCircle, Leaf, Star, Heart, Award } from 'lucide-react';
+
+const ICON_MAP: Record<string, React.ElementType> = {
+  Shield, CheckCircle, Leaf, Star, Heart, Award
+};
 
 interface AgroForteRendererProps {
   data: AgroForteData;
@@ -8,8 +13,8 @@ interface AgroForteRendererProps {
 const AGROFORTE_CSS = `
   @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
   .afr-root,[class*="afr-"]{box-sizing:border-box}
-  .afr-root{font-family:Inter,system-ui,sans-serif;color:#1a1a1a;margin:0;padding:0}
-  .afr-nav{padding:0 5%;display:flex;align-items:center;justify-content:space-between;height:64px;position:fixed;top:0;left:0;right:0;z-index:50;transition:background-color 0.3s ease}
+  .afr-root{font-family:Inter,system-ui,sans-serif;color:#1a1a1a;margin:0;padding:0;position:relative}
+  .afr-nav{padding:0 5%;display:flex;align-items:center;justify-content:space-between;height:64px;position:-webkit-sticky;position:sticky;top:0;z-index:50;transition:background-color 0.3s ease;margin-bottom:-64px}
   .afr-logo{display:flex;align-items:center;gap:8px;text-decoration:none}
   .afr-logo-icon{width:36px;height:36px;background:#4caf50;border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
   .afr-logo-icon svg{width:22px;height:22px;fill:#fff}
@@ -21,10 +26,10 @@ const AGROFORTE_CSS = `
   .afr-nav-links a:hover{color:#8bc34a}
   .afr-nav-cta{background:#4caf50;color:#fff!important;border:none;padding:10px 22px;border-radius:24px;font-size:14px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:6px;transition:background .2s;font-family:inherit;text-decoration:none}
   .afr-nav-cta:hover{background:#43a047}
-  .afr-hero{background:linear-gradient(135deg,#0d2b0e 0%,#1a3a1f 40%,#2d5a1e 100%);min-height:520px;position:relative;overflow:hidden}
+  .afr-hero{min-height:520px;position:relative;overflow:hidden}
   .afr-hero-slide{position:absolute;inset:0;opacity:0;transition:opacity 0.8s ease;display:flex;align-items:center;padding:60px 5%;pointer-events:none}
   .afr-hero-slide.active{opacity:1;z-index:1;pointer-events:auto}
-  .afr-hero-bg{position:absolute;right:0;top:0;width:55%;height:100%;object-fit:cover;opacity:.35}
+  .afr-hero-bg{position:absolute;right:0;top:0;width:55%;height:100%;opacity:.35}
   .afr-hero-content{position:relative;z-index:2;max-width:600px}
   .afr-hero-content h1{font-size:52px;font-weight:900;color:#fff;line-height:1.1;margin:0 0 16px;font-family:inherit}
   .afr-hero-content h1 em{color:#8bc34a;font-style:normal}
@@ -33,7 +38,6 @@ const AGROFORTE_CSS = `
   .afr-hero-cta:hover{background:#43a047}
   .afr-hero-badge{position:absolute;bottom:40px;right:5%;background:rgba(255,255,255,.95);border-radius:16px;padding:16px 20px;display:flex;align-items:center;gap:12px;z-index:2;box-shadow:0 8px 32px rgba(0,0,0,.2);max-width:320px}
   .afr-hero-badge-icon{width:40px;height:40px;background:#e8f5e9;border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
-  .afr-hero-badge-icon svg{width:22px;height:22px;stroke:#2e7d32;fill:none;stroke-width:2}
   .afr-hero-badge strong{display:block;font-size:13px;font-weight:800;color:#1a3a1f}
   .afr-hero-badge span{font-size:11px;color:#555;line-height:1.4;display:block;margin-top:2px}
   .afr-section-solutions{padding:60px 5%;background:#f9fafb}
@@ -130,6 +134,7 @@ export function AgroForteRenderer({ data }: AgroForteRendererProps) {
   const { brand, hero, featuredProducts, catalogs, footer } = data;
   const [currentSlide, setCurrentSlide] = useState(0);
   const [isScrolled, setIsScrolled] = useState(false);
+  const topRef = useRef<HTMLDivElement>(null);
 
   const safeNavLinks = brand.navLinks || [
     { label: 'Início', url: '#' },
@@ -159,11 +164,12 @@ export function AgroForteRenderer({ data }: AgroForteRendererProps) {
   }, [hero.autoPlay, hero.interval, safeBanners.length]);
 
   useEffect(() => {
-    const handleScroll = () => {
-      setIsScrolled(window.scrollY > 20);
-    };
-    window.addEventListener('scroll', handleScroll);
-    return () => window.removeEventListener('scroll', handleScroll);
+    if (!topRef.current) return;
+    const observer = new IntersectionObserver(([entry]) => {
+      setIsScrolled(!entry.isIntersecting);
+    }, { threshold: [0] });
+    observer.observe(topRef.current);
+    return () => observer.disconnect();
   }, []);
   
   // Parse brand name: last uppercase word gets green color
@@ -173,6 +179,7 @@ export function AgroForteRenderer({ data }: AgroForteRendererProps) {
 
   return (
     <div className="afr-root">
+      <div ref={topRef} style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 10, pointerEvents: 'none', visibility: 'hidden' }} />
       <style dangerouslySetInnerHTML={{ __html: AGROFORTE_CSS }} />
 
       {/* NAV */}
@@ -205,9 +212,11 @@ export function AgroForteRenderer({ data }: AgroForteRendererProps) {
 
       {/* HERO */}
       <section className="afr-hero">
-        {safeBanners.map((banner, i) => (
-          <div key={i} className={`afr-hero-slide ${i === currentSlide ? 'active' : ''}`}>
-            <img className="afr-hero-bg" src={banner.bgImage} alt="" />
+        {safeBanners.map((banner, i) => {
+          const BadgeIcon = ICON_MAP[banner.badgeIcon || 'Shield'] || Shield;
+          return (
+          <div key={i} className={`afr-hero-slide ${i === currentSlide ? 'active' : ''}`} style={{ background: banner.overlayGradient || 'linear-gradient(135deg, #0d2b0e 0%, #1a3a1f 40%, #2d5a1e 100%)' }}>
+            <img className="afr-hero-bg" src={banner.bgImage} alt="" style={{ objectFit: (banner.imageFit || 'cover') as any, objectPosition: banner.imagePosition || 'center' }} />
             <div className="afr-hero-content">
               <h1>
                 {banner.headline} <em>{banner.headlineHighlight}</em><br/>
@@ -219,17 +228,19 @@ export function AgroForteRenderer({ data }: AgroForteRendererProps) {
                 {banner.ctaText}
               </a>
             </div>
-            <div className="afr-hero-badge">
-              <div className="afr-hero-badge-icon">
-                <svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+            {banner.showBadge !== false && (
+              <div className="afr-hero-badge">
+                <div className="afr-hero-badge-icon">
+                  <BadgeIcon size={22} color="#2e7d32" strokeWidth={2} />
+                </div>
+                <div>
+                  <strong>{banner.badgeTitle}</strong>
+                  <span>{banner.badgeText}</span>
+                </div>
               </div>
-              <div>
-                <strong>{banner.badgeTitle}</strong>
-                <span>{banner.badgeText}</span>
-              </div>
-            </div>
+            )}
           </div>
-        ))}
+        )})}
         {safeBanners.length > 1 && (
           <div style={{ position: 'absolute', bottom: '20px', left: '5%', zIndex: 3, display: 'flex', gap: '8px' }}>
             {safeBanners.map((_, i) => (
