@@ -107,6 +107,7 @@ function formatTs(ts: string) {
 }
 
 export default function CommitmentDetail() {
+  console.log("CommitmentDetail loaded v3 (cache buster)");
   const { id } = useParams();
   const nav = useNavigate();
   const [searchParams] = useSearchParams();

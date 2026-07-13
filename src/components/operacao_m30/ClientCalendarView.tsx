@@ -9,7 +9,8 @@ import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
 import { CalendarIcon } from "lucide-react";
 
-export function ClientCalendarView({ 
+export function ClientCalendarView({
+  console.log("ClientCalendarView loaded v2"); 
   cases,
   defaultPostingDays = [],
   onUpdate
