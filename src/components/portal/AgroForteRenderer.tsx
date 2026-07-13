@@ -11,6 +11,7 @@ interface AgroForteRendererProps {
 }
 
 const AGROFORTE_CSS = `
+  html, body { scroll-behavior: smooth; }
   @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
   .afr-root,[class*="afr-"]{box-sizing:border-box}
   .afr-root{font-family:Inter,system-ui,sans-serif;color:#1a1a1a;margin:0;padding:0;position:relative}
@@ -177,6 +178,17 @@ export function AgroForteRenderer({ data }: AgroForteRendererProps) {
   const brandFirst = nameParts.length > 1 ? nameParts[0] : brand.name.slice(0, 4);
   const brandSecond = nameParts.length > 1 ? nameParts[1] : brand.name.slice(4);
 
+  const getStyleProps = (styles?: any): React.CSSProperties => {
+    if (!styles) return {};
+    return {
+      ...(styles.backgroundColor ? { backgroundColor: styles.backgroundColor } : {}),
+      ...(styles.paddingTop ? { paddingTop: styles.paddingTop } : {}),
+      ...(styles.paddingBottom ? { paddingBottom: styles.paddingBottom } : {}),
+      ...(styles.marginTop ? { marginTop: styles.marginTop } : {}),
+      ...(styles.marginBottom ? { marginBottom: styles.marginBottom } : {}),
+    };
+  };
+
   return (
     <div className="afr-root">
       <div ref={topRef} style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 10, pointerEvents: 'none', visibility: 'hidden' }} />
@@ -211,7 +223,7 @@ export function AgroForteRenderer({ data }: AgroForteRendererProps) {
       </nav>
 
       {/* HERO */}
-      <section className="afr-hero">
+      <section className="afr-hero" id={hero.styles?.id} style={getStyleProps(hero.styles)}>
         {safeBanners.map((banner, i) => {
           const BadgeIcon = ICON_MAP[banner.badgeIcon || 'Shield'] || Shield;
           return (
@@ -255,7 +267,7 @@ export function AgroForteRenderer({ data }: AgroForteRendererProps) {
       </section>
 
       {/* CATEGORIAS */}
-      <section className="afr-section-solutions">
+      <section className="afr-section-solutions" id={catalogs.styles?.id} style={getStyleProps(catalogs.styles)}>
         <p className="afr-section-label">NOSSAS SOLUÇÕES PARA CADA ETAPA DO CAMPO</p>
         <div className="afr-categories">
           {[
@@ -280,7 +292,7 @@ export function AgroForteRenderer({ data }: AgroForteRendererProps) {
       </section>
 
       {/* PRODUTOS EM DESTAQUE */}
-      <section className="afr-section-products">
+      <section className="afr-section-products" id={data.featuredProductsStyles?.id} style={getStyleProps(data.featuredProductsStyles)}>
         <div className="afr-products-header">
           <div>
             <p className="afr-products-label">PRODUTOS EM DESTAQUE</p>
@@ -311,9 +323,9 @@ export function AgroForteRenderer({ data }: AgroForteRendererProps) {
         { key: 'tecnologia', label: 'TECNOLOGIA DE APLICAÇÃO', colorClass: 'tecnologia', icon: <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/></svg> },
         { key: 'plantio', label: 'PLANTIO E PREPARO DE SOLO', colorClass: 'plantio', icon: <svg viewBox="0 0 24 24"><path d="M3 9L12 2L21 9V20A2 2 0 0119 22H5A2 2 0 013 20V9Z"/></svg> },
       ].map(cat => {
-        const catalog = catalogs[cat.key as keyof typeof catalogs];
+        const catalog = catalogs[cat.key as keyof typeof catalogs] as any;
         return (
-          <div className={`afr-catalog-row ${cat.colorClass}`} key={cat.key}>
+          <div className={`afr-catalog-row ${cat.colorClass}`} key={cat.key} id={catalog.styles?.id} style={getStyleProps(catalog.styles)}>
             <div className="afr-catalog-info">
               <div className="afr-catalog-info-icon">{cat.icon}</div>
               <h3>{cat.label}</h3>

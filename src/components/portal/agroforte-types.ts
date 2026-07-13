@@ -7,6 +7,15 @@ export interface AgroForteProduct {
   image: string;
 }
 
+export interface SectionStyleOptions {
+  id?: string;
+  backgroundColor?: string;
+  paddingTop?: string;
+  paddingBottom?: string;
+  marginTop?: string;
+  marginBottom?: string;
+}
+
 export interface AgroForteData {
   _template: 'agroforte';
   brand: {
@@ -20,6 +29,7 @@ export interface AgroForteData {
     navBackgroundScrolled?: string;
   };
   hero: {
+    styles?: SectionStyleOptions;
     autoPlay: boolean;
     interval: number;
     banners: {
@@ -39,10 +49,12 @@ export interface AgroForteData {
     }[];
   };
   featuredProducts: AgroForteProduct[];
+  featuredProductsStyles?: SectionStyleOptions;
   catalogs: {
-    insumos: { description: string; products: AgroForteProduct[] };
-    tecnologia: { description: string; products: AgroForteProduct[] };
-    plantio: { description: string; products: AgroForteProduct[] };
+    styles?: SectionStyleOptions;
+    insumos: { description: string; products: AgroForteProduct[]; styles?: SectionStyleOptions };
+    tecnologia: { description: string; products: AgroForteProduct[]; styles?: SectionStyleOptions };
+    plantio: { description: string; products: AgroForteProduct[]; styles?: SectionStyleOptions };
   };
   footer: {
     phone: string;

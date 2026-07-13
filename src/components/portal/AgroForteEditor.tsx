@@ -3,7 +3,7 @@ import { ChevronDown, ChevronRight, Leaf, Image as ImageIcon, Package, Sprout, C
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { ImageUpload } from './ImageUpload';
-import type { AgroForteData, AgroForteProduct } from './agroforte-types';
+import type { AgroForteData, AgroForteProduct, SectionStyleOptions } from './agroforte-types';
 import { cn } from '@/lib/utils';
 
 interface AgroForteEditorProps {
@@ -41,6 +41,78 @@ function Section({ title, icon, children, defaultOpen = false }: {
           {children}
         </div>
       )}
+    </div>
+  );
+}
+
+// ────────────────────────────────────────────
+// Section Style Editor
+// ────────────────────────────────────────────
+function SectionStyleEditor({ value = {}, onChange }: { value?: SectionStyleOptions, onChange: (v: SectionStyleOptions) => void }) {
+  return (
+    <div className="pt-3 mt-4 border-t border-slate-200 dark:border-slate-800 space-y-3 bg-slate-100/50 dark:bg-slate-900/50 p-3 rounded-lg border border-dashed">
+      <div className="flex items-center gap-2 mb-2">
+        <span className="w-4 h-4 bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 rounded flex items-center justify-center text-[10px] font-bold">#</span>
+        <p className="text-[11px] uppercase font-bold text-slate-500">Aparência da Seção</p>
+      </div>
+      
+      <Field label="ID / Âncora (para link do menu)">
+        <Input
+          value={value.id || ''}
+          onChange={e => onChange({ ...value, id: e.target.value })}
+          placeholder="ex: produtos"
+          className="h-8 text-sm"
+        />
+      </Field>
+
+      <div className="grid grid-cols-1 gap-2">
+        <Field label="Cor de Fundo (CSS)">
+          <Input
+            value={value.backgroundColor || ''}
+            onChange={e => onChange({ ...value, backgroundColor: e.target.value })}
+            placeholder="#ffffff ou transparent"
+            className="h-8 text-sm"
+          />
+        </Field>
+      </div>
+
+      <div className="grid grid-cols-2 gap-2">
+        <Field label="Espaço Interno Topo (Padding)">
+          <Input
+            value={value.paddingTop || ''}
+            onChange={e => onChange({ ...value, paddingTop: e.target.value })}
+            placeholder="ex: 60px"
+            className="h-8 text-sm"
+          />
+        </Field>
+        <Field label="Espaço Interno Base (Padding)">
+          <Input
+            value={value.paddingBottom || ''}
+            onChange={e => onChange({ ...value, paddingBottom: e.target.value })}
+            placeholder="ex: 60px"
+            className="h-8 text-sm"
+          />
+        </Field>
+      </div>
+      
+      <div className="grid grid-cols-2 gap-2">
+        <Field label="Espaço Externo Topo (Margin)">
+          <Input
+            value={value.marginTop || ''}
+            onChange={e => onChange({ ...value, marginTop: e.target.value })}
+            placeholder="ex: 20px"
+            className="h-8 text-sm"
+          />
+        </Field>
+        <Field label="Espaço Externo Base (Margin)">
+          <Input
+            value={value.marginBottom || ''}
+            onChange={e => onChange({ ...value, marginBottom: e.target.value })}
+            placeholder="ex: 20px"
+            className="h-8 text-sm"
+          />
+        </Field>
+      </div>
     </div>
   );
 }
@@ -516,6 +588,10 @@ export function AgroForteEditor({ data, onChange }: AgroForteEditorProps) {
             <Plus className="h-4 w-4" /> Adicionar Banner
           </button>
         </div>
+        <SectionStyleEditor
+          value={data.hero.styles}
+          onChange={styles => setHero({ styles })}
+        />
       </Section>
 
       {/* PRODUTOS EM DESTAQUE */}
@@ -529,6 +605,10 @@ export function AgroForteEditor({ data, onChange }: AgroForteEditorProps) {
             </div>
           ))}
         </div>
+        <SectionStyleEditor
+          value={data.featuredProductsStyles}
+          onChange={styles => set('featuredProductsStyles', styles)}
+        />
       </Section>
 
       {/* CATALOGO INSUMOS */}
@@ -549,6 +629,10 @@ export function AgroForteEditor({ data, onChange }: AgroForteEditorProps) {
             </div>
           ))}
         </div>
+        <SectionStyleEditor
+          value={data.catalogs.insumos.styles}
+          onChange={styles => set('catalogs', { ...data.catalogs, insumos: { ...data.catalogs.insumos, styles } })}
+        />
       </Section>
 
       {/* CATALOGO TECNOLOGIA */}
@@ -569,6 +653,10 @@ export function AgroForteEditor({ data, onChange }: AgroForteEditorProps) {
             </div>
           ))}
         </div>
+        <SectionStyleEditor
+          value={data.catalogs.tecnologia.styles}
+          onChange={styles => set('catalogs', { ...data.catalogs, tecnologia: { ...data.catalogs.tecnologia, styles } })}
+        />
       </Section>
 
       {/* CATALOGO PLANTIO */}
@@ -589,6 +677,10 @@ export function AgroForteEditor({ data, onChange }: AgroForteEditorProps) {
             </div>
           ))}
         </div>
+        <SectionStyleEditor
+          value={data.catalogs.plantio.styles}
+          onChange={styles => set('catalogs', { ...data.catalogs, plantio: { ...data.catalogs.plantio, styles } })}
+        />
       </Section>
 
       {/* RODAPÉ */}

@@ -684,7 +684,7 @@ export default function PortalEditor() {
                     </div>
                     <div className="flex-1 overflow-y-auto p-8 bg-slate-100 dark:bg-slate-950 flex justify-center">
                         <div className={cn(
-                            "transition-all duration-500 bg-white shadow-2xl min-h-[800px] overflow-hidden",
+                            "transition-all duration-500 bg-white shadow-2xl min-h-[800px] overflow-clip",
                             previewMode === 'desktop' ? "w-full max-w-[95%] rounded-[32px]" : "w-[375px] rounded-[48px] border-[10px] border-slate-800"
                         )}>
                             <div id="editor-stage">
