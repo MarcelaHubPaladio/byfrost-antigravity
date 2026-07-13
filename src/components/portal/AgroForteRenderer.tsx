@@ -223,11 +223,15 @@ export function AgroForteRenderer({ data }: AgroForteRendererProps) {
       </nav>
 
       {/* HERO */}
-      <section className="afr-hero" id={hero.styles?.id} style={getStyleProps(hero.styles)}>
+      <section className="afr-hero" id={hero.styles?.id} style={{ ...getStyleProps(hero.styles), paddingTop: undefined, paddingBottom: undefined }}>
         {safeBanners.map((banner, i) => {
           const BadgeIcon = ICON_MAP[banner.badgeIcon || 'Shield'] || Shield;
           return (
-          <div key={i} className={`afr-hero-slide ${i === currentSlide ? 'active' : ''}`} style={{ background: banner.overlayGradient || 'linear-gradient(135deg, #0d2b0e 0%, #1a3a1f 40%, #2d5a1e 100%)' }}>
+          <div key={i} className={`afr-hero-slide ${i === currentSlide ? 'active' : ''}`} style={{ 
+            background: banner.overlayGradient || 'linear-gradient(135deg, #0d2b0e 0%, #1a3a1f 40%, #2d5a1e 100%)',
+            paddingTop: hero.styles?.paddingTop,
+            paddingBottom: hero.styles?.paddingBottom
+          }}>
             <img className="afr-hero-bg" src={banner.bgImage} alt="" style={{ objectFit: (banner.imageFit || 'cover') as any, objectPosition: banner.imagePosition || 'center' }} />
             <div className="afr-hero-content">
               <h1>
