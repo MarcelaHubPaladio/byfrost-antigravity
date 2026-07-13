@@ -150,33 +150,6 @@ export default function CommitmentDetail() {
 
   const [isEditingTerm, setIsEditingTerm] = useState(false);
   const [newTermMonths, setNewTermMonths] = useState(12);
-  const [notes, setNotes] = useState("");
-
-  useEffect(() => {
-    if (commitmentQ.data?.metadata?.notes) {
-      setNotes(commitmentQ.data.metadata.notes);
-    }
-  }, [commitmentQ.data]);
-
-  const updateNotes = async () => {
-    setSaving(true);
-    try {
-      const currentMeta = commitmentQ.data?.metadata || {};
-      const { error } = await supabase
-        .from("commercial_commitments")
-        .update({ metadata: { ...currentMeta, notes } })
-        .eq("id", commitmentId);
-      
-      if (error) throw error;
-      showSuccess("Anotações salvas com sucesso!");
-      commitmentQ.refetch();
-    } catch (err: any) {
-      showError(err.message ?? "Erro ao salvar anotações");
-    } finally {
-      setSaving(false);
-    }
-  };
-
   const updateContractTerm = async (months: number) => {
     if (months <= 0) return;
     setSaving(true);
@@ -282,6 +255,33 @@ export default function CommitmentDetail() {
     },
     staleTime: 5_000,
   });
+
+  const [notes, setNotes] = useState("");
+
+  useEffect(() => {
+    if (commitmentQ.data?.metadata?.notes) {
+      setNotes(commitmentQ.data.metadata.notes);
+    }
+  }, [commitmentQ.data]);
+
+  const updateNotes = async () => {
+    setSaving(true);
+    try {
+      const currentMeta = commitmentQ.data?.metadata || {};
+      const { error } = await supabase
+        .from("commercial_commitments")
+        .update({ metadata: { ...currentMeta, notes } })
+        .eq("id", commitmentId);
+      
+      if (error) throw error;
+      showSuccess("Anotações salvas com sucesso!");
+      commitmentQ.refetch();
+    } catch (err: any) {
+      showError(err.message ?? "Erro ao salvar anotações");
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const itemsQ = useQuery({
     queryKey: ["commitment_items", activeTenantId, commitmentId],
