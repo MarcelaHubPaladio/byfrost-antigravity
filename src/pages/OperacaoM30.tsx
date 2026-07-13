@@ -1367,13 +1367,13 @@ export default function OperacaoM30() {
                   <div className="flex flex-col gap-1 w-full sm:w-auto">
                     <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider pl-1">Período</label>
                     <div className="h-10 w-full sm:w-auto">
-                    <DateRangePickerCustom
-                      date={dateRange}
-                      onDateChange={setDateRange}
-                    />
+                      <DateRangePickerCustom
+                        date={dateRange}
+                        onDateChange={setDateRange}
+                      />
+                    </div>
                   </div>
                 </div>
-              </div>
 
               {tab === "kanban" && (
                 <div className="flex bg-slate-100 p-1 rounded-2xl self-start w-fit dark:bg-slate-900 shrink-0">
@@ -1471,7 +1471,7 @@ export default function OperacaoM30() {
             <div className="mt-4 overflow-x-auto pb-1">
               {tab === "kanban" && viewMode === "kanban" ? (
                 <div className="flex min-w-[980px] gap-4">
-                  {columns.map((col) => (
+                  {columns.map((col, idx) => (
                     <div
                       key={col.key}
                       className="w-[320px] flex-shrink-0"
@@ -1512,7 +1512,11 @@ export default function OperacaoM30() {
                       <div
                         className={cn(
                           "flex flex-col gap-2 overflow-y-auto max-h-[70vh] p-2 mt-2 rounded-[24px]",
-                          col.key !== "__other__" ? "bg-slate-50/60 border border-dashed border-slate-200" : ""
+                          col.key !== "__other__" 
+                            ? idx % 2 === 0 
+                              ? "bg-slate-50/60 border border-dashed border-slate-200" 
+                              : "bg-primary/5 border border-dashed border-primary/20"
+                            : ""
                         )}
                       >
                         {col.items.map((c) => {
