@@ -57,7 +57,7 @@ type CommitmentRow = {
   status: string | null;
   total_value: number | null;
   customer_entity_id: string;
-  meta_json: any;
+  metadata: any;
   created_at: string;
   updated_at: string;
 };
@@ -242,7 +242,7 @@ export default function CommitmentDetail() {
           customer_entity_id,
           created_at,
           updated_at,
-          meta_json,
+          metadata,
           customer:core_entities!commercial_commitments_customer_fk(display_name)
         `)
         .eq("tenant_id", activeTenantId!)
@@ -257,35 +257,27 @@ export default function CommitmentDetail() {
   });
 
   const [notes, setNotes] = useState("");
-  const [clientLabels, setClientLabels] = useState<{id: string, name: string, color: string}[]>([]);
-  const [defaultPostingDays, setDefaultPostingDays] = useState<number[]>([]);
 
   useEffect(() => {
-    if (commitmentQ.data?.meta_json?.notes) {
-      setNotes(commitmentQ.data.meta_json.notes);
-    }
-    if (commitmentQ.data?.meta_json?.labels) {
-      setClientLabels(commitmentQ.data.meta_json.labels);
-    }
-    if (commitmentQ.data?.meta_json?.default_posting_days) {
-      setDefaultPostingDays(commitmentQ.data.meta_json.default_posting_days);
+    if (commitmentQ.data?.metadata?.notes) {
+      setNotes(commitmentQ.data.metadata.notes);
     }
   }, [commitmentQ.data]);
 
-  const updateMetadata = async () => {
+  const updateNotes = async () => {
     setSaving(true);
     try {
-      const currentMeta = commitmentQ.data?.meta_json || {};
+      const currentMeta = commitmentQ.data?.metadata || {};
       const { error } = await supabase
         .from("commercial_commitments")
-        .update({ meta_json: { ...currentMeta, notes, labels: clientLabels, default_posting_days: defaultPostingDays } })
+        .update({ metadata: { ...currentMeta, notes } })
         .eq("id", commitmentId);
       
       if (error) throw error;
-      showSuccess("Configurações salvas com sucesso!");
+      showSuccess("Anotações salvas com sucesso!");
       commitmentQ.refetch();
     } catch (err: any) {
-      showError(err.message ?? "Erro ao salvar configurações");
+      showError(err.message ?? "Erro ao salvar anotações");
     } finally {
       setSaving(false);
     }
@@ -1505,7 +1497,7 @@ export default function CommitmentDetail() {
 
               {isM30Journey && (
                 <TabsContent value="calendar" className="space-y-4 outline-none">
-                  <ClientCalendarView cases={m30CasesQ.data ?? []} defaultPostingDays={defaultPostingDays} onUpdate={refreshAll} />
+                  <ClientCalendarView cases={m30CasesQ.data ?? []} />
                 </TabsContent>
               )}
 
@@ -1532,126 +1524,34 @@ export default function CommitmentDetail() {
                 </Card>
               </TabsContent>
 
-              <TabsContent value="settings" className="space-y-6 outline-none">
-                
-                {/* CONFIGURAÇÕES DO CONTRATO */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {/* ANOTAÇÕES */}
-                  <Card className="rounded-2xl border-slate-200 p-6 flex flex-col h-full">
-                    <h3 className="text-sm font-bold uppercase tracking-wider text-slate-800 mb-2">Observações</h3>
-                    <p className="text-xs text-slate-500 mb-4">Anotações internas sobre a operação do cliente.</p>
+              <TabsContent value="settings" className="space-y-4 outline-none">
+                <Card className="rounded-2xl border-slate-200 p-6">
+                  <h3 className="text-sm font-bold uppercase tracking-wider text-slate-800 mb-4">Configurações e Observações</h3>
+                  <p className="text-xs text-slate-500 mb-4">Anotações internas sobre a operação do cliente.</p>
+                  <div className="flex flex-col gap-4">
                     <textarea 
-                      className="w-full flex-grow min-h-[150px] p-4 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all text-sm text-slate-700 outline-none resize-y mb-4"
+                      className="w-full min-h-[200px] p-4 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all text-sm text-slate-700 outline-none resize-y"
                       placeholder="Digite anotações, links importantes, ou qualquer observação sobre a operação deste cliente..."
                       value={notes}
                       onChange={(e) => setNotes(e.target.value)}
                     />
-                    <div className="flex justify-end mt-auto">
-                      <Button onClick={updateMetadata} disabled={saving} className="rounded-xl px-6">
-                        {saving ? "Salvando..." : "Salvar Configurações"}
+                    <div className="flex justify-end">
+                      <Button onClick={updateNotes} disabled={saving} className="rounded-xl px-6">
+                        {saving ? "Salvando..." : "Salvar Anotações"}
                       </Button>
                     </div>
-                  </Card>
-
-                  {/* LABELS E DIAS PADRÕES */}
-                  <Card className="rounded-2xl border-slate-200 p-6 flex flex-col h-full space-y-6">
-                    <div>
-                      <h3 className="text-sm font-bold uppercase tracking-wider text-slate-800 mb-2">Dias Padrões de Postagem</h3>
-                      <p className="text-xs text-slate-500 mb-4">Selecione os dias da semana para auto-preencher o calendário.</p>
-                      <div className="flex flex-wrap gap-2">
-                        {[
-                          { id: 0, label: "Dom" },
-                          { id: 1, label: "Seg" },
-                          { id: 2, label: "Ter" },
-                          { id: 3, label: "Qua" },
-                          { id: 4, label: "Qui" },
-                          { id: 5, label: "Sex" },
-                          { id: 6, label: "Sáb" }
-                        ].map(day => (
-                          <button
-                            key={day.id}
-                            onClick={() => {
-                              if (defaultPostingDays.includes(day.id)) {
-                                setDefaultPostingDays(defaultPostingDays.filter(d => d !== day.id));
-                              } else {
-                                setDefaultPostingDays([...defaultPostingDays, day.id].sort());
-                              }
-                            }}
-                            className={cn(
-                              "px-3 py-1.5 rounded-lg text-xs font-bold transition-all",
-                              defaultPostingDays.includes(day.id)
-                                ? "bg-indigo-100 text-indigo-700 ring-2 ring-indigo-500/20"
-                                : "bg-slate-100 text-slate-500 hover:bg-slate-200"
-                            )}
-                          >
-                            {day.label}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    <div className="border-t border-slate-100 pt-4">
-                      <h3 className="text-sm font-bold uppercase tracking-wider text-slate-800 mb-2">Labels / Etiquetas</h3>
-                      <p className="text-xs text-slate-500 mb-4">Crie tags para organizar os casos deste cliente.</p>
-                      
-                      <div className="flex flex-wrap gap-2 mb-3">
-                        {clientLabels.map((lbl, idx) => (
-                          <Badge key={idx} style={{ backgroundColor: lbl.color, color: '#fff' }} className="px-2 py-1 flex items-center gap-1 font-medium border-0">
-                            {lbl.name}
-                            <button onClick={() => setClientLabels(clientLabels.filter((_, i) => i !== idx))} className="ml-1 hover:text-white/80">
-                              <svg width="12" height="12" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M11.7816 4.03157C12.0062 3.80702 12.0062 3.44295 11.7816 3.2184C11.5571 2.99385 11.193 2.99385 10.9685 3.2184L7.50005 6.68682L4.03164 3.2184C3.80708 2.99385 3.44301 2.99385 3.21846 3.2184C2.99391 3.44295 2.99391 3.80702 3.21846 4.03157L6.68688 7.49999L3.21846 10.9684C2.99391 11.193 2.99391 11.557 3.21846 11.7816C3.44301 12.0061 3.80708 12.0061 4.03164 11.7816L7.50005 8.31316L10.9685 11.7816C11.193 12.0061 11.5571 12.0061 11.7816 11.7816C12.0062 11.557 12.0062 11.193 11.7816 10.9684L8.31322 7.49999L11.7816 4.03157Z" fill="currentColor" fillRule="evenodd" clipRule="evenodd"></path></svg>
-                            </button>
-                          </Badge>
-                        ))}
-                      </div>
-
-                      <div className="flex gap-2">
-                        <input 
-                          id="new-label-input"
-                          type="text" 
-                          placeholder="Nova label..." 
-                          className="flex-grow text-xs px-3 py-2 rounded-lg border border-slate-200 bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') {
-                              e.preventDefault();
-                              const input = e.currentTarget;
-                              if (input.value.trim()) {
-                                setClientLabels([...clientLabels, { id: crypto.randomUUID(), name: input.value.trim(), color: '#6366f1' }]);
-                                input.value = '';
-                              }
-                            }
-                          }}
-                        />
-                        <Button 
-                          variant="outline" 
-                          size="sm" 
-                          className="rounded-lg px-3"
-                          onClick={() => {
-                            const input = document.getElementById('new-label-input') as HTMLInputElement;
-                            if (input && input.value.trim()) {
-                              setClientLabels([...clientLabels, { id: crypto.randomUUID(), name: input.value.trim(), color: '#6366f1' }]);
-                              input.value = '';
-                            }
-                          }}
-                        >
-                          Adicionar
-                        </Button>
-                      </div>
-                      <p className="text-[10px] text-slate-400 mt-2">* Clique em "Salvar Configurações" para gravar.</p>
-                    </div>
-                  </Card>
-                </div>
-
-                {/* PAINEL DE CLIENTES M30 */}
-                {isM30Journey && commitmentId && (
-                  <div className="mt-6">
-                    <M30ClientUsersPanel commitmentId={commitmentId} />
                   </div>
-                )}
+                </Card>
               </TabsContent>
 
             </Tabs>
 
+            {/* PAINEL DE CLIENTES M30 */}
+            {isM30Journey && commitmentId && (
+              <div className="mt-6">
+                <M30ClientUsersPanel commitmentId={commitmentId} />
+              </div>
+            )}
 
             <Dialog open={journeyOpen} onOpenChange={setJourneyOpen}>
               <DialogContent className="max-w-md">
