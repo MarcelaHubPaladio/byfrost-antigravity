@@ -1250,120 +1250,116 @@ export default function OperacaoM30() {
             </div>
           </div>
 
-          {/* Tabs & View Mode */}
-          <div className="flex flex-col sm:flex-row gap-4 sm:items-center justify-between">
-            <div className="flex bg-slate-100 p-1 rounded-2xl self-start w-fit dark:bg-slate-900">
-              <button
-                onClick={() => setTab("kanban")}
-                className={cn(
-                  "px-4 py-2 text-xs font-semibold rounded-xl transition-all",
-                  tab === "kanban" ? "bg-white text-slate-900 shadow-sm dark:bg-slate-800 dark:text-slate-100" : "text-slate-600 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200"
-                )}
-              >
-                Quadro
-              </button>
-              <button
-                onClick={() => setTab("calendar")}
-                className={cn(
-                  "px-4 py-2 text-xs font-semibold rounded-xl transition-all",
-                  tab === "calendar" ? "bg-white text-slate-900 shadow-sm dark:bg-slate-800 dark:text-slate-100" : "text-slate-600 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200"
-                )}
-              >
-                Calendário
-              </button>
-              <button
-                onClick={() => setTab("contracts")}
-                className={cn(
-                  "px-4 py-2 text-xs font-semibold rounded-xl transition-all",
-                  tab === "contracts" ? "bg-white text-slate-900 shadow-sm dark:bg-slate-800 dark:text-slate-100" : "text-slate-600 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200"
-                )}
-              >
-                Contratos
-              </button>
-              <Link
-                to="/app/operacao-m30/postits"
-                className="px-4 py-2 text-xs font-semibold rounded-xl transition-all text-slate-600 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 flex items-center justify-center"
-              >
-                Post-its
-              </Link>
-            </div>
-            {tab === "kanban" && (
-              <div className="flex bg-slate-100 p-1 rounded-2xl self-start w-fit dark:bg-slate-900">
-                <button
-                  onClick={() => setViewMode("kanban")}
-                  className={cn(
-                    "px-4 py-2 text-xs font-semibold rounded-xl transition-all",
-                    viewMode === "kanban" ? "bg-white text-slate-900 shadow-sm dark:bg-slate-800 dark:text-slate-100" : "text-slate-600 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200"
-                  )}
-                  title="Modo Kanban"
-                >
-                  <Columns2 className="h-4 w-4" />
-                </button>
-                <button
-                  onClick={() => setViewMode("list")}
-                  className={cn(
-                    "px-4 py-2 text-xs font-semibold rounded-xl transition-all",
-                    viewMode === "list" ? "bg-white text-slate-900 shadow-sm dark:bg-slate-800 dark:text-slate-100" : "text-slate-600 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200"
-                  )}
-                  title="Modo Lista"
-                >
-                  <LayoutList className="h-4 w-4" />
-                </button>
+          {/* Tabs, View Mode & Filters */}
+          <div className="flex flex-col gap-4">
+            <div className="flex flex-col xl:flex-row gap-4 justify-between items-start xl:items-center">
+              <div className="flex items-center gap-4 flex-wrap flex-1">
+                <div className="flex bg-slate-100 p-1 rounded-2xl self-start w-fit dark:bg-slate-900 shrink-0">
+                  <button
+                    onClick={() => setTab("kanban")}
+                    className={cn(
+                      "px-4 py-2 text-xs font-semibold rounded-xl transition-all",
+                      tab === "kanban" ? "bg-white text-slate-900 shadow-sm dark:bg-slate-800 dark:text-slate-100" : "text-slate-600 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200"
+                    )}
+                  >
+                    Quadro
+                  </button>
+                  <button
+                    onClick={() => setTab("calendar")}
+                    className={cn(
+                      "px-4 py-2 text-xs font-semibold rounded-xl transition-all",
+                      tab === "calendar" ? "bg-white text-slate-900 shadow-sm dark:bg-slate-800 dark:text-slate-100" : "text-slate-600 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200"
+                    )}
+                  >
+                    Calendário
+                  </button>
+                  <button
+                    onClick={() => setTab("contracts")}
+                    className={cn(
+                      "px-4 py-2 text-xs font-semibold rounded-xl transition-all",
+                      tab === "contracts" ? "bg-white text-slate-900 shadow-sm dark:bg-slate-800 dark:text-slate-100" : "text-slate-600 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200"
+                    )}
+                  >
+                    Contratos
+                  </button>
+                  <Link
+                    to="/app/operacao-m30/postits"
+                    className="px-4 py-2 text-xs font-semibold rounded-xl transition-all text-slate-600 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 flex items-center justify-center"
+                  >
+                    Post-its
+                  </Link>
+                </div>
+
+                {/* Inline Filters */}
+                <div className="flex flex-wrap items-center gap-2 flex-1">
+                  <div className="relative w-full sm:w-[220px]">
+                    <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
+                    <Input
+                      value={q}
+                      onChange={(e) => setQ(e.target.value)}
+                      placeholder="Título, telefone, cliente…"
+                      className="rounded-xl border-slate-200 dark:border-slate-850 text-sm pl-9 focus:border-indigo-400 focus:ring-indigo-400 w-full h-10"
+                    />
+                  </div>
+                  <select
+                    value={entityFilterId}
+                    onChange={(e) => setEntityFilterId(e.target.value)}
+                    className="h-10 w-full sm:w-auto min-w-[160px] rounded-xl border border-slate-200 dark:border-slate-850 bg-white dark:bg-slate-900 px-3 text-sm text-slate-800 dark:text-slate-200 outline-none focus:border-indigo-400"
+                  >
+                    <option value="all">Todos os clientes</option>
+                    <option value="__unassigned__">Sem cliente</option>
+                    {(entitiesQ.data ?? []).map((e) => (
+                      <option key={e.id} value={e.id}>
+                        {e.display_name || "Sem nome"}
+                      </option>
+                    ))}
+                  </select>
+                  <select
+                    value={assigneeFilterId}
+                    onChange={(e) => setAssigneeFilterId(e.target.value)}
+                    className="h-10 w-full sm:w-auto min-w-[160px] rounded-xl border border-slate-200 dark:border-slate-850 bg-white dark:bg-slate-900 px-3 text-sm text-slate-800 dark:text-slate-200 outline-none focus:border-indigo-400"
+                  >
+                    <option value="all">Todos os responsáveis</option>
+                    <option value="__unassigned__">Sem dono (Unassigned)</option>
+                    {(tenantUsersQ.data ?? []).map((u) => (
+                      <option key={u.user_id} value={u.user_id}>
+                        {u.display_name ?? u.email ?? "Desconhecido"}
+                      </option>
+                    ))}
+                  </select>
+                  <div className="h-10 w-full sm:w-auto">
+                    <DateRangePickerCustom
+                      date={dateRange}
+                      onDateChange={setDateRange}
+                    />
+                  </div>
+                </div>
               </div>
-            )}
-          </div>
 
-          {/* Filters Row */}
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center bg-white dark:bg-slate-900 p-4 rounded-[22px] border border-slate-200/80 dark:border-slate-800 shadow-xs relative">
-            <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center flex-1">
-              <div className="relative w-full sm:w-[280px]">
-                <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
-                <Input
-                  value={q}
-                  onChange={(e) => setQ(e.target.value)}
-                  placeholder="Título, telefone, cliente…"
-                  className="rounded-xl border-slate-200 dark:border-slate-850 text-sm pl-9 focus:border-indigo-400 focus:ring-indigo-400 w-full h-10"
-                />
-              </div>
-
-              <select
-                value={entityFilterId}
-                onChange={(e) => setEntityFilterId(e.target.value)}
-                className="h-10 w-full sm:min-w-[180px] rounded-xl border border-slate-200 dark:border-slate-850 bg-white dark:bg-slate-900 px-3 text-sm text-slate-800 dark:text-slate-200 outline-none focus:border-indigo-400"
-              >
-                <option value="all">Todos os clientes</option>
-                <option value="__unassigned__">Sem cliente</option>
-                {(entitiesQ.data ?? []).map((e) => (
-                  <option key={e.id} value={e.id}>
-                    {e.display_name || "Sem nome"}
-                  </option>
-                ))}
-              </select>
-
-              <select
-                value={assigneeFilterId}
-                onChange={(e) => setAssigneeFilterId(e.target.value)}
-                className="h-10 w-full sm:min-w-[180px] rounded-xl border border-slate-200 dark:border-slate-850 bg-white dark:bg-slate-900 px-3 text-sm text-slate-800 dark:text-slate-200 outline-none focus:border-indigo-400"
-              >
-                <option value="all">Todos os responsáveis</option>
-                <option value="__unassigned__">Sem dono (Unassigned)</option>
-                {(tenantUsersQ.data ?? []).map((u) => (
-                  <option key={u.user_id} value={u.user_id}>
-                    {u.display_name ?? u.email ?? "Desconhecido"}
-                  </option>
-                ))}
-              </select>
-
-              <div className="h-10">
-                <DateRangePickerCustom
-                  date={dateRange}
-                  onDateChange={setDateRange}
-                />
-              </div>
-            </div>
-            
-            <div className="hidden rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-850 px-3 py-2 text-xs text-slate-600 dark:text-slate-400 md:block ml-auto">
-              Arraste para mudar de etapa.
+              {tab === "kanban" && (
+                <div className="flex bg-slate-100 p-1 rounded-2xl self-start w-fit dark:bg-slate-900 shrink-0">
+                  <button
+                    onClick={() => setViewMode("kanban")}
+                    className={cn(
+                      "px-4 py-2 text-xs font-semibold rounded-xl transition-all",
+                      viewMode === "kanban" ? "bg-white text-slate-900 shadow-sm dark:bg-slate-800 dark:text-slate-100" : "text-slate-600 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200"
+                    )}
+                    title="Modo Kanban"
+                  >
+                    <Columns2 className="h-4 w-4" />
+                  </button>
+                  <button
+                    onClick={() => setViewMode("list")}
+                    className={cn(
+                      "px-4 py-2 text-xs font-semibold rounded-xl transition-all",
+                      viewMode === "list" ? "bg-white text-slate-900 shadow-sm dark:bg-slate-800 dark:text-slate-100" : "text-slate-600 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200"
+                    )}
+                    title="Modo Lista"
+                  >
+                    <LayoutList className="h-4 w-4" />
+                  </button>
+                </div>
+              )}
             </div>
           </div>
 
@@ -1434,7 +1430,7 @@ export default function OperacaoM30() {
 
           {selectedKey && (
             <div className="mt-4 overflow-x-auto pb-1">
-              {tab === "kanban" ? (
+              {tab === "kanban" && viewMode === "kanban" ? (
                 <div className="flex min-w-[980px] gap-4">
                   {columns.map((col) => (
                     <div
@@ -1452,8 +1448,23 @@ export default function OperacaoM30() {
                         updateCaseState(cid, col.key);
                       }}
                     >
-                      <div className="flex items-center justify-between px-1">
-                        <div className="text-sm font-semibold text-slate-800">{col.label}</div>
+                      <div className="flex items-center justify-between px-1 mb-2">
+                        <div className="flex items-center gap-2">
+                          <Checkbox
+                            checked={col.items.length > 0 && col.items.every(item => selectedCaseIds.includes(item.id))}
+                            onCheckedChange={(checked) => {
+                              if (checked) {
+                                const newIds = col.items.map(i => i.id).filter(id => !selectedCaseIds.includes(id));
+                                setSelectedCaseIds(prev => [...prev, ...newIds]);
+                              } else {
+                                const colIds = col.items.map(i => i.id);
+                                setSelectedCaseIds(prev => prev.filter(id => !colIds.includes(id)));
+                              }
+                            }}
+                            className="h-4 w-4 border-slate-300 data-[state=checked]:bg-indigo-600 data-[state=checked]:border-indigo-600"
+                          />
+                          <div className="text-sm font-semibold text-slate-800">{col.label}</div>
+                        </div>
                         <div className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-600">
                           {col.items.length}
                         </div>
