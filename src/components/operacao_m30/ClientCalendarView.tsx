@@ -172,29 +172,7 @@ export function ClientCalendarView({
                   
                   <div className="flex flex-col gap-1.5 flex-1 overflow-y-auto no-scrollbar">
                     {dayCases.map(c => (
-                      <Link 
-                        key={c.id} 
-                        to={`/app/operacao-m30/${c.id}`}
-                        className="bg-white border border-slate-200 rounded-xl p-2 hover:border-indigo-300 hover:shadow-sm transition-all group"
-                      >
-                        <p className="text-[10px] font-bold text-slate-800 leading-tight line-clamp-2 group-hover:text-indigo-600">
-                          {c.title || "Sem título"}
-                        </p>
-                        {clientLabels && ((c.meta_json as any)?.labels || []).length > 0 && (
-                          <div className="mt-1 flex flex-wrap gap-0.5">
-                            {((c.meta_json as any)?.labels || []).map((lblId: string) => {
-                              const lbl = clientLabels.find(l => l.id === lblId);
-                              if (!lbl) return null;
-                              return (
-                                <span key={lbl.id} className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: lbl.color }} title={lbl.name} />
-                              );
-                            })}
-                          </div>
-                        )}
-                        <div className="flex items-center gap-1 mt-1 text-[8px] text-slate-400 font-medium">
-                          <span className="truncate">{c.state}</span>
-                        </div>
-                      </Link>
+                      <DayCaseCard key={c.id} c={c} clientLabels={clientLabels} viewMode="list" />
                     ))}
                   </div>
                 </div>
@@ -219,36 +197,7 @@ export function ClientCalendarView({
                   </div>
                   <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-3">
                     {dayCases.map(c => (
-                      <Link 
-                        key={c.id} 
-                        to={`/app/operacao-m30/${c.id}`}
-                        className={cn(
-                          "bg-white border rounded-xl p-3 hover:border-indigo-300 hover:shadow-sm transition-all group flex flex-col justify-between",
-                          isToday(dateObj) ? "border-[hsl(var(--byfrost-accent)/0.3)] bg-[hsl(var(--byfrost-accent)/0.02)]" : "border-slate-200"
-                        )}
-                      >
-                        <div>
-                          <p className="text-xs font-bold text-slate-900 leading-tight group-hover:text-indigo-600 mb-2">
-                            {c.title || "Sem título"}
-                          </p>
-                          {clientLabels && ((c.meta_json as any)?.labels || []).length > 0 && (
-                            <div className="flex flex-wrap gap-1 mb-2">
-                              {((c.meta_json as any)?.labels || []).map((lblId: string) => {
-                                const lbl = clientLabels.find(l => l.id === lblId);
-                                if (!lbl) return null;
-                                return (
-                                  <span key={lbl.id} className="text-[8px] font-bold px-1.5 py-0.5 rounded-sm" style={{ backgroundColor: lbl.color, color: '#fff' }}>
-                                    {lbl.name}
-                                  </span>
-                                );
-                              })}
-                            </div>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-1 mt-auto pt-2 border-t border-slate-50 text-[9px] text-slate-400 font-medium">
-                          <span className="truncate">{c.state}</span>
-                        </div>
-                      </Link>
+                      <DayCaseCard key={c.id} c={c} clientLabels={clientLabels} viewMode="grid" isToday={isToday(dateObj)} />
                     ))}
                   </div>
                 </div>
@@ -264,5 +213,68 @@ export function ClientCalendarView({
         </div>
       )}
     </div>
+  );
+}
+
+function DayCaseCard({ c, clientLabels, viewMode, isToday = false }: { c: any, clientLabels?: any[], viewMode: 'list' | 'grid', isToday?: boolean }) {
+  if (viewMode === 'list') {
+    return (
+      <Link 
+        key={c.id} 
+        to={`/app/operacao-m30/${c.id}`}
+        className="bg-white border border-slate-200 rounded-xl p-2 hover:border-indigo-300 hover:shadow-sm transition-all group"
+      >
+        <p className="text-[10px] font-bold text-slate-800 leading-tight line-clamp-2 group-hover:text-indigo-600">
+          {c.title || "Sem título"}
+        </p>
+        {clientLabels && ((c.meta_json as any)?.labels || []).length > 0 && (
+          <div className="mt-1 flex flex-wrap gap-0.5">
+            {((c.meta_json as any)?.labels || []).map((lblId: string) => {
+              const lbl = clientLabels.find(l => l.id === lblId);
+              if (!lbl) return null;
+              return (
+                <span key={lbl.id} className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: lbl.color }} title={lbl.name} />
+              );
+            })}
+          </div>
+        )}
+        <div className="flex items-center gap-1 mt-1 text-[8px] text-slate-400 font-medium">
+          <span className="truncate">{c.state}</span>
+        </div>
+      </Link>
+    );
+  }
+
+  return (
+    <Link 
+      key={c.id} 
+      to={`/app/operacao-m30/${c.id}`}
+      className={cn(
+        "bg-white border rounded-xl p-3 hover:border-indigo-300 hover:shadow-sm transition-all group flex flex-col justify-between",
+        isToday ? "border-[hsl(var(--byfrost-accent)/0.3)] bg-[hsl(var(--byfrost-accent)/0.02)]" : "border-slate-200"
+      )}
+    >
+      <div>
+        <p className="text-xs font-bold text-slate-900 leading-tight group-hover:text-indigo-600 mb-2">
+          {c.title || "Sem título"}
+        </p>
+        {clientLabels && ((c.meta_json as any)?.labels || []).length > 0 && (
+          <div className="flex flex-wrap gap-1 mb-2">
+            {((c.meta_json as any)?.labels || []).map((lblId: string) => {
+              const lbl = clientLabels.find(l => l.id === lblId);
+              if (!lbl) return null;
+              return (
+                <span key={lbl.id} className="text-[8px] font-bold px-1.5 py-0.5 rounded-sm" style={{ backgroundColor: lbl.color, color: '#fff' }}>
+                  {lbl.name}
+                </span>
+              );
+            })}
+          </div>
+        )}
+      </div>
+      <div className="flex items-center gap-1 mt-auto pt-2 border-t border-slate-50 text-[9px] text-slate-400 font-medium">
+        <span className="truncate">{c.state}</span>
+      </div>
+    </Link>
   );
 }
