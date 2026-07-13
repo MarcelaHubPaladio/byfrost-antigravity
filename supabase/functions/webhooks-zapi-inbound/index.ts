@@ -965,6 +965,13 @@ serve(async (req) => {
           ? "outbound"
           : (forced ?? inferred);
 
+    // Z-API often sends the destination phone in `payload.phone` for outbound messages,
+    // which gets parsed into `normalized.from`. We must swap them to `normalized.to`.
+    if (direction === "outbound" && normalized.from && !normalized.to && !effectiveGroupId) {
+      normalized.to = normalized.from;
+      normalized.from = null;
+    }
+
     // For call events, treat the peer (caller/callee) as the effective sender for matching/case linking.
     const inboundFromPhone =
       direction === "outbound"
