@@ -1152,51 +1152,19 @@ export default function OperacaoM30() {
   return (
     <RequireAuth>
       <AppShell>
-        <div className="rounded-[28px] border border-slate-200 bg-white/65 p-4 shadow-sm backdrop-blur md:p-5">
-          <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-            <div className="min-w-0 flex flex-col md:flex-row md:items-center gap-4">
-              <div>
-                <h2 className="text-lg font-semibold tracking-tight text-slate-900">Operação M30</h2>
-                <p className="mt-1 text-sm text-slate-600">
-                  Acompanhamento dos casos ativos desta jornada.
-                </p>
-              </div>
-              
-              <div className="flex bg-slate-100/80 p-1 rounded-2xl md:ml-4 self-start md:self-auto">
-                <button
-                  onClick={() => setTab("kanban")}
-                  className={cn(
-                    "px-4 py-1.5 text-sm font-medium rounded-xl transition-all",
-                    tab === "kanban" ? "bg-white text-slate-900 shadow-sm" : "text-slate-600 hover:text-slate-800"
-                  )}
-                >
-                  Quadro
-                </button>
-                <button
-                  onClick={() => setTab("calendar")}
-                  className={cn(
-                    "px-4 py-1.5 text-sm font-medium rounded-xl transition-all",
-                    tab === "calendar" ? "bg-white text-slate-900 shadow-sm" : "text-slate-600 hover:text-slate-800"
-                  )}
-                >
-                  Calendário
-                </button>
-                <button
-                  onClick={() => setTab("contracts")}
-                  className={cn(
-                    "px-4 py-1.5 text-sm font-medium rounded-xl transition-all",
-                    tab === "contracts" ? "bg-white text-slate-900 shadow-sm" : "text-slate-600 hover:text-slate-800"
-                  )}
-                >
-                  Contratos
-                </button>
-                <Link
-                  to="/app/operacao-m30/postits"
-                  className="px-4 py-1.5 text-sm font-medium rounded-xl transition-all text-slate-600 hover:text-slate-800 flex items-center justify-center"
-                >
-                  Post-its
-                </Link>
-              </div>
+        <div className="flex flex-col gap-6 p-6">
+          {/* Header */}
+          <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
+            <div>
+              <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-50">
+                <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-indigo-100 text-indigo-600 dark:bg-indigo-950/40 dark:text-indigo-400">
+                  <LayoutList className="h-5 w-5" />
+                </span>
+                Operação M30
+              </h1>
+              <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                Acompanhamento dos casos ativos desta jornada.
+              </p>
             </div>
 
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
@@ -1205,8 +1173,9 @@ export default function OperacaoM30() {
               ) : null}
 
               <Button
-                variant="secondary"
-                className="h-10 rounded-2xl"
+                variant="outline"
+                size="sm"
+                className="h-10 rounded-xl"
                 onClick={() => {
                   journeyQ.refetch();
                   casesQ.refetch();
@@ -1217,35 +1186,67 @@ export default function OperacaoM30() {
                   readsQ.refetch();
                 }}
               >
-                <RefreshCw className="mr-2 h-4 w-4" /> Atualizar
+                <RefreshCw className="mr-1.5 h-3.5 w-3.5" /> Atualizar
               </Button>
             </div>
           </div>
 
+          {/* Tabs */}
+          <div className="flex bg-slate-100 p-1 rounded-2xl self-start w-fit dark:bg-slate-900">
+            <button
+              onClick={() => setTab("kanban")}
+              className={cn(
+                "px-4 py-2 text-xs font-semibold rounded-xl transition-all",
+                tab === "kanban" ? "bg-white text-slate-900 shadow-sm dark:bg-slate-800 dark:text-slate-100" : "text-slate-600 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200"
+              )}
+            >
+              Quadro
+            </button>
+            <button
+              onClick={() => setTab("calendar")}
+              className={cn(
+                "px-4 py-2 text-xs font-semibold rounded-xl transition-all",
+                tab === "calendar" ? "bg-white text-slate-900 shadow-sm dark:bg-slate-800 dark:text-slate-100" : "text-slate-600 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200"
+              )}
+            >
+              Calendário
+            </button>
+            <button
+              onClick={() => setTab("contracts")}
+              className={cn(
+                "px-4 py-2 text-xs font-semibold rounded-xl transition-all",
+                tab === "contracts" ? "bg-white text-slate-900 shadow-sm dark:bg-slate-800 dark:text-slate-100" : "text-slate-600 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200"
+              )}
+            >
+              Contratos
+            </button>
+            <Link
+              to="/app/operacao-m30/postits"
+              className="px-4 py-2 text-xs font-semibold rounded-xl transition-all text-slate-600 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 flex items-center justify-center"
+            >
+              Post-its
+            </Link>
+          </div>
 
-
-          <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-end flex-wrap">
-            <div className="relative flex-1 min-w-[200px]">
-              <div className="mb-1 text-[11px] font-semibold text-slate-700">Busca rápida</div>
-              <div className="relative">
-                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+          {/* Filters Row */}
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center bg-white dark:bg-slate-900 p-4 rounded-[22px] border border-slate-200/80 dark:border-slate-800 shadow-xs relative">
+            <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center flex-1">
+              <div className="relative w-full sm:w-[280px]">
+                <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
                 <Input
                   value={q}
                   onChange={(e) => setQ(e.target.value)}
                   placeholder="Título, telefone, cliente…"
-                  className="h-11 rounded-2xl pl-10"
+                  className="rounded-xl border-slate-200 dark:border-slate-850 text-sm pl-9 focus:border-indigo-400 focus:ring-indigo-400 w-full h-10"
                 />
               </div>
-            </div>
 
-            <div className="relative">
-              <div className="mb-1 text-[11px] font-semibold text-slate-700">Cliente (Entidade)</div>
               <select
                 value={entityFilterId}
                 onChange={(e) => setEntityFilterId(e.target.value)}
-                className="h-11 w-full sm:min-w-[180px] rounded-2xl border border-slate-200 bg-white px-3 text-sm text-slate-800 outline-none focus:border-[hsl(var(--byfrost-accent)/0.45)]"
+                className="h-10 w-full sm:min-w-[180px] rounded-xl border border-slate-200 dark:border-slate-850 bg-white dark:bg-slate-900 px-3 text-sm text-slate-800 dark:text-slate-200 outline-none focus:border-indigo-400"
               >
-                <option value="all">Todos</option>
+                <option value="all">Todos os clientes</option>
                 <option value="__unassigned__">Sem cliente</option>
                 {(entitiesQ.data ?? []).map((e) => (
                   <option key={e.id} value={e.id}>
@@ -1253,16 +1254,13 @@ export default function OperacaoM30() {
                   </option>
                 ))}
               </select>
-            </div>
 
-            <div className="relative">
-              <div className="mb-1 text-[11px] font-semibold text-slate-700">Responsável</div>
               <select
                 value={assigneeFilterId}
                 onChange={(e) => setAssigneeFilterId(e.target.value)}
-                className="h-11 w-full sm:min-w-[180px] rounded-2xl border border-slate-200 bg-white px-3 text-sm text-slate-800 outline-none focus:border-[hsl(var(--byfrost-accent)/0.45)]"
+                className="h-10 w-full sm:min-w-[180px] rounded-xl border border-slate-200 dark:border-slate-850 bg-white dark:bg-slate-900 px-3 text-sm text-slate-800 dark:text-slate-200 outline-none focus:border-indigo-400"
               >
-                <option value="all">Todos</option>
+                <option value="all">Todos os responsáveis</option>
                 <option value="__unassigned__">Sem dono (Unassigned)</option>
                 {(tenantUsersQ.data ?? []).map((u) => (
                   <option key={u.user_id} value={u.user_id}>
@@ -1270,19 +1268,16 @@ export default function OperacaoM30() {
                   </option>
                 ))}
               </select>
+
+              <div className="h-10">
+                <DateRangePickerCustom
+                  date={dateRange}
+                  onDateChange={setDateRange}
+                />
+              </div>
             </div>
-
-            <div className="relative">
-              <div className="mb-1 text-[11px] font-semibold text-slate-700">Data</div>
-              <DateRangePickerCustom
-                date={dateRange}
-                onDateChange={setDateRange}
-              />
-            </div>
-
-
-
-            <div className="hidden rounded-2xl border border-slate-200 bg-white/70 px-3 py-2 text-xs text-slate-600 shadow-sm md:block">
+            
+            <div className="hidden rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-850 px-3 py-2 text-xs text-slate-600 dark:text-slate-400 md:block ml-auto">
               Arraste para mudar de etapa.
             </div>
           </div>
@@ -1381,7 +1376,7 @@ export default function OperacaoM30() {
 
                       <div
                         className={cn(
-                          "mt-2 space-y-3 rounded-[24px] p-2",
+                          "flex flex-col gap-2 overflow-y-auto max-h-[70vh] p-2 mt-2 rounded-[24px]",
                           col.key !== "__other__" ? "bg-slate-50/60 border border-dashed border-slate-200" : ""
                         )}
                       >
@@ -1443,15 +1438,18 @@ export default function OperacaoM30() {
                                     const eid = (c as any).customer_entity_id || (c as any).customer_id || (c.meta_json as any)?.entity_id;
                                     const metaName = (c.meta_json as any)?.customer_entity_name || (c.meta_json as any)?.entity_name;
                                     const entityFullName = metaName || (eid ? caseEntitiesQ.data?.get(eid) : null);
-                                    const entityFirstName = entityFullName ? entityFullName.split(" ")[0] : null;
                                     
-                                    if (!entityFirstName) return null;
+                                    if (!entityFullName) return null;
+
+                                    const nameParts = entityFullName.split(" ");
+                                    const entityDisplayName = nameParts.slice(0, 2).join(" ");
+                                    
                                     return (
                                       <div 
                                         className="mt-1 inline-block truncate max-w-full rounded bg-indigo-50 px-1.5 py-0.5 text-[10px] uppercase tracking-wider font-bold text-indigo-700 ring-1 ring-inset ring-indigo-700/10"
                                         title={entityFullName}
                                       >
-                                        {entityFirstName}
+                                        {entityDisplayName}
                                       </div>
                                     );
                                   })()}
@@ -1474,11 +1472,7 @@ export default function OperacaoM30() {
                                     <Badge className="rounded-full border-0 bg-amber-100 text-amber-900 hover:bg-amber-100">
                                       {pend.open} pend.
                                     </Badge>
-                                  ) : (
-                                    <Badge className="rounded-full border-0 bg-emerald-100 text-emerald-900 hover:bg-emerald-100">
-                                      ok
-                                    </Badge>
-                                  )}
+                                  ) : null}
                                 </div>
                               </div>
 
