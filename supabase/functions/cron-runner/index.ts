@@ -81,14 +81,14 @@ serve(async (req) => {
         const publicationId = (p as any).id as string;
         const idempotencyKey = `META_PUBLISH_PUBLICATION:${publicationId}`;
 
-        const { error } = await supabase.from("job_queue").insert({
+        const { error } = await supabase.from("job_queue").upsert({
           tenant_id: tenantId,
           type: "META_PUBLISH_PUBLICATION",
           idempotency_key: idempotencyKey,
           payload_json: { publication_id: publicationId },
           status: "pending",
           run_after: new Date().toISOString(),
-        });
+        }, { onConflict: "tenant_id, idempotency_key", ignoreDuplicates: true });
 
         if (error) {
           const msg = String((error as any)?.message ?? "").toLowerCase();
@@ -228,14 +228,14 @@ serve(async (req) => {
       const tenantId = (t as any).id as string;
       const idempotencyKey = `DAILY_WA_SUMMARY:${tenantId}:${dateStr}`;
 
-      const { error } = await supabase.from("job_queue").insert({
+      const { error } = await supabase.from("job_queue").upsert({
         tenant_id: tenantId,
         type: "DAILY_WA_SUMMARY",
         idempotency_key: idempotencyKey,
         payload_json: { date: dateStr, time_zone: timeZone },
         status: "pending",
         run_after: new Date().toISOString(),
-      });
+        }, { onConflict: "tenant_id, idempotency_key", ignoreDuplicates: true });
 
       if (error) {
         const msg = String((error as any)?.message ?? "").toLowerCase();
@@ -276,14 +276,14 @@ serve(async (req) => {
 
           for (const j of activeJourneys ?? []) {
             const idempotencyKey = `GUARDIAO_INSIGHTS:${p.tenant_id}:${j.journey_id}:${idempTime}`;
-            const { error } = await supabase.from("job_queue").insert({
+            const { error } = await supabase.from("job_queue").upsert({
               tenant_id: p.tenant_id,
               type: "GUARDIAO_INSIGHTS_GENERATE",
               idempotency_key: idempotencyKey,
               payload_json: { journey_id: j.journey_id, frequency: freq, model: "openai" },
               status: "pending",
               run_after: new Date().toISOString(),
-            });
+        }, { onConflict: "tenant_id, idempotency_key", ignoreDuplicates: true });
 
             if (!error) {
               guardiaoEnqueued += 1;

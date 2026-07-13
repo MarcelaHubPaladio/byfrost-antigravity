@@ -22,7 +22,7 @@ function readDirRecursive(dir, baseDir = dir) {
   return results;
 }
 
-const funcName = "webhooks-zapi-inbound";
+const funcName = "jobs-processor";
 const funcDir = path.join(__dirname, 'supabase', 'functions', funcName);
 const sharedDir = path.join(__dirname, 'supabase', 'functions', '_shared');
 

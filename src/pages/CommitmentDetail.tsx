@@ -5,6 +5,7 @@ import { AppShell } from "@/components/AppShell";
 import { RequireAuth } from "@/components/RequireAuth";
 import { DeliverablesPipelineChart } from "@/components/case/DeliverablesPipelineChart";
 import { M30ClientUsersPanel } from "@/components/operacao_m30/M30ClientUsersPanel";
+import { ClientCalendarView } from "@/components/operacao_m30/ClientCalendarView";
 import { RequireRouteAccess } from "@/components/RequireRouteAccess";
 import { RequireTenantRole } from "@/components/RequireTenantRole";
 import { useTenant } from "@/providers/TenantProvider";
@@ -43,6 +44,7 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
@@ -55,6 +57,7 @@ type CommitmentRow = {
   status: string | null;
   total_value: number | null;
   customer_entity_id: string;
+  metadata: any;
   created_at: string;
   updated_at: string;
 };
@@ -147,6 +150,32 @@ export default function CommitmentDetail() {
 
   const [isEditingTerm, setIsEditingTerm] = useState(false);
   const [newTermMonths, setNewTermMonths] = useState(12);
+  const [notes, setNotes] = useState("");
+
+  useEffect(() => {
+    if (commitmentQ.data?.metadata?.notes) {
+      setNotes(commitmentQ.data.metadata.notes);
+    }
+  }, [commitmentQ.data]);
+
+  const updateNotes = async () => {
+    setSaving(true);
+    try {
+      const currentMeta = commitmentQ.data?.metadata || {};
+      const { error } = await supabase
+        .from("commercial_commitments")
+        .update({ metadata: { ...currentMeta, notes } })
+        .eq("id", commitmentId);
+      
+      if (error) throw error;
+      showSuccess("Anotações salvas com sucesso!");
+      commitmentQ.refetch();
+    } catch (err: any) {
+      showError(err.message ?? "Erro ao salvar anotações");
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const updateContractTerm = async (months: number) => {
     if (months <= 0) return;
@@ -240,6 +269,7 @@ export default function CommitmentDetail() {
           customer_entity_id,
           created_at,
           updated_at,
+          metadata,
           customer:core_entities!commercial_commitments_customer_fk(display_name)
         `)
         .eq("tenant_id", activeTenantId!)
@@ -931,6 +961,17 @@ export default function CommitmentDetail() {
               </div>
             </div>
 
+            <Tabs defaultValue="overview" className="w-full">
+              <TabsList className="mb-4 bg-slate-100 p-1 rounded-2xl w-full justify-start overflow-x-auto no-scrollbar">
+                <TabsTrigger value="overview" className="rounded-xl data-[state=active]:bg-white data-[state=active]:shadow-sm text-[10px] font-bold uppercase">Visão Geral</TabsTrigger>
+                {isM30Journey && <TabsTrigger value="operation" className="rounded-xl data-[state=active]:bg-white data-[state=active]:shadow-sm text-[10px] font-bold uppercase">Operação / Casos</TabsTrigger>}
+                {isM30Journey && <TabsTrigger value="calendar" className="rounded-xl data-[state=active]:bg-white data-[state=active]:shadow-sm text-[10px] font-bold uppercase">Calendário</TabsTrigger>}
+                <TabsTrigger value="financial" className="rounded-xl data-[state=active]:bg-white data-[state=active]:shadow-sm text-[10px] font-bold uppercase">Financeiro</TabsTrigger>
+                <TabsTrigger value="settings" className="rounded-xl data-[state=active]:bg-white data-[state=active]:shadow-sm text-[10px] font-bold uppercase">Config. & Observações</TabsTrigger>
+              </TabsList>
+              
+              <TabsContent value="overview" className="space-y-4 outline-none">
+
             {/* Se não existem entregáveis (ou no-items), mostramos o card de sincronização e o relacionamento. Se já existem, limpamos a UI. */}
             {(deliverablesQ.data ?? []).length === 0 ? (
               <div className="grid gap-4 lg:grid-cols-4">
@@ -1375,6 +1416,10 @@ export default function CommitmentDetail() {
               </div>
             </Card>
 
+              </TabsContent>
+
+              {isM30Journey && (
+                <TabsContent value="operation" className="space-y-4 outline-none">
             {/* M30 Journey Kanban Section */}
             {m30JourneyQ.data && (
               <Card className="rounded-[32px] border-none bg-slate-50/50 p-6 shadow-inner">
@@ -1447,6 +1492,59 @@ export default function CommitmentDetail() {
                 )}
               </Card>
             )}
+                </TabsContent>
+              )}
+
+              {isM30Journey && (
+                <TabsContent value="calendar" className="space-y-4 outline-none">
+                  <ClientCalendarView cases={m30CasesQ.data ?? []} />
+                </TabsContent>
+              )}
+
+              <TabsContent value="financial" className="space-y-4 outline-none">
+                <Card className="rounded-2xl border-slate-200 p-6">
+                  <h3 className="text-sm font-bold uppercase tracking-wider text-slate-800 mb-4">Informações Financeiras</h3>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
+                      <p className="text-[10px] uppercase font-bold text-slate-500 mb-1">Status do Contrato</p>
+                      <Badge variant="outline" className={cn(
+                        "text-xs font-bold",
+                        commitmentQ.data?.status === 'active' ? "bg-emerald-100 text-emerald-700 border-emerald-200" : "bg-slate-200 text-slate-700 border-slate-300"
+                      )}>
+                        {commitmentQ.data?.status || "Indefinido"}
+                      </Badge>
+                    </div>
+                    <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
+                      <p className="text-[10px] uppercase font-bold text-slate-500 mb-1">Valor Total</p>
+                      <p className="text-lg font-black text-slate-900">
+                        {commitmentQ.data?.total_value ? `R$ ${commitmentQ.data.total_value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : "Não informado"}
+                      </p>
+                    </div>
+                  </div>
+                </Card>
+              </TabsContent>
+
+              <TabsContent value="settings" className="space-y-4 outline-none">
+                <Card className="rounded-2xl border-slate-200 p-6">
+                  <h3 className="text-sm font-bold uppercase tracking-wider text-slate-800 mb-4">Configurações e Observações</h3>
+                  <p className="text-xs text-slate-500 mb-4">Anotações internas sobre a operação do cliente.</p>
+                  <div className="flex flex-col gap-4">
+                    <textarea 
+                      className="w-full min-h-[200px] p-4 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all text-sm text-slate-700 outline-none resize-y"
+                      placeholder="Digite anotações, links importantes, ou qualquer observação sobre a operação deste cliente..."
+                      value={notes}
+                      onChange={(e) => setNotes(e.target.value)}
+                    />
+                    <div className="flex justify-end">
+                      <Button onClick={updateNotes} disabled={saving} className="rounded-xl px-6">
+                        {saving ? "Salvando..." : "Salvar Anotações"}
+                      </Button>
+                    </div>
+                  </div>
+                </Card>
+              </TabsContent>
+
+            </Tabs>
 
             {/* PAINEL DE CLIENTES M30 */}
             {isM30Journey && commitmentId && (
