@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { ChevronDown, ChevronRight, Leaf, Image as ImageIcon, Package, Sprout, Cpu, AlignLeft, Phone, Plus, Trash2, Copy } from 'lucide-react';
+import { RichTextEditor } from '@/components/RichTextEditor';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { ImageUpload } from './ImageUpload';
@@ -65,12 +66,20 @@ function SectionStyleEditor({ value = {}, onChange }: { value?: SectionStyleOpti
         />
       </Field>
 
-      <div className="grid grid-cols-1 gap-2">
+      <div className="grid grid-cols-2 gap-2">
         <Field label="Cor de Fundo (CSS)">
           <Input
             value={value.backgroundColor || ''}
             onChange={e => onChange({ ...value, backgroundColor: e.target.value })}
             placeholder="#ffffff ou transparent"
+            className="h-8 text-sm"
+          />
+        </Field>
+        <Field label="Altura Mínima">
+          <Input
+            value={(value as any).minHeight || ''}
+            onChange={e => onChange({ ...value, minHeight: e.target.value } as any)}
+            placeholder="ex: 500px, 100vh"
             className="h-8 text-sm"
           />
         </Field>
@@ -450,45 +459,30 @@ export function AgroForteEditor({ data, onChange }: AgroForteEditorProps) {
                   placeholder="linear-gradient(...) ou #cor"
                 />
               </Field>
-              <div className="flex gap-2">
-                <Field label="Título">
-                  <Input
+              <div className="space-y-4 my-2">
+                <Field label="Título do Banner">
+                  <RichTextEditor
                     value={banner.headline}
-                    onChange={e => {
+                    onChange={html => {
                       const newBanners = [...safeBanners];
-                      newBanners[i] = { ...banner, headline: e.target.value };
+                      newBanners[i] = { ...banner, headline: html };
                       setHero({ banners: newBanners });
                     }}
-                    placeholder="Cultivando"
-                    className="h-8 text-sm"
+                    placeholder="Seu título incrível aqui..."
                   />
                 </Field>
-                <Field label="Destaque (verde)">
-                  <Input
-                    value={banner.headlineHighlight}
-                    onChange={e => {
+                <Field label="Subtítulo">
+                  <RichTextEditor
+                    value={banner.subtitle}
+                    onChange={html => {
                       const newBanners = [...safeBanners];
-                      newBanners[i] = { ...banner, headlineHighlight: e.target.value };
+                      newBanners[i] = { ...banner, subtitle: html };
                       setHero({ banners: newBanners });
                     }}
-                    placeholder="Confiança,"
-                    className="h-8 text-sm text-green-700 font-bold"
+                    placeholder="Descrição complementar..."
                   />
                 </Field>
               </div>
-              <Field label="Subtítulo">
-                <Textarea
-                  value={banner.subtitle}
-                  onChange={e => {
-                    const newBanners = [...safeBanners];
-                    newBanners[i] = { ...banner, subtitle: e.target.value };
-                    setHero({ banners: newBanners });
-                  }}
-                  placeholder="Descreva..."
-                  className="text-sm resize-none"
-                  rows={2}
-                />
-              </Field>
               <div className="flex gap-2">
                 <div className="flex-1">
                   <Field label="Texto CTA">
@@ -614,11 +608,9 @@ export function AgroForteEditor({ data, onChange }: AgroForteEditorProps) {
       {/* CATALOGO INSUMOS */}
       <Section title="Catálogo — Insumos Agrícolas" icon={<Sprout className="h-4 w-4" />}>
         <Field label="Descrição da seção">
-          <Textarea
+          <RichTextEditor
             value={data.catalogs.insumos.description}
-            onChange={e => setCatalogDesc('insumos', e.target.value)}
-            className="text-sm resize-none"
-            rows={2}
+            onChange={html => setCatalogDesc('insumos', html)}
           />
         </Field>
         <div className="space-y-3">
@@ -638,11 +630,9 @@ export function AgroForteEditor({ data, onChange }: AgroForteEditorProps) {
       {/* CATALOGO TECNOLOGIA */}
       <Section title="Catálogo — Tecnologia de Aplicação" icon={<Cpu className="h-4 w-4" />}>
         <Field label="Descrição da seção">
-          <Textarea
+          <RichTextEditor
             value={data.catalogs.tecnologia.description}
-            onChange={e => setCatalogDesc('tecnologia', e.target.value)}
-            className="text-sm resize-none"
-            rows={2}
+            onChange={html => setCatalogDesc('tecnologia', html)}
           />
         </Field>
         <div className="space-y-3">
@@ -662,11 +652,9 @@ export function AgroForteEditor({ data, onChange }: AgroForteEditorProps) {
       {/* CATALOGO PLANTIO */}
       <Section title="Catálogo — Plantio e Solo" icon={<AlignLeft className="h-4 w-4" />}>
         <Field label="Descrição da seção">
-          <Textarea
+          <RichTextEditor
             value={data.catalogs.plantio.description}
-            onChange={e => setCatalogDesc('plantio', e.target.value)}
-            className="text-sm resize-none"
-            rows={2}
+            onChange={html => setCatalogDesc('plantio', html)}
           />
         </Field>
         <div className="space-y-3">

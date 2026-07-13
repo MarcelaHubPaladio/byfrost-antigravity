@@ -16,8 +16,63 @@ import {
   Redo2,
   Underline as UnderlineIcon,
   Undo2,
+  AlignLeft,
+  AlignCenter,
+  AlignRight,
+  AlignJustify
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import TextStyle from "@tiptap/extension-text-style";
+import Color from "@tiptap/extension-color";
+import FontFamily from "@tiptap/extension-font-family";
+import TextAlign from "@tiptap/extension-text-align";
+import { Extension } from '@tiptap/core';
+
+// Custom FontSize Extension
+const FontSize = Extension.create({
+  name: 'fontSize',
+  addOptions() {
+    return {
+      types: ['textStyle'],
+    }
+  },
+  addGlobalAttributes() {
+    return [
+      {
+        types: this.options.types,
+        attributes: {
+          fontSize: {
+            default: null,
+            parseHTML: element => element.style.fontSize.replace(/['"]+/g, ''),
+            renderHTML: attributes => {
+              if (!attributes.fontSize) {
+                return {}
+              }
+              return {
+                style: `font-size: ${attributes.fontSize}`,
+              }
+            },
+          },
+        },
+      },
+    ]
+  },
+  addCommands() {
+    return {
+      setFontSize: fontSize => ({ chain }) => {
+        return chain()
+          .setMark('textStyle', { fontSize })
+          .run()
+      },
+      unsetFontSize: () => ({ chain }) => {
+        return chain()
+          .setMark('textStyle', { fontSize: null })
+          .removeEmptyTextStyle()
+          .run()
+      },
+    }
+  },
+});
 
 function escapeHtml(s: string) {
   return s
@@ -69,6 +124,13 @@ export function RichTextEditor(props: {
     extensions: [
       StarterKit,
       Underline,
+      TextStyle,
+      Color,
+      FontFamily,
+      FontSize,
+      TextAlign.configure({
+        types: ['heading', 'paragraph'],
+      }),
       Link.configure({
         openOnClick: false,
         autolink: true,
@@ -125,6 +187,49 @@ export function RichTextEditor(props: {
   return (
     <div className={cn("rounded-2xl border border-slate-200 bg-white", props.className)}>
       <div className="flex flex-wrap items-center gap-1 border-b border-slate-200 bg-slate-50/60 px-2 py-2">
+        <select
+          onChange={(e) => editor.chain().focus().setFontFamily(e.target.value).run()}
+          className="h-9 px-2 text-sm border border-slate-200 rounded-md bg-white"
+        >
+          <option value="">Fonte padrão</option>
+          <option value="Inter">Inter</option>
+          <option value="Roboto">Roboto</option>
+          <option value="Montserrat">Montserrat</option>
+          <option value="Arial">Arial</option>
+          <option value="Georgia">Georgia</option>
+        </select>
+        
+        <select
+          onChange={(e) => {
+            if (e.target.value) {
+              (editor.chain().focus() as any).setFontSize(e.target.value).run();
+            } else {
+              (editor.chain().focus() as any).unsetFontSize().run();
+            }
+          }}
+          className="h-9 px-2 text-sm border border-slate-200 rounded-md bg-white w-[80px]"
+        >
+          <option value="">Tamanho</option>
+          <option value="12px">12px</option>
+          <option value="14px">14px</option>
+          <option value="16px">16px</option>
+          <option value="18px">18px</option>
+          <option value="24px">24px</option>
+          <option value="32px">32px</option>
+          <option value="48px">48px</option>
+          <option value="64px">64px</option>
+          <option value="80px">80px</option>
+        </select>
+        
+        <input
+          type="color"
+          onInput={(event: any) => editor.chain().focus().setColor(event.target.value).run()}
+          value={editor.getAttributes('textStyle').color || '#000000'}
+          className="h-9 w-9 p-1 border border-slate-200 rounded-md bg-white cursor-pointer"
+          title="Cor do Texto"
+        />
+
+        <div className="mx-1 h-6 w-px bg-slate-200" />
         <Button
           type="button"
           variant={editor.isActive("bold") ? "default" : "secondary"}
@@ -154,6 +259,43 @@ export function RichTextEditor(props: {
           title="Sublinhado"
         >
           <UnderlineIcon className={iconCls} />
+        </Button>
+        <div className="mx-1 h-6 w-px bg-slate-200" />
+        <Button
+          type="button"
+          variant={editor.isActive({ textAlign: 'left' }) ? "default" : "secondary"}
+          className={cn(btnCls, editor.isActive({ textAlign: 'left' }) ? "bg-slate-900 text-white" : "")}
+          onClick={() => editor.chain().focus().setTextAlign('left').run()}
+          title="Alinhar à Esquerda"
+        >
+          <AlignLeft className={iconCls} />
+        </Button>
+        <Button
+          type="button"
+          variant={editor.isActive({ textAlign: 'center' }) ? "default" : "secondary"}
+          className={cn(btnCls, editor.isActive({ textAlign: 'center' }) ? "bg-slate-900 text-white" : "")}
+          onClick={() => editor.chain().focus().setTextAlign('center').run()}
+          title="Centralizar"
+        >
+          <AlignCenter className={iconCls} />
+        </Button>
+        <Button
+          type="button"
+          variant={editor.isActive({ textAlign: 'right' }) ? "default" : "secondary"}
+          className={cn(btnCls, editor.isActive({ textAlign: 'right' }) ? "bg-slate-900 text-white" : "")}
+          onClick={() => editor.chain().focus().setTextAlign('right').run()}
+          title="Alinhar à Direita"
+        >
+          <AlignRight className={iconCls} />
+        </Button>
+        <Button
+          type="button"
+          variant={editor.isActive({ textAlign: 'justify' }) ? "default" : "secondary"}
+          className={cn(btnCls, editor.isActive({ textAlign: 'justify' }) ? "bg-slate-900 text-white" : "")}
+          onClick={() => editor.chain().focus().setTextAlign('justify').run()}
+          title="Justificar"
+        >
+          <AlignJustify className={iconCls} />
         </Button>
         <div className="mx-1 h-6 w-px bg-slate-200" />
         <Button

@@ -27,8 +27,8 @@ const AGROFORTE_CSS = `
   .afr-nav-links a:hover{color:#8bc34a}
   .afr-nav-cta{background:#4caf50;color:#fff!important;border:none;padding:10px 22px;border-radius:24px;font-size:14px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:6px;transition:background .2s;font-family:inherit;text-decoration:none}
   .afr-nav-cta:hover{background:#43a047}
-  .afr-hero{min-height:520px;position:relative;overflow:hidden}
-  .afr-hero-slide{position:absolute;inset:0;opacity:0;transition:opacity 0.8s ease;display:flex;align-items:center;padding:60px 5%;pointer-events:none}
+  .afr-hero{display:grid;position:relative;overflow:hidden}
+  .afr-hero-slide{grid-area:1 / 1;opacity:0;transition:opacity 0.8s ease;display:flex;align-items:center;padding:60px 5%;pointer-events:none}
   .afr-hero-slide.active{opacity:1;z-index:1;pointer-events:auto}
   .afr-hero-bg{position:absolute;right:0;top:0;width:55%;height:100%;opacity:.35}
   .afr-hero-content{position:relative;z-index:2;max-width:600px}
@@ -186,6 +186,7 @@ export function AgroForteRenderer({ data }: AgroForteRendererProps) {
       ...(styles.paddingBottom ? { paddingBottom: styles.paddingBottom } : {}),
       ...(styles.marginTop ? { marginTop: styles.marginTop } : {}),
       ...(styles.marginBottom ? { marginBottom: styles.marginBottom } : {}),
+      ...(styles.minHeight ? { minHeight: styles.minHeight } : {}),
     };
   };
 
@@ -234,11 +235,8 @@ export function AgroForteRenderer({ data }: AgroForteRendererProps) {
           }}>
             <img className="afr-hero-bg" src={banner.bgImage} alt="" style={{ objectFit: (banner.imageFit || 'cover') as any, objectPosition: banner.imagePosition || 'center' }} />
             <div className="afr-hero-content">
-              <h1>
-                {banner.headline} <em>{banner.headlineHighlight}</em><br/>
-                Colhendo<br/>Soluções.
-              </h1>
-              <p>{banner.subtitle}</p>
+              <div dangerouslySetInnerHTML={{ __html: banner.headline || '' }} />
+              <div dangerouslySetInnerHTML={{ __html: banner.subtitle || '' }} />
               <a href={banner.ctaUrl} className="afr-hero-cta">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
                 {banner.ctaText}
