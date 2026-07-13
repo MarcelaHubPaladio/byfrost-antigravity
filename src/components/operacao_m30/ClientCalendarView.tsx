@@ -16,9 +16,11 @@ export function ClientCalendarView({
 }: { 
   cases: any[],
   defaultPostingDays?: number[],
+  clientLabels?: {id: string, name: string, color: string}[],
   onUpdate?: () => void
 }) {
   const [date, setDate] = useState(new Date());
+  const [viewMode, setViewMode] = useState<'calendar' | 'list'>('calendar');
   
   const monthStart = startOfMonth(date);
   const monthEnd = endOfMonth(monthStart);
@@ -111,7 +113,23 @@ export function ClientCalendarView({
           <Button variant="outline" size="sm" className="rounded-xl h-8 text-xs font-semibold" onClick={() => setDate(new Date())}>
             Hoje
           </Button>
-          <Button variant="outline" size="icon" className="h-8 w-8 rounded-xl" onClick={prevMonth}>
+          <div className="flex border rounded-xl overflow-hidden ml-2 h-8">
+            <Button 
+              variant="ghost" 
+              className={cn("rounded-none h-full px-3 text-xs font-bold", viewMode === 'calendar' ? "bg-slate-100 text-slate-900" : "text-slate-400")}
+              onClick={() => setViewMode('calendar')}
+            >
+              Calendário
+            </Button>
+            <Button 
+              variant="ghost" 
+              className={cn("rounded-none h-full px-3 text-xs font-bold", viewMode === 'list' ? "bg-slate-100 text-slate-900" : "text-slate-400")}
+              onClick={() => setViewMode('list')}
+            >
+              Lista
+            </Button>
+          </div>
+          <Button variant="outline" size="icon" className="h-8 w-8 rounded-xl ml-2" onClick={prevMonth}>
             <ChevronLeft className="h-4 w-4" />
           </Button>
           <Button variant="outline" size="icon" className="h-8 w-8 rounded-xl" onClick={nextMonth}>
@@ -120,58 +138,131 @@ export function ClientCalendarView({
         </div>
       </div>
       
-      <div className="grid grid-cols-7 gap-3 mb-2 px-1">
-        {weekDays.map(d => (
-          <div key={d} className="text-center text-[11px] font-semibold text-slate-500 uppercase tracking-wider">{d}</div>
-        ))}
-      </div>
+      {viewMode === 'calendar' ? (
+        <>
+          <div className="grid grid-cols-7 gap-3 mb-2 px-1">
+            {weekDays.map(d => (
+              <div key={d} className="text-center text-[11px] font-semibold text-slate-500 uppercase tracking-wider">{d}</div>
+            ))}
+          </div>
 
-      <div className="grid grid-cols-7 gap-3">
-        {blanks}
-        {daysInMonth.map((day) => {
-          const dayKey = format(day, 'yyyy-MM-dd');
-          const dayCases = casesByDay.get(dayKey) ?? [];
-          const isTodayDate = isToday(day);
+          <div className="grid grid-cols-7 gap-3">
+            {blanks}
+            {daysInMonth.map((day) => {
+              const dayKey = format(day, 'yyyy-MM-dd');
+              const dayCases = casesByDay.get(dayKey) ?? [];
+              const isTodayDate = isToday(day);
 
-          return (
-            <div key={dayKey} className={cn(
-              "bg-white/80 rounded-[24px] border p-2 min-h-[140px] shadow-sm transition-all flex flex-col",
-              isTodayDate ? "border-[hsl(var(--byfrost-accent)/0.4)] bg-[hsl(var(--byfrost-accent)/0.02)] ring-1 ring-[hsl(var(--byfrost-accent)/0.2)]" : "border-slate-200"
-            )}>
-              <div className="flex items-center justify-between mb-2 px-1">
-                <span className={cn(
-                  "text-xs font-bold w-6 h-6 flex items-center justify-center rounded-full tracking-tighter",
-                  isTodayDate ? "bg-[hsl(var(--byfrost-accent))] text-white" : "text-slate-700"
-                )}>{format(day, 'd')}</span>
-                {dayCases.length > 0 && (
-                  <span className="text-[10px] font-medium bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded-full">
-                    {dayCases.length} caso{dayCases.length > 1 ? 's' : ''}
-                  </span>
-                )}
-              </div>
-              <div className="flex flex-col gap-1.5 mt-1 max-h-[140px] overflow-y-auto no-scrollbar scroll-smooth">
-                {dayCases.map(c => (
-                  <Link
-                    key={c.id}
-                    to={`/app/operacao-m30/${c.id}`}
-                    className="block p-2 rounded-[16px] border border-slate-100 bg-white hover:bg-slate-50 hover:border-slate-200 transition-colors cursor-pointer shadow-sm"
-                    title={c.title ?? "Caso sem título"}
-                  >
-                    <div className="text-[11px] font-semibold text-slate-800 line-clamp-2 leading-tight">
-                      {c.title || "Caso sem título"}
-                    </div>
-                    {Boolean(c.state) && (
-                      <div className="text-[9px] text-slate-400 truncate mt-1 font-medium uppercase">
-                        {c.state}
-                      </div>
+              return (
+                <div key={dayKey} className={cn(
+                  "bg-white/80 rounded-[24px] border p-2 min-h-[140px] shadow-sm transition-all flex flex-col",
+                  isTodayDate ? "border-[hsl(var(--byfrost-accent)/0.4)] bg-[hsl(var(--byfrost-accent)/0.02)] ring-1 ring-[hsl(var(--byfrost-accent)/0.2)]" : "border-slate-200"
+                )}>
+                  <div className="flex items-center justify-between mb-2 px-1">
+                    <span className={cn(
+                      "text-xs font-bold w-6 h-6 flex items-center justify-center rounded-full tracking-tighter",
+                      isTodayDate ? "bg-[hsl(var(--byfrost-accent))] text-white" : "text-slate-700"
+                    )}>{format(day, 'd')}</span>
+                    {dayCases.length > 0 && (
+                      <span className="text-[10px] font-medium bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded-full">
+                        {dayCases.length} caso{dayCases.length > 1 ? 's' : ''}
+                      </span>
                     )}
-                  </Link>
-                ))}
+                  </div>
+                  
+                  <div className="flex flex-col gap-1.5 flex-1 overflow-y-auto no-scrollbar">
+                    {dayCases.map(c => (
+                      <Link 
+                        key={c.id} 
+                        to={`/app/operacao-m30/${c.id}`}
+                        className="bg-white border border-slate-200 rounded-xl p-2 hover:border-indigo-300 hover:shadow-sm transition-all group"
+                      >
+                        <p className="text-[10px] font-bold text-slate-800 leading-tight line-clamp-2 group-hover:text-indigo-600">
+                          {c.title || "Sem título"}
+                        </p>
+                        {clientLabels && ((c.meta_json as any)?.labels || []).length > 0 && (
+                          <div className="mt-1 flex flex-wrap gap-0.5">
+                            {((c.meta_json as any)?.labels || []).map((lblId: string) => {
+                              const lbl = clientLabels.find(l => l.id === lblId);
+                              if (!lbl) return null;
+                              return (
+                                <span key={lbl.id} className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: lbl.color }} title={lbl.name} />
+                              );
+                            })}
+                          </div>
+                        )}
+                        <div className="flex items-center gap-1 mt-1 text-[8px] text-slate-400 font-medium">
+                          <span className="truncate">{c.state}</span>
+                        </div>
+                      </Link>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </>
+      ) : (
+        <div className="bg-white/80 rounded-[24px] border border-slate-200 p-4 min-h-[400px]">
+          <div className="space-y-4">
+            {Array.from(casesByDay.keys()).sort().map(dayKey => {
+              const dayCases = casesByDay.get(dayKey)!;
+              const dateObj = new Date(dayKey + 'T12:00:00'); 
+              
+              if (format(dateObj, 'yyyy-MM') !== format(date, 'yyyy-MM')) return null;
+
+              return (
+                <div key={dayKey} className="flex flex-col md:flex-row gap-4 border-b border-slate-100 pb-4 last:border-0 last:pb-0">
+                  <div className="md:w-32 shrink-0">
+                    <p className="text-sm font-black text-slate-800">{format(dateObj, 'dd MMM', { locale: ptBR })}</p>
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{format(dateObj, 'EEEE', { locale: ptBR })}</p>
+                  </div>
+                  <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {dayCases.map(c => (
+                      <Link 
+                        key={c.id} 
+                        to={`/app/operacao-m30/${c.id}`}
+                        className={cn(
+                          "bg-white border rounded-xl p-3 hover:border-indigo-300 hover:shadow-sm transition-all group flex flex-col justify-between",
+                          isToday(dateObj) ? "border-[hsl(var(--byfrost-accent)/0.3)] bg-[hsl(var(--byfrost-accent)/0.02)]" : "border-slate-200"
+                        )}
+                      >
+                        <div>
+                          <p className="text-xs font-bold text-slate-900 leading-tight group-hover:text-indigo-600 mb-2">
+                            {c.title || "Sem título"}
+                          </p>
+                          {clientLabels && ((c.meta_json as any)?.labels || []).length > 0 && (
+                            <div className="flex flex-wrap gap-1 mb-2">
+                              {((c.meta_json as any)?.labels || []).map((lblId: string) => {
+                                const lbl = clientLabels.find(l => l.id === lblId);
+                                if (!lbl) return null;
+                                return (
+                                  <span key={lbl.id} className="text-[8px] font-bold px-1.5 py-0.5 rounded-sm" style={{ backgroundColor: lbl.color, color: '#fff' }}>
+                                    {lbl.name}
+                                  </span>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-1 mt-auto pt-2 border-t border-slate-50 text-[9px] text-slate-400 font-medium">
+                          <span className="truncate">{c.state}</span>
+                        </div>
+                      </Link>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+            
+            {Array.from(casesByDay.keys()).filter(dayKey => format(new Date(dayKey + 'T12:00:00'), 'yyyy-MM') === format(date, 'yyyy-MM')).length === 0 && (
+              <div className="text-center py-12 text-sm text-slate-400 font-medium">
+                Nenhum caso agendado para este mês.
               </div>
-            </div>
-          );
-        })}
-      </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

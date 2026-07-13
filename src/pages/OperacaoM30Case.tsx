@@ -1791,6 +1791,7 @@ export default function OperacaoM30Case() {
                                                             const newMeta = { ...(caseQ.data?.meta_json || {}), labels: newLabels };
                                                             await supabase.from("cases").update({ meta_json: newMeta }).eq("id", id!);
                                                             await caseQ.refetch();
+                                                            toast.success(isSelected ? "Etiqueta removida" : "Etiqueta vinculada ao caso!");
                                                             setSaving(false);
                                                         }}
                                                         className={cn(

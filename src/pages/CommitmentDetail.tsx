@@ -258,6 +258,7 @@ export default function CommitmentDetail() {
   });
 
   const [notes, setNotes] = useState("");
+  const [searchCases, setSearchCases] = useState("");
   const [clientLabels, setClientLabels] = useState<{id: string, name: string, color: string}[]>([]);
   const [defaultPostingDays, setDefaultPostingDays] = useState<number[]>([]);
 
@@ -489,13 +490,31 @@ export default function CommitmentDetail() {
 
   const m30KanbanData = useMemo(() => {
     const states = (m30JourneyQ.data?.default_state_machine_json?.states ?? []) as string[];
-    const cases = m30CasesQ.data ?? [];
+    const list = states.map(s => ({ state: s, items: [] as any[] }));
     
-    return states.map(s => ({
-      state: s,
-      items: cases.filter(c => c.state === s)
-    }));
-  }, [m30JourneyQ.data, m30CasesQ.data]);
+    const filteredCases = (m30CasesQ.data ?? []).filter(c => {
+      if (!searchCases.trim()) return true;
+      const q = searchCases.toLowerCase();
+      if (c.title?.toLowerCase().includes(q)) return true;
+      
+      const cLabels = (c.meta_json as any)?.labels || [];
+      const hasLabelMatch = clientLabels.some(l => cLabels.includes(l.id) && l.name.toLowerCase().includes(q));
+      if (hasLabelMatch) return true;
+      
+      return false;
+    });
+
+    for (const c of filteredCases) {
+      const col = list.find(l => l.state === c.state);
+      if (col) col.items.push(c);
+      else {
+        // fallback
+        const first = list[0];
+        if (first) first.items.push(c);
+      }
+    }
+    return list;
+  }, [m30JourneyQ.data, m30CasesQ.data, searchCases, clientLabels]);
 
   const journeysQ = useQuery({
     queryKey: ["active_journeys", activeTenantId],
@@ -1440,9 +1459,18 @@ export default function CommitmentDetail() {
                     </h3>
                     <p className="text-xs text-slate-500 font-medium">Acompanhamento operacional das pautas deste cliente.</p>
                   </div>
-                  <Badge variant="outline" className="bg-white border-indigo-100 text-indigo-600 font-bold">
-                    {m30CasesQ.data?.length ?? 0} Cards Ativos
-                  </Badge>
+                  <div className="flex items-center gap-4">
+                    <input 
+                      type="text" 
+                      placeholder="Buscar título ou tag..." 
+                      className="text-xs px-3 py-1.5 rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 w-[200px]"
+                      value={searchCases}
+                      onChange={e => setSearchCases(e.target.value)}
+                    />
+                    <Badge variant="outline" className="bg-white border-indigo-100 text-indigo-600 font-bold">
+                      {m30CasesQ.data?.length ?? 0} Cards Ativos
+                    </Badge>
+                  </div>
                 </div>
 
                 <div className="flex gap-4 overflow-x-auto pb-4 no-scrollbar">
@@ -1477,6 +1505,22 @@ export default function CommitmentDetail() {
                                 <AlertCircle className="h-3 w-3 text-rose-500 shrink-0" />
                               )}
                             </div>
+                            
+                            {/* Render labels on card */}
+                            {((c.meta_json as any)?.labels || []).length > 0 && (
+                              <div className="mt-2 flex flex-wrap gap-1">
+                                {((c.meta_json as any)?.labels || []).map((lblId: string) => {
+                                  const lbl = clientLabels.find(l => l.id === lblId);
+                                  if (!lbl) return null;
+                                  return (
+                                    <span key={lbl.id} className="text-[8px] font-bold px-1.5 py-0.5 rounded-sm" style={{ backgroundColor: lbl.color, color: '#fff' }}>
+                                      {lbl.name}
+                                    </span>
+                                  );
+                                })}
+                              </div>
+                            )}
+
                             <div className="mt-2 flex items-center justify-between text-[9px] font-medium text-slate-400">
                               <span className="truncate">{new Date(c.updated_at).toLocaleDateString()}</span>
                               {(c.meta_json as any)?.commitment_id === commitmentId && (
@@ -1506,7 +1550,7 @@ export default function CommitmentDetail() {
 
               {isM30Journey && (
                 <TabsContent value="calendar" className="space-y-4 outline-none">
-                  <ClientCalendarView cases={m30CasesQ.data ?? []} defaultPostingDays={defaultPostingDays} onUpdate={refreshAll} />
+                  <ClientCalendarView cases={m30CasesQ.data ?? []} defaultPostingDays={defaultPostingDays} onUpdate={refreshAll} clientLabels={clientLabels} />
                 </TabsContent>
               )}
 
