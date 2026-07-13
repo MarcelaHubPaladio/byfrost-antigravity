@@ -1403,11 +1403,15 @@ export default function CommitmentDetail() {
                                               <span className="truncate font-medium text-slate-700">{c.title || "Tarefa sem nome"}</span>
                                               {/* Labels on case */}
                                               {((c.meta_json as any)?.labels || []).length > 0 && (
-                                                <div className="flex gap-0.5 items-center">
+                                                <div className="flex gap-1 items-center ml-2">
                                                   {((c.meta_json as any)?.labels || []).map((lblId: string) => {
                                                     const lbl = clientLabels.find(l => l.id === lblId);
                                                     if (!lbl) return null;
-                                                    return <span key={lbl.id} className="w-2 h-2 rounded-full" style={{ backgroundColor: lbl.color }} title={lbl.name} />
+                                                    return (
+                                                      <span key={lbl.id} className="text-[9px] font-bold px-1.5 py-0.5 rounded-sm" style={{ backgroundColor: lbl.color, color: '#fff' }}>
+                                                        {lbl.name}
+                                                      </span>
+                                                    );
                                                   })}
                                                 </div>
                                               )}

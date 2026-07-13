@@ -537,6 +537,7 @@ export default function OperacaoM30() {
           status,
           created_at,
           customer_entity_id,
+          metadata,
           customer:core_entities!commercial_commitments_customer_fk(id, display_name, metadata)
         `)
         .eq("tenant_id", activeTenantId!)
@@ -586,6 +587,19 @@ export default function OperacaoM30() {
 
     return base;
   }, [contractsQ.data, entityFilterId, startDate, endDate, q]);
+
+  const globalLabelsMap = useMemo(() => {
+    const map = new Map<string, {id: string, name: string, color: string}>();
+    if (!contractsQ.data) return map;
+    for (const c of contractsQ.data) {
+      if (c.metadata?.labels && Array.isArray(c.metadata.labels)) {
+        for (const l of c.metadata.labels) {
+          map.set(l.id, l);
+        }
+      }
+    }
+    return map;
+  }, [contractsQ.data]);
 
   const groupedM30Contracts = useMemo(() => {
     const list = filteredContracts;
@@ -1619,6 +1633,20 @@ export default function OperacaoM30() {
                                     );
                                   })()}
 
+                                  {((c.meta_json as any)?.labels || []).length > 0 && (
+                                    <div className="mt-1.5 flex flex-wrap gap-1">
+                                      {((c.meta_json as any)?.labels || []).map((lblId: string) => {
+                                        const lbl = globalLabelsMap.get(lblId);
+                                        if (!lbl) return null;
+                                        return (
+                                          <span key={lbl.id} className="text-[8px] font-bold px-1.5 py-0.5 rounded-sm" style={{ backgroundColor: lbl.color, color: '#fff' }}>
+                                            {lbl.name}
+                                          </span>
+                                        );
+                                      })}
+                                    </div>
+                                  )}
+
                                   <div className="mt-1 truncate text-xs text-slate-500">
                                     {(c.users_profile?.display_name ?? c.users_profile?.email ?? "Sem dono")}
                                   </div>
@@ -1734,8 +1762,21 @@ export default function OperacaoM30() {
                                   {unread && <div className="w-2 h-2 rounded-full bg-rose-500" />}
                                   <div className="font-semibold text-sm text-slate-900 dark:text-slate-100">{titlePrimary}</div>
                                 </div>
+                                {((c.meta_json as any)?.labels || []).length > 0 && (
+                                  <div className="mt-1 flex flex-wrap gap-1">
+                                    {((c.meta_json as any)?.labels || []).map((lblId: string) => {
+                                      const lbl = globalLabelsMap.get(lblId);
+                                      if (!lbl) return null;
+                                      return (
+                                        <span key={lbl.id} className="text-[9px] font-bold px-1.5 py-0.5 rounded-sm" style={{ backgroundColor: lbl.color, color: '#fff' }}>
+                                          {lbl.name}
+                                        </span>
+                                      );
+                                    })}
+                                  </div>
+                                )}
                                 {entityDisplayName && (
-                                  <div className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">{entityDisplayName}</div>
+                                  <div className="text-[10px] text-slate-500 dark:text-slate-400 mt-1">{entityDisplayName}</div>
                                 )}
                               </Link>
                             </TableCell>
