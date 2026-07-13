@@ -341,6 +341,16 @@ export default function OperacaoM30() {
     }
   };
 
+  const handleSingleUpdateCaseType = async (caseId: string, value: string) => {
+    try {
+      await supabase.from("cases").update({ case_type: value }).eq("id", caseId);
+      casesQ.refetch();
+      showSuccess("Tipo de caso atualizado com sucesso!");
+    } catch (e: any) {
+      showError("Erro ao atualizar tipo de caso", e);
+    }
+  };
+
   const handleSingleClose = async (caseId: string) => {
     try {
       await supabase.from("cases").update({ status: "closed" }).eq("id", caseId);
@@ -1746,17 +1756,20 @@ export default function OperacaoM30() {
                             </TableCell>
                             <TableCell className="py-3">
                               <select
-                                value={(c.meta_json as any)?.video_style || ""}
-                                onChange={(e) => handleSingleUpdateMeta(c.id, "video_style", e.target.value, c.meta_json)}
-                                className="h-8 rounded-lg border border-slate-200 bg-white px-2 text-xs font-medium text-slate-800 outline-none hover:border-indigo-400 focus:border-indigo-400 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 min-w-[100px]"
+                                value={c.case_type || "order"}
+                                onChange={(e) => handleSingleUpdateCaseType(c.id, e.target.value)}
+                                className="h-8 rounded-lg border border-slate-200 bg-white px-2 text-[10px] font-bold uppercase text-slate-800 outline-none hover:border-indigo-400 focus:border-indigo-400 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 min-w-[120px]"
                               >
-                                <option value="">Sem estilo</option>
-                                <option value="reels">Reels</option>
-                                <option value="tiktok">TikTok</option>
-                                <option value="shorts">Shorts</option>
-                                <option value="feed">Feed</option>
-                                <option value="stories">Stories</option>
-                                <option value="youtube_longo">YouTube Longo</option>
+                                <option value="planejamento">PLANEJAMENTO</option>
+                                <option value="trafego_pago">TRÁFEGO PAGO</option>
+                                <option value="arte_estatica">ARTE ESTÁTICA</option>
+                                <option value="gravacao">GRAVAÇÃO</option>
+                                <option value="relatorio">RELATÓRIO</option>
+                                <option value="edicao">EDIÇÃO</option>
+                                <option value="validacao">VALIDAÇÃO</option>
+                                <option value="aprovacao">APROVAÇÃO</option>
+                                <option value="calendario">CALENDÁRIO</option>
+                                <option value="order">GERAL</option>
                               </select>
                             </TableCell>
                             <TableCell className="py-3">
