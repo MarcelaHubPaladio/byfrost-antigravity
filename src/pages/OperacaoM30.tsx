@@ -49,7 +49,7 @@ import { NewOperacaoM30CardDialog } from "@/components/operacao_m30/NewOperacaoM
 import { DateRangePickerCustom } from "@/components/ui/date-range-picker-custom";
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, getDay, isSameMonth, isToday, addMonths, subMonths } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, ClipboardList, MessageSquareWarning } from "lucide-react";
+import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, ClipboardList, MessageSquareWarning, CheckCircle } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { CreatePostingCalendarDialog } from "@/components/operacao_m30/CreatePostingCalendarDialog";
 
@@ -320,6 +320,36 @@ export default function OperacaoM30() {
   };
 
   const clearSelection = () => setSelectedCaseIds([]);
+
+  const handleSingleAssign = async (caseId: string, userId: string) => {
+    try {
+      await supabase.from("cases").update({ assigned_user_id: userId === "__unassigned__" ? null : userId }).eq("id", caseId);
+      casesQ.refetch();
+      showSuccess("Responsável atualizado com sucesso!");
+    } catch (e: any) {
+      showError("Erro ao atribuir responsável", e);
+    }
+  };
+
+  const handleSingleUpdateMeta = async (caseId: string, key: string, value: any, currentMeta: any) => {
+    try {
+      await supabase.from("cases").update({ meta_json: { ...(currentMeta || {}), [key]: value } }).eq("id", caseId);
+      casesQ.refetch();
+      showSuccess("Estilo atualizado com sucesso!");
+    } catch (e: any) {
+      showError("Erro ao atualizar estilo", e);
+    }
+  };
+
+  const handleSingleClose = async (caseId: string) => {
+    try {
+      await supabase.from("cases").update({ status: "closed" }).eq("id", caseId);
+      casesQ.refetch();
+      showSuccess("Caso concluído com sucesso!");
+    } catch (e: any) {
+      showError("Erro ao concluir", e);
+    }
+  };
 
   const handleMassAssign = async (userId: string) => {
     if (!selectedCaseIds.length) return;
@@ -1227,6 +1257,16 @@ export default function OperacaoM30() {
             </div>
 
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+              <div className="relative w-full sm:w-[280px] mr-2">
+                <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
+                <Input
+                  value={q}
+                  onChange={(e) => setQ(e.target.value)}
+                  placeholder="Título, telefone, cliente…"
+                  className="rounded-xl border-slate-200 dark:border-slate-850 text-sm pl-9 focus:border-indigo-400 focus:ring-indigo-400 w-full h-10"
+                />
+              </div>
+
               {activeTenantId && selectedJourney?.id && (isSuperAdmin || activeTenant?.role === "admin") ? (
                 <NewOperacaoM30CardDialog tenantId={activeTenantId} journeyId={selectedJourney.id} />
               ) : null}
@@ -1291,43 +1331,42 @@ export default function OperacaoM30() {
                 </div>
 
                 {/* Inline Filters */}
-                <div className="flex flex-wrap items-center gap-2 flex-1">
-                  <div className="relative w-full sm:w-[220px]">
-                    <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
-                    <Input
-                      value={q}
-                      onChange={(e) => setQ(e.target.value)}
-                      placeholder="Título, telefone, cliente…"
-                      className="rounded-xl border-slate-200 dark:border-slate-850 text-sm pl-9 focus:border-indigo-400 focus:ring-indigo-400 w-full h-10"
-                    />
+                <div className="flex flex-wrap items-center gap-3 flex-1">
+                  <div className="flex flex-col gap-1 w-full sm:w-auto">
+                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider pl-1">Cliente</label>
+                    <select
+                      value={entityFilterId}
+                      onChange={(e) => setEntityFilterId(e.target.value)}
+                      className="h-10 w-full sm:w-auto min-w-[160px] rounded-xl border border-slate-200 dark:border-slate-850 bg-white dark:bg-slate-900 px-3 text-sm text-slate-800 dark:text-slate-200 outline-none focus:border-indigo-400"
+                    >
+                      <option value="all">Todos os clientes</option>
+                      <option value="__unassigned__">Sem cliente</option>
+                      {(entitiesQ.data ?? []).map((e) => (
+                        <option key={e.id} value={e.id}>
+                          {e.display_name || "Sem nome"}
+                        </option>
+                      ))}
+                    </select>
                   </div>
-                  <select
-                    value={entityFilterId}
-                    onChange={(e) => setEntityFilterId(e.target.value)}
-                    className="h-10 w-full sm:w-auto min-w-[160px] rounded-xl border border-slate-200 dark:border-slate-850 bg-white dark:bg-slate-900 px-3 text-sm text-slate-800 dark:text-slate-200 outline-none focus:border-indigo-400"
-                  >
-                    <option value="all">Todos os clientes</option>
-                    <option value="__unassigned__">Sem cliente</option>
-                    {(entitiesQ.data ?? []).map((e) => (
-                      <option key={e.id} value={e.id}>
-                        {e.display_name || "Sem nome"}
-                      </option>
-                    ))}
-                  </select>
-                  <select
-                    value={assigneeFilterId}
-                    onChange={(e) => setAssigneeFilterId(e.target.value)}
-                    className="h-10 w-full sm:w-auto min-w-[160px] rounded-xl border border-slate-200 dark:border-slate-850 bg-white dark:bg-slate-900 px-3 text-sm text-slate-800 dark:text-slate-200 outline-none focus:border-indigo-400"
-                  >
-                    <option value="all">Todos os responsáveis</option>
-                    <option value="__unassigned__">Sem dono (Unassigned)</option>
-                    {(tenantUsersQ.data ?? []).map((u) => (
-                      <option key={u.user_id} value={u.user_id}>
-                        {u.display_name ?? u.email ?? "Desconhecido"}
-                      </option>
-                    ))}
-                  </select>
-                  <div className="h-10 w-full sm:w-auto">
+                  <div className="flex flex-col gap-1 w-full sm:w-auto">
+                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider pl-1">Responsável</label>
+                    <select
+                      value={assigneeFilterId}
+                      onChange={(e) => setAssigneeFilterId(e.target.value)}
+                      className="h-10 w-full sm:w-auto min-w-[160px] rounded-xl border border-slate-200 dark:border-slate-850 bg-white dark:bg-slate-900 px-3 text-sm text-slate-800 dark:text-slate-200 outline-none focus:border-indigo-400"
+                    >
+                      <option value="all">Todos os responsáveis</option>
+                      <option value="__unassigned__">Sem dono (Unassigned)</option>
+                      {(tenantUsersQ.data ?? []).map((u) => (
+                        <option key={u.user_id} value={u.user_id}>
+                          {u.display_name ?? u.email ?? "Desconhecido"}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="flex flex-col gap-1 w-full sm:w-auto">
+                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider pl-1">Período</label>
+                    <div className="h-10 w-full sm:w-auto">
                     <DateRangePickerCustom
                       date={dateRange}
                       onDateChange={setDateRange}
@@ -1624,7 +1663,9 @@ export default function OperacaoM30() {
                         <TableHead className="text-xs font-semibold text-slate-600 dark:text-slate-400">Card / Cliente</TableHead>
                         <TableHead className="text-xs font-semibold text-slate-600 dark:text-slate-400">Responsável</TableHead>
                         <TableHead className="text-xs font-semibold text-slate-600 dark:text-slate-400">Estágio</TableHead>
+                        <TableHead className="text-xs font-semibold text-slate-600 dark:text-slate-400">Estilo</TableHead>
                         <TableHead className="text-xs font-semibold text-slate-600 dark:text-slate-400">Data e Pend.</TableHead>
+                        <TableHead className="w-[50px]"></TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -1675,13 +1716,43 @@ export default function OperacaoM30() {
                                 )}
                               </Link>
                             </TableCell>
-                            <TableCell className="py-3 text-sm text-slate-600 dark:text-slate-400">
-                              {c.users_profile?.display_name ?? c.users_profile?.email ?? "Sem dono"}
+                            <TableCell className="py-3">
+                              <select
+                                value={c.assigned_user_id || "__unassigned__"}
+                                onChange={(e) => handleSingleAssign(c.id, e.target.value)}
+                                className="h-8 rounded-lg border border-slate-200 bg-white px-2 text-xs font-medium text-slate-800 outline-none hover:border-indigo-400 focus:border-indigo-400 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 min-w-[120px]"
+                              >
+                                <option value="__unassigned__">Sem dono</option>
+                                {(tenantUsersQ.data ?? []).map(u => (
+                                  <option key={u.user_id} value={u.user_id}>{u.display_name ?? u.email}</option>
+                                ))}
+                              </select>
                             </TableCell>
                             <TableCell className="py-3">
-                              <div className="inline-flex items-center px-2 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-xs font-medium text-slate-700 dark:text-slate-300">
-                                {getStateLabel(selectedJourney as any, c.state) || titleizeState(c.state)}
-                              </div>
+                              <select
+                                value={c.state || ""}
+                                onChange={(e) => updateCaseState(c.id, e.target.value)}
+                                className="h-8 rounded-lg border border-slate-200 bg-white px-2 text-xs font-medium text-slate-800 outline-none hover:border-indigo-400 focus:border-indigo-400 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 min-w-[140px]"
+                              >
+                                {listStateOptions.map(o => (
+                                  <option key={o.value} value={o.value}>{o.label}</option>
+                                ))}
+                              </select>
+                            </TableCell>
+                            <TableCell className="py-3">
+                              <select
+                                value={(c.meta_json as any)?.video_style || ""}
+                                onChange={(e) => handleSingleUpdateMeta(c.id, "video_style", e.target.value, c.meta_json)}
+                                className="h-8 rounded-lg border border-slate-200 bg-white px-2 text-xs font-medium text-slate-800 outline-none hover:border-indigo-400 focus:border-indigo-400 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 min-w-[100px]"
+                              >
+                                <option value="">Sem estilo</option>
+                                <option value="reels">Reels</option>
+                                <option value="tiktok">TikTok</option>
+                                <option value="shorts">Shorts</option>
+                                <option value="feed">Feed</option>
+                                <option value="stories">Stories</option>
+                                <option value="youtube_longo">YouTube Longo</option>
+                              </select>
                             </TableCell>
                             <TableCell className="py-3">
                               <div className="flex flex-col gap-1 items-start">
@@ -1693,12 +1764,23 @@ export default function OperacaoM30() {
                                 ) : null}
                               </div>
                             </TableCell>
+                            <TableCell className="py-3 pr-4 text-right">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={(e) => { e.preventDefault(); handleSingleClose(c.id); }}
+                                className="h-8 px-2 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-900/20"
+                                title="Concluir caso"
+                              >
+                                <CheckCircle className="h-4 w-4" />
+                              </Button>
+                            </TableCell>
                           </TableRow>
                         );
                       })}
                       {listRows.length === 0 && (
                         <TableRow>
-                          <TableCell colSpan={5} className="py-10 text-center text-slate-500">
+                          <TableCell colSpan={7} className="py-10 text-center text-slate-500">
                             Nenhum caso encontrado.
                           </TableCell>
                         </TableRow>
