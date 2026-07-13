@@ -1980,7 +1980,8 @@ export default function OperacaoM30() {
                 
                 <CreatePostingCalendarDialog 
                   selectedCaseIds={selectedCaseIds} 
-                  cases={filteredRows} 
+                  cases={casesQ.data || []}
+                  contracts={contractsQ.data || []}
                   onSuccess={clearSelection}
                   tenantId={activeTenantId!}
                   journeyId={selectedJourney?.id}

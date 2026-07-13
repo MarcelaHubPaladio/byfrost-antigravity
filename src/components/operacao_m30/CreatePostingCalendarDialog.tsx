@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -20,12 +20,14 @@ import { ptBR } from "date-fns/locale";
 export function CreatePostingCalendarDialog({
   selectedCaseIds,
   cases,
+  contracts,
   onSuccess,
   tenantId,
   journeyId,
 }: {
   selectedCaseIds: string[];
   cases: any[];
+  contracts?: any[];
   onSuccess: () => void;
   tenantId: string;
   journeyId?: string;
@@ -34,6 +36,7 @@ export function CreatePostingCalendarDialog({
   const [loading, setLoading] = useState(false);
   const [postDates, setPostDates] = useState<Record<string, string>>({});
   const qc = useQueryClient();
+  const [hasAutoFilled, setHasAutoFilled] = useState(false);
 
   const selectedCases = useMemo(() => {
     return cases.filter(c => selectedCaseIds.includes(c.id));
@@ -71,6 +74,42 @@ export function CreatePostingCalendarDialog({
 
     return allSame ? firstDid : null;
   }, [selectedCases]);
+
+  // Auto-fill dates based on defaultPostingDays
+  useEffect(() => {
+    if (open && selectedCases.length > 0 && !hasAutoFilled) {
+      setHasAutoFilled(true);
+      
+      const firstContractId = (selectedCases[0].meta_json as any)?.commitment_id;
+      if (!firstContractId || !contracts) return;
+      
+      const contract = contracts.find(c => c.id === firstContractId);
+      const defaultDays = contract?.metadata?.default_posting_days as number[] | undefined;
+      
+      if (defaultDays && defaultDays.length > 0) {
+        // Calculate dates
+        let currentDate = new Date();
+        const autoDates: Record<string, string> = {};
+        
+        for (const c of selectedCases) {
+          // find next valid date starting from currentDate
+          let iterations = 0;
+          while (iterations < 30) { // safety limit
+            const dayOfWeek = currentDate.getDay(); // 0 = Sunday, 1 = Monday
+            if (defaultDays.includes(dayOfWeek)) {
+              autoDates[c.id] = format(currentDate, "yyyy-MM-dd");
+              // advance one day for the next iteration
+              currentDate.setDate(currentDate.getDate() + 1);
+              break;
+            }
+            currentDate.setDate(currentDate.getDate() + 1);
+            iterations++;
+          }
+        }
+        setPostDates(autoDates);
+      }
+    }
+  }, [open, selectedCases, contracts, hasAutoFilled]);
 
   const handleDateChange = (caseId: string, dateStr: string) => {
     setPostDates(prev => ({ ...prev, [caseId]: dateStr }));
@@ -156,7 +195,13 @@ export function CreatePostingCalendarDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={(val) => {
+      setOpen(val);
+      if (!val) {
+        setHasAutoFilled(false);
+        setPostDates({});
+      }
+    }}>
       <DialogTrigger asChild>
         <Button variant="outline" size="sm" className="h-8 rounded-full border-indigo-200 text-indigo-700 bg-indigo-50 hover:bg-indigo-100 hover:text-indigo-800 text-xs px-4">
           <CalendarIcon className="mr-1.5 h-3.5 w-3.5" />
