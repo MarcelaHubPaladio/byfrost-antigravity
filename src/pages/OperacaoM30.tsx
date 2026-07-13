@@ -50,6 +50,8 @@ import { DateRangePickerCustom } from "@/components/ui/date-range-picker-custom"
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, getDay, isSameMonth, isToday, addMonths, subMonths } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, ClipboardList, MessageSquareWarning } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { CreatePostingCalendarDialog } from "@/components/operacao_m30/CreatePostingCalendarDialog";
 
 const DASHBOARD_VIEW_MODE_KEY_PREFIX = "dashboard_view_mode_v1:";
 
@@ -295,7 +297,64 @@ export default function OperacaoM30() {
   const [newSalesOrderOpen, setNewSalesOrderOpen] = useState(false);
   // Tab e visualização
   const [tab, setTab] = useState<"kanban" | "calendar" | "contracts">("kanban");
+  const [viewMode, setViewMode] = useState<"kanban" | "list">(() => {
+    try {
+      return (localStorage.getItem("operacao_m30_view_mode") as any) || "kanban";
+    } catch {
+      return "kanban";
+    }
+  });
   const [calendarDate, setCalendarDate] = useState(new Date());
+
+  const [selectedCaseIds, setSelectedCaseIds] = useState<string[]>([]);
+  const [massUpdating, setMassUpdating] = useState(false);
+
+  useEffect(() => {
+    localStorage.setItem("operacao_m30_view_mode", viewMode);
+  }, [viewMode]);
+
+  const toggleCaseSelection = (id: string) => {
+    setSelectedCaseIds(prev => 
+      prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+    );
+  };
+
+  const clearSelection = () => setSelectedCaseIds([]);
+
+  const handleMassAssign = async (userId: string) => {
+    if (!selectedCaseIds.length) return;
+    setMassUpdating(true);
+    try {
+      await supabase.from("cases").update({ assigned_user_id: userId === "__unassigned__" ? null : userId }).in("id", selectedCaseIds);
+      casesQ.refetch();
+      clearSelection();
+      showSuccess("Responsável atualizado com sucesso!");
+    } catch (e: any) {
+      showError("Erro ao atribuir responsável", e);
+    } finally {
+      setMassUpdating(false);
+    }
+  };
+
+  const handleMassMoveState = async (nextState: string) => {
+    if (!selectedCaseIds.length) return;
+    setMassUpdating(true);
+    try {
+      const journeyConfig = selectedJourney?.default_state_machine_json as unknown as StateMachine;
+      const promises = selectedCaseIds.map(cid => {
+         const oldState = filteredRows.find(c => c.id === cid)?.state || "";
+         if (oldState === nextState) return Promise.resolve();
+         return transitionState(cid, oldState, nextState, journeyConfig);
+      });
+      await Promise.allSettled(promises);
+      clearSelection();
+      showSuccess("Estágio atualizado em lote!");
+    } catch (e: any) {
+      showError("Alguns casos podem não ter sido movidos.", e);
+    } finally {
+      setMassUpdating(false);
+    }
+  };
 
   // Filtros jornada Auditoria e Responsável
   const [instanceFilterId, setInstanceFilterId] = useState<string>(() => { try { return JSON.parse(localStorage.getItem("operacao_m30_filters") || "{}").instanceFilterId || "all"; } catch { return "all"; } });
@@ -1191,41 +1250,67 @@ export default function OperacaoM30() {
             </div>
           </div>
 
-          {/* Tabs */}
-          <div className="flex bg-slate-100 p-1 rounded-2xl self-start w-fit dark:bg-slate-900">
-            <button
-              onClick={() => setTab("kanban")}
-              className={cn(
-                "px-4 py-2 text-xs font-semibold rounded-xl transition-all",
-                tab === "kanban" ? "bg-white text-slate-900 shadow-sm dark:bg-slate-800 dark:text-slate-100" : "text-slate-600 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200"
-              )}
-            >
-              Quadro
-            </button>
-            <button
-              onClick={() => setTab("calendar")}
-              className={cn(
-                "px-4 py-2 text-xs font-semibold rounded-xl transition-all",
-                tab === "calendar" ? "bg-white text-slate-900 shadow-sm dark:bg-slate-800 dark:text-slate-100" : "text-slate-600 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200"
-              )}
-            >
-              Calendário
-            </button>
-            <button
-              onClick={() => setTab("contracts")}
-              className={cn(
-                "px-4 py-2 text-xs font-semibold rounded-xl transition-all",
-                tab === "contracts" ? "bg-white text-slate-900 shadow-sm dark:bg-slate-800 dark:text-slate-100" : "text-slate-600 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200"
-              )}
-            >
-              Contratos
-            </button>
-            <Link
-              to="/app/operacao-m30/postits"
-              className="px-4 py-2 text-xs font-semibold rounded-xl transition-all text-slate-600 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 flex items-center justify-center"
-            >
-              Post-its
-            </Link>
+          {/* Tabs & View Mode */}
+          <div className="flex flex-col sm:flex-row gap-4 sm:items-center justify-between">
+            <div className="flex bg-slate-100 p-1 rounded-2xl self-start w-fit dark:bg-slate-900">
+              <button
+                onClick={() => setTab("kanban")}
+                className={cn(
+                  "px-4 py-2 text-xs font-semibold rounded-xl transition-all",
+                  tab === "kanban" ? "bg-white text-slate-900 shadow-sm dark:bg-slate-800 dark:text-slate-100" : "text-slate-600 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200"
+                )}
+              >
+                Quadro
+              </button>
+              <button
+                onClick={() => setTab("calendar")}
+                className={cn(
+                  "px-4 py-2 text-xs font-semibold rounded-xl transition-all",
+                  tab === "calendar" ? "bg-white text-slate-900 shadow-sm dark:bg-slate-800 dark:text-slate-100" : "text-slate-600 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200"
+                )}
+              >
+                Calendário
+              </button>
+              <button
+                onClick={() => setTab("contracts")}
+                className={cn(
+                  "px-4 py-2 text-xs font-semibold rounded-xl transition-all",
+                  tab === "contracts" ? "bg-white text-slate-900 shadow-sm dark:bg-slate-800 dark:text-slate-100" : "text-slate-600 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200"
+                )}
+              >
+                Contratos
+              </button>
+              <Link
+                to="/app/operacao-m30/postits"
+                className="px-4 py-2 text-xs font-semibold rounded-xl transition-all text-slate-600 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 flex items-center justify-center"
+              >
+                Post-its
+              </Link>
+            </div>
+            {tab === "kanban" && (
+              <div className="flex bg-slate-100 p-1 rounded-2xl self-start w-fit dark:bg-slate-900">
+                <button
+                  onClick={() => setViewMode("kanban")}
+                  className={cn(
+                    "px-4 py-2 text-xs font-semibold rounded-xl transition-all",
+                    viewMode === "kanban" ? "bg-white text-slate-900 shadow-sm dark:bg-slate-800 dark:text-slate-100" : "text-slate-600 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200"
+                  )}
+                  title="Modo Kanban"
+                >
+                  <Columns2 className="h-4 w-4" />
+                </button>
+                <button
+                  onClick={() => setViewMode("list")}
+                  className={cn(
+                    "px-4 py-2 text-xs font-semibold rounded-xl transition-all",
+                    viewMode === "list" ? "bg-white text-slate-900 shadow-sm dark:bg-slate-800 dark:text-slate-100" : "text-slate-600 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200"
+                  )}
+                  title="Modo Lista"
+                >
+                  <LayoutList className="h-4 w-4" />
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Filters Row */}
@@ -1419,6 +1504,13 @@ export default function OperacaoM30() {
                               <div className="flex items-start justify-between gap-3">
                                 <div className="min-w-0 flex-1 pr-1">
                                   <div className="flex items-center gap-2">
+                                    <div onClick={(e) => { e.preventDefault(); e.stopPropagation(); }} className="shrink-0 flex items-center pt-0.5">
+                                      <Checkbox
+                                        checked={selectedCaseIds.includes(c.id)}
+                                        onCheckedChange={() => toggleCaseSelection(c.id)}
+                                        className="h-3.5 w-3.5 border-slate-300 data-[state=checked]:bg-indigo-600 data-[state=checked]:border-indigo-600"
+                                      />
+                                    </div>
                                     <div className="truncate text-sm font-semibold text-slate-900">{titlePrimary}</div>
                                     {locks[c.id] && (
                                       <div className="flex items-center gap-1 rounded bg-rose-50 px-1.5 py-0.5 text-[10px] uppercase font-bold text-rose-600 ring-1 ring-inset ring-rose-500/20" title={`Sendo editado por ${locks[c.id].userName}`}>
@@ -1501,6 +1593,108 @@ export default function OperacaoM30() {
                     </div>
                   ))}
                 </div>
+              ) : tab === "kanban" && viewMode === "list" ? (
+                <div className="rounded-[22px] border border-slate-200 bg-white shadow-sm overflow-hidden dark:border-slate-800 dark:bg-slate-900">
+                  <Table>
+                    <TableHeader className="bg-slate-50/80 dark:bg-slate-850/50">
+                      <TableRow className="hover:bg-transparent border-slate-200 dark:border-slate-800">
+                        <TableHead className="w-[40px] pl-4">
+                          <Checkbox
+                            checked={listRows.length > 0 && selectedCaseIds.length === listRows.length}
+                            onCheckedChange={() => {
+                              if (selectedCaseIds.length === listRows.length) {
+                                clearSelection();
+                              } else {
+                                setSelectedCaseIds(listRows.map(r => r.id));
+                              }
+                            }}
+                          />
+                        </TableHead>
+                        <TableHead className="text-xs font-semibold text-slate-600 dark:text-slate-400">Card / Cliente</TableHead>
+                        <TableHead className="text-xs font-semibold text-slate-600 dark:text-slate-400">Responsável</TableHead>
+                        <TableHead className="text-xs font-semibold text-slate-600 dark:text-slate-400">Estágio</TableHead>
+                        <TableHead className="text-xs font-semibold text-slate-600 dark:text-slate-400">Data e Pend.</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {listRows.map((c) => {
+                        const pend = pendQ.data?.get(c.id);
+                        const age = formatCaseDate(c.updated_at);
+                        const isMoving = movingCaseId === c.id;
+                        const unread = unreadByCase.has(c.id);
+                        const cust = isCrm ? customersQ.data?.get(String((c as any).customer_id ?? "")) : null;
+
+                        const titlePrimary =
+                          isCrm
+                            ? (cust?.name ??
+                              casePhoneQ.data?.get(c.id) ??
+                              getMetaPhone((c as any).meta_json) ??
+                              cust?.phone_e164 ??
+                              c.title ??
+                              "Caso")
+                            : c.title ?? "Caso";
+
+                        const eid = (c as any).customer_entity_id || (c as any).customer_id || (c.meta_json as any)?.entity_id;
+                        const metaName = (c.meta_json as any)?.customer_entity_name || (c.meta_json as any)?.entity_name;
+                        const entityFullName = metaName || (eid ? caseEntitiesQ.data?.get(eid) : null);
+                        const entityDisplayName = entityFullName ? entityFullName.split(" ").slice(0, 2).join(" ") : null;
+
+                        return (
+                          <TableRow 
+                            key={c.id}
+                            className={cn(
+                              "group border-slate-100 hover:bg-slate-50 dark:border-slate-800/60 dark:hover:bg-slate-800/30 transition-colors",
+                              selectedCaseIds.includes(c.id) && "bg-indigo-50/50 dark:bg-indigo-900/20"
+                            )}
+                          >
+                            <TableCell className="pl-4 py-3">
+                              <Checkbox
+                                checked={selectedCaseIds.includes(c.id)}
+                                onCheckedChange={() => toggleCaseSelection(c.id)}
+                              />
+                            </TableCell>
+                            <TableCell className="py-3">
+                              <Link to={`/app/operacao-m30/${c.id}`} className="block">
+                                <div className="flex items-center gap-2">
+                                  {unread && <div className="w-2 h-2 rounded-full bg-rose-500" />}
+                                  <div className="font-semibold text-sm text-slate-900 dark:text-slate-100">{titlePrimary}</div>
+                                </div>
+                                {entityDisplayName && (
+                                  <div className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">{entityDisplayName}</div>
+                                )}
+                              </Link>
+                            </TableCell>
+                            <TableCell className="py-3 text-sm text-slate-600 dark:text-slate-400">
+                              {c.users_profile?.display_name ?? c.users_profile?.email ?? "Sem dono"}
+                            </TableCell>
+                            <TableCell className="py-3">
+                              <div className="inline-flex items-center px-2 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-xs font-medium text-slate-700 dark:text-slate-300">
+                                {getStateLabel(selectedJourney as any, c.state) || titleizeState(c.state)}
+                              </div>
+                            </TableCell>
+                            <TableCell className="py-3">
+                              <div className="flex flex-col gap-1 items-start">
+                                <span className="text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap">{age}</span>
+                                {pend?.open ? (
+                                  <Badge className="rounded-full border-0 bg-amber-100 text-amber-900 hover:bg-amber-100 px-1.5 h-5 text-[10px]">
+                                    {pend.open} pend.
+                                  </Badge>
+                                ) : null}
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                      {listRows.length === 0 && (
+                        <TableRow>
+                          <TableCell colSpan={5} className="py-10 text-center text-slate-500">
+                            Nenhum caso encontrado.
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </TableBody>
+                  </Table>
+                </div>
               ) : tab === "calendar" ? (
                 <M30CalendarView cases={filteredRows} date={calendarDate} onChangeDate={setCalendarDate} locks={locks} />
               ) : tab === "contracts" ? (
@@ -1582,6 +1776,66 @@ export default function OperacaoM30() {
             nextStateName={transitionBlock.nextStateName}
             blocks={transitionBlock.reasons}
           />
+          {/* Mass Action Toolbar */}
+          {selectedCaseIds.length > 0 && (
+            <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-slate-900 text-white rounded-full px-4 py-3 shadow-xl flex items-center gap-4 animate-in slide-in-from-bottom-5">
+              <div className="text-sm font-semibold pl-2">
+                {selectedCaseIds.length} caso{selectedCaseIds.length > 1 ? 's' : ''} selecionado{selectedCaseIds.length > 1 ? 's' : ''}
+              </div>
+              <div className="h-6 w-px bg-slate-700" />
+              
+              <div className="flex items-center gap-2">
+                <select
+                  className="bg-slate-800 text-xs rounded-full px-3 py-1.5 outline-none focus:ring-2 focus:ring-indigo-500 border border-slate-700 max-w-[140px]"
+                  onChange={(e) => {
+                    if (e.target.value) {
+                      handleMassMoveState(e.target.value);
+                      e.target.value = "";
+                    }
+                  }}
+                  disabled={massUpdating}
+                >
+                  <option value="">Mover para...</option>
+                  {listStateOptions.map(o => (
+                    <option key={o.value} value={o.value}>{o.label}</option>
+                  ))}
+                </select>
+
+                <select
+                  className="bg-slate-800 text-xs rounded-full px-3 py-1.5 outline-none focus:ring-2 focus:ring-indigo-500 border border-slate-700 max-w-[140px]"
+                  onChange={(e) => {
+                    if (e.target.value) {
+                      handleMassAssign(e.target.value);
+                      e.target.value = "";
+                    }
+                  }}
+                  disabled={massUpdating}
+                >
+                  <option value="">Responsável...</option>
+                  <option value="__unassigned__">Sem dono (Unassigned)</option>
+                  {(tenantUsersQ.data ?? []).map(u => (
+                    <option key={u.user_id} value={u.user_id}>{u.display_name ?? u.email}</option>
+                  ))}
+                </select>
+                
+                <CreatePostingCalendarDialog 
+                  selectedCaseIds={selectedCaseIds} 
+                  cases={filteredRows} 
+                  onSuccess={clearSelection}
+                  tenantId={activeTenantId!}
+                  journeyId={selectedJourney?.id}
+                />
+              </div>
+
+              <div className="h-6 w-px bg-slate-700" />
+              <button 
+                onClick={clearSelection}
+                className="text-slate-400 hover:text-white text-xs underline pr-2"
+              >
+                Cancelar
+              </button>
+            </div>
+          )}
         </div>
       </AppShell>
     </RequireAuth>
