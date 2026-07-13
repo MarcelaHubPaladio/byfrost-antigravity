@@ -734,6 +734,11 @@ export function WhatsAppConversation({
 
       showSuccess(`${type === "image" ? "Imagem" : "Arquivo"} enviado para: ${data?.debug?.to || to}`);
 
+      if (!beeiaIsPaused) {
+        // Auto-pause AI if user sends manual message
+        await handleToggleBeeia(true);
+      }
+
       await Promise.all([
         qc.invalidateQueries({ queryKey: ["wa_messages_case", activeTenantId, caseId, conversationMode, entityPhone, waGroupId] }),
         qc.invalidateQueries({ queryKey: ["timeline", activeTenantId, caseId] }),
@@ -808,6 +813,11 @@ export function WhatsAppConversation({
       }
       setText("");
       showSuccess(successMsg);
+
+      if (!beeiaIsPaused) {
+        // Auto-pause AI if user sends manual message
+        await handleToggleBeeia(true);
+      }
 
       await Promise.all([
         qc.invalidateQueries({ queryKey: ["wa_messages_case", activeTenantId, caseId, conversationMode, entityPhone, waGroupId] }),
