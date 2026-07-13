@@ -129,14 +129,33 @@ const AGROFORTE_CSS = `
 export function AgroForteRenderer({ data }: AgroForteRendererProps) {
   const { brand, hero, featuredProducts, catalogs, footer } = data;
   const [currentSlide, setCurrentSlide] = useState(0);
+
+  const safeNavLinks = brand.navLinks || [
+    { label: 'Início', url: '#' },
+    { label: 'Produtos', url: '#produtos' },
+    { label: 'Serviços', url: '#servicos' },
+    { label: 'Sobre Nós', url: '#sobre' },
+    { label: 'Contato', url: '#contato' },
+  ];
+
+  const safeBanners = hero.banners || [{
+    headline: (hero as any).headline || 'Cultivando',
+    headlineHighlight: (hero as any).headlineHighlight || 'Confiança,',
+    subtitle: (hero as any).subtitle || 'Soluções completas para o campo, com qualidade, tecnologia e atendimento que faz a diferença.',
+    bgImage: (hero as any).bgImage || 'https://images.unsplash.com/photo-1416879595882-3373a0480b5b?w=800&q=80',
+    ctaText: (hero as any).ctaText || 'Conheça Nossas Soluções',
+    ctaUrl: (hero as any).ctaUrl || '#',
+    badgeTitle: (hero as any).badgeTitle || 'QUALIDADE GARANTIDA',
+    badgeText: (hero as any).badgeText || 'Produtos selecionados e parceiros de confiança para o melhor resultado no campo.',
+  }];
   
   useEffect(() => {
-    if (!hero.autoPlay || hero.banners.length <= 1) return;
+    if (!hero.autoPlay || safeBanners.length <= 1) return;
     const timer = setInterval(() => {
-      setCurrentSlide(c => (c + 1) % hero.banners.length);
-    }, Math.max(1, hero.interval) * 1000);
+      setCurrentSlide(c => (c + 1) % safeBanners.length);
+    }, Math.max(1, hero.interval || 5) * 1000);
     return () => clearInterval(timer);
-  }, [hero.autoPlay, hero.interval, hero.banners.length]);
+  }, [hero.autoPlay, hero.interval, safeBanners.length]);
   
   // Parse brand name: last uppercase word gets green color
   const nameParts = brand.name.split(/(?=[A-Z][^A-Z]+$)/);
@@ -165,7 +184,7 @@ export function AgroForteRenderer({ data }: AgroForteRendererProps) {
           )}
         </div>
         <ul className="afr-nav-links">
-          {brand.navLinks.map((link, idx) => (
+          {safeNavLinks.map((link, idx) => (
             <li key={idx}><a href={link.url}>{link.label}</a></li>
           ))}
         </ul>
@@ -177,7 +196,7 @@ export function AgroForteRenderer({ data }: AgroForteRendererProps) {
 
       {/* HERO */}
       <section className="afr-hero">
-        {hero.banners.map((banner, i) => (
+        {safeBanners.map((banner, i) => (
           <div key={i} className={`afr-hero-slide ${i === currentSlide ? 'active' : ''}`}>
             <img className="afr-hero-bg" src={banner.bgImage} alt="" />
             <div className="afr-hero-content">
@@ -202,9 +221,9 @@ export function AgroForteRenderer({ data }: AgroForteRendererProps) {
             </div>
           </div>
         ))}
-        {hero.banners.length > 1 && (
+        {safeBanners.length > 1 && (
           <div style={{ position: 'absolute', bottom: '20px', left: '5%', zIndex: 3, display: 'flex', gap: '8px' }}>
-            {hero.banners.map((_, i) => (
+            {safeBanners.map((_, i) => (
               <button
                 key={i}
                 onClick={() => setCurrentSlide(i)}
@@ -346,7 +365,7 @@ export function AgroForteRenderer({ data }: AgroForteRendererProps) {
           </div>
           <div className="afr-footer-col">
             <h4>NAVEGAÇÃO</h4>
-            <ul>{brand.navLinks.map((link, idx) => <li key={idx}><a href={link.url}>{link.label}</a></li>)}</ul>
+            <ul>{safeNavLinks.map((link, idx) => <li key={idx}><a href={link.url}>{link.label}</a></li>)}</ul>
           </div>
           <div className="afr-footer-col">
             <h4>PRODUTOS</h4>

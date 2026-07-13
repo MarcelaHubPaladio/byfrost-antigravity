@@ -107,14 +107,33 @@ function ProductEditor({ product, onChange, compact = false }: {
 // Main Editor component
 // ────────────────────────────────────────────
 export function AgroForteEditor({ data, onChange }: AgroForteEditorProps) {
+  const safeNavLinks = data.brand.navLinks || [
+    { label: 'Início', url: '#' },
+    { label: 'Produtos', url: '#produtos' },
+    { label: 'Serviços', url: '#servicos' },
+    { label: 'Sobre Nós', url: '#sobre' },
+    { label: 'Contato', url: '#contato' },
+  ];
+
+  const safeBanners = data.hero.banners || [{
+    headline: (data.hero as any).headline || 'Cultivando',
+    headlineHighlight: (data.hero as any).headlineHighlight || 'Confiança,',
+    subtitle: (data.hero as any).subtitle || 'Soluções completas para o campo...',
+    bgImage: (data.hero as any).bgImage || 'https://images.unsplash.com/photo-1416879595882-3373a0480b5b?w=800&q=80',
+    ctaText: (data.hero as any).ctaText || 'Conheça Nossas Soluções',
+    ctaUrl: (data.hero as any).ctaUrl || '#',
+    badgeTitle: (data.hero as any).badgeTitle || 'QUALIDADE GARANTIDA',
+    badgeText: (data.hero as any).badgeText || 'Produtos selecionados e parceiros de confiança...',
+  }];
+
   const set = <K extends keyof AgroForteData>(key: K, value: AgroForteData[K]) =>
     onChange({ ...data, [key]: value });
 
   const setBrand = (patch: Partial<typeof data.brand>) =>
-    set('brand', { ...data.brand, ...patch });
+    set('brand', { navLinks: safeNavLinks, ...data.brand, ...patch });
 
   const setHero = (patch: Partial<typeof data.hero>) =>
-    set('hero', { ...data.hero, ...patch });
+    set('hero', { autoPlay: true, interval: 5, banners: safeBanners, ...data.hero, ...patch });
 
   const setFooter = (patch: Partial<typeof data.footer>) =>
     set('footer', { ...data.footer, ...patch });
@@ -184,20 +203,20 @@ export function AgroForteEditor({ data, onChange }: AgroForteEditorProps) {
         <div className="pt-2 border-t border-slate-200 dark:border-slate-800">
           <Field label="Links do Menu">
             <div className="space-y-2 mt-2">
-              {data.brand.navLinks.map((link, i) => (
+              {safeNavLinks.map((link, i) => (
                 <div key={i} className="flex gap-2">
                   <Input value={link.label} onChange={e => {
-                    const newLinks = [...data.brand.navLinks];
+                    const newLinks = [...safeNavLinks];
                     newLinks[i].label = e.target.value;
                     setBrand({ navLinks: newLinks });
                   }} placeholder="Rótulo" className="h-8 text-sm flex-1" />
                   <Input value={link.url} onChange={e => {
-                    const newLinks = [...data.brand.navLinks];
+                    const newLinks = [...safeNavLinks];
                     newLinks[i].url = e.target.value;
                     setBrand({ navLinks: newLinks });
                   }} placeholder="URL ou #ancora" className="h-8 text-sm flex-1" />
                   <button onClick={() => {
-                    const newLinks = [...data.brand.navLinks];
+                    const newLinks = [...safeNavLinks];
                     newLinks.splice(i, 1);
                     setBrand({ navLinks: newLinks });
                   }} className="h-8 w-8 flex items-center justify-center text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-md">
@@ -206,7 +225,7 @@ export function AgroForteEditor({ data, onChange }: AgroForteEditorProps) {
                 </div>
               ))}
               <button onClick={() => {
-                setBrand({ navLinks: [...data.brand.navLinks, { label: 'Novo Link', url: '#' }] });
+                setBrand({ navLinks: [...safeNavLinks, { label: 'Novo Link', url: '#' }] });
               }} className="w-full flex items-center justify-center gap-2 text-sm text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20 py-2 rounded-md transition-colors border border-dashed border-green-200 dark:border-green-900/40">
                 <Plus className="h-4 w-4" /> Adicionar Link
               </button>
@@ -250,13 +269,13 @@ export function AgroForteEditor({ data, onChange }: AgroForteEditorProps) {
         </div>
         
         <div className="space-y-6">
-          {data.hero.banners.map((banner, i) => (
+          {safeBanners.map((banner, i) => (
             <div key={i} className="space-y-3 bg-slate-50 dark:bg-slate-900/50 p-3 rounded-lg border border-slate-200 dark:border-slate-800 relative">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-[11px] uppercase font-bold text-slate-500">Banner {i + 1}</span>
-                {data.hero.banners.length > 1 && (
+                {safeBanners.length > 1 && (
                   <button onClick={() => {
-                    const newBanners = [...data.hero.banners];
+                    const newBanners = [...safeBanners];
                     newBanners.splice(i, 1);
                     setHero({ banners: newBanners });
                   }} className="text-red-500 hover:text-red-600 p-1">
@@ -267,7 +286,7 @@ export function AgroForteEditor({ data, onChange }: AgroForteEditorProps) {
               <ImageUpload
                 value={banner.bgImage}
                 onChange={url => {
-                  const newBanners = [...data.hero.banners];
+                  const newBanners = [...safeBanners];
                   newBanners[i] = { ...banner, bgImage: url };
                   setHero({ banners: newBanners });
                 }}
@@ -278,7 +297,7 @@ export function AgroForteEditor({ data, onChange }: AgroForteEditorProps) {
                   <Input
                     value={banner.headline}
                     onChange={e => {
-                      const newBanners = [...data.hero.banners];
+                      const newBanners = [...safeBanners];
                       newBanners[i] = { ...banner, headline: e.target.value };
                       setHero({ banners: newBanners });
                     }}
@@ -290,7 +309,7 @@ export function AgroForteEditor({ data, onChange }: AgroForteEditorProps) {
                   <Input
                     value={banner.headlineHighlight}
                     onChange={e => {
-                      const newBanners = [...data.hero.banners];
+                      const newBanners = [...safeBanners];
                       newBanners[i] = { ...banner, headlineHighlight: e.target.value };
                       setHero({ banners: newBanners });
                     }}
@@ -303,7 +322,7 @@ export function AgroForteEditor({ data, onChange }: AgroForteEditorProps) {
                 <Textarea
                   value={banner.subtitle}
                   onChange={e => {
-                    const newBanners = [...data.hero.banners];
+                    const newBanners = [...safeBanners];
                     newBanners[i] = { ...banner, subtitle: e.target.value };
                     setHero({ banners: newBanners });
                   }}
@@ -318,7 +337,7 @@ export function AgroForteEditor({ data, onChange }: AgroForteEditorProps) {
                     <Input
                       value={banner.ctaText}
                       onChange={e => {
-                        const newBanners = [...data.hero.banners];
+                        const newBanners = [...safeBanners];
                         newBanners[i] = { ...banner, ctaText: e.target.value };
                         setHero({ banners: newBanners });
                       }}
@@ -331,7 +350,7 @@ export function AgroForteEditor({ data, onChange }: AgroForteEditorProps) {
                     <Input
                       value={banner.ctaUrl}
                       onChange={e => {
-                        const newBanners = [...data.hero.banners];
+                        const newBanners = [...safeBanners];
                         newBanners[i] = { ...banner, ctaUrl: e.target.value };
                         setHero({ banners: newBanners });
                       }}
@@ -348,7 +367,7 @@ export function AgroForteEditor({ data, onChange }: AgroForteEditorProps) {
                       <Input
                         value={banner.badgeTitle}
                         onChange={e => {
-                          const newBanners = [...data.hero.banners];
+                          const newBanners = [...safeBanners];
                           newBanners[i] = { ...banner, badgeTitle: e.target.value };
                           setHero({ banners: newBanners });
                         }}
@@ -361,7 +380,7 @@ export function AgroForteEditor({ data, onChange }: AgroForteEditorProps) {
                       <Input
                         value={banner.badgeText}
                         onChange={e => {
-                          const newBanners = [...data.hero.banners];
+                          const newBanners = [...safeBanners];
                           newBanners[i] = { ...banner, badgeText: e.target.value };
                           setHero({ banners: newBanners });
                         }}
@@ -374,7 +393,7 @@ export function AgroForteEditor({ data, onChange }: AgroForteEditorProps) {
             </div>
           ))}
           <button onClick={() => {
-            const newBanners = [...data.hero.banners, data.hero.banners[0]]; // copy first banner as template
+            const newBanners = [...safeBanners, safeBanners[0]]; // copy first banner as template
             setHero({ banners: newBanners });
           }} className="w-full flex items-center justify-center gap-2 text-sm text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20 py-2 rounded-md transition-colors border border-dashed border-green-200 dark:border-green-900/40">
             <Plus className="h-4 w-4" /> Adicionar Banner
