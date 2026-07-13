@@ -37,6 +37,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Trash2,
+  Tag,
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import {
@@ -50,6 +51,14 @@ import { cn } from "@/lib/utils";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { QueryClient, useQueryClient } from "@tanstack/react-query";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuCheckboxItem,
+  DropdownMenuTrigger,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
 
 type CommitmentRow = {
   id: string;
@@ -274,17 +283,25 @@ export default function CommitmentDetail() {
     }
   }, [commitmentQ.data]);
 
-  const updateMetadata = async () => {
+  const updateMetadata = async (overrides?: any) => {
     setSaving(true);
     try {
       const currentMeta = commitmentQ.data?.metadata || {};
+      const newMeta = { 
+        ...currentMeta, 
+        notes, 
+        labels: clientLabels, 
+        default_posting_days: defaultPostingDays,
+        ...(overrides || {}) 
+      };
+      
       const { error } = await supabase
         .from("commercial_commitments")
-        .update({ metadata: { ...currentMeta, notes, labels: clientLabels, default_posting_days: defaultPostingDays } })
+        .update({ metadata: newMeta })
         .eq("id", commitmentId);
       
       if (error) throw error;
-      showSuccess("Configurações salvas com sucesso!");
+      if (!overrides) showSuccess("Configurações salvas com sucesso!");
       commitmentQ.refetch();
     } catch (err: any) {
       showError(err.message ?? "Erro ao salvar configurações");
@@ -1384,10 +1401,65 @@ export default function CommitmentDetail() {
                                             <div className="flex items-center gap-2 truncate">
                                               <KanbanSquare className="h-3 w-3 text-blue-500/70" />
                                               <span className="truncate font-medium text-slate-700">{c.title || "Tarefa sem nome"}</span>
+                                              {/* Labels on case */}
+                                              {((c.meta_json as any)?.labels || []).length > 0 && (
+                                                <div className="flex gap-0.5 items-center">
+                                                  {((c.meta_json as any)?.labels || []).map((lblId: string) => {
+                                                    const lbl = clientLabels.find(l => l.id === lblId);
+                                                    if (!lbl) return null;
+                                                    return <span key={lbl.id} className="w-2 h-2 rounded-full" style={{ backgroundColor: lbl.color }} title={lbl.name} />
+                                                  })}
+                                                </div>
+                                              )}
                                             </div>
-                                            <Badge variant="outline" className="h-4 px-1 text-[9px] bg-slate-50">
-                                              {c.state}
-                                            </Badge>
+                                            <div className="flex items-center gap-2">
+                                              <DropdownMenu>
+                                                <DropdownMenuTrigger asChild onClick={e => e.stopPropagation()}>
+                                                  <Button variant="ghost" size="icon" className="h-6 w-6 hover:bg-slate-100">
+                                                    <Tag className="h-3 w-3 text-slate-400" />
+                                                  </Button>
+                                                </DropdownMenuTrigger>
+                                                <DropdownMenuContent align="end" className="w-48" onClick={e => e.stopPropagation()}>
+                                                  <DropdownMenuLabel className="text-[10px] text-slate-500 uppercase">Etiquetas</DropdownMenuLabel>
+                                                  <DropdownMenuSeparator />
+                                                  {clientLabels.length === 0 && (
+                                                    <div className="text-[10px] px-2 py-1 text-slate-400">Nenhuma etiqueta cadastrada.</div>
+                                                  )}
+                                                  {clientLabels.map(lbl => {
+                                                    const isSelected = ((c.meta_json as any)?.labels || []).includes(lbl.id);
+                                                    return (
+                                                      <DropdownMenuCheckboxItem
+                                                        key={lbl.id}
+                                                        checked={isSelected}
+                                                        onCheckedChange={async () => {
+                                                          try {
+                                                            const currentLabels = (c.meta_json as any)?.labels || [];
+                                                            let newLabels = [...currentLabels];
+                                                            if (isSelected) newLabels = newLabels.filter((id: string) => id !== lbl.id);
+                                                            else newLabels.push(lbl.id);
+                                                            
+                                                            const newMeta = { ...(c.meta_json || {}), labels: newLabels };
+                                                            await supabase.from("cases").update({ meta_json: newMeta }).eq("id", c.id);
+                                                            deliverablesQ.refetch();
+                                                            m30CasesQ.refetch();
+                                                          } catch (err) {
+                                                            console.error(err);
+                                                          }
+                                                        }}
+                                                      >
+                                                        <div className="flex items-center gap-2">
+                                                          <span className="w-2 h-2 rounded-full" style={{ backgroundColor: lbl.color }} />
+                                                          <span className="text-xs">{lbl.name}</span>
+                                                        </div>
+                                                      </DropdownMenuCheckboxItem>
+                                                    )
+                                                  })}
+                                                </DropdownMenuContent>
+                                              </DropdownMenu>
+                                              <Badge variant="outline" className="h-4 px-1 text-[9px] bg-slate-50">
+                                                {c.state}
+                                              </Badge>
+                                            </div>
                                           </Link>
                                         ))
                                       ) : (
@@ -1624,11 +1696,15 @@ export default function CommitmentDetail() {
                           <button
                             key={day.id}
                             onClick={() => {
-                              if (defaultPostingDays.includes(day.id)) {
-                                setDefaultPostingDays(defaultPostingDays.filter(d => d !== day.id));
+                              let newDays = [...defaultPostingDays];
+                              if (newDays.includes(day.id)) {
+                                newDays = newDays.filter(d => d !== day.id);
                               } else {
-                                setDefaultPostingDays([...defaultPostingDays, day.id].sort());
+                                newDays.push(day.id);
+                                newDays.sort();
                               }
+                              setDefaultPostingDays(newDays);
+                              updateMetadata({ default_posting_days: newDays });
                             }}
                             className={cn(
                               "px-3 py-1.5 rounded-lg text-xs font-bold transition-all",
@@ -1651,7 +1727,11 @@ export default function CommitmentDetail() {
                         {clientLabels.map((lbl, idx) => (
                           <Badge key={idx} style={{ backgroundColor: lbl.color, color: '#fff' }} className="px-2 py-1 flex items-center gap-1 font-medium border-0">
                             {lbl.name}
-                            <button onClick={() => setClientLabels(clientLabels.filter((_, i) => i !== idx))} className="ml-1 hover:text-white/80">
+                            <button onClick={() => {
+                              const newLabels = clientLabels.filter((_, i) => i !== idx);
+                              setClientLabels(newLabels);
+                              updateMetadata({ labels: newLabels });
+                            }} className="ml-1 hover:text-white/80">
                               <svg width="12" height="12" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M11.7816 4.03157C12.0062 3.80702 12.0062 3.44295 11.7816 3.2184C11.5571 2.99385 11.193 2.99385 10.9685 3.2184L7.50005 6.68682L4.03164 3.2184C3.80708 2.99385 3.44301 2.99385 3.21846 3.2184C2.99391 3.44295 2.99391 3.80702 3.21846 4.03157L6.68688 7.49999L3.21846 10.9684C2.99391 11.193 2.99391 11.557 3.21846 11.7816C3.44301 12.0061 3.80708 12.0061 4.03164 11.7816L7.50005 8.31316L10.9685 11.7816C11.193 12.0061 11.5571 12.0061 11.7816 11.7816C12.0062 11.557 12.0062 11.193 11.7816 10.9684L8.31322 7.49999L11.7816 4.03157Z" fill="currentColor" fillRule="evenodd" clipRule="evenodd"></path></svg>
                             </button>
                           </Badge>
@@ -1669,7 +1749,9 @@ export default function CommitmentDetail() {
                               e.preventDefault();
                               const input = e.currentTarget;
                               if (input.value.trim()) {
-                                setClientLabels([...clientLabels, { id: crypto.randomUUID(), name: input.value.trim(), color: '#6366f1' }]);
+                                const newLabels = [...clientLabels, { id: crypto.randomUUID(), name: input.value.trim(), color: '#6366f1' }];
+                                setClientLabels(newLabels);
+                                updateMetadata({ labels: newLabels });
                                 input.value = '';
                               }
                             }
@@ -1682,7 +1764,9 @@ export default function CommitmentDetail() {
                           onClick={() => {
                             const input = document.getElementById('new-label-input') as HTMLInputElement;
                             if (input && input.value.trim()) {
-                              setClientLabels([...clientLabels, { id: crypto.randomUUID(), name: input.value.trim(), color: '#6366f1' }]);
+                              const newLabels = [...clientLabels, { id: crypto.randomUUID(), name: input.value.trim(), color: '#6366f1' }];
+                              setClientLabels(newLabels);
+                              updateMetadata({ labels: newLabels });
                               input.value = '';
                             }
                           }}
@@ -1690,7 +1774,7 @@ export default function CommitmentDetail() {
                           Adicionar
                         </Button>
                       </div>
-                      <p className="text-[10px] text-slate-400 mt-2">* Clique em "Salvar Configurações" para gravar.</p>
+                      <p className="text-[10px] text-slate-400 mt-2">* As labels e os dias da semana são salvos automaticamente.</p>
                     </div>
                   </Card>
                 </div>
