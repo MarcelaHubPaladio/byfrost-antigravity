@@ -1374,6 +1374,7 @@ export default function OperacaoM30() {
                     </div>
                   </div>
                 </div>
+              </div>
 
               {tab === "kanban" && (
                 <div className="flex bg-slate-100 p-1 rounded-2xl self-start w-fit dark:bg-slate-900 shrink-0">
