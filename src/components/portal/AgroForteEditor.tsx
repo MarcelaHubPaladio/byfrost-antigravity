@@ -254,6 +254,28 @@ export function AgroForteEditor({ data, onChange }: AgroForteEditorProps) {
             </Field>
           </div>
         </div>
+        <div className="flex gap-2 pt-2 border-t border-slate-200 dark:border-slate-800">
+          <div className="flex-1">
+            <Field label="Fundo do Menu (Topo)">
+              <Input
+                value={data.brand.navBackgroundTop || 'transparent'}
+                onChange={e => setBrand({ navBackgroundTop: e.target.value })}
+                placeholder="transparent"
+                className="h-8 text-sm"
+              />
+            </Field>
+          </div>
+          <div className="flex-1">
+            <Field label="Fundo do Menu (Rolagem)">
+              <Input
+                value={data.brand.navBackgroundScrolled || '#1a3a1f'}
+                onChange={e => setBrand({ navBackgroundScrolled: e.target.value })}
+                placeholder="#1a3a1f"
+                className="h-8 text-sm"
+              />
+            </Field>
+          </div>
+        </div>
       </Section>
 
       {/* HERO */}

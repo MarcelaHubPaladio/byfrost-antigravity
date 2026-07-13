@@ -16,6 +16,8 @@ export interface AgroForteData {
     navCtaUrl: string;
     logoImage?: string;
     navLinks: { label: string; url: string }[];
+    navBackgroundTop?: string;
+    navBackgroundScrolled?: string;
   };
   hero: {
     autoPlay: boolean;
@@ -60,6 +62,8 @@ export const AGROFORTE_DEFAULT: AgroForteData = {
       { label: 'Sobre Nós', url: '#sobre' },
       { label: 'Contato', url: '#contato' },
     ],
+    navBackgroundTop: 'transparent',
+    navBackgroundScrolled: '#1a3a1f',
   },
   hero: {
     autoPlay: true,

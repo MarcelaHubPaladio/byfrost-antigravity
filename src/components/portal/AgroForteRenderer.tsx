@@ -9,7 +9,7 @@ const AGROFORTE_CSS = `
   @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
   .afr-root,[class*="afr-"]{box-sizing:border-box}
   .afr-root{font-family:Inter,system-ui,sans-serif;color:#1a1a1a;margin:0;padding:0}
-  .afr-nav{background:#1a3a1f;padding:0 5%;display:flex;align-items:center;justify-content:space-between;height:64px}
+  .afr-nav{padding:0 5%;display:flex;align-items:center;justify-content:space-between;height:64px;position:fixed;top:0;left:0;right:0;z-index:50;transition:background-color 0.3s ease}
   .afr-logo{display:flex;align-items:center;gap:8px;text-decoration:none}
   .afr-logo-icon{width:36px;height:36px;background:#4caf50;border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
   .afr-logo-icon svg{width:22px;height:22px;fill:#fff}
@@ -129,6 +129,7 @@ const AGROFORTE_CSS = `
 export function AgroForteRenderer({ data }: AgroForteRendererProps) {
   const { brand, hero, featuredProducts, catalogs, footer } = data;
   const [currentSlide, setCurrentSlide] = useState(0);
+  const [isScrolled, setIsScrolled] = useState(false);
 
   const safeNavLinks = brand.navLinks || [
     { label: 'Início', url: '#' },
@@ -156,6 +157,14 @@ export function AgroForteRenderer({ data }: AgroForteRendererProps) {
     }, Math.max(1, hero.interval || 5) * 1000);
     return () => clearInterval(timer);
   }, [hero.autoPlay, hero.interval, safeBanners.length]);
+
+  useEffect(() => {
+    const handleScroll = () => {
+      setIsScrolled(window.scrollY > 20);
+    };
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
   
   // Parse brand name: last uppercase word gets green color
   const nameParts = brand.name.split(/(?=[A-Z][^A-Z]+$)/);
@@ -167,7 +176,7 @@ export function AgroForteRenderer({ data }: AgroForteRendererProps) {
       <style dangerouslySetInnerHTML={{ __html: AGROFORTE_CSS }} />
 
       {/* NAV */}
-      <nav className="afr-nav">
+      <nav className="afr-nav" style={{ backgroundColor: isScrolled ? (brand.navBackgroundScrolled || '#1a3a1f') : (brand.navBackgroundTop || 'transparent') }}>
         <div className="afr-logo">
           {brand.logoImage ? (
             <img src={brand.logoImage} alt={brand.name} style={{ height: '36px', width: 'auto', objectFit: 'contain' }} />
