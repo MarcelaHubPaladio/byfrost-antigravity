@@ -4,6 +4,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Slider } from '@/components/ui/slider';
 import { Switch } from '@/components/ui/switch';
+import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { ImageUpload } from '@/components/portal/ImageUpload';
@@ -11,7 +12,7 @@ import {
     LayoutTemplate, Moon, Settings, 
     Paintbrush, Image as ImageIcon, Video, Square, Circle, Triangle,
     AlignLeft, AlignCenter, AlignRight, AlignJustify,
-    Link as LinkIcon, Globe
+    Link as LinkIcon, Globe, Monitor
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -312,8 +313,202 @@ export function SectionPropertiesPanel({ section, onChange }: { section: any, on
                     </Accordion>
                 </TabsContent>
 
-                <TabsContent value="avancado" className="p-4 mt-0">
-                    <p className="text-sm text-slate-500">Opções avançadas em breve.</p>
+                <TabsContent value="avancado" className="mt-0">
+                    <Accordion type="multiple" defaultValue={["avancado-main"]} className="w-full">
+                        
+                        {/* AVANÇADO MAIN */}
+                        <AccordionItem value="avancado-main" className="border-slate-100">
+                            <AccordionTrigger className="px-4 py-3 hover:bg-slate-50 text-xs font-bold uppercase tracking-wider text-slate-700 hover:no-underline">
+                                Avançado
+                            </AccordionTrigger>
+                            <AccordionContent className="px-4 pb-4 space-y-4">
+                                <div className="space-y-2">
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-2">
+                                            <Label className="text-xs text-slate-600 font-medium">Margin</Label>
+                                            <Monitor className="h-3 w-3 text-slate-400" />
+                                        </div>
+                                        <div className="flex gap-2 text-[9px] text-slate-500 font-bold">
+                                            <span className="text-blue-600 border-b border-blue-600 cursor-pointer">PX</span>
+                                            <span className="cursor-pointer">EM</span>
+                                            <span className="cursor-pointer">%</span>
+                                            <span className="cursor-pointer">REM</span>
+                                        </div>
+                                    </div>
+                                    <div className="flex bg-slate-50 border border-slate-200 rounded-md overflow-hidden">
+                                        {['SUPERIOR', 'DIREITA', 'INFERIOR', 'ESQUERDA'].map(dir => (
+                                            <div key={dir} className="flex-1 border-r border-slate-200">
+                                                <Input className="h-8 bg-transparent border-0 text-center text-xs p-0 focus-visible:ring-0" placeholder="0" />
+                                                <div className="text-[8px] text-center text-slate-400 pb-1">{dir}</div>
+                                            </div>
+                                        ))}
+                                        <div className="w-10 bg-slate-100 flex items-center justify-center cursor-pointer hover:bg-slate-200">
+                                            <LinkIcon className="h-3.5 w-3.5 text-slate-500" />
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="space-y-2 pt-2">
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-2">
+                                            <Label className="text-xs text-slate-600 font-medium">Padding</Label>
+                                            <Monitor className="h-3 w-3 text-slate-400" />
+                                        </div>
+                                        <div className="flex gap-2 text-[9px] text-slate-500 font-bold">
+                                            <span className="text-blue-600 border-b border-blue-600 cursor-pointer">PX</span>
+                                            <span className="cursor-pointer">EM</span>
+                                            <span className="cursor-pointer">%</span>
+                                            <span className="cursor-pointer">REM</span>
+                                        </div>
+                                    </div>
+                                    <div className="flex bg-slate-50 border border-slate-200 rounded-md overflow-hidden">
+                                        {['SUPERIOR', 'DIREITA', 'INFERIOR', 'ESQUERDA'].map(dir => (
+                                            <div key={dir} className="flex-1 border-r border-slate-200">
+                                                <Input className="h-8 bg-transparent border-0 text-center text-xs p-0 focus-visible:ring-0" placeholder="0" />
+                                                <div className="text-[8px] text-center text-slate-400 pb-1">{dir}</div>
+                                            </div>
+                                        ))}
+                                        <div className="w-10 bg-slate-100 flex items-center justify-center cursor-pointer hover:bg-slate-200">
+                                            <LinkIcon className="h-3.5 w-3.5 text-slate-500" />
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="flex items-center gap-4 pt-2">
+                                    <div className="flex items-center gap-2 flex-1">
+                                        <Label className="text-xs text-slate-600 font-medium w-20">Z-Index</Label>
+                                        <Monitor className="h-3 w-3 text-slate-400" />
+                                    </div>
+                                    <Input className="w-24 h-8 text-xs" />
+                                </div>
+                                <div className="flex items-center gap-4">
+                                    <Label className="text-xs text-slate-600 font-medium w-20">ID CSS</Label>
+                                    <Input className="flex-1 h-8 text-xs" />
+                                </div>
+                                <div className="flex items-center gap-4">
+                                    <Label className="text-xs text-slate-600 font-medium w-20">Classe CSS</Label>
+                                    <Input className="flex-1 h-8 text-xs" />
+                                </div>
+                            </AccordionContent>
+                        </AccordionItem>
+
+                        {/* EFEITOS DE MOVIMENTO */}
+                        <AccordionItem value="motion" className="border-slate-100">
+                            <AccordionTrigger className="px-4 py-3 hover:bg-slate-50 text-xs font-bold uppercase tracking-wider text-slate-700 hover:no-underline">
+                                Efeitos de movimento
+                            </AccordionTrigger>
+                            <AccordionContent className="px-4 pb-4 space-y-4">
+                                <div className="flex items-center justify-between">
+                                    <Label className="text-xs text-slate-600 font-medium">Scrolling Effects</Label>
+                                    <div className="flex items-center gap-2">
+                                        <Switch />
+                                    </div>
+                                </div>
+                                <div className="flex items-center justify-between">
+                                    <Label className="text-xs text-slate-600 font-medium">Sticky</Label>
+                                    <Select defaultValue="none">
+                                        <SelectTrigger className="w-32 h-8 text-xs"><SelectValue /></SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="none">None</SelectItem>
+                                            <SelectItem value="top">Top</SelectItem>
+                                            <SelectItem value="bottom">Bottom</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                                <div className="space-y-2">
+                                    <div className="flex items-center gap-2">
+                                        <Label className="text-xs text-slate-600 font-medium">Animação de entrada</Label>
+                                        <Monitor className="h-3 w-3 text-slate-400" />
+                                    </div>
+                                    <Select defaultValue="padrao">
+                                        <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="padrao">Padrão</SelectItem>
+                                            <SelectItem value="fade-in">Fade In</SelectItem>
+                                            <SelectItem value="fade-up">Fade Up</SelectItem>
+                                            <SelectItem value="zoom-in">Zoom In</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                            </AccordionContent>
+                        </AccordionItem>
+
+                        {/* RESPONSIVO */}
+                        <AccordionItem value="responsive" className="border-slate-100">
+                            <AccordionTrigger className="px-4 py-3 hover:bg-slate-50 text-xs font-bold uppercase tracking-wider text-slate-700 hover:no-underline">
+                                Responsivo
+                            </AccordionTrigger>
+                            <AccordionContent className="px-4 pb-4 space-y-4">
+                                <div className="flex items-center justify-between">
+                                    <Label className="text-xs text-slate-600 font-medium">Reverter colunas (Tablet)</Label>
+                                    <Switch />
+                                </div>
+                                <div className="flex items-center justify-between">
+                                    <Label className="text-xs text-slate-600 font-medium">Reverter colunas (Celular)</Label>
+                                    <Switch />
+                                </div>
+                                
+                                <div className="pt-2">
+                                    <Label className="text-xs font-bold text-slate-700 block mb-2">Visibilidade</Label>
+                                    <p className="text-[10px] italic text-slate-500 leading-relaxed mb-4">
+                                        A visibilidade responsiva terá efeito somente na pré-visualização ou na página ao vivo, e não durante a edição.
+                                    </p>
+                                    
+                                    <div className="space-y-3">
+                                        <div className="flex items-center justify-between">
+                                            <Label className="text-xs text-slate-600 font-medium">Ocultar em Desktop</Label>
+                                            <Switch />
+                                        </div>
+                                        <div className="flex items-center justify-between">
+                                            <Label className="text-xs text-slate-600 font-medium">Ocultar em Tablet</Label>
+                                            <Switch />
+                                        </div>
+                                        <div className="flex items-center justify-between">
+                                            <Label className="text-xs text-slate-600 font-medium">Ocultar em Celular</Label>
+                                            <Switch />
+                                        </div>
+                                    </div>
+                                </div>
+                            </AccordionContent>
+                        </AccordionItem>
+
+                        {/* ATTRIBUTES */}
+                        <AccordionItem value="attributes" className="border-slate-100">
+                            <AccordionTrigger className="px-4 py-3 hover:bg-slate-50 text-xs font-bold uppercase tracking-wider text-slate-700 hover:no-underline">
+                                Attributes
+                            </AccordionTrigger>
+                            <AccordionContent className="px-4 pb-4 space-y-2">
+                                <Label className="text-xs text-slate-600 font-medium">Custom Attributes</Label>
+                                <Textarea 
+                                    className="h-24 text-xs font-mono bg-slate-50 resize-none" 
+                                    placeholder="key|value"
+                                />
+                                <p className="text-[10px] italic text-slate-500 leading-relaxed pt-1">
+                                    Set custom attributes for the wrapper element. Each attribute in a separate line. Separate attribute key from the value using | character.
+                                </p>
+                            </AccordionContent>
+                        </AccordionItem>
+
+                        {/* CUSTOM CSS */}
+                        <AccordionItem value="css" className="border-slate-100">
+                            <AccordionTrigger className="px-4 py-3 hover:bg-slate-50 text-xs font-bold uppercase tracking-wider text-slate-700 hover:no-underline">
+                                Custom CSS
+                            </AccordionTrigger>
+                            <AccordionContent className="px-4 pb-4 space-y-2">
+                                <Label className="text-xs text-slate-600 font-medium">Add your own custom CSS here</Label>
+                                <Textarea 
+                                    className="h-32 text-xs font-mono bg-slate-800 text-green-400 border-slate-700" 
+                                    placeholder="selector {&#10;  color: red;&#10;}"
+                                />
+                                <p className="text-[10px] italic text-slate-500 leading-relaxed pt-1">
+                                    Use "selector" to target wrapper element. Examples:<br/>
+                                    selector {'{color: red;}'} // For main element<br/>
+                                    selector .child-element {'{margin: 10px;}'} // For child element<br/>
+                                </p>
+                            </AccordionContent>
+                        </AccordionItem>
+
+                    </Accordion>
                 </TabsContent>
             </div>
         </Tabs>
