@@ -886,7 +886,8 @@ export default function PortalEditor() {
                         <Popover open={isAddingSection} onOpenChange={setIsAddingSection}>
                             <PopoverTrigger asChild>
                                 <button 
-                                    className="h-12 w-12 rounded-full bg-[#9b3a5a] text-white flex items-center justify-center shadow hover:opacity-90 transition-opacity relative group"
+                                    className="h-12 w-12 rounded-full text-white flex items-center justify-center shadow hover:opacity-90 transition-opacity relative group"
+                                    style={{ backgroundColor: tenant?.primary_color || '#9b3a5a' }}
                                 >
                                     <Plus className="h-6 w-6" />
                                     <div className="absolute -bottom-8 left-1/2 -translate-x-1/2 bg-slate-800 text-white text-[10px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 whitespace-nowrap pointer-events-none transition-opacity">
@@ -1368,6 +1369,7 @@ function SortableFixedSectionItem({ id, children, previewMode, active, onSetting
 }
 
 function DroppableEmptyColumn({ sectionId, colId, onAddWidgetClick }: { sectionId: string, colId: string, onAddWidgetClick: any }) {
+    const { tenant } = useTenant();
     const { setNodeRef, isOver } = useDroppable({
         id: `empty-col-${sectionId}-${colId}`,
         data: { type: 'empty-col', sectionId, colId }
@@ -1380,7 +1382,8 @@ function DroppableEmptyColumn({ sectionId, colId, onAddWidgetClick }: { sectionI
         >
             <button 
                 onClick={(e) => { e.stopPropagation(); onAddWidgetClick?.(sectionId, colId); }}
-                className="h-8 w-8 rounded-full bg-[#9b3a5a] text-white flex items-center justify-center shadow hover:opacity-90 transition-opacity"
+                className="h-8 w-8 rounded-full text-white flex items-center justify-center shadow hover:opacity-90 transition-opacity"
+                style={{ backgroundColor: tenant?.primary_color || '#9b3a5a' }}
             >
                 <Plus className="h-4 w-4" />
             </button>

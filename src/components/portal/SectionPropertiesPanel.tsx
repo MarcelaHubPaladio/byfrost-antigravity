@@ -316,6 +316,6 @@ export function SectionPropertiesPanel({ section, onChange }: { section: any, on
                     <p className="text-sm text-slate-500">Opções avançadas em breve.</p>
                 </TabsContent>
             </div>
-        </div>
+        </Tabs>
     );
 }
