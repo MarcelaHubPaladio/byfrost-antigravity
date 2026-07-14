@@ -160,6 +160,49 @@ export default function PortalEditor() {
     const [activeData, setActiveData] = useState<any>(null);
     const [isAddingSection, setIsAddingSection] = useState(false);
     const [activeColumnId, setActiveColumnId] = useState<{sectionId: string, colId: string} | null>(null);
+    const [resizingCol, setResizingCol] = useState<{ sectionId: string, leftColIndex: number, startX: number, startWidthLeft: number, startWidthRight: number, parentWidth: number } | null>(null);
+
+    React.useEffect(() => {
+        if (!resizingCol) return;
+        
+        const handlePointerMove = (e: PointerEvent) => {
+            const deltaX = e.clientX - resizingCol.startX;
+            const deltaPercent = (deltaX / resizingCol.parentWidth) * 100;
+            
+            let newLeft = resizingCol.startWidthLeft + deltaPercent;
+            let newRight = resizingCol.startWidthRight - deltaPercent;
+            
+            if (newLeft < 10) {
+                newRight -= (10 - newLeft);
+                newLeft = 10;
+            }
+            if (newRight < 10) {
+                newLeft -= (10 - newRight);
+                newRight = 10;
+            }
+            
+            setSections(prev => prev.map(s => {
+                if (s.id !== resizingCol.sectionId) return s;
+                if (!s.columns) return s;
+                const newCols = [...s.columns];
+                newCols[resizingCol.leftColIndex] = { ...newCols[resizingCol.leftColIndex], size: newLeft };
+                newCols[resizingCol.leftColIndex + 1] = { ...newCols[resizingCol.leftColIndex + 1], size: newRight };
+                return { ...s, columns: newCols };
+            }));
+        };
+        
+        const handlePointerUp = () => {
+            setResizingCol(null);
+        };
+        
+        window.addEventListener('pointermove', handlePointerMove);
+        window.addEventListener('pointerup', handlePointerUp);
+        
+        return () => {
+            window.removeEventListener('pointermove', handlePointerMove);
+            window.removeEventListener('pointerup', handlePointerUp);
+        };
+    }, [resizingCol]);
 
     const layoutOrder = React.useMemo(() => {
         if (agroforteData?.layoutOrder) return agroforteData.layoutOrder;
@@ -815,7 +858,7 @@ export default function PortalEditor() {
         <div className="space-y-4">
             <div className="pt-2 space-y-4">
                 <div className="grid grid-cols-2 gap-3">
-                    <DraggableBlockButton icon={<Layout />} label="Header" type="header" onClick={() => activeColumnId && addBlock(activeColumnId.sectionId, 'header', activeColumnId.colId)} />
+                    <DraggableBlockButton icon={<Layout />} label="Menu" type="header" onClick={() => activeColumnId && addBlock(activeColumnId.sectionId, 'header', activeColumnId.colId)} />
                     <DraggableBlockButton icon={<Layout />} label="Hero" type="hero" onClick={() => activeColumnId && addBlock(activeColumnId.sectionId, 'hero', activeColumnId.colId)} />
                     <DraggableBlockButton icon={<ImageIcon />} label="Slider" type="slider" onClick={() => activeColumnId && addBlock(activeColumnId.sectionId, 'slider', activeColumnId.colId)} />
                     <DraggableBlockButton icon={<Layout />} label="Cards" type="info-cards" onClick={() => activeColumnId && addBlock(activeColumnId.sectionId, 'info-cards', activeColumnId.colId)} />
@@ -1478,26 +1521,50 @@ function SortableSectionItem({ section, previewMode, active, onSelect, onRemove,
                 >
                     <div className={cn("mx-auto flex", previewMode === 'mobile' ? 'w-full flex-col' : section.settings?.contentWidth === 'full' ? 'w-full px-4' : 'max-w-7xl', section.settings?.columnGap === 'no-gap' ? 'gap-0' : section.settings?.columnGap === 'extended' ? 'gap-8' : section.settings?.columnGap === 'wide' ? 'gap-12' : 'gap-4')}>
                         {section.columns ? (
-                            section.columns.map((col: any) => (
-                                <div key={col.id} style={{ width: previewMode === 'mobile' ? '100%' : `${col.size}%` }} className="flex flex-col gap-4 relative group/col">
-                                    <SortableContext items={(col.blocks || []).map((b: any) => b.id)} strategy={verticalListSortingStrategy}>
-                                        {(col.blocks || []).map((block: any) => (
-                                            <SortableBlockItem 
-                                                key={block.id} 
-                                                block={block}
-                                                sectionId={section.id}
-                                                previewMode={previewMode}
-                                                onUpdate={(updates: any) => onUpdateBlock(block.id, updates)}
-                                                onRemove={() => onRemoveBlock(block.id)}
-                                                onSettingsClick={() => onSettingsClick(block.id)}
-                                            />
-                                        ))}
-                                    </SortableContext>
-                                    
-                                    {(!col.blocks || col.blocks.length === 0) && (
-                                        <DroppableEmptyColumn sectionId={section.id} colId={col.id} onAddWidgetClick={onAddWidgetClick} />
+                            section.columns.map((col: any, colIdx: number) => (
+                                <React.Fragment key={col.id}>
+                                    <div style={{ width: previewMode === 'mobile' ? '100%' : `${col.size}%` }} className="flex flex-col gap-4 relative group/col">
+                                        <SortableContext items={(col.blocks || []).map((b: any) => b.id)} strategy={verticalListSortingStrategy}>
+                                            {(col.blocks || []).map((block: any) => (
+                                                <SortableBlockItem 
+                                                    key={block.id} 
+                                                    block={block}
+                                                    sectionId={section.id}
+                                                    previewMode={previewMode}
+                                                    onUpdate={(updates: any) => onUpdateBlock(block.id, updates)}
+                                                    onRemove={() => onRemoveBlock(block.id)}
+                                                    onSettingsClick={() => onSettingsClick(block.id)}
+                                                />
+                                            ))}
+                                        </SortableContext>
+                                        
+                                        {(!col.blocks || col.blocks.length === 0) && (
+                                            <DroppableEmptyColumn sectionId={section.id} colId={col.id} onAddWidgetClick={onAddWidgetClick} />
+                                        )}
+                                    </div>
+                                    {colIdx < section.columns.length - 1 && previewMode === 'desktop' && (
+                                        <div 
+                                            className="w-4 -ml-2 -mr-2 z-10 cursor-col-resize flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity"
+                                            onPointerDown={(e) => {
+                                                e.preventDefault();
+                                                e.stopPropagation();
+                                                const parentWidth = (e.currentTarget as HTMLElement).parentElement?.clientWidth || 1000;
+                                                setResizingCol({
+                                                    sectionId: section.id,
+                                                    leftColIndex: colIdx,
+                                                    startX: e.clientX,
+                                                    startWidthLeft: section.columns[colIdx].size,
+                                                    startWidthRight: section.columns[colIdx + 1].size,
+                                                    parentWidth
+                                                });
+                                            }}
+                                        >
+                                            <div className="w-1.5 h-12 bg-blue-500 rounded-full shadow-md flex items-center justify-center">
+                                                <div className="w-0.5 h-6 bg-white/50 rounded-full" />
+                                            </div>
+                                        </div>
                                     )}
-                                </div>
+                                </React.Fragment>
                             ))
                         ) : (
                             // Legacy blocks
