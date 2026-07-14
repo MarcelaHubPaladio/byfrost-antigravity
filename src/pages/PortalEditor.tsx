@@ -1506,14 +1506,17 @@ function SortableBlockItem({ block, sectionId, previewMode, isNested, onUpdate, 
     return (
         <div ref={setNodeRef} style={style} className="group/block relative border border-transparent hover:border-blue-400 rounded-xl transition-all" onClick={(e) => { e.stopPropagation(); onSettingsClick(); }}>
             <div className="absolute right-2 top-2 z-50 bg-white shadow-md border border-slate-200 rounded-lg flex items-center h-7 opacity-0 group-hover/block:opacity-100 transition-opacity divide-x divide-slate-100">
-                <div {...attributes} {...listeners} className="p-1 px-2 hover:bg-slate-50 text-slate-400 hover:text-slate-600 cursor-grab active:cursor-grabbing">
+                <div {...attributes} {...listeners} className="p-1 px-2 hover:bg-slate-50 text-slate-400 hover:text-slate-600 cursor-grab active:cursor-grabbing" title="Arrastar">
                     <GripVertical className="h-3.5 w-3.5" />
                 </div>
-                <button onClick={(e) => { e.stopPropagation(); onRemove(); }} className="p-1 px-2 hover:bg-red-50 text-slate-400 hover:text-red-600 transition-colors">
+                <button onClick={(e) => { e.stopPropagation(); onSettingsClick(); }} className="p-1 px-2 hover:bg-slate-50 text-slate-400 hover:text-slate-600 transition-colors" title="Configurações">
+                    <Settings className="h-3.5 w-3.5" />
+                </button>
+                <button onClick={(e) => { e.stopPropagation(); onRemove(); }} className="p-1 px-2 hover:bg-red-50 text-slate-400 hover:text-red-600 transition-colors" title="Remover">
                     <Trash2 className="h-3.5 w-3.5" />
                 </button>
             </div>
-            <div className="mt-2 pointer-events-none">
+            <div className="mt-2 relative z-10">
                 <PortalBlockRenderer 
                     block={block} 
                     isPremium={false} 
