@@ -617,9 +617,84 @@ export default function PortalEditor() {
 
     if (isLoading) return <div className="p-20"><Skeleton className="h-full w-full rounded-3xl" /></div>;
 
-    // ─── AgroForte No-Code Editor ───────────────────────────────────────────
+    const customBlocksPanel = (
+        <div className="space-y-4">
+            <Button variant="outline" className="w-full rounded-xl gap-2 border-dashed" onClick={() => addSection()}>
+                <Plus className="h-4 w-4" /> Nova Seção
+            </Button>
+            <div className="pt-2 space-y-4">
+                <div className="grid grid-cols-2 gap-3">
+                    <DraggableBlockButton icon={<Layout />} label="Header" type="header" />
+                    <DraggableBlockButton icon={<Layout />} label="Hero" type="hero" />
+                    <DraggableBlockButton icon={<ImageIcon />} label="Slider" type="slider" />
+                    <DraggableBlockButton icon={<Layout />} label="Cards" type="info-cards" />
+                    <DraggableBlockButton icon={<Plus />} label="Grid" type="grid" />
+                    <DraggableBlockButton icon={<ImageIcon />} label="Galeria" type="gallery" />
+                    <DraggableBlockButton icon={<Type />} label="Texto" type="text" />
+                    <DraggableBlockButton icon={<ImageIcon />} label="Imagem" type="image" />
+                    <DraggableBlockButton icon={<LinkIcon />} label="Links" type="links" />
+                    <DraggableBlockButton icon={<Plus />} label="HTML" type="html" />
+                </div>
+                <p className="text-[10px] text-blue-600 bg-blue-50 p-3 rounded-xl leading-relaxed">
+                    <strong>Dica:</strong> Arraste os componentes diretamente para dentro das seções no palco.
+                </p>
+            </div>
+        </div>
+    );
+
+    const renderCustomSections = (
+        <SortableContext items={sections.map(s => s.id)} strategy={verticalListSortingStrategy}>
+            {sections.length > 0 && (
+                <div className="space-y-4 mt-8 w-full p-4">
+                    {sections.map((section) => (
+                        <SortableSectionItem 
+                            key={section.id} 
+                            section={section} 
+                            previewMode={previewMode}
+                            active={activeSectionId === section.id}
+                            onSelect={() => setActiveSectionId(section.id)}
+                            onUpdateSettings={(settings: any) => updateSectionSettings(section.id, settings)}
+                            onRemove={() => removeSection(section.id)}
+                            onUpdateBlock={(bid: string, updates: any) => updateBlock(section.id, bid, updates)}
+                            onRemoveBlock={(bid: string) => removeBlock(section.id, bid)}
+                        />
+                    ))}
+                </div>
+            )}
+        </SortableContext>
+    );
+
+    const dndOverlay = (
+        <DragOverlay dropAnimation={{
+            sideEffects: defaultDropAnimationSideEffects({
+                styles: { active: { opacity: '0.5' } },
+            }),
+        }}>
+            {activeId ? (
+                activeData?.type === 'new-block' ? (
+                    <div className="p-4 bg-white border-2 border-blue-500 rounded-2xl shadow-2xl opacity-80 flex items-center gap-3">
+                        <Layout className="h-5 w-5 text-blue-500" />
+                        <span className="font-bold text-sm text-slate-700 capitalize">{activeData.blockType}</span>
+                    </div>
+                ) : (
+                    <div className="p-4 bg-white border-2 border-blue-500 rounded-2xl shadow-2xl opacity-80 w-80">
+                        <div className="h-4 w-2/3 bg-slate-100 rounded mb-2"></div>
+                        <div className="h-3 w-full bg-slate-50 rounded"></div>
+                    </div>
+                )
+            ) : null}
+        </DragOverlay>
+    );
+
     if (agroforteData) {
         return (
+            <DndContext 
+                sensors={sensors}
+                collisionDetection={closestCenter}
+                onDragStart={handleDragStart}
+                onDragOver={handleDragOver}
+                onDragEnd={handleDragEnd}
+            >
             <div className="flex h-screen bg-slate-50 dark:bg-slate-950 overflow-hidden">
                 {/* AgroForte Sidebar */}
                 <div className="w-[340px] border-r border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex flex-col">
@@ -638,6 +713,7 @@ export default function PortalEditor() {
                             onChange={(d) => setAgroforteData(d)}
                             activeElementId={activeElementId}
                             onBack={() => setActiveElementId(null)}
+                            renderCustomBlocksPanel={() => customBlocksPanel}
                         />
                     </div>
                     <div className="p-4 border-t border-slate-100 dark:border-slate-800 space-y-2">
@@ -696,12 +772,15 @@ export default function PortalEditor() {
                                     data={agroforteData} 
                                     editMode={true}
                                     onSelectElement={(id) => setActiveElementId(id)}
+                                    customSectionsContent={renderCustomSections}
                                 />
                             </div>
                         </div>
                     </div>
                 </div>
             </div>
+            {dndOverlay}
+            </DndContext>
         );
     }
     // ────────────────────────────────────────────────────────────────────────
