@@ -25,20 +25,26 @@ export function SectionPropertiesPanel({ section, block, onChange }: { section?:
     const styleSettings = element.settings?.style || {};
 
     const updateSettings = (updates: any) => {
-        onChange({ ...settings, ...updates });
+        if (isBlock) {
+            onChange({ settings: updates });
+        } else {
+            onChange({ ...settings, ...updates });
+        }
     };
 
     const updateStyle = (group: string, updates: any) => {
-        onChange({
-            ...settings,
-            style: {
-                ...styleSettings,
-                [group]: {
-                    ...(styleSettings[group] || {}),
-                    ...updates
-                }
+        const newStyle = {
+            ...styleSettings,
+            [group]: {
+                ...(styleSettings[group] || {}),
+                ...updates
             }
-        });
+        };
+        if (isBlock) {
+            onChange({ settings: { ...settings, style: newStyle } });
+        } else {
+            onChange({ ...settings, style: newStyle });
+        }
     };
 
     const isBlock = !!block;
@@ -68,7 +74,7 @@ export function SectionPropertiesPanel({ section, block, onChange }: { section?:
             <div className="bg-white p-0 text-slate-800 min-h-[500px]">
                 {isBlock && (
                     <TabsContent value="conteudo" className="mt-0 p-4">
-                        <BlockPropertiesPanel block={block} onChange={(updates) => onChange({ ...settings, ...updates })} />
+                        <BlockPropertiesPanel block={block} onChange={onChange} />
                     </TabsContent>
                 )}
                 <TabsContent value="layout" className="mt-0">

@@ -15,7 +15,7 @@ export function BlockPropertiesPanel({ block, onChange }: { block: any, onChange
     const content = block.content || {};
 
     const updateContent = (updates: any) => {
-        onChange({ content: { ...content, ...updates } });
+        onChange(updates);
     };
 
     if (block.type === 'title') {

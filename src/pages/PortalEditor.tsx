@@ -609,9 +609,19 @@ export default function PortalEditor() {
         }
     };
 
+    const handleSaveAsync = async () => {
+        const payload = agroforteData
+            ? [{ ...agroforteData, customSections: sections }]
+            : sections;
+        await saveM.mutateAsync({
+            content_json: payload,
+            updated_at: new Date().toISOString(),
+        });
+    };
+
     const handleSave = () => {
         const payload = agroforteData
-            ? [agroforteData]
+            ? [{ ...agroforteData, customSections: sections }]
             : sections;
         saveM.mutate({
             content_json: payload,
@@ -1229,7 +1239,10 @@ export default function PortalEditor() {
                     <div className="flex items-center gap-4">
                         <span className="text-sm text-slate-500 font-medium">{page?.title}</span>
                         <div className="h-4 w-[1px] bg-slate-200" />
-                        <Button variant="outline" size="sm" className="rounded-lg h-9 gap-2" onClick={() => window.open(`/l/${page?.slug}`, '_blank')}>
+                        <Button variant="outline" size="sm" className="rounded-lg h-9 gap-2" onClick={async () => {
+                            await handleSaveAsync();
+                            window.open(`/l/${page?.slug}`, '_blank');
+                        }} disabled={saveM.isPending}>
                             <Eye className="h-4 w-4" /> Visualizar
                         </Button>
                         <Button 

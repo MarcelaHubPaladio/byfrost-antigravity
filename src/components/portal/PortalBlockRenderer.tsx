@@ -284,6 +284,83 @@ export function PortalBlockRenderer({ block, isPremium, isMobile, onRenderInnerB
                 </div>
             )}
 
+            {block.type === 'button' && (
+                <div className={cn("w-full py-4 flex", 
+                    block.content?.alignment === 'center' ? 'justify-center' : 
+                    block.content?.alignment === 'right' ? 'justify-end' : 'justify-start'
+                )}>
+                    <a 
+                        href={block.content?.link || '#'} 
+                        className={cn(
+                            "inline-flex items-center justify-center font-bold rounded-2xl transition-all shadow-md hover:scale-105 active:scale-95",
+                            block.content?.size === 'small' ? 'h-9 px-4 text-sm' :
+                            block.content?.size === 'large' ? 'h-14 px-8 text-lg' :
+                            block.content?.size === 'xlarge' ? 'h-16 px-10 text-xl' :
+                            'h-11 px-6 text-base',
+                            block.content?.variant === 'info' ? 'bg-blue-600 text-white hover:bg-blue-700' :
+                            block.content?.variant === 'success' ? 'bg-green-600 text-white hover:bg-green-700' :
+                            block.content?.variant === 'warning' ? 'bg-yellow-500 text-white hover:bg-yellow-600' :
+                            block.content?.variant === 'danger' ? 'bg-red-600 text-white hover:bg-red-700' :
+                            'bg-slate-900 text-white hover:bg-slate-800'
+                        )}
+                    >
+                        {block.content?.text || 'Clique Aqui'}
+                    </a>
+                </div>
+            )}
+
+            {block.type === 'video' && (
+                <div className="w-full py-8">
+                    {block.content?.url ? (
+                        <div className="relative w-full aspect-video rounded-3xl overflow-hidden shadow-2xl bg-black">
+                            {block.content.source === 'youtube' ? (
+                                <iframe 
+                                    src={`https://www.youtube.com/embed/${block.content.url}?autoplay=${block.content.autoplay ? 1 : 0}&controls=${block.content.controls === false ? 0 : 1}&loop=${block.content.loop ? 1 : 0}&mute=${block.content.autoplay ? 1 : 0}`} 
+                                    className="absolute top-0 left-0 w-full h-full border-0"
+                                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
+                                    allowFullScreen
+                                />
+                            ) : block.content.source === 'vimeo' ? (
+                                <iframe 
+                                    src={`https://player.vimeo.com/video/${block.content.url}?autoplay=${block.content.autoplay ? 1 : 0}&loop=${block.content.loop ? 1 : 0}&muted=${block.content.autoplay ? 1 : 0}`} 
+                                    className="absolute top-0 left-0 w-full h-full border-0"
+                                    allow="autoplay; fullscreen; picture-in-picture" 
+                                    allowFullScreen
+                                />
+                            ) : (
+                                <video 
+                                    src={block.content.url} 
+                                    className="absolute top-0 left-0 w-full h-full object-cover"
+                                    autoPlay={block.content.autoplay}
+                                    controls={block.content.controls !== false}
+                                    loop={block.content.loop}
+                                    muted={block.content.autoplay}
+                                />
+                            )}
+                        </div>
+                    ) : (
+                        <div className="w-full aspect-video bg-slate-100 flex items-center justify-center rounded-3xl text-slate-400">
+                            Sem Vídeo
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {block.type === 'icon' && (
+                <div className={cn("w-full py-4 flex", 
+                    block.content?.alignment === 'center' ? 'justify-center' : 
+                    block.content?.alignment === 'right' ? 'justify-end' : 'justify-start'
+                )}>
+                    {block.content?.source === 'upload' && block.content?.url ? (
+                        <img src={block.content.url} alt="Icon" className="w-12 h-12 object-contain" />
+                    ) : (
+                        <div className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center text-slate-400 text-2xl">
+                            ★
+                        </div>
+                    )}
+                </div>
+            )}
+
             {block.type === 'grid' && (
                 <div className={cn(
                     "grid gap-8 py-8 w-full",
