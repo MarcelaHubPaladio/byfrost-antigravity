@@ -20,6 +20,7 @@ export interface AgroForteData {
   _template: 'agroforte';
   theme: 'dark' | 'light' | 'green' | 'blue';
   layoutOrder?: string[];
+  layoutSettings?: Record<string, any>;
   brand: {
     name: string;
     tagline: string;

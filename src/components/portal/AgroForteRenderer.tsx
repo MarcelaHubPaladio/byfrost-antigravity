@@ -180,19 +180,44 @@ export function AgroForteRenderer({ data, editMode, onSelectElement, customSecti
   const topRef = useRef<HTMLDivElement>(null);
 
   // Helper for edit mode interactivity
-  const EditableBlock = ({ id, label, children, className = '' }: { id: string, label: string, children: React.ReactNode, className?: string }) => {
-    if (!editMode) return <div className={className}>{children}</div>;
+  const EditableBlock = ({ id, label, children, className = '', style = {} }: { id: string, label: string, children: React.ReactNode, className?: string, style?: React.CSSProperties }) => {
+    const layout = data.layoutSettings?.[id] || {};
+    const Tag = (layout.htmlTag && layout.htmlTag !== 'default' ? layout.htmlTag : 'div') as keyof JSX.IntrinsicElements;
+    
+    let layoutClasses = '';
+    if (layout.contentWidth === 'boxed') {
+        layoutClasses += ' max-w-[1200px] mx-auto'; // Default boxed class, could be dynamically set by widthValue
+    }
+    if (layout.height === 'screen') layoutClasses += ' min-h-screen';
+    if (layout.height === 'min') layoutClasses += ' min-h-[400px]';
+    
+    if (layout.verticalAlign === 'top') layoutClasses += ' flex flex-col justify-start';
+    if (layout.verticalAlign === 'middle') layoutClasses += ' flex flex-col justify-center';
+    if (layout.verticalAlign === 'bottom') layoutClasses += ' flex flex-col justify-end';
+    if (layout.verticalAlign === 'space-between') layoutClasses += ' flex flex-col justify-between';
+    
+    if (layout.overflow === 'hidden') layoutClasses += ' overflow-hidden';
+    if (layout.overflow === 'auto') layoutClasses += ' overflow-auto';
+    
+    if (layout.stretchSection) layoutClasses += ' w-full max-w-none';
+    
+    const combinedClassName = editMode ? cn("afr-editable", className, layoutClasses) : cn(className, layoutClasses);
+    const combinedStyle = layout.widthValue && layout.contentWidth === 'boxed' ? { ...style, maxWidth: `${layout.widthValue}px`, margin: '0 auto' } : style;
+
+    if (!editMode) return <Tag className={combinedClassName} style={combinedStyle}>{children}</Tag>;
+    
     return (
-      <div 
-        className={cn("afr-editable", className)} 
-        onClick={(e) => {
+      <Tag 
+        className={combinedClassName} 
+        style={combinedStyle}
+        onClick={(e: React.MouseEvent) => {
           e.stopPropagation();
           onSelectElement?.(id);
         }}
       >
         <div className="afr-editable-label">{label}</div>
         {children}
-      </div>
+      </Tag>
     );
   };
 

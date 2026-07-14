@@ -476,14 +476,31 @@ export default function PublicPortal() {
                                 effectiveSettings.maxWidth === '1200' ? "max-w-[1200px]" :
                                 effectiveSettings.maxWidth === '1400' ? "max-w-[1400px]" : "max-w-full"
                             )}>
-                                {section.blocks.map((block) => (
-                                    <BlockRenderer 
-                                        key={block.id} 
-                                        block={block} 
-                                        isPremium={isPremium} 
-                                        isMobile={isMobile}
-                                    />
-                                ))}
+                                {section.columns ? (
+                                    <div className={cn("mx-auto flex gap-4 w-full", isMobile ? 'flex-col' : '')}>
+                                        {section.columns.map((col: any) => (
+                                            <div key={col.id} style={{ width: isMobile ? '100%' : `${col.size}%` }} className="flex flex-col gap-4">
+                                                {(col.blocks || []).map((block: any) => (
+                                                    <BlockRenderer 
+                                                        key={block.id} 
+                                                        block={block} 
+                                                        isPremium={isPremium} 
+                                                        isMobile={isMobile}
+                                                    />
+                                                ))}
+                                            </div>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    (section.blocks || []).map((block) => (
+                                        <BlockRenderer 
+                                            key={block.id} 
+                                            block={block} 
+                                            isPremium={isPremium} 
+                                            isMobile={isMobile}
+                                        />
+                                    ))
+                                )}
                             </div>
                         </section>
                     );

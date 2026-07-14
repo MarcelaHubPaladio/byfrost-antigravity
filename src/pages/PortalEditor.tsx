@@ -20,7 +20,8 @@ import {
     Eye,
     Monitor,
     Smartphone,
-    Globe
+    Globe,
+    Folder
 } from "lucide-react";
 import { toast } from "sonner";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -49,6 +50,7 @@ import { RichTextEditor } from "@/components/RichTextEditor";
 import { AgroForteEditor } from "@/components/portal/AgroForteEditor";
 import { AgroForteRenderer } from "@/components/portal/AgroForteRenderer";
 import { PortalBlockRenderer } from "@/components/portal/PortalBlockRenderer";
+import { FixedSectionLayoutEditor } from "@/components/portal/FixedSectionLayoutEditor";
 import { AGROFORTE_DEFAULT, type AgroForteData } from "@/components/portal/agroforte-types";
 import { useTenant } from "@/providers/TenantProvider";
 import { 
@@ -106,6 +108,12 @@ type PageSettings = {
     og_image_url?: string;
 };
 
+type Column = {
+    id: string;
+    size: number;
+    blocks: Block[];
+};
+
 type Section = {
     id: string;
     settings: {
@@ -121,7 +129,8 @@ type Section = {
         alignItems?: 'flex-start' | 'center' | 'flex-end' | 'stretch';
     };
     mobileSettings?: Partial<Section['settings']>;
-    blocks: Block[];
+    blocks?: Block[];
+    columns?: Column[];
 };
 
 const getEffectiveSettings = (settings: any, mobileSettings: any, mode: 'desktop' | 'mobile') => {
@@ -143,6 +152,8 @@ export default function PortalEditor() {
     const [activeId, setActiveId] = useState<string | null>(null);
     const [activeSettingsTarget, setActiveSettingsTarget] = useState<{type: 'section' | 'block' | 'fixed_section', id: string, blockId?: string} | null>(null);
     const [activeData, setActiveData] = useState<any>(null);
+    const [isAddingSection, setIsAddingSection] = useState(false);
+    const [activeColumnId, setActiveColumnId] = useState<{sectionId: string, colId: string} | null>(null);
 
     const layoutOrder = React.useMemo(() => {
         if (agroforteData?.layoutOrder) return agroforteData.layoutOrder;
@@ -228,13 +239,16 @@ export default function PortalEditor() {
         }
     });
 
-    const addSection = (type?: BlockType) => {
+    const addSectionWithStructure = (structure: number[]) => {
         const newSection: Section = {
             id: Math.random().toString(36).substr(2, 9),
             settings: { paddingY: '12', maxWidth: '1400' },
-            blocks: type ? [
-                { id: Math.random().toString(36).substr(2, 9), type, content: type === 'grid' ? { columns: 2 } : type === 'gallery' ? { items: [] } : {} }
-            ] : []
+            columns: structure.map(size => ({
+                id: Math.random().toString(36).substr(2, 9),
+                size,
+                blocks: []
+            })),
+            blocks: [] // Legacy fallback empty
         };
         setSections([...sections, newSection]);
         setAgroforteData(prev => {
@@ -251,7 +265,7 @@ export default function PortalEditor() {
         });
     };
 
-    const addBlock = (sectionId: string, type: BlockType) => {
+    const addBlock = (sectionId: string, type: BlockType, colId?: string) => {
         let content = {};
         if (type === 'header') content = { 
             variant: 'logo-left', 
@@ -273,7 +287,18 @@ export default function PortalEditor() {
             type,
             content
         };
-        setSections(sections.map(s => s.id === sectionId ? { ...s, blocks: [...s.blocks, newBlock] } : s));
+        
+        setSections(sections.map(s => {
+            if (s.id !== sectionId) return s;
+            if (colId && s.columns) {
+                return {
+                    ...s,
+                    columns: s.columns.map(c => c.id === colId ? { ...c, blocks: [...c.blocks, newBlock] } : c)
+                };
+            }
+            // Fallback for legacy sections
+            return { ...s, blocks: [...(s.blocks || []), newBlock] };
+        }));
     };
 
     const removeSection = (sectionId: string) => {
@@ -287,15 +312,27 @@ export default function PortalEditor() {
     };
 
     const removeBlock = (sectionId: string, blockId: string) => {
-        setSections(sections.map(s => s.id === sectionId ? { ...s, blocks: s.blocks.filter(b => b.id !== blockId) } : s));
+        setSections(sections.map(s => {
+            if (s.id !== sectionId) return s;
+            if (s.columns) {
+                return {
+                    ...s,
+                    columns: s.columns.map(c => ({
+                        ...c,
+                        blocks: c.blocks.filter(b => b.id !== blockId)
+                    }))
+                };
+            }
+            return { ...s, blocks: (s.blocks || []).filter(b => b.id !== blockId) };
+        }));
     };
 
     const updateBlock = (sectionId: string, blockId: string, updates: any) => {
-        setSections(sections.map(s => s.id === sectionId ? {
-            ...s,
-            blocks: s.blocks.map(b => {
+        setSections(sections.map(s => {
+            if (s.id !== sectionId) return s;
+
+            const processBlock = (b: Block) => {
                 if (b.id !== blockId) return b;
-                
                 const { settings, blocks, ...contentUpdates } = updates;
                 let updatedBlock = { ...b };
                 
@@ -306,18 +343,24 @@ export default function PortalEditor() {
                         updatedBlock.settings = { ...(updatedBlock.settings || {}), ...settings };
                     }
                 }
-                
-                if (blocks) {
-                    updatedBlock.blocks = blocks;
-                }
-                
+                if (blocks) updatedBlock.blocks = blocks;
                 if (Object.keys(contentUpdates).length > 0) {
                     updatedBlock.content = { ...(updatedBlock.content || {}), ...contentUpdates };
                 }
-                
                 return updatedBlock;
-            })
-        } : s));
+            };
+
+            if (s.columns) {
+                return {
+                    ...s,
+                    columns: s.columns.map(c => ({
+                        ...c,
+                        blocks: c.blocks.map(processBlock)
+                    }))
+                };
+            }
+            return { ...s, blocks: (s.blocks || []).map(processBlock) };
+        }));
     };
 
     const updateSectionSettings = (sectionId: string, settings: Partial<Section['settings']>) => {
@@ -659,16 +702,16 @@ export default function PortalEditor() {
         <div className="space-y-4">
             <div className="pt-2 space-y-4">
                 <div className="grid grid-cols-2 gap-3">
-                    <DraggableBlockButton icon={<Layout />} label="Header" type="header" />
-                    <DraggableBlockButton icon={<Layout />} label="Hero" type="hero" />
-                    <DraggableBlockButton icon={<ImageIcon />} label="Slider" type="slider" />
-                    <DraggableBlockButton icon={<Layout />} label="Cards" type="info-cards" />
-                    <DraggableBlockButton icon={<Plus />} label="Grid" type="grid" />
-                    <DraggableBlockButton icon={<ImageIcon />} label="Galeria" type="gallery" />
-                    <DraggableBlockButton icon={<Type />} label="Texto" type="text" />
-                    <DraggableBlockButton icon={<ImageIcon />} label="Imagem" type="image" />
-                    <DraggableBlockButton icon={<LinkIcon />} label="Links" type="links" />
-                    <DraggableBlockButton icon={<Plus />} label="HTML" type="html" />
+                    <DraggableBlockButton icon={<Layout />} label="Header" type="header" onClick={() => activeColumnId && addBlock(activeColumnId.sectionId, 'header', activeColumnId.colId)} />
+                    <DraggableBlockButton icon={<Layout />} label="Hero" type="hero" onClick={() => activeColumnId && addBlock(activeColumnId.sectionId, 'hero', activeColumnId.colId)} />
+                    <DraggableBlockButton icon={<ImageIcon />} label="Slider" type="slider" onClick={() => activeColumnId && addBlock(activeColumnId.sectionId, 'slider', activeColumnId.colId)} />
+                    <DraggableBlockButton icon={<Layout />} label="Cards" type="info-cards" onClick={() => activeColumnId && addBlock(activeColumnId.sectionId, 'info-cards', activeColumnId.colId)} />
+                    <DraggableBlockButton icon={<Plus />} label="Grid" type="grid" onClick={() => activeColumnId && addBlock(activeColumnId.sectionId, 'grid', activeColumnId.colId)} />
+                    <DraggableBlockButton icon={<ImageIcon />} label="Galeria" type="gallery" onClick={() => activeColumnId && addBlock(activeColumnId.sectionId, 'gallery', activeColumnId.colId)} />
+                    <DraggableBlockButton icon={<Type />} label="Texto" type="text" onClick={() => activeColumnId && addBlock(activeColumnId.sectionId, 'text', activeColumnId.colId)} />
+                    <DraggableBlockButton icon={<ImageIcon />} label="Imagem" type="image" onClick={() => activeColumnId && addBlock(activeColumnId.sectionId, 'image', activeColumnId.colId)} />
+                    <DraggableBlockButton icon={<LinkIcon />} label="Links" type="links" onClick={() => activeColumnId && addBlock(activeColumnId.sectionId, 'links', activeColumnId.colId)} />
+                    <DraggableBlockButton icon={<Plus />} label="HTML" type="html" onClick={() => activeColumnId && addBlock(activeColumnId.sectionId, 'html', activeColumnId.colId)} />
                 </div>
                 <p className="text-[10px] text-blue-600 bg-blue-50 p-3 rounded-xl leading-relaxed">
                     <strong>Dica:</strong> Arraste os componentes diretamente para dentro das seções no palco.
@@ -714,6 +757,10 @@ export default function PortalEditor() {
                                                 return { ...prev, layoutOrder: newOrder };
                                             });
                                         }}
+                                        onAddWidgetClick={(secId: string, colId: string) => {
+                                            setActiveColumnId({ sectionId: secId, colId });
+                                            setActiveSettingsTarget({ type: 'section', id: secId }); // Ensure sidebar is open
+                                        }}
                                     />
                                 );
                             } else {
@@ -732,14 +779,52 @@ export default function PortalEditor() {
                         })}
                     </SortableContext>
 
-            <div 
-                onClick={() => addSection()}
-                className="border-2 border-dashed border-blue-200 bg-slate-50/50 hover:bg-slate-50 transition-colors mx-8 mt-4 p-12 rounded-[32px] flex flex-col items-center justify-center cursor-pointer group"
-            >
-                <div className="h-14 w-14 rounded-full bg-blue-100 group-hover:bg-blue-600 transition-colors flex items-center justify-center shadow-sm mb-4">
-                    <Plus className="h-6 w-6 text-blue-600 group-hover:text-white transition-colors" />
+            <div className="border border-dashed border-slate-300 bg-white/50 mx-8 mt-4 p-8 flex flex-col items-center justify-center relative min-h-[160px]">
+                <div className="flex flex-col items-center gap-2">
+                    <div className="flex items-center gap-3">
+                        <Popover open={isAddingSection} onOpenChange={setIsAddingSection}>
+                            <PopoverTrigger asChild>
+                                <button 
+                                    className="h-12 w-12 rounded-full bg-[#9b3a5a] text-white flex items-center justify-center shadow hover:opacity-90 transition-opacity relative group"
+                                >
+                                    <Plus className="h-6 w-6" />
+                                    <div className="absolute -bottom-8 left-1/2 -translate-x-1/2 bg-slate-800 text-white text-[10px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 whitespace-nowrap pointer-events-none transition-opacity">
+                                        Adicionar seção
+                                    </div>
+                                </button>
+                            </PopoverTrigger>
+                            <PopoverContent side="bottom" align="center" className="w-[500px] p-8 rounded-none border-dashed border-slate-300 shadow-xl" sideOffset={20}>
+                                <div className="text-center mb-8">
+                                    <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest">Selecione Sua Estrutura</h3>
+                                </div>
+                                <div className="grid grid-cols-6 gap-3">
+                                    {/* Row 1 */}
+                                    <div onClick={() => { addSectionWithStructure([100]); setIsAddingSection(false); }} className="col-span-2 h-16 bg-slate-200 hover:bg-blue-200 cursor-pointer transition-colors" />
+                                    <div onClick={() => { addSectionWithStructure([50, 50]); setIsAddingSection(false); }} className="col-span-2 h-16 flex gap-1 cursor-pointer group"><div className="w-1/2 bg-slate-200 group-hover:bg-blue-200 transition-colors h-full" /><div className="w-1/2 bg-slate-200 group-hover:bg-blue-200 transition-colors h-full" /></div>
+                                    <div onClick={() => { addSectionWithStructure([33.3, 33.3, 33.3]); setIsAddingSection(false); }} className="col-span-2 h-16 flex gap-1 cursor-pointer group"><div className="w-1/3 bg-slate-200 group-hover:bg-blue-200 transition-colors h-full" /><div className="w-1/3 bg-slate-200 group-hover:bg-blue-200 transition-colors h-full" /><div className="w-1/3 bg-slate-200 group-hover:bg-blue-200 transition-colors h-full" /></div>
+                                    
+                                    {/* Row 2 */}
+                                    <div onClick={() => { addSectionWithStructure([25, 25, 25, 25]); setIsAddingSection(false); }} className="col-span-2 h-16 flex gap-1 cursor-pointer group"><div className="w-1/4 bg-slate-200 group-hover:bg-blue-200 transition-colors h-full" /><div className="w-1/4 bg-slate-200 group-hover:bg-blue-200 transition-colors h-full" /><div className="w-1/4 bg-slate-200 group-hover:bg-blue-200 transition-colors h-full" /><div className="w-1/4 bg-slate-200 group-hover:bg-blue-200 transition-colors h-full" /></div>
+                                    <div onClick={() => { addSectionWithStructure([33.3, 66.6]); setIsAddingSection(false); }} className="col-span-2 h-16 flex gap-1 cursor-pointer group"><div className="w-1/3 bg-slate-200 group-hover:bg-blue-200 transition-colors h-full" /><div className="w-2/3 bg-slate-200 group-hover:bg-blue-200 transition-colors h-full" /></div>
+                                    <div onClick={() => { addSectionWithStructure([66.6, 33.3]); setIsAddingSection(false); }} className="col-span-2 h-16 flex gap-1 cursor-pointer group"><div className="w-2/3 bg-slate-200 group-hover:bg-blue-200 transition-colors h-full" /><div className="w-1/3 bg-slate-200 group-hover:bg-blue-200 transition-colors h-full" /></div>
+                                    
+                                    {/* Row 3 */}
+                                    <div onClick={() => { addSectionWithStructure([16.6, 66.6, 16.6]); setIsAddingSection(false); }} className="col-span-2 h-16 flex gap-1 cursor-pointer group"><div className="w-[16.6%] bg-slate-200 group-hover:bg-blue-200 transition-colors h-full" /><div className="w-[66.6%] bg-slate-200 group-hover:bg-blue-200 transition-colors h-full" /><div className="w-[16.6%] bg-slate-200 group-hover:bg-blue-200 transition-colors h-full" /></div>
+                                    <div onClick={() => { addSectionWithStructure([50, 25, 25]); setIsAddingSection(false); }} className="col-span-2 h-16 flex gap-1 cursor-pointer group"><div className="w-1/2 bg-slate-200 group-hover:bg-blue-200 transition-colors h-full" /><div className="w-1/4 bg-slate-200 group-hover:bg-blue-200 transition-colors h-full" /><div className="w-1/4 bg-slate-200 group-hover:bg-blue-200 transition-colors h-full" /></div>
+                                    <div onClick={() => { addSectionWithStructure([25, 25, 50]); setIsAddingSection(false); }} className="col-span-2 h-16 flex gap-1 cursor-pointer group"><div className="w-1/4 bg-slate-200 group-hover:bg-blue-200 transition-colors h-full" /><div className="w-1/4 bg-slate-200 group-hover:bg-blue-200 transition-colors h-full" /><div className="w-1/2 bg-slate-200 group-hover:bg-blue-200 transition-colors h-full" /></div>
+                                </div>
+                            </PopoverContent>
+                        </Popover>
+                        
+                        <button 
+                            className="h-12 w-12 rounded-full bg-slate-500 text-white flex items-center justify-center shadow hover:opacity-90 transition-opacity"
+                            title="Adicionar template"
+                        >
+                            <Folder className="h-5 w-5 fill-current" />
+                        </button>
+                    </div>
+                    <p className="text-sm text-slate-400 italic mt-3">Solte o widget aqui</p>
                 </div>
-                <p className="text-sm font-medium text-slate-500 uppercase tracking-widest">Adicionar Nova Seção</p>
             </div>
         </div>
     );
@@ -892,9 +977,19 @@ export default function PortalEditor() {
                             <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
                                 <Label className="text-[10px] uppercase text-slate-400 font-bold mb-4 block">Propriedades</Label>
                                 {activeSettingsTarget.type === 'fixed_section' && (
-                                    <div className="space-y-4">
-                                        <p className="text-sm text-slate-500">Para editar o conteúdo desta seção, acesse as "Configurações Globais" ou as abas do Painel Direito de Template.</p>
-                                    </div>
+                                    <FixedSectionLayoutEditor 
+                                        settings={agroforteData?.layoutSettings?.[activeSettingsTarget.id] || {}} 
+                                        onChange={(newSettings) => {
+                                            if (!agroforteData) return;
+                                            setAgroforteData({
+                                                ...agroforteData,
+                                                layoutSettings: {
+                                                    ...(agroforteData.layoutSettings || {}),
+                                                    [activeSettingsTarget.id]: newSettings
+                                                }
+                                            });
+                                        }} 
+                                    />
                                 )}
                                 {(activeSettingsTarget.type === 'section' || activeSettingsTarget.type === 'block') && (
                                     <div className="space-y-4">
@@ -1019,7 +1114,7 @@ export default function PortalEditor() {
     );
 }
 
-function DraggableBlockButton({ icon, label, type, active }: { icon: React.ReactNode, label: string, type: BlockType, active?: boolean }) {
+function DraggableBlockButton({ icon, label, type, active, onClick }: { icon: React.ReactNode, label: string, type: BlockType, active?: boolean, onClick?: () => void }) {
     const {
         attributes,
         listeners,
@@ -1044,6 +1139,12 @@ function DraggableBlockButton({ icon, label, type, active }: { icon: React.React
             style={style}
             {...listeners}
             {...attributes}
+            onClick={(e) => {
+                if (onClick) {
+                    e.preventDefault();
+                    onClick();
+                }
+            }}
             className={cn(
                 "flex flex-col items-center justify-center gap-3 p-4 rounded-2xl border transition-all text-slate-600 dark:text-slate-400",
                 "border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 group hover:border-blue-500 hover:text-blue-600",
@@ -1086,7 +1187,7 @@ function SortableFixedSectionItem({ id, children, previewMode, active, onSetting
     );
 }
 
-function SortableSectionItem({ section, previewMode, active, onSelect, onRemove, onUpdateSettings, onUpdateBlock, onRemoveBlock, onAddSectionAbove, onSettingsClick }: any) {
+function SortableSectionItem({ section, previewMode, active, onSelect, onRemove, onUpdateSettings, onUpdateBlock, onRemoveBlock, onAddSectionAbove, onSettingsClick, onAddWidgetClick }: any) {
     const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: section.id });
     const style = { transform: CSS.Transform.toString(transform), transition, zIndex: isDragging ? 50 : 1, opacity: isDragging ? 0.8 : 1 };
     const sectionPadding = section.settings?.paddingY || '12';
@@ -1107,24 +1208,67 @@ function SortableSectionItem({ section, previewMode, active, onSelect, onRemove,
             <div className="w-full relative rounded-[32px] overflow-hidden" style={{ backgroundColor: section.settings?.backgroundColor, backgroundImage: section.settings?.backgroundImage ? `url(${section.settings.backgroundImage})` : undefined, backgroundSize: section.settings?.backgroundSize || 'cover', backgroundPosition: section.settings?.backgroundPosition || 'center' }}>
                 {section.settings?.backgroundOverlay && <div className="absolute inset-0 z-0" style={{ backgroundColor: section.settings.backgroundOverlay }}></div>}
                 <div className={cn("relative z-10", `py-${sectionPadding}`, previewMode === 'mobile' ? 'px-4' : 'px-8')}>
-                    <div className={cn("mx-auto flex flex-col gap-6", previewMode === 'mobile' ? 'w-full' : 'max-w-7xl')}>
-                        <SortableContext items={(section.blocks || []).map((b: any) => b.id)} strategy={verticalListSortingStrategy}>
-                            {(section.blocks || []).map((block: any) => (
-                                <SortableBlockItem 
-                                    key={block.id} 
-                                    block={block}
-                                    sectionId={section.id}
-                                    previewMode={previewMode}
-                                    onUpdate={(updates: any) => onUpdateBlock(block.id, updates)}
-                                    onRemove={() => onRemoveBlock(block.id)}
-                                    onSettingsClick={() => onSettingsClick(block.id)}
-                                />
-                            ))}
-                        </SortableContext>
-                        {(!section.blocks || section.blocks.length === 0) && (
-                            <div className="py-12 border-2 border-dashed border-slate-200/50 rounded-2xl flex flex-col items-center justify-center bg-white/20 backdrop-blur-sm">
-                                <div className="h-12 w-12 rounded-full bg-slate-100 flex items-center justify-center mb-3"><ArrowDown className="h-6 w-6 text-slate-400 animate-bounce" /></div>
-                                <p className="text-sm font-medium text-slate-500">Arraste componentes para cá</p>
+                    <div className={cn("mx-auto flex gap-4", previewMode === 'mobile' ? 'w-full flex-col' : 'max-w-7xl')}>
+                        {section.columns ? (
+                            section.columns.map((col: any) => (
+                                <div key={col.id} style={{ width: previewMode === 'mobile' ? '100%' : `${col.size}%` }} className="flex flex-col gap-4 relative group/col">
+                                    <SortableContext items={(col.blocks || []).map((b: any) => b.id)} strategy={verticalListSortingStrategy}>
+                                        {(col.blocks || []).map((block: any) => (
+                                            <SortableBlockItem 
+                                                key={block.id} 
+                                                block={block}
+                                                sectionId={section.id}
+                                                previewMode={previewMode}
+                                                onUpdate={(updates: any) => onUpdateBlock(block.id, updates)}
+                                                onRemove={() => onRemoveBlock(block.id)}
+                                                onSettingsClick={() => onSettingsClick(block.id)}
+                                            />
+                                        ))}
+                                    </SortableContext>
+                                    
+                                    {(!col.blocks || col.blocks.length === 0) && (
+                                        <div className="h-24 border border-dashed border-slate-300 rounded-lg flex items-center justify-center bg-slate-50/50 group-hover/col:border-blue-300 transition-colors">
+                                            <button 
+                                                onClick={(e) => { e.stopPropagation(); onAddWidgetClick?.(section.id, col.id); }}
+                                                className="h-8 w-8 rounded-full bg-[#9b3a5a] text-white flex items-center justify-center shadow hover:opacity-90 transition-opacity"
+                                            >
+                                                <Plus className="h-4 w-4" />
+                                            </button>
+                                        </div>
+                                    )}
+                                    {col.blocks && col.blocks.length > 0 && (
+                                        <div className="opacity-0 group-hover/col:opacity-100 transition-opacity flex justify-center mt-2">
+                                            <button 
+                                                onClick={(e) => { e.stopPropagation(); onAddWidgetClick?.(section.id, col.id); }}
+                                                className="h-6 w-6 rounded-full bg-[#9b3a5a] text-white flex items-center justify-center shadow hover:opacity-90 transition-opacity"
+                                            >
+                                                <Plus className="h-3 w-3" />
+                                            </button>
+                                        </div>
+                                    )}
+                                </div>
+                            ))
+                        ) : (
+                            // Legacy blocks
+                            <div className="w-full flex flex-col gap-4">
+                                <SortableContext items={(section.blocks || []).map((b: any) => b.id)} strategy={verticalListSortingStrategy}>
+                                    {(section.blocks || []).map((block: any) => (
+                                        <SortableBlockItem 
+                                            key={block.id} 
+                                            block={block}
+                                            sectionId={section.id}
+                                            previewMode={previewMode}
+                                            onUpdate={(updates: any) => onUpdateBlock(block.id, updates)}
+                                            onRemove={() => onRemoveBlock(block.id)}
+                                            onSettingsClick={() => onSettingsClick(block.id)}
+                                        />
+                                    ))}
+                                </SortableContext>
+                                {(!section.blocks || section.blocks.length === 0) && (
+                                    <div className="py-12 border-2 border-dashed border-slate-200/50 rounded-2xl flex flex-col items-center justify-center bg-white/20 backdrop-blur-sm">
+                                        <p className="text-sm font-medium text-slate-500">Seção sem colunas</p>
+                                    </div>
+                                )}
                             </div>
                         )}
                     </div>
