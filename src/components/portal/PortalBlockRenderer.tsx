@@ -68,6 +68,36 @@ function getEffectiveSettings(desktop: any, mobile: any, isMobile: boolean) {
 }
 
 export function PortalBlockRenderer({ block, isPremium, isMobile, onRenderInnerBlock, editMode, onUpdateContent }: { block: any; isPremium: boolean; isMobile: boolean; onRenderInnerBlock?: (b: any) => React.ReactNode; editMode?: boolean; onUpdateContent?: (c: any) => void }) {
+    if (!block) return null;
+
+    const renderIconInner = (content: any) => {
+        if (content?.source === 'system' && content?.iconName) {
+            return (
+                <DynamicIcon 
+                    name={content.iconName} 
+                    lib={content.iconLib} 
+                    style={{ 
+                        color: content.iconColor || '#000000',
+                        width: content.iconSize ? `${content.iconSize}px` : '48px',
+                        height: content.iconSize ? `${content.iconSize}px` : '48px'
+                    }} 
+                />
+            );
+        }
+        
+        if (content?.source === 'upload' || !content?.source) {
+            if (content?.url) {
+                return <img src={content.url} alt="Icon" className="object-contain" style={{ width: content.iconSize ? `${content.iconSize}px` : '48px', height: content.iconSize ? `${content.iconSize}px` : '48px' }} />;
+            }
+        }
+        
+        return (
+            <div className="bg-slate-100 rounded flex items-center justify-center text-slate-400" style={{ width: content.iconSize ? `${content.iconSize}px` : '48px', height: content.iconSize ? `${content.iconSize}px` : '48px' }}>
+                ★
+            </div>
+        );
+    };
+
     const effectiveSettings = getEffectiveSettings(block.settings, block.mobileSettings, isMobile);
 
     const heightClass = effectiveSettings.height === 'sm' ? 'min-h-[200px]' :

@@ -1,5 +1,7 @@
 import { useState } from 'react';
-import { ChevronDown, ChevronRight, ChevronLeft, Leaf, Image as ImageIcon, Package, Sprout, Cpu, AlignLeft, Phone, Plus, Trash2, Copy, Info, Grid } from 'lucide-react';
+import { useDraggable } from '@dnd-kit/core';
+import { CSS } from '@dnd-kit/utilities';
+import { ChevronDown, ChevronRight, ChevronLeft, Leaf, Image as ImageIcon, Package, Sprout, Cpu, AlignLeft, Phone, Plus, Trash2, Copy, Info, Grid, GripVertical } from 'lucide-react';
 import { RichTextEditor } from '@/components/RichTextEditor';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -18,7 +20,8 @@ interface AgroForteEditorProps {
 // ────────────────────────────────────────────
 // Accordion section wrapper
 // ────────────────────────────────────────────
-function Section({ title, icon, children, defaultOpen = false, hidden = false, forceOpen = false, onBack }: {
+function Section({ id, title, icon, children, defaultOpen = false, hidden = false, forceOpen = false, onBack }: {
+  id?: string;
   title: string;
   icon: React.ReactNode;
   children: React.ReactNode;
@@ -28,14 +31,26 @@ function Section({ title, icon, children, defaultOpen = false, hidden = false, f
   onBack?: () => void;
 }) {
   const [open, setOpen] = useState(defaultOpen);
+  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
+    id: id || title,
+    data: { type: 'new-block', blockType: id, isSidebarItem: true },
+    disabled: !id || forceOpen,
+  });
+
   if (hidden) return null;
   
   const isOpen = forceOpen || open;
   
+  const style = transform ? {
+    transform: CSS.Translate.toString(transform),
+    opacity: isDragging ? 0.5 : 1,
+    zIndex: isDragging ? 9999 : 1,
+  } : undefined;
+  
   return (
-    <div className={cn(forceOpen ? "" : "border border-slate-100 dark:border-slate-800 rounded-xl overflow-hidden")}>
+    <div ref={setNodeRef} style={style} className={cn(forceOpen ? "" : "border border-slate-100 dark:border-slate-800 rounded-xl overflow-hidden", isDragging && "shadow-xl border-indigo-500")}>
       <div
-        className={cn("w-full flex items-center gap-3 bg-white dark:bg-slate-900 text-left", forceOpen ? "pb-4" : "p-4 hover:bg-slate-50 dark:hover:bg-slate-800/60 transition-colors cursor-pointer")}
+        className={cn("w-full flex items-center gap-3 bg-white dark:bg-slate-900 text-left relative", forceOpen ? "pb-4" : "p-4 hover:bg-slate-50 dark:hover:bg-slate-800/60 transition-colors cursor-pointer")}
         onClick={() => !forceOpen && setOpen(!open)}
       >
         {forceOpen && onBack && (
@@ -50,6 +65,19 @@ function Section({ title, icon, children, defaultOpen = false, hidden = false, f
           {icon}
         </span>
         <span className={cn("font-semibold flex-1", forceOpen ? "text-lg" : "text-sm")}>{title}</span>
+        
+        {!forceOpen && id && (
+            <div 
+                {...attributes} 
+                {...listeners} 
+                onClick={(e) => e.stopPropagation()}
+                className="p-1.5 hover:bg-slate-200 dark:hover:bg-slate-700 rounded transition-colors cursor-grab active:cursor-grabbing text-slate-400 hover:text-slate-600"
+                title="Arrastar para o palco"
+            >
+                <GripVertical className="h-4 w-4" />
+            </div>
+        )}
+        
         {!forceOpen && (
           isOpen
             ? <ChevronDown className="h-4 w-4 text-slate-400" />
@@ -280,6 +308,7 @@ export function AgroForteEditor({ data, onChange, activeElementId, onBack, rende
     <>
       {/* IDENTIDADE */}
       <Section 
+        id="header"
         title="Identidade & Navegação" 
         icon={<Leaf className="h-4 w-4" />} 
         hidden={isHidden('nav')}
@@ -388,6 +417,7 @@ export function AgroForteEditor({ data, onChange, activeElementId, onBack, rende
 
       {/* HERO BANNERS */}
       <Section 
+        id="hero"
         title="Carrossel Hero (Banners)" 
         icon={<ImageIcon className="h-4 w-4" />} 
         hidden={isHidden('hero')}
@@ -619,6 +649,7 @@ export function AgroForteEditor({ data, onChange, activeElementId, onBack, rende
 
       {/* SOBRE */}
       <Section 
+        id="about"
         title="Sobre Nós (Por que escolher AgroForte?)" 
         icon={<Info className="h-4 w-4" />}
         hidden={isHidden('about')}
@@ -694,6 +725,7 @@ export function AgroForteEditor({ data, onChange, activeElementId, onBack, rende
 
       {/* PRODUTOS EM DESTAQUE */}
       <Section 
+        id="featured_products"
         title="Produtos em Destaque (6)" 
         icon={<Package className="h-4 w-4" />}
         hidden={isHidden('featured_products')}
@@ -717,6 +749,7 @@ export function AgroForteEditor({ data, onChange, activeElementId, onBack, rende
 
       {/* CATEGORIAS */}
       <Section 
+        id="catalogs_categories"
         title="Categorias (Nossas Soluções)" 
         icon={<Grid className="h-4 w-4" />}
         hidden={isHidden('catalogs_categories')}
@@ -813,6 +846,7 @@ export function AgroForteEditor({ data, onChange, activeElementId, onBack, rende
 
       {/* CATALOGO INSUMOS */}
       <Section 
+        id="catalogs"
         title="Catálogo — Insumos Agrícolas" 
         icon={<Sprout className="h-4 w-4" />}
         hidden={isHidden('catalog_insumos')}
