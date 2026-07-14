@@ -271,6 +271,31 @@ export default function PortalEditor() {
         }
     }, [page]);
 
+    const historyRef = React.useRef<{ sections: Section[], agroforteData: AgroForteData | null }[]>([]);
+    const pushHistory = React.useCallback(() => {
+        historyRef.current = [...historyRef.current, { sections, agroforteData }].slice(-5);
+    }, [sections, agroforteData]);
+
+    const undo = React.useCallback(() => {
+        if (historyRef.current.length === 0) return;
+        const previousState = historyRef.current[historyRef.current.length - 1];
+        setSections(previousState.sections);
+        setAgroforteData(previousState.agroforteData);
+        historyRef.current = historyRef.current.slice(0, -1);
+    }, []);
+
+    React.useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
+                e.preventDefault();
+                undo();
+            }
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [undo]);
+
+
     const saveM = useMutation({
         mutationFn: async (payload: any) => {
             const { error } = await supabase
