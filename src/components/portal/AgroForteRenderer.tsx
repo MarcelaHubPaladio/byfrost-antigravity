@@ -1,9 +1,9 @@
 import type { AgroForteData } from './agroforte-types';
 import { useState, useEffect, useRef } from 'react';
-import { Shield, CheckCircle, Leaf, Star, Heart, Award } from 'lucide-react';
+import { Shield, CheckCircle, Leaf, Star, Heart, Award, Check, Users, Target, Sprout, Cpu, Tractor, Package } from 'lucide-react';
 
 const ICON_MAP: Record<string, React.ElementType> = {
-  Shield, CheckCircle, Leaf, Star, Heart, Award
+  Shield, CheckCircle, Leaf, Star, Heart, Award, Check, Users, Target, Sprout, Cpu, Tractor, Package
 };
 
 interface AgroForteRendererProps {
@@ -270,26 +270,29 @@ export function AgroForteRenderer({ data }: AgroForteRendererProps) {
 
       {/* CATEGORIAS */}
       <section className="afr-section-solutions" id={catalogs.styles?.id} style={getStyleProps(catalogs.styles)}>
-        <p className="afr-section-label">NOSSAS SOLUÇÕES PARA CADA ETAPA DO CAMPO</p>
+        <p className="afr-section-label">{catalogs.categoriesLabel || 'NOSSAS SOLUÇÕES PARA CADA ETAPA DO CAMPO'}</p>
         <div className="afr-categories">
-          {[
-            { title: 'INSUMOS AGRÍCOLAS', desc: 'Fertilizantes, sementes e defensivos de alta qualidade para máxima produtividade das lavouras.', img: 'https://images.unsplash.com/photo-1585664811154-4c86e2e5f86d?w=600&q=80', color: 'green', icon: <svg viewBox="0 0 24 24"><path d="M12 2C9 2 6 4 5 7C4 10 5 13 7 15C9 17 11 17 11 20H13C13 17 15 17 17 15C19 13 20 10 19 7C18 4 15 2 12 2Z"/></svg> },
-            { title: 'TECNOLOGIA DE APLICAÇÃO', desc: 'Equipamentos e soluções que garantem eficiência e precisão na aplicação.', img: 'https://images.unsplash.com/photo-1589923188900-85dae523342b?w=600&q=80', color: 'purple', icon: <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/></svg> },
-            { title: 'PLANTIO E PREPARO DE SOLO', desc: 'Máquinas e implementos para cultivo, plantio e manejo com mais desempenho.', img: 'https://images.unsplash.com/photo-1574943320219-553eb213f72d?w=600&q=80', color: 'brown', icon: <svg viewBox="0 0 24 24"><path d="M3 9L12 2L21 9V20A2 2 0 0119 22H5A2 2 0 013 20V9Z"/></svg> },
-          ].map(cat => (
+          {(catalogs.categories || [
+            { title: 'INSUMOS AGRÍCOLAS', desc: 'Fertilizantes, sementes e defensivos de alta qualidade para máxima produtividade das lavouras.', img: 'https://images.unsplash.com/photo-1585664811154-4c86e2e5f86d?w=600&q=80', color: 'green', icon: 'Sprout' },
+            { title: 'TECNOLOGIA DE APLICAÇÃO', desc: 'Equipamentos e soluções que garantem eficiência e precisão na aplicação.', img: 'https://images.unsplash.com/photo-1589923188900-85dae523342b?w=600&q=80', color: 'purple', icon: 'Cpu' },
+            { title: 'PLANTIO E PREPARO DE SOLO', desc: 'Máquinas e implementos para cultivo, plantio e manejo com mais desempenho.', img: 'https://images.unsplash.com/photo-1574943320219-553eb213f72d?w=600&q=80', color: 'brown', icon: 'Tractor' },
+          ]).map(cat => {
+            const IconComponent = ICON_MAP[cat.icon as keyof typeof ICON_MAP] || Package;
+            return (
             <div className="afr-cat-card" key={cat.title}>
               <img src={cat.img} alt={cat.title} />
               <div className={`afr-cat-overlay ${cat.color}`} />
               <div className="afr-cat-content">
                 <div className="afr-cat-icon" style={{ background: cat.color === 'green' ? 'rgba(76,175,80,.3)' : cat.color === 'purple' ? 'rgba(156,39,176,.3)' : 'rgba(121,85,72,.3)' }}>
-                  {cat.icon}
+                  <IconComponent size={24} color="#ffffff" strokeWidth={2} />
                 </div>
-                <h3>{cat.title}</h3>
-                <p>{cat.desc}</p>
+                <div dangerouslySetInnerHTML={{ __html: cat.title || '' }} className="afr-cat-title-inner" />
+                <div dangerouslySetInnerHTML={{ __html: cat.desc || '' }} />
                 <div className="afr-cat-btn"><svg viewBox="0 0 24 24"><path d="M5 12h14M12 5l7 7-7 7"/></svg></div>
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
       </section>
 
@@ -350,22 +353,25 @@ export function AgroForteRenderer({ data }: AgroForteRendererProps) {
       })}
 
       {/* POR QUE AGROFORTE */}
-      <section className="afr-section-why">
-        <p className="afr-why-label">Por que escolher AgroForte?</p>
-        <h3 className="afr-why-title">Mais que produtos, entregamos parceria, confiança e soluções que impulsionam o campo.</h3>
+      <section className="afr-section-why" id={data.about?.styles?.id || 'sobre'} style={getStyleProps(data.about?.styles)}>
+        <p className="afr-why-label">{data.about?.label || 'Por que escolher AgroForte?'}</p>
+        <div className="afr-why-title" dangerouslySetInnerHTML={{ __html: data.about?.headline || 'Mais que produtos, entregamos parceria, confiança e soluções que impulsionam o campo.' }} />
         <div className="afr-why-grid">
-          {[
-            { icon: <svg viewBox="0 0 24 24"><path d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z"/></svg>, title: 'Produtos de Qualidade', text: 'Selecionamos o melhor para cada etapa do campo.' },
-            { icon: <svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2M9 11a4 4 0 100-8 4 4 0 000 8zM23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>, title: 'Atendimento Especializado', text: 'Nossa equipe está sempre ao lado para te atender da melhor forma.' },
-            { icon: <svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>, title: 'Parceiros de Confiança', text: 'Trabalhamos com as melhores marcas do mercado.' },
-            { icon: <svg viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>, title: 'Foco em Resultados', text: 'Soluções que geram mais produtividade e lucro.' },
-          ].map(item => (
+          {(data.about?.cards || [
+            { icon: 'CheckCircle', title: 'Produtos de Qualidade', text: 'Selecionamos o melhor para cada etapa do campo.' },
+            { icon: 'Users', title: 'Atendimento Especializado', text: 'Nossa equipe está sempre ao lado para te atender da melhor forma.' },
+            { icon: 'Shield', title: 'Parceiros de Confiança', text: 'Trabalhamos com as melhores marcas do mercado.' },
+            { icon: 'Target', title: 'Foco em Resultados', text: 'Soluções que geram mais produtividade e lucro.' },
+          ]).map(item => {
+            const IconComp = ICON_MAP[item.icon as keyof typeof ICON_MAP] || Check;
+            return (
             <div className="afr-why-item" key={item.title}>
-              <div className="afr-why-icon">{item.icon}</div>
-              <h4>{item.title}</h4>
-              <p>{item.text}</p>
+              <div className="afr-why-icon"><IconComp size={24} color="#4caf50" /></div>
+              <div dangerouslySetInnerHTML={{ __html: item.title }} className="afr-why-item-title" />
+              <div dangerouslySetInnerHTML={{ __html: item.text }} />
             </div>
-          ))}
+            )
+          })}
         </div>
       </section>
 

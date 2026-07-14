@@ -50,8 +50,16 @@ export interface AgroForteData {
   };
   featuredProducts: AgroForteProduct[];
   featuredProductsStyles?: SectionStyleOptions;
+  about?: {
+    styles?: SectionStyleOptions;
+    label: string;
+    headline: string;
+    cards: { icon: string; title: string; text: string }[];
+  };
   catalogs: {
     styles?: SectionStyleOptions;
+    categoriesLabel?: string;
+    categories?: { title: string; desc: string; img: string; color: string; icon: string }[];
     insumos: { description: string; products: AgroForteProduct[]; styles?: SectionStyleOptions };
     tecnologia: { description: string; products: AgroForteProduct[]; styles?: SectionStyleOptions };
     plantio: { description: string; products: AgroForteProduct[]; styles?: SectionStyleOptions };
@@ -104,14 +112,30 @@ export const AGROFORTE_DEFAULT: AgroForteData = {
     ]
   },
   featuredProducts: [
-    { name: 'Semente do Milho', price: 'R$ 245,00', unit: '/saca', image: 'https://images.unsplash.com/photo-1557682250-9af12b8e7db1?w=300&q=80' },
-    { name: 'Fertilizante NPK', price: 'R$ 198,00', unit: '/saca', image: 'https://images.unsplash.com/photo-1604537372136-89b3dae196e3?w=300&q=80' },
-    { name: 'Defensivo Agrícola', price: 'R$ 320,00', unit: '/litro', image: 'https://images.unsplash.com/photo-1416879595882-3373a0480b5b?w=300&q=80' },
-    { name: 'Semeadora 8 Linhas', price: 'R$ 68.800,00', unit: '', image: 'https://images.unsplash.com/photo-1589923188900-85dae523342b?w=300&q=80' },
-    { name: 'Trator T85s', price: 'R$ 265.000,00', unit: '', image: 'https://images.unsplash.com/photo-1574943320219-553eb213f72d?w=300&q=80' },
-    { name: 'Grade Niveladora', price: 'R$ 38.000,00', unit: '', image: 'https://images.unsplash.com/photo-1591696205602-2f950c417cb9?w=300&q=80' },
+    { name: 'Fertilizante NPK 10-10-10', price: 'R$ 150,00', unit: '/sc 50kg', image: 'https://images.unsplash.com/photo-1592997571659-0b21ff64313b?w=400&q=80' },
+    { name: 'Semente de Milho Híbrido', price: 'R$ 420,00', unit: '/sc 20kg', image: 'https://images.unsplash.com/photo-1574327429676-e1e36fa78486?w=400&q=80' },
+    { name: 'Defensivo Agrícola XPTO', price: 'R$ 89,90', unit: '/litro', image: 'https://images.unsplash.com/photo-1563241527-200445d47e8e?w=400&q=80' },
+    { name: 'Adubo Foliar Completo', price: 'R$ 120,00', unit: '/galão', image: 'https://images.unsplash.com/photo-1628186105085-f5d8124231b2?w=400&q=80' },
+    { name: 'Semente de Soja RR', price: 'R$ 280,00', unit: '/sc 40kg', image: 'https://images.unsplash.com/photo-1599839619722-39751411ea63?w=400&q=80' },
+    { name: 'Pulverizador Costal 20L', price: 'R$ 350,00', unit: '/unidade', image: 'https://images.unsplash.com/photo-1589923188900-85dae523342b?w=400&q=80' }
   ],
+  about: {
+    label: 'Por que escolher AgroForte?',
+    headline: 'Mais que produtos, entregamos parceria, confiança e soluções que impulsionam o campo.',
+    cards: [
+      { icon: 'Check', title: 'Produtos de Qualidade', text: 'Selecionamos o melhor para cada etapa do campo.' },
+      { icon: 'Users', title: 'Atendimento Especializado', text: 'Nossa equipe está sempre ao lado para te atender da melhor forma.' },
+      { icon: 'Shield', title: 'Parceiros de Confiança', text: 'Trabalhamos com as melhores marcas do mercado.' },
+      { icon: 'Target', title: 'Foco em Resultados', text: 'Soluções que geram mais produtividade e lucro.' },
+    ]
+  },
   catalogs: {
+    categoriesLabel: 'NOSSAS SOLUÇÕES PARA CADA ETAPA DO CAMPO',
+    categories: [
+      { title: 'INSUMOS AGRÍCOLAS', desc: 'Fertilizantes, sementes e defensivos de alta qualidade para máxima produtividade das lavouras.', img: 'https://images.unsplash.com/photo-1585664811154-4c86e2e5f86d?w=600&q=80', color: 'green', icon: 'Sprout' },
+      { title: 'TECNOLOGIA DE APLICAÇÃO', desc: 'Equipamentos e soluções que garantem eficiência e precisão na aplicação.', img: 'https://images.unsplash.com/photo-1589923188900-85dae523342b?w=600&q=80', color: 'purple', icon: 'Cpu' },
+      { title: 'PLANTIO E PREPARO DE SOLO', desc: 'Máquinas e implementos para cultivo, plantio e manejo com mais desempenho.', img: 'https://images.unsplash.com/photo-1574943320219-553eb213f72d?w=600&q=80', color: 'brown', icon: 'Tractor' },
+    ],
     insumos: {
       description: 'Sementes, fertilizantes e defensivos de alta qualidade para garantir a sua lavoura.',
       products: [

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ChevronDown, ChevronRight, Leaf, Image as ImageIcon, Package, Sprout, Cpu, AlignLeft, Phone, Plus, Trash2, Copy } from 'lucide-react';
+import { ChevronDown, ChevronRight, Leaf, Image as ImageIcon, Package, Sprout, Cpu, AlignLeft, Phone, Plus, Trash2, Copy, Info, Grid } from 'lucide-react';
 import { RichTextEditor } from '@/components/RichTextEditor';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -588,6 +588,75 @@ export function AgroForteEditor({ data, onChange }: AgroForteEditorProps) {
         />
       </Section>
 
+      {/* SOBRE */}
+      <Section title="Sobre Nós (Por que escolher AgroForte?)" icon={<Info className="h-4 w-4" />}>
+        <div className="space-y-4">
+          <Field label="Rótulo da Seção">
+            <Input 
+              value={data.about?.label || ''} 
+              onChange={e => set('about', { ...data.about, label: e.target.value })} 
+              className="text-sm"
+            />
+          </Field>
+          <Field label="Título Principal (HTML/RichText)">
+            <RichTextEditor 
+              value={data.about?.headline || ''}
+              onChange={html => set('about', { ...data.about, headline: html })}
+            />
+          </Field>
+          
+          <div className="pt-4 border-t border-slate-200 dark:border-slate-700">
+            <p className="text-xs font-semibold mb-3">Cards (4)</p>
+            <div className="space-y-4">
+              {(data.about?.cards || []).map((card, i) => (
+                <div key={i} className="p-3 bg-slate-50 dark:bg-slate-900 rounded-md space-y-3">
+                  <p className="text-[10px] uppercase font-bold text-slate-400">Card {i + 1}</p>
+                  <div className="flex gap-2">
+                    <div className="flex-1">
+                      <Field label="Ícone (Lucide)">
+                        <Input 
+                          value={card.icon} 
+                          onChange={e => {
+                            const newCards = [...(data.about?.cards || [])];
+                            newCards[i] = { ...card, icon: e.target.value };
+                            set('about', { ...data.about, cards: newCards });
+                          }} 
+                          className="h-8 text-sm"
+                        />
+                      </Field>
+                    </div>
+                  </div>
+                  <Field label="Título (Rich Text)">
+                    <RichTextEditor 
+                      value={card.title}
+                      onChange={html => {
+                        const newCards = [...(data.about?.cards || [])];
+                        newCards[i] = { ...card, title: html };
+                        set('about', { ...data.about, cards: newCards });
+                      }}
+                    />
+                  </Field>
+                  <Field label="Texto (Rich Text)">
+                    <RichTextEditor 
+                      value={card.text}
+                      onChange={html => {
+                        const newCards = [...(data.about?.cards || [])];
+                        newCards[i] = { ...card, text: html };
+                        set('about', { ...data.about, cards: newCards });
+                      }}
+                    />
+                  </Field>
+                </div>
+              ))}
+            </div>
+          </div>
+          <SectionStyleEditor
+            value={data.about?.styles}
+            onChange={styles => set('about', { ...data.about, styles })}
+          />
+        </div>
+      </Section>
+
       {/* PRODUTOS EM DESTAQUE */}
       <Section title="Produtos em Destaque (6)" icon={<Package className="h-4 w-4" />}>
         <p className="text-xs text-slate-500 -mt-1">Estes 6 produtos aparecem na grade principal.</p>
@@ -603,6 +672,96 @@ export function AgroForteEditor({ data, onChange }: AgroForteEditorProps) {
           value={data.featuredProductsStyles}
           onChange={styles => set('featuredProductsStyles', styles)}
         />
+      </Section>
+
+      {/* CATEGORIAS (Nossas Soluções) */}
+      <Section title="Categorias (Nossas Soluções)" icon={<Grid className="h-4 w-4" />}>
+        <div className="space-y-4">
+          <Field label="Título da Seção">
+            <Input 
+              value={data.catalogs.categoriesLabel || ''} 
+              onChange={e => set('catalogs', { ...data.catalogs, categoriesLabel: e.target.value })} 
+              className="text-sm"
+            />
+          </Field>
+
+          <div className="pt-4 border-t border-slate-200 dark:border-slate-700">
+            <p className="text-xs font-semibold mb-3">Categorias Principais (3)</p>
+            <div className="space-y-4">
+              {(data.catalogs.categories || []).map((cat, i) => (
+                <div key={i} className="p-3 bg-slate-50 dark:bg-slate-900 rounded-md space-y-3">
+                  <p className="text-[10px] uppercase font-bold text-slate-400">Categoria {i + 1}</p>
+                  <Field label="Imagem de Fundo">
+                    <ImageUpload 
+                      value={cat.img} 
+                      onChange={img => {
+                        const newCats = [...(data.catalogs.categories || [])];
+                        newCats[i] = { ...cat, img };
+                        set('catalogs', { ...data.catalogs, categories: newCats });
+                      }} 
+                    />
+                  </Field>
+                  <div className="flex gap-2">
+                    <div className="flex-1">
+                      <Field label="Cor de Fundo (Classe)">
+                        <select
+                          value={cat.color}
+                          onChange={e => {
+                            const newCats = [...(data.catalogs.categories || [])];
+                            newCats[i] = { ...cat, color: e.target.value };
+                            set('catalogs', { ...data.catalogs, categories: newCats });
+                          }}
+                          className="w-full h-8 px-2 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm"
+                        >
+                          <option value="green">Verde</option>
+                          <option value="purple">Roxo</option>
+                          <option value="brown">Marrom</option>
+                        </select>
+                      </Field>
+                    </div>
+                    <div className="flex-1">
+                      <Field label="Ícone (Lucide)">
+                        <Input 
+                          value={cat.icon} 
+                          onChange={e => {
+                            const newCats = [...(data.catalogs.categories || [])];
+                            newCats[i] = { ...cat, icon: e.target.value };
+                            set('catalogs', { ...data.catalogs, categories: newCats });
+                          }} 
+                          className="h-8 text-sm"
+                        />
+                      </Field>
+                    </div>
+                  </div>
+                  <Field label="Título (Rich Text)">
+                    <RichTextEditor 
+                      value={cat.title}
+                      onChange={html => {
+                        const newCats = [...(data.catalogs.categories || [])];
+                        newCats[i] = { ...cat, title: html };
+                        set('catalogs', { ...data.catalogs, categories: newCats });
+                      }}
+                    />
+                  </Field>
+                  <Field label="Descrição (Rich Text)">
+                    <RichTextEditor 
+                      value={cat.desc}
+                      onChange={html => {
+                        const newCats = [...(data.catalogs.categories || [])];
+                        newCats[i] = { ...cat, desc: html };
+                        set('catalogs', { ...data.catalogs, categories: newCats });
+                      }}
+                    />
+                  </Field>
+                </div>
+              ))}
+            </div>
+          </div>
+          <SectionStyleEditor
+            value={data.catalogs.styles}
+            onChange={styles => set('catalogs', { ...data.catalogs, styles })}
+          />
+        </div>
       </Section>
 
       {/* CATALOGO INSUMOS */}
