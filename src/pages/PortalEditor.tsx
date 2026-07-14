@@ -30,7 +30,8 @@ import {
     Settings,
     Maximize,
     AlignCenter,
-    StretchHorizontal
+    StretchHorizontal,
+    AlignLeft
 } from "lucide-react";
 import {
   Popover,
