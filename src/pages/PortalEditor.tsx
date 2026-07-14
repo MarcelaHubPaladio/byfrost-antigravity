@@ -872,6 +872,19 @@ export default function PortalEditor() {
                                         previewMode={previewMode}
                                         active={activeSettingsTarget?.id === id}
                                         onSettingsClick={() => setActiveSettingsTarget({ type: 'fixed_section', id })}
+                                        onRemove={() => {
+                                            if (confirm('Tem certeza que deseja remover esta seção?')) {
+                                                setAgroforteData(prev => {
+                                                    if (!prev) return prev;
+                                                    const currentOrder = prev.layoutOrder || layoutOrder;
+                                                    return {
+                                                        ...prev,
+                                                        layoutOrder: currentOrder.filter(item => item !== id)
+                                                    };
+                                                });
+                                                if (activeSettingsTarget?.id === id) setActiveSettingsTarget(null);
+                                            }
+                                        }}
                                     >
                                         <AgroForteRenderer data={agroforteData!} sectionToRender={id} editMode={true} onSelectElement={(elId) => setActiveSettingsTarget({ type: 'fixed_section', id: elId })} />
                                     </SortableFixedSectionItem>
@@ -917,13 +930,6 @@ export default function PortalEditor() {
                                 </div>
                             </PopoverContent>
                         </Popover>
-                        
-                        <button 
-                            className="h-12 w-12 rounded-full bg-slate-500 text-white flex items-center justify-center shadow hover:opacity-90 transition-opacity"
-                            title="Adicionar template"
-                        >
-                            <Folder className="h-5 w-5 fill-current" />
-                        </button>
                     </div>
                     <p className="text-sm text-slate-400 italic mt-3">Solte o widget aqui</p>
                 </div>
@@ -1007,7 +1013,7 @@ export default function PortalEditor() {
                                         return (
                                             <div className="space-y-4">
                                                 {activeBlock ? (
-                                                    <BlockPropertiesPanel 
+                                                    <SectionPropertiesPanel 
                                                         block={activeBlock} 
                                                         onChange={(updates) => updateBlock(activeSettingsTarget.id, activeSettingsTarget.blockId!, updates)}
                                                     />
@@ -1150,7 +1156,7 @@ export default function PortalEditor() {
                                     return (
                                         <div className="space-y-4">
                                             {activeBlock ? (
-                                                <BlockPropertiesPanel 
+                                                <SectionPropertiesPanel 
                                                     block={activeBlock} 
                                                     onChange={(updates) => updateBlock(activeSettingsTarget.id, activeSettingsTarget.blockId!, updates)}
                                                 />
@@ -1329,7 +1335,7 @@ function DraggableBlockButton({ icon, label, type, active, onClick }: { icon: Re
 }
 
 
-function SortableFixedSectionItem({ id, children, previewMode, active, onSettingsClick }: { id: string, children: React.ReactNode, previewMode: string, active?: boolean, onSettingsClick: () => void }) {
+function SortableFixedSectionItem({ id, children, previewMode, active, onSettingsClick, onRemove }: { id: string, children: React.ReactNode, previewMode: string, active?: boolean, onSettingsClick: () => void, onRemove?: () => void }) {
     const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
 
     const style = {
@@ -1348,6 +1354,11 @@ function SortableFixedSectionItem({ id, children, previewMode, active, onSetting
                 <button onClick={(e) => { e.stopPropagation(); onSettingsClick(); }} className="p-1.5 px-3 hover:bg-blue-600 transition-colors cursor-pointer" title="Configurações">
                     <Settings className="h-4 w-4" />
                 </button>
+                {onRemove && (
+                    <button onClick={(e) => { e.stopPropagation(); onRemove(); }} className="p-1.5 px-3 hover:bg-red-500 transition-colors cursor-pointer text-white" title="Remover">
+                        <Trash2 className="h-4 w-4" />
+                    </button>
+                )}
                 <div 
                     {...attributes} 
                     {...listeners} 
@@ -1531,12 +1542,12 @@ function SortableBlockItem({ block, sectionId, previewMode, isNested, onUpdate, 
                             previewMode={previewMode}
                             isNested={true}
                             onUpdate={(innerUpdates: any) => {
-                                const newBlocks = block.content.blocks.map((b: any) => b.id === innerBlock.id ? { ...b, ...innerUpdates } : b);
-                                onUpdate({ content: { ...block.content, blocks: newBlocks } });
+                                const newBlocks = (block.blocks || []).map((b: any) => b.id === innerBlock.id ? { ...b, ...innerUpdates } : b);
+                                onUpdate({ blocks: newBlocks });
                             }}
                             onRemove={() => {
-                                const newBlocks = block.content.blocks.filter((b: any) => b.id !== innerBlock.id);
-                                onUpdate({ content: { ...block.content, blocks: newBlocks } });
+                                const newBlocks = (block.blocks || []).filter((b: any) => b.id !== innerBlock.id);
+                                onUpdate({ blocks: newBlocks });
                             }}
                             onSettingsClick={() => onSettingsClick(innerBlock.id)}
                         />

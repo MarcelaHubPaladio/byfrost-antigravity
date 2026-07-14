@@ -85,11 +85,35 @@ export function PortalBlockRenderer({ block, isPremium, isMobile, onRenderInnerB
 
     return (
         <div className={cn(
-            "duration-1000 fill-mode-forwards w-full",
+            "relative duration-1000 fill-mode-forwards w-full",
             heightClass,
             alignClass,
-            animationClass
-        )}>
+            animationClass,
+            effectiveSettings.htmlTag || ''
+        )}
+        style={{
+            backgroundColor: effectiveSettings.style?.background?.color || effectiveSettings.backgroundColor || 'transparent',
+            backgroundImage: effectiveSettings.style?.background?.image ? `url(${effectiveSettings.style.background.image})` : effectiveSettings.backgroundImage ? `url(${effectiveSettings.backgroundImage})` : 'none',
+            backgroundSize: effectiveSettings.style?.background?.size || effectiveSettings.backgroundSize || 'cover',
+            backgroundPosition: effectiveSettings.style?.background?.position || 'center',
+            backgroundRepeat: effectiveSettings.style?.background?.repeat || 'no-repeat',
+            backgroundAttachment: effectiveSettings.style?.background?.attachment || 'scroll',
+            borderStyle: effectiveSettings.style?.border?.type && effectiveSettings.style?.border?.type !== 'none' ? effectiveSettings.style.border.type : undefined,
+            borderWidth: effectiveSettings.style?.border?.width ? `${effectiveSettings.style.border.width}px` : undefined,
+            borderColor: effectiveSettings.style?.border?.color,
+            borderRadius: effectiveSettings.style?.border?.radius ? `${effectiveSettings.style.border.radius}px` : undefined,
+            paddingTop: effectiveSettings.paddingY ? `${effectiveSettings.paddingY}px` : undefined,
+            paddingBottom: effectiveSettings.paddingY ? `${effectiveSettings.paddingY}px` : undefined,
+            paddingLeft: isMobile ? '16px' : effectiveSettings.paddingX ? `${effectiveSettings.paddingX}px` : undefined,
+            paddingRight: isMobile ? '16px' : effectiveSettings.paddingX ? `${effectiveSettings.paddingX}px` : undefined,
+            zIndex: effectiveSettings.style?.advanced?.zIndex ? Number(effectiveSettings.style.advanced.zIndex) : undefined,
+        }}
+        id={effectiveSettings.style?.advanced?.cssId || undefined}
+        >
+            {(effectiveSettings.style?.background?.overlay?.color || effectiveSettings.backgroundOverlay) && (
+                <div className="absolute inset-0 z-0" style={{ backgroundColor: effectiveSettings.style?.background?.overlay?.color || effectiveSettings.backgroundOverlay }}></div>
+            )}
+            <div className="relative z-10 w-full h-full">
             {block.type === 'slider' && <PremiumSlider items={block.content?.items || []} />}
             
             {block.type === 'info-cards' && <InfoCards items={block.content?.items || []} isMobile={isMobile} />}
@@ -305,6 +329,7 @@ export function PortalBlockRenderer({ block, isPremium, isMobile, onRenderInnerB
                     </div>
                 </div>
             )}
+            </div>
         </div>
     );
 }

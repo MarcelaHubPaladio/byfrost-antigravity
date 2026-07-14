@@ -276,21 +276,8 @@ export function AgroForteEditor({ data, onChange, activeElementId, onBack, rende
   const isContextual = !!activeElementId;
   const isHidden = (id: string) => isContextual && activeElementId !== id;
 
-  return (
-    <div className="space-y-3">
-      {/* Header banner */}
-      {!isContextual && (
-        <div className="flex items-center gap-2 px-1 mb-4">
-          <div className="w-7 h-7 rounded-lg bg-green-600 flex items-center justify-center">
-            <Leaf className="h-4 w-4 text-white" />
-          </div>
-          <div>
-            <p className="text-sm font-bold leading-none">AgroForte</p>
-            <p className="text-[10px] text-slate-400 mt-0.5">Editor visual</p>
-          </div>
-        </div>
-      )}
-
+  const templateSections = (
+    <>
       {/* IDENTIDADE */}
       <Section 
         title="Identidade & Navegação" 
@@ -298,7 +285,7 @@ export function AgroForteEditor({ data, onChange, activeElementId, onBack, rende
         hidden={isHidden('nav')}
         forceOpen={activeElementId === 'nav'}
         onBack={onBack}
-        defaultOpen
+        defaultOpen={false}
       >
         <ImageUpload
           value={data.brand.logoImage || ''}
@@ -949,17 +936,37 @@ export function AgroForteEditor({ data, onChange, activeElementId, onBack, rende
           />
         </Field>
       </Section>
+    </>
+  );
 
-      {/* BLOCOS CUSTOMIZADOS (Criação Livre) */}
-      <Section 
-        title="Criação (Seções Livres)" 
-        icon={<Plus className="h-4 w-4" />}
-        hidden={isHidden('custom_blocks')}
-        forceOpen={activeElementId === 'custom_blocks'}
-        onBack={onBack}
-      >
-        {renderCustomBlocksPanel && renderCustomBlocksPanel()}
-      </Section>
+  return (
+    <div className="space-y-3">
+      {/* Header banner */}
+      {!isContextual && (
+        <div className="flex items-center gap-2 px-1 mb-4">
+          <div className="w-7 h-7 rounded-lg bg-green-600 flex items-center justify-center">
+            <Leaf className="h-4 w-4 text-white" />
+          </div>
+          <div>
+            <p className="text-sm font-bold leading-none">AgroForte</p>
+            <p className="text-[10px] text-slate-400 mt-0.5">Editor visual</p>
+          </div>
+        </div>
+      )}
+
+      {renderCustomBlocksPanel && !isContextual && (
+        <Section title="Componentes" icon={<Grid className="h-4 w-4" />} defaultOpen={true}>
+            {renderCustomBlocksPanel()}
+        </Section>
+      )}
+
+      {!isContextual ? (
+        <Section title="Template AgroForte" icon={<Leaf className="h-4 w-4" />} defaultOpen={false}>
+            <div className="space-y-3">
+                {templateSections}
+            </div>
+        </Section>
+      ) : templateSections}
     </div>
   );
 }

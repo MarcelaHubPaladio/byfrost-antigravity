@@ -8,18 +8,21 @@ import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { ImageUpload } from '@/components/portal/ImageUpload';
+import { BlockPropertiesPanel } from './BlockPropertiesPanel';
 import { 
-    LayoutTemplate, Moon, Settings, 
+    LayoutTemplate, Moon, Settings, FileText,
     Paintbrush, Image as ImageIcon, Video, Square, Circle, Triangle,
     AlignLeft, AlignCenter, AlignRight, AlignJustify,
     Link as LinkIcon, Globe, Monitor
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-export function SectionPropertiesPanel({ section, onChange }: { section: any, onChange: (updates: any) => void }) {
-    if (!section) return null;
-    const settings = section.settings || {};
-    const styleSettings = section.settings?.style || {};
+export function SectionPropertiesPanel({ section, block, onChange }: { section?: any, block?: any, onChange: (updates: any) => void }) {
+    const element = section || block;
+    if (!element) return null;
+    
+    const settings = element.settings || {};
+    const styleSettings = element.settings?.style || {};
 
     const updateSettings = (updates: any) => {
         onChange({ ...settings, ...updates });
@@ -38,9 +41,17 @@ export function SectionPropertiesPanel({ section, onChange }: { section: any, on
         });
     };
 
+    const isBlock = !!block;
+
     return (
-        <Tabs defaultValue="estilo" className="w-full -mx-4 -mt-4 w-[calc(100%+2rem)]">
-            <TabsList className="w-full grid grid-cols-3 h-14 bg-slate-100 rounded-t-xl rounded-b-none p-1 border-b border-slate-200">
+        <Tabs defaultValue={isBlock ? "conteudo" : "layout"} className="w-full -mx-4 -mt-4 w-[calc(100%+2rem)]">
+            <TabsList className={cn("w-full grid h-14 bg-slate-100 rounded-t-xl rounded-b-none p-1 border-b border-slate-200", isBlock ? "grid-cols-4" : "grid-cols-3")}>
+                {isBlock && (
+                    <TabsTrigger value="conteudo" className="flex flex-col items-center gap-1 data-[state=active]:bg-white data-[state=active]:text-slate-900 text-slate-500 data-[state=active]:shadow-sm">
+                        <FileText className="h-4 w-4" />
+                        <span className="text-[9px] uppercase font-bold tracking-wider">Conteúdo</span>
+                    </TabsTrigger>
+                )}
                 <TabsTrigger value="layout" className="flex flex-col items-center gap-1 data-[state=active]:bg-white data-[state=active]:text-slate-900 text-slate-500 data-[state=active]:shadow-sm">
                     <LayoutTemplate className="h-4 w-4" />
                     <span className="text-[9px] uppercase font-bold tracking-wider">Layout</span>
@@ -55,6 +66,11 @@ export function SectionPropertiesPanel({ section, onChange }: { section: any, on
                 </TabsTrigger>
             </TabsList>
             <div className="bg-white p-0 text-slate-800 min-h-[500px]">
+                {isBlock && (
+                    <TabsContent value="conteudo" className="mt-0 p-4">
+                        <BlockPropertiesPanel block={block} onChange={(updates) => onChange({ ...settings, ...updates })} />
+                    </TabsContent>
+                )}
                 <TabsContent value="layout" className="mt-0">
                     <Accordion type="multiple" defaultValue={["layout-main"]} className="w-full">
                         {/* LAYOUT MAIN */}
