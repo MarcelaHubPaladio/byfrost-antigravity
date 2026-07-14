@@ -9,6 +9,9 @@ import { Slider } from '@/components/ui/slider';
 import { AlignLeft, AlignCenter, AlignRight, AlignJustify, Trash2, Plus } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ImageUpload } from './ImageUpload';
+import { IconPicker } from '@/components/media-kit/IconPicker';
+import { DynamicIcon } from './DynamicIcon';
+import { Button } from '@/components/ui/button';
 
 export function BlockPropertiesPanel({ block, onChange }: { block: any, onChange: (updates: any) => void }) {
     if (!block) return null;
@@ -463,59 +466,135 @@ export function BlockPropertiesPanel({ block, onChange }: { block: any, onChange
     }
 
     if (block.type === 'icon') {
-        return (
-            <div className="space-y-4">
-                <div className="space-y-2">
-                    <Label className="text-xs">Ícone</Label>
-                    <ImageUpload 
-                        value={content.url || ''}
-                        onChange={v => updateContent({ url: v })}
-                    />
-                </div>
-                <div className="space-y-2">
-                    <Label className="text-xs">Visualizar</Label>
-                    <Select value={content.view || 'default'} onValueChange={v => updateContent({ view: v })}>
-                        <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="default">Padrão</SelectItem>
-                            <SelectItem value="stacked">Empilhado</SelectItem>
-                            <SelectItem value="framed">Emoldurado</SelectItem>
-                        </SelectContent>
-                    </Select>
-                </div>
-                <div className="space-y-2">
-                    <Label className="text-xs">Link</Label>
-                    <Input 
-                        value={content.link || ''}
-                        onChange={e => updateContent({ link: e.target.value })}
-                        className="text-sm h-8"
-                        placeholder="https://"
-                    />
-                </div>
-                <div className="space-y-2">
-                    <Label className="text-xs">Alinhamento</Label>
-                    <div className="flex border border-slate-200 rounded-md overflow-hidden bg-slate-100/50 p-1 gap-1">
-                        {[{ value: 'left', icon: AlignLeft }, { value: 'center', icon: AlignCenter }, { value: 'right', icon: AlignRight }].map(({ value, icon: Icon }) => (
-                            <button
-                                key={value}
-                                onClick={() => updateContent({ alignment: value })}
-                                className={cn(
-                                    "flex-1 h-7 flex items-center justify-center rounded transition-colors",
-                                    content.alignment === value ? "bg-white shadow-sm border border-slate-200 text-slate-800" : "text-slate-500 hover:text-slate-700 hover:bg-slate-200/50"
-                                )}
-                            >
-                                <Icon className="h-3.5 w-3.5" />
-                            </button>
-                        ))}
-                    </div>
-                </div>
-            </div>
-        );
+        return <IconBlockEditor content={content} updateContent={updateContent} />;
     }
 
     return (
         <div className="p-4 bg-slate-50 border border-slate-100 rounded-lg text-sm text-slate-500">
             Propriedades específicas para o bloco <strong>{block.type}</strong> serão exibidas aqui.
+        </div>
+    );
+}
+
+
+function IconBlockEditor({ content, updateContent }: { content: any, updateContent: (u: any) => void }) {
+    const [isIconPickerOpen, setIsIconPickerOpen] = React.useState(false);
+
+    return (
+        <div className="space-y-4">
+            <div className="space-y-2">
+                <Label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Origem do Ícone</Label>
+                <Select value={content.source || 'upload'} onValueChange={v => updateContent({ source: v })}>
+                    <SelectTrigger className="h-8 text-xs bg-white"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="upload">Upload de Imagem</SelectItem>
+                        <SelectItem value="system">Sistema (Ícones Prontos)</SelectItem>
+                    </SelectContent>
+                </Select>
+            </div>
+
+            {content.source === 'system' ? (
+                <div className="space-y-4 border-t border-slate-100 pt-4">
+                    <div className="space-y-2">
+                        <Label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Ícone do Sistema</Label>
+                        <div className="flex gap-2 items-center">
+                            <div className="h-10 w-10 bg-slate-100 rounded flex items-center justify-center text-slate-500">
+                                {content.iconName ? (
+                                    <DynamicIcon name={content.iconName} lib={content.iconLib} className="w-5 h-5" />
+                                ) : (
+                                    <span className="text-[10px]">Nenhum</span>
+                                )}
+                            </div>
+                            <Button variant="outline" className="flex-1 text-xs h-10 bg-white" onClick={() => setIsIconPickerOpen(true)}>
+                                Escolher Ícone
+                            </Button>
+                        </div>
+                    </div>
+                    
+                    <div className="space-y-2">
+                        <Label className="text-xs font-bold text-slate-500 uppercase tracking-wider flex justify-between">
+                            <span>Tamanho</span>
+                            <span>{content.iconSize || 48}px</span>
+                        </Label>
+                        <Slider 
+                            value={[content.iconSize || 48]} 
+                            min={16} max={200} step={4}
+                            onValueChange={v => updateContent({ iconSize: v[0] })}
+                        />
+                    </div>
+                    
+                    <div className="space-y-2">
+                        <Label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Cor do Ícone</Label>
+                        <div className="flex gap-2">
+                            <Input 
+                                type="color" 
+                                value={content.iconColor || '#000000'}
+                                onChange={e => updateContent({ iconColor: e.target.value })}
+                                className="w-10 h-10 p-1 bg-white cursor-pointer"
+                            />
+                            <Input 
+                                type="text" 
+                                value={content.iconColor || '#000000'}
+                                onChange={e => updateContent({ iconColor: e.target.value })}
+                                className="flex-1 h-10 text-xs bg-white"
+                            />
+                        </div>
+                    </div>
+                </div>
+            ) : (
+                <div className="space-y-2 border-t border-slate-100 pt-4">
+                    <Label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Imagem</Label>
+                    <ImageUpload 
+                        value={content.url || ''}
+                        onChange={v => updateContent({ url: v })}
+                    />
+                    <div className="space-y-2 mt-4">
+                        <Label className="text-xs font-bold text-slate-500 uppercase tracking-wider flex justify-between">
+                            <span>Tamanho Máximo</span>
+                            <span>{content.iconSize || 48}px</span>
+                        </Label>
+                        <Slider 
+                            value={[content.iconSize || 48]} 
+                            min={16} max={300} step={4}
+                            onValueChange={v => updateContent({ iconSize: v[0] })}
+                        />
+                    </div>
+                </div>
+            )}
+            
+            <IconPicker
+                open={isIconPickerOpen}
+                onOpenChange={setIsIconPickerOpen}
+                onSelect={(name, lib) => updateContent({ iconName: name, iconLib: lib })}
+            />
+
+            <div className="space-y-2 border-t border-slate-100 pt-4">
+                <Label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Link (Opcional)</Label>
+                <Input 
+                    value={content.link || ''}
+                    onChange={e => updateContent({ link: e.target.value })}
+                    className="text-sm h-10 bg-white"
+                    placeholder="https://"
+                />
+            </div>
+
+            <div className="space-y-2 border-t border-slate-100 pt-4">
+                <Label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Alinhamento</Label>
+                <div className="flex border border-slate-200 rounded-lg overflow-hidden bg-white p-1 gap-1">
+                    {[{ value: 'left', icon: AlignLeft }, { value: 'center', icon: AlignCenter }, { value: 'right', icon: AlignRight }].map(({ value, icon: Icon }) => (
+                        <button
+                            key={value}
+                            onClick={() => updateContent({ alignment: value })}
+                            className={cn(
+                                "flex-1 h-8 flex items-center justify-center rounded transition-colors",
+                                content.alignment === value ? "bg-slate-100 shadow-sm border border-slate-200 text-slate-800" : "text-slate-500 hover:text-slate-700 hover:bg-slate-50"
+                            )}
+                        >
+                            <Icon className="h-4 w-4" />
+                        </button>
+                    ))}
+                </div>
+            </div>
         </div>
     );
 }

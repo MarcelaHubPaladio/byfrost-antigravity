@@ -335,12 +335,12 @@ export function PortalBlockRenderer({ block, isPremium, isMobile, onRenderInnerB
                     block.content?.alignment === 'center' ? 'justify-center' : 
                     block.content?.alignment === 'right' ? 'justify-end' : 'justify-start'
                 )}>
-                    {block.content?.source === 'upload' && block.content?.url ? (
-                        <img src={block.content.url} alt="Icon" className="w-12 h-12 object-contain" />
+                    {block.content?.link ? (
+                        <a href={block.content.link} className="block transition-transform hover:scale-105">
+                            {renderIconInner(block.content)}
+                        </a>
                     ) : (
-                        <div className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center text-slate-400 text-2xl">
-                            ★
-                        </div>
+                        renderIconInner(block.content)
                     )}
                 </div>
             )}
