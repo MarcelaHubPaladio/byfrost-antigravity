@@ -853,6 +853,7 @@ export default function PortalEditor() {
                                     editMode={true}
                                     onSelectElement={(id) => setActiveElementId(id)}
                                     customSectionsContent={renderCustomSections}
+                                    sectionToRender="root"
                                 />
                             </div>
                         </div>

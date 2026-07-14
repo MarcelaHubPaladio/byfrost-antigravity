@@ -488,19 +488,13 @@ export function AgroForteRenderer({ data, editMode, onSelectElement, customSecti
         </div>
       </EditableBlock>
 
-      {/* CUSTOM SECTIONS (Generic Blocks) */}
-      {customSectionsContent && (
-        <div className="afr-custom-sections-wrapper" style={{ padding: '0', margin: '0' }}>
-          {customSectionsContent}
-        </div>
-      )}
 
 
         </>
       )}
       
       
-      {(!sectionToRender || sectionToRender === 'custom') && (
+      {(!sectionToRender || sectionToRender === 'custom' || sectionToRender === 'root') && (
         <>{customSectionsContent}</>
       )}
       {(!sectionToRender || sectionToRender === 'footer') && (
