@@ -138,6 +138,7 @@ export default function PortalEditor() {
     const [agroforteData, setAgroforteData] = useState<AgroForteData | null>(null);
     const [previewMode, setPreviewMode] = useState<'desktop' | 'mobile'>('desktop');
     const [activeSectionId, setActiveSectionId] = useState<string | null>(null);
+    const [activeElementId, setActiveElementId] = useState<string | null>(null);
     const [activeId, setActiveId] = useState<string | null>(null);
     const [activeData, setActiveData] = useState<any>(null);
 
@@ -634,6 +635,8 @@ export default function PortalEditor() {
                         <AgroForteEditor
                             data={agroforteData}
                             onChange={(d) => setAgroforteData(d)}
+                            activeElementId={activeElementId}
+                            onBack={() => setActiveElementId(null)}
                         />
                     </div>
                     <div className="p-4 border-t border-slate-100 dark:border-slate-800 space-y-2">
@@ -688,7 +691,11 @@ export default function PortalEditor() {
                             previewMode === 'desktop' ? "w-full max-w-[95%] rounded-[32px]" : "w-[375px] rounded-[48px] border-[10px] border-slate-800"
                         )}>
                             <div id="editor-stage">
-                                <AgroForteRenderer data={agroforteData} />
+                                <AgroForteRenderer 
+                                    data={agroforteData} 
+                                    editMode={true}
+                                    onSelectElement={(id) => setActiveElementId(id)}
+                                />
                             </div>
                         </div>
                     </div>

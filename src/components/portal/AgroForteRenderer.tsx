@@ -1,6 +1,7 @@
 import type { AgroForteData } from './agroforte-types';
 import { useState, useEffect, useRef } from 'react';
 import { Shield, CheckCircle, Leaf, Star, Heart, Award, Check, Users, Target, Sprout, Cpu, Tractor, Package } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 const ICON_MAP: Record<string, React.ElementType> = {
   Shield, CheckCircle, Leaf, Star, Heart, Award, Check, Users, Target, Sprout, Cpu, Tractor, Package
@@ -8,6 +9,8 @@ const ICON_MAP: Record<string, React.ElementType> = {
 
 interface AgroForteRendererProps {
   data: AgroForteData;
+  editMode?: boolean;
+  onSelectElement?: (id: string) => void;
 }
 
 const AGROFORTE_CSS = `
@@ -129,13 +132,65 @@ const AGROFORTE_CSS = `
     .afr-nav-links{display:none}
     .afr-hero-badge{display:none}
   }
+
+  /* Edit Mode Styles */
+  .afr-editable {
+    position: relative;
+    transition: all 0.2s ease;
+  }
+  .afr-editable:hover {
+    outline: 2px solid #3b82f6; /* Tailwind blue-500 */
+    outline-offset: -2px;
+    cursor: pointer;
+  }
+  .afr-editable-active {
+    outline: 3px solid #3b82f6 !important;
+    outline-offset: -3px;
+    z-index: 40;
+  }
+  .afr-editable-label {
+    position: absolute;
+    top: 0;
+    left: 0;
+    background: #3b82f6;
+    color: white;
+    font-size: 10px;
+    padding: 2px 8px;
+    font-weight: bold;
+    border-bottom-right-radius: 8px;
+    opacity: 0;
+    transition: opacity 0.2s;
+    pointer-events: none;
+    z-index: 50;
+  }
+  .afr-editable:hover > .afr-editable-label,
+  .afr-editable-active > .afr-editable-label {
+    opacity: 1;
+  }
 `;
 
-export function AgroForteRenderer({ data }: AgroForteRendererProps) {
+export function AgroForteRenderer({ data, editMode, onSelectElement }: AgroForteRendererProps) {
   const { brand, hero, featuredProducts, catalogs, footer } = data;
   const [currentSlide, setCurrentSlide] = useState(0);
   const [isScrolled, setIsScrolled] = useState(false);
   const topRef = useRef<HTMLDivElement>(null);
+
+  // Helper for edit mode interactivity
+  const EditableBlock = ({ id, label, children, className = '' }: { id: string, label: string, children: React.ReactNode, className?: string }) => {
+    if (!editMode) return <div className={className}>{children}</div>;
+    return (
+      <div 
+        className={cn("afr-editable", className)} 
+        onClick={(e) => {
+          e.stopPropagation();
+          onSelectElement?.(id);
+        }}
+      >
+        <div className="afr-editable-label">{label}</div>
+        {children}
+      </div>
+    );
+  };
 
   const safeNavLinks = brand.navLinks || [
     { label: 'Início', url: '#' },
@@ -196,7 +251,7 @@ export function AgroForteRenderer({ data }: AgroForteRendererProps) {
       <style dangerouslySetInnerHTML={{ __html: AGROFORTE_CSS }} />
 
       {/* NAV */}
-      <nav className="afr-nav" style={{ backgroundColor: isScrolled ? (brand.navBackgroundScrolled || '#1a3a1f') : (brand.navBackgroundTop || 'transparent') }}>
+      <EditableBlock id="nav" label="Navegação" className="afr-nav" style={{ backgroundColor: isScrolled ? (brand.navBackgroundScrolled || '#1a3a1f') : (brand.navBackgroundTop || 'transparent') }}>
         <div className="afr-logo">
           {brand.logoImage ? (
             <img src={brand.logoImage} alt={brand.name} style={{ height: '36px', width: 'auto', objectFit: 'contain' }} />
@@ -221,10 +276,10 @@ export function AgroForteRenderer({ data }: AgroForteRendererProps) {
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 014.47 11.5a19.79 19.79 0 01-3.07-8.67A2 2 0 013.38 1h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L7.91 8.96a16 16 0 006.07 6.07l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z"/></svg>
           {brand.navCta}
         </a>
-      </nav>
+      </EditableBlock>
 
       {/* HERO */}
-      <section className="afr-hero" id={hero.styles?.id} style={{ ...getStyleProps(hero.styles), paddingTop: undefined, paddingBottom: undefined }}>
+      <EditableBlock id="hero" label="Banner Principal" className="afr-hero" style={{ ...getStyleProps(hero.styles), paddingTop: undefined, paddingBottom: undefined }}>
         {safeBanners.map((banner, i) => {
           const BadgeIcon = ICON_MAP[banner.badgeIcon || 'Shield'] || Shield;
           return (
@@ -266,10 +321,10 @@ export function AgroForteRenderer({ data }: AgroForteRendererProps) {
             ))}
           </div>
         )}
-      </section>
+      </EditableBlock>
 
       {/* CATEGORIAS */}
-      <section className="afr-section-solutions" id={catalogs.styles?.id} style={getStyleProps(catalogs.styles)}>
+      <EditableBlock id="catalogs_categories" label="Categorias" className="afr-section-solutions" style={getStyleProps(catalogs.styles)}>
         <p className="afr-section-label">{catalogs.categoriesLabel || 'NOSSAS SOLUÇÕES PARA CADA ETAPA DO CAMPO'}</p>
         <div className="afr-categories">
           {(catalogs.categories || [
@@ -294,10 +349,10 @@ export function AgroForteRenderer({ data }: AgroForteRendererProps) {
             );
           })}
         </div>
-      </section>
+      </EditableBlock>
 
       {/* PRODUTOS EM DESTAQUE */}
-      <section className="afr-section-products" id={data.featuredProductsStyles?.id} style={getStyleProps(data.featuredProductsStyles)}>
+      <EditableBlock id="featured_products" label="Produtos em Destaque" className="afr-section-products" style={getStyleProps(data.featuredProductsStyles)}>
         <div className="afr-products-header">
           <div>
             <p className="afr-products-label">PRODUTOS EM DESTAQUE</p>
@@ -320,7 +375,7 @@ export function AgroForteRenderer({ data }: AgroForteRendererProps) {
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
           Ver Todos os Produtos
         </button>
-      </section>
+      </EditableBlock>
 
       {/* CATÁLOGOS */}
       {[
@@ -330,7 +385,7 @@ export function AgroForteRenderer({ data }: AgroForteRendererProps) {
       ].map(cat => {
         const catalog = catalogs[cat.key as keyof typeof catalogs] as any;
         return (
-          <div className={`afr-catalog-row ${cat.colorClass}`} key={cat.key} id={catalog.styles?.id} style={getStyleProps(catalog.styles)}>
+          <EditableBlock id={`catalog_${cat.key}`} label={`Catálogo: ${cat.label}`} className={`afr-catalog-row ${cat.colorClass}`} key={cat.key} style={getStyleProps(catalog.styles)}>
             <div className="afr-catalog-info">
               <div className="afr-catalog-info-icon">{cat.icon}</div>
               <h3>{cat.label}</h3>
@@ -338,7 +393,7 @@ export function AgroForteRenderer({ data }: AgroForteRendererProps) {
               <a href="#">Ver Todos <svg viewBox="0 0 24 24" style={{width:14,height:14,stroke:'#fff',fill:'none',strokeWidth:2.5,display:'inline',marginLeft:4}}><path d="M5 12h14M12 5l7 7-7 7"/></svg></a>
             </div>
             <div className="afr-catalog-products">
-              {catalog.products.map((p, i) => (
+              {catalog.products.map((p: any, i: number) => (
                 <div className="afr-catalog-product" key={i}>
                   <img src={p.image} alt={p.name} />
                   <div className="afr-catalog-product-info">
@@ -348,12 +403,12 @@ export function AgroForteRenderer({ data }: AgroForteRendererProps) {
                 </div>
               ))}
             </div>
-          </div>
+          </EditableBlock>
         );
       })}
 
       {/* POR QUE AGROFORTE */}
-      <section className="afr-section-why" id={data.about?.styles?.id || 'sobre'} style={getStyleProps(data.about?.styles)}>
+      <EditableBlock id="about" label="Sobre Nós" className="afr-section-why" style={getStyleProps(data.about?.styles)}>
         <p className="afr-why-label">{data.about?.label || 'Por que escolher AgroForte?'}</p>
         <div className="afr-why-title" dangerouslySetInnerHTML={{ __html: data.about?.headline || 'Mais que produtos, entregamos parceria, confiança e soluções que impulsionam o campo.' }} />
         <div className="afr-why-grid">
@@ -373,10 +428,10 @@ export function AgroForteRenderer({ data }: AgroForteRendererProps) {
             )
           })}
         </div>
-      </section>
+      </EditableBlock>
 
       {/* CTA */}
-      <section className="afr-section-cta" id="contato">
+      <EditableBlock id="cta" label="Contato / CTA" className="afr-section-cta" style={{}}>
         <div className="afr-cta-inner">
           <h2 className="afr-cta-title">Vamos juntos <em>fortalecer o agronegócio!</em></h2>
           <div className="afr-cta-form">
@@ -389,30 +444,39 @@ export function AgroForteRenderer({ data }: AgroForteRendererProps) {
             </button>
           </div>
         </div>
-      </section>
+      </EditableBlock>
 
       {/* FOOTER */}
-      <footer className="afr-footer">
+      <EditableBlock id="footer" label="Rodapé" className="afr-footer" style={{}}>
         <div className="afr-footer-top">
           <div>
             <div className="afr-footer-brand">{brandFirst}<em>{brandSecond}</em></div>
-            <p className="afr-footer-tag">{brand.tagline}</p>
+            <div className="afr-footer-tag">{brand.tagline}</div>
             <div className="afr-footer-social">
-              <a href="#"><svg viewBox="0 0 24 24"><path d="M18 2h-3a5 5 0 00-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 011-1h3z"/></svg></a>
-              <a href="#"><svg viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="20" rx="5" ry="5"/><path d="M16 11.37A4 4 0 1112.63 8 4 4 0 0116 11.37zM17.5 6.5h.01"/></svg></a>
-              <a href="#"><svg viewBox="0 0 24 24"><path d="M22.54 6.42a2.78 2.78 0 00-1.95-1.96C18.88 4 12 4 12 4s-6.88 0-8.59.46a2.78 2.78 0 00-1.95 1.96A29 29 0 001 12a29 29 0 00.46 5.58A2.78 2.78 0 003.41 19.54C5.12 20 12 20 12 20s6.88 0 8.59-.46a2.78 2.78 0 001.95-1.96A29 29 0 0023 12a29 29 0 00-.46-5.58zM9.75 15.02V8.98L15.5 12l-5.75 3.02z"/></svg></a>
+              {brand.socialLinks?.map((s, i) => {
+                const Icon = ICON_MAP[s.platform] || Shield;
+                return <a key={i} href={s.url}><Icon /></a>;
+              })}
             </div>
           </div>
           <div className="afr-footer-col">
-            <h4>NAVEGAÇÃO</h4>
-            <ul>{safeNavLinks.map((link, idx) => <li key={idx}><a href={link.url}>{link.label}</a></li>)}</ul>
+            <h4>Navegação</h4>
+            <ul>
+              {safeNavLinks.map((l, i) => (
+                <li key={i}><a href={l.url}>{l.label}</a></li>
+              ))}
+            </ul>
           </div>
           <div className="afr-footer-col">
-            <h4>PRODUTOS</h4>
-            <ul>{['Insumos Agrícolas', 'Tecnologia de Aplicação', 'Plantio e Preparo de Solo'].map(l => <li key={l}><a href="#">{l}</a></li>)}</ul>
+            <h4>Catálogos</h4>
+            <ul>
+              <li><a href="#insumos">Insumos Agrícolas</a></li>
+              <li><a href="#tecnologia">Tecnologia</a></li>
+              <li><a href="#plantio">Plantio</a></li>
+            </ul>
           </div>
           <div className="afr-footer-col">
-            <h4>CONTATO</h4>
+            <h4>Contato</h4>
             <div className="afr-contact-row">
               <svg viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 014.47 11.5a19.79 19.79 0 01-3.07-8.67A2 2 0 013.38 1h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L7.91 8.96a16 16 0 006.07 6.07l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z"/></svg>
               {footer.phone}
@@ -421,7 +485,7 @@ export function AgroForteRenderer({ data }: AgroForteRendererProps) {
               <svg viewBox="0 0 24 24"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
               {footer.email}
             </div>
-            <div className="afr-contact-row">
+            <div className="afr-contact-row" style={{alignItems:'flex-start'}}>
               <svg viewBox="0 0 24 24"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>
               {footer.address}
             </div>
@@ -431,7 +495,7 @@ export function AgroForteRenderer({ data }: AgroForteRendererProps) {
           <p>{footer.copyright}</p>
           <p>Desenvolvido com Byfrost</p>
         </div>
-      </footer>
+      </EditableBlock>
     </div>
   );
 }

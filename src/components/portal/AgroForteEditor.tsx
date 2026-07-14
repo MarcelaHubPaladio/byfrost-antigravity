@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ChevronDown, ChevronRight, Leaf, Image as ImageIcon, Package, Sprout, Cpu, AlignLeft, Phone, Plus, Trash2, Copy, Info, Grid } from 'lucide-react';
+import { ChevronDown, ChevronRight, ChevronLeft, Leaf, Image as ImageIcon, Package, Sprout, Cpu, AlignLeft, Phone, Plus, Trash2, Copy, Info, Grid } from 'lucide-react';
 import { RichTextEditor } from '@/components/RichTextEditor';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -10,35 +10,53 @@ import { cn } from '@/lib/utils';
 interface AgroForteEditorProps {
   data: AgroForteData;
   onChange: (data: AgroForteData) => void;
+  activeElementId?: string | null;
+  onBack?: () => void;
 }
 
 // ────────────────────────────────────────────
 // Accordion section wrapper
 // ────────────────────────────────────────────
-function Section({ title, icon, children, defaultOpen = false }: {
+function Section({ title, icon, children, defaultOpen = false, hidden = false, forceOpen = false, onBack }: {
   title: string;
   icon: React.ReactNode;
   children: React.ReactNode;
   defaultOpen?: boolean;
+  hidden?: boolean;
+  forceOpen?: boolean;
+  onBack?: () => void;
 }) {
   const [open, setOpen] = useState(defaultOpen);
+  if (hidden) return null;
+  
+  const isOpen = forceOpen || open;
+  
   return (
-    <div className="border border-slate-100 dark:border-slate-800 rounded-xl overflow-hidden">
-      <button
-        className="w-full flex items-center gap-3 p-4 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800/60 transition-colors text-left"
-        onClick={() => setOpen(!open)}
+    <div className={cn(forceOpen ? "" : "border border-slate-100 dark:border-slate-800 rounded-xl overflow-hidden")}>
+      <div
+        className={cn("w-full flex items-center gap-3 bg-white dark:bg-slate-900 text-left", forceOpen ? "pb-4" : "p-4 hover:bg-slate-50 dark:hover:bg-slate-800/60 transition-colors cursor-pointer")}
+        onClick={() => !forceOpen && setOpen(!open)}
       >
+        {forceOpen && onBack && (
+          <button 
+            onClick={(e) => { e.stopPropagation(); onBack(); }}
+            className="w-8 h-8 flex items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors mr-1"
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </button>
+        )}
         <span className="w-8 h-8 rounded-lg bg-green-50 dark:bg-green-900/20 flex items-center justify-center text-green-700 dark:text-green-400 flex-shrink-0">
           {icon}
         </span>
-        <span className="font-semibold text-sm flex-1">{title}</span>
-        {open
-          ? <ChevronDown className="h-4 w-4 text-slate-400" />
-          : <ChevronRight className="h-4 w-4 text-slate-400" />
-        }
-      </button>
-      {open && (
-        <div className="p-4 bg-slate-50 dark:bg-slate-900/40 space-y-4 border-t border-slate-100 dark:border-slate-800">
+        <span className={cn("font-semibold flex-1", forceOpen ? "text-lg" : "text-sm")}>{title}</span>
+        {!forceOpen && (
+          isOpen
+            ? <ChevronDown className="h-4 w-4 text-slate-400" />
+            : <ChevronRight className="h-4 w-4 text-slate-400" />
+        )}
+      </div>
+      {isOpen && (
+        <div className={cn("bg-slate-50 dark:bg-slate-900/40 space-y-4", forceOpen ? "" : "p-4 border-t border-slate-100 dark:border-slate-800")}>
           {children}
         </div>
       )}
@@ -187,7 +205,7 @@ function ProductEditor({ product, onChange, compact = false }: {
 // ────────────────────────────────────────────
 // Main Editor component
 // ────────────────────────────────────────────
-export function AgroForteEditor({ data, onChange }: AgroForteEditorProps) {
+export function AgroForteEditor({ data, onChange, activeElementId, onBack }: AgroForteEditorProps) {
   const safeNavLinks = data.brand.navLinks || [
     { label: 'Início', url: '#' },
     { label: 'Produtos', url: '#produtos' },
@@ -250,21 +268,33 @@ export function AgroForteEditor({ data, onChange }: AgroForteEditorProps) {
     });
   };
 
+  const isContextual = !!activeElementId;
+  const isHidden = (id: string) => isContextual && activeElementId !== id;
+
   return (
     <div className="space-y-3">
       {/* Header banner */}
-      <div className="flex items-center gap-2 px-1 mb-4">
-        <div className="w-7 h-7 rounded-lg bg-green-600 flex items-center justify-center">
-          <Leaf className="h-4 w-4 text-white" />
+      {!isContextual && (
+        <div className="flex items-center gap-2 px-1 mb-4">
+          <div className="w-7 h-7 rounded-lg bg-green-600 flex items-center justify-center">
+            <Leaf className="h-4 w-4 text-white" />
+          </div>
+          <div>
+            <p className="text-sm font-bold leading-none">AgroForte</p>
+            <p className="text-[10px] text-slate-400 mt-0.5">Editor visual</p>
+          </div>
         </div>
-        <div>
-          <p className="text-sm font-bold leading-none">AgroForte</p>
-          <p className="text-[10px] text-slate-400 mt-0.5">Editor visual</p>
-        </div>
-      </div>
+      )}
 
       {/* IDENTIDADE */}
-      <Section title="Identidade & Navegação" icon={<Leaf className="h-4 w-4" />} defaultOpen>
+      <Section 
+        title="Identidade & Navegação" 
+        icon={<Leaf className="h-4 w-4" />} 
+        hidden={isHidden('nav')}
+        forceOpen={activeElementId === 'nav'}
+        onBack={onBack}
+        defaultOpen
+      >
         <ImageUpload
           value={data.brand.logoImage || ''}
           onChange={url => setBrand({ logoImage: url })}
@@ -364,8 +394,15 @@ export function AgroForteEditor({ data, onChange }: AgroForteEditorProps) {
         </div>
       </Section>
 
-      {/* HERO */}
-      <Section title="Carrossel Hero (Banners)" icon={<ImageIcon className="h-4 w-4" />} defaultOpen>
+      {/* HERO BANNERS */}
+      <Section 
+        title="Carrossel Hero (Banners)" 
+        icon={<ImageIcon className="h-4 w-4" />} 
+        hidden={isHidden('hero')}
+        forceOpen={activeElementId === 'hero'}
+        onBack={onBack}
+        defaultOpen
+      >
         <div className="flex gap-4 mb-4 pb-4 border-b border-slate-200 dark:border-slate-800">
           <label className="flex items-center gap-2 text-sm">
             <input type="checkbox" checked={data.hero.autoPlay} onChange={e => setHero({ autoPlay: e.target.checked })} />
@@ -589,7 +626,13 @@ export function AgroForteEditor({ data, onChange }: AgroForteEditorProps) {
       </Section>
 
       {/* SOBRE */}
-      <Section title="Sobre Nós (Por que escolher AgroForte?)" icon={<Info className="h-4 w-4" />}>
+      <Section 
+        title="Sobre Nós (Por que escolher AgroForte?)" 
+        icon={<Info className="h-4 w-4" />}
+        hidden={isHidden('about')}
+        forceOpen={activeElementId === 'about'}
+        onBack={onBack}
+      >
         <div className="space-y-4">
           <Field label="Rótulo da Seção">
             <Input 
@@ -658,7 +701,13 @@ export function AgroForteEditor({ data, onChange }: AgroForteEditorProps) {
       </Section>
 
       {/* PRODUTOS EM DESTAQUE */}
-      <Section title="Produtos em Destaque (6)" icon={<Package className="h-4 w-4" />}>
+      <Section 
+        title="Produtos em Destaque (6)" 
+        icon={<Package className="h-4 w-4" />}
+        hidden={isHidden('featured_products')}
+        forceOpen={activeElementId === 'featured_products'}
+        onBack={onBack}
+      >
         <p className="text-xs text-slate-500 -mt-1">Estes 6 produtos aparecem na grade principal.</p>
         <div className="space-y-3">
           {data.featuredProducts.map((p, i) => (
@@ -674,8 +723,14 @@ export function AgroForteEditor({ data, onChange }: AgroForteEditorProps) {
         />
       </Section>
 
-      {/* CATEGORIAS (Nossas Soluções) */}
-      <Section title="Categorias (Nossas Soluções)" icon={<Grid className="h-4 w-4" />}>
+      {/* CATEGORIAS */}
+      <Section 
+        title="Categorias (Nossas Soluções)" 
+        icon={<Grid className="h-4 w-4" />}
+        hidden={isHidden('catalogs_categories')}
+        forceOpen={activeElementId === 'catalogs_categories'}
+        onBack={onBack}
+      >
         <div className="space-y-4">
           <Field label="Título da Seção">
             <Input 
@@ -765,7 +820,13 @@ export function AgroForteEditor({ data, onChange }: AgroForteEditorProps) {
       </Section>
 
       {/* CATALOGO INSUMOS */}
-      <Section title="Catálogo — Insumos Agrícolas" icon={<Sprout className="h-4 w-4" />}>
+      <Section 
+        title="Catálogo — Insumos Agrícolas" 
+        icon={<Sprout className="h-4 w-4" />}
+        hidden={isHidden('catalog_insumos')}
+        forceOpen={activeElementId === 'catalog_insumos'}
+        onBack={onBack}
+      >
         <Field label="Descrição da seção">
           <RichTextEditor
             value={data.catalogs.insumos.description}
@@ -787,7 +848,13 @@ export function AgroForteEditor({ data, onChange }: AgroForteEditorProps) {
       </Section>
 
       {/* CATALOGO TECNOLOGIA */}
-      <Section title="Catálogo — Tecnologia de Aplicação" icon={<Cpu className="h-4 w-4" />}>
+      <Section 
+        title="Catálogo — Tecnologia de Aplicação" 
+        icon={<Cpu className="h-4 w-4" />}
+        hidden={isHidden('catalog_tecnologia')}
+        forceOpen={activeElementId === 'catalog_tecnologia'}
+        onBack={onBack}
+      >
         <Field label="Descrição da seção">
           <RichTextEditor
             value={data.catalogs.tecnologia.description}
@@ -809,7 +876,13 @@ export function AgroForteEditor({ data, onChange }: AgroForteEditorProps) {
       </Section>
 
       {/* CATALOGO PLANTIO */}
-      <Section title="Catálogo — Plantio e Solo" icon={<AlignLeft className="h-4 w-4" />}>
+      <Section 
+        title="Catálogo — Plantio e Solo" 
+        icon={<AlignLeft className="h-4 w-4" />}
+        hidden={isHidden('catalog_plantio')}
+        forceOpen={activeElementId === 'catalog_plantio'}
+        onBack={onBack}
+      >
         <Field label="Descrição da seção">
           <RichTextEditor
             value={data.catalogs.plantio.description}
@@ -831,7 +904,13 @@ export function AgroForteEditor({ data, onChange }: AgroForteEditorProps) {
       </Section>
 
       {/* RODAPÉ */}
-      <Section title="Contato & Rodapé" icon={<Phone className="h-4 w-4" />}>
+      <Section 
+        title="Contato & Rodapé" 
+        icon={<Phone className="h-4 w-4" />}
+        hidden={isHidden('cta') && isHidden('footer')}
+        forceOpen={activeElementId === 'cta' || activeElementId === 'footer'}
+        onBack={onBack}
+      >
         <Field label="Telefone / WhatsApp">
           <Input
             value={data.footer.phone}
