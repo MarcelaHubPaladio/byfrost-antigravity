@@ -207,7 +207,11 @@ function ProductEditor({ product, onChange, compact = false }: {
 // Main Editor component
 // ────────────────────────────────────────────
 export function AgroForteEditor({ data, onChange, activeElementId, onBack, renderCustomBlocksPanel }: AgroForteEditorProps) {
-  const safeNavLinks = data.brand.navLinks || [
+  const safeData = data || AGROFORTE_DEFAULT;
+  const brand = safeData.brand || AGROFORTE_DEFAULT.brand;
+  const hero = safeData.hero || AGROFORTE_DEFAULT.hero;
+
+  const safeNavLinks = brand.navLinks || [
     { label: 'Início', url: '#' },
     { label: 'Produtos', url: '#produtos' },
     { label: 'Serviços', url: '#servicos' },

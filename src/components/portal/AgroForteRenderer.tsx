@@ -173,7 +173,8 @@ const AGROFORTE_CSS = `
 `;
 
 export function AgroForteRenderer({ data, editMode, onSelectElement, customSectionsContent, sectionToRender, customSectionsMap }: AgroForteRendererProps) {
-  const { brand, hero, featuredProducts, catalogs, footer } = data;
+  const safeData = data || AGROFORTE_DEFAULT;
+  const { brand = AGROFORTE_DEFAULT.brand, hero = AGROFORTE_DEFAULT.hero, featuredProducts = AGROFORTE_DEFAULT.featuredProducts, catalogs = AGROFORTE_DEFAULT.catalogs, footer = AGROFORTE_DEFAULT.footer } = safeData;
   const [currentSlide, setCurrentSlide] = useState(0);
   const [isScrolled, setIsScrolled] = useState(false);
   const topRef = useRef<HTMLDivElement>(null);

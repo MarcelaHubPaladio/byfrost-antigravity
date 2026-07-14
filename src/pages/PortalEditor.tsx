@@ -146,15 +146,20 @@ export default function PortalEditor() {
 
     const layoutOrder = React.useMemo(() => {
         if (agroforteData?.layoutOrder) return agroforteData.layoutOrder;
-        const base = ['nav', 'hero', 'catalogs_categories', 'featured_products', 'catalogs_lists', 'about', 'cta', 'custom', 'footer'];
-        const customIds = sections.map(s => s.id);
-        const result: string[] = [];
-        base.forEach(id => {
-            if (id === 'custom') result.push(...customIds);
-            else result.push(id);
-        });
-        return result;
-    }, [agroforteData?.layoutOrder, sections]);
+        
+        if (agroforteData) {
+            const base = ['nav', 'hero', 'catalogs_categories', 'featured_products', 'catalogs_lists', 'about', 'cta', 'custom', 'footer'];
+            const customIds = sections.map(s => s.id);
+            const result: string[] = [];
+            base.forEach(id => {
+                if (id === 'custom') result.push(...customIds);
+                else result.push(id);
+            });
+            return result;
+        }
+        
+        return sections.map(s => s.id);
+    }, [agroforteData, sections]);
 
 
     const { activeTenant } = useTenant();
