@@ -905,6 +905,7 @@ export default function PortalEditor() {
                                                 setActiveSettingsTarget({ type: 'section', id: customSection.id });
                                             }
                                         }}
+                                        onResizeStart={setResizingCol}
                                         onAddSectionAbove={() => {
                                             const newSection: Section = { id: Math.random().toString(36).substr(2, 9), blocks: [], settings: {} };
                                             setSections([...sections, newSection]);
@@ -1464,7 +1465,7 @@ function DroppableEmptyColumn({ sectionId, colId, onAddWidgetClick }: { sectionI
     );
 }
 
-function SortableSectionItem({ section, previewMode, active, onSelect, onRemove, onUpdateSettings, onUpdateBlock, onRemoveBlock, onAddSectionAbove, onSettingsClick, onAddWidgetClick }: any) {
+function SortableSectionItem({ section, previewMode, active, onSelect, onRemove, onUpdateSettings, onUpdateBlock, onRemoveBlock, onAddSectionAbove, onSettingsClick, onAddWidgetClick, onResizeStart }: any) {
     const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: section.id });
     const style = { transform: CSS.Transform.toString(transform), transition, zIndex: isDragging ? 50 : 1, opacity: isDragging ? 0.8 : 1 };
     const sectionPadding = section.settings?.paddingY || '12';
@@ -1549,7 +1550,7 @@ function SortableSectionItem({ section, previewMode, active, onSelect, onRemove,
                                                 e.preventDefault();
                                                 e.stopPropagation();
                                                 const parentWidth = (e.currentTarget as HTMLElement).parentElement?.clientWidth || 1000;
-                                                setResizingCol({
+                                                onResizeStart({
                                                     sectionId: section.id,
                                                     leftColIndex: colIdx,
                                                     startX: e.clientX,
