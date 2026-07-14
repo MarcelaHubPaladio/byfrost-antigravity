@@ -289,6 +289,7 @@ export default function PortalEditor() {
     });
 
     const addSectionWithStructure = (structure: number[]) => {
+        pushHistory();
         const newSection: Section = {
             id: Math.random().toString(36).substr(2, 9),
             settings: { paddingY: '12', maxWidth: '1400' },
@@ -315,6 +316,7 @@ export default function PortalEditor() {
     };
 
     const addBlock = (sectionId: string, type: BlockType, colId?: string) => {
+        pushHistory();
         let content = {};
         if (type === 'header') content = { 
             variant: 'logo-left', 
@@ -351,6 +353,7 @@ export default function PortalEditor() {
     };
 
     const removeSection = (sectionId: string) => {
+        pushHistory();
         setSections(sections.filter(s => s.id !== sectionId));
         setAgroforteData(prev => {
             if (!prev) return prev;
@@ -361,6 +364,7 @@ export default function PortalEditor() {
     };
 
     const removeBlock = (sectionId: string, blockId: string) => {
+        pushHistory();
         setSections(sections.map(s => {
             if (s.id !== sectionId) return s;
             if (s.columns) {
@@ -377,6 +381,7 @@ export default function PortalEditor() {
     };
 
     const updateBlock = (sectionId: string, blockId: string, updates: any) => {
+        pushHistory();
         setSections(sections.map(s => {
             if (s.id !== sectionId) return s;
 
@@ -413,6 +418,7 @@ export default function PortalEditor() {
     };
 
     const updateSectionSettings = (sectionId: string, settings: Partial<Section['settings']>) => {
+        pushHistory();
         setSections(sections.map(s => s.id === sectionId ? { 
             ...s, 
             settings: previewMode === 'mobile' ? s.settings : { ...s.settings, ...settings },
@@ -545,6 +551,28 @@ export default function PortalEditor() {
         // Case 1: Dragging Sidebar Item to Section/Column
         if (active.data.current?.type === 'new-block') {
             const blockType = active.data.current.blockType;
+            
+            const agroforteSections = ['header', 'hero', 'features', 'products', 'catalogs', 'cta', 'footer'];
+            if (agroforteSections.includes(blockType)) {
+                pushHistory();
+                setAgroforteData(prev => {
+                    const base = prev || AGROFORTE_DEFAULT;
+                    const currentOrder = base.layoutOrder || layoutOrder;
+                    if (!currentOrder.includes(blockType)) {
+                        let newOrder = [...currentOrder];
+                        if (overId && currentOrder.includes(overId as string)) {
+                            const overIndex = currentOrder.indexOf(overId as string);
+                            newOrder.splice(overIndex, 0, blockType);
+                        } else {
+                            newOrder.push(blockType);
+                        }
+                        return { ...base, layoutOrder: newOrder };
+                    }
+                    return base;
+                });
+                return;
+            }
+
             const overItem = findContainer(overId);
             
             if (overItem) {
@@ -602,6 +630,21 @@ export default function PortalEditor() {
         const overItem = findContainer(overId);
 
         if (!activeItem || !overItem) return;
+
+        // Handle reordering in layoutOrder
+        if (layoutOrder.includes(activeId) && layoutOrder.includes(overId)) {
+            const oldIndex = layoutOrder.indexOf(activeId);
+            const newIndex = layoutOrder.indexOf(overId);
+            if (oldIndex !== -1 && newIndex !== -1 && oldIndex !== newIndex) {
+                pushHistory();
+                setAgroforteData(prev => {
+                    const base = prev || AGROFORTE_DEFAULT;
+                    const newOrder = arrayMove(base.layoutOrder || layoutOrder, oldIndex, newIndex);
+                    return { ...base, layoutOrder: newOrder };
+                });
+            }
+            return;
+        }
 
         // Case 2: Reordering Sections
         if (!activeItem.isBlock && !overItem.isBlock) {
@@ -907,6 +950,7 @@ export default function PortalEditor() {
                                         }}
                                         onResizeStart={setResizingCol}
                                         onAddSectionAbove={() => {
+                                            pushHistory();
                                             const newSection: Section = { id: Math.random().toString(36).substr(2, 9), blocks: [], settings: {} };
                                             setSections([...sections, newSection]);
                                             setAgroforteData(prev => {
@@ -915,6 +959,20 @@ export default function PortalEditor() {
                                                 let newOrder = [...order];
                                                 const idx = newOrder.indexOf(customSection.id);
                                                 if (idx !== -1) newOrder.splice(idx, 0, newSection.id);
+                                                return { ...prev, layoutOrder: newOrder };
+                                            });
+                                        }}
+                                        onAddSectionBelow={() => {
+                                            pushHistory();
+                                            const newSection: Section = { id: Math.random().toString(36).substr(2, 9), blocks: [], settings: {} };
+                                            setSections([...sections, newSection]);
+                                            setAgroforteData(prev => {
+                                                if (!prev) return prev;
+                                                const order = prev.layoutOrder || layoutOrder;
+                                                let newOrder = [...order];
+                                                const idx = newOrder.indexOf(customSection.id);
+                                                if (idx !== -1) newOrder.splice(idx + 1, 0, newSection.id);
+                                                else newOrder.push(newSection.id);
                                                 return { ...prev, layoutOrder: newOrder };
                                             });
                                         }}
@@ -960,7 +1018,7 @@ export default function PortalEditor() {
                             <PopoverTrigger asChild>
                                 <button 
                                     className="h-12 w-12 rounded-full text-white flex items-center justify-center shadow hover:opacity-90 transition-opacity relative group"
-                                    style={{ backgroundColor: activeTenant?.primary_color || '#9b3a5a' }}
+                                    style={{ backgroundColor: activeTenant?.branding_json?.palette_primary || '#9b3a5a' }}
                                 >
                                     <Plus className="h-6 w-6" />
                                     <div className="absolute -bottom-8 left-1/2 -translate-x-1/2 bg-slate-800 text-white text-[10px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 whitespace-nowrap pointer-events-none transition-opacity">
@@ -1457,7 +1515,7 @@ function DroppableEmptyColumn({ sectionId, colId, onAddWidgetClick }: { sectionI
             <button 
                 onClick={(e) => { e.stopPropagation(); onAddWidgetClick?.(sectionId, colId); }}
                 className="h-8 w-8 rounded-full text-white flex items-center justify-center shadow hover:opacity-90 transition-opacity"
-                style={{ backgroundColor: activeTenant?.primary_color || '#9b3a5a' }}
+                style={{ backgroundColor: activeTenant?.branding_json?.palette_primary || '#9b3a5a' }}
             >
                 <Plus className="h-4 w-4" />
             </button>
@@ -1465,7 +1523,7 @@ function DroppableEmptyColumn({ sectionId, colId, onAddWidgetClick }: { sectionI
     );
 }
 
-function SortableSectionItem({ section, previewMode, active, onSelect, onRemove, onUpdateSettings, onUpdateBlock, onRemoveBlock, onAddSectionAbove, onSettingsClick, onAddWidgetClick, onResizeStart }: any) {
+function SortableSectionItem({ section, previewMode, active, onSelect, onRemove, onUpdateSettings, onUpdateBlock, onRemoveBlock, onAddSectionAbove, onAddSectionBelow, onSettingsClick, onAddWidgetClick, onResizeStart }: any) {
     const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: section.id });
     const style = { transform: CSS.Transform.toString(transform), transition, zIndex: isDragging ? 50 : 1, opacity: isDragging ? 0.8 : 1 };
     const sectionPadding = section.settings?.paddingY || '12';
@@ -1493,6 +1551,15 @@ function SortableSectionItem({ section, previewMode, active, onSelect, onRemove,
                     <Trash2 className="h-4 w-4" />
                 </button>
             </div>
+            {onAddSectionBelow && (
+                <button 
+                    onClick={(e) => { e.stopPropagation(); onAddSectionBelow(); }}
+                    className="absolute -bottom-4 left-1/2 -translate-x-1/2 z-[60] h-8 px-4 rounded-full bg-blue-500 text-white text-xs font-bold flex items-center justify-center gap-2 shadow-lg opacity-0 group-hover:opacity-100 transition-all hover:bg-blue-600 hover:scale-105 pointer-events-auto cursor-pointer"
+                >
+                    <Plus className="h-4 w-4" />
+                    Novo Grid
+                </button>
+            )}
             <div 
                 className={cn("w-full relative rounded-[32px] overflow-hidden flex flex-col", section.settings?.htmlTag || '',
                     section.settings?.height === 'fit-screen' ? "min-h-screen" : section.settings?.height === 'min-height' ? "min-h-[500px]" : "min-h-0"
