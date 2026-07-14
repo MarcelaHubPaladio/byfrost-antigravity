@@ -229,7 +229,7 @@ export function PortalBlockRenderer({ block, isPremium, isMobile, onRenderInnerB
                     {block.content?.url ? (
                         <div 
                             className={cn(
-                                "relative rounded-[40px] overflow-hidden shadow-2xl transition-all duration-300",
+                                "relative transition-all duration-300",
                                 block.settings?.textAlign === 'left' ? "mr-auto" : 
                                 block.settings?.textAlign === 'right' ? "ml-auto" : "mx-auto"
                             )}

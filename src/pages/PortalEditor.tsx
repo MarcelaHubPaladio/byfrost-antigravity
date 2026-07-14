@@ -1494,7 +1494,9 @@ function SortableSectionItem({ section, previewMode, active, onSelect, onRemove,
                 </button>
             </div>
             <div 
-                className={cn("w-full relative rounded-[32px] overflow-hidden", section.settings?.htmlTag || '')} 
+                className={cn("w-full relative rounded-[32px] overflow-hidden flex flex-col", section.settings?.htmlTag || '',
+                    section.settings?.height === 'fit-screen' ? "min-h-screen" : section.settings?.height === 'min-height' ? "min-h-[500px]" : "min-h-0"
+                )} 
                 style={{ 
                     backgroundColor: section.settings?.style?.background?.color || section.settings?.backgroundColor, 
                     backgroundImage: section.settings?.style?.background?.image ? `url(${section.settings.style.background.image})` : section.settings?.backgroundImage ? `url(${section.settings.backgroundImage})` : undefined, 
@@ -1506,6 +1508,8 @@ function SortableSectionItem({ section, previewMode, active, onSelect, onRemove,
                     borderWidth: section.settings?.style?.border?.width ? `${section.settings.style.border.width}px` : undefined,
                     borderColor: section.settings?.style?.border?.color,
                     borderRadius: section.settings?.style?.border?.radius ? `${section.settings.style.border.radius}px` : undefined,
+                    justifyContent: section.settings?.alignItems === 'middle' ? 'center' : section.settings?.alignItems || 'flex-start',
+                    alignItems: section.settings?.justifyContent || 'stretch',
                 }}
             >
                 {(section.settings?.style?.background?.overlay?.color || section.settings?.backgroundOverlay) && (

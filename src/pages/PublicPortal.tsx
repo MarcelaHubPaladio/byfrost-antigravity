@@ -442,7 +442,7 @@ export default function PublicPortal() {
                         paddingBottom: effectiveSettings.paddingY ? `${effectiveSettings.paddingY}px` : undefined,
                         paddingLeft: isMobile ? '16px' : effectiveSettings.paddingX ? `${effectiveSettings.paddingX}px` : '32px',
                         paddingRight: isMobile ? '16px' : effectiveSettings.paddingX ? `${effectiveSettings.paddingX}px` : '32px',
-                        justifyContent: effectiveSettings.alignItems || 'flex-start',
+                        justifyContent: effectiveSettings.alignItems === 'middle' ? 'center' : effectiveSettings.alignItems || 'flex-start',
                         alignItems: effectiveSettings.justifyContent || 'stretch',
                     }}
                 >
