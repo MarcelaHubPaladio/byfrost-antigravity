@@ -1616,7 +1616,12 @@ function SortableSectionItem({ section, previewMode, active, onSelect, onRemove,
                         paddingRight: previewMode === 'mobile' ? '16px' : section.settings?.paddingX ? `${section.settings.paddingX}px` : '32px',
                     }}
                 >
-                    <div className={cn("mx-auto flex", previewMode === 'mobile' ? 'w-full flex-col' : section.settings?.contentWidth === 'full' ? 'w-full px-4' : 'max-w-7xl', section.settings?.columnGap === 'no-gap' ? 'gap-0' : section.settings?.columnGap === 'extended' ? 'gap-8' : section.settings?.columnGap === 'wide' ? 'gap-12' : 'gap-4')}>
+                    <div 
+                        className={cn("mx-auto flex", previewMode === 'mobile' ? 'w-full flex-col' : section.settings?.contentWidth === 'full' ? 'w-full px-4' : 'w-full px-4', section.settings?.columnGap === 'no-gap' ? 'gap-0' : section.settings?.columnGap === 'extended' ? 'gap-8' : section.settings?.columnGap === 'wide' ? 'gap-12' : 'gap-4')}
+                        style={{
+                            maxWidth: section.settings?.contentWidth === 'full' ? undefined : section.settings?.widthValue ? `${section.settings.widthValue}px` : '1280px'
+                        }}
+                    >
                         {section.columns ? (
                             section.columns.map((col: any, colIdx: number) => (
                                 <React.Fragment key={col.id}>

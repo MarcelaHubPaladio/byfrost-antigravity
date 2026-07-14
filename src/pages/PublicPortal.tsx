@@ -450,7 +450,12 @@ export default function PublicPortal() {
                         <div className="absolute inset-0 z-0" style={{ backgroundColor: effectiveSettings.style?.background?.overlay?.color || effectiveSettings.backgroundOverlay }}></div>
                     )}
                     <div className="relative z-10">
-                        <div className={cn("mx-auto flex", isMobile ? 'w-full flex-col' : effectiveSettings.contentWidth === 'full' ? 'w-full px-4' : 'max-w-7xl', effectiveSettings.columnGap === 'no-gap' ? 'gap-0' : effectiveSettings.columnGap === 'extended' ? 'gap-8' : effectiveSettings.columnGap === 'wide' ? 'gap-12' : 'gap-4')}>
+                        <div 
+                            className={cn("mx-auto flex", isMobile ? 'w-full flex-col' : effectiveSettings.contentWidth === 'full' ? 'w-full px-4' : 'w-full px-4', effectiveSettings.columnGap === 'no-gap' ? 'gap-0' : effectiveSettings.columnGap === 'extended' ? 'gap-8' : effectiveSettings.columnGap === 'wide' ? 'gap-12' : 'gap-4')}
+                            style={{
+                                maxWidth: effectiveSettings.contentWidth === 'full' ? undefined : effectiveSettings.widthValue ? `${effectiveSettings.widthValue}px` : '1280px'
+                            }}
+                        >
                             {section.columns ? (
                                 section.columns.map((col: any) => (
                                     <div key={col.id} style={{ width: isMobile ? '100%' : `${col.size}%` }} className="flex flex-col gap-4 relative">
@@ -553,11 +558,16 @@ export default function PublicPortal() {
                             {(effectiveSettings.style?.background?.overlay?.color || effectiveSettings.backgroundOverlay) && (
                                 <div className="absolute inset-0 z-0" style={{ backgroundColor: effectiveSettings.style?.background?.overlay?.color || effectiveSettings.backgroundOverlay }}></div>
                             )}
-                            <div className={cn(
-                                "relative z-10 w-full mx-auto flex",
-                                effectiveSettings.contentWidth === 'full' ? "w-full px-4" : "max-w-7xl",
-                                effectiveSettings.columnGap === 'no-gap' ? 'gap-0' : effectiveSettings.columnGap === 'extended' ? 'gap-8' : effectiveSettings.columnGap === 'wide' ? 'gap-12' : 'gap-4'
-                            )}>
+                            <div 
+                                className={cn(
+                                    "relative z-10 w-full mx-auto flex",
+                                    effectiveSettings.contentWidth === 'full' ? "w-full px-4" : "w-full px-4",
+                                    effectiveSettings.columnGap === 'no-gap' ? 'gap-0' : effectiveSettings.columnGap === 'extended' ? 'gap-8' : effectiveSettings.columnGap === 'wide' ? 'gap-12' : 'gap-4'
+                                )}
+                                style={{
+                                    maxWidth: effectiveSettings.contentWidth === 'full' ? undefined : effectiveSettings.widthValue ? `${effectiveSettings.widthValue}px` : '1280px'
+                                }}
+                            >
                                 {section.columns ? (
                                     <div className={cn("mx-auto flex gap-4 w-full", isMobile ? 'flex-col' : '')}>
                                         {section.columns.map((col: any) => (
