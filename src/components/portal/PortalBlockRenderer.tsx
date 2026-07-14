@@ -148,17 +148,8 @@ export function PortalBlockRenderer({ block, isPremium, isMobile, onRenderInnerB
                     isPremium && "bg-transparent border-none text-white backdrop-blur-none static px-12",
                     block.content?.variant === 'logo-center' && "flex-col gap-6"
                 )}>
-                    <div className={cn(
-                        "flex items-center gap-2",
-                        block.content?.variant === 'logo-center' && "w-full justify-center"
-                    )}>
-                        <span className="text-2xl font-black tracking-tighter">
-                            {block.content?.logoText || 'LOGO'}
-                        </span>
-                    </div>
-
                     <nav className={cn(
-                        "hidden md:flex flex-1 items-center gap-8 mx-auto",
+                        "flex flex-1 items-center gap-8 mx-auto",
                         block.content?.variant === 'logo-left' && "ml-12",
                         block.content?.variant === 'logo-center' && "justify-center"
                     )}>

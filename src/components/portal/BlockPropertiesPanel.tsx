@@ -30,16 +30,6 @@ export function BlockPropertiesPanel({ block, onChange }: { block: any, onChange
         return (
             <div className="space-y-4">
                 <div className="space-y-2">
-                    <Label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Logo / Texto</Label>
-                    <Input 
-                        value={content.logoText || 'AgroFORTE'}
-                        onChange={e => updateContent({ logoText: e.target.value })}
-                        className="text-sm h-8"
-                        placeholder="Ex: AgroFORTE"
-                    />
-                </div>
-
-                <div className="space-y-2">
                     <Label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Links do Menu</Label>
                     <div className="space-y-2 mt-2">
                         {links.map((link: any, i: number) => (
