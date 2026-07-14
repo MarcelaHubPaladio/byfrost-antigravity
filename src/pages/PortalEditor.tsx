@@ -21,7 +21,10 @@ import {
     Monitor,
     Smartphone,
     Globe,
-    Folder
+    Folder,
+    MousePointerClick,
+    Video,
+    Star
 } from "lucide-react";
 import { toast } from "sonner";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -812,6 +815,9 @@ export default function PortalEditor() {
                     <DraggableBlockButton icon={<AlignLeft />} label="Texto" type="text" onClick={() => activeColumnId && addBlock(activeColumnId.sectionId, 'text', activeColumnId.colId)} />
                     <DraggableBlockButton icon={<ImageIcon />} label="Imagem" type="image" onClick={() => activeColumnId && addBlock(activeColumnId.sectionId, 'image', activeColumnId.colId)} />
                     <DraggableBlockButton icon={<LinkIcon />} label="Links" type="links" onClick={() => activeColumnId && addBlock(activeColumnId.sectionId, 'links', activeColumnId.colId)} />
+                    <DraggableBlockButton icon={<MousePointerClick />} label="Botão" type="button" onClick={() => activeColumnId && addBlock(activeColumnId.sectionId, 'button', activeColumnId.colId)} />
+                    <DraggableBlockButton icon={<Video />} label="Vídeo" type="video" onClick={() => activeColumnId && addBlock(activeColumnId.sectionId, 'video', activeColumnId.colId)} />
+                    <DraggableBlockButton icon={<Star />} label="Ícone" type="icon" onClick={() => activeColumnId && addBlock(activeColumnId.sectionId, 'icon', activeColumnId.colId)} />
                     <DraggableBlockButton icon={<Plus />} label="HTML" type="html" onClick={() => activeColumnId && addBlock(activeColumnId.sectionId, 'html', activeColumnId.colId)} />
                 </div>
                 <p className="text-[10px] text-blue-600 bg-blue-50 p-3 rounded-xl leading-relaxed">

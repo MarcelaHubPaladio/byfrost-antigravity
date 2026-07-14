@@ -28,11 +28,21 @@ const AGROFORTE_CSS = `
   .afr-logo-name{color:#fff;font-size:22px;font-weight:900;letter-spacing:-0.5px;line-height:1}
   .afr-logo-name em{color:#8bc34a;font-style:normal}
   .afr-logo-tag{color:#8bc34a;font-size:10px;font-weight:600;letter-spacing:1px;display:block;margin-top:-2px}
+  .afr-nav-menu-toggle{display:none;background:none;border:none;color:#fff;cursor:pointer;padding:4px}
+  .afr-nav-menu{display:flex;align-items:center;gap:28px}
   .afr-nav-links{display:flex;gap:28px;list-style:none;margin:0;padding:0}
   .afr-nav-links a{color:rgba(255,255,255,.85);text-decoration:none;font-size:14px;font-weight:500;transition:color .2s}
   .afr-nav-links a:hover{color:#8bc34a}
   .afr-nav-cta{background:#4caf50;color:#fff!important;border:none;padding:10px 22px;border-radius:24px;font-size:14px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:6px;transition:background .2s;font-family:inherit;text-decoration:none}
   .afr-nav-cta:hover{background:#43a047}
+  @media (max-width: 768px) {
+    .afr-nav-menu-toggle{display:block}
+    .afr-nav-menu{display:none;position:absolute;top:100%;left:0;right:0;flex-direction:column;padding:24px;gap:20px;border-top:1px solid rgba(255,255,255,.1);box-shadow:0 10px 30px rgba(0,0,0,.3);background:var(--nav-bg-scrolled, #1a3a1f)}
+    .afr-nav-menu.open{display:flex}
+    .afr-nav-links{flex-direction:column;gap:20px;width:100%;text-align:center}
+    .afr-nav-links a{font-size:16px;padding:8px}
+    .afr-nav-cta{width:100%;justify-content:center}
+  }
   .afr-hero{display:grid;position:relative;overflow:hidden}
   .afr-hero-slide{grid-area:1 / 1;opacity:0;transition:opacity 0.8s ease;display:flex;align-items:center;padding:60px 5%;pointer-events:none}
   .afr-hero-slide.active{opacity:1;z-index:1;pointer-events:auto}
@@ -177,6 +187,7 @@ export function AgroForteRenderer({ data, editMode, onSelectElement, customSecti
   const { brand = AGROFORTE_DEFAULT.brand, hero = AGROFORTE_DEFAULT.hero, featuredProducts = AGROFORTE_DEFAULT.featuredProducts, catalogs = AGROFORTE_DEFAULT.catalogs, footer = AGROFORTE_DEFAULT.footer } = safeData;
   const [currentSlide, setCurrentSlide] = useState(0);
   const [isScrolled, setIsScrolled] = useState(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const topRef = useRef<HTMLDivElement>(null);
 
   // Helper for edit mode interactivity
@@ -299,15 +310,32 @@ export function AgroForteRenderer({ data, editMode, onSelectElement, customSecti
             </>
           )}
         </div>
-        <ul className="afr-nav-links">
-          {safeNavLinks.map((link, idx) => (
-            <li key={idx}><a href={link.url}>{link.label}</a></li>
-          ))}
-        </ul>
-        <a href={brand.navCtaUrl || '#contato'} className="afr-nav-cta">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 014.47 11.5a19.79 19.79 0 01-3.07-8.67A2 2 0 013.38 1h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L7.91 8.96a16 16 0 006.07 6.07l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z"/></svg>
-          {brand.navCta}
-        </a>
+        <button 
+          className="afr-nav-menu-toggle" 
+          onClick={(e) => { e.stopPropagation(); setIsMobileMenuOpen(!isMobileMenuOpen); }}
+          aria-label="Alternar menu"
+        >
+          {isMobileMenuOpen ? (
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+          ) : (
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
+          )}
+        </button>
+
+        <div 
+          className={cn("afr-nav-menu", isMobileMenuOpen && "open")} 
+          style={{ '--nav-bg-scrolled': brand.navBackgroundScrolled || '#1a3a1f' } as React.CSSProperties}
+        >
+          <ul className="afr-nav-links">
+            {safeNavLinks.map((link, idx) => (
+              <li key={idx}><a href={link.url} onClick={() => setIsMobileMenuOpen(false)}>{link.label}</a></li>
+            ))}
+          </ul>
+          <a href={brand.navCtaUrl || '#contato'} className="afr-nav-cta" onClick={() => setIsMobileMenuOpen(false)}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 014.47 11.5a19.79 19.79 0 01-3.07-8.67A2 2 0 013.38 1h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L7.91 8.96a16 16 0 006.07 6.07l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z"/></svg>
+            {brand.navCta}
+          </a>
+        </div>
       </EditableBlock>
 
 
