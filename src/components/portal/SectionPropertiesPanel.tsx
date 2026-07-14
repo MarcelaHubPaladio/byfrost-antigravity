@@ -220,9 +220,39 @@ export function SectionPropertiesPanel({ section, block, onChange }: { section?:
                                         <Slider
                                             value={[settings.paddingX ? Number(settings.paddingX) : 0]}
                                             min={0}
-                                            max={64}
+                                            max={128}
                                             step={1}
                                             onValueChange={([v]) => updateSettings({ paddingX: String(v) })}
+                                        />
+                                    </div>
+                                </div>
+                                <div className="space-y-4">
+                                    <div className="flex items-center justify-between">
+                                        <Label className="text-xs font-medium text-slate-600">Margem Y (Externa)</Label>
+                                        <span className="text-[10px] text-slate-500 font-bold uppercase bg-slate-100 px-2 py-1 rounded">{settings.marginY || '0'}</span>
+                                    </div>
+                                    <div className="px-2">
+                                        <Slider
+                                            value={[settings.marginY ? Number(settings.marginY) : 0]}
+                                            min={0}
+                                            max={128}
+                                            step={1}
+                                            onValueChange={([v]) => updateSettings({ marginY: String(v) })}
+                                        />
+                                    </div>
+                                </div>
+                                <div className="space-y-4">
+                                    <div className="flex items-center justify-between">
+                                        <Label className="text-xs font-medium text-slate-600">Margem X (Externa)</Label>
+                                        <span className="text-[10px] text-slate-500 font-bold uppercase bg-slate-100 px-2 py-1 rounded">{settings.marginX || '0'}</span>
+                                    </div>
+                                    <div className="px-2">
+                                        <Slider
+                                            value={[settings.marginX ? Number(settings.marginX) : 0]}
+                                            min={0}
+                                            max={128}
+                                            step={1}
+                                            onValueChange={([v]) => updateSettings({ marginX: String(v) })}
                                         />
                                     </div>
                                 </div>

@@ -87,15 +87,6 @@ export function BlockPropertiesPanel({ block, onChange }: { block: any, onChange
                     </div>
                 </div>
 
-                <div className="space-y-2 pt-2 border-t border-slate-100">
-                    <Label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Botão CTA</Label>
-                    <Input 
-                        value={content.ctaText || 'Fale Conosco'}
-                        onChange={e => updateContent({ ctaText: e.target.value })}
-                        className="text-sm h-8"
-                        placeholder="Texto do botão"
-                    />
-                </div>
             </div>
         );
     }

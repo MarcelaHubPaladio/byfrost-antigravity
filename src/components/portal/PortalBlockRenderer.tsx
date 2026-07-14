@@ -106,6 +106,10 @@ export function PortalBlockRenderer({ block, isPremium, isMobile, onRenderInnerB
             paddingBottom: effectiveSettings.paddingY ? `${effectiveSettings.paddingY}px` : undefined,
             paddingLeft: isMobile ? '16px' : effectiveSettings.paddingX ? `${effectiveSettings.paddingX}px` : undefined,
             paddingRight: isMobile ? '16px' : effectiveSettings.paddingX ? `${effectiveSettings.paddingX}px` : undefined,
+            marginTop: effectiveSettings.marginY ? `${effectiveSettings.marginY}px` : undefined,
+            marginBottom: effectiveSettings.marginY ? `${effectiveSettings.marginY}px` : undefined,
+            marginLeft: effectiveSettings.marginX ? `${effectiveSettings.marginX}px` : undefined,
+            marginRight: effectiveSettings.marginX ? `${effectiveSettings.marginX}px` : undefined,
             zIndex: effectiveSettings.style?.advanced?.zIndex ? Number(effectiveSettings.style.advanced.zIndex) : undefined,
         }}
         id={effectiveSettings.style?.advanced?.cssId || undefined}
@@ -176,17 +180,6 @@ export function PortalBlockRenderer({ block, isPremium, isMobile, onRenderInnerB
                         "flex items-center gap-8",
                         block.content?.variant === 'logo-center' && "hidden"
                     )}>
-                        <button className="text-slate-400 hover:text-slate-600 transition-colors">
-                            <Search className="h-5 w-5" />
-                        </button>
-                        {block.content?.cta?.label && !isPremium && (
-                            <a 
-                                href={block.content?.cta.url || '#'}
-                                className="h-11 px-6 flex items-center justify-center rounded-2xl bg-slate-900 text-white text-sm font-bold hover:scale-105 transition-transform"
-                            >
-                                {block.content.cta.label}
-                            </a>
-                        )}
                     </div>
                 </header>
             )}
