@@ -172,9 +172,9 @@ export default function PortalEditor() {
     useEffect(() => {
         if (page?.content_json) {
             const content = page.content_json;
-            // Detect AgroForte template
             if (Array.isArray(content) && content.length > 0 && content[0]?._template === 'agroforte') {
                 setAgroforteData({ ...AGROFORTE_DEFAULT, ...content[0] });
+                setSections(content[0].customSections || []);
                 return;
             }
             setAgroforteData(null);
@@ -435,10 +435,11 @@ export default function PortalEditor() {
         });
     };
 
-    const handleAgroforteSave = (data: AgroForteData) => {
+    const handleAgroforteSave = (data: AgroForteData | null) => {
+        if (!data) return;
         setAgroforteData(data);
         saveM.mutate({
-            content_json: [data],
+            content_json: [{ ...data, customSections: sections }],
             updated_at: new Date().toISOString(),
         });
     };
@@ -589,7 +590,7 @@ export default function PortalEditor() {
                 .trim();
 
             const payload = agroforteData
-                ? [agroforteData]
+                ? [{ ...agroforteData, customSections: sections }]
                 : sections;
 
             const { error } = await supabase

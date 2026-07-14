@@ -11,6 +11,7 @@ interface AgroForteRendererProps {
   data: AgroForteData;
   editMode?: boolean;
   onSelectElement?: (id: string) => void;
+  customSectionsContent?: React.ReactNode;
 }
 
 const AGROFORTE_CSS = `
@@ -169,7 +170,7 @@ const AGROFORTE_CSS = `
   }
 `;
 
-export function AgroForteRenderer({ data, editMode, onSelectElement }: AgroForteRendererProps) {
+export function AgroForteRenderer({ data, editMode, onSelectElement, customSectionsContent }: AgroForteRendererProps) {
   const { brand, hero, featuredProducts, catalogs, footer } = data;
   const [currentSlide, setCurrentSlide] = useState(0);
   const [isScrolled, setIsScrolled] = useState(false);
@@ -445,6 +446,13 @@ export function AgroForteRenderer({ data, editMode, onSelectElement }: AgroForte
           </div>
         </div>
       </EditableBlock>
+
+      {/* CUSTOM SECTIONS (Generic Blocks) */}
+      {customSectionsContent && (
+        <div className="afr-custom-sections-wrapper" style={{ padding: '0', margin: '0' }}>
+          {customSectionsContent}
+        </div>
+      )}
 
       {/* FOOTER */}
       <EditableBlock id="footer" label="Rodapé" className="afr-footer" style={{}}>

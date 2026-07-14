@@ -12,6 +12,7 @@ interface AgroForteEditorProps {
   onChange: (data: AgroForteData) => void;
   activeElementId?: string | null;
   onBack?: () => void;
+  renderCustomBlocksPanel?: () => React.ReactNode;
 }
 
 // ────────────────────────────────────────────
@@ -205,7 +206,7 @@ function ProductEditor({ product, onChange, compact = false }: {
 // ────────────────────────────────────────────
 // Main Editor component
 // ────────────────────────────────────────────
-export function AgroForteEditor({ data, onChange, activeElementId, onBack }: AgroForteEditorProps) {
+export function AgroForteEditor({ data, onChange, activeElementId, onBack, renderCustomBlocksPanel }: AgroForteEditorProps) {
   const safeNavLinks = data.brand.navLinks || [
     { label: 'Início', url: '#' },
     { label: 'Produtos', url: '#produtos' },
@@ -943,6 +944,17 @@ export function AgroForteEditor({ data, onChange, activeElementId, onBack }: Agr
             className="h-8 text-sm"
           />
         </Field>
+      </Section>
+
+      {/* BLOCOS CUSTOMIZADOS (Criação Livre) */}
+      <Section 
+        title="Criação (Seções Livres)" 
+        icon={<Plus className="h-4 w-4" />}
+        hidden={isHidden('custom_blocks')}
+        forceOpen={activeElementId === 'custom_blocks'}
+        onBack={onBack}
+      >
+        {renderCustomBlocksPanel && renderCustomBlocksPanel()}
       </Section>
     </div>
   );
