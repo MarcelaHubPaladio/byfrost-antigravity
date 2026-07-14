@@ -48,6 +48,7 @@ import { Slider } from "@/components/ui/slider";
 import { RichTextEditor } from "@/components/RichTextEditor";
 import { AgroForteEditor } from "@/components/portal/AgroForteEditor";
 import { AgroForteRenderer } from "@/components/portal/AgroForteRenderer";
+import { PortalBlockRenderer } from "@/components/portal/PortalBlockRenderer";
 import { AGROFORTE_DEFAULT, type AgroForteData } from "@/components/portal/agroforte-types";
 import { useTenant } from "@/providers/TenantProvider";
 import { 
@@ -1063,7 +1064,7 @@ function SortableSectionItem({ section, previewMode, active, onSelect, onRemove,
                             <Settings className="h-4 w-4" />
                         </button>
                     </PopoverTrigger>
-                    <PopoverContent className="w-80 p-6 rounded-[24px] shadow-2xl border-slate-100" side="bottom" align="center">
+                    <PopoverContent className="w-[350px] max-h-[80vh] overflow-y-auto p-6 rounded-[24px] shadow-2xl border-slate-100" side="bottom" align="center">
                         <div className="space-y-6">
                             <div className="flex items-center justify-between">
                                 <div className="space-y-0.5">
@@ -1268,7 +1269,7 @@ function SortableBlockItem({ block, sectionId, previewMode, onUpdate, onRemove }
                             <Settings className="h-3 w-3" />
                         </button>
                     </PopoverTrigger>
-                    <PopoverContent className="w-56 p-4 rounded-2xl shadow-xl border-slate-100" side="left">
+                    <PopoverContent className="w-[350px] max-h-[80vh] overflow-y-auto p-4 rounded-2xl shadow-xl border-slate-100" side="left">
                         <div className="space-y-4">
                             <div className="space-y-0.5">
                                 <Label className="text-[10px] uppercase text-slate-400 font-bold">Configuração do Bloco</Label>
@@ -1325,20 +1326,8 @@ function SortableBlockItem({ block, sectionId, previewMode, onUpdate, onRemove }
                                 </div>
                             </div>
                         </div>
-                    </PopoverContent>
-                </Popover>
+                        <div className="pt-4 mt-4 border-t border-slate-100 space-y-4">
 
-                <div {...attributes} {...listeners} className="p-1.5 hover:bg-blue-600 transition-colors cursor-grab active:cursor-grabbing border-r border-blue-400/50">
-                    <GripVertical className="h-3 w-3" />
-                </div>
-                <button 
-                    className="p-1.5 hover:bg-red-500 transition-colors" 
-                    onClick={(e) => { e.stopPropagation(); onRemove(); }} 
-                    title="Excluir Widget"
-                >
-                    <Trash2 className="h-3 w-3" />
-                </button>
-            </div>
 
             {block.type === 'header' && (
                 <div className="space-y-4">
@@ -1819,6 +1808,52 @@ function SortableBlockItem({ block, sectionId, previewMode, onUpdate, onRemove }
                     </div>
                 </div>
             )}
+                        </div>
+                    </PopoverContent>
+                </Popover>
+
+                <div {...attributes} {...listeners} className="p-1.5 hover:bg-blue-600 transition-colors cursor-grab active:cursor-grabbing border-r border-blue-400/50">
+                    <GripVertical className="h-3 w-3" />
+                </div>
+                <button 
+                    className="p-1.5 hover:bg-red-500 transition-colors" 
+                    onClick={(e) => { e.stopPropagation(); onRemove(); }} 
+                    title="Excluir Widget"
+                >
+                    <Trash2 className="h-3 w-3" />
+                </button>
+            </div>
+            {/* VISUAL PREVIEW */}
+            <div className="mt-2 pointer-events-none">
+                <PortalBlockRenderer 
+                    block={block} 
+                    isPremium={false} 
+                    isMobile={previewMode === 'mobile'} 
+                    onRenderInnerBlock={(innerBlock: any) => (
+                        <SortableBlockItem 
+                            key={innerBlock.id} 
+                            block={innerBlock}
+                            previewMode={previewMode}
+                            onUpdate={(innerUpdates: any) => {
+                                const blocks = block.blocks?.map((b: any) => {
+                                    if (b.id !== innerBlock.id) return b;
+                                    const { settings, blocks: subBlocks, ...innerContent } = innerUpdates;
+                                    let nb = { ...b };
+                                    if (settings) nb.settings = { ...(nb.settings || {}), ...settings };
+                                    if (subBlocks) nb.blocks = subBlocks;
+                                    if (Object.keys(innerContent).length > 0) nb.content = { ...(nb.content || {}), ...innerContent };
+                                    return nb;
+                                });
+                                onUpdate({ blocks });
+                            }}
+                            onRemove={() => {
+                                const blocks = block.blocks?.filter((b: any) => b.id !== innerBlock.id);
+                                onUpdate({ blocks });
+                            }}
+                        />
+                    )}
+                />
+            </div>
         </div>
     );
 }
