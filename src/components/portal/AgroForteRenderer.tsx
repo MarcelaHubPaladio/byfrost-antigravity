@@ -1,5 +1,5 @@
 import type { AgroForteData } from './agroforte-types';
-import { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Shield, CheckCircle, Leaf, Star, Heart, Award, Check, Users, Target, Sprout, Cpu, Tractor, Package } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
