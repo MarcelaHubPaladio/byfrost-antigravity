@@ -1,4 +1,5 @@
 import { cn } from "@/lib/utils";
+import { DynamicIcon } from "./DynamicIcon";
 import useEmblaCarousel from 'embla-carousel-react';
 import { Search, ChevronRight, ArrowRight } from "lucide-react";
 
