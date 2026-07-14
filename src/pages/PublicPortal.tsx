@@ -534,7 +534,12 @@ export default function PublicPortal() {
                                 "relative w-full overflow-hidden transition-all duration-700",
                                 effectiveSettings.height === 'fit-screen' ? "min-h-screen" : effectiveSettings.height === 'min-height' ? "min-h-[500px]" : "min-h-0",
                                 "flex flex-col",
-                                effectiveSettings.htmlTag || ''
+                                effectiveSettings.htmlTag || '',
+                                effectiveSettings.sticky === 'top' && "sticky top-0 z-50",
+                                effectiveSettings.sticky === 'bottom' && "sticky bottom-0 z-50",
+                                effectiveSettings.animation === 'fade-in' && "animate-in fade-in duration-700",
+                                effectiveSettings.animation === 'fade-up' && "animate-in fade-in slide-in-from-bottom-8 duration-700",
+                                effectiveSettings.animation === 'zoom-in' && "animate-in zoom-in duration-700"
                             )}
                             style={{
                                 backgroundColor: effectiveSettings.style?.background?.color || effectiveSettings.backgroundColor || 'transparent',
@@ -547,10 +552,14 @@ export default function PublicPortal() {
                                 borderWidth: effectiveSettings.style?.border?.width ? `${effectiveSettings.style.border.width}px` : undefined,
                                 borderColor: effectiveSettings.style?.border?.color,
                                 borderRadius: effectiveSettings.style?.border?.radius ? `${effectiveSettings.style.border.radius}px` : undefined,
-                                paddingTop: effectiveSettings.paddingY ? `${effectiveSettings.paddingY}px` : undefined,
-                                paddingBottom: effectiveSettings.paddingY ? `${effectiveSettings.paddingY}px` : undefined,
-                                paddingLeft: isMobile ? '16px' : effectiveSettings.paddingX ? `${effectiveSettings.paddingX}px` : '32px',
-                                paddingRight: isMobile ? '16px' : effectiveSettings.paddingX ? `${effectiveSettings.paddingX}px` : '32px',
+                                marginTop: effectiveSettings.marginY ? `${Number(effectiveSettings.marginY) * 4}px` : undefined,
+                                marginBottom: effectiveSettings.marginY ? `${Number(effectiveSettings.marginY) * 4}px` : undefined,
+                                marginLeft: isMobile ? undefined : effectiveSettings.marginX ? `${Number(effectiveSettings.marginX) * 4}px` : undefined,
+                                marginRight: isMobile ? undefined : effectiveSettings.marginX ? `${Number(effectiveSettings.marginX) * 4}px` : undefined,
+                                paddingTop: effectiveSettings.paddingY ? `${Number(effectiveSettings.paddingY) * 4}px` : undefined,
+                                paddingBottom: effectiveSettings.paddingY ? `${Number(effectiveSettings.paddingY) * 4}px` : undefined,
+                                paddingLeft: isMobile ? '16px' : effectiveSettings.paddingX ? `${Number(effectiveSettings.paddingX) * 4}px` : '32px',
+                                paddingRight: isMobile ? '16px' : effectiveSettings.paddingX ? `${Number(effectiveSettings.paddingX) * 4}px` : '32px',
                                 justifyContent: effectiveSettings.alignItems || 'flex-start',
                                 alignItems: effectiveSettings.justifyContent || 'stretch',
                             }}

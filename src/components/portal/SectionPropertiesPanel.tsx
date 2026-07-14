@@ -579,7 +579,7 @@ export function SectionPropertiesPanel({ section, block, onChange }: { section?:
                                 </div>
                                 <div className="flex items-center justify-between">
                                     <Label className="text-xs text-slate-600 font-medium">Sticky</Label>
-                                    <Select defaultValue="none">
+                                    <Select value={settings.sticky || 'none'} onValueChange={v => updateSettings({ sticky: v })}>
                                         <SelectTrigger className="w-32 h-8 text-xs"><SelectValue /></SelectTrigger>
                                         <SelectContent>
                                             <SelectItem value="none">None</SelectItem>
@@ -593,7 +593,7 @@ export function SectionPropertiesPanel({ section, block, onChange }: { section?:
                                         <Label className="text-xs text-slate-600 font-medium">Animação de entrada</Label>
                                         <Monitor className="h-3 w-3 text-slate-400" />
                                     </div>
-                                    <Select defaultValue="padrao">
+                                    <Select value={settings.animation || 'padrao'} onValueChange={v => updateSettings({ animation: v })}>
                                         <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
                                         <SelectContent>
                                             <SelectItem value="padrao">Padrão</SelectItem>

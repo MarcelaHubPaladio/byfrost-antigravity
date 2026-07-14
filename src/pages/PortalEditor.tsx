@@ -1590,6 +1590,10 @@ function SortableSectionItem({ section, previewMode, active, onSelect, onRemove,
                     section.settings?.height === 'fit-screen' ? "min-h-screen" : section.settings?.height === 'min-height' ? "min-h-[500px]" : "min-h-0"
                 )} 
                 style={{ 
+                    marginTop: section.settings?.marginY ? `${Number(section.settings.marginY) * 4}px` : undefined,
+                    marginBottom: section.settings?.marginY ? `${Number(section.settings.marginY) * 4}px` : undefined,
+                    marginLeft: previewMode === 'mobile' ? undefined : section.settings?.marginX ? `${Number(section.settings.marginX) * 4}px` : undefined,
+                    marginRight: previewMode === 'mobile' ? undefined : section.settings?.marginX ? `${Number(section.settings.marginX) * 4}px` : undefined,
                     backgroundColor: section.settings?.style?.background?.color || section.settings?.backgroundColor, 
                     backgroundImage: section.settings?.style?.background?.image ? `url(${section.settings.style.background.image})` : section.settings?.backgroundImage ? `url(${section.settings.backgroundImage})` : undefined, 
                     backgroundSize: section.settings?.style?.background?.size || section.settings?.backgroundSize || 'cover', 
@@ -1610,10 +1614,10 @@ function SortableSectionItem({ section, previewMode, active, onSelect, onRemove,
                 <div 
                     className="relative z-10"
                     style={{
-                        paddingTop: section.settings?.paddingY ? `${section.settings.paddingY}px` : undefined,
-                        paddingBottom: section.settings?.paddingY ? `${section.settings.paddingY}px` : undefined,
-                        paddingLeft: previewMode === 'mobile' ? '16px' : section.settings?.paddingX ? `${section.settings.paddingX}px` : '32px',
-                        paddingRight: previewMode === 'mobile' ? '16px' : section.settings?.paddingX ? `${section.settings.paddingX}px` : '32px',
+                        paddingTop: section.settings?.paddingY ? `${Number(section.settings.paddingY) * 4}px` : undefined,
+                        paddingBottom: section.settings?.paddingY ? `${Number(section.settings.paddingY) * 4}px` : undefined,
+                        paddingLeft: previewMode === 'mobile' ? '16px' : section.settings?.paddingX ? `${Number(section.settings.paddingX) * 4}px` : '32px',
+                        paddingRight: previewMode === 'mobile' ? '16px' : section.settings?.paddingX ? `${Number(section.settings.paddingX) * 4}px` : '32px',
                     }}
                 >
                     <div 

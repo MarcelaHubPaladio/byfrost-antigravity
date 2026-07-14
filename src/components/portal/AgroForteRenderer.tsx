@@ -212,6 +212,14 @@ export function AgroForteRenderer({ data, editMode, onSelectElement, customSecti
     
     if (layout.stretchSection) layoutClasses += ' w-full max-w-none';
     
+    if (layout.sticky === 'top') layoutClasses += ' sticky top-0 z-50';
+    if (layout.sticky === 'bottom') layoutClasses += ' sticky bottom-0 z-50';
+    if (layout.animation && layout.animation !== 'padrao' && layout.animation !== 'none') {
+        if (layout.animation === 'fade-in') layoutClasses += ' animate-in fade-in duration-700';
+        if (layout.animation === 'fade-up') layoutClasses += ' animate-in fade-in slide-in-from-bottom-8 duration-700';
+        if (layout.animation === 'zoom-in') layoutClasses += ' animate-in zoom-in duration-700';
+    }
+    
     const combinedClassName = editMode ? cn("afr-editable", className, layoutClasses) : cn(className, layoutClasses);
     
     let combinedStyle = { ...style };
@@ -219,6 +227,22 @@ export function AgroForteRenderer({ data, editMode, onSelectElement, customSecti
         combinedStyle.maxWidth = layout.widthValue ? `${layout.widthValue}px` : '1200px';
         combinedStyle.width = '100%';
         combinedStyle.margin = '0 auto';
+    }
+    if (layout.paddingY) {
+        combinedStyle.paddingTop = `${Number(layout.paddingY) * 4}px`;
+        combinedStyle.paddingBottom = `${Number(layout.paddingY) * 4}px`;
+    }
+    if (layout.paddingX) {
+        combinedStyle.paddingLeft = `${Number(layout.paddingX) * 4}px`;
+        combinedStyle.paddingRight = `${Number(layout.paddingX) * 4}px`;
+    }
+    if (layout.marginY) {
+        combinedStyle.marginTop = `${Number(layout.marginY) * 4}px`;
+        combinedStyle.marginBottom = `${Number(layout.marginY) * 4}px`;
+    }
+    if (layout.marginX) {
+        combinedStyle.marginLeft = `${Number(layout.marginX) * 4}px`;
+        combinedStyle.marginRight = `${Number(layout.marginX) * 4}px`;
     }
 
     if (!editMode) return <Tag className={combinedClassName} style={combinedStyle}>{children}</Tag>;
