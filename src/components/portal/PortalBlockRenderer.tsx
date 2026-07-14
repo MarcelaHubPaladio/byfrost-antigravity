@@ -167,18 +167,54 @@ export function PortalBlockRenderer({ block, isPremium, isMobile, onRenderInnerB
                 </header>
             )}
 
-            {block.type === 'text' && (
-                <div className={cn(
-                    "max-w-3xl py-8",
-                    block.settings?.textAlign === 'center' ? "mx-auto" :
-                    block.settings?.textAlign === 'right' ? "ml-auto" : "mr-auto"
-                )}>
-                    <div 
-                        className="prose prose-slate dark:prose-invert max-w-none text-lg leading-relaxed"
-                        dangerouslySetInnerHTML={{ __html: block.content?.text || 'Digite seu texto aqui...' }}
-                    />
-                </div>
-            )}
+            {block.type === 'title' && (() => {
+                const Tag = (block.content?.htmlTag?.toLowerCase() || 'h2') as keyof JSX.IntrinsicElements;
+                const sizeClass = block.content?.size === 'Pequeno' ? 'text-2xl' :
+                                  block.content?.size === 'Médio' ? 'text-4xl' :
+                                  block.content?.size === 'Grande' ? 'text-6xl md:text-7xl font-extrabold' :
+                                  block.content?.size === 'Gigante' ? 'text-7xl md:text-9xl font-black' : 'text-3xl font-bold';
+                
+                const alignClass = block.content?.alignment === 'center' ? 'text-center' :
+                                   block.content?.alignment === 'right' ? 'text-right' :
+                                   block.content?.alignment === 'justify' ? 'text-justify' : 'text-left';
+
+                const content = block.content?.title || 'Título Aqui';
+
+                return (
+                    <div className={cn("w-full py-4", alignClass)}>
+                        {block.content?.link ? (
+                            <a href={block.content.link} className="hover:opacity-80 transition-opacity">
+                                <Tag className={sizeClass}>{content}</Tag>
+                            </a>
+                        ) : (
+                            <Tag className={sizeClass}>{content}</Tag>
+                        )}
+                    </div>
+                );
+            })()}
+
+            {block.type === 'text' && (() => {
+                const cols = block.content?.columns && block.content.columns !== 'Padrão' ? Number(block.content.columns) : 1;
+                const gap = block.content?.columnGap || 16;
+                const alignClass = effectiveSettings.textAlign === 'center' ? 'text-center' :
+                                   effectiveSettings.textAlign === 'right' ? 'text-right' : 'text-left';
+
+                return (
+                    <div className={cn("w-full py-6", alignClass)}>
+                        <div 
+                            className={cn(
+                                "prose prose-slate dark:prose-invert max-w-none text-lg leading-relaxed",
+                                block.content?.dropCap && "first-letter:text-7xl first-letter:font-bold first-letter:text-slate-900 dark:first-letter:text-white first-letter:mr-3 first-letter:float-left first-letter:leading-none"
+                            )}
+                            style={{ 
+                                columnCount: cols > 1 ? cols : undefined, 
+                                columnGap: cols > 1 ? `${gap}px` : undefined 
+                            }}
+                            dangerouslySetInnerHTML={{ __html: block.content?.text || '<p>Digite seu texto aqui...</p>' }}
+                        />
+                    </div>
+                );
+            })()}
 
             {block.type === 'image' && (
                 <div className="w-full py-8">

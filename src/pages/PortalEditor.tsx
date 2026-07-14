@@ -51,6 +51,7 @@ import { AgroForteEditor } from "@/components/portal/AgroForteEditor";
 import { AgroForteRenderer } from "@/components/portal/AgroForteRenderer";
 import { PortalBlockRenderer } from "@/components/portal/PortalBlockRenderer";
 import { FixedSectionLayoutEditor } from "@/components/portal/FixedSectionLayoutEditor";
+import { BlockPropertiesPanel } from "@/components/portal/BlockPropertiesPanel";
 import { AGROFORTE_DEFAULT, type AgroForteData } from "@/components/portal/agroforte-types";
 import { useTenant } from "@/providers/TenantProvider";
 import { 
@@ -77,7 +78,7 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 
-type BlockType = 'header' | 'hero' | 'text' | 'image' | 'links' | 'divider' | 'html' | 'slider' | 'info-cards' | 'grid' | 'gallery';
+type BlockType = 'header' | 'hero' | 'text' | 'title' | 'image' | 'links' | 'divider' | 'html' | 'slider' | 'info-cards' | 'grid' | 'gallery';
 
 type Block = {
     id: string;
@@ -376,55 +377,108 @@ export default function PortalEditor() {
         setActiveData(event.active.data.current);
     };
 
+    const findContainer = (id: string) => {
+        if (id.startsWith('empty-col-')) {
+            const parts = id.split('-');
+            const sectionId = parts[2];
+            const colId = parts.slice(3).join('-'); // in case colId has hyphens
+            const section = sections.find(s => s.id === sectionId);
+            if (section) {
+                const col = section.columns?.find(c => c.id === colId);
+                if (col) return { section, col, isBlock: false };
+            }
+            return null;
+        }
+
+        const section = sections.find(s => s.id === id);
+        if (section) return { section, col: null, isBlock: false };
+
+        for (const s of sections) {
+            if (s.blocks?.some(b => b.id === id)) {
+                return { section: s, col: null, isBlock: true, block: s.blocks.find(b => b.id === id) };
+            }
+            if (s.columns) {
+                for (const c of s.columns) {
+                    if (c.blocks?.some(b => b.id === id)) {
+                        return { section: s, col: c, isBlock: true, block: c.blocks.find(b => b.id === id) };
+                    }
+                }
+            }
+        }
+        return null;
+    };
+
     const handleDragOver = (event: DragOverEvent) => {
         const { active, over } = event;
         if (!over) return;
 
-        const activeId = active.id;
-        const overId = over.id;
+        const activeId = active.id as string;
+        const overId = over.id as string;
 
-        // Find the containers
-        const activeContainer = sections.find(s => s.id === activeId || s.blocks.some(b => b.id === activeId));
-        const overContainer = sections.find(s => s.id === overId || s.blocks.some(b => b.id === overId));
+        const activeItem = findContainer(activeId);
+        const overItem = findContainer(overId);
 
-        if (!activeContainer || !overContainer || activeContainer === overContainer) {
-            return;
-        }
+        if (!activeItem || !overItem) return;
 
-        // If dragging sidebar block into a section
-        if (active.data.current?.type === 'new-block') {
-            return;
-        }
+        // If dragging sidebar block into a section, wait for DragEnd
+        if (active.data.current?.type === 'new-block') return;
 
-        // If dragging a section
-        if (activeContainer.id === activeId || overContainer.id === overId) {
-            return;
+        // If dragging a section (reordering sections)
+        if (!activeItem.isBlock && !overItem.isBlock) return;
+
+        // Both must be blocks to swap between lists in handleDragOver
+        if (!activeItem.isBlock) return;
+
+        const activeSectionId = activeItem.section.id;
+        const overSectionId = overItem.section.id;
+        const activeColId = activeItem.col?.id;
+        const overColId = overItem.col?.id;
+
+        if (activeSectionId === overSectionId && activeColId === overColId) {
+            return; // Same container, handle in DragEnd
         }
 
         setSections(prev => {
-            const activeSectionIndex = prev.findIndex(s => s.id === activeContainer.id);
-            const overSectionIndex = prev.findIndex(s => s.id === overContainer.id);
+            const newSections = JSON.parse(JSON.stringify(prev)); // Deep clone for safety
+            
+            const getBlocksList = (sections: any[], sectionId: string, colId?: string) => {
+                const sec = sections.find((s: any) => s.id === sectionId);
+                if (!sec) return null;
+                if (colId && sec.columns) {
+                    const col = sec.columns.find((c: any) => c.id === colId);
+                    if (!col) return null;
+                    if (!col.blocks) col.blocks = [];
+                    return col.blocks;
+                }
+                if (!sec.blocks) sec.blocks = [];
+                return sec.blocks;
+            };
 
-            const activeBlockIndex = activeContainer.blocks.findIndex(b => b.id === activeId);
-            const overBlockIndex = overContainer.blocks.findIndex(b => b.id === overId);
+            const activeList = getBlocksList(newSections, activeSectionId, activeColId);
+            const overList = getBlocksList(newSections, overSectionId, overColId);
 
+            if (!activeList || !overList) return prev;
+
+            const activeBlockIndex = activeList.findIndex((b: any) => b.id === activeId);
+            if (activeBlockIndex === -1) return prev;
+            
+            let overBlockIndex = overList.findIndex((b: any) => b.id === overId);
+            
             let newIndex;
-            if (overId in prev.map(s => s.id)) {
-                newIndex = overContainer.blocks.length + 1;
+            if (overId.startsWith('empty-col-')) {
+                newIndex = 0;
             } else {
                 const isBelowOverItem =
                     over &&
                     active.rect.current.translated &&
                     active.rect.current.translated.top >
                     over.rect.top + over.rect.height;
-
                 const modifier = isBelowOverItem ? 1 : 0;
-                newIndex = overBlockIndex >= 0 ? overBlockIndex + modifier : overContainer.blocks.length + 1;
+                newIndex = overBlockIndex >= 0 ? overBlockIndex + modifier : overList.length + 1;
             }
 
-            const newSections = [...prev];
-            const [movedBlock] = newSections[activeSectionIndex].blocks.splice(activeBlockIndex, 1);
-            newSections[overSectionIndex].blocks.splice(newIndex, 0, movedBlock);
+            const [movedBlock] = activeList.splice(activeBlockIndex, 1);
+            overList.splice(newIndex, 0, movedBlock);
 
             return newSections;
         });
@@ -437,21 +491,21 @@ export default function PortalEditor() {
 
         if (!over) return;
 
-        const activeId = active.id;
-        const overId = over.id;
+        const activeId = active.id as string;
+        const overId = over.id as string;
 
-        // Case 1: Dragging Sidebar Item to Section
+        // Case 1: Dragging Sidebar Item to Section/Column
         if (active.data.current?.type === 'new-block') {
             const blockType = active.data.current.blockType;
-            const overSectionId = over.data.current?.sectionId || overId;
-            const overSection = sections.find(s => s.id === overSectionId || s.blocks.some(b => b.id === overSectionId));
+            const overItem = findContainer(overId);
             
-            if (overSection) {
+            if (overItem) {
                 // Initialize default content
                 let content = {};
                 if (blockType === 'header') content = { variant: 'logo-left', logoText: page?.title || 'Byfrost', links: [], cta: { label: 'CTA', url: '#' } };
                 if (blockType === 'hero') content = { title: 'Destaque', subtitle: 'Complemento' };
-                if (blockType === 'text') content = { text: 'Conteúdo de texto' };
+                if (blockType === 'title') content = { title: 'Adicione o texto do seu título aqui', link: '', size: 'Padrão', htmlTag: 'H2', alignment: 'center' };
+                if (blockType === 'text') content = { text: 'Conteúdo de texto', dropCap: false, columns: 'Padrão', columnGap: 16 };
                 if (blockType === 'grid') content = { columns: 2 };
                 if (blockType === 'gallery') content = { items: [] };
 
@@ -461,47 +515,91 @@ export default function PortalEditor() {
                     content
                 };
 
-                setSections(prev => prev.map(s => {
-                    if (s.id === overSection.id) {
-                        const overBlockIndex = s.blocks.findIndex(b => b.id === overId);
-                        const newBlocks = [...s.blocks];
-                        if (overBlockIndex >= 0) {
-                            newBlocks.splice(overBlockIndex, 0, newBlock);
-                        } else {
-                            newBlocks.push(newBlock);
+                setSections(prev => {
+                    const newSections = JSON.parse(JSON.stringify(prev));
+                    const sec = newSections.find((s: any) => s.id === overItem.section.id);
+                    if (!sec) return prev;
+
+                    let targetList;
+                    if (overItem.col) {
+                        const col = sec.columns?.find((c: any) => c.id === overItem.col.id);
+                        if (col) {
+                            if (!col.blocks) col.blocks = [];
+                            targetList = col.blocks;
                         }
-                        return { ...s, blocks: newBlocks };
+                    } else {
+                        if (!sec.blocks) sec.blocks = [];
+                        targetList = sec.blocks;
                     }
-                    return s;
-                }));
+
+                    if (targetList) {
+                        if (overId.startsWith('empty-col-')) {
+                            targetList.push(newBlock);
+                        } else {
+                            const overBlockIndex = targetList.findIndex((b: any) => b.id === overId);
+                            if (overBlockIndex >= 0) {
+                                targetList.splice(overBlockIndex, 0, newBlock);
+                            } else {
+                                targetList.push(newBlock);
+                            }
+                        }
+                    }
+                    return newSections;
+                });
             }
             return;
         }
 
-        // Case 2: Reordering Sections
-        const activeSectionIndex = sections.findIndex(s => s.id === activeId);
-        const overSectionIndex = sections.findIndex(s => s.id === overId);
+        const activeItem = findContainer(activeId);
+        const overItem = findContainer(overId);
 
-        if (activeSectionIndex !== -1 && overSectionIndex !== -1) {
-            if (activeId !== overId) {
+        if (!activeItem || !overItem) return;
+
+        // Case 2: Reordering Sections
+        if (!activeItem.isBlock && !overItem.isBlock) {
+            const activeSectionIndex = sections.findIndex(s => s.id === activeId);
+            const overSectionIndex = sections.findIndex(s => s.id === overId);
+            if (activeSectionIndex !== -1 && overSectionIndex !== -1 && activeId !== overId) {
                 setSections(items => arrayMove(items, activeSectionIndex, overSectionIndex));
             }
             return;
         }
 
-        // Case 3: Reordering Blocks within same Section (handleDragOver handles different sections)
-        const currentSection = sections.find(s => s.blocks.some(b => b.id === activeId));
-        if (currentSection) {
-            const activeBlockIndex = currentSection.blocks.findIndex(b => b.id === activeId);
-            const overBlockIndex = currentSection.blocks.findIndex(b => b.id === overId);
+        // Case 3: Reordering Blocks within SAME container (handleDragOver handles different containers)
+        if (activeItem.isBlock) {
+            const activeSectionId = activeItem.section.id;
+            const overSectionId = overItem.section.id;
+            const activeColId = activeItem.col?.id;
+            const overColId = overItem.col?.id;
 
-            if (activeBlockIndex !== -1 && overBlockIndex !== -1 && activeBlockIndex !== overBlockIndex) {
-                setSections(prev => prev.map(s => {
-                    if (s.id === currentSection.id) {
-                        return { ...s, blocks: arrayMove(s.blocks, activeBlockIndex, overBlockIndex) };
+            if (activeSectionId === overSectionId && activeColId === overColId) {
+                setSections(prev => {
+                    const newSections = JSON.parse(JSON.stringify(prev));
+                    const sec = newSections.find((s: any) => s.id === activeSectionId);
+                    if (!sec) return prev;
+
+                    let targetList;
+                    if (activeColId) {
+                        const col = sec.columns?.find((c: any) => c.id === activeColId);
+                        if (col) targetList = col.blocks;
+                    } else {
+                        targetList = sec.blocks;
                     }
-                    return s;
-                }));
+
+                    if (targetList) {
+                        const activeBlockIndex = targetList.findIndex((b: any) => b.id === activeId);
+                        const overBlockIndex = targetList.findIndex((b: any) => b.id === overId);
+                        if (activeBlockIndex !== -1 && overBlockIndex !== -1 && activeBlockIndex !== overBlockIndex) {
+                            const newArray = arrayMove(targetList, activeBlockIndex, overBlockIndex);
+                            if (activeColId) {
+                                sec.columns.find((c: any) => c.id === activeColId).blocks = newArray;
+                            } else {
+                                sec.blocks = newArray;
+                            }
+                        }
+                    }
+                    return newSections;
+                });
             }
         }
     };
@@ -708,7 +806,8 @@ export default function PortalEditor() {
                     <DraggableBlockButton icon={<Layout />} label="Cards" type="info-cards" onClick={() => activeColumnId && addBlock(activeColumnId.sectionId, 'info-cards', activeColumnId.colId)} />
                     <DraggableBlockButton icon={<Plus />} label="Grid" type="grid" onClick={() => activeColumnId && addBlock(activeColumnId.sectionId, 'grid', activeColumnId.colId)} />
                     <DraggableBlockButton icon={<ImageIcon />} label="Galeria" type="gallery" onClick={() => activeColumnId && addBlock(activeColumnId.sectionId, 'gallery', activeColumnId.colId)} />
-                    <DraggableBlockButton icon={<Type />} label="Texto" type="text" onClick={() => activeColumnId && addBlock(activeColumnId.sectionId, 'text', activeColumnId.colId)} />
+                    <DraggableBlockButton icon={<Type />} label="Título" type="title" onClick={() => activeColumnId && addBlock(activeColumnId.sectionId, 'title', activeColumnId.colId)} />
+                    <DraggableBlockButton icon={<AlignLeft />} label="Texto" type="text" onClick={() => activeColumnId && addBlock(activeColumnId.sectionId, 'text', activeColumnId.colId)} />
                     <DraggableBlockButton icon={<ImageIcon />} label="Imagem" type="image" onClick={() => activeColumnId && addBlock(activeColumnId.sectionId, 'image', activeColumnId.colId)} />
                     <DraggableBlockButton icon={<LinkIcon />} label="Links" type="links" onClick={() => activeColumnId && addBlock(activeColumnId.sectionId, 'links', activeColumnId.colId)} />
                     <DraggableBlockButton icon={<Plus />} label="HTML" type="html" onClick={() => activeColumnId && addBlock(activeColumnId.sectionId, 'html', activeColumnId.colId)} />
@@ -873,13 +972,59 @@ export default function PortalEditor() {
                         </div>
                     </div>
                     <div className="flex-1 overflow-y-auto p-4">
-                        <AgroForteEditor
-                            data={agroforteData}
-                            onChange={(d) => setAgroforteData(d)}
-                            activeElementId={activeElementId}
-                            onBack={() => setActiveElementId(null)}
-                            renderCustomBlocksPanel={() => customBlocksPanel}
-                        />
+                        {activeSettingsTarget ? (
+                            <div className="space-y-6">
+                                <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
+                                    <div className="flex items-center gap-2 mb-4 pb-4 border-b border-slate-100">
+                                        <Button variant="ghost" size="icon" className="rounded-full h-6 w-6" onClick={() => setActiveSettingsTarget(null)}>
+                                            <ChevronLeft className="h-4 w-4" />
+                                        </Button>
+                                        <Label className="text-[10px] uppercase text-slate-400 font-bold">Propriedades</Label>
+                                    </div>
+                                    
+                                    {activeSettingsTarget.type === 'fixed_section' && (
+                                        <FixedSectionLayoutEditor 
+                                            type={activeSettingsTarget.id === 'fixed-header' ? 'header' : 'footer'}
+                                            settings={agroforteData?.layoutSettings?.[activeSettingsTarget.id] || {}} 
+                                            onChange={(newSettings) => {
+                                                if (!agroforteData) return;
+                                                setAgroforteData({
+                                                    ...agroforteData,
+                                                    layoutSettings: {
+                                                        ...(agroforteData.layoutSettings || {}),
+                                                        [activeSettingsTarget.id]: newSettings
+                                                    }
+                                                });
+                                            }} 
+                                        />
+                                    )}
+                                    {(activeSettingsTarget.type === 'section' || activeSettingsTarget.type === 'block') && (() => {
+                                        const activeBlockItem = activeSettingsTarget.type === 'block' && activeSettingsTarget.blockId ? findContainer(activeSettingsTarget.blockId) : null;
+                                        const activeBlock = activeBlockItem?.block;
+                                        return (
+                                            <div className="space-y-4">
+                                                {activeBlock ? (
+                                                    <BlockPropertiesPanel 
+                                                        block={activeBlock} 
+                                                        onChange={(updates) => updateBlock(activeSettingsTarget.id, activeSettingsTarget.blockId!, updates)}
+                                                    />
+                                                ) : (
+                                                    <p className="text-sm text-slate-500">Selecione um bloco para editar as propriedades.</p>
+                                                )}
+                                            </div>
+                                        );
+                                    })()}
+                                </div>
+                            </div>
+                        ) : (
+                            <AgroForteEditor
+                                data={agroforteData}
+                                onChange={(d) => setAgroforteData(d)}
+                                activeElementId={activeElementId}
+                                onBack={() => setActiveElementId(null)}
+                                renderCustomBlocksPanel={() => customBlocksPanel}
+                            />
+                        )}
                     </div>
                     <div className="p-4 border-t border-slate-100 dark:border-slate-800 space-y-2">
                         <Button
@@ -991,11 +1136,22 @@ export default function PortalEditor() {
                                         }} 
                                     />
                                 )}
-                                {(activeSettingsTarget.type === 'section' || activeSettingsTarget.type === 'block') && (
-                                    <div className="space-y-4">
-                                        <p className="text-sm text-slate-500">As opções de edição migraram para este painel. Você está editando o ID: {activeSettingsTarget.id} {activeSettingsTarget.blockId && ` / Bloco: ${activeSettingsTarget.blockId}`}</p>
-                                    </div>
-                                )}
+                                {(activeSettingsTarget.type === 'section' || activeSettingsTarget.type === 'block') && (() => {
+                                    const activeBlockItem = activeSettingsTarget.type === 'block' && activeSettingsTarget.blockId ? findContainer(activeSettingsTarget.blockId) : null;
+                                    const activeBlock = activeBlockItem?.block;
+                                    return (
+                                        <div className="space-y-4">
+                                            {activeBlock ? (
+                                                <BlockPropertiesPanel 
+                                                    block={activeBlock} 
+                                                    onChange={(updates) => updateBlock(activeSettingsTarget.id, activeSettingsTarget.blockId!, updates)}
+                                                />
+                                            ) : (
+                                                <p className="text-sm text-slate-500">Selecione um bloco para editar as propriedades.</p>
+                                            )}
+                                        </div>
+                                    );
+                                })()}
                             </div>
                         </div>
                     ) : (
@@ -1179,13 +1335,43 @@ function SortableFixedSectionItem({ id, children, previewMode, active, onSetting
                 <button onClick={(e) => { e.stopPropagation(); onSettingsClick(); }} className="p-1.5 px-3 hover:bg-blue-600 transition-colors cursor-pointer" title="Configurações">
                     <Settings className="h-4 w-4" />
                 </button>
-                <div {...attributes} {...listeners} className="p-1.5 px-3 hover:bg-blue-600 transition-colors cursor-grab active:cursor-grabbing" title="Arrastar Seção">
+                <div 
+                    {...attributes} 
+                    {...listeners} 
+                    onClick={(e) => { e.stopPropagation(); onSettingsClick(); }}
+                    onPointerUp={(e) => { e.stopPropagation(); onSettingsClick(); }}
+                    className="p-1.5 px-3 hover:bg-blue-600 transition-colors cursor-grab active:cursor-grabbing" 
+                    title="Arrastar ou Configurar"
+                >
                     <GripVertical className="h-4 w-4" />
                 </div>
             </div>
-            <div className="pointer-events-none">
+            {/* Click overlay to ensure clicks register over the fixed section */}
+            <div className="absolute inset-0 z-10 cursor-pointer" onClick={(e) => { e.stopPropagation(); onSettingsClick(); }} />
+            <div className="pointer-events-none relative z-0">
                 {children}
             </div>
+        </div>
+    );
+}
+
+function DroppableEmptyColumn({ sectionId, colId, onAddWidgetClick }: { sectionId: string, colId: string, onAddWidgetClick: any }) {
+    const { setNodeRef, isOver } = useDroppable({
+        id: `empty-col-${sectionId}-${colId}`,
+        data: { type: 'empty-col', sectionId, colId }
+    });
+
+    return (
+        <div 
+            ref={setNodeRef}
+            className={cn("h-24 border border-dashed rounded-lg flex items-center justify-center transition-colors", isOver ? "border-blue-500 bg-blue-100 ring-2 ring-blue-500/30" : "border-slate-300 bg-slate-50/50 group-hover/col:border-blue-300")}
+        >
+            <button 
+                onClick={(e) => { e.stopPropagation(); onAddWidgetClick?.(sectionId, colId); }}
+                className="h-8 w-8 rounded-full bg-[#9b3a5a] text-white flex items-center justify-center shadow hover:opacity-90 transition-opacity"
+            >
+                <Plus className="h-4 w-4" />
+            </button>
         </div>
     );
 }
@@ -1198,10 +1384,20 @@ function SortableSectionItem({ section, previewMode, active, onSelect, onRemove,
     return (
         <div ref={setNodeRef} style={style} className={cn("group relative border-2 transition-all mb-8 rounded-[32px]", active ? "border-blue-500 bg-blue-50/50 ring-4 ring-blue-500/20" : "border-transparent hover:border-blue-500/50")} onClick={(e) => { e.stopPropagation(); onSettingsClick(); }}>
             <div className={cn("absolute right-6 top-0 z-50 bg-white border border-slate-200 text-slate-700 rounded-b-xl shadow-xl flex items-center h-8 transition-all overflow-hidden divide-x divide-slate-100", active ? "translate-y-0 opacity-100" : "opacity-0 group-hover:opacity-100 translate-y-[-100%] group-hover:translate-y-0")}>
-                <div className="px-3 h-full flex items-center text-[10px] font-bold uppercase tracking-widest text-blue-600 bg-blue-50/50">
+                <div onClick={(e) => { e.stopPropagation(); onSettingsClick(); }} className="px-3 h-full flex items-center text-[10px] font-bold uppercase tracking-widest text-blue-600 bg-blue-50/50 cursor-pointer hover:bg-blue-100 transition-colors">
                     Seção Livre
                 </div>
-                <div {...attributes} {...listeners} className="p-1.5 px-3 hover:bg-slate-50 transition-colors text-slate-400 hover:text-slate-600 cursor-grab active:cursor-grabbing focus:outline-none">
+                <button onClick={(e) => { e.stopPropagation(); onSettingsClick(); }} className="p-1.5 px-3 hover:bg-slate-50 transition-colors text-slate-400 hover:text-slate-600 focus:outline-none" title="Configurações">
+                    <Settings className="h-4 w-4" />
+                </button>
+                <div 
+                    {...attributes} 
+                    {...listeners} 
+                    onClick={(e) => { e.stopPropagation(); onSettingsClick(); }}
+                    onPointerUp={(e) => { e.stopPropagation(); onSettingsClick(); }}
+                    className="p-1.5 px-3 hover:bg-slate-50 transition-colors text-slate-400 hover:text-slate-600 cursor-grab active:cursor-grabbing focus:outline-none" 
+                    title="Arrastar ou Configurar"
+                >
                     <GripVertical className="h-4 w-4" />
                 </div>
                 <button onClick={(e) => { e.stopPropagation(); onRemove(); }} className="p-1.5 px-3 hover:bg-red-50 hover:text-red-600 transition-colors text-slate-400 focus:outline-none">
@@ -1230,14 +1426,7 @@ function SortableSectionItem({ section, previewMode, active, onSelect, onRemove,
                                     </SortableContext>
                                     
                                     {(!col.blocks || col.blocks.length === 0) && (
-                                        <div className="h-24 border border-dashed border-slate-300 rounded-lg flex items-center justify-center bg-slate-50/50 group-hover/col:border-blue-300 transition-colors">
-                                            <button 
-                                                onClick={(e) => { e.stopPropagation(); onAddWidgetClick?.(section.id, col.id); }}
-                                                className="h-8 w-8 rounded-full bg-[#9b3a5a] text-white flex items-center justify-center shadow hover:opacity-90 transition-opacity"
-                                            >
-                                                <Plus className="h-4 w-4" />
-                                            </button>
-                                        </div>
+                                        <DroppableEmptyColumn sectionId={section.id} colId={col.id} onAddWidgetClick={onAddWidgetClick} />
                                     )}
                                     {col.blocks && col.blocks.length > 0 && (
                                         <div className="opacity-0 group-hover/col:opacity-100 transition-opacity flex justify-center mt-2">
