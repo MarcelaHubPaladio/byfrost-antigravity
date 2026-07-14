@@ -1064,15 +1064,15 @@ function SortableSectionItem({ section, previewMode, active, onSelect, onRemove,
                             <Settings className="h-4 w-4" />
                         </button>
                     </PopoverTrigger>
-                    <PopoverContent className="w-[350px] max-h-[80vh] overflow-y-auto p-6 rounded-[24px] shadow-2xl border-slate-100" side="bottom" align="center">
+                    <PopoverContent className="w-[95vw] sm:w-[380px] max-h-[80vh] overflow-y-auto p-6 rounded-[24px] shadow-2xl border-slate-100" side="bottom" align="center" sideOffset={10}>
                         <div className="space-y-6">
-                            <div className="flex items-center justify-between">
-                                <div className="space-y-0.5">
-                                    <h4 className="font-bold text-sm">Configuração da Seção</h4>
-                                    <p className="text-[10px] text-blue-500 font-bold uppercase">{previewMode === 'mobile' ? 'Editando Mobile 📱' : 'Editando Desktop 🖥️'}</p>
+                            <div className="flex items-start justify-between gap-4">
+                                <div className="space-y-0.5 flex-1 min-w-0">
+                                    <h4 className="font-bold text-sm truncate leading-tight">Configuração da Seção</h4>
+                                    <p className="text-[10px] text-blue-500 font-bold uppercase truncate">{previewMode === 'mobile' ? 'Editando Mobile 📱' : 'Editando Desktop 🖥️'}</p>
                                 </div>
-                                <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full" onClick={onRemove}>
-                                    <Trash2 className="h-4 w-4 text-red-500" />
+                                <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0 rounded-full text-red-500 hover:bg-red-50 hover:text-red-600 focus:ring-2 focus:ring-red-500" onClick={onRemove}>
+                                    <Trash2 className="h-4 w-4" />
                                 </Button>
                             </div>
 
