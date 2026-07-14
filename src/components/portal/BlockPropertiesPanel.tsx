@@ -6,7 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { RichTextEditor } from '@/components/RichTextEditor';
 import { Textarea } from '@/components/ui/textarea';
 import { Slider } from '@/components/ui/slider';
-import { AlignLeft, AlignCenter, AlignRight, AlignJustify } from 'lucide-react';
+import { AlignLeft, AlignCenter, AlignRight, AlignJustify, Trash2, Plus } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ImageUpload } from './ImageUpload';
 
@@ -17,6 +17,88 @@ export function BlockPropertiesPanel({ block, onChange }: { block: any, onChange
     const updateContent = (updates: any) => {
         onChange(updates);
     };
+
+    if (block.type === 'header') {
+        const links = content.links || [
+            { label: 'Início', url: '#' },
+            { label: 'Serviços', url: '#services' },
+            { label: 'Produtos', url: '#products' },
+            { label: 'Sobre Nós', url: '#sobre' },
+            { label: 'Contato', url: '#contato' },
+        ];
+
+        return (
+            <div className="space-y-4">
+                <div className="space-y-2">
+                    <Label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Logo / Texto</Label>
+                    <Input 
+                        value={content.logoText || 'AgroFORTE'}
+                        onChange={e => updateContent({ logoText: e.target.value })}
+                        className="text-sm h-8"
+                        placeholder="Ex: AgroFORTE"
+                    />
+                </div>
+
+                <div className="space-y-2">
+                    <Label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Links do Menu</Label>
+                    <div className="space-y-2 mt-2">
+                        {links.map((link: any, i: number) => (
+                            <div key={i} className="flex gap-2 items-center">
+                                <Input 
+                                    value={link.label} 
+                                    onChange={e => {
+                                        const newLinks = [...links];
+                                        newLinks[i].label = e.target.value;
+                                        updateContent({ links: newLinks });
+                                    }} 
+                                    placeholder="Rótulo" 
+                                    className="h-8 text-sm flex-1 bg-white" 
+                                />
+                                <Input 
+                                    value={link.url} 
+                                    onChange={e => {
+                                        const newLinks = [...links];
+                                        newLinks[i].url = e.target.value;
+                                        updateContent({ links: newLinks });
+                                    }} 
+                                    placeholder="URL ou #ancora" 
+                                    className="h-8 text-sm flex-1 bg-white" 
+                                />
+                                <button 
+                                    onClick={() => {
+                                        const newLinks = [...links];
+                                        newLinks.splice(i, 1);
+                                        updateContent({ links: newLinks });
+                                    }} 
+                                    className="h-8 w-8 flex items-center justify-center text-red-500 hover:bg-red-50 rounded-md transition-colors"
+                                >
+                                    <Trash2 className="h-4 w-4" />
+                                </button>
+                            </div>
+                        ))}
+                        <button 
+                            onClick={() => {
+                                updateContent({ links: [...links, { label: 'Novo Link', url: '#' }] });
+                            }} 
+                            className="w-full flex items-center justify-center gap-2 text-sm text-green-600 hover:bg-green-50 py-2 rounded-md transition-colors border border-dashed border-green-200 mt-2"
+                        >
+                            <Plus className="h-4 w-4" /> Adicionar Link
+                        </button>
+                    </div>
+                </div>
+
+                <div className="space-y-2 pt-2 border-t border-slate-100">
+                    <Label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Botão CTA</Label>
+                    <Input 
+                        value={content.ctaText || 'Fale Conosco'}
+                        onChange={e => updateContent({ ctaText: e.target.value })}
+                        className="text-sm h-8"
+                        placeholder="Texto do botão"
+                    />
+                </div>
+            </div>
+        );
+    }
 
     if (block.type === 'title') {
         return (

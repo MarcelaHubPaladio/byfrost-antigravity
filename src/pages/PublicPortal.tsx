@@ -19,6 +19,7 @@ import {
 import { useState, useEffect } from "react";
 import { AgroForteRenderer } from "@/components/portal/AgroForteRenderer";
 import { AGROFORTE_DEFAULT } from "@/components/portal/agroforte-types";
+import { PortalBlockRenderer } from "@/components/portal/PortalBlockRenderer";
 
 type BlockType = 'header' | 'hero' | 'text' | 'image' | 'links' | 'divider' | 'html' | 'slider' | 'info-cards' | 'grid' | 'gallery';
 
@@ -412,7 +413,74 @@ export default function PublicPortal() {
     // ─── AgroForte template detection ───────────────────────────────────────
     if (Array.isArray(content) && content.length > 0 && content[0]?._template === 'agroforte') {
         const agroData = { ...AGROFORTE_DEFAULT, ...content[0] };
-        return <AgroForteRenderer data={agroData} />;
+        
+        const customSectionsContent = (agroData.customSections || []).map((section: any) => {
+            const effectiveSettings = section.settings || {};
+            return (
+                <section 
+                    key={section.id} 
+                    className={cn(
+                        "relative w-full overflow-hidden transition-all duration-700",
+                        effectiveSettings.height === 'fit-screen' ? "min-h-screen" : effectiveSettings.height === 'min-height' ? "min-h-[500px]" : "min-h-0",
+                        "flex flex-col",
+                        effectiveSettings.htmlTag || ''
+                    )}
+                    style={{
+                        backgroundColor: effectiveSettings.style?.background?.color || effectiveSettings.backgroundColor || 'transparent',
+                        backgroundImage: effectiveSettings.style?.background?.image ? `url(${effectiveSettings.style.background.image})` : effectiveSettings.backgroundImage ? `url(${effectiveSettings.backgroundImage})` : 'none',
+                        backgroundSize: effectiveSettings.style?.background?.size || effectiveSettings.backgroundSize || 'cover',
+                        backgroundPosition: effectiveSettings.style?.background?.position || 'center',
+                        backgroundRepeat: effectiveSettings.style?.background?.repeat || 'no-repeat',
+                        backgroundAttachment: effectiveSettings.style?.background?.attachment || 'scroll',
+                        borderStyle: effectiveSettings.style?.border?.type && effectiveSettings.style?.border?.type !== 'none' ? effectiveSettings.style.border.type : undefined,
+                        borderWidth: effectiveSettings.style?.border?.width ? `${effectiveSettings.style.border.width}px` : undefined,
+                        borderColor: effectiveSettings.style?.border?.color,
+                        borderRadius: effectiveSettings.style?.border?.radius ? `${effectiveSettings.style.border.radius}px` : undefined,
+                        paddingTop: effectiveSettings.paddingY ? `${effectiveSettings.paddingY}px` : undefined,
+                        paddingBottom: effectiveSettings.paddingY ? `${effectiveSettings.paddingY}px` : undefined,
+                        paddingLeft: isMobile ? '16px' : effectiveSettings.paddingX ? `${effectiveSettings.paddingX}px` : '32px',
+                        paddingRight: isMobile ? '16px' : effectiveSettings.paddingX ? `${effectiveSettings.paddingX}px` : '32px',
+                        justifyContent: effectiveSettings.alignItems || 'flex-start',
+                        alignItems: effectiveSettings.justifyContent || 'stretch',
+                    }}
+                >
+                    {(effectiveSettings.style?.background?.overlay?.color || effectiveSettings.backgroundOverlay) && (
+                        <div className="absolute inset-0 z-0" style={{ backgroundColor: effectiveSettings.style?.background?.overlay?.color || effectiveSettings.backgroundOverlay }}></div>
+                    )}
+                    <div className="relative z-10">
+                        <div className={cn("mx-auto flex", isMobile ? 'w-full flex-col' : effectiveSettings.contentWidth === 'full' ? 'w-full px-4' : 'max-w-7xl', effectiveSettings.columnGap === 'no-gap' ? 'gap-0' : effectiveSettings.columnGap === 'extended' ? 'gap-8' : effectiveSettings.columnGap === 'wide' ? 'gap-12' : 'gap-4')}>
+                            {section.columns ? (
+                                section.columns.map((col: any) => (
+                                    <div key={col.id} style={{ width: isMobile ? '100%' : `${col.size}%` }} className="flex flex-col gap-4 relative">
+                                        {(col.blocks || []).map((block: any) => (
+                                            <PortalBlockRenderer 
+                                                key={block.id} 
+                                                block={block}
+                                                isPremium={isPremium}
+                                                isMobile={isMobile}
+                                            />
+                                        ))}
+                                    </div>
+                                ))
+                            ) : (
+                                <div className="flex flex-col gap-4 w-full">
+                                    {(section.blocks || []).map((block: any) => (
+                                        <PortalBlockRenderer 
+                                            key={block.id} 
+                                            block={block}
+                                            isPremium={isPremium}
+                                            isMobile={isMobile}
+                                        />
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </section>
+            );
+        });
+
+        return <AgroForteRenderer data={agroData} customSectionsContent={customSectionsContent} />;
     }
     // ────────────────────────────────────────────────────────────────────────
 
