@@ -414,9 +414,11 @@ export default function PublicPortal() {
     if (Array.isArray(content) && content.length > 0 && content[0]?._template === 'agroforte') {
         const agroData = { ...AGROFORTE_DEFAULT, ...content[0] };
         
-        const customSectionsContent = (agroData.customSections || []).map((section: any) => {
+        const customSectionsMap: Record<string, React.ReactNode> = {};
+        
+        (agroData.customSections || []).forEach((section: any) => {
             const effectiveSettings = section.settings || {};
-            return (
+            customSectionsMap[section.id] = (
                 <section 
                     key={section.id} 
                     className={cn(
@@ -480,7 +482,7 @@ export default function PublicPortal() {
             );
         });
 
-        return <AgroForteRenderer data={agroData} customSectionsContent={customSectionsContent} />;
+        return <AgroForteRenderer data={agroData} customSectionsMap={customSectionsMap} />;
     }
     // ────────────────────────────────────────────────────────────────────────
 

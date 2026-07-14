@@ -291,320 +291,318 @@ export function AgroForteRenderer({ data, editMode, onSelectElement, customSecti
       <style dangerouslySetInnerHTML={{ __html: AGROFORTE_CSS }} />
 
       
-      {(!sectionToRender || sectionToRender === 'nav') && (
-        <>
-{/* NAV */}
-      <EditableBlock id="nav" label="Navegação" className="afr-nav" style={{ backgroundColor: isScrolled ? (brand.navBackgroundScrolled || '#1a3a1f') : (brand.navBackgroundTop || 'transparent') }}>
-        <div className="afr-logo">
-          {brand.logoImage ? (
-            <img src={brand.logoImage} alt={brand.name} style={{ height: '36px', width: 'auto', objectFit: 'contain' }} />
-          ) : (
-            <>
-              <div className="afr-logo-icon">
-                <svg viewBox="0 0 24 24"><path d="M12 2C9 2 6 4 5 7C4 10 5 13 7 15C9 17 11 17 11 20H13C13 17 15 17 17 15C19 13 20 10 19 7C18 4 15 2 12 2Z"/><rect x="10" y="20" width="4" height="3" rx="1"/></svg>
-              </div>
-              <div>
-                <span className="afr-logo-name">{brandFirst}<em>{brandSecond}</em></span>
-                <span className="afr-logo-tag">{brand.tagline}</span>
-              </div>
-            </>
-          )}
-        </div>
-        <button 
-          className="afr-nav-menu-toggle" 
-          onClick={(e) => { e.stopPropagation(); setIsMobileMenuOpen(!isMobileMenuOpen); }}
-          aria-label="Alternar menu"
-        >
-          {isMobileMenuOpen ? (
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
-          ) : (
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
-          )}
-        </button>
-
-        <div 
-          className={cn("afr-nav-menu", isMobileMenuOpen && "open")} 
-          style={{ '--nav-bg-scrolled': brand.navBackgroundScrolled || '#1a3a1f' } as React.CSSProperties}
-        >
-          <ul className="afr-nav-links">
-            {safeNavLinks.map((link, idx) => (
-              <li key={idx}><a href={link.url} onClick={() => setIsMobileMenuOpen(false)}>{link.label}</a></li>
-            ))}
-          </ul>
-          <a href={brand.navCtaUrl || '#contato'} className="afr-nav-cta" onClick={() => setIsMobileMenuOpen(false)}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 014.47 11.5a19.79 19.79 0 01-3.07-8.67A2 2 0 013.38 1h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L7.91 8.96a16 16 0 006.07 6.07l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z"/></svg>
-            {brand.navCta}
-          </a>
-        </div>
-      </EditableBlock>
-
-
-        </>
-      )}
-      
-      {(!sectionToRender || sectionToRender === 'hero') && (
-        <>
-{/* HERO */}
-      <EditableBlock id="hero" label="Banner Principal" className="afr-hero" style={{ ...getStyleProps(hero.styles), paddingTop: undefined, paddingBottom: undefined }}>
-        {safeBanners.map((banner, i) => {
-          const BadgeIcon = ICON_MAP[banner.badgeIcon || 'Shield'] || Shield;
-          return (
-          <div key={i} className={`afr-hero-slide ${i === currentSlide ? 'active' : ''}`} style={{ 
-            background: banner.overlayGradient || 'linear-gradient(135deg, #0d2b0e 0%, #1a3a1f 40%, #2d5a1e 100%)',
-            paddingTop: hero.styles?.paddingTop,
-            paddingBottom: hero.styles?.paddingBottom
-          }}>
-            <img className="afr-hero-bg" src={banner.bgImage} alt="" style={{ objectFit: (banner.imageFit || 'cover') as any, objectPosition: banner.imagePosition || 'center' }} />
-            <div className="afr-hero-content">
-              <div dangerouslySetInnerHTML={{ __html: banner.headline || '' }} />
-              <div dangerouslySetInnerHTML={{ __html: banner.subtitle || '' }} />
-              <a href={banner.ctaUrl} className="afr-hero-cta">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
-                {banner.ctaText}
-              </a>
-            </div>
-            {banner.showBadge !== false && (
-              <div className="afr-hero-badge">
-                <div className="afr-hero-badge-icon">
-                  <BadgeIcon size={22} color="#2e7d32" strokeWidth={2} />
-                </div>
-                <div>
-                  <strong>{banner.badgeTitle}</strong>
-                  <span>{banner.badgeText}</span>
-                </div>
-              </div>
-            )}
-          </div>
-        )})}
-        {safeBanners.length > 1 && (
-          <div style={{ position: 'absolute', bottom: '20px', left: '5%', zIndex: 3, display: 'flex', gap: '8px' }}>
-            {safeBanners.map((_, i) => (
-              <button
-                key={i}
-                onClick={() => setCurrentSlide(i)}
-                style={{ width: '8px', height: '8px', borderRadius: '50%', border: 'none', cursor: 'pointer', background: i === currentSlide ? '#4caf50' : 'rgba(255,255,255,0.3)' }}
-              />
-            ))}
-          </div>
-        )}
-      </EditableBlock>
-
-
-        </>
-      )}
-      
-      {(!sectionToRender || sectionToRender === 'catalogs_categories') && (
-        <>
-{/* CATEGORIAS */}
-      <EditableBlock id="catalogs_categories" label="Categorias" className="afr-section-solutions" style={getStyleProps(catalogs.styles)}>
-        <p className="afr-section-label">{catalogs.categoriesLabel || 'NOSSAS SOLUÇÕES PARA CADA ETAPA DO CAMPO'}</p>
-        <div className="afr-categories">
-          {(catalogs.categories || [
-            { title: 'INSUMOS AGRÍCOLAS', desc: 'Fertilizantes, sementes e defensivos de alta qualidade para máxima produtividade das lavouras.', img: 'https://images.unsplash.com/photo-1585664811154-4c86e2e5f86d?w=600&q=80', color: 'green', icon: 'Sprout' },
-            { title: 'TECNOLOGIA DE APLICAÇÃO', desc: 'Equipamentos e soluções que garantem eficiência e precisão na aplicação.', img: 'https://images.unsplash.com/photo-1589923188900-85dae523342b?w=600&q=80', color: 'purple', icon: 'Cpu' },
-            { title: 'PLANTIO E PREPARO DE SOLO', desc: 'Máquinas e implementos para cultivo, plantio e manejo com mais desempenho.', img: 'https://images.unsplash.com/photo-1574943320219-553eb213f72d?w=600&q=80', color: 'brown', icon: 'Tractor' },
-          ]).map(cat => {
-            const IconComponent = ICON_MAP[cat.icon as keyof typeof ICON_MAP] || Package;
-            return (
-            <div className="afr-cat-card" key={cat.title}>
-              <img src={cat.img} alt={cat.title} />
-              <div className={`afr-cat-overlay ${cat.color}`} />
-              <div className="afr-cat-content">
-                <div className="afr-cat-icon" style={{ background: cat.color === 'green' ? 'rgba(76,175,80,.3)' : cat.color === 'purple' ? 'rgba(156,39,176,.3)' : 'rgba(121,85,72,.3)' }}>
-                  <IconComponent size={24} color="#ffffff" strokeWidth={2} />
-                </div>
-                <div dangerouslySetInnerHTML={{ __html: cat.title || '' }} className="afr-cat-title-inner" />
-                <div dangerouslySetInnerHTML={{ __html: cat.desc || '' }} />
-                <div className="afr-cat-btn"><svg viewBox="0 0 24 24"><path d="M5 12h14M12 5l7 7-7 7"/></svg></div>
-              </div>
-            </div>
-            );
-          })}
-        </div>
-      </EditableBlock>
-
-      {/* PRODUTOS EM DESTAQUE */}
-
-        </>
-      )}
-      
-      {(!sectionToRender || sectionToRender === 'featured_products') && (
-        <>
-      <EditableBlock id="featured_products" label="Produtos em Destaque" className="afr-section-products" style={getStyleProps(data.featuredProductsStyles)}>
-        <div className="afr-products-header">
-          <div>
-            <p className="afr-products-label">PRODUTOS EM DESTAQUE</p>
-            <h3 className="afr-products-title">Qualidade que gera resultado!</h3>
-          </div>
-        </div>
-        <div className="afr-products-grid">
-          {featuredProducts.map((p, i) => (
-            <div className="afr-product-card" key={i}>
-              <img src={p.image} alt={p.name} />
-              <div className="afr-product-card-info">
-                <h4>{p.name}</h4>
-                <div className="afr-product-price">{p.price} <span className="afr-product-unit">{p.unit}</span></div>
-              </div>
-              <button className="afr-product-add">+ Adicionar</button>
-            </div>
-          ))}
-        </div>
-        <button className="afr-view-all">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
-          Ver Todos os Produtos
-        </button>
-      </EditableBlock>
-
-        </>
-      )}
-
-      {/* CATÁLOGOS */}
-      {(!sectionToRender || sectionToRender === 'catalogs_lists') && (
-        <>
-      {[
-        { key: 'insumos', label: 'INSUMOS AGRÍCOLAS', colorClass: 'insumos', icon: <svg viewBox="0 0 24 24"><path d="M12 2C9 2 6 4 5 7C4 10 5 13 7 15C9 17 11 17 11 20H13C13 17 15 17 17 15C19 13 20 10 19 7C18 4 15 2 12 2Z"/></svg> },
-        { key: 'tecnologia', label: 'TECNOLOGIA DE APLICAÇÃO', colorClass: 'tecnologia', icon: <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/></svg> },
-        { key: 'plantio', label: 'PLANTIO E PREPARO DE SOLO', colorClass: 'plantio', icon: <svg viewBox="0 0 24 24"><path d="M3 9L12 2L21 9V20A2 2 0 0119 22H5A2 2 0 013 20V9Z"/></svg> },
-      ].map(cat => {
-        const catalog = catalogs[cat.key as keyof typeof catalogs] as any;
-        return (
-          <EditableBlock id={`catalog_${cat.key}`} label={`Catálogo: ${cat.label}`} className={`afr-catalog-row ${cat.colorClass}`} key={cat.key} style={getStyleProps(catalog.styles)}>
-            <div className="afr-catalog-info">
-              <div className="afr-catalog-info-icon">{cat.icon}</div>
-              <h3>{cat.label}</h3>
-              <p>{catalog.description}</p>
-              <a href="#">Ver Todos <svg viewBox="0 0 24 24" style={{width:14,height:14,stroke:'#fff',fill:'none',strokeWidth:2.5,display:'inline',marginLeft:4}}><path d="M5 12h14M12 5l7 7-7 7"/></svg></a>
-            </div>
-            <div className="afr-catalog-products">
-              {catalog.products.map((p: any, i: number) => (
-                <div className="afr-catalog-product" key={i}>
-                  <img src={p.image} alt={p.name} />
-                  <div className="afr-catalog-product-info">
-                    <h4>{p.name}</h4>
-                    <span>{p.price}</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </EditableBlock>
-        );
-      })}
-
-        </>
-      )}
-
-      {/* POR QUE AGROFORTE */}
-      
-      {(!sectionToRender || sectionToRender === 'about') && (
-        <>
-<EditableBlock id="about" label="Sobre Nós" className="afr-section-why" style={getStyleProps(data.about?.styles)}>
-        <p className="afr-why-label">{data.about?.label || 'Por que escolher AgroForte?'}</p>
-        <div className="afr-why-title" dangerouslySetInnerHTML={{ __html: data.about?.headline || 'Mais que produtos, entregamos parceria, confiança e soluções que impulsionam o campo.' }} />
-        <div className="afr-why-grid">
-          {(data.about?.cards || [
-            { icon: 'CheckCircle', title: 'Produtos de Qualidade', text: 'Selecionamos o melhor para cada etapa do campo.' },
-            { icon: 'Users', title: 'Atendimento Especializado', text: 'Nossa equipe está sempre ao lado para te atender da melhor forma.' },
-            { icon: 'Shield', title: 'Parceiros de Confiança', text: 'Trabalhamos com as melhores marcas do mercado.' },
-            { icon: 'Target', title: 'Foco em Resultados', text: 'Soluções que geram mais produtividade e lucro.' },
-          ]).map(item => {
-            const IconComp = ICON_MAP[item.icon as keyof typeof ICON_MAP] || Check;
-            return (
-            <div className="afr-why-item" key={item.title}>
-              <div className="afr-why-icon"><IconComp size={24} color="#4caf50" /></div>
-              <div dangerouslySetInnerHTML={{ __html: item.title }} className="afr-why-item-title" />
-              <div dangerouslySetInnerHTML={{ __html: item.text }} />
-            </div>
-            )
-          })}
-        </div>
-      </EditableBlock>
-
-      {/* CTA */}
-
-        </>
-      )}
-      
-      {(!sectionToRender || sectionToRender === 'cta') && (
-        <>
-<EditableBlock id="cta" label="Contato / CTA" className="afr-section-cta" style={{}}>
-        <div className="afr-cta-inner">
-          <h2 className="afr-cta-title">Vamos juntos <em>fortalecer o agronegócio!</em></h2>
-          <div className="afr-cta-form">
-            <input className="afr-cta-input" type="text" placeholder="Seu nome" />
-            <input className="afr-cta-input" type="text" placeholder="Seu WhatsApp" />
-            <input className="afr-cta-input" type="text" placeholder="Sua mensagem" />
-            <button className="afr-cta-btn">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg>
-              Enviar
-            </button>
-          </div>
-        </div>
-      </EditableBlock>
-
-
-
-        </>
-      )}
-      
-      
-      {(!sectionToRender || sectionToRender === 'custom' || sectionToRender === 'root') && (
-        <>{customSectionsContent}</>
-      )}
-      {(!sectionToRender || sectionToRender === 'footer') && (
-        <>
-{/* FOOTER */}
-      <EditableBlock id="footer" label="Rodapé" className="afr-footer" style={{}}>
-        <div className="afr-footer-top">
-          <div>
-            <div className="afr-footer-brand">{brandFirst}<em>{brandSecond}</em></div>
-            <div className="afr-footer-tag">{brand.tagline}</div>
-            <div className="afr-footer-social">
-              {brand.socialLinks?.map((s, i) => {
-                const Icon = ICON_MAP[s.platform] || Shield;
-                return <a key={i} href={s.url}><Icon /></a>;
-              })}
-            </div>
-          </div>
-          <div className="afr-footer-col">
-            <h4>Navegação</h4>
-            <ul>
-              {safeNavLinks.map((l, i) => (
-                <li key={i}><a href={l.url}>{l.label}</a></li>
-              ))}
-            </ul>
-          </div>
-          <div className="afr-footer-col">
-            <h4>Catálogos</h4>
-            <ul>
-              <li><a href="#insumos">Insumos Agrícolas</a></li>
-              <li><a href="#tecnologia">Tecnologia</a></li>
-              <li><a href="#plantio">Plantio</a></li>
-            </ul>
-          </div>
-          <div className="afr-footer-col">
-            <h4>Contato</h4>
-            <div className="afr-contact-row">
-              <svg viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 014.47 11.5a19.79 19.79 0 01-3.07-8.67A2 2 0 013.38 1h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L7.91 8.96a16 16 0 006.07 6.07l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z"/></svg>
-              {footer.phone}
-            </div>
-            <div className="afr-contact-row">
-              <svg viewBox="0 0 24 24"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
-              {footer.email}
-            </div>
-            <div className="afr-contact-row" style={{alignItems:'flex-start'}}>
-              <svg viewBox="0 0 24 24"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>
-              {footer.address}
-            </div>
-          </div>
-        </div>
-        <div className="afr-footer-bottom">
-          <p>{footer.copyright}</p>
-          <p>Desenvolvido com Byfrost</p>
-        </div>
-      </EditableBlock>
-
-        </>
+      {sectionToRender ? (
+        renderSection(sectionToRender)
+      ) : (
+        (data.layoutOrder || ['header', 'hero', 'features', 'products', 'catalogs', 'cta', 'custom', 'footer']).map((sectionId, idx) => (
+          <React.Fragment key={`${sectionId}-${idx}`}>
+            {renderSection(sectionId)}
+          </React.Fragment>
+        ))
       )}
     </div>
   );
+
+  function renderSection(id: string) {
+    if (id === 'header' || id === 'nav') {
+      return (
+        <EditableBlock id="nav" label="Navegação" className="afr-nav" style={{ backgroundColor: isScrolled ? (brand.navBackgroundScrolled || '#1a3a1f') : (brand.navBackgroundTop || 'transparent') }}>
+          <div className="afr-logo">
+            {brand.logoImage ? (
+              <img src={brand.logoImage} alt={brand.name} style={{ height: '36px', width: 'auto', objectFit: 'contain' }} />
+            ) : (
+              <>
+                <div className="afr-logo-icon">
+                  <svg viewBox="0 0 24 24"><path d="M12 2C9 2 6 4 5 7C4 10 5 13 7 15C9 17 11 17 11 20H13C13 17 15 17 17 15C19 13 20 10 19 7C18 4 15 2 12 2Z"/><rect x="10" y="20" width="4" height="3" rx="1"/></svg>
+                </div>
+                <div>
+                  <span className="afr-logo-name">{brandFirst}<em>{brandSecond}</em></span>
+                  <span className="afr-logo-tag">{brand.tagline}</span>
+                </div>
+              </>
+            )}
+          </div>
+          <button 
+            className="afr-nav-menu-toggle" 
+            onClick={(e) => { e.stopPropagation(); setIsMobileMenuOpen(!isMobileMenuOpen); }}
+            aria-label="Alternar menu"
+          >
+            {isMobileMenuOpen ? (
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+            ) : (
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
+            )}
+          </button>
+  
+          <div 
+            className={cn("afr-nav-menu", isMobileMenuOpen && "open")} 
+            style={{ '--nav-bg-scrolled': brand.navBackgroundScrolled || '#1a3a1f' } as React.CSSProperties}
+          >
+            <ul className="afr-nav-links">
+              {safeNavLinks.map((link, idx) => (
+                <li key={idx}><a href={link.url} onClick={() => setIsMobileMenuOpen(false)}>{link.label}</a></li>
+              ))}
+            </ul>
+            <a href={brand.navCtaUrl || '#contato'} className="afr-nav-cta" onClick={() => setIsMobileMenuOpen(false)}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 014.47 11.5a19.79 19.79 0 01-3.07-8.67A2 2 0 013.38 1h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L7.91 8.96a16 16 0 006.07 6.07l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z"/></svg>
+              {brand.navCta}
+            </a>
+          </div>
+        </EditableBlock>
+      );
+    }
+    
+    if (id === 'hero') {
+      return (
+        <EditableBlock id="hero" label="Banner Principal" className="afr-hero" style={{ ...getStyleProps(hero.styles), paddingTop: undefined, paddingBottom: undefined }}>
+          {safeBanners.map((banner, i) => {
+            const BadgeIcon = ICON_MAP[banner.badgeIcon || 'Shield'] || Shield;
+            return (
+            <div key={i} className={`afr-hero-slide ${i === currentSlide ? 'active' : ''}`} style={{ 
+              background: banner.overlayGradient || 'linear-gradient(135deg, #0d2b0e 0%, #1a3a1f 40%, #2d5a1e 100%)',
+              paddingTop: hero.styles?.paddingTop,
+              paddingBottom: hero.styles?.paddingBottom
+            }}>
+              <img className="afr-hero-bg" src={banner.bgImage} alt="" style={{ objectFit: (banner.imageFit || 'cover') as any, objectPosition: banner.imagePosition || 'center' }} />
+              <div className="afr-hero-content">
+                <div dangerouslySetInnerHTML={{ __html: banner.headline || '' }} />
+                <div dangerouslySetInnerHTML={{ __html: banner.subtitle || '' }} />
+                <a href={banner.ctaUrl} className="afr-hero-cta">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+                  {banner.ctaText}
+                </a>
+              </div>
+              {banner.showBadge !== false && (
+                <div className="afr-hero-badge">
+                  <div className="afr-hero-badge-icon">
+                    <BadgeIcon size={22} color="#2e7d32" strokeWidth={2} />
+                  </div>
+                  <div>
+                    <strong>{banner.badgeTitle}</strong>
+                    <span>{banner.badgeText}</span>
+                  </div>
+                </div>
+              )}
+            </div>
+          )})}
+          {safeBanners.length > 1 && (
+            <div style={{ position: 'absolute', bottom: '20px', left: '5%', zIndex: 3, display: 'flex', gap: '8px' }}>
+              {safeBanners.map((_, i) => (
+                <button
+                  key={i}
+                  onClick={() => setCurrentSlide(i)}
+                  style={{ width: '8px', height: '8px', borderRadius: '50%', border: 'none', cursor: 'pointer', background: i === currentSlide ? '#4caf50' : 'rgba(255,255,255,0.3)' }}
+                />
+              ))}
+            </div>
+          )}
+        </EditableBlock>
+      );
+    }
+    
+    if (id === 'catalogs_categories') {
+      return (
+        <EditableBlock id="catalogs_categories" label="Categorias" className="afr-section-solutions" style={getStyleProps(catalogs.styles)}>
+          <p className="afr-section-label">{catalogs.categoriesLabel || 'NOSSAS SOLUÇÕES PARA CADA ETAPA DO CAMPO'}</p>
+          <div className="afr-categories">
+            {(catalogs.categories || [
+              { title: 'INSUMOS AGRÍCOLAS', desc: 'Fertilizantes, sementes e defensivos de alta qualidade para máxima produtividade das lavouras.', img: 'https://images.unsplash.com/photo-1585664811154-4c86e2e5f86d?w=600&q=80', color: 'green', icon: 'Sprout' },
+              { title: 'TECNOLOGIA DE APLICAÇÃO', desc: 'Equipamentos e soluções que garantem eficiência e precisão na aplicação.', img: 'https://images.unsplash.com/photo-1589923188900-85dae523342b?w=600&q=80', color: 'purple', icon: 'Cpu' },
+              { title: 'PLANTIO E PREPARO DE SOLO', desc: 'Máquinas e implementos para cultivo, plantio e manejo com mais desempenho.', img: 'https://images.unsplash.com/photo-1574943320219-553eb213f72d?w=600&q=80', color: 'brown', icon: 'Tractor' },
+            ]).map(cat => {
+              const IconComponent = ICON_MAP[cat.icon as keyof typeof ICON_MAP] || Package;
+              return (
+              <div className="afr-cat-card" key={cat.title}>
+                <img src={cat.img} alt={cat.title} />
+                <div className={`afr-cat-overlay ${cat.color}`} />
+                <div className="afr-cat-content">
+                  <div className="afr-cat-icon" style={{ background: cat.color === 'green' ? 'rgba(76,175,80,.3)' : cat.color === 'purple' ? 'rgba(156,39,176,.3)' : 'rgba(121,85,72,.3)' }}>
+                    <IconComponent size={24} color="#ffffff" strokeWidth={2} />
+                  </div>
+                  <div dangerouslySetInnerHTML={{ __html: cat.title || '' }} className="afr-cat-title-inner" />
+                  <div dangerouslySetInnerHTML={{ __html: cat.desc || '' }} />
+                  <div className="afr-cat-btn"><svg viewBox="0 0 24 24"><path d="M5 12h14M12 5l7 7-7 7"/></svg></div>
+                </div>
+              </div>
+              );
+            })}
+          </div>
+        </EditableBlock>
+      );
+    }
+    
+    if (id === 'featured_products' || id === 'products') {
+      return (
+        <EditableBlock id="featured_products" label="Produtos em Destaque" className="afr-section-products" style={getStyleProps(data.featuredProductsStyles)}>
+          <div className="afr-products-header">
+            <div>
+              <p className="afr-products-label">PRODUTOS EM DESTAQUE</p>
+              <h3 className="afr-products-title">Qualidade que gera resultado!</h3>
+            </div>
+          </div>
+          <div className="afr-products-grid">
+            {featuredProducts.map((p, i) => (
+              <div className="afr-product-card" key={i}>
+                <img src={p.image} alt={p.name} />
+                <div className="afr-product-card-info">
+                  <h4>{p.name}</h4>
+                  <div className="afr-product-price">{p.price} <span className="afr-product-unit">{p.unit}</span></div>
+                </div>
+                <button className="afr-product-add">+ Adicionar</button>
+              </div>
+            ))}
+          </div>
+          <button className="afr-view-all">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+            Ver Todos os Produtos
+          </button>
+        </EditableBlock>
+      );
+    }
+    
+    if (id === 'catalogs_lists' || id === 'catalogs') {
+      return (
+        <>
+        {[
+          { key: 'insumos', label: 'INSUMOS AGRÍCOLAS', colorClass: 'insumos', icon: <svg viewBox="0 0 24 24"><path d="M12 2C9 2 6 4 5 7C4 10 5 13 7 15C9 17 11 17 11 20H13C13 17 15 17 17 15C19 13 20 10 19 7C18 4 15 2 12 2Z"/></svg> },
+          { key: 'tecnologia', label: 'TECNOLOGIA DE APLICAÇÃO', colorClass: 'tecnologia', icon: <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/></svg> },
+          { key: 'plantio', label: 'PLANTIO E PREPARO DE SOLO', colorClass: 'plantio', icon: <svg viewBox="0 0 24 24"><path d="M3 9L12 2L21 9V20A2 2 0 0119 22H5A2 2 0 013 20V9Z"/></svg> },
+        ].map(cat => {
+          const catalog = catalogs[cat.key as keyof typeof catalogs] as any;
+          return (
+            <EditableBlock id={`catalog_${cat.key}`} label={`Catálogo: ${cat.label}`} className={`afr-catalog-row ${cat.colorClass}`} key={cat.key} style={getStyleProps(catalog.styles)}>
+              <div className="afr-catalog-info">
+                <div className="afr-catalog-info-icon">{cat.icon}</div>
+                <h3>{cat.label}</h3>
+                <p>{catalog.description}</p>
+                <a href="#">Ver Todos <svg viewBox="0 0 24 24" style={{width:14,height:14,stroke:'#fff',fill:'none',strokeWidth:2.5,display:'inline',marginLeft:4}}><path d="M5 12h14M12 5l7 7-7 7"/></svg></a>
+              </div>
+              <div className="afr-catalog-products">
+                {catalog.products.map((p: any, i: number) => (
+                  <div className="afr-catalog-product" key={i}>
+                    <img src={p.image} alt={p.name} />
+                    <div className="afr-catalog-product-info">
+                      <h4>{p.name}</h4>
+                      <span>{p.price}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </EditableBlock>
+          );
+        })}
+        </>
+      );
+    }
+    
+    if (id === 'about' || id === 'features') {
+      return (
+        <EditableBlock id="about" label="Sobre Nós" className="afr-section-why" style={getStyleProps(data.about?.styles)}>
+          <p className="afr-why-label">{data.about?.label || 'Por que escolher AgroForte?'}</p>
+          <div className="afr-why-title" dangerouslySetInnerHTML={{ __html: data.about?.headline || 'Mais que produtos, entregamos parceria, confiança e soluções que impulsionam o campo.' }} />
+          <div className="afr-why-grid">
+            {(data.about?.cards || [
+              { icon: 'CheckCircle', title: 'Produtos de Qualidade', text: 'Selecionamos o melhor para cada etapa do campo.' },
+              { icon: 'Users', title: 'Atendimento Especializado', text: 'Nossa equipe está sempre ao lado para te atender da melhor forma.' },
+              { icon: 'Shield', title: 'Parceiros de Confiança', text: 'Trabalhamos com as melhores marcas do mercado.' },
+              { icon: 'Target', title: 'Foco em Resultados', text: 'Soluções que geram mais produtividade e lucro.' },
+            ]).map(item => {
+              const IconComp = ICON_MAP[item.icon as keyof typeof ICON_MAP] || Check;
+              return (
+              <div className="afr-why-item" key={item.title}>
+                <div className="afr-why-icon"><IconComp size={24} color="#4caf50" /></div>
+                <div dangerouslySetInnerHTML={{ __html: item.title }} className="afr-why-item-title" />
+                <div dangerouslySetInnerHTML={{ __html: item.text }} />
+              </div>
+              )
+            })}
+          </div>
+        </EditableBlock>
+      );
+    }
+    
+    if (id === 'cta') {
+      return (
+        <EditableBlock id="cta" label="Contato / CTA" className="afr-section-cta" style={{}}>
+          <div className="afr-cta-inner">
+            <h2 className="afr-cta-title">Vamos juntos <em>fortalecer o agronegócio!</em></h2>
+            <div className="afr-cta-form">
+              <input className="afr-cta-input" type="text" placeholder="Seu nome" />
+              <input className="afr-cta-input" type="text" placeholder="Seu WhatsApp" />
+              <input className="afr-cta-input" type="text" placeholder="Sua mensagem" />
+              <button className="afr-cta-btn">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg>
+                Enviar
+              </button>
+            </div>
+          </div>
+        </EditableBlock>
+      );
+    }
+    
+    if (id === 'footer') {
+      return (
+        <EditableBlock id="footer" label="Rodapé" className="afr-footer" style={{}}>
+          <div className="afr-footer-top">
+            <div>
+              <div className="afr-footer-brand">{brandFirst}<em>{brandSecond}</em></div>
+              <div className="afr-footer-tag">{brand.tagline}</div>
+              <div className="afr-footer-social">
+                {brand.socialLinks?.map((s, i) => {
+                  const Icon = ICON_MAP[s.platform] || Shield;
+                  return <a key={i} href={s.url}><Icon /></a>;
+                })}
+              </div>
+            </div>
+            <div className="afr-footer-col">
+              <h4>Navegação</h4>
+              <ul>
+                {safeNavLinks.map((l, i) => (
+                  <li key={i}><a href={l.url}>{l.label}</a></li>
+                ))}
+              </ul>
+            </div>
+            <div className="afr-footer-col">
+              <h4>Catálogos</h4>
+              <ul>
+                <li><a href="#insumos">Insumos Agrícolas</a></li>
+                <li><a href="#tecnologia">Tecnologia</a></li>
+                <li><a href="#plantio">Plantio</a></li>
+              </ul>
+            </div>
+            <div className="afr-footer-col">
+              <h4>Contato</h4>
+              <div className="afr-contact-row">
+                <svg viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 014.47 11.5a19.79 19.79 0 01-3.07-8.67A2 2 0 013.38 1h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L7.91 8.96a16 16 0 006.07 6.07l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z"/></svg>
+                {footer.phone}
+              </div>
+              <div className="afr-contact-row">
+                <svg viewBox="0 0 24 24"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+                {footer.email}
+              </div>
+              <div className="afr-contact-row" style={{alignItems:'flex-start'}}>
+                <svg viewBox="0 0 24 24"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>
+                {footer.address}
+              </div>
+            </div>
+          </div>
+          <div className="afr-footer-bottom">
+            <p>{footer.copyright}</p>
+            <p>Desenvolvido com Byfrost</p>
+          </div>
+        </EditableBlock>
+      );
+    }
+    
+    // Legacy support for single custom block injection when not using customSectionsMap
+    if (id === 'custom' || id === 'root') {
+      return <>{customSectionsContent}</>;
+    }
+    
+    if (customSectionsMap && customSectionsMap[id]) {
+      return <>{customSectionsMap[id]}</>;
+    }
+    
+    return null;
+  }
 }
