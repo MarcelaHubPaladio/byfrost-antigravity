@@ -21,7 +21,7 @@ const AGROFORTE_CSS = `
   @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
   .afr-root,[class*="afr-"]{box-sizing:border-box}
   .afr-root{font-family:Inter,system-ui,sans-serif;color:#1a1a1a;margin:0;padding:0;position:relative}
-  .afr-nav{padding:0 5%;display:flex;align-items:center;justify-content:space-between;height:64px;position:-webkit-sticky;position:sticky;top:0;z-index:50;transition:background-color 0.3s ease;margin-bottom:-64px}
+  .afr-nav{padding:0 5%;display:flex;align-items:center;justify-content:space-between;height:64px;position:-webkit-sticky;position:sticky;top:0;z-index:50;transition:background-color 0.3s ease;${!isVisualizer ? '' : 'margin-bottom:-64px'}}
   .afr-logo{display:flex;align-items:center;gap:8px;text-decoration:none}
   .afr-logo-icon{width:36px;height:36px;background:#4caf50;border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
   .afr-logo-icon svg{width:22px;height:22px;fill:#fff}
