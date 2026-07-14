@@ -860,7 +860,7 @@ export default function PortalEditor() {
                                         }}
                                         onAddWidgetClick={(secId: string, colId: string) => {
                                             setActiveColumnId({ sectionId: secId, colId });
-                                            setActiveSettingsTarget({ type: 'section', id: secId }); // Ensure sidebar is open
+                                            setActiveSettingsTarget(null); // Ensure sidebar shows component list
                                         }}
                                     />
                                 );
@@ -1439,16 +1439,6 @@ function SortableSectionItem({ section, previewMode, active, onSelect, onRemove,
                                     
                                     {(!col.blocks || col.blocks.length === 0) && (
                                         <DroppableEmptyColumn sectionId={section.id} colId={col.id} onAddWidgetClick={onAddWidgetClick} />
-                                    )}
-                                    {col.blocks && col.blocks.length > 0 && (
-                                        <div className="opacity-0 group-hover/col:opacity-100 transition-opacity flex justify-center mt-2">
-                                            <button 
-                                                onClick={(e) => { e.stopPropagation(); onAddWidgetClick?.(section.id, col.id); }}
-                                                className="h-6 w-6 rounded-full bg-[#9b3a5a] text-white flex items-center justify-center shadow hover:opacity-90 transition-opacity"
-                                            >
-                                                <Plus className="h-3 w-3" />
-                                            </button>
-                                        </div>
                                     )}
                                 </div>
                             ))
