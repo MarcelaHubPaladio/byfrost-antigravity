@@ -619,9 +619,6 @@ export default function PortalEditor() {
 
     const customBlocksPanel = (
         <div className="space-y-4">
-            <Button variant="outline" className="w-full rounded-xl gap-2 border-dashed" onClick={() => addSection()}>
-                <Plus className="h-4 w-4" /> Nova Seção
-            </Button>
             <div className="pt-2 space-y-4">
                 <div className="grid grid-cols-2 gap-3">
                     <DraggableBlockButton icon={<Layout />} label="Header" type="header" />
@@ -643,10 +640,10 @@ export default function PortalEditor() {
     );
 
     const renderCustomSections = (
-        <SortableContext items={sections.map(s => s.id)} strategy={verticalListSortingStrategy}>
-            {sections.length > 0 && (
-                <div className="space-y-4 mt-8 w-full p-4">
-                    {sections.map((section) => (
+        <div className="w-full pb-20">
+            <SortableContext items={sections.map(s => s.id)} strategy={verticalListSortingStrategy}>
+                <div className="space-y-4 w-full p-4">
+                    {sections.map((section, index) => (
                         <SortableSectionItem 
                             key={section.id} 
                             section={section} 
@@ -657,11 +654,21 @@ export default function PortalEditor() {
                             onRemove={() => removeSection(section.id)}
                             onUpdateBlock={(bid: string, updates: any) => updateBlock(section.id, bid, updates)}
                             onRemoveBlock={(bid: string) => removeBlock(section.id, bid)}
+                            onAddSectionAbove={() => addSection(index)}
                         />
                     ))}
                 </div>
-            )}
-        </SortableContext>
+            </SortableContext>
+            <div 
+                onClick={() => addSection()}
+                className="border-2 border-dashed border-blue-200 bg-slate-50/50 hover:bg-slate-50 transition-colors mx-8 mt-4 p-12 rounded-[32px] flex flex-col items-center justify-center cursor-pointer group"
+            >
+                <div className="h-14 w-14 rounded-full bg-blue-100 group-hover:bg-blue-600 transition-colors flex items-center justify-center shadow-sm mb-4">
+                    <Plus className="h-6 w-6 text-blue-600 group-hover:text-white transition-colors" />
+                </div>
+                <p className="text-sm font-medium text-slate-500 uppercase tracking-widest">Adicionar Nova Seção</p>
+            </div>
+        </div>
     );
 
     const dndOverlay = (
@@ -804,29 +811,8 @@ export default function PortalEditor() {
                 </div>
                 
                 <div className="p-6 space-y-4 flex-1 overflow-y-auto">
-                    <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Estrutura</p>
-                    <Button variant="outline" className="w-full rounded-xl gap-2 border-dashed" onClick={() => addSection()}>
-                        <Plus className="h-4 w-4" /> Nova Seção
-                    </Button>
-
-                    <div className="pt-4 space-y-4">
-                        <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Componentes</p>
-                        <div className="grid grid-cols-2 gap-3">
-                            <DraggableBlockButton icon={<Layout />} label="Header" type="header" />
-                            <DraggableBlockButton icon={<Layout />} label="Hero" type="hero" />
-                            <DraggableBlockButton icon={<ImageIcon />} label="Slider" type="slider" />
-                            <DraggableBlockButton icon={<Layout />} label="Cards" type="info-cards" />
-                            <DraggableBlockButton icon={<Plus />} label="Grid" type="grid" />
-                            <DraggableBlockButton icon={<ImageIcon />} label="Galeria" type="gallery" />
-                            <DraggableBlockButton icon={<Type />} label="Texto" type="text" />
-                            <DraggableBlockButton icon={<ImageIcon />} label="Imagem" type="image" />
-                            <DraggableBlockButton icon={<LinkIcon />} label="Links" type="links" />
-                            <DraggableBlockButton icon={<Plus />} label="HTML" type="html" />
-                        </div>
-                        <p className="text-[10px] text-blue-600 bg-blue-50 p-3 rounded-xl leading-relaxed">
-                            <strong>Dica:</strong> Arraste os componentes diretamente para dentro das seções no palco.
-                        </p>
-                    </div>
+                    <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Componentes & Blocos</p>
+                    {customBlocksPanel}
 
                     <div className="pt-8 space-y-6">
                         <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Configurações</p>
@@ -927,33 +913,7 @@ export default function PortalEditor() {
                     )}>
                         {/* Render Editor Blocks */}
                         <div className="relative" id="editor-stage">
-                            <SortableContext 
-                                items={sections.map(s => s.id)}
-                                strategy={verticalListSortingStrategy}
-                            >
-                                {sections.length === 0 ? (
-                                    <div className="h-full flex flex-col items-center justify-center p-20 text-center opacity-40">
-                                        <Layout className="h-12 w-12 mb-4" />
-                                        <p>Sua página está vazia.<br/>Comece adicionando uma seção.</p>
-                                    </div>
-                                ) : (
-                                    <div className="space-y-4 p-4">
-                                        {sections.map((section) => (
-                                            <SortableSectionItem 
-                                                key={section.id} 
-                                                section={section} 
-                                                previewMode={previewMode}
-                                                active={activeSectionId === section.id}
-                                                onSelect={() => setActiveSectionId(section.id)}
-                                                onUpdateSettings={(settings) => updateSectionSettings(section.id, settings)}
-                                                onRemove={() => removeSection(section.id)}
-                                                onUpdateBlock={(bid, updates) => updateBlock(section.id, bid, updates)}
-                                                onRemoveBlock={(bid) => removeBlock(section.id, bid)}
-                                            />
-                                        ))}
-                                    </div>
-                                )}
-                            </SortableContext>
+                            {renderCustomSections}
                         </div>
                     </div>
                 </div>
@@ -1026,7 +986,7 @@ function DraggableBlockButton({ icon, label, type, active }: { icon: React.React
     );
 }
 
-function SortableSectionItem({ section, previewMode, active, onSelect, onRemove, onUpdateSettings, onUpdateBlock, onRemoveBlock }: any) {
+function SortableSectionItem({ section, previewMode, active, onSelect, onRemove, onUpdateSettings, onUpdateBlock, onRemoveBlock, onAddSectionAbove }: any) {
     const {
         attributes,
         listeners,
@@ -1075,15 +1035,35 @@ function SortableSectionItem({ section, previewMode, active, onSelect, onRemove,
                 "bg-cover bg-center"
             )}
         >
-            {/* Section Controls */}
-            <div className="absolute right-4 top-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity z-20">
+            {/* Section Elementor Toolbar */}
+            <div className="absolute left-1/2 -top-0 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity z-50 flex items-center bg-blue-500 text-white rounded-b-lg shadow-lg overflow-hidden">
+                <button 
+                    className="p-1.5 px-3 hover:bg-blue-600 transition-colors border-r border-blue-400/50"
+                    onClick={(e) => { e.stopPropagation(); onAddSectionAbove?.(); }}
+                    title="Adicionar Seção Acima"
+                >
+                    <Plus className="h-4 w-4" />
+                </button>
+                <div 
+                    {...attributes} 
+                    {...listeners} 
+                    className="p-1.5 px-3 hover:bg-blue-600 transition-colors cursor-grab active:cursor-grabbing border-r border-blue-400/50"
+                    title="Arrastar Seção"
+                    onClick={(e) => { e.stopPropagation(); onSelect(); }}
+                >
+                    <GripVertical className="h-4 w-4" />
+                </div>
                 <Popover>
                     <PopoverTrigger asChild>
-                        <Button variant="secondary" size="icon" className="h-9 w-9 rounded-full shadow-lg bg-white/90">
-                            <Settings className="h-4 w-4 text-slate-600" />
-                        </Button>
+                        <button 
+                            className="p-1.5 px-3 hover:bg-blue-600 transition-colors border-r border-blue-400/50"
+                            onClick={(e) => { e.stopPropagation(); }}
+                            title="Configurações da Seção"
+                        >
+                            <Settings className="h-4 w-4" />
+                        </button>
                     </PopoverTrigger>
-                    <PopoverContent className="w-80 p-6 rounded-[24px] shadow-2xl border-slate-100" side="left" align="start">
+                    <PopoverContent className="w-80 p-6 rounded-[24px] shadow-2xl border-slate-100" side="bottom" align="center">
                         <div className="space-y-6">
                             <div className="flex items-center justify-between">
                                 <div className="space-y-0.5">
@@ -1207,10 +1187,13 @@ function SortableSectionItem({ section, previewMode, active, onSelect, onRemove,
                         </div>
                     </PopoverContent>
                 </Popover>
-
-                <div {...attributes} {...listeners} className="h-9 w-9 rounded-full shadow-lg bg-white/90 flex items-center justify-center cursor-grab active:cursor-grabbing">
-                    <GripVertical className="h-4 w-4 text-slate-400" />
-                </div>
+                <button 
+                    className="p-1.5 px-3 hover:bg-red-500 transition-colors"
+                    onClick={(e) => { e.stopPropagation(); onRemove(); }}
+                    title="Excluir Seção"
+                >
+                    <Trash2 className="h-4 w-4" />
+                </button>
             </div>
 
             <div ref={setDroppableRef} className="relative z-10 space-y-4 px-8 w-full">
@@ -1219,9 +1202,9 @@ function SortableSectionItem({ section, previewMode, active, onSelect, onRemove,
                     strategy={verticalListSortingStrategy}
                 >
                     {section.blocks.length === 0 && (
-                        <div className="py-20 text-center border-2 border-dashed border-slate-200 rounded-3xl opacity-40">
-                            <Plus className="h-8 w-8 mx-auto mb-2" />
-                            <p className="text-sm font-medium">Seção vazia.<br/>Arraste componentes para cá.</p>
+                        <div className="py-16 mx-12 text-center border-2 border-dashed border-slate-300 bg-white/50 rounded-2xl opacity-70">
+                            <Plus className="h-6 w-6 mx-auto mb-2 text-slate-400" />
+                            <p className="text-sm font-medium text-slate-500 uppercase tracking-widest">Arraste o widget para cá</p>
                         </div>
                     )}
                     {section.blocks.map((block: Block) => (
@@ -1271,22 +1254,19 @@ function SortableBlockItem({ block, sectionId, previewMode, onUpdate, onRemove }
             style={style}
             key={effectiveSettings.animation || 'static'} 
             className={cn(
-                "group/block relative p-4 rounded-2xl hover:bg-slate-50 transition-all border border-transparent hover:border-slate-100",
+                "group/block relative p-4 rounded-2xl hover:bg-slate-50 transition-all border-2 border-transparent hover:border-blue-200/50",
                 effectiveSettings.animation === 'fade-up' && 'animate-fade-up',
                 effectiveSettings.animation === 'zoom-in' && 'animate-zoom-in',
                 effectiveSettings.animation === 'fade-left' && 'animate-fade-left',
                 effectiveSettings.animation === 'fade-right' && 'animate-fade-right'
             )}
         >
-            <div className="absolute -left-3 top-1/2 -translate-y-1/2 opacity-0 group-hover/block:opacity-100 transition-opacity cursor-grab active:cursor-grabbing z-40 bg-white shadow-sm border border-slate-100 rounded-lg p-1" {...attributes} {...listeners}>
-                <GripVertical className="h-3 w-3 text-slate-400" />
-            </div>
-            <div className="absolute -right-2 -top-2 flex gap-1 opacity-0 group-hover/block:opacity-100 transition-opacity z-30">
+            <div className="absolute right-0 top-0 opacity-0 group-hover/block:opacity-100 transition-opacity z-50 flex items-center bg-blue-500 text-white rounded-bl-lg rounded-tr-xl shadow-lg overflow-hidden">
                 <Popover>
                     <PopoverTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-7 w-7 rounded-full bg-white shadow-sm border border-slate-100">
-                            <Settings className="h-3.5 w-3.5 text-slate-400" />
-                        </Button>
+                        <button className="p-1.5 hover:bg-blue-600 transition-colors border-r border-blue-400/50" title="Editar Widget">
+                            <Settings className="h-3 w-3" />
+                        </button>
                     </PopoverTrigger>
                     <PopoverContent className="w-56 p-4 rounded-2xl shadow-xl border-slate-100" side="left">
                         <div className="space-y-4">
@@ -1348,13 +1328,16 @@ function SortableBlockItem({ block, sectionId, previewMode, onUpdate, onRemove }
                     </PopoverContent>
                 </Popover>
 
-                <Button 
-                    variant="ghost" size="icon" 
-                    className="h-7 w-7 rounded-full bg-white shadow-sm border border-slate-100"
-                    onClick={onRemove}
+                <div {...attributes} {...listeners} className="p-1.5 hover:bg-blue-600 transition-colors cursor-grab active:cursor-grabbing border-r border-blue-400/50">
+                    <GripVertical className="h-3 w-3" />
+                </div>
+                <button 
+                    className="p-1.5 hover:bg-red-500 transition-colors" 
+                    onClick={(e) => { e.stopPropagation(); onRemove(); }} 
+                    title="Excluir Widget"
                 >
-                    <Trash2 className="h-3.5 w-3.5 text-red-500" />
-                </Button>
+                    <Trash2 className="h-3 w-3" />
+                </button>
             </div>
 
             {block.type === 'header' && (
