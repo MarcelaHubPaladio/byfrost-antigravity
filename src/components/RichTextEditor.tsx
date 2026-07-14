@@ -22,7 +22,7 @@ import {
   AlignJustify
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { TextStyle } from "@tiptap/extension-text-style";
+import { TextStyle, LineHeight } from "@tiptap/extension-text-style";
 import { Color } from "@tiptap/extension-color";
 import { FontFamily } from "@tiptap/extension-font-family";
 import { TextAlign } from "@tiptap/extension-text-align";
@@ -128,6 +128,7 @@ export function RichTextEditor(props: {
       Color,
       FontFamily,
       FontSize,
+      LineHeight,
       TextAlign.configure({
         types: ['heading', 'paragraph'],
       }),
@@ -219,6 +220,23 @@ export function RichTextEditor(props: {
           <option value="48px">48px</option>
           <option value="64px">64px</option>
           <option value="80px">80px</option>
+        </select>
+        
+        <select
+          onChange={(e) => {
+            if (e.target.value) {
+              (editor.chain().focus() as any).setLineHeight(e.target.value).run();
+            } else {
+              (editor.chain().focus() as any).unsetLineHeight().run();
+            }
+          }}
+          className="h-9 px-2 text-sm border border-slate-200 rounded-md bg-white w-[100px]"
+        >
+          <option value="">Altura da Linha</option>
+          <option value="1">1.0 (Apertado)</option>
+          <option value="1.2">1.2 (Normal)</option>
+          <option value="1.5">1.5 (Relaxado)</option>
+          <option value="2">2.0 (Duplo)</option>
         </select>
         
         <input
