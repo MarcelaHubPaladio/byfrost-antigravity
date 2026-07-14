@@ -154,6 +154,20 @@ export function SectionPropertiesPanel({ section, block, onChange }: { section?:
                                     </Select>
                                 </div>
                                 <div className="flex items-center justify-between">
+                                    <Label className="text-xs text-slate-600 font-medium">Alinhamento horizontal</Label>
+                                    <Select value={settings.justifyContent || 'padrao'} onValueChange={v => updateSettings({ justifyContent: v })}>
+                                        <SelectTrigger className="w-32 h-8 text-xs"><SelectValue /></SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="padrao">Padrão</SelectItem>
+                                            <SelectItem value="flex-start">Esquerda</SelectItem>
+                                            <SelectItem value="center">Centro</SelectItem>
+                                            <SelectItem value="right">Direita</SelectItem>
+                                            <SelectItem value="space-between">Espaço-entre</SelectItem>
+                                            <SelectItem value="space-around">Espaço-ao-redor</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                                <div className="flex items-center justify-between">
                                     <Label className="text-xs text-slate-600 font-medium">Transbordar</Label>
                                     <Select value={settings.overflow || 'padrao'} onValueChange={v => updateSettings({ overflow: v })}>
                                         <SelectTrigger className="w-32 h-8 text-xs"><SelectValue /></SelectTrigger>
