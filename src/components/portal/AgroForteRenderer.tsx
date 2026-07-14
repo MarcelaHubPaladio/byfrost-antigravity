@@ -21,7 +21,7 @@ const AGROFORTE_CSS = `
   @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
   .afr-root,[class*="afr-"]{box-sizing:border-box}
   .afr-root{font-family:Inter,system-ui,sans-serif;color:#1a1a1a;margin:0;padding:0;position:relative}
-  .afr-nav{padding:0 5%;display:flex;align-items:center;justify-content:space-between;height:64px;position:-webkit-sticky;position:sticky;top:0;z-index:50;transition:background-color 0.3s ease;${!isVisualizer ? '' : 'margin-bottom:-64px'}}
+  .afr-nav{padding:0 5%;display:flex;align-items:center;justify-content:space-between;height:64px;position:-webkit-sticky;position:sticky;top:0;z-index:50;transition:background-color 0.3s ease;}
   .afr-logo{display:flex;align-items:center;gap:8px;text-decoration:none}
   .afr-logo-icon{width:36px;height:36px;background:#4caf50;border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
   .afr-logo-icon svg{width:22px;height:22px;fill:#fff}
@@ -289,7 +289,7 @@ export function AgroForteRenderer({ data, editMode, onSelectElement, customSecti
     <div className="afr-root">
       <div ref={topRef} style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 10, pointerEvents: 'none', visibility: 'hidden' }} />
       <style dangerouslySetInnerHTML={{ __html: AGROFORTE_CSS }} />
-
+      {!editMode && <style dangerouslySetInnerHTML={{ __html: '.afr-nav { margin-bottom: -64px; }' }} />}
       
       {sectionToRender ? (
         renderSection(sectionToRender)
