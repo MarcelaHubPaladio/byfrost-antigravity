@@ -582,7 +582,10 @@ export default function PublicPortal() {
                                 {section.columns ? (
                                     <div className={cn("mx-auto flex gap-4 w-full", isMobile ? 'flex-col' : '')}>
                                         {section.columns.map((col: any) => (
-                                            <div key={col.id} style={{ width: isMobile ? '100%' : `${col.size}%` }} className="flex flex-col gap-4">
+                                            <div key={col.id} style={{ 
+                                                width: isMobile ? '100%' : `${col.size}%`,
+                                                alignItems: effectiveSettings.justifyContent === 'center' ? 'center' : effectiveSettings.justifyContent === 'right' ? 'flex-end' : 'stretch'
+                                            }} className="flex flex-col gap-4">
                                                 {(col.blocks || []).map((block: any) => (
                                                     <BlockRenderer 
                                                         key={block.id} 

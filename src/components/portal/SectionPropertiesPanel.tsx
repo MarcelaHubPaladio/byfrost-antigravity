@@ -105,14 +105,14 @@ export function SectionPropertiesPanel({ section, block, onChange }: { section?:
                                     <div className="flex items-center gap-4">
                                         <Slider
                                             className="flex-1"
-                                            value={[settings.width ? Number(settings.width) : 100]}
-                                            min={0}
-                                            max={100}
-                                            step={1}
-                                            onValueChange={([v]) => updateSettings({ width: String(v) })}
+                                            value={[settings.widthValue ? Number(settings.widthValue) : 1280]}
+                                            min={300}
+                                            max={1920}
+                                            step={10}
+                                            onValueChange={([v]) => updateSettings({ widthValue: String(v) })}
                                         />
                                         <div className="w-12 h-8 bg-slate-50 border border-slate-200 rounded text-center text-xs flex items-center justify-center">
-                                            {settings.width || 100}
+                                            {settings.widthValue || 1280}
                                         </div>
                                     </div>
                                 </div>

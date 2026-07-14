@@ -1631,7 +1631,10 @@ function SortableSectionItem({ section, previewMode, active, onSelect, onRemove,
                         {section.columns ? (
                             section.columns.map((col: any, colIdx: number) => (
                                 <React.Fragment key={col.id}>
-                                    <div style={{ width: previewMode === 'mobile' ? '100%' : `${col.size}%` }} className="flex flex-col gap-4 relative group/col">
+                                    <div style={{ 
+                                        width: previewMode === 'mobile' ? '100%' : `${col.size}%`,
+                                        alignItems: section.settings?.justifyContent === 'center' ? 'center' : section.settings?.justifyContent === 'right' ? 'flex-end' : 'stretch'
+                                    }} className="flex flex-col gap-4 relative group/col">
                                         <SortableContext items={(col.blocks || []).map((b: any) => b.id)} strategy={verticalListSortingStrategy}>
                                             {(col.blocks || []).map((block: any) => (
                                                 <SortableBlockItem 
