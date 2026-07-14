@@ -197,7 +197,7 @@ export function AgroForteRenderer({ data, editMode, onSelectElement, customSecti
     
     let layoutClasses = '';
     if (layout.contentWidth === 'boxed') {
-        layoutClasses += ' max-w-[1200px] mx-auto'; // Default boxed class, could be dynamically set by widthValue
+        layoutClasses += ' mx-auto'; // Center the boxed content
     }
     if (layout.height === 'screen') layoutClasses += ' min-h-screen';
     if (layout.height === 'min') layoutClasses += ' min-h-[400px]';
@@ -213,7 +213,13 @@ export function AgroForteRenderer({ data, editMode, onSelectElement, customSecti
     if (layout.stretchSection) layoutClasses += ' w-full max-w-none';
     
     const combinedClassName = editMode ? cn("afr-editable", className, layoutClasses) : cn(className, layoutClasses);
-    const combinedStyle = layout.widthValue && layout.contentWidth === 'boxed' ? { ...style, maxWidth: `${layout.widthValue}px`, margin: '0 auto' } : style;
+    
+    let combinedStyle = { ...style };
+    if (layout.contentWidth === 'boxed' && !layout.stretchSection) {
+        combinedStyle.maxWidth = layout.widthValue ? `${layout.widthValue}px` : '1200px';
+        combinedStyle.width = '100%';
+        combinedStyle.margin = '0 auto';
+    }
 
     if (!editMode) return <Tag className={combinedClassName} style={combinedStyle}>{children}</Tag>;
     
