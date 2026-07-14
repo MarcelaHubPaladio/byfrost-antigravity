@@ -457,24 +457,36 @@ export default function PublicPortal() {
                             key={section.id} 
                             className={cn(
                                 "relative w-full overflow-hidden transition-all duration-700",
-                                effectiveSettings.height === 'screen' ? "min-h-screen" : "min-h-0",
-                                "flex flex-col"
+                                effectiveSettings.height === 'fit-screen' ? "min-h-screen" : effectiveSettings.height === 'min-height' ? "min-h-[500px]" : "min-h-0",
+                                "flex flex-col",
+                                effectiveSettings.htmlTag || ''
                             )}
                             style={{
-                                backgroundImage: effectiveSettings.backgroundImage ? `url(${effectiveSettings.backgroundImage})` : 'none',
-                                backgroundColor: effectiveSettings.backgroundColor || 'transparent',
-                                backgroundSize: effectiveSettings.backgroundSize || 'cover',
-                                backgroundPosition: 'center',
-                                paddingTop: `${(Number(effectiveSettings.paddingY) || 0) * 4}px`,
-                                paddingBottom: `${(Number(effectiveSettings.paddingY) || 0) * 4}px`,
+                                backgroundColor: effectiveSettings.style?.background?.color || effectiveSettings.backgroundColor || 'transparent',
+                                backgroundImage: effectiveSettings.style?.background?.image ? `url(${effectiveSettings.style.background.image})` : effectiveSettings.backgroundImage ? `url(${effectiveSettings.backgroundImage})` : 'none',
+                                backgroundSize: effectiveSettings.style?.background?.size || effectiveSettings.backgroundSize || 'cover',
+                                backgroundPosition: effectiveSettings.style?.background?.position || 'center',
+                                backgroundRepeat: effectiveSettings.style?.background?.repeat || 'no-repeat',
+                                backgroundAttachment: effectiveSettings.style?.background?.attachment || 'scroll',
+                                borderStyle: effectiveSettings.style?.border?.type && effectiveSettings.style?.border?.type !== 'none' ? effectiveSettings.style.border.type : undefined,
+                                borderWidth: effectiveSettings.style?.border?.width ? `${effectiveSettings.style.border.width}px` : undefined,
+                                borderColor: effectiveSettings.style?.border?.color,
+                                borderRadius: effectiveSettings.style?.border?.radius ? `${effectiveSettings.style.border.radius}px` : undefined,
+                                paddingTop: effectiveSettings.paddingY ? `${effectiveSettings.paddingY}px` : undefined,
+                                paddingBottom: effectiveSettings.paddingY ? `${effectiveSettings.paddingY}px` : undefined,
+                                paddingLeft: isMobile ? '16px' : effectiveSettings.paddingX ? `${effectiveSettings.paddingX}px` : '32px',
+                                paddingRight: isMobile ? '16px' : effectiveSettings.paddingX ? `${effectiveSettings.paddingX}px` : '32px',
                                 justifyContent: effectiveSettings.alignItems || 'flex-start',
                                 alignItems: effectiveSettings.justifyContent || 'stretch',
                             }}
                         >
+                            {(effectiveSettings.style?.background?.overlay?.color || effectiveSettings.backgroundOverlay) && (
+                                <div className="absolute inset-0 z-0" style={{ backgroundColor: effectiveSettings.style?.background?.overlay?.color || effectiveSettings.backgroundOverlay }}></div>
+                            )}
                             <div className={cn(
-                                "relative z-10 w-full px-6 md:px-12 mx-auto",
-                                effectiveSettings.maxWidth === '1200' ? "max-w-[1200px]" :
-                                effectiveSettings.maxWidth === '1400' ? "max-w-[1400px]" : "max-w-full"
+                                "relative z-10 w-full mx-auto flex",
+                                effectiveSettings.contentWidth === 'full' ? "w-full px-4" : "max-w-7xl",
+                                effectiveSettings.columnGap === 'no-gap' ? 'gap-0' : effectiveSettings.columnGap === 'extended' ? 'gap-8' : effectiveSettings.columnGap === 'wide' ? 'gap-12' : 'gap-4'
                             )}>
                                 {section.columns ? (
                                     <div className={cn("mx-auto flex gap-4 w-full", isMobile ? 'flex-col' : '')}>

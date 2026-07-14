@@ -1419,10 +1419,34 @@ function SortableSectionItem({ section, previewMode, active, onSelect, onRemove,
                     <Trash2 className="h-4 w-4" />
                 </button>
             </div>
-            <div className="w-full relative rounded-[32px] overflow-hidden" style={{ backgroundColor: section.settings?.backgroundColor, backgroundImage: section.settings?.backgroundImage ? `url(${section.settings.backgroundImage})` : undefined, backgroundSize: section.settings?.backgroundSize || 'cover', backgroundPosition: section.settings?.backgroundPosition || 'center' }}>
-                {section.settings?.backgroundOverlay && <div className="absolute inset-0 z-0" style={{ backgroundColor: section.settings.backgroundOverlay }}></div>}
-                <div className={cn("relative z-10", `py-${sectionPadding}`, previewMode === 'mobile' ? 'px-4' : 'px-8')}>
-                    <div className={cn("mx-auto flex gap-4", previewMode === 'mobile' ? 'w-full flex-col' : 'max-w-7xl')}>
+            <div 
+                className={cn("w-full relative rounded-[32px] overflow-hidden", section.settings?.htmlTag || '')} 
+                style={{ 
+                    backgroundColor: section.settings?.style?.background?.color || section.settings?.backgroundColor, 
+                    backgroundImage: section.settings?.style?.background?.image ? `url(${section.settings.style.background.image})` : section.settings?.backgroundImage ? `url(${section.settings.backgroundImage})` : undefined, 
+                    backgroundSize: section.settings?.style?.background?.size || section.settings?.backgroundSize || 'cover', 
+                    backgroundPosition: section.settings?.style?.background?.position || section.settings?.backgroundPosition || 'center',
+                    backgroundRepeat: section.settings?.style?.background?.repeat || 'no-repeat',
+                    backgroundAttachment: section.settings?.style?.background?.attachment || 'scroll',
+                    borderStyle: section.settings?.style?.border?.type && section.settings?.style?.border?.type !== 'none' ? section.settings.style.border.type : undefined,
+                    borderWidth: section.settings?.style?.border?.width ? `${section.settings.style.border.width}px` : undefined,
+                    borderColor: section.settings?.style?.border?.color,
+                    borderRadius: section.settings?.style?.border?.radius ? `${section.settings.style.border.radius}px` : undefined,
+                }}
+            >
+                {(section.settings?.style?.background?.overlay?.color || section.settings?.backgroundOverlay) && (
+                    <div className="absolute inset-0 z-0" style={{ backgroundColor: section.settings?.style?.background?.overlay?.color || section.settings?.backgroundOverlay }}></div>
+                )}
+                <div 
+                    className="relative z-10"
+                    style={{
+                        paddingTop: section.settings?.paddingY ? `${section.settings.paddingY}px` : undefined,
+                        paddingBottom: section.settings?.paddingY ? `${section.settings.paddingY}px` : undefined,
+                        paddingLeft: previewMode === 'mobile' ? '16px' : section.settings?.paddingX ? `${section.settings.paddingX}px` : '32px',
+                        paddingRight: previewMode === 'mobile' ? '16px' : section.settings?.paddingX ? `${section.settings.paddingX}px` : '32px',
+                    }}
+                >
+                    <div className={cn("mx-auto flex", previewMode === 'mobile' ? 'w-full flex-col' : section.settings?.contentWidth === 'full' ? 'w-full px-4' : 'max-w-7xl', section.settings?.columnGap === 'no-gap' ? 'gap-0' : section.settings?.columnGap === 'extended' ? 'gap-8' : section.settings?.columnGap === 'wide' ? 'gap-12' : 'gap-4')}>
                         {section.columns ? (
                             section.columns.map((col: any) => (
                                 <div key={col.id} style={{ width: previewMode === 'mobile' ? '100%' : `${col.size}%` }} className="flex flex-col gap-4 relative group/col">

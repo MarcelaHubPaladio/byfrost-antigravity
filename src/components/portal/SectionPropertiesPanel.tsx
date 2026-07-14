@@ -55,47 +55,168 @@ export function SectionPropertiesPanel({ section, onChange }: { section: any, on
                 </TabsTrigger>
             </TabsList>
             <div className="bg-white p-0 text-slate-800 min-h-[500px]">
-                <TabsContent value="layout" className="p-6 space-y-8 mt-0">
-                    <div className="space-y-4">
-                        <div className="flex items-center justify-between">
-                            <Label className="text-xs font-semibold text-slate-700">Espaçamento Y</Label>
-                            <span className="text-[10px] text-slate-500 font-bold uppercase bg-slate-100 px-2 py-1 rounded">{settings.paddingY || '16'}</span>
-                        </div>
-                        <div className="px-2">
-                            <Slider
-                                value={[settings.paddingY ? Number(settings.paddingY) : 16]}
-                                min={0}
-                                max={64}
-                                step={1}
-                                onValueChange={([v]) => updateSettings({ paddingY: String(v) })}
-                            />
-                        </div>
-                    </div>
-                    <div className="space-y-4">
-                        <div className="flex items-center justify-between">
-                            <Label className="text-xs font-semibold text-slate-700">Espaçamento X</Label>
-                            <span className="text-[10px] text-slate-500 font-bold uppercase bg-slate-100 px-2 py-1 rounded">{settings.paddingX || '0'}</span>
-                        </div>
-                        <div className="px-2">
-                            <Slider
-                                value={[settings.paddingX ? Number(settings.paddingX) : 0]}
-                                min={0}
-                                max={64}
-                                step={1}
-                                onValueChange={([v]) => updateSettings({ paddingX: String(v) })}
-                            />
-                        </div>
-                    </div>
-                    <div className="space-y-2">
-                        <Label className="text-xs font-semibold text-slate-700">Tema (Cores do texto)</Label>
-                        <Select value={settings.theme || 'light'} onValueChange={v => updateSettings({ theme: v })}>
-                            <SelectTrigger className="h-9 text-xs"><SelectValue /></SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="light">Claro</SelectItem>
-                                <SelectItem value="dark">Escuro</SelectItem>
-                            </SelectContent>
-                        </Select>
-                    </div>
+                <TabsContent value="layout" className="mt-0">
+                    <Accordion type="multiple" defaultValue={["layout-main"]} className="w-full">
+                        {/* LAYOUT MAIN */}
+                        <AccordionItem value="layout-main" className="border-slate-100">
+                            <AccordionTrigger className="px-4 py-3 hover:bg-slate-50 text-xs font-bold uppercase tracking-wider text-slate-700 hover:no-underline">
+                                Layout
+                            </AccordionTrigger>
+                            <AccordionContent className="px-4 pb-4 space-y-4">
+                                <div className="flex items-center justify-between">
+                                    <Label className="text-xs text-slate-600 font-medium">Largura do conteúdo</Label>
+                                    <Select value={settings.contentWidth || 'boxed'} onValueChange={v => updateSettings({ contentWidth: v })}>
+                                        <SelectTrigger className="w-32 h-8 text-xs"><SelectValue /></SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="boxed">Boxed</SelectItem>
+                                            <SelectItem value="full">Full Width</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                                <div className="space-y-4">
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-2">
+                                            <Label className="text-xs text-slate-600 font-medium">Largura</Label>
+                                            <Monitor className="h-3 w-3 text-slate-400" />
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center gap-4">
+                                        <Slider
+                                            className="flex-1"
+                                            value={[settings.width ? Number(settings.width) : 100]}
+                                            min={0}
+                                            max={100}
+                                            step={1}
+                                            onValueChange={([v]) => updateSettings({ width: String(v) })}
+                                        />
+                                        <div className="w-12 h-8 bg-slate-50 border border-slate-200 rounded text-center text-xs flex items-center justify-center">
+                                            {settings.width || 100}
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className="flex items-center justify-between">
+                                    <Label className="text-xs text-slate-600 font-medium">Espaçamento da coluna</Label>
+                                    <Select value={settings.columnGap || 'padrao'} onValueChange={v => updateSettings({ columnGap: v })}>
+                                        <SelectTrigger className="w-32 h-8 text-xs"><SelectValue /></SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="padrao">Padrão</SelectItem>
+                                            <SelectItem value="no-gap">Sem espaçamento</SelectItem>
+                                            <SelectItem value="narrow">Estreito</SelectItem>
+                                            <SelectItem value="extended">Estendido</SelectItem>
+                                            <SelectItem value="wide">Largo</SelectItem>
+                                            <SelectItem value="custom">Customizado</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                                <div className="flex items-center justify-between">
+                                    <Label className="text-xs text-slate-600 font-medium">Altura</Label>
+                                    <Select value={settings.height || 'padrao'} onValueChange={v => updateSettings({ height: v })}>
+                                        <SelectTrigger className="w-32 h-8 text-xs"><SelectValue /></SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="padrao">Padrão</SelectItem>
+                                            <SelectItem value="fit-screen">Ajustar à tela</SelectItem>
+                                            <SelectItem value="min-height">Altura mínima</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                                <div className="flex items-center justify-between">
+                                    <Label className="text-xs text-slate-600 font-medium">Alinhamento vertical</Label>
+                                    <Select value={settings.verticalAlign || 'padrao'} onValueChange={v => updateSettings({ verticalAlign: v })}>
+                                        <SelectTrigger className="w-32 h-8 text-xs"><SelectValue /></SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="padrao">Padrão</SelectItem>
+                                            <SelectItem value="top">Top</SelectItem>
+                                            <SelectItem value="middle">Middle</SelectItem>
+                                            <SelectItem value="bottom">Bottom</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                                <div className="flex items-center justify-between">
+                                    <Label className="text-xs text-slate-600 font-medium">Transbordar</Label>
+                                    <Select value={settings.overflow || 'padrao'} onValueChange={v => updateSettings({ overflow: v })}>
+                                        <SelectTrigger className="w-32 h-8 text-xs"><SelectValue /></SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="padrao">Padrão</SelectItem>
+                                            <SelectItem value="hidden">Hidden</SelectItem>
+                                            <SelectItem value="auto">Auto</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                                <div className="flex items-start justify-between py-2">
+                                    <div>
+                                        <Label className="text-xs text-slate-600 font-medium">Esticar seção</Label>
+                                        <p className="text-[10px] italic text-slate-500 leading-relaxed max-w-[200px] pt-1">
+                                            Estique a seção até a largura total da página usando JS. <a href="#" className="text-blue-500 hover:underline">Saiba mais.</a>
+                                        </p>
+                                    </div>
+                                    <Switch />
+                                </div>
+                                <div className="flex items-center justify-between">
+                                    <Label className="text-xs text-slate-600 font-medium">Tag HTML</Label>
+                                    <Select value={settings.htmlTag || 'padrao'} onValueChange={v => updateSettings({ htmlTag: v })}>
+                                        <SelectTrigger className="w-32 h-8 text-xs"><SelectValue /></SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="padrao">Padrão</SelectItem>
+                                            <SelectItem value="header">header</SelectItem>
+                                            <SelectItem value="footer">footer</SelectItem>
+                                            <SelectItem value="main">main</SelectItem>
+                                            <SelectItem value="article">article</SelectItem>
+                                            <SelectItem value="section">section</SelectItem>
+                                            <SelectItem value="div">div</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                            </AccordionContent>
+                        </AccordionItem>
+                        {/* ESTRUTURA */}
+                        <AccordionItem value="estrutura" className="border-slate-100">
+                            <AccordionTrigger className="px-4 py-3 hover:bg-slate-50 text-xs font-bold uppercase tracking-wider text-slate-700 hover:no-underline">
+                                Estrutura
+                            </AccordionTrigger>
+                            <AccordionContent className="px-4 pb-4 space-y-4">
+                                <div className="space-y-4 pt-2">
+                                    <div className="flex items-center justify-between">
+                                        <Label className="text-xs font-medium text-slate-600">Espaçamento Y</Label>
+                                        <span className="text-[10px] text-slate-500 font-bold uppercase bg-slate-100 px-2 py-1 rounded">{settings.paddingY || '16'}</span>
+                                    </div>
+                                    <div className="px-2">
+                                        <Slider
+                                            value={[settings.paddingY ? Number(settings.paddingY) : 16]}
+                                            min={0}
+                                            max={64}
+                                            step={1}
+                                            onValueChange={([v]) => updateSettings({ paddingY: String(v) })}
+                                        />
+                                    </div>
+                                </div>
+                                <div className="space-y-4">
+                                    <div className="flex items-center justify-between">
+                                        <Label className="text-xs font-medium text-slate-600">Espaçamento X</Label>
+                                        <span className="text-[10px] text-slate-500 font-bold uppercase bg-slate-100 px-2 py-1 rounded">{settings.paddingX || '0'}</span>
+                                    </div>
+                                    <div className="px-2">
+                                        <Slider
+                                            value={[settings.paddingX ? Number(settings.paddingX) : 0]}
+                                            min={0}
+                                            max={64}
+                                            step={1}
+                                            onValueChange={([v]) => updateSettings({ paddingX: String(v) })}
+                                        />
+                                    </div>
+                                </div>
+                                <div className="space-y-2">
+                                    <Label className="text-xs font-medium text-slate-600">Tema (Cores do texto)</Label>
+                                    <Select value={settings.theme || 'light'} onValueChange={v => updateSettings({ theme: v })}>
+                                        <SelectTrigger className="h-9 text-xs"><SelectValue /></SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="light">Claro</SelectItem>
+                                            <SelectItem value="dark">Escuro</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                            </AccordionContent>
+                        </AccordionItem>
+                    </Accordion>
                 </TabsContent>
 
                 <TabsContent value="estilo" className="mt-0">
