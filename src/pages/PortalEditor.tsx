@@ -720,7 +720,7 @@ export default function PortalEditor() {
                                         active={activeSettingsTarget?.id === id}
                                         onSettingsClick={() => setActiveSettingsTarget({ type: 'fixed_section', id })}
                                     >
-                                        <AgroForteRenderer data={agroforteData!} sectionToRender={id} editMode={true} onSelectElement={setSelectedElementId} />
+                                        <AgroForteRenderer data={agroforteData!} sectionToRender={id} editMode={true} onSelectElement={(elId) => setActiveSettingsTarget({ type: 'fixed_section', id: elId })} />
                                     </SortableFixedSectionItem>
                                 );
                             }
