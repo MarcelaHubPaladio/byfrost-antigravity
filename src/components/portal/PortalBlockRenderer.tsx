@@ -67,7 +67,7 @@ function getEffectiveSettings(desktop: any, mobile: any, isMobile: boolean) {
     return { ...desktop, ...mobile };
 }
 
-export function PortalBlockRenderer({ block, isPremium, isMobile, onRenderInnerBlock }: { block: any; isPremium: boolean; isMobile: boolean; onRenderInnerBlock?: (b: any) => React.ReactNode }) {
+export function PortalBlockRenderer({ block, isPremium, isMobile, onRenderInnerBlock, editMode, onUpdateContent }: { block: any; isPremium: boolean; isMobile: boolean; onRenderInnerBlock?: (b: any) => React.ReactNode; editMode?: boolean; onUpdateContent?: (c: any) => void }) {
     const effectiveSettings = getEffectiveSettings(block.settings, block.mobileSettings, isMobile);
 
     const heightClass = effectiveSettings.height === 'sm' ? 'min-h-[200px]' :

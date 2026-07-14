@@ -18,6 +18,8 @@ export interface SectionStyleOptions {
 
 export interface AgroForteData {
   _template: 'agroforte';
+  theme: 'dark' | 'light' | 'green' | 'blue';
+  layoutOrder?: string[];
   brand: {
     name: string;
     tagline: string;

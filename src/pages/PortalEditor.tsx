@@ -1,665 +1,45 @@
-import { useState, useEffect, useCallback } from "react";
-import { useParams, useNavigate } from "react-router-dom";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/lib/supabase";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
-import { 
-    ChevronLeft, 
-    Save, 
-    Plus, 
-    Type, 
-    Image as ImageIcon, 
-    Link as LinkIcon, 
-    Layout,
-    Trash2,
-    GripVertical,
-    Eye,
-    Monitor,
-    Smartphone,
-    Globe
-} from "lucide-react";
-import { toast } from "sonner";
-import { Skeleton } from "@/components/ui/skeleton";
-import { cn } from "@/lib/utils";
-import { 
-    Settings,
-    Maximize,
-    AlignCenter,
-    StretchHorizontal
-} from "lucide-react";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { ImageUpload } from "@/components/portal/ImageUpload";
-import { Slider } from "@/components/ui/slider";
-import { RichTextEditor } from "@/components/RichTextEditor";
-import { AgroForteEditor } from "@/components/portal/AgroForteEditor";
-import { AgroForteRenderer } from "@/components/portal/AgroForteRenderer";
-import { PortalBlockRenderer } from "@/components/portal/PortalBlockRenderer";
-import { AGROFORTE_DEFAULT, type AgroForteData } from "@/components/portal/agroforte-types";
-import { useTenant } from "@/providers/TenantProvider";
-import { 
-    DndContext, 
-    closestCenter,
-    KeyboardSensor,
-    PointerSensor,
-    useSensor,
-    useSensors,
-    DragOverlay,
-    useDraggable,
-    useDroppable,
-    DragStartEvent,
-    DragOverEvent,
-    DragEndEvent,
-    defaultDropAnimationSideEffects,
-} from '@dnd-kit/core';
-import {
-  arrayMove,
-  SortableContext,
-  sortableKeyboardCoordinates,
-  verticalListSortingStrategy,
-  useSortable,
-} from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
 
-type BlockType = 'header' | 'hero' | 'text' | 'image' | 'links' | 'divider' | 'html' | 'slider' | 'info-cards' | 'grid' | 'gallery';
-
-type Block = {
-    id: string;
-    type: BlockType;
-    content: any;
-    blocks?: Block[];
-    settings?: {
-        height?: 'auto' | 'sm' | 'md' | 'lg' | 'screen';
-        textAlign?: 'left' | 'center' | 'right';
-        backgroundColor?: string;
-        padding?: string;
-        direction?: 'row' | 'col';
-        alignment?: 'start' | 'center' | 'end' | 'between';
-        animation?: 'none' | 'fade-up' | 'zoom-in' | 'fade-left' | 'fade-right';
-        imageWidth?: string;
-        targetUrl?: string;
-    };
-    mobileSettings?: Block['settings'];
-};
-
-type PageSettings = {
-    layout?: 'default' | 'sidebar';
-    sidebarLogo?: string;
-    socialLinks?: { type: string, url: string }[];
-    seo_title?: string;
-    seo_description?: string;
-    favicon_url?: string;
-    og_image_url?: string;
-};
-
-type Section = {
-    id: string;
-    settings: {
-        backgroundImage?: string;
-        backgroundSize?: 'cover' | 'contain';
-        backgroundColor?: string;
-        paddingY?: string;
-        paddingX?: string;
-        maxWidth?: '1200' | '1400' | 'full';
-        columns?: number;
-        height?: 'auto' | 'screen';
-        justifyContent?: 'flex-start' | 'center' | 'flex-end';
-        alignItems?: 'flex-start' | 'center' | 'flex-end' | 'stretch';
-    };
-    mobileSettings?: Partial<Section['settings']>;
-    blocks: Block[];
-};
-
-const getEffectiveSettings = (settings: any, mobileSettings: any, mode: 'desktop' | 'mobile') => {
-    if (mode === 'mobile' && mobileSettings) {
-        return { ...(settings || {}), ...mobileSettings };
-    }
-    return settings || {};
-};
-
-export default function PortalEditor() {
-    const { id } = useParams();
-    const navigate = useNavigate();
-    const queryClient = useQueryClient();
-    const [sections, setSections] = useState<Section[]>([]);
-    const [agroforteData, setAgroforteData] = useState<AgroForteData | null>(null);
-    const [previewMode, setPreviewMode] = useState<'desktop' | 'mobile'>('desktop');
-    const [activeSectionId, setActiveSectionId] = useState<string | null>(null);
-    const [activeElementId, setActiveElementId] = useState<string | null>(null);
-    const [activeId, setActiveId] = useState<string | null>(null);
-    const [activeData, setActiveData] = useState<any>(null);
-
-    const { activeTenant } = useTenant();
-    const sensors = useSensors(
-        useSensor(PointerSensor, {
-            activationConstraint: {
-                distance: 8,
-            },
-        }),
-        useSensor(KeyboardSensor, {
-            coordinateGetter: sortableKeyboardCoordinates,
-        })
-    );
-
-    const { data: page, isLoading } = useQuery({
-        queryKey: ["portal_page", id],
-        queryFn: async () => {
-            const { data, error } = await supabase
-                .from("portal_pages")
-                .select("*")
-                .eq("id", id)
-                .eq("tenant_id", activeTenant?.id)
-                .single();
-            if (error) throw error;
-            return data;
-        },
-        enabled: !!id,
-    });
-
-    useEffect(() => {
-        if (page?.content_json) {
-            const content = page.content_json;
-            if (Array.isArray(content) && content.length > 0 && content[0]?._template === 'agroforte') {
-                setAgroforteData({ ...AGROFORTE_DEFAULT, ...content[0] });
-                setSections(content[0].customSections || []);
-                return;
-            }
-            setAgroforteData(null);
-            // Migration for old structure if necessary
-            if (Array.isArray(content) && content.length > 0 && !content[0].blocks) {
-                setSections([{
-                    id: 'default-section',
-                    settings: { paddingY: '12' },
-                    blocks: content as Block[]
-                }]);
-            } else {
-                setSections(content as Section[]);
-            }
-        }
-    }, [page]);
-
-    const saveM = useMutation({
-        mutationFn: async (payload: any) => {
-            const { error } = await supabase
-                .from("portal_pages")
-                .update(payload)
-                .eq("id", id);
-            if (error) throw error;
-        },
-        onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ["portal_page", id] });
-            toast.success("Página salva com sucesso!");
-        },
-        onError: (err: any) => {
-            toast.error(err.message || "Erro ao salvar");
-        }
-    });
-
-    const addSection = (type?: BlockType) => {
-        const newSection: Section = {
-            id: Math.random().toString(36).substr(2, 9),
-            settings: { paddingY: '12', maxWidth: '1400' },
-            blocks: type ? [
-                { id: Math.random().toString(36).substr(2, 9), type, content: type === 'grid' ? { columns: 2 } : type === 'gallery' ? { items: [] } : {} }
-            ] : []
-        };
-        setSections([...sections, newSection]);
-    };
-
-    const addBlock = (sectionId: string, type: BlockType) => {
-        let content = {};
-        if (type === 'header') content = { 
-            variant: 'logo-left', 
-            logoText: page?.title || 'Byfrost',
-            links: [{ label: 'Início', url: '#' }, { label: 'Sobre', url: '#' }],
-            cta: { label: 'Contato', url: '#' }
-        };
-        if (type === 'hero') content = { title: 'Bem-vindo', subtitle: 'Subtítulo aqui' };
-        if (type === 'text') content = { text: 'Seu texto aqui...' };
-        if (type === 'links') content = { items: [{ label: 'Botão 1', url: '#' }] };
-        if (type === 'html') content = { html: '<div class="p-4 bg-slate-100 rounded-xl">Custom HTML</div>' };
-        if (type === 'slider') content = { items: [{ title: 'Slide 1', subtitle: 'Subtítulo', image: '' }] };
-        if (type === 'info-cards') content = { items: [{ title: 'Explore', date: 'Hoje', text: 'Descrição curta...', image: '' }] };
-        if (type === 'grid') content = { columns: 2 };
-        if (type === 'gallery') content = { items: [] };
-
-        const newBlock: Block = {
-            id: Math.random().toString(36).substr(2, 9),
-            type,
-            content
-        };
-        setSections(sections.map(s => s.id === sectionId ? { ...s, blocks: [...s.blocks, newBlock] } : s));
-    };
-
-    const removeSection = (sectionId: string) => {
-        setSections(sections.filter(s => s.id !== sectionId));
-    };
-
-    const removeBlock = (sectionId: string, blockId: string) => {
-        setSections(sections.map(s => s.id === sectionId ? { ...s, blocks: s.blocks.filter(b => b.id !== blockId) } : s));
-    };
-
-    const updateBlock = (sectionId: string, blockId: string, updates: any) => {
-        setSections(sections.map(s => s.id === sectionId ? {
-            ...s,
-            blocks: s.blocks.map(b => {
-                if (b.id !== blockId) return b;
-                
-                const { settings, blocks, ...contentUpdates } = updates;
-                let updatedBlock = { ...b };
-                
-                if (settings) {
-                    if (previewMode === 'mobile') {
-                        updatedBlock.mobileSettings = { ...(updatedBlock.mobileSettings || {}), ...settings };
-                    } else {
-                        updatedBlock.settings = { ...(updatedBlock.settings || {}), ...settings };
-                    }
-                }
-                
-                if (blocks) {
-                    updatedBlock.blocks = blocks;
-                }
-                
-                if (Object.keys(contentUpdates).length > 0) {
-                    updatedBlock.content = { ...(updatedBlock.content || {}), ...contentUpdates };
-                }
-                
-                return updatedBlock;
-            })
-        } : s));
-    };
-
-    const updateSectionSettings = (sectionId: string, settings: Partial<Section['settings']>) => {
-        setSections(sections.map(s => s.id === sectionId ? { 
-            ...s, 
-            settings: previewMode === 'mobile' ? s.settings : { ...s.settings, ...settings },
-            mobileSettings: previewMode === 'mobile' ? { ...(s.mobileSettings || {}), ...settings } : s.mobileSettings
-        } : s));
-    };
-
-    const handleDragStart = (event: DragStartEvent) => {
-        setActiveId(event.active.id as string);
-        setActiveData(event.active.data.current);
-    };
-
-    const handleDragOver = (event: DragOverEvent) => {
-        const { active, over } = event;
-        if (!over) return;
-
-        const activeId = active.id;
-        const overId = over.id;
-
-        // Find the containers
-        const activeContainer = sections.find(s => s.id === activeId || s.blocks.some(b => b.id === activeId));
-        const overContainer = sections.find(s => s.id === overId || s.blocks.some(b => b.id === overId));
-
-        if (!activeContainer || !overContainer || activeContainer === overContainer) {
-            return;
-        }
-
-        // If dragging sidebar block into a section
-        if (active.data.current?.type === 'new-block') {
-            return;
-        }
-
-        // If dragging a section
-        if (activeContainer.id === activeId || overContainer.id === overId) {
-            return;
-        }
-
-        setSections(prev => {
-            const activeSectionIndex = prev.findIndex(s => s.id === activeContainer.id);
-            const overSectionIndex = prev.findIndex(s => s.id === overContainer.id);
-
-            const activeBlockIndex = activeContainer.blocks.findIndex(b => b.id === activeId);
-            const overBlockIndex = overContainer.blocks.findIndex(b => b.id === overId);
-
-            let newIndex;
-            if (overId in prev.map(s => s.id)) {
-                newIndex = overContainer.blocks.length + 1;
-            } else {
-                const isBelowOverItem =
-                    over &&
-                    active.rect.current.translated &&
-                    active.rect.current.translated.top >
-                    over.rect.top + over.rect.height;
-
-                const modifier = isBelowOverItem ? 1 : 0;
-                newIndex = overBlockIndex >= 0 ? overBlockIndex + modifier : overContainer.blocks.length + 1;
-            }
-
-            const newSections = [...prev];
-            const [movedBlock] = newSections[activeSectionIndex].blocks.splice(activeBlockIndex, 1);
-            newSections[overSectionIndex].blocks.splice(newIndex, 0, movedBlock);
-
-            return newSections;
-        });
-    };
-
-    const handleDragEnd = (event: DragEndEvent) => {
-        const { active, over } = event;
-        setActiveId(null);
-        setActiveData(null);
-
-        if (!over) return;
-
-        const activeId = active.id;
-        const overId = over.id;
-
-        // Case 1: Dragging Sidebar Item to Section
-        if (active.data.current?.type === 'new-block') {
-            const blockType = active.data.current.blockType;
-            const overSectionId = over.data.current?.sectionId || overId;
-            const overSection = sections.find(s => s.id === overSectionId || s.blocks.some(b => b.id === overSectionId));
-            
-            if (overSection) {
-                // Initialize default content
-                let content = {};
-                if (blockType === 'header') content = { variant: 'logo-left', logoText: page?.title || 'Byfrost', links: [], cta: { label: 'CTA', url: '#' } };
-                if (blockType === 'hero') content = { title: 'Destaque', subtitle: 'Complemento' };
-                if (blockType === 'text') content = { text: 'Conteúdo de texto' };
-                if (blockType === 'grid') content = { columns: 2 };
-                if (blockType === 'gallery') content = { items: [] };
-
-                const newBlock: Block = {
-                    id: Math.random().toString(36).substr(2, 9),
-                    type: blockType,
-                    content
-                };
-
-                setSections(prev => prev.map(s => {
-                    if (s.id === overSection.id) {
-                        const overBlockIndex = s.blocks.findIndex(b => b.id === overId);
-                        const newBlocks = [...s.blocks];
-                        if (overBlockIndex >= 0) {
-                            newBlocks.splice(overBlockIndex, 0, newBlock);
-                        } else {
-                            newBlocks.push(newBlock);
-                        }
-                        return { ...s, blocks: newBlocks };
-                    }
-                    return s;
-                }));
-            }
-            return;
-        }
-
-        // Case 2: Reordering Sections
-        const activeSectionIndex = sections.findIndex(s => s.id === activeId);
-        const overSectionIndex = sections.findIndex(s => s.id === overId);
-
-        if (activeSectionIndex !== -1 && overSectionIndex !== -1) {
-            if (activeId !== overId) {
-                setSections(items => arrayMove(items, activeSectionIndex, overSectionIndex));
-            }
-            return;
-        }
-
-        // Case 3: Reordering Blocks within same Section (handleDragOver handles different sections)
-        const currentSection = sections.find(s => s.blocks.some(b => b.id === activeId));
-        if (currentSection) {
-            const activeBlockIndex = currentSection.blocks.findIndex(b => b.id === activeId);
-            const overBlockIndex = currentSection.blocks.findIndex(b => b.id === overId);
-
-            if (activeBlockIndex !== -1 && overBlockIndex !== -1 && activeBlockIndex !== overBlockIndex) {
-                setSections(prev => prev.map(s => {
-                    if (s.id === currentSection.id) {
-                        return { ...s, blocks: arrayMove(s.blocks, activeBlockIndex, overBlockIndex) };
-                    }
-                    return s;
-                }));
-            }
-        }
-    };
-
-    const handleSave = () => {
-        const payload = agroforteData
-            ? [agroforteData]
-            : sections;
-        saveM.mutate({
-            content_json: payload,
-            updated_at: new Date().toISOString(),
-        });
-    };
-
-    const handleAgroforteSave = (data: AgroForteData | null) => {
-        if (!data) return;
-        setAgroforteData(data);
-        saveM.mutate({
-            content_json: [{ ...data, customSections: sections }],
-            updated_at: new Date().toISOString(),
-        });
-    };
-
-    const publishM = useMutation({
-        mutationFn: async () => {
-            // 1. Capture HTML from the stage
-            const stage = document.getElementById('editor-stage');
-            if (!stage) throw new Error("Stage not found");
-
-            // Clone to sanitize and optimize
-            const clone = stage.cloneNode(true) as HTMLElement;
-            
-            // Remove editor-only elements (buttons, drag handles, settings, etc.)
-            clone.querySelectorAll('.editor-controls, [data-editor-only], .absolute.top-4.right-4, button:not([class*="cta"])').forEach(el => el.remove());
-            
-            // Optimization: Image Hints (LCP & Lazy Loading) & Turbo Compression
-            const images = clone.querySelectorAll('img');
-            images.forEach((img, idx) => {
-                // Optimization - Lazy Loading & Priority
-                if (idx === 0) {
-                    img.setAttribute('fetchpriority', 'high');
-                } else {
-                    img.setAttribute('loading', 'lazy');
-                }
-
-                // Turbo Compression - Supabase Transformation API
-                const src = img.getAttribute('src');
-                if (src && src.includes('supabase.co/storage/v1/object/public/')) {
-                    // Convert object/public to render/image/public
-                    // Quality 80, auto format (webp/avif), smart resizing if needed
-                    const optimizedUrl = src.replace('/object/public/', '/render/image/public/') + "?quality=80&format=auto";
-                    img.setAttribute('src', optimizedUrl);
-                }
-            });
-
-            // Optimize background images in inline styles
-            clone.querySelectorAll('[style*="background-image"]').forEach((el: any) => {
-                const style = el.getAttribute('style');
-                if (style && style.includes('supabase.co/storage/v1/object/public/')) {
-                    const optimizedStyle = style.replace(/\/object\/public\//g, '/render/image/public/');
-                    // Add quality/format to URLs inside url()
-                    const finalStyle = optimizedStyle.replace(/url\(['"]?([^'"]+)['"]?\)/g, (match, url) => {
-                        if (url.includes('supabase.co/storage/v1/render/image/public/')) {
-                            const separator = url.includes('?') ? '&' : '?';
-                            return `url("${url}${separator}quality=80&format=auto")`;
-                        }
-                        return match;
-                    });
-                    el.setAttribute('style', finalStyle);
-                }
-            });
-
-            const html = clone.innerHTML
-                .replace(/\s+/g, ' ')
-                .replace(/>\s+</g, '><')
-                .trim();
-
-            // 2. Optimized CSS Purging (Client-side)
-            let styles = "";
-            const usedSelectors = new Set<string>();
-            
-            // Collect all unique classes and IDs used in the clone to speed up matching
-            const allElements = clone.querySelectorAll('*');
-            const usedClasses = new Set<string>();
-            allElements.forEach(el => {
-                el.classList.forEach(cls => usedClasses.add(cls));
-                if (el.id) usedSelectors.add(`#${el.id}`);
-            });
-
-            for (let i = 0; i < document.styleSheets.length; i++) {
-                try {
-                    const sheet = document.styleSheets[i];
-                    for (let j = 0; j < sheet.cssRules.length; j++) {
-                        const rule = sheet.cssRules[j];
-                        
-                        // Keep essential rules (keyframes, fonts, media queries)
-                        if (rule.type === CSSRule.KEYFRAMES_RULE || 
-                            rule.type === CSSRule.FONT_FACE_RULE || 
-                            rule.type === CSSRule.MEDIA_RULE) {
-                            styles += rule.cssText + "\n";
-                            continue;
-                        }
-
-                        if (rule instanceof CSSStyleRule) {
-                            const selector = rule.selectorText;
-                            
-                            const shouldKeep = 
-                                selector === '*' || 
-                                selector.includes('html') || 
-                                selector.includes('body') ||
-                                selector.split(/[\s,>+~:]+/).some(part => {
-                                    if (part.startsWith('.')) return usedClasses.has(part.slice(1));
-                                    if (part.startsWith('#')) return usedSelectors.has(part);
-                                    return false;
-                                });
-
-                            if (shouldKeep) {
-                                styles += rule.cssText + "\n";
+                    <SortableContext items={layoutOrder} strategy={verticalListSortingStrategy}>
+                        {layoutOrder.map((id) => {
+                            const customSection = sections.find(s => s.id === id);
+                            if (customSection) {
+                                return (
+                                    <SortableSectionItem
+                                        key={customSection.id}
+                                        section={customSection}
+                                        previewMode={previewMode}
+                                        active={activeSectionId === customSection.id}
+                                        onSelect={() => setActiveSectionId(customSection.id)}
+                                        onRemove={() => handleDeleteSection(customSection.id)}
+                                        onUpdate={(updates) => handleUpdateSection(customSection.id, updates)}
+                                        onAddBlock={(type) => {
+                                            const newBlock: Block = {
+                                                id: Math.random().toString(36).substr(2, 9),
+                                                type,
+                                                content: type === 'text' || type === 'header' ? { text: 'Novo Bloco' } :
+                                                        type === 'gallery' ? { images: [] } :
+                                                        type === 'form' ? { fields: [] } :
+                                                        type === 'image' ? { url: '' } :
+                                                        type === 'slider' ? { slides: [] } :
+                                                        type === 'button' ? { label: 'Clique Aqui', url: '#' } :
+                                                        type === 'grid' ? { columns: 2 } :
+                                                        type === 'pdf' ? { url: '', title: 'Documento PDF' } : {}
+                                            };
+                                            const updatedBlocks = [...(customSection.blocks || []), newBlock];
+                                            handleUpdateSection(customSection.id, { blocks: updatedBlocks });
+                                        }}
+                                    />
+                                );
+                            } else {
+                                return (
+                                    <SortableFixedSectionItem key={id} id={id} previewMode={previewMode}>
+                                        <AgroForteRenderer data={agroforteData!} sectionToRender={id} editMode={true} onSelectElement={setSelectedElementId} />
+                                    </SortableFixedSectionItem>
+                                );
                             }
-                        }
-                    }
-                } catch (e) {
-                    // Ignore cross-origin stylesheet errors
-                }
-            }
+                        })}
+                    </SortableContext>
 
-            // 3. Generate Responsive Media Queries from mobileSettings
-            let responsiveCSS = "\n@media (max-width: 768px) {\n";
-            sections.forEach(s => {
-                if (s.mobileSettings && Object.keys(s.mobileSettings).length > 0) {
-                    responsiveCSS += `  #section-${s.id} {\n`;
-                    if (s.mobileSettings.backgroundColor) responsiveCSS += `    background-color: ${s.mobileSettings.backgroundColor} !important;\n`;
-                    if (s.mobileSettings.paddingY) {
-                        const py = Number(s.mobileSettings.paddingY) * 4;
-                        responsiveCSS += `    padding-top: ${py}px !important; padding-bottom: ${py}px !important;\n`;
-                    }
-                    if (s.mobileSettings.paddingX) {
-                        const px = Number(s.mobileSettings.paddingX) * 4;
-                        responsiveCSS += `    padding-left: ${px}px !important; padding-right: ${px}px !important;\n`;
-                    }
-                    if (s.mobileSettings.alignItems) responsiveCSS += `    justify-content: ${s.mobileSettings.alignItems} !important;\n`;
-                    if (s.mobileSettings.justifyContent) responsiveCSS += `    align-items: ${s.mobileSettings.justifyContent} !important;\n`;
-                    responsiveCSS += `  }\n`;
-                }
-                s.blocks.forEach(b => {
-                    if (b.mobileSettings && Object.keys(b.mobileSettings).length > 0) {
-                        responsiveCSS += `  #block-${b.id} {\n`;
-                        if (b.mobileSettings.textAlign) responsiveCSS += `    text-align: ${b.mobileSettings.textAlign} !important;\n`;
-                        if (b.mobileSettings.height) responsiveCSS += `    height: ${b.mobileSettings.height === 'screen' ? '100vh' : 'auto'} !important;\n`;
-                        if (b.mobileSettings.direction) responsiveCSS += `    flex-direction: ${b.mobileSettings.direction} !important;\n`;
-                        if (b.mobileSettings.imageWidth) {
-                            responsiveCSS += `    width: ${b.mobileSettings.imageWidth}% !important;\n`;
-                        }
-                        responsiveCSS += `  }\n`;
-                    }
-                });
-            });
-            responsiveCSS += "}\n";
-
-            styles += responsiveCSS;
-
-            // Minify CSS
-            styles = styles
-                .replace(/\/\*[\s\S]*?\*\//g, '') // remove comments
-                .replace(/\s+/g, ' ')
-                .replace(/\s*([{}:;,])\s*/g, '$1')
-                .trim();
-
-            const payload = agroforteData
-                ? [{ ...agroforteData, customSections: sections }]
-                : sections;
-
-            const { error } = await supabase
-                .from("portal_pages")
-                .update({
-                    content_json: payload,
-                    is_published: true,
-                    published_html: html,
-                    published_css: styles,
-                    updated_at: new Date().toISOString(),
-                })
-                .eq("id", id);
-            
-            if (error) throw error;
-        },
-        onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ["portal_page", id] });
-            toast.success("Site publicado com otimização turbo! 🚀");
-        },
-        onError: (err: any) => {
-            toast.error(err.message || "Erro ao publicar");
-        }
-    });
-
-    if (isLoading) return <div className="p-20"><Skeleton className="h-full w-full rounded-3xl" /></div>;
-
-    const customBlocksPanel = (
-        <div className="space-y-4">
-            <div className="pt-2 space-y-4">
-                <div className="grid grid-cols-2 gap-3">
-                    <DraggableBlockButton icon={<Layout />} label="Header" type="header" />
-                    <DraggableBlockButton icon={<Layout />} label="Hero" type="hero" />
-                    <DraggableBlockButton icon={<ImageIcon />} label="Slider" type="slider" />
-                    <DraggableBlockButton icon={<Layout />} label="Cards" type="info-cards" />
-                    <DraggableBlockButton icon={<Plus />} label="Grid" type="grid" />
-                    <DraggableBlockButton icon={<ImageIcon />} label="Galeria" type="gallery" />
-                    <DraggableBlockButton icon={<Type />} label="Texto" type="text" />
-                    <DraggableBlockButton icon={<ImageIcon />} label="Imagem" type="image" />
-                    <DraggableBlockButton icon={<LinkIcon />} label="Links" type="links" />
-                    <DraggableBlockButton icon={<Plus />} label="HTML" type="html" />
-                </div>
-                <p className="text-[10px] text-blue-600 bg-blue-50 p-3 rounded-xl leading-relaxed">
-                    <strong>Dica:</strong> Arraste os componentes diretamente para dentro das seções no palco.
-                </p>
-            </div>
-        </div>
-    );
-
-    const renderCustomSections = (
-        <div className="w-full pb-20">
-            <SortableContext items={sections.map(s => s.id)} strategy={verticalListSortingStrategy}>
-                <div className="space-y-4 w-full p-4">
-                    {sections.map((section, index) => (
-                        <SortableSectionItem 
-                            key={section.id} 
-                            section={section} 
-                            previewMode={previewMode}
-                            active={activeSectionId === section.id}
-                            onSelect={() => setActiveSectionId(section.id)}
-                            onUpdateSettings={(settings: any) => updateSectionSettings(section.id, settings)}
-                            onRemove={() => removeSection(section.id)}
-                            onUpdateBlock={(bid: string, updates: any) => updateBlock(section.id, bid, updates)}
-                            onRemoveBlock={(bid: string) => removeBlock(section.id, bid)}
-                            onAddSectionAbove={() => addSection(index)}
-                        />
-                    ))}
-                </div>
-            </SortableContext>
             <div 
                 onClick={() => addSection()}
                 className="border-2 border-dashed border-blue-200 bg-slate-50/50 hover:bg-slate-50 transition-colors mx-8 mt-4 p-12 rounded-[32px] flex flex-col items-center justify-center cursor-pointer group"
@@ -984,6 +364,38 @@ function DraggableBlockButton({ icon, label, type, active }: { icon: React.React
             </div>
             <span className="text-xs font-medium">{label}</span>
         </button>
+    );
+}
+
+
+function SortableFixedSectionItem({ id, children, previewMode }: { id: string, children: React.ReactNode, previewMode: string }) {
+    const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
+
+    const style = {
+        transform: CSS.Transform.toString(transform),
+        transition,
+        zIndex: isDragging ? 50 : 1,
+        opacity: isDragging ? 0.8 : 1,
+    };
+
+    return (
+        <div ref={setNodeRef} style={style} className="relative group/fixed-section border-2 border-transparent hover:border-blue-500 rounded-[32px] transition-all overflow-hidden mb-8">
+            <div 
+                {...attributes} 
+                {...listeners} 
+                className="absolute right-6 top-0 z-50 bg-blue-500 text-white rounded-b-xl shadow-lg flex items-center h-8 opacity-0 group-hover/fixed-section:opacity-100 transition-opacity translate-y-[-100%] group-hover/fixed-section:translate-y-0"
+            >
+                <div className="px-3 h-full flex items-center text-[10px] font-bold uppercase tracking-widest border-r border-blue-400/50">
+                    Seção Fixa
+                </div>
+                <div className="p-1.5 px-3 hover:bg-blue-600 transition-colors cursor-grab active:cursor-grabbing" title="Arrastar Seção">
+                    <GripVertical className="h-4 w-4" />
+                </div>
+            </div>
+            <div className="pointer-events-none">
+                {children}
+            </div>
+        </div>
     );
 }
 
@@ -1830,15 +1242,18 @@ function SortableBlockItem({ block, sectionId, previewMode, onUpdate, onRemove, 
                 </button>
             </div>
             {/* VISUAL PREVIEW */}
-            <div className="mt-2 pointer-events-none">
+            <div className="mt-2">
                 <PortalBlockRenderer 
                     block={block} 
                     isPremium={false} 
                     isMobile={previewMode === 'mobile'} 
+                    editMode={true}
+                    onUpdateContent={(content) => onUpdate({ content })}
                     onRenderInnerBlock={(innerBlock: any) => (
                         <SortableBlockItem 
                             key={innerBlock.id} 
                             block={innerBlock}
+                            sectionId={sectionId}
                             previewMode={previewMode}
                             isNested={true}
                             onUpdate={(innerUpdates: any) => {
