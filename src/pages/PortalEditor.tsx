@@ -1623,7 +1623,9 @@ function SortableSectionItem({ section, previewMode, active, onSelect, onRemove,
                     <div 
                         className={cn("mx-auto flex", previewMode === 'mobile' ? 'w-full flex-col' : section.settings?.contentWidth === 'full' ? 'w-full px-4' : 'w-full px-4', section.settings?.columnGap === 'no-gap' ? 'gap-0' : section.settings?.columnGap === 'extended' ? 'gap-8' : section.settings?.columnGap === 'wide' ? 'gap-12' : 'gap-4')}
                         style={{
-                            maxWidth: section.settings?.contentWidth === 'full' ? undefined : section.settings?.widthValue ? `${section.settings.widthValue}px` : '1280px'
+                            maxWidth: section.settings?.contentWidth === 'full' ? undefined : section.settings?.widthValue ? `${section.settings.widthValue}px` : '1280px',
+                            justifyContent: section.settings?.justifyContent === 'center' ? 'center' : section.settings?.justifyContent === 'right' ? 'flex-end' : section.settings?.justifyContent === 'space-between' ? 'space-between' : section.settings?.justifyContent === 'space-around' ? 'space-around' : 'flex-start',
+                            alignItems: section.settings?.alignItems === 'middle' ? 'center' : section.settings?.alignItems === 'bottom' ? 'flex-end' : 'stretch'
                         }}
                     >
                         {section.columns ? (

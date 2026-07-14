@@ -175,7 +175,7 @@ export function PortalBlockRenderer({ block, isPremium, isMobile, onRenderInnerB
 
             {block.type === 'header' && (
                 <header className={cn(
-                    "w-full py-6 px-6 md:px-12 flex items-center transition-all bg-white/80 backdrop-blur-md sticky top-0 z-[100] border-b border-slate-100 rounded-[32px] mb-8 shadow-sm",
+                    "w-full py-6 px-6 md:px-12 flex items-center transition-all bg-white/80 backdrop-blur-md sticky top-0 z-[100] border-b border-slate-100 rounded-[32px] shadow-sm",
                     isPremium && "bg-transparent border-none text-white backdrop-blur-none static px-12",
                     block.content?.variant === 'logo-center' && "flex-col gap-6"
                 )}>
