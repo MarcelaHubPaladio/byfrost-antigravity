@@ -53,6 +53,7 @@ import { AgroForteRenderer } from "@/components/portal/AgroForteRenderer";
 import { PortalBlockRenderer } from "@/components/portal/PortalBlockRenderer";
 import { FixedSectionLayoutEditor } from "@/components/portal/FixedSectionLayoutEditor";
 import { BlockPropertiesPanel } from "@/components/portal/BlockPropertiesPanel";
+import { SectionPropertiesPanel } from "@/components/portal/SectionPropertiesPanel";
 import { AGROFORTE_DEFAULT, type AgroForteData } from "@/components/portal/agroforte-types";
 import { useTenant } from "@/providers/TenantProvider";
 import { 
@@ -1009,6 +1010,11 @@ export default function PortalEditor() {
                                                         block={activeBlock} 
                                                         onChange={(updates) => updateBlock(activeSettingsTarget.id, activeSettingsTarget.blockId!, updates)}
                                                     />
+                                                ) : activeSettingsTarget.type === 'section' ? (
+                                                    <SectionPropertiesPanel 
+                                                        section={sections.find(s => s.id === activeSettingsTarget.id)}
+                                                        onChange={(updates) => updateSectionSettings(activeSettingsTarget.id, updates)}
+                                                    />
                                                 ) : (
                                                     <p className="text-sm text-slate-500">Selecione um bloco para editar as propriedades.</p>
                                                 )}
@@ -1146,6 +1152,11 @@ export default function PortalEditor() {
                                                 <BlockPropertiesPanel 
                                                     block={activeBlock} 
                                                     onChange={(updates) => updateBlock(activeSettingsTarget.id, activeSettingsTarget.blockId!, updates)}
+                                                />
+                                            ) : activeSettingsTarget.type === 'section' ? (
+                                                <SectionPropertiesPanel 
+                                                    section={sections.find(s => s.id === activeSettingsTarget.id)}
+                                                    onChange={(updates) => updateSectionSettings(activeSettingsTarget.id, updates)}
                                                 />
                                             ) : (
                                                 <p className="text-sm text-slate-500">Selecione um bloco para editar as propriedades.</p>
