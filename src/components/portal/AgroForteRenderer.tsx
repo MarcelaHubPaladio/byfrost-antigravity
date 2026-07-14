@@ -374,6 +374,9 @@ export function AgroForteRenderer({ data, editMode, onSelectElement, customSecti
 
         </>
       )}
+      
+      {(!sectionToRender || sectionToRender === 'featured_products') && (
+        <>
       <EditableBlock id="featured_products" label="Produtos em Destaque" className="afr-section-products" style={getStyleProps(data.featuredProductsStyles)}>
         <div className="afr-products-header">
           <div>
@@ -399,7 +402,12 @@ export function AgroForteRenderer({ data, editMode, onSelectElement, customSecti
         </button>
       </EditableBlock>
 
+        </>
+      )}
+
       {/* CATÁLOGOS */}
+      {(!sectionToRender || sectionToRender === 'catalogs_lists') && (
+        <>
       {[
         { key: 'insumos', label: 'INSUMOS AGRÍCOLAS', colorClass: 'insumos', icon: <svg viewBox="0 0 24 24"><path d="M12 2C9 2 6 4 5 7C4 10 5 13 7 15C9 17 11 17 11 20H13C13 17 15 17 17 15C19 13 20 10 19 7C18 4 15 2 12 2Z"/></svg> },
         { key: 'tecnologia', label: 'TECNOLOGIA DE APLICAÇÃO', colorClass: 'tecnologia', icon: <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/></svg> },
@@ -428,6 +436,9 @@ export function AgroForteRenderer({ data, editMode, onSelectElement, customSecti
           </EditableBlock>
         );
       })}
+
+        </>
+      )}
 
       {/* POR QUE AGROFORTE */}
       
