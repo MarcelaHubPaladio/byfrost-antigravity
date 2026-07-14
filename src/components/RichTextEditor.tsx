@@ -242,7 +242,15 @@ export function RichTextEditor(props: {
         <input
           type="color"
           onInput={(event: any) => editor.chain().focus().setColor(event.target.value).run()}
-          value={editor.getAttributes('textStyle').color || '#000000'}
+          value={(function(c) {
+            if (!c) return '#000000';
+            if (c.startsWith('#')) return c;
+            const match = c.match(/^rgba?\((\d+),\s*(\d+),\s*(\d+)/);
+            if (match) {
+              return '#' + match.slice(1).map((n: string) => parseInt(n, 10).toString(16).padStart(2, '0')).join('');
+            }
+            return '#000000';
+          })(editor.getAttributes('textStyle').color)}
           className="h-9 w-9 p-1 border border-slate-200 rounded-md bg-white cursor-pointer"
           title="Cor do Texto"
         />

@@ -1172,10 +1172,13 @@ function SortableFixedSectionItem({ id, children, previewMode, active, onSetting
 
     return (
         <div ref={setNodeRef} style={style} onClick={onSettingsClick} className={cn("relative group/fixed-section border-2 transition-all overflow-hidden mb-8", active ? "border-blue-500 rounded-[32px] ring-4 ring-blue-500/20" : "border-transparent hover:border-blue-500 rounded-[32px]")}>
-            <div className={cn("absolute right-6 top-0 z-50 bg-blue-500 text-white rounded-b-xl shadow-lg flex items-center h-8 transition-all", active ? "translate-y-0 opacity-100" : "opacity-0 group-hover/fixed-section:opacity-100 translate-y-[-100%] group-hover/fixed-section:translate-y-0")}>
-                <div className="px-3 h-full flex items-center text-[10px] font-bold uppercase tracking-widest border-r border-blue-400/50">
+            <div className={cn("absolute right-6 top-0 z-50 bg-blue-500 text-white rounded-b-xl shadow-lg flex items-center h-8 transition-all overflow-hidden divide-x divide-blue-400/50", active ? "translate-y-0 opacity-100" : "opacity-0 group-hover/fixed-section:opacity-100 translate-y-[-100%] group-hover/fixed-section:translate-y-0")}>
+                <div onClick={(e) => { e.stopPropagation(); onSettingsClick(); }} className="px-3 h-full flex items-center text-[10px] font-bold uppercase tracking-widest cursor-pointer hover:bg-blue-600 transition-colors">
                     Seção Fixa
                 </div>
+                <button onClick={(e) => { e.stopPropagation(); onSettingsClick(); }} className="p-1.5 px-3 hover:bg-blue-600 transition-colors cursor-pointer" title="Configurações">
+                    <Settings className="h-4 w-4" />
+                </button>
                 <div {...attributes} {...listeners} className="p-1.5 px-3 hover:bg-blue-600 transition-colors cursor-grab active:cursor-grabbing" title="Arrastar Seção">
                     <GripVertical className="h-4 w-4" />
                 </div>
