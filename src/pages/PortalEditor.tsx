@@ -1224,7 +1224,7 @@ function SortableSectionItem({ section, previewMode, active, onSelect, onRemove,
     );
 }
 
-function SortableBlockItem({ block, sectionId, previewMode, onUpdate, onRemove }: any) {
+function SortableBlockItem({ block, sectionId, previewMode, onUpdate, onRemove, isNested }: any) {
     const {
         attributes,
         listeners,
@@ -1237,7 +1237,8 @@ function SortableBlockItem({ block, sectionId, previewMode, onUpdate, onRemove }
         data: {
             type: 'existing-block',
             sectionId: sectionId
-        }
+        },
+        disabled: isNested
     });
 
     const effectiveSettings = getEffectiveSettings(block.settings, block.mobileSettings, previewMode);
@@ -1255,14 +1256,17 @@ function SortableBlockItem({ block, sectionId, previewMode, onUpdate, onRemove }
             style={style}
             key={effectiveSettings.animation || 'static'} 
             className={cn(
-                "group/block relative p-4 rounded-2xl hover:bg-slate-50 transition-all border-2 border-transparent hover:border-blue-200/50",
+                isNested ? "group/innerblock relative p-2 hover:bg-slate-50 border-2 border-transparent hover:border-blue-200/50" : "group/block relative p-4 rounded-2xl hover:bg-slate-50 transition-all border-2 border-transparent hover:border-blue-200/50",
                 effectiveSettings.animation === 'fade-up' && 'animate-fade-up',
                 effectiveSettings.animation === 'zoom-in' && 'animate-zoom-in',
                 effectiveSettings.animation === 'fade-left' && 'animate-fade-left',
                 effectiveSettings.animation === 'fade-right' && 'animate-fade-right'
             )}
         >
-            <div className="absolute right-0 top-0 opacity-0 group-hover/block:opacity-100 transition-opacity z-50 flex items-center bg-blue-500 text-white rounded-bl-lg rounded-tr-xl shadow-lg overflow-hidden">
+            <div className={cn(
+                "absolute opacity-0 transition-opacity z-50 flex items-center bg-blue-500 text-white shadow-lg overflow-hidden",
+                isNested ? "right-2 top-2 rounded-lg group-hover/innerblock:opacity-100" : "right-0 top-0 rounded-bl-lg rounded-tr-xl group-hover/block:opacity-100"
+            )}>
                 <Popover>
                     <PopoverTrigger asChild>
                         <button className="p-1.5 hover:bg-blue-600 transition-colors border-r border-blue-400/50" title="Editar Widget">
@@ -1812,9 +1816,11 @@ function SortableBlockItem({ block, sectionId, previewMode, onUpdate, onRemove }
                     </PopoverContent>
                 </Popover>
 
-                <div {...attributes} {...listeners} className="p-1.5 hover:bg-blue-600 transition-colors cursor-grab active:cursor-grabbing border-r border-blue-400/50">
-                    <GripVertical className="h-3 w-3" />
-                </div>
+                {!isNested && (
+                    <div {...attributes} {...listeners} className="p-1.5 hover:bg-blue-600 transition-colors cursor-grab active:cursor-grabbing border-r border-blue-400/50">
+                        <GripVertical className="h-3 w-3" />
+                    </div>
+                )}
                 <button 
                     className="p-1.5 hover:bg-red-500 transition-colors" 
                     onClick={(e) => { e.stopPropagation(); onRemove(); }} 
@@ -1834,6 +1840,7 @@ function SortableBlockItem({ block, sectionId, previewMode, onUpdate, onRemove }
                             key={innerBlock.id} 
                             block={innerBlock}
                             previewMode={previewMode}
+                            isNested={true}
                             onUpdate={(innerUpdates: any) => {
                                 const blocks = block.blocks?.map((b: any) => {
                                     if (b.id !== innerBlock.id) return b;
