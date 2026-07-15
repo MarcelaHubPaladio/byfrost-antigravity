@@ -421,6 +421,21 @@ export function WhatsAppConversation({
     },
   });
 
+  const tenantSettingsQ = useQuery({
+    queryKey: ["tenant_settings", activeTenantId],
+    enabled: Boolean(activeTenantId),
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("tenants")
+        .select("branding_json")
+        .eq("id", activeTenantId!)
+        .maybeSingle();
+      if (error) throw error;
+      return data?.branding_json ?? {};
+    },
+  });
+  const beeiaAutoPauseManualMsg = (tenantSettingsQ.data?.features?.beeia_auto_pause_manual_msg as boolean | undefined) ?? true;
+
   const senderIsVendor = useMemo(() => {
     const cfg = (tenantJourneyCfgQ.data as any)?.config_json ?? {};
     return Boolean(readCfg(cfg, "automation.conversations.sender_is_vendor"));
@@ -600,6 +615,21 @@ export function WhatsAppConversation({
     }
   };
 
+  const forcePauseBeeIA = async () => {
+    if (!activeTenantId || beeiaIsPaused) return;
+    try {
+      const { error } = await supabase
+        .from("cases")
+        .update({ beeia_paused: true })
+        .eq("tenant_id", activeTenantId)
+        .eq("id", caseId);
+      if (error) throw error;
+      await qc.invalidateQueries({ queryKey: ["case_lite_for_chat", activeTenantId, caseId] });
+    } catch (e) {
+      console.error("Failed to force pause BeeIA", e);
+    }
+  };
+
   const instancePhone = instanceQ.data?.phone_number ?? null;
 
   const counterpartPhone = useMemo(() => {
@@ -734,9 +764,9 @@ export function WhatsAppConversation({
 
       showSuccess(`${type === "image" ? "Imagem" : "Arquivo"} enviado para: ${data?.debug?.to || to}`);
 
-      if (!beeiaIsPaused) {
+      if (!beeiaIsPaused && beeiaAutoPauseManualMsg) {
         // Auto-pause AI if user sends manual message
-        await handleToggleBeeia(true);
+        await forcePauseBeeIA();
       }
 
       await Promise.all([
@@ -814,9 +844,9 @@ export function WhatsAppConversation({
       setText("");
       showSuccess(successMsg);
 
-      if (!beeiaIsPaused) {
+      if (!beeiaIsPaused && beeiaAutoPauseManualMsg) {
         // Auto-pause AI if user sends manual message
-        await handleToggleBeeia(true);
+        await forcePauseBeeIA();
       }
 
       await Promise.all([

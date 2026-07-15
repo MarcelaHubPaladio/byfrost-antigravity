@@ -1760,15 +1760,25 @@ serve(async (req) => {
 
       if (caseId && payload?.fromApi === false) {
         // Human sent a message from Celular/Web, auto-pause AI.
-        const { error: pauseErr } = await supabase
-          .from("cases")
-          .update({ beeia_paused: true })
-          .eq("id", caseId);
-        
-        if (pauseErr) {
-          console.error(`[${fn}] Failed to auto-pause BeeIA for Celular/Web message`, { pauseErr });
-        } else {
-          console.log(`[${fn}] Auto-paused BeeIA for case ${caseId} due to Celular/Web message.`);
+        const { data: tenantData } = await supabase
+          .from("tenants")
+          .select("branding_json")
+          .eq("id", instance.tenant_id)
+          .maybeSingle();
+
+        const beeiaAutoPause = tenantData?.branding_json?.features?.beeia_auto_pause_manual_msg ?? true;
+
+        if (beeiaAutoPause) {
+          const { error: pauseErr } = await supabase
+            .from("cases")
+            .update({ beeia_paused: true })
+            .eq("id", caseId);
+          
+          if (pauseErr) {
+            console.error(`[${fn}] Failed to auto-pause BeeIA for Celular/Web message`, { pauseErr });
+          } else {
+            console.log(`[${fn}] Auto-paused BeeIA for case ${caseId} due to Celular/Web message.`);
+          }
         }
       }
 

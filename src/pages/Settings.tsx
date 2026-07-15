@@ -44,6 +44,7 @@ export default function Settings() {
     const f = bj.features ?? {};
     return {
       notify_customer: (f.notify_customer as boolean | undefined) ?? true,
+      beeia_auto_pause_manual_msg: (f.beeia_auto_pause_manual_msg as boolean | undefined) ?? true,
     };
   }, [tenantQ.data]);
 
@@ -153,6 +154,22 @@ export default function Settings() {
                 <Switch
                   checked={features.notify_customer}
                   onCheckedChange={(v) => setFeature("notify_customer", v)}
+                  disabled={!isSuperAdminUi || saving}
+                />
+              </div>
+
+              <div className="mt-4 flex items-center justify-between rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3 dark:border-slate-800 dark:bg-slate-950/40">
+                <div>
+                  <div className="text-sm font-medium text-slate-900 dark:text-slate-100">
+                    Pausar IA automaticamente
+                  </div>
+                  <div className="mt-0.5 text-xs text-slate-600 dark:text-slate-400">
+                    Pausa a BeeIA automaticamente quando uma mensagem for enviada manualmente pelo CRM ou Celular/Web.
+                  </div>
+                </div>
+                <Switch
+                  checked={features.beeia_auto_pause_manual_msg}
+                  onCheckedChange={(v) => setFeature("beeia_auto_pause_manual_msg", v)}
                   disabled={!isSuperAdminUi || saving}
                 />
               </div>
