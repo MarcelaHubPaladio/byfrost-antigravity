@@ -158,22 +158,6 @@ export default function Settings() {
                 />
               </div>
 
-              <div className="mt-4 flex items-center justify-between rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3 dark:border-slate-800 dark:bg-slate-950/40">
-                <div>
-                  <div className="text-sm font-medium text-slate-900 dark:text-slate-100">
-                    Pausar IA automaticamente
-                  </div>
-                  <div className="mt-0.5 text-xs text-slate-600 dark:text-slate-400">
-                    Pausa a BeeIA automaticamente quando uma mensagem for enviada manualmente pelo CRM ou Celular/Web.
-                  </div>
-                </div>
-                <Switch
-                  checked={features.beeia_auto_pause_manual_msg}
-                  onCheckedChange={(v) => setFeature("beeia_auto_pause_manual_msg", v)}
-                  disabled={!isSuperAdminUi || saving}
-                />
-              </div>
-
               {!isSuperAdminUi && (
                 <div className="mt-3 rounded-2xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
                   Você não tem permissão de super-admin. Modo somente leitura.

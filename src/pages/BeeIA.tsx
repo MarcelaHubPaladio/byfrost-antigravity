@@ -16,6 +16,7 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { env } from "@/lib/env";
 import {
   Sparkles,
   Smartphone,
@@ -105,7 +106,9 @@ function BeeIAPage() {
   const qc = useQueryClient();
   const { activeTenantId } = useTenant();
   const { user } = useSession();
+  const email = (user?.email ?? "").toLowerCase();
   const isSuperAdmin = (user as any)?.app_metadata?.role === "super-admin";
+  const isSuperAdminUi = env.APP_SUPER_ADMIN_EMAILS.includes(email) || isSuperAdmin;
   const [activeTab, setActiveTab] = useState("crm");
 
   // State for config
@@ -191,6 +194,23 @@ function BeeIAPage() {
       return data as BeeiaConfig | null;
     },
   });
+
+  const tenantSettingsQ = useQuery({
+    queryKey: ["tenant_settings", activeTenantId],
+    enabled: Boolean(activeTenantId),
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("tenants")
+        .select("id,branding_json")
+        .eq("id", activeTenantId!)
+        .maybeSingle();
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  const beeiaAutoPauseManualMsg = (tenantSettingsQ.data?.branding_json?.features?.beeia_auto_pause_manual_msg as boolean | undefined) ?? true;
+  const [savingAutoPause, setSavingAutoPause] = useState(false);
 
   useEffect(() => {
     if (configQ.data) {
@@ -718,6 +738,32 @@ function BeeIAPage() {
     } catch (e: any) {
       showError(`Falha ao alterar status global: ${e.message}`);
       setIsActive(!newVal); // revert
+    }
+  };
+
+  const handleToggleAutoPause = async (checked: boolean) => {
+    if (!activeTenantId || !isSuperAdminUi) return;
+    setSavingAutoPause(true);
+    try {
+      const current = tenantSettingsQ.data?.branding_json ?? {};
+      const next = {
+        ...current,
+        features: {
+          ...(current.features ?? {}),
+          beeia_auto_pause_manual_msg: checked,
+        },
+      };
+      const { error } = await supabase
+        .from("tenants")
+        .update({ branding_json: next })
+        .eq("id", activeTenantId);
+      if (error) throw error;
+      showSuccess(`Pausa automática ${checked ? "Ativada" : "Desativada"}!`);
+      await qc.invalidateQueries({ queryKey: ["tenant_settings", activeTenantId] });
+    } catch (e: any) {
+      showError(`Falha ao alterar: ${e.message}`);
+    } finally {
+      setSavingAutoPause(false);
     }
   };
 
@@ -1784,6 +1830,36 @@ function BeeIAPage() {
                         onCheckedChange={handleToggleGlobalSwitch} 
                         className="data-[state=checked]:bg-amber-500" 
                       />
+                    </div>
+                  </div>
+                </Card>
+
+                {/* Auto Pause Switch */}
+                <Card className="rounded-[22px] border-slate-200/80 p-5 dark:border-slate-800 bg-white dark:bg-slate-900">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <span className={`flex h-10 w-10 items-center justify-center rounded-xl transition-colors ${beeiaAutoPauseManualMsg ? 'bg-amber-500/10 text-amber-500' : 'bg-slate-100 text-slate-400 dark:bg-slate-800'}`}>
+                        <Hand className="h-5 w-5" />
+                      </span>
+                      <div>
+                        <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">
+                          Pausar IA automaticamente
+                        </h2>
+                        <p className="text-xs text-slate-500">
+                          Pausa a BeeIA automaticamente quando um humano enviar uma mensagem manual (Painel ou Celular).
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 flex-col items-end">
+                      <Switch 
+                        checked={beeiaAutoPauseManualMsg} 
+                        onCheckedChange={handleToggleAutoPause} 
+                        disabled={!isSuperAdminUi || savingAutoPause}
+                        className="data-[state=checked]:bg-amber-500" 
+                      />
+                      {!isSuperAdminUi && (
+                        <span className="text-[10px] text-amber-600 font-medium">Restrito ao Super Admin</span>
+                      )}
                     </div>
                   </div>
                 </Card>
