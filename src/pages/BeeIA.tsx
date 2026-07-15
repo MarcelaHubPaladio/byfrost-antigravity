@@ -47,7 +47,8 @@ import {
   Download,
   X,
   Webhook,
-  Bell
+  Bell,
+  Hand
 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
