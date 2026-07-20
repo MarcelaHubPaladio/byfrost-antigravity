@@ -1782,13 +1782,18 @@ export default function OperacaoM30Case() {
                                                         disabled={saving}
                                                         onClick={async () => {
                                                             setSaving(true);
+                                                            const { data: latestCase } = await supabase.from("cases").select("meta_json").eq("id", id!).single();
+                                                            const latestMeta = latestCase?.meta_json as any || caseQ.data?.meta_json || {};
+                                                            const caseLabels = latestMeta.labels || [];
+                                                            const isSelected = caseLabels.includes(lbl.id);
+
                                                             let newLabels = [...caseLabels];
                                                             if (isSelected) {
                                                                 newLabels = newLabels.filter((id: string) => id !== lbl.id);
                                                             } else {
                                                                 newLabels.push(lbl.id);
                                                             }
-                                                            const newMeta = { ...(caseQ.data?.meta_json || {}), labels: newLabels };
+                                                            const newMeta = { ...latestMeta, labels: newLabels };
                                                             await supabase.from("cases").update({ meta_json: newMeta }).eq("id", id!);
                                                             await caseQ.refetch();
                                                             toast.success(isSelected ? "Etiqueta removida" : "Etiqueta vinculada ao caso!");
@@ -1962,12 +1967,14 @@ export default function OperacaoM30Case() {
                                                                         onClick={async (e) => {
                                                                             e.stopPropagation();
                                                                             if (!confirm("Tem certeza que deseja desaprovar este roteiro?")) return;
-                                                                            const current = (caseQ.data?.meta_json as any)?.pending_subtasks || [];
+                                                                            const { data: latestCase } = await supabase.from("cases").select("meta_json").eq("id", id!).single();
+                                                                            const latestMeta = latestCase?.meta_json as any || caseQ.data?.meta_json || {};
+                                                                            const current = latestMeta.pending_subtasks || [];
                                                                             const next = [...current];
                                                                             next[idx] = { ...next[idx], is_approved: false };
                                                                             try {
                                                                                 await supabase.from("cases").update({
-                                                                                    meta_json: { ...(caseQ.data?.meta_json as any), pending_subtasks: next }
+                                                                                    meta_json: { ...latestMeta, pending_subtasks: next }
                                                                                 }).eq("id", id!);
                                                                                 showSuccess("Roteiro desaprovado.");
                                                                                 caseQ.refetch();
@@ -2013,10 +2020,12 @@ export default function OperacaoM30Case() {
                                                                     className="h-9 w-9 rounded-xl text-slate-400 hover:text-rose-600 hover:bg-rose-50"
                                                                     onClick={async (e) => {
                                                                         e.stopPropagation();
-                                                                        const current = (caseQ.data?.meta_json as any)?.pending_subtasks || [];
+                                                                        const { data: latestCase } = await supabase.from("cases").select("meta_json").eq("id", id!).single();
+                                                                        const latestMeta = latestCase?.meta_json as any || caseQ.data?.meta_json || {};
+                                                                        const current = latestMeta.pending_subtasks || [];
                                                                         const next = current.filter((_: any, i: number) => i !== idx);
                                                                         await supabase.from("cases").update({
-                                                                            meta_json: { ...(caseQ.data?.meta_json as any), pending_subtasks: next }
+                                                                            meta_json: { ...latestMeta, pending_subtasks: next }
                                                                         }).eq("id", id!);
                                                                         caseQ.refetch();
                                                                     }}
@@ -2055,10 +2064,12 @@ export default function OperacaoM30Case() {
                                                     onClick={async () => {
                                                         const el = document.getElementById("new-subtask-title") as HTMLInputElement;
                                                         if (!el || !el.value.trim()) return;
-                                                        const current = (caseQ.data?.meta_json as any)?.pending_subtasks || [];
+                                                        const { data: latestCase } = await supabase.from("cases").select("meta_json").eq("id", id!).single();
+                                                        const latestMeta = latestCase?.meta_json as any || caseQ.data?.meta_json || {};
+                                                        const current = latestMeta.pending_subtasks || [];
                                                         const next = [...current, { title: el.value, type: "edicao" }];
                                                         await supabase.from("cases").update({
-                                                            meta_json: { ...(caseQ.data?.meta_json as any), pending_subtasks: next }
+                                                            meta_json: { ...latestMeta, pending_subtasks: next }
                                                         }).eq("id", id!);
                                                         el.value = "";
                                                         caseQ.refetch();
@@ -2073,10 +2084,12 @@ export default function OperacaoM30Case() {
                                                     onClick={async () => {
                                                         const el = document.getElementById("new-subtask-title") as HTMLInputElement;
                                                         if (!el || !el.value.trim()) return;
-                                                        const current = (caseQ.data?.meta_json as any)?.pending_subtasks || [];
+                                                        const { data: latestCase } = await supabase.from("cases").select("meta_json").eq("id", id!).single();
+                                                        const latestMeta = latestCase?.meta_json as any || caseQ.data?.meta_json || {};
+                                                        const current = latestMeta.pending_subtasks || [];
                                                         const next = [...current, { title: el.value, type: "arte_estatica" }];
                                                         await supabase.from("cases").update({
-                                                            meta_json: { ...(caseQ.data?.meta_json as any), pending_subtasks: next }
+                                                            meta_json: { ...latestMeta, pending_subtasks: next }
                                                         }).eq("id", id!);
                                                         el.value = "";
                                                         caseQ.refetch();

@@ -164,12 +164,15 @@ export function TrelloCardDetails(props: { tenantId: string; caseId: string }) {
     if (!props.tenantId || !props.caseId) return;
     setSaving(true);
     try {
+      const { data: latestCase } = await supabase.from("cases").select("meta_json").eq("id", props.caseId).single();
+      const latestMeta = latestCase?.meta_json as any || (caseQ.data as any)?.meta_json || {};
+
       const payload: any = {
         title: form.title.trim() || null,
         summary_text: normalizeRichTextHtmlOrNull(form.descriptionHtml),
         assigned_user_id: form.assignedUserId === "__unassigned__" ? null : form.assignedUserId,
         meta_json: {
-          ...((caseQ.data as any)?.meta_json ?? {}),
+          ...latestMeta,
           due_at: parseDateInput(form.dueDate),
         },
       };
