@@ -54,6 +54,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { WhatsAppConversation } from "@/components/case/WhatsAppConversation";
+import { MetaConversation } from "@/components/case/MetaConversation";
 import { BeeIASimulator } from "@/components/case/BeeIASimulator";
 
 type CaseRow = {
@@ -73,6 +74,11 @@ type CaseRow = {
   wa_messages?: {
     body_text: string | null;
     occurred_at: string;
+  }[];
+  meta_messages?: {
+    message_text: string | null;
+    created_at: string;
+    platform: string;
   }[];
   beeia_paused?: boolean;
 };
@@ -478,16 +484,24 @@ function BeeIAPage() {
       const rows = (data ?? []) as any[];
       const enriched: CaseRow[] = await Promise.all(
         rows.map(async (c) => {
-          const { data: lastMsg } = await supabase
+          const { data: waLastMsg } = await supabase
             .from("wa_messages")
             .select("body_text, occurred_at")
             .eq("case_id", c.id)
             .order("occurred_at", { ascending: false })
             .limit(1);
 
+          const { data: metaLastMsg } = await supabase
+            .from("meta_messages")
+            .select("message_text, created_at, platform")
+            .eq("case_id", c.id)
+            .order("created_at", { ascending: false })
+            .limit(1);
+
           return {
             ...c,
-            wa_messages: lastMsg ?? [],
+            wa_messages: waLastMsg ?? [],
+            meta_messages: metaLastMsg ?? [],
           } as CaseRow;
         })
       );
@@ -1475,10 +1489,27 @@ function BeeIAPage() {
                                   onClick={() => setSelectedCaseId(c.id)}
                                 >
                                   <td className="py-3.5">
-                                    <div className="text-xs font-semibold text-slate-800 dark:text-slate-200 group-hover:text-amber-600 dark:group-hover:text-amber-400">
-                                      {name}
+                                    <div className="flex items-center gap-2">
+                                      {c.meta_messages?.[0]?.platform === "instagram" ? (
+                                        <div className="w-5 h-5 rounded-full bg-gradient-to-tr from-amber-400 via-rose-500 to-purple-600 flex items-center justify-center flex-shrink-0">
+                                          <Instagram className="w-3 h-3 text-white" />
+                                        </div>
+                                      ) : c.meta_messages?.[0]?.platform === "facebook" ? (
+                                        <div className="w-5 h-5 rounded-full bg-blue-600 flex items-center justify-center flex-shrink-0">
+                                          <Facebook className="w-3 h-3 text-white fill-white" />
+                                        </div>
+                                      ) : (
+                                        <div className="w-5 h-5 rounded-full bg-emerald-500 flex items-center justify-center flex-shrink-0">
+                                          <Phone className="w-3 h-3 text-white" />
+                                        </div>
+                                      )}
+                                      <div>
+                                        <div className="text-xs font-semibold text-slate-800 dark:text-slate-200 group-hover:text-amber-600 dark:group-hover:text-amber-400">
+                                          {name}
+                                        </div>
+                                        <div className="text-[10px] text-slate-400 font-mono mt-0.5">{phone}</div>
+                                      </div>
                                     </div>
-                                    <div className="text-[10px] text-slate-400 font-mono mt-0.5">{phone}</div>
                                   </td>
                                   <td className="py-3.5">
                                     <div onClick={(e) => e.stopPropagation()}>
@@ -2712,9 +2743,16 @@ function BeeIAPage() {
               </SheetHeader>
               
               <div className="flex-1 overflow-hidden">
-                {selectedCaseId && (
-                  <WhatsAppConversation caseId={selectedCaseId} className="h-full" />
-                )}
+                {selectedCaseId && (() => {
+                  const selectedCase = casesQ.data?.find(c => c.id === selectedCaseId);
+                  const isMeta = selectedCase?.meta_messages && selectedCase.meta_messages.length > 0;
+                  
+                  if (isMeta) {
+                    return <MetaConversation caseId={selectedCaseId} className="h-full" />;
+                  } else {
+                    return <WhatsAppConversation caseId={selectedCaseId} className="h-full" />;
+                  }
+                })()}
               </div>
             </div>
           </SheetContent>
