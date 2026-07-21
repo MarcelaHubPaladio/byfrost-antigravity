@@ -12,6 +12,9 @@ import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { showError, showSuccess } from "@/utils/toast";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { MoreVertical, Trash2, Edit } from "lucide-react";
 
 export function MetaPlanner() {
   const { activeTenant } = useTenant();
@@ -25,6 +28,10 @@ export function MetaPlanner() {
   const [mediaFile, setMediaFile] = useState<File | null>(null);
   const [mediaPreview, setMediaPreview] = useState("");
   const [scheduleDate, setScheduleDate] = useState("");
+  const [postNow, setPostNow] = useState(false);
+  
+  // Edit State
+  const [editingPostId, setEditingPostId] = useState<string | null>(null);
 
   const pagesQ = useQuery({
     queryKey: ["meta_organic_pages", activeTenant?.id],
@@ -65,7 +72,7 @@ export function MetaPlanner() {
 
   const createPostM = useMutation({
     mutationFn: async () => {
-      if (!pageId || !message || !mediaFile || !scheduleDate) {
+      if (!pageId || !message || !mediaFile || (!postNow && !scheduleDate)) {
         throw new Error("Preencha todos os campos e selecione uma imagem.");
       }
 
@@ -92,18 +99,23 @@ export function MetaPlanner() {
             meta_organic_page_id: pageId,
             message: message,
             media_url: publicUrlData.publicUrl,
-            scheduled_at: new Date(scheduleDate).toISOString(),
+            scheduled_at: postNow ? new Date().toISOString() : new Date(scheduleDate).toISOString(),
             status: "pending"
           });
 
         if (insertError) throw insertError;
+        
+        // If postNow is checked, trigger publisher immediately
+        if (postNow) {
+          await supabase.functions.invoke("meta-publisher");
+        }
 
       } finally {
         setUploading(false);
       }
     },
     onSuccess: () => {
-      showSuccess("Postagem agendada com sucesso!");
+      showSuccess(postNow ? "Postagem iniciada!" : "Postagem agendada com sucesso!");
       qc.invalidateQueries({ queryKey: ["meta_scheduled_posts"] });
       setOpen(false);
       // Reset form
@@ -112,11 +124,109 @@ export function MetaPlanner() {
       setMediaFile(null);
       setMediaPreview("");
       setScheduleDate("");
+      setPostNow(false);
+      setEditingPostId(null);
     },
     onError: (err: any) => {
       showError("Erro ao agendar postagem", err);
     }
   });
+
+  const updatePostM = useMutation({
+    mutationFn: async () => {
+      if (!editingPostId || !message || (!postNow && !scheduleDate)) {
+        throw new Error("Preencha todos os campos.");
+      }
+      setUploading(true);
+      try {
+        let mediaUrl = mediaPreview; // keep existing by default
+        
+        // 1. Upload media if a new one was selected
+        if (mediaFile) {
+          const fileExt = mediaFile.name.split('.').pop();
+          const fileName = `${activeTenant?.id}/${Date.now()}.${fileExt}`;
+          const { error: uploadError } = await supabase.storage
+            .from("meta_post_media")
+            .upload(fileName, mediaFile);
+          if (uploadError) throw uploadError;
+          
+          const { data: publicUrlData } = supabase.storage
+            .from("meta_post_media")
+            .getPublicUrl(fileName);
+          mediaUrl = publicUrlData.publicUrl;
+        }
+
+        // 2. Update record
+        const finalSchedule = postNow ? new Date().toISOString() : new Date(scheduleDate).toISOString();
+        const { error: updateError } = await supabase
+          .from("meta_scheduled_posts")
+          .update({
+            meta_organic_page_id: pageId,
+            message: message,
+            media_url: mediaUrl,
+            scheduled_at: finalSchedule,
+            status: "pending"
+          })
+          .eq("id", editingPostId);
+
+        if (updateError) throw updateError;
+        
+        if (postNow) {
+          await supabase.functions.invoke("meta-publisher");
+        }
+      } finally {
+        setUploading(false);
+      }
+    },
+    onSuccess: () => {
+      showSuccess("Postagem atualizada com sucesso!");
+      qc.invalidateQueries({ queryKey: ["meta_scheduled_posts"] });
+      setOpen(false);
+      setEditingPostId(null);
+    },
+    onError: (err: any) => {
+      showError("Erro ao atualizar postagem", err);
+    }
+  });
+
+  const deletePostM = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase
+        .from("meta_scheduled_posts")
+        .delete()
+        .eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      showSuccess("Agendamento excluído.");
+      qc.invalidateQueries({ queryKey: ["meta_scheduled_posts"] });
+    },
+    onError: (err: any) => {
+      showError("Erro ao excluir agendamento", err);
+    }
+  });
+  
+  const handleEdit = (post: any) => {
+    setEditingPostId(post.id);
+    setPageId(post.meta_organic_page_id);
+    setMessage(post.message);
+    setMediaPreview(post.media_url);
+    setMediaFile(null);
+    setScheduleDate(post.scheduled_at.slice(0, 16));
+    setPostNow(false);
+    setOpen(true);
+  };
+
+  const handleOpenNew = () => {
+    setEditingPostId(null);
+    setPageId("");
+    setMessage("");
+    setMediaFile(null);
+    setMediaPreview("");
+    setScheduleDate("");
+    setPostNow(false);
+    setOpen(true);
+  };
 
   if (!activeTenant) return null;
 
@@ -132,7 +242,7 @@ export function MetaPlanner() {
         </div>
 
         <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger asChild>
+          <DialogTrigger asChild onClick={handleOpenNew}>
             <Button className="bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm rounded-xl gap-2">
               <Plus className="w-4 h-4" />
               Agendar Post
@@ -140,7 +250,7 @@ export function MetaPlanner() {
           </DialogTrigger>
           <DialogContent className="sm:max-w-[500px]">
             <DialogHeader>
-              <DialogTitle>Novo Agendamento</DialogTitle>
+              <DialogTitle>{editingPostId ? "Editar Agendamento" : "Novo Agendamento"}</DialogTitle>
             </DialogHeader>
 
             <div className="space-y-4 py-4">
@@ -160,13 +270,29 @@ export function MetaPlanner() {
                 </Select>
               </div>
 
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Data e Hora (Local)</label>
-                <Input 
-                  type="datetime-local" 
-                  value={scheduleDate}
-                  onChange={(e) => setScheduleDate(e.target.value)}
-                />
+              <div className="space-y-4">
+                <div className="flex items-center space-x-2 border border-indigo-100 dark:border-indigo-900/30 bg-indigo-50/50 dark:bg-indigo-900/10 p-3 rounded-xl">
+                  <Checkbox 
+                    id="postNow" 
+                    checked={postNow} 
+                    onCheckedChange={(c) => setPostNow(!!c)} 
+                    className="border-indigo-300 text-indigo-600 focus-visible:ring-indigo-500"
+                  />
+                  <label htmlFor="postNow" className="text-sm font-semibold text-indigo-700 dark:text-indigo-400 cursor-pointer">
+                    Postar Imediatamente
+                  </label>
+                </div>
+
+                {!postNow && (
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Data e Hora (Local)</label>
+                    <Input 
+                      type="datetime-local" 
+                      value={scheduleDate}
+                      onChange={(e) => setScheduleDate(e.target.value)}
+                    />
+                  </div>
+                )}
               </div>
 
               <div className="space-y-2">
@@ -210,12 +336,12 @@ export function MetaPlanner() {
             <div className="flex justify-end gap-3 pt-4 border-t">
               <Button variant="ghost" onClick={() => setOpen(false)}>Cancelar</Button>
               <Button 
-                onClick={() => createPostM.mutate()} 
-                disabled={createPostM.isPending || uploading}
+                onClick={() => editingPostId ? updatePostM.mutate() : createPostM.mutate()} 
+                disabled={createPostM.isPending || updatePostM.isPending || uploading}
                 className="bg-indigo-600 hover:bg-indigo-700 text-white"
               >
-                {(createPostM.isPending || uploading) && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Agendar
+                {(createPostM.isPending || updatePostM.isPending || uploading) && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                {editingPostId ? "Salvar" : "Agendar"}
               </Button>
             </div>
           </DialogContent>
@@ -272,9 +398,31 @@ export function MetaPlanner() {
                     {post.message}
                   </p>
                   
-                  <div className="mt-auto pt-4 border-t border-slate-100 dark:border-slate-800 flex items-center text-xs font-semibold text-slate-600 dark:text-slate-300">
-                    <Calendar className="w-3.5 h-3.5 mr-1.5 text-indigo-400" />
-                    {format(new Date(post.scheduled_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
+                  <div className="mt-auto pt-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs font-semibold text-slate-600 dark:text-slate-300">
+                    <div className="flex items-center">
+                      <Calendar className="w-3.5 h-3.5 mr-1.5 text-indigo-400" />
+                      {format(new Date(post.scheduled_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
+                    </div>
+                    
+                    {(post.status === "pending" || post.status === "failed") && (
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="sm" className="h-6 w-6 p-0 rounded-full hover:bg-slate-200 dark:hover:bg-slate-800">
+                            <MoreVertical className="h-4 w-4 text-slate-400" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-32">
+                          <DropdownMenuItem onClick={() => handleEdit(post)} className="cursor-pointer font-medium text-slate-700">
+                            <Edit className="w-3.5 h-3.5 mr-2" />
+                            Editar
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => deletePostM.mutate(post.id)} className="cursor-pointer text-red-600 font-medium hover:text-red-700 focus:text-red-700">
+                            <Trash2 className="w-3.5 h-3.5 mr-2" />
+                            Excluir
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    )}
                   </div>
                 </div>
               </div>

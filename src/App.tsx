@@ -118,6 +118,7 @@ const SmartCampaigns = lazyWithRetry(() => import("@/pages/SmartCampaigns"));
 const SmartCampaignDetail = lazyWithRetry(() => import("@/pages/SmartCampaignDetail"));
 const BeeIA = lazyWithRetry(() => import("@/pages/BeeIA"));
 const BiDashboard = lazyWithRetry(() => import("@/pages/bi/BiDashboard"));
+const MetaPlannerPage = lazyWithRetry(() => import("@/pages/MetaPlannerPage"));
 const GlobalLoading = () => (
   <div className="flex h-screen w-full items-center justify-center bg-slate-50 dark:bg-slate-950">
     <div className="h-8 w-8 animate-spin rounded-full border-4 border-slate-200 border-t-blue-500 dark:border-slate-800" />
@@ -426,6 +427,15 @@ const App = () => (
                           <BeeIA />
                         </RequireRouteAccess>
                       </RequireBeeiaEnabled>
+                    }
+                  />
+
+                  <Route
+                    path="/app/planner"
+                    element={
+                      <RequireRouteAccess routeKey="app.bi">
+                        <MetaPlannerPage />
+                      </RequireRouteAccess>
                     }
                   />
 

@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { useTenant } from "@/providers/TenantProvider";
-import { useAuth } from "@/providers/AuthProvider";
+
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Loader2, Send, Bot, User, CheckCheck, Clock, Check, RefreshCw } from "lucide-react";
@@ -11,7 +11,7 @@ import { showError } from "@/utils/toast";
 
 export function MetaConversation({ caseId, className = "" }: { caseId: string; className?: string }) {
   const { activeTenantId } = useTenant();
-  const { user } = useAuth();
+
   const qc = useQueryClient();
   const messagesEndRef = useRef<HTMLDivElement>(null);
   
