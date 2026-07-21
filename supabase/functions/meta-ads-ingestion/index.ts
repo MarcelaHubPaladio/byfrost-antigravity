@@ -43,107 +43,118 @@ serve(async (req) => {
           level: "ad",
           time_increment: "1",
           date_preset: "last_90d",
+          limit: "500", // Grab larger chunks
           access_token: token,
         });
 
         // Use Insights API which gives us metrics AND campaign names for active ones
-        const url = `https://graph.facebook.com/v19.0/${acc.ad_account_id}/insights?${params.toString()}`;
-        const fbRes = await fetch(url);
-        const fbJson = await fbRes.json();
-
-        if (!fbRes.ok) {
-          console.error(`[meta-ads-ingestion] Failed for account ${acc.ad_account_id}`, fbJson);
-          results.push({ account: acc.ad_account_id, ok: false, error: fbJson?.error?.message });
-          continue;
-        }
-
-        const data = fbJson.data || [];
+        let url = `https://graph.facebook.com/v19.0/${acc.ad_account_id}/insights?${params.toString()}`;
         let campaignsProcessed = 0;
         let metricsProcessed = 0;
 
-        for (const row of data) {
-          const campId = row.campaign_id;
-          const campName = row.campaign_name || "Campanha Desconhecida";
-          const dateStart = row.date_start; // YYYY-MM-DD
-          
-          // Basic metrics
-          const spend = parseFloat(row.spend || "0");
-          const impressions = parseInt(row.impressions || "0", 10);
-          const clicks = parseInt(row.clicks || "0", 10);
-          
-          // Parse actions for leads and purchases
-          let leads = 0;
-          let purchases = 0;
-          if (Array.isArray(row.actions)) {
-            for (const act of row.actions) {
-              if (act.action_type === "lead") leads += parseInt(act.value || "0", 10);
-              if (act.action_type === "purchase") purchases += parseInt(act.value || "0", 10);
+        while (url) {
+          const fbRes = await fetch(url);
+          const fbJson = await fbRes.json();
+
+          if (!fbRes.ok) {
+            console.error(`[meta-ads-ingestion] Failed for account ${acc.ad_account_id}`, fbJson);
+            results.push({ account: acc.ad_account_id, ok: false, error: fbJson?.error?.message });
+            break;
+          }
+
+          const data = fbJson.data || [];
+
+          for (const row of data) {
+            const campId = row.campaign_id;
+            const campName = row.campaign_name || "Campanha Desconhecida";
+            const dateStart = row.date_start; // YYYY-MM-DD
+            
+            // Basic metrics
+            const spend = parseFloat(row.spend || "0");
+            const impressions = parseInt(row.impressions || "0", 10);
+            const clicks = parseInt(row.clicks || "0", 10);
+            
+            // Parse actions for leads and purchases
+            let leads = 0;
+            let purchases = 0;
+            if (Array.isArray(row.actions)) {
+              for (const act of row.actions) {
+                if (act.action_type === "lead") leads += parseInt(act.value || "0", 10);
+                if (act.action_type === "purchase") purchases += parseInt(act.value || "0", 10);
+              }
             }
-          }
 
-          const adIdStr = row.ad_id;
-          const adNameStr = row.ad_name || "Anúncio Desconhecido";
+            const adIdStr = row.ad_id;
+            const adNameStr = row.ad_name || "Anúncio Desconhecido";
 
-          // 1. Upsert Campaign
-          const { data: campRow, error: campErr } = await supabase
-            .from("meta_ads_campaigns")
-            .upsert({
-              meta_ads_account_id: acc.id,
-              campaign_id: campId,
-              name: campName,
-              status: "ACTIVE", // From insights, it has delivery. We can sync real status later if needed.
-              updated_at: new Date().toISOString()
-            }, { onConflict: "meta_ads_account_id,campaign_id" })
-            .select("id")
-            .single();
-
-          if (campErr) {
-            console.error(`[meta-ads-ingestion] Failed to upsert campaign ${campId}`, campErr);
-            continue;
-          }
-          campaignsProcessed++;
-
-          // 1.5. Upsert Ad
-          let adDbId = null;
-          if (adIdStr) {
-            const { data: adRow, error: adErr } = await supabase
-              .from("meta_ads_ads")
+            // 1. Upsert Campaign
+            const { data: campRow, error: campErr } = await supabase
+              .from("meta_ads_campaigns")
               .upsert({
-                meta_ads_campaign_id: campRow.id,
-                ad_id: adIdStr,
-                name: adNameStr,
-                status: "ACTIVE",
+                meta_ads_account_id: acc.id,
+                campaign_id: campId,
+                name: campName,
+                status: "ACTIVE", // From insights, it has delivery. We can sync real status later if needed.
                 updated_at: new Date().toISOString()
-              }, { onConflict: "meta_ads_campaign_id,ad_id" })
+              }, { onConflict: "meta_ads_account_id,campaign_id" })
               .select("id")
               .single();
-              
-            if (!adErr && adRow) {
-              adDbId = adRow.id;
+
+            if (campErr) {
+              console.error(`[meta-ads-ingestion] Failed to upsert campaign ${campId}`, campErr);
+              continue;
+            }
+            campaignsProcessed++;
+
+            // 1.5. Upsert Ad
+            let adDbId = null;
+            if (adIdStr) {
+              const { data: adRow, error: adErr } = await supabase
+                .from("meta_ads_ads")
+                .upsert({
+                  meta_ads_campaign_id: campRow.id,
+                  ad_id: adIdStr,
+                  name: adNameStr,
+                  status: "ACTIVE",
+                  updated_at: new Date().toISOString()
+                }, { onConflict: "meta_ads_campaign_id,ad_id" })
+                .select("id")
+                .single();
+                
+              if (!adErr && adRow) {
+                adDbId = adRow.id;
+              } else {
+                console.error(`[meta-ads-ingestion] Failed to upsert ad ${adIdStr}`, adErr);
+              }
+            }
+
+            // 2. Upsert Daily Metrics
+            const { error: metricErr } = await supabase
+              .from("meta_ads_metrics_daily")
+              .upsert({
+                campaign_id: campRow.id,
+                meta_ads_ad_id: adDbId,
+                date: dateStart,
+                spend,
+                impressions,
+                clicks,
+                leads,
+                purchases,
+                updated_at: new Date().toISOString()
+              }, { onConflict: "campaign_id,meta_ads_ad_id,date" });
+
+            if (metricErr) {
+              console.error(`[meta-ads-ingestion] Failed to upsert metric for ${campId} on ${dateStart}`, metricErr);
             } else {
-              console.error(`[meta-ads-ingestion] Failed to upsert ad ${adIdStr}`, adErr);
+              metricsProcessed++;
             }
           }
 
-          // 2. Upsert Daily Metrics
-          const { error: metricErr } = await supabase
-            .from("meta_ads_metrics_daily")
-            .upsert({
-              campaign_id: campRow.id,
-              meta_ads_ad_id: adDbId,
-              date: dateStart,
-              spend,
-              impressions,
-              clicks,
-              leads,
-              purchases,
-              updated_at: new Date().toISOString()
-            }, { onConflict: "campaign_id,meta_ads_ad_id,date" });
-
-          if (metricErr) {
-            console.error(`[meta-ads-ingestion] Failed to upsert metric for ${campId} on ${dateStart}`, metricErr);
+          // Handle Pagination
+          if (fbJson.paging && fbJson.paging.next) {
+            url = fbJson.paging.next;
           } else {
-            metricsProcessed++;
+            url = ""; // End loop
           }
         }
         
