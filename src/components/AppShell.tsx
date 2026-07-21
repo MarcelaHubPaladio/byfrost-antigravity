@@ -1106,7 +1106,10 @@ export function AppShell({
                 )}
 
                 {biEnabledForTenant && (
-                  <NavTile to="/app/bi" icon={LineChart} label="BI" disabled={!can("app.bi")} />
+                  <>
+                    <NavTile to="/app/bi" icon={LineChart} label="BI" disabled={!can("app.bi")} />
+                    <NavTile to="/app/planner" icon={CalendarClock} label="Agendador" disabled={!can("app.bi")} />
+                  </>
                 )}
 
                 {/* Core (desktop): hover menu */}
@@ -1699,13 +1702,22 @@ export function AppShell({
                             )}
 
                             {biEnabledForTenant && (
-                              <MobileNavItem
-                                to="/app/bi"
-                                icon={LineChart}
-                                label="Business Intelligence"
-                                disabled={!can("app.bi")}
-                                onNavigate={() => setMobileNavOpen(false)}
-                              />
+                              <>
+                                <MobileNavItem
+                                  to="/app/bi"
+                                  icon={LineChart}
+                                  label="Business Intelligence"
+                                  disabled={!can("app.bi")}
+                                  onNavigate={() => setMobileNavOpen(false)}
+                                />
+                                <MobileNavItem
+                                  to="/app/planner"
+                                  icon={CalendarClock}
+                                  label="Agendador Meta"
+                                  disabled={!can("app.bi")}
+                                  onNavigate={() => setMobileNavOpen(false)}
+                                />
+                              </>
                             )}
 
                             {(activeTenant?.modules_json?.tasks_enabled) && (
