@@ -107,7 +107,7 @@ export function MetaPlanner() {
         
         // If postNow is checked, trigger publisher immediately
         if (postNow) {
-          await supabase.functions.invoke("meta-publisher");
+          await supabase.functions.invoke("meta-publish");
         }
 
       } finally {
@@ -172,7 +172,7 @@ export function MetaPlanner() {
         if (updateError) throw updateError;
         
         if (postNow) {
-          await supabase.functions.invoke("meta-publisher");
+          await supabase.functions.invoke("meta-publish");
         }
       } finally {
         setUploading(false);
