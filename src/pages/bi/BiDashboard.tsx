@@ -8,7 +8,9 @@ import { BiOverviewTab } from "./tabs/BiOverviewTab";
 import { BiFinanceTab } from "./tabs/BiFinanceTab";
 import { BiCrmTab } from "./tabs/BiCrmTab";
 import { BiInventoryTab } from "./tabs/BiInventoryTab";
-import { Download, Filter, LineChart, ArrowLeft } from "lucide-react";
+import { MetaAdsDashboard } from "@/components/operacao_m30/MetaAdsDashboard";
+import { MetaOrganicDashboard } from "@/components/operacao_m30/MetaOrganicDashboard";
+import { Download, Filter, LineChart, ArrowLeft, DollarSign, Heart } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useTenant } from "@/providers/TenantProvider";
@@ -130,6 +132,12 @@ export default function BiDashboard() {
               >
                 Inventário
               </TabsTrigger>
+              <TabsTrigger 
+                value="meta" 
+                className="rounded-xl px-6 py-2 text-sm font-medium transition-all data-[state=active]:bg-white data-[state=active]:text-indigo-600 data-[state=active]:shadow-sm dark:data-[state=active]:bg-slate-800 dark:data-[state=active]:text-indigo-400"
+              >
+                Painel Meta
+              </TabsTrigger>
             </TabsList>
 
             <TabsContent value="overview" className="mt-0 outline-none">
@@ -146,6 +154,38 @@ export default function BiDashboard() {
 
             <TabsContent value="inventory" className="mt-0 outline-none">
               <BiInventoryTab dateRange={dateRange} />
+            </TabsContent>
+
+            <TabsContent value="meta" className="mt-0 outline-none">
+              <div className="space-y-12 animate-in fade-in duration-500 pb-10 mt-6">
+                <section>
+                  <div className="flex items-center gap-3 mb-6">
+                    <div className="w-10 h-10 rounded-xl bg-blue-100/50 flex items-center justify-center">
+                      <DollarSign className="w-5 h-5 text-blue-600" />
+                    </div>
+                    <h2 className="text-2xl font-bold text-slate-800">Resultados Pagos (Anúncios)</h2>
+                  </div>
+                  <MetaAdsDashboard 
+                    startDate={dateRange?.from?.toISOString()} 
+                    endDate={dateRange?.to?.toISOString()} 
+                  />
+                </section>
+                
+                <hr className="border-slate-200" />
+
+                <section>
+                  <div className="flex items-center gap-3 mb-6">
+                    <div className="w-10 h-10 rounded-xl bg-rose-100/50 flex items-center justify-center">
+                      <Heart className="w-5 h-5 text-rose-600" />
+                    </div>
+                    <h2 className="text-2xl font-bold text-slate-800">Resultados Orgânicos (Páginas e Perfis)</h2>
+                  </div>
+                  <MetaOrganicDashboard 
+                    startDate={dateRange?.from?.toISOString()} 
+                    endDate={dateRange?.to?.toISOString()} 
+                  />
+                </section>
+              </div>
             </TabsContent>
           </Tabs>
         </div>
