@@ -25,6 +25,7 @@ serve(async (req) => {
 
     const body = await req.json().catch(() => null);
     const tenantId = String(body?.tenantId ?? "").trim();
+    const integrationType = String(body?.integrationType ?? "instagram").trim(); // "instagram" | "ads"
     if (!tenantId) return err("missing_tenantId", 400);
 
     const appId = Deno.env.get("META_APP_ID") ?? "";
@@ -69,7 +70,7 @@ serve(async (req) => {
 
     if (!membership && !isSuperAdmin) return err("forbidden", 403);
 
-    const state = crypto.randomUUID() + "." + crypto.getRandomValues(new Uint32Array(2)).join("-");
+    const state = integrationType + "." + crypto.randomUUID() + "." + crypto.getRandomValues(new Uint32Array(2)).join("-");
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
 
     const { error: insErr } = await supabase.from("meta_oauth_states").insert({
@@ -96,6 +97,8 @@ serve(async (req) => {
       "instagram_basic",
       "instagram_manage_insights",
       "instagram_content_publish",
+      "ads_read",
+      "ads_management"
     ].join(",");
 
     const params = new URLSearchParams({

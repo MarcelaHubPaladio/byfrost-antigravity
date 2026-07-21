@@ -209,6 +209,16 @@ export default function Settings() {
                   Conectar Instagram via Página do Facebook.
                 </div>
               </Link>
+
+              <Link
+                to="/app/integrations/meta-ads"
+                className="mt-3 block rounded-2xl border border-slate-200 bg-slate-50 p-4 transition hover:bg-white"
+              >
+                <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">Meta Ads</div>
+                <div className="mt-1 text-xs text-slate-600 dark:text-slate-400">
+                  Conectar contas de anúncio para BI da Operação M30.
+                </div>
+              </Link>
             </div>
           </div>
         </div>

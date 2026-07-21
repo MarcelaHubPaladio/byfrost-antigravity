@@ -65,6 +65,7 @@ const Chats = lazyWithRetry(() => import("@/pages/Chats"));
 const Presence = lazyWithRetry(() => import("@/pages/Presence"));
 const PresenceManage = lazyWithRetry(() => import("@/pages/PresenceManage"));
 const IntegrationsMeta = lazyWithRetry(() => import("@/pages/IntegrationsMeta"));
+const IntegrationsMetaAds = lazyWithRetry(() => import("@/pages/IntegrationsMetaAds"));
 const Content = lazyWithRetry(() => import("@/pages/Content"));
 const ContentDetail = lazyWithRetry(() => import("@/pages/ContentDetail"));
 const Screen = lazyWithRetry(() => import("@/pages/Screen"));
@@ -634,6 +635,24 @@ const App = () => (
                     element={
                       <RequireRouteAccess routeKey="app.settings">
                         <Settings />
+                      </RequireRouteAccess>
+                    }
+                  />
+
+                  <Route
+                    path="/app/integrations/meta"
+                    element={
+                      <RequireRouteAccess routeKey="app.settings">
+                        <IntegrationsMeta />
+                      </RequireRouteAccess>
+                    }
+                  />
+
+                  <Route
+                    path="/app/integrations/meta-ads"
+                    element={
+                      <RequireRouteAccess routeKey="app.settings">
+                        <IntegrationsMetaAds />
                       </RequireRouteAccess>
                     }
                   />

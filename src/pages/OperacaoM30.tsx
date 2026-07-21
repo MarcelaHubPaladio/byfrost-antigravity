@@ -52,6 +52,7 @@ import { ptBR } from "date-fns/locale";
 import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, ClipboardList, MessageSquareWarning, CheckCircle } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { CreatePostingCalendarDialog } from "@/components/operacao_m30/CreatePostingCalendarDialog";
+import { MetaAdsDashboard } from "@/components/operacao_m30/MetaAdsDashboard";
 
 const DASHBOARD_VIEW_MODE_KEY_PREFIX = "dashboard_view_mode_v1:";
 
@@ -296,7 +297,7 @@ export default function OperacaoM30() {
   }>({ open: false, nextStateName: "", reasons: [] });
   const [newSalesOrderOpen, setNewSalesOrderOpen] = useState(false);
   // Tab e visualização
-  const [tab, setTab] = useState<"kanban" | "calendar" | "contracts">("kanban");
+  const [tab, setTab] = useState<"kanban" | "calendar" | "contracts" | "meta-ads">("kanban");
   const [viewMode, setViewMode] = useState<"kanban" | "list">(() => {
     try {
       return (localStorage.getItem("operacao_m30_view_mode") as any) || "kanban";
@@ -1346,6 +1347,15 @@ export default function OperacaoM30() {
                   >
                     Contratos
                   </button>
+                  <button
+                    onClick={() => setTab("meta-ads")}
+                    className={cn(
+                      "px-4 py-2 text-xs font-semibold rounded-xl transition-all",
+                      tab === "meta-ads" ? "bg-white text-slate-900 shadow-sm dark:bg-slate-800 dark:text-slate-100" : "text-slate-600 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200"
+                    )}
+                  >
+                    Meta Ads BI
+                  </button>
                   <Link
                     to="/app/operacao-m30/postits"
                     className="px-4 py-2 text-xs font-semibold rounded-xl transition-all text-slate-600 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 flex items-center justify-center"
@@ -1919,6 +1929,10 @@ export default function OperacaoM30() {
                       <p className="max-w-xs text-sm text-slate-400">Os contratos aparecerão aqui assim que forem registrados no sistema.</p>
                     </div>
                   )}
+                </div>
+              ) : tab === "meta-ads" ? (
+                <div className="space-y-8 animate-in fade-in duration-500 pb-10">
+                  <MetaAdsDashboard />
                 </div>
               ) : null}
             </div>
