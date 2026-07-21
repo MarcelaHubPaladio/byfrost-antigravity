@@ -10,7 +10,8 @@ import { BiCrmTab } from "./tabs/BiCrmTab";
 import { BiInventoryTab } from "./tabs/BiInventoryTab";
 import { MetaAdsDashboard } from "@/components/operacao_m30/MetaAdsDashboard";
 import { MetaOrganicDashboard } from "@/components/operacao_m30/MetaOrganicDashboard";
-import { Download, Filter, LineChart, ArrowLeft, DollarSign, Heart } from "lucide-react";
+import { MetaPlanner } from "@/components/operacao_m30/MetaPlanner";
+import { Download, Filter, LineChart, ArrowLeft, DollarSign, Heart, CalendarClock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useTenant } from "@/providers/TenantProvider";
@@ -138,6 +139,15 @@ export default function BiDashboard() {
               >
                 Painel Meta
               </TabsTrigger>
+              <TabsTrigger 
+                value="planner" 
+                className="rounded-xl px-6 py-2 text-sm font-medium transition-all data-[state=active]:bg-white data-[state=active]:text-indigo-600 data-[state=active]:shadow-sm dark:data-[state=active]:bg-slate-800 dark:data-[state=active]:text-indigo-400"
+              >
+                <div className="flex items-center gap-2">
+                  <CalendarClock className="w-4 h-4" />
+                  Agendador
+                </div>
+              </TabsTrigger>
             </TabsList>
 
             <TabsContent value="overview" className="mt-0 outline-none">
@@ -185,6 +195,12 @@ export default function BiDashboard() {
                     endDate={dateRange?.to?.toISOString()} 
                   />
                 </section>
+              </div>
+            </TabsContent>
+
+            <TabsContent value="planner" className="mt-0 outline-none">
+              <div className="animate-in fade-in duration-500 pb-10 mt-6">
+                <MetaPlanner />
               </div>
             </TabsContent>
           </Tabs>
