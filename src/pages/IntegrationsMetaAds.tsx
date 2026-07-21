@@ -254,6 +254,7 @@ export default function IntegrationsMetaAds() {
                     </h4>
                     <ol className="mt-2 space-y-1 text-[11px] text-blue-800 list-decimal list-inside pl-1">
                       <li>Acesse o <strong>Configurações do Negócio</strong> no Meta.</li>
+                      <li>Vá em <strong>Contas &gt; Apps</strong> e certifique-se de que o aplicativo do seu sistema está adicionado ao portfólio. (Obrigatório)</li>
                       <li>Vá em <strong>Usuários &gt; Usuários do sistema</strong> e adicione um novo usuário do tipo "Funcionário" ou "Administrador".</li>
                       <li>Clique em <strong>Adicionar ativos</strong> e dê permissão de visualização (ou administração) à respectiva <strong>Conta de anúncios</strong>.</li>
                       <li>Clique em <strong>Gerar novo token</strong>, selecione seu App e marque as permissões: <code>ads_read</code>, <code>ads_management</code> e <code>read_insights</code>.</li>

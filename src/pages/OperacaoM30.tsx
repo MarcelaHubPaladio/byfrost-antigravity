@@ -53,6 +53,7 @@ import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, ClipboardList, Mes
 import { Checkbox } from "@/components/ui/checkbox";
 import { CreatePostingCalendarDialog } from "@/components/operacao_m30/CreatePostingCalendarDialog";
 import { MetaAdsDashboard } from "@/components/operacao_m30/MetaAdsDashboard";
+import { MetaOrganicDashboard } from "@/components/operacao_m30/MetaOrganicDashboard";
 
 const DASHBOARD_VIEW_MODE_KEY_PREFIX = "dashboard_view_mode_v1:";
 
@@ -1354,7 +1355,7 @@ export default function OperacaoM30() {
                       tab === "meta-ads" ? "bg-white text-slate-900 shadow-sm dark:bg-slate-800 dark:text-slate-100" : "text-slate-600 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200"
                     )}
                   >
-                    Meta Ads BI
+                    Painel Meta
                   </button>
                   <Link
                     to="/app/operacao-m30/postits"
@@ -1931,8 +1932,28 @@ export default function OperacaoM30() {
                   )}
                 </div>
               ) : tab === "meta-ads" ? (
-                <div className="space-y-8 animate-in fade-in duration-500 pb-10">
-                  <MetaAdsDashboard />
+                <div className="space-y-12 animate-in fade-in duration-500 pb-10">
+                  <section>
+                    <div className="flex items-center gap-3 mb-6">
+                      <div className="w-10 h-10 rounded-xl bg-blue-100/50 flex items-center justify-center">
+                        <DollarSign className="w-5 h-5 text-blue-600" />
+                      </div>
+                      <h2 className="text-2xl font-bold text-slate-800">Resultados Pagos (Anúncios)</h2>
+                    </div>
+                    <MetaAdsDashboard startDate={startDate} endDate={endDate} />
+                  </section>
+                  
+                  <hr className="border-slate-200" />
+
+                  <section>
+                    <div className="flex items-center gap-3 mb-6">
+                      <div className="w-10 h-10 rounded-xl bg-rose-100/50 flex items-center justify-center">
+                        <Heart className="w-5 h-5 text-rose-600" />
+                      </div>
+                      <h2 className="text-2xl font-bold text-slate-800">Resultados Orgânicos (Páginas e Perfis)</h2>
+                    </div>
+                    <MetaOrganicDashboard startDate={startDate} endDate={endDate} />
+                  </section>
                 </div>
               ) : null}
             </div>

@@ -39,10 +39,10 @@ serve(async (req) => {
         // 1. Fetch active campaigns (or all campaigns to sync status)
         // using date_preset=last_7d to fetch campaigns that had delivery in the last 7 days
         const params = new URLSearchParams({
-          fields: "campaign_id,campaign_name,spend,impressions,clicks,actions",
-          level: "campaign",
+          fields: "campaign_id,campaign_name,ad_id,ad_name,spend,impressions,clicks,actions",
+          level: "ad",
           time_increment: "1",
-          date_preset: "last_7d",
+          date_preset: "last_90d",
           access_token: token,
         });
 
@@ -81,6 +81,9 @@ serve(async (req) => {
             }
           }
 
+          const adIdStr = row.ad_id;
+          const adNameStr = row.ad_name || "Anúncio Desconhecido";
+
           // 1. Upsert Campaign
           const { data: campRow, error: campErr } = await supabase
             .from("meta_ads_campaigns")
@@ -100,11 +103,34 @@ serve(async (req) => {
           }
           campaignsProcessed++;
 
+          // 1.5. Upsert Ad
+          let adDbId = null;
+          if (adIdStr) {
+            const { data: adRow, error: adErr } = await supabase
+              .from("meta_ads_ads")
+              .upsert({
+                meta_ads_campaign_id: campRow.id,
+                ad_id: adIdStr,
+                name: adNameStr,
+                status: "ACTIVE",
+                updated_at: new Date().toISOString()
+              }, { onConflict: "meta_ads_campaign_id,ad_id" })
+              .select("id")
+              .single();
+              
+            if (!adErr && adRow) {
+              adDbId = adRow.id;
+            } else {
+              console.error(`[meta-ads-ingestion] Failed to upsert ad ${adIdStr}`, adErr);
+            }
+          }
+
           // 2. Upsert Daily Metrics
           const { error: metricErr } = await supabase
             .from("meta_ads_metrics_daily")
             .upsert({
               campaign_id: campRow.id,
+              meta_ads_ad_id: adDbId,
               date: dateStart,
               spend,
               impressions,
@@ -112,7 +138,7 @@ serve(async (req) => {
               leads,
               purchases,
               updated_at: new Date().toISOString()
-            }, { onConflict: "campaign_id,date" });
+            }, { onConflict: "campaign_id,meta_ads_ad_id,date" });
 
           if (metricErr) {
             console.error(`[meta-ads-ingestion] Failed to upsert metric for ${campId} on ${dateStart}`, metricErr);

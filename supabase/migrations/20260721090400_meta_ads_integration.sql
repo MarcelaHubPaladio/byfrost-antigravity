@@ -25,7 +25,7 @@ begin
     from pg_policies
     where schemaname='public' and tablename='meta_ads_accounts' and policyname='meta_ads_accounts_select'
   ) then
-    execute 'create policy meta_ads_accounts_select on public.meta_ads_accounts for select to authenticated using ((public.current_tenant_id() is not null and tenant_id = public.current_tenant_id()) or public.is_panel_user(tenant_id))';
+    execute 'create policy meta_ads_accounts_select on public.meta_ads_accounts for select to authenticated using (public.is_panel_user(tenant_id))';
   end if;
 end$$;
 
@@ -57,7 +57,7 @@ begin
       exists (
         select 1 from public.meta_ads_accounts acc
         where acc.id = meta_ads_campaigns.meta_ads_account_id
-        and ((public.current_tenant_id() is not null and acc.tenant_id = public.current_tenant_id()) or public.is_panel_user(acc.tenant_id))
+        and public.is_panel_user(acc.tenant_id)
       )
     )';
   end if;
@@ -94,7 +94,7 @@ begin
         select 1 from public.meta_ads_campaigns cmp
         join public.meta_ads_accounts acc on acc.id = cmp.meta_ads_account_id
         where cmp.id = meta_ads_metrics_daily.campaign_id
-        and ((public.current_tenant_id() is not null and acc.tenant_id = public.current_tenant_id()) or public.is_panel_user(acc.tenant_id))
+        and public.is_panel_user(acc.tenant_id)
       )
     )';
   end if;
