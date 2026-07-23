@@ -65,11 +65,29 @@ serve(async (req) => {
           let resMedia = await reqMedia.json();
           if (resMedia.error) throw new Error(resMedia.error.message);
           
-          // 2. Publish container
+          // 2. Publish container (with retry for 'Media ID is not available')
           let publishUrl = `https://graph.facebook.com/v19.0/${igUserId}/media_publish?creation_id=${resMedia.id}&access_token=${token}`;
-          let reqPublish = await fetch(publishUrl, { method: "POST" });
-          publishRes = await reqPublish.json();
-          if (publishRes.error) throw new Error(publishRes.error.message);
+          
+          let maxRetries = 4;
+          for (let i = 0; i < maxRetries; i++) {
+            let reqPublish = await fetch(publishUrl, { method: "POST" });
+            publishRes = await reqPublish.json();
+            
+            if (!publishRes.error) {
+              break; // Success
+            }
+            
+            // If the error is 'Media ID is not available' (or subcode 2207027), we need to wait and retry
+            if (publishRes.error?.message?.includes("Media ID is not available") || publishRes.error?.error_user_msg?.includes("not available")) {
+              if (i < maxRetries - 1) {
+                // Wait 3 seconds before retrying
+                await new Promise(r => setTimeout(r, 3000));
+                continue;
+              }
+            }
+            
+            throw new Error(publishRes.error.message);
+          }
           
         } else {
           // Facebook publishing
