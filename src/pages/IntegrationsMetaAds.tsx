@@ -12,7 +12,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { showError, showSuccess } from "@/utils/toast";
-import { ArrowLeft, RefreshCw, BarChart, Plus, HelpCircle } from "lucide-react";
+import { ArrowLeft, RefreshCw, BarChart, Plus, HelpCircle, ShieldCheck, Loader2 } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
 
 export default function IntegrationsMetaAds() {
   const qc = useQueryClient();
@@ -25,6 +32,11 @@ export default function IntegrationsMetaAds() {
   const [adAccountId, setAdAccountId] = useState("");
   const [name, setName] = useState("");
   const [accessToken, setAccessToken] = useState("");
+
+  const [permsOpen, setPermsOpen] = useState(false);
+  const [permsAccountId, setPermsAccountId] = useState<string | null>(null);
+  const [permsData, setPermsData] = useState<any[]>([]);
+  const [permsLoading, setPermsLoading] = useState(false);
 
   const accountsQ = useQuery({
     queryKey: ["meta_ads_accounts", activeTenantId],
@@ -82,6 +94,40 @@ export default function IntegrationsMetaAds() {
       showError(`Falha ao salvar conexão: ${e?.message ?? "erro"}`);
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleCheckPermissions = async (accountId: string) => {
+    setPermsAccountId(accountId);
+    setPermsData([]);
+    setPermsOpen(true);
+    setPermsLoading(true);
+
+    try {
+      const { data: sess } = await supabase.auth.getSession();
+      const token = sess.session?.access_token;
+      if (!token) throw new Error("Sessão inválida");
+
+      const res = await fetch("https://pryoirzeghatrgecwrci.supabase.co/functions/v1/meta-ads-check-permissions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ accountId }),
+      });
+
+      const json = await res.json().catch(() => null);
+      if (!res.ok || !json?.ok) {
+        throw new Error(json?.details || json?.error || `HTTP ${res.status}`);
+      }
+
+      setPermsData(json.permissions || []);
+    } catch (e: any) {
+      showError(`Falha ao verificar permissões: ${e?.message ?? "erro"}`);
+      setPermsOpen(false);
+    } finally {
+      setPermsLoading(false);
     }
   };
 
@@ -180,6 +226,14 @@ export default function IntegrationsMetaAds() {
                           <Badge variant="outline" className="rounded-full">
                             {a.currency} - {a.timezone}
                           </Badge>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-6 rounded-full px-2 text-[10px] font-medium"
+                            onClick={() => handleCheckPermissions(a.id)}
+                          >
+                            <ShieldCheck className="mr-1 h-3 w-3" /> Permissões do Token
+                          </Button>
                         </div>
                       </div>
                       
@@ -271,6 +325,41 @@ export default function IntegrationsMetaAds() {
               </div>
             )}
           </div>
+
+          <Dialog open={permsOpen} onOpenChange={setPermsOpen}>
+            <DialogContent className="max-w-md">
+              <DialogHeader>
+                <DialogTitle>Permissões do Token</DialogTitle>
+                <DialogDescription>
+                  Permissões concedidas a este System User Token na Meta.
+                </DialogDescription>
+              </DialogHeader>
+
+              <div className="mt-4">
+                {permsLoading ? (
+                  <div className="flex h-32 flex-col items-center justify-center gap-2 text-slate-500">
+                    <Loader2 className="h-6 w-6 animate-spin text-[hsl(var(--byfrost-accent))]" />
+                    <span className="text-sm">Consultando API da Meta...</span>
+                  </div>
+                ) : permsData.length === 0 ? (
+                  <div className="rounded-xl border border-dashed p-4 text-center text-sm text-slate-500">
+                    Nenhuma permissão encontrada ou erro ao carregar.
+                  </div>
+                ) : (
+                  <div className="grid max-h-[300px] gap-2 overflow-y-auto pr-2">
+                    {permsData.map((p, idx) => (
+                      <div key={idx} className="flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50 p-3">
+                        <span className="font-mono text-sm font-medium text-slate-700">{p.permission}</span>
+                        <Badge className={cn("rounded-full", p.status === "granted" ? "bg-emerald-100 text-emerald-900" : "bg-red-100 text-red-900")}>
+                          {p.status}
+                        </Badge>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </DialogContent>
+          </Dialog>
         </div>
       </AppShell>
     </RequireAuth>
