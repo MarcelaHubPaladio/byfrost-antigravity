@@ -82,6 +82,7 @@ serve(async (req) => {
     let url = `https://graph.facebook.com/v19.0/${page.page_id}/messages`;
     
     const sendBody = {
+       messaging_type: "RESPONSE",
        recipient: { id: recipientId },
        message: { text: messageText }
     };
@@ -96,6 +97,13 @@ serve(async (req) => {
     
     if (resF.error) {
        console.error(`[${fn}] API Error:`, resF.error);
+       await supabase.from("timeline_events").insert({
+           tenant_id: theCase.tenant_id,
+           case_id: caseId,
+           event_type: "beeia_error",
+           actor_type: "system",
+           message: "API Error from Facebook: " + JSON.stringify(resF.error)
+       });
        return err("api_error", 400, { api_error: resF.error.message });
     }
     
