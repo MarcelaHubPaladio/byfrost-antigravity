@@ -41,5 +41,11 @@ entrypoint = "./functions/crm-generate-sales-order/index.ts"
 # For example, if you want to serve static HTML pages in your function:
 # static_files = [ "./functions/crm-generate-sales-order/*.html" ]
 
+[functions.meta-dms-ingestion]
+verify_jwt = false
+
+[functions.meta-publisher]
+verify_jwt = false
+
 [functions.financial-ingestion-upload]
 verify_jwt = false

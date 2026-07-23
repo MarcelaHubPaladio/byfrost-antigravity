@@ -44,9 +44,11 @@ serve(async (req) => {
     for (const post of posts) {
       try {
         const page = post.meta_organic_pages;
-        if (!page || !page.access_token || !page.page_id) {
+        if (!page || !page.access_token_encrypted || !page.page_id) {
           throw new Error("Page access token missing");
         }
+
+        const token = await decryptText(page.access_token_encrypted);
 
         // Post to Meta API (Graph API)
         const isInstagram = page.platform === "instagram";
@@ -54,18 +56,17 @@ serve(async (req) => {
         let publishRes;
         
         if (isInstagram) {
-          // Instagram publishing requires ig_user_id. Assuming page.page_id is ig_user_id or needs specific handling.
-          // For now, simulating success as this might require specialized logic.
-          if (!page.ig_user_id) throw new Error("ig_user_id missing for Instagram page");
+          // Instagram publishing requires the Instagram Business Account ID, which we store in page_id
+          const igUserId = page.page_id;
           
           // 1. Create media container
-          let url = `https://graph.facebook.com/v19.0/${page.ig_user_id}/media?image_url=${encodeURIComponent(post.media_url)}&caption=${encodeURIComponent(post.message)}&access_token=${page.access_token}`;
+          let url = `https://graph.facebook.com/v19.0/${igUserId}/media?image_url=${encodeURIComponent(post.media_url)}&caption=${encodeURIComponent(post.message)}&access_token=${token}`;
           let reqMedia = await fetch(url, { method: "POST" });
           let resMedia = await reqMedia.json();
           if (resMedia.error) throw new Error(resMedia.error.message);
           
           // 2. Publish container
-          let publishUrl = `https://graph.facebook.com/v19.0/${page.ig_user_id}/media_publish?creation_id=${resMedia.id}&access_token=${page.access_token}`;
+          let publishUrl = `https://graph.facebook.com/v19.0/${igUserId}/media_publish?creation_id=${resMedia.id}&access_token=${token}`;
           let reqPublish = await fetch(publishUrl, { method: "POST" });
           publishRes = await reqPublish.json();
           if (publishRes.error) throw new Error(publishRes.error.message);
@@ -76,7 +77,7 @@ serve(async (req) => {
           const formData = new URLSearchParams();
           formData.append("url", post.media_url);
           formData.append("message", post.message);
-          formData.append("access_token", page.access_token);
+          formData.append("access_token", token);
           
           let reqF = await fetch(url, { method: "POST", body: formData });
           publishRes = await reqF.json();
