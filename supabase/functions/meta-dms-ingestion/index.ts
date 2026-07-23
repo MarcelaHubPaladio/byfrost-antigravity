@@ -176,8 +176,8 @@ serve(async (req) => {
                        .from("job_queue")
                        .insert({
                           tenant_id: page.tenant_id,
-                          job_type: "BEEIA_PROCESS_META_MESSAGE",
-                          payload: { case_id: caseId, meta_message_id: msg.id }
+                          type: "BEEIA_PROCESS_META_MESSAGE",
+                          payload_json: { case_id: caseId, meta_message_id: msg.id }
                        });
                  }
               }
