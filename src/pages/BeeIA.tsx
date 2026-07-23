@@ -1474,7 +1474,7 @@ function BeeIAPage() {
                             </tr>
                           ) : (
                             filteredCases.map((c) => {
-                              const lastMsg = c.wa_messages?.[0];
+                              const lastMsgBody = c.wa_messages?.[0]?.body_text || c.meta_messages?.[0]?.message_text;
                               const phone = c.customer_accounts?.phone_e164 ?? "";
                               const name = c.customer_accounts?.name ?? "Contato sem nome";
                               
@@ -1534,9 +1534,9 @@ function BeeIAPage() {
                                     R$ {costBrl.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 4 })}
                                   </td>
                                   <td className="py-3.5 max-w-[300px]">
-                                    {lastMsg ? (
+                                    {lastMsgBody ? (
                                       <div className="text-xs text-slate-600 dark:text-slate-400 truncate">
-                                        {lastMsg.body_text}
+                                        {lastMsgBody}
                                       </div>
                                     ) : (
                                       <div className="text-[10px] italic text-slate-450">Sem mensagens gravadas</div>
@@ -1700,7 +1700,7 @@ function BeeIAPage() {
                               </div>
                             ) : (
                               colCases.map((c) => {
-                                const lastMsg = c.wa_messages?.[0];
+                                const lastMsgBody = c.wa_messages?.[0]?.body_text || c.meta_messages?.[0]?.message_text;
                                 const phone = c.customer_accounts?.phone_e164 ?? "";
                                 const name = c.customer_accounts?.name ?? "Contato sem nome";
 
@@ -1742,9 +1742,9 @@ function BeeIAPage() {
                                       {phone}
                                     </div>
 
-                                    {lastMsg ? (
+                                    {lastMsgBody ? (
                                       <div className="mt-2 line-clamp-2 text-[11px] text-slate-600 dark:text-slate-400">
-                                        {lastMsg.body_text}
+                                        {lastMsgBody}
                                       </div>
                                     ) : (
                                       <div className="mt-2 text-[10px] italic text-slate-400">

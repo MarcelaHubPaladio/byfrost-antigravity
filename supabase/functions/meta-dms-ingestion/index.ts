@@ -36,6 +36,12 @@ serve(async (req) => {
       return json({ ok: true, message: "No active pages" });
     }
 
+    const { data: journey } = await supabase
+      .from("journeys")
+      .select("id")
+      .eq("key", "beeia_crm")
+      .maybeSingle();
+
     let processedMessages = 0;
     
     for (const page of pages) {
@@ -124,6 +130,7 @@ serve(async (req) => {
                               customer_entity_id: custAcc.id, 
                               status: "open",
                               created_by_channel: "meta",
+                              journey_id: journey?.id,
                               is_chat: true,
                               title: "Nova Conversa Meta"
                            })
