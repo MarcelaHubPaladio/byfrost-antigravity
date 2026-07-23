@@ -149,7 +149,7 @@ serve(async (req) => {
               }
 
               // Insert message
-              const { error: insErr } = await supabase
+              const { data: insMsg, error: insErr } = await supabase
                  .from("meta_messages")
                  .insert({
                     tenant_id: page.tenant_id,
@@ -164,9 +164,11 @@ serve(async (req) => {
                     platform: page.platform,
                     direction,
                     remote_created_at: msg.created_time
-                 });
+                 })
+                 .select("id")
+                 .single();
 
-              if (!insErr) {
+              if (!insErr && insMsg) {
                  processedMessages++;
                  
                  // If inbound, enqueue AI job
@@ -176,7 +178,7 @@ serve(async (req) => {
                        .insert({
                           tenant_id: page.tenant_id,
                           type: "BEEIA_PROCESS_META_MESSAGE",
-                          payload_json: { case_id: caseId, meta_message_id: msg.id }
+                          payload_json: { case_id: caseId, meta_message_id: insMsg.id }
                        });
                  }
               }
