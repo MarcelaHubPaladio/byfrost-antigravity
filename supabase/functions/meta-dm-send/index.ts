@@ -31,7 +31,7 @@ serve(async (req) => {
     // Fetch case and page
     const { data: theCase, error: caseErr } = await supabase
       .from("cases")
-      .select("tenant_id, customer_entity_id, status")
+      .select("tenant_id, customer_id, status")
       .eq("id", caseId)
       .single();
 
@@ -64,7 +64,7 @@ serve(async (req) => {
     const { data: custAcc } = await supabase
       .from("customer_accounts")
       .select("phone_e164")
-      .eq("id", theCase.customer_entity_id)
+      .eq("id", theCase.customer_id)
       .single();
       
     if (!custAcc) return err("customer_not_found", 404);

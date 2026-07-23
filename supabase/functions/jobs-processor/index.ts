@@ -1889,13 +1889,14 @@ serve(async (req: any) => {
           continue;
         }
 
-        if (job.type === "BEEIA_PROCESS_MESSAGE") {
+        if (job.type === "BEEIA_PROCESS_MESSAGE" || job.type === "BEEIA_PROCESS_META_MESSAGE") {
+          const isMeta = job.type === "BEEIA_PROCESS_META_MESSAGE";
           const caseId = job.payload_json?.case_id;
-          const tenantId = job.payload_json?.tenant_id;
-          const messageId = job.payload_json?.message_id;
+          const tenantId = job.payload_json?.tenant_id || job.tenant_id;
+          const messageId = isMeta ? job.payload_json?.meta_message_id : job.payload_json?.message_id;
           const instanceId = job.payload_json?.instance_id;
 
-          if (!caseId || !tenantId || !messageId || !instanceId) {
+          if (!caseId || !tenantId || !messageId || (!isMeta && !instanceId)) {
             throw new Error(`Missing required fields: caseId=${caseId}, tenantId=${tenantId}, messageId=${messageId}, instanceId=${instanceId}`);
           }
 
@@ -1931,15 +1932,33 @@ serve(async (req: any) => {
           }
 
           // 1c. Fetch case message history early so it can be used for plugs scanning and prompts
-          const { data: msgs, error: msgsErr } = await supabase
-            .from("wa_messages")
-            .select("direction, body_text, type, occurred_at")
-            .eq("tenant_id", tenantId)
-            .eq("case_id", caseId)
-            .order("occurred_at", { ascending: true })
-            .limit(15);
-
-          if (msgsErr) throw msgsErr;
+          let msgs: any[] = [];
+          if (isMeta) {
+            const { data: mMsgs, error: msgsErr } = await supabase
+              .from("meta_messages")
+              .select("direction, message_text, created_at")
+              .eq("tenant_id", tenantId)
+              .eq("case_id", caseId)
+              .order("created_at", { ascending: true })
+              .limit(15);
+            if (msgsErr) throw msgsErr;
+            msgs = (mMsgs || []).map(m => ({
+              direction: m.direction,
+              body_text: m.message_text,
+              type: "text",
+              occurred_at: m.created_at
+            }));
+          } else {
+            const { data: wMsgs, error: msgsErr } = await supabase
+              .from("wa_messages")
+              .select("direction, body_text, type, occurred_at")
+              .eq("tenant_id", tenantId)
+              .eq("case_id", caseId)
+              .order("occurred_at", { ascending: true })
+              .limit(15);
+            if (msgsErr) throw msgsErr;
+            msgs = wMsgs || [];
+          }
 
           // 2. Fetch BeeIA configs
           const { data: config, error: cfgErr } = await supabase
@@ -2325,43 +2344,68 @@ serve(async (req: any) => {
           }
 
           // 3. Fetch wa_instance to verify beeia_enabled is true
-          const { data: inst, error: instErr } = await supabase
-            .from("wa_instances")
-            .select("id, beeia_enabled, zapi_instance_id, phone_number")
-            .eq("tenant_id", tenantId)
-            .eq("id", instanceId)
-            .maybeSingle();
+          if (!isMeta) {
+            const { data: inst, error: instErr } = await supabase
+              .from("wa_instances")
+              .select("id, beeia_enabled, zapi_instance_id, phone_number")
+              .eq("tenant_id", tenantId)
+              .eq("id", instanceId)
+              .maybeSingle();
 
-          if (instErr) throw instErr;
-          if (!inst || !inst.beeia_enabled) {
-            console.log(`[BEEIA_PROCESS_MESSAGE] Instance ${instanceId} not found or has BeeIA disabled, skipping`);
-            await supabase.from("job_queue").update({ status: "done" }).eq("id", job.id);
-            results.push({ id: job.id, ok: true, reason: "beeia_disabled_on_instance" });
-            continue;
+            if (instErr) throw instErr;
+            if (!inst || !inst.beeia_enabled) {
+              console.log(`[BEEIA_PROCESS_MESSAGE] Instance ${instanceId} not found or has BeeIA disabled, skipping`);
+              await supabase.from("job_queue").update({ status: "done" }).eq("id", job.id);
+              results.push({ id: job.id, ok: true, reason: "beeia_disabled_on_instance" });
+              continue;
+            }
           }
 
           // 4. Load the specific inbound message to get the sender's phone number and timestamp
-          const { data: inMsg, error: inMsgErr } = await supabase
-            .from("wa_messages")
-            .select("from_phone, occurred_at")
-            .eq("id", messageId)
-            .maybeSingle();
+          let customerPhone: string | undefined;
+          let customerName = "Não informado";
+          let inboundOccurredAt: string | undefined;
 
-          if (inMsgErr) throw inMsgErr;
-          const customerPhone = inMsg?.from_phone;
-          if (!customerPhone) {
-            throw new Error(`Inbound message ${messageId} does not have a from_phone`);
+          if (isMeta) {
+            const { data: inMsg, error: inMsgErr } = await supabase
+              .from("meta_messages")
+              .select("sender_id, created_at")
+              .eq("id", messageId)
+              .maybeSingle();
+            if (inMsgErr) throw inMsgErr;
+            customerPhone = inMsg?.sender_id;
+            inboundOccurredAt = inMsg?.created_at;
+            
+            if (c?.customer_id) {
+               const { data: custAcc } = await supabase.from("customer_accounts").select("name").eq("id", c.customer_id).maybeSingle();
+               if (custAcc?.name) customerName = custAcc.name;
+            }
+          } else {
+            const { data: inMsg, error: inMsgErr } = await supabase
+              .from("wa_messages")
+              .select("from_phone, occurred_at")
+              .eq("id", messageId)
+              .maybeSingle();
+
+            if (inMsgErr) throw inMsgErr;
+            customerPhone = inMsg?.from_phone;
+            inboundOccurredAt = inMsg?.occurred_at;
+
+            if (customerPhone) {
+              const { data: contact } = await supabase
+                .from("wa_contacts")
+                .select("name")
+                .eq("tenant_id", tenantId)
+                .eq("phone_number", customerPhone)
+                .maybeSingle();
+              if (contact && contact.name) {
+                customerName = contact.name;
+              }
+            }
           }
 
-          let customerName = "Não informado";
-          const { data: contact } = await supabase
-            .from("wa_contacts")
-            .select("name")
-            .eq("tenant_id", tenantId)
-            .eq("phone_number", customerPhone)
-            .maybeSingle();
-          if (contact && contact.name) {
-            customerName = contact.name;
+          if (!customerPhone) {
+            throw new Error(`Inbound message ${messageId} does not have a from_phone`);
           }
 
           sysPrompt += `\n[DADOS DO LEAD ATUAL]\n- Telefone: ${customerPhone}\n- Nome: ${customerName}\n`;
@@ -2369,16 +2413,16 @@ serve(async (req: any) => {
           // 4b. Deduplication guard: if BeeIA already processed a job or sent an outbound
           // message for this case AFTER the triggering message, skip. This prevents
           // duplicate AI responses when multiple inbound messages arrive in rapid succession.
-          if (inMsg?.occurred_at && !job.payload_json?.manual_retake) {
+          if (inboundOccurredAt && !job.payload_json?.manual_retake) {
             // Check if another BEEIA job was already completed for this case after this message
             const { data: laterDoneJob } = await supabase
               .from("job_queue")
               .select("id")
               .eq("tenant_id", tenantId)
-              .eq("type", "BEEIA_PROCESS_MESSAGE")
+              .in("type", ["BEEIA_PROCESS_MESSAGE", "BEEIA_PROCESS_META_MESSAGE"])
               .eq("status", "done")
               .contains("payload_json", { case_id: caseId })
-              .gt("updated_at", inMsg.occurred_at)
+              .gt("updated_at", inboundOccurredAt)
               .neq("id", job.id)
               .limit(1)
               .maybeSingle();
@@ -2392,16 +2436,33 @@ serve(async (req: any) => {
 
             // Also check if there's already an outbound message for this case after this message (within 10 min window)
             const tenMinAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
-            const { data: laterOutbound } = await supabase
-              .from("wa_messages")
-              .select("id")
-              .eq("tenant_id", tenantId)
-              .eq("case_id", caseId)
-              .eq("direction", "outbound")
-              .gt("occurred_at", inMsg.occurred_at)
-              .gt("occurred_at", tenMinAgo)
-              .limit(1)
-              .maybeSingle();
+            
+            let laterOutbound = null;
+            if (isMeta) {
+              const { data: laterMetaOutbound } = await supabase
+                .from("meta_messages")
+                .select("id")
+                .eq("tenant_id", tenantId)
+                .eq("case_id", caseId)
+                .eq("direction", "outbound")
+                .gt("created_at", inboundOccurredAt)
+                .gt("created_at", tenMinAgo)
+                .limit(1)
+                .maybeSingle();
+              laterOutbound = laterMetaOutbound;
+            } else {
+              const { data: laterWaOutbound } = await supabase
+                .from("wa_messages")
+                .select("id")
+                .eq("tenant_id", tenantId)
+                .eq("case_id", caseId)
+                .eq("direction", "outbound")
+                .gt("occurred_at", inboundOccurredAt)
+                .gt("occurred_at", tenMinAgo)
+                .limit(1)
+                .maybeSingle();
+              laterOutbound = laterWaOutbound;
+            }
 
             if (laterOutbound) {
               console.log(`[BEEIA_PROCESS_MESSAGE] Outbound message already exists after message ${messageId}, skipping duplicate`);
@@ -2557,7 +2618,24 @@ serve(async (req: any) => {
             });
           }
 
-          // 8. Send reply via integrations-zapi-send Edge Function
+          // 8. Send reply via integrations-zapi-send Edge Function OR meta-dm-send
+          if (isMeta) {
+             console.log(`[BEEIA] Dispatching response to meta-dm-send`);
+             const { data, error } = await supabase.functions.invoke("meta-dm-send", {
+                body: { case_id: caseId, message_text: responseText }
+             });
+             
+             let anyError = false;
+             if (error || !data?.ok) {
+                console.error("[BEEIA] meta-dm-send failed:", error || data?.error);
+                anyError = true;
+             }
+             
+             await supabase.from("job_queue").update({ status: "done" }).eq("id", job.id);
+             results.push({ id: job.id, ok: !anyError, transitioned: shouldTransition });
+             continue;
+          }
+
           const supabaseUrl = Deno.env.get("SUPABASE_URL")?.replace(/\/$/, "");
           const functionUrl = supabaseUrl ? `${supabaseUrl}/functions/v1` : "http://localhost:54321/functions/v1";
           const sendUrl = `${functionUrl}/integrations-zapi-send`;

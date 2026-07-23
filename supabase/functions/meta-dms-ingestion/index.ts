@@ -43,6 +43,7 @@ serve(async (req) => {
       .maybeSingle();
 
     let processedMessages = 0;
+    const debugLogs: any[] = [];
     
     for (const page of pages) {
       try {
@@ -57,13 +58,13 @@ serve(async (req) => {
         const res = await fetch(url);
         const data = await res.json();
         
-        console.log(`[${fn}] API Response for page ${page.page_id}:`, JSON.stringify(data).substring(0, 1000));
-
         if (data.error) {
+           debugLogs.push({ page: page.platform, error: data.error });
            console.error(`[${fn}] API Error for page ${page.page_id}:`, data.error);
            continue;
         }
 
+        debugLogs.push({ page: page.platform, conversationsCount: data.data?.length });
         const conversations = data.data || [];
         
         for (const conv of conversations) {
@@ -182,11 +183,12 @@ serve(async (req) => {
            }
         }
       } catch (pageErr: any) {
+         debugLogs.push({ page: page.platform, exception: pageErr.message });
          console.error(`[${fn}] Exception processing page ${page.page_id}:`, pageErr);
       }
     }
 
-    return json({ ok: true, processed: processedMessages });
+    return json({ ok: true, processed: processedMessages, debug: debugLogs });
   } catch (e: any) {
     console.error(`[${fn}] unhandled`, { error: e?.message ?? String(e) });
     return err("internal_error", 500);
