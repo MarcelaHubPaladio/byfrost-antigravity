@@ -8,6 +8,9 @@ import { Input } from "@/components/ui/input";
 import { Loader2, Send, Bot, User, CheckCheck, Clock, Check, RefreshCw } from "lucide-react";
 import { format } from "date-fns";
 import { showError } from "@/utils/toast";
+import { FaFacebook, FaInstagram } from "react-icons/fa";
+import { CustomerNameEditor } from "./CustomerNameEditor";
+import { CaseLabelsSelector } from "./CaseLabelsSelector";
 
 export function MetaConversation({ caseId, className = "" }: { caseId: string; className?: string }) {
   const { activeTenantId } = useTenant();
@@ -22,7 +25,7 @@ export function MetaConversation({ caseId, className = "" }: { caseId: string; c
     queryFn: async () => {
       const { data, error } = await supabase
         .from("cases")
-        .select("id, beeia_paused, customer_accounts(name, phone_e164)")
+        .select("id, beeia_paused, customer_id, customer_accounts(name, phone_e164)")
         .eq("id", caseId)
         .single();
       if (error) throw error;
@@ -96,23 +99,33 @@ export function MetaConversation({ caseId, className = "" }: { caseId: string; c
 
   if (!caseId || !activeTenantId) return null;
 
+  const platform = messagesQ.data?.[0]?.platform || "instagram";
+  const isFacebook = platform === "facebook";
+
   return (
     <div className={`flex flex-col bg-slate-50 dark:bg-[#0a0a0a] ${className}`}>
       {/* Header */}
       <div className="flex-none p-3 md:p-4 bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center text-indigo-600 dark:text-indigo-400 font-bold">
-            {caseQ.data?.customer_accounts?.name?.charAt(0) || "U"}
+          <div className="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
+            {isFacebook ? (
+              <FaFacebook className="w-5 h-5 text-blue-600" />
+            ) : (
+              <FaInstagram className="w-5 h-5 text-pink-600" />
+            )}
           </div>
           <div>
-            <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">
-              {caseQ.data?.customer_accounts?.name || "Usuário Desconhecido"}
-            </h3>
-            <p className="text-xs text-slate-500">Instagram / Facebook</p>
+            <CustomerNameEditor 
+              customerId={caseQ.data?.customer_id || null} 
+              currentName={caseQ.data?.customer_accounts?.name || null} 
+              activeTenantId={activeTenantId} 
+            />
+            <p className="text-xs text-slate-500 capitalize">{platform}</p>
           </div>
         </div>
 
         <div className="flex items-center gap-2">
+          <CaseLabelsSelector caseId={caseId} activeTenantId={activeTenantId} />
           <Button
             variant="outline"
             size="sm"

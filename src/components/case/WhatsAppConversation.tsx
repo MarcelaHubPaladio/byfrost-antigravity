@@ -4,6 +4,9 @@ import { supabase } from "@/lib/supabase";
 import { useTenant } from "@/providers/TenantProvider";
 import { useSession } from "@/providers/SessionProvider";
 import { useChatInstanceAccess } from "@/hooks/useChatInstanceAccess";
+import { FaWhatsapp } from "react-icons/fa";
+import { CustomerNameEditor } from "./CustomerNameEditor";
+import { CaseLabelsSelector } from "./CaseLabelsSelector";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { showError, showSuccess } from "@/utils/toast";
@@ -335,7 +338,7 @@ export function WhatsAppConversation({
     queryFn: async () => {
       const { data, error } = await supabase
         .from("cases")
-        .select("id,journey_id,customer_entity_id,meta_json,beeia_paused,customer_accounts:customer_id(name, phone_e164)")
+        .select("id,journey_id,customer_entity_id,customer_id,meta_json,beeia_paused,customer_accounts:customer_id(name, phone_e164)")
         .eq("tenant_id", activeTenantId!)
         .eq("id", caseId)
         .maybeSingle();
@@ -343,6 +346,7 @@ export function WhatsAppConversation({
       if (!data) throw new Error("Case não encontrado");
       return data as CaseRowLite & { 
         customer_entity_id: string | null; 
+        customer_id: string | null;
         meta_json: any;
         customer_accounts: { name: string | null; phone_e164: string } | null;
       };
@@ -908,8 +912,15 @@ export function WhatsAppConversation({
         {/* Row 1: Title, Subtitle, Radar and Tab Triggers */}
         <div className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between border-b border-slate-100 dark:border-slate-850">
           <div className="min-w-0 flex flex-col sm:flex-row sm:items-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center flex-shrink-0">
+              <FaWhatsapp className="w-5 h-5 text-green-500" />
+            </div>
             <div>
-              <div className="text-sm font-semibold text-slate-900">Conversa</div>
+              <CustomerNameEditor 
+                customerId={caseQ.data?.customer_id || null} 
+                currentName={caseQ.data?.customer_accounts?.name || null} 
+                activeTenantId={activeTenantId} 
+              />
               <div className="mt-0.5 text-[11px] text-slate-600 truncate">
                 WhatsApp • {counterpartPhone ? `destinatário (${counterpartRoleLabel}): ${counterpartPhone}` : "aguardando mensagens"}
               </div>
@@ -924,6 +935,7 @@ export function WhatsAppConversation({
           </div>
 
           <div className="flex items-center gap-1.5 self-end sm:self-auto">
+            <CaseLabelsSelector caseId={caseId} activeTenantId={activeTenantId} />
             <Button
               type="button"
               variant={tab === "messages" ? "default" : "ghost"}

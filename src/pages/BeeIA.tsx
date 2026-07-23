@@ -15,6 +15,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { env } from "@/lib/env";
 import {
@@ -57,6 +58,8 @@ import { WhatsAppConversation } from "@/components/case/WhatsAppConversation";
 import { MetaConversation } from "@/components/case/MetaConversation";
 import { BeeIASimulator } from "@/components/case/BeeIASimulator";
 import { FaWhatsapp, FaInstagram, FaFacebook } from "react-icons/fa";
+import { LabelsManagerModal } from "@/components/case/LabelsManagerModal";
+import { Tags } from "lucide-react";
 
 type CaseRow = {
   id: string;
@@ -170,6 +173,10 @@ function BeeIAPage() {
     return val ? new Date(val) : null;
   });
   const [calendarMonth, setCalendarMonth] = useState<Date>(() => new Date());
+
+  // Labels Filter
+  const [selectedLabels, setSelectedLabels] = useState<string[]>([]);
+  const [showLabelsManager, setShowLabelsManager] = useState(false);
 
   useEffect(() => {
     localStorage.setItem("beeia_filter_search", searchQuery);
@@ -445,9 +452,24 @@ function BeeIAPage() {
     }
   }, [activeTenantId, configQ.data?.system_prompt, promptVersionsQ.isSuccess, promptVersionsQ.data?.length]);
 
+  // Fetch all labels for the filter
+  const allLabelsQ = useQuery({
+    queryKey: ["crm_labels", activeTenantId],
+    enabled: Boolean(activeTenantId),
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("crm_labels")
+        .select("*")
+        .eq("tenant_id", activeTenantId!)
+        .order("name", { ascending: true });
+      if (error) throw error;
+      return data || [];
+    }
+  });
+
   // 3. Fetch cases in the beeia_crm journey
   const casesQ = useQuery({
-    queryKey: ["beeia_cases", activeTenantId],
+    queryKey: ["beeia_cases", activeTenantId, selectedLabels],
     enabled: Boolean(activeTenantId),
     refetchInterval: 10_000,
     queryFn: async () => {
@@ -459,7 +481,7 @@ function BeeIAPage() {
 
       if (!journey) return [] as CaseRow[];
 
-      const { data, error } = await supabase
+      let query = supabase
         .from("cases")
         .select(`
           id,
@@ -472,13 +494,29 @@ function BeeIAPage() {
           assigned_user_id,
           meta_json,
           beeia_paused,
-          customer_accounts:customer_id(name, phone_e164)
+          customer_accounts:customer_id(name, phone_e164),
+          case_labels(crm_labels(id, name, color))
         `)
         .eq("tenant_id", activeTenantId!)
         .eq("journey_id", journey.id)
         .eq("status", "open")
         .is("deleted_at", null)
         .order("updated_at", { ascending: false });
+
+      // If user selected labels to filter by
+      if (selectedLabels.length > 0) {
+        // Fetch case_ids that have the selected labels
+        const { data: clData } = await supabase
+          .from("case_labels")
+          .select("case_id")
+          .in("label_id", selectedLabels);
+        
+        const filteredCaseIds = clData?.map(c => c.case_id) || [];
+        if (filteredCaseIds.length === 0) return [];
+        query = query.in("id", filteredCaseIds);
+      }
+
+      const { data, error } = await query;
 
       if (error) throw error;
 
@@ -1311,6 +1349,58 @@ function BeeIAPage() {
                       />
                     </div>
 
+                    {/* Labels Filter Trigger */}
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          className="rounded-xl text-xs border-slate-200 dark:border-slate-850 px-3.5 h-9 flex items-center gap-2 hover:bg-slate-50 dark:hover:bg-slate-800/50"
+                        >
+                          <Tags className="h-3.5 w-3.5 text-slate-500" />
+                          <span>{selectedLabels.length === 0 ? "Todas as Etiquetas" : `${selectedLabels.length} Etiquetas`}</span>
+                          <ChevronDown className="h-3.5 w-3.5 text-slate-400" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-56 p-2" align="start">
+                        <div className="mb-2 px-2 py-1 flex items-center justify-between">
+                          <span className="text-xs font-semibold text-slate-500 uppercase">Filtrar por Etiqueta</span>
+                        </div>
+                        <div className="flex flex-col gap-1 max-h-60 overflow-y-auto custom-scrollbar">
+                          {allLabelsQ.data?.map((lbl: any) => {
+                            const isSelected = selectedLabels.includes(lbl.id);
+                            return (
+                              <button
+                                key={lbl.id}
+                                onClick={() => {
+                                  setSelectedLabels(prev => 
+                                    isSelected ? prev.filter(id => id !== lbl.id) : [...prev, lbl.id]
+                                  );
+                                }}
+                                className="flex items-center gap-2 px-2 py-1.5 rounded-md text-sm text-left transition-colors hover:bg-slate-100 dark:hover:bg-slate-800"
+                              >
+                                <div className="flex-none w-3 h-3 rounded-full border border-black/10" style={{ backgroundColor: lbl.color }} />
+                                <span className="flex-1 truncate">{lbl.name}</span>
+                                {isSelected && <Check className="w-3.5 h-3.5 text-indigo-600" />}
+                              </button>
+                            );
+                          })}
+                          {allLabelsQ.data?.length === 0 && (
+                            <div className="text-xs text-slate-500 p-2">Nenhuma etiqueta criada.</div>
+                          )}
+                        </div>
+                        <div className="mt-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+                          <Button 
+                            variant="ghost" 
+                            className="w-full justify-start text-xs text-indigo-600 hover:text-indigo-700" 
+                            onClick={() => setShowLabelsManager(true)}
+                          >
+                            <Edit2 className="w-3.5 h-3.5 mr-2" />
+                            Gerenciar Etiquetas
+                          </Button>
+                        </div>
+                      </PopoverContent>
+                    </Popover>
+
                     {/* Date Picker Trigger */}
                     <div className="relative">
                       <Button
@@ -1503,6 +1593,16 @@ function BeeIAPage() {
                                           {name}
                                         </div>
                                         <div className="text-[10px] text-slate-400 font-mono mt-0.5">{phone}</div>
+                                        {c.case_labels && c.case_labels.length > 0 && (
+                                          <div className="flex flex-wrap gap-1 mt-1">
+                                            {c.case_labels.map((cl: any) => cl.crm_labels && (
+                                              <span key={cl.crm_labels.id} className="inline-flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded-full border border-black/5 bg-slate-50 dark:bg-slate-800">
+                                                <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: cl.crm_labels.color }} />
+                                                {cl.crm_labels.name}
+                                              </span>
+                                            ))}
+                                          </div>
+                                        )}
                                       </div>
                                     </div>
                                   </td>
@@ -1743,6 +1843,16 @@ function BeeIAPage() {
                                     <div className="mt-1 pl-5 text-[10px] text-slate-400 font-mono">
                                       {phone}
                                     </div>
+                                    {c.case_labels && c.case_labels.length > 0 && (
+                                      <div className="mt-1.5 pl-5 flex flex-wrap gap-1">
+                                        {c.case_labels.map((cl: any) => cl.crm_labels && (
+                                          <span key={cl.crm_labels.id} className="inline-flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded-full border border-black/5 bg-slate-50 dark:bg-slate-800">
+                                            <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: cl.crm_labels.color }} />
+                                            {cl.crm_labels.name}
+                                          </span>
+                                        ))}
+                                      </div>
+                                    )}
 
                                     {lastMsgBody ? (
                                       <div className="mt-2 line-clamp-2 text-[11px] text-slate-600 dark:text-slate-400">
@@ -2834,6 +2944,11 @@ function BeeIAPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <LabelsManagerModal 
+        open={showLabelsManager} 
+        onOpenChange={setShowLabelsManager} 
+        activeTenantId={activeTenantId} 
+      />
     </AppShell>
   );
 }
