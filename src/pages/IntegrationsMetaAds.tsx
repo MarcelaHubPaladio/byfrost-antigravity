@@ -12,7 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { showError, showSuccess } from "@/utils/toast";
-import { ArrowLeft, RefreshCw, BarChart, Plus, HelpCircle, ShieldCheck, Loader2 } from "lucide-react";
+import { ArrowLeft, RefreshCw, BarChart, Plus, HelpCircle, ShieldCheck, Loader2, Edit2 } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -146,6 +146,17 @@ export default function IntegrationsMetaAds() {
     }
   };
 
+  const handleEdit = (a: any) => {
+    setAdAccountId(a.ad_account_id);
+    setName(a.name);
+    setAccessToken("");
+    setFormOpen(true);
+    // Scroll to the form
+    setTimeout(() => {
+      window.scrollTo({ top: document.body.scrollHeight, behavior: "smooth" });
+    }, 100);
+  };
+
   return (
     <RequireAuth>
       <AppShell>
@@ -237,19 +248,30 @@ export default function IntegrationsMetaAds() {
                         </div>
                       </div>
                       
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        onClick={() => toggleActive(a.id, a.is_active)}
-                        className={cn(
-                          "rounded-xl text-xs",
-                          a.is_active
-                            ? "border-amber-200 bg-amber-50 text-amber-900 hover:bg-amber-100"
-                            : "border-emerald-200 bg-emerald-50 text-emerald-900 hover:bg-emerald-100"
-                        )}
-                      >
-                        {a.is_active ? "Desativar" : "Reativar"}
-                      </Button>
+                      <div className="flex flex-col gap-2">
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => toggleActive(a.id, a.is_active)}
+                          className={cn(
+                            "rounded-xl text-xs h-8",
+                            a.is_active
+                              ? "border-amber-200 bg-amber-50 text-amber-900 hover:bg-amber-100"
+                              : "border-emerald-200 bg-emerald-50 text-emerald-900 hover:bg-emerald-100"
+                          )}
+                        >
+                          {a.is_active ? "Desativar" : "Reativar"}
+                        </Button>
+
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleEdit(a)}
+                          className="rounded-xl text-xs h-8"
+                        >
+                          <Edit2 className="mr-1.5 h-3.5 w-3.5" /> Editar
+                        </Button>
+                      </div>
                     </div>
                   </div>
                 ))}
