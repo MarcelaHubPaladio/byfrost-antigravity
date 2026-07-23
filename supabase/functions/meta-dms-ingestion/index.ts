@@ -51,6 +51,8 @@ serve(async (req) => {
         const res = await fetch(url);
         const data = await res.json();
         
+        console.log(`[${fn}] API Response for page ${page.page_id}:`, JSON.stringify(data).substring(0, 1000));
+
         if (data.error) {
            console.error(`[${fn}] API Error for page ${page.page_id}:`, data.error);
            continue;
@@ -115,17 +117,23 @@ serve(async (req) => {
                        .maybeSingle();
 
                     if (!activeCase) {
-                       const { data: newCase } = await supabase
-                          .from("cases")
-                          .insert({ 
-                             tenant_id: page.tenant_id, 
-                             customer_entity_id: custAcc.id, 
-                             status: "open",
-                             ref_type: "meta_dm" 
-                          })
-                          .select("id")
-                          .single();
-                       activeCase = newCase;
+                        const { data: newCase, error: caseErr } = await supabase
+                           .from("cases")
+                           .insert({ 
+                              tenant_id: page.tenant_id, 
+                              customer_entity_id: custAcc.id, 
+                              status: "open",
+                              created_by_channel: "meta",
+                              is_chat: true,
+                              title: "Nova Conversa Meta"
+                           })
+                           .select("id")
+                           .single();
+
+                        if (caseErr) {
+                           console.error(`[${fn}] Error creating case:`, caseErr);
+                        }
+                        activeCase = newCase;
                     }
 
                     caseId = activeCase?.id;
