@@ -129,6 +129,7 @@ serve(async (req) => {
                            .insert({ 
                               tenant_id: page.tenant_id, 
                               customer_entity_id: custAcc.id, 
+                              customer_id: custAcc.id,
                               status: "open",
                               created_by_channel: "meta",
                               journey_id: journey?.id,

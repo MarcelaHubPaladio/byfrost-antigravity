@@ -49,7 +49,7 @@ export function CustomerNameEditor({ customerId, currentName, activeTenantId }: 
               setTempName(currentName || "");
               setIsEditing(true);
             }}
-            className="text-slate-400 hover:text-indigo-600 opacity-0 group-hover:opacity-100 transition-opacity"
+            className="text-slate-400 hover:text-indigo-600 opacity-50 hover:opacity-100 transition-opacity"
             title="Editar nome"
           >
             <Edit2 className="w-3.5 h-3.5" />
