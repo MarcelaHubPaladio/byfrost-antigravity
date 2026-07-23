@@ -59,7 +59,7 @@ import { MetaConversation } from "@/components/case/MetaConversation";
 import { BeeIASimulator } from "@/components/case/BeeIASimulator";
 import { FaWhatsapp, FaInstagram, FaFacebook } from "react-icons/fa";
 import { LabelsManagerModal } from "@/components/case/LabelsManagerModal";
-import { Tags } from "lucide-react";
+import { Tags, Edit2, Check } from "lucide-react";
 
 type CaseRow = {
   id: string;
