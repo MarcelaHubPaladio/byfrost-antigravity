@@ -119,7 +119,7 @@ serve(async (req) => {
                        .from("cases")
                        .select("id")
                        .eq("tenant_id", page.tenant_id)
-                       .eq("customer_entity_id", custAcc.id)
+                       .eq("customer_id", custAcc.id)
                        .eq("status", "open")
                        .maybeSingle();
 
@@ -128,7 +128,6 @@ serve(async (req) => {
                            .from("cases")
                            .insert({ 
                               tenant_id: page.tenant_id, 
-                              customer_entity_id: custAcc.id, 
                               customer_id: custAcc.id,
                               status: "open",
                               created_by_channel: "meta",
