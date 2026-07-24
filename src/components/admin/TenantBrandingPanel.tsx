@@ -145,7 +145,11 @@ export function TenantBrandingPanel() {
 
   const logoUrl = useMemo(() => {
     if (!logoInfo?.bucket || !logoInfo?.path) return null;
-    return publicUrl(logoInfo.bucket, logoInfo.path);
+    const base = publicUrl(logoInfo.bucket, logoInfo.path);
+    if (!base) return null;
+    return logoInfo.updated_at 
+      ? `${base}?t=${new Date(logoInfo.updated_at).getTime()}`
+      : base;
   }, [logoInfo]);
 
   const palette = useMemo(() => {
@@ -202,6 +206,9 @@ export function TenantBrandingPanel() {
       }
 
       showSuccess("Logo atualizado. Agora extraia a paleta.");
+      if (fileRef.current) {
+        fileRef.current.value = "";
+      }
       await qc.invalidateQueries({ queryKey: ["tenant_branding", activeTenantId] });
       await qc.invalidateQueries({ queryKey: ["tenant_settings", activeTenantId] });
       await refresh();
