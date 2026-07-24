@@ -1,4 +1,4 @@
-type ChatMessage = { role: "system" | "user"; content: string };
+export type ChatMessage = { role: "system" | "user" | "assistant"; content: string | any[] };
 
 function seededPick(text: string, options: string[]) {
   let h = 2166136261;

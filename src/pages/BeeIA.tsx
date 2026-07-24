@@ -49,7 +49,9 @@ import {
   X,
   Webhook,
   Bell,
-  Hand
+  Hand,
+  Headphones,
+  Eye
 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -3151,6 +3153,54 @@ function BeeIAPlugsTab({
       </div>
 
       <div className="flex flex-col gap-5">
+        {/* Plug 0A: Audio Transcription */}
+        <Card className="rounded-[22px] border-slate-200/80 p-5 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900 transition-all hover:border-slate-350 dark:hover:border-slate-700">
+          <div className="flex items-center justify-between gap-4 border-b border-slate-100 pb-3 dark:border-slate-850">
+            <div className="flex items-center gap-3">
+              <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-100 text-blue-600 dark:bg-blue-950/40 dark:text-blue-400">
+                <Headphones className="h-5 w-5" />
+              </span>
+              <div>
+                <h3 className="text-sm font-bold text-slate-900 dark:text-slate-150">
+                  Escutar e Transcrever Áudios (`audio_transcription`)
+                </h3>
+                <p className="text-[11px] text-slate-500 mt-0.5">
+                  Permite que a BeeiA "ouça" as mensagens de voz do cliente, transcrevendo em tempo real para gerar a resposta.
+                </p>
+              </div>
+            </div>
+            <Switch
+              checked={isPlugEnabled("audio_transcription")}
+              disabled={isSaving}
+              onCheckedChange={(checked) => handleTogglePlug("audio_transcription", checked)}
+            />
+          </div>
+        </Card>
+
+        {/* Plug 0B: Vision */}
+        <Card className="rounded-[22px] border-slate-200/80 p-5 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900 transition-all hover:border-slate-350 dark:hover:border-slate-700">
+          <div className="flex items-center justify-between gap-4 border-b border-slate-100 pb-3 dark:border-slate-850">
+            <div className="flex items-center gap-3">
+              <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-green-100 text-green-600 dark:bg-green-950/40 dark:text-green-400">
+                <Eye className="h-5 w-5" />
+              </span>
+              <div>
+                <h3 className="text-sm font-bold text-slate-900 dark:text-slate-150">
+                  Ver e Interpretar Imagens (`vision_interpretation`)
+                </h3>
+                <p className="text-[11px] text-slate-500 mt-0.5">
+                  Permite que a BeeiA "enxergue" fotos e imagens enviadas pelo usuário, usando visão computacional.
+                </p>
+              </div>
+            </div>
+            <Switch
+              checked={isPlugEnabled("vision_interpretation")}
+              disabled={isSaving}
+              onCheckedChange={(checked) => handleTogglePlug("vision_interpretation", checked)}
+            />
+          </div>
+        </Card>
+
         {/* Plug 1: CRM & Journeys */}
         <Card className="rounded-[22px] border-slate-200/80 p-5 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900 transition-all hover:border-slate-350 dark:hover:border-slate-700">
           <div className="flex items-center justify-between gap-4 border-b border-slate-100 pb-3 dark:border-slate-850">

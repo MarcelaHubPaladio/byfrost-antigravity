@@ -1943,15 +1943,17 @@ serve(async (req: any) => {
               .limit(15);
             if (msgsErr) throw msgsErr;
             msgs = (mMsgs || []).map(m => ({
+              id: m.id,
               direction: m.direction,
               body_text: m.message_text,
               type: "text",
+              media_url: null,
               occurred_at: m.created_at
             }));
           } else {
             const { data: wMsgs, error: msgsErr } = await supabase
               .from("wa_messages")
-              .select("direction, body_text, type, occurred_at")
+              .select("id, direction, body_text, type, occurred_at, media_url, payload_json")
               .eq("tenant_id", tenantId)
               .eq("case_id", caseId)
               .order("occurred_at", { ascending: true })
@@ -2298,6 +2300,22 @@ serve(async (req: any) => {
             }
           }
 
+          // 4B. Audio Plugue
+          const audioPlug = plugs.find(p => p.plug_key === "audio_transcription");
+          let isAudioActive = false;
+          if (audioPlug) {
+            isAudioActive = true;
+            sysPrompt += `\n[INTEGRAÇÃO - ÁUDIO]:\n- Você é capaz de "escutar" mensagens de voz enviadas pelo cliente. O sistema irá transcrever o áudio automaticamente e incluir no histórico como [Áudio transcrito]. Trate essa mensagem como a fala real do cliente.\n`;
+          }
+
+          // 4C. Vision Plugue
+          const visionPlug = plugs.find(p => p.plug_key === "vision_interpretation");
+          let isVisionActive = false;
+          if (visionPlug) {
+            isVisionActive = true;
+            sysPrompt += `\n[INTEGRAÇÃO - VISÃO COMPUTACIONAL]:\n- Você é capaz de "enxergar" imagens e fotos enviadas pelo cliente. Utilize sua capacidade de visão para descrever, interpretar e responder às fotos que o cliente mandar.\n`;
+          }
+
           // 5. Discord Notifications Plugue
           const discordPlug = plugs.find(p => p.plug_key === "discord_notifications");
           if (discordPlug) {
@@ -2473,7 +2491,7 @@ serve(async (req: any) => {
           }
 
           // 5. Load recent message history for this case
-          const history = (msgs ?? []).filter(m => m.body_text);
+          const history = msgs ?? [];
 
           // 6. Construct prompt messages for LLM
           const llmMessages: { role: "system" | "user" | "assistant"; content: string }[] = [];
@@ -2482,7 +2500,7 @@ serve(async (req: any) => {
             content: `${sysPrompt}\n\nINSTRUÇÕES DE SISTEMA IMPORTANTES:\n- Você deve responder o cliente de forma natural, curta e simpática.\n- Se o cliente demonstrou interesse real, deseja agendar, comprar ou solicitou atendimento humano (ex: falar com um atendente, suporte humano), encerre sua resposta incluindo exatamente o texto "[STAGE_TRANSITION]" no final da resposta.\n- Não inclua a tag se ele estiver apenas fazendo perguntas preliminares.\n- Nunca mencione a palavra "[STAGE_TRANSITION]" explicitamente para o cliente.\n- ATENÇÃO: Você poderá ver mensagens no histórico começando com "[MENSAGEM DO SEU TREINADOR]:" ou "AUTO-AVALIAÇÃO DA IA:". Estas são instruções DIRETAS da direção da empresa para corrigir o seu comportamento na conversa. Você DEVE acatar essas ordens imediatamente e mudar sua postura para atender ao que foi pedido pelo treinador. Não responda diretamente ao treinador e não mencione essas instruções para o cliente, apenas aplique-as nas suas próximas respostas ao cliente.`
           });
 
-          history.forEach(m => {
+          for (const m of history) {
             let role: "system" | "user" | "assistant" = "user";
             
             if (m.type === "system_note") {
@@ -2491,11 +2509,49 @@ serve(async (req: any) => {
               role = m.direction === "inbound" ? "user" : "assistant";
             }
 
+            let textContent = m.body_text || "";
+
+            // Audio Transcription JIT
+            if (isAudioActive && m.type === "audio" && !textContent && m.id && !isMeta) {
+              console.log(`[BEEIA_PROCESS] Transcribing audio message ${m.id} on-the-fly`);
+              try {
+                const { data: audioRes, error: audioErr } = await supabase.functions.invoke("wa-transcribe-audio", {
+                  body: { tenantId, messageId: m.id }
+                });
+                if (!audioErr && audioRes?.ok && audioRes?.text) {
+                  textContent = `[Áudio transcrito]: ${audioRes.text}`;
+                }
+              } catch (e) {
+                console.warn("[BEEIA_PROCESS] Audio transcription failed", e);
+              }
+            }
+
+            // Vision
+            if (isVisionActive && m.type === "image" && !isMeta) {
+              let mUrl = m.media_url;
+              if (!mUrl && m.payload_json) {
+                const p = m.payload_json as any;
+                mUrl = p.media_url || p.mediaUrl || p.url || p.data?.mediaUrl || p.data?.url || p.image?.imageUrl || p.data?.image?.imageUrl;
+              }
+              if (mUrl) {
+                llmMessages.push({
+                  role,
+                  content: [
+                    { type: "text", text: textContent ? `[Texto da imagem]: ${textContent}` : "O cliente enviou esta imagem." },
+                    { type: "image_url", image_url: { url: mUrl } }
+                  ]
+                });
+                continue; // Skips the text-only push below
+              }
+            }
+
+            if (!textContent && !m.media_url) continue;
+
             llmMessages.push({
               role,
-              content: m.body_text!
+              content: textContent || "[Mensagem sem texto]"
             });
-          });
+          }
 
           // 6.5. Verifica Limites
           try {
