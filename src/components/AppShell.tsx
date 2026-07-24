@@ -569,7 +569,7 @@ export function AppShell({
 }: PropsWithChildren<{ hideTopBar?: boolean }>) {
   const nav = useNavigate();
   const loc = useLocation();
-  const { activeTenant, isSuperAdmin, activeTenantId } = useTenant();
+  const { activeTenant, isSuperAdmin, activeTenantId, tenants } = useTenant();
   const { user } = useSession();
   const { prefs } = useTheme();
   const chatAccess = useChatInstanceAccess();
@@ -1283,18 +1283,20 @@ export function AppShell({
                             </Link>
 
                             <div className="flex items-center justify-end gap-2">
-                              <Button
-                                variant="secondary"
-                                className="h-10 rounded-2xl bg-white/15 text-white hover:bg-white/20"
-                                onClick={() => {
-                                  setMobileNavOpen(false);
-                                  nav("/tenants");
-                                }}
-                                title="Trocar tenant"
-                              >
-                                <ArrowLeftRight className="mr-2 h-4 w-4" />
-                                Trocar
-                              </Button>
+                              {(isSuperAdmin || (tenants && tenants.length > 1)) && (
+                                <Button
+                                  variant="secondary"
+                                  className="h-10 rounded-2xl bg-white/15 text-white hover:bg-white/20"
+                                  onClick={() => {
+                                    setMobileNavOpen(false);
+                                    nav("/tenants");
+                                  }}
+                                  title="Trocar tenant"
+                                >
+                                  <ArrowLeftRight className="mr-2 h-4 w-4" />
+                                  Trocar
+                                </Button>
+                              )}
                             </div>
                           </div>
                         </div>
@@ -1816,7 +1818,7 @@ export function AppShell({
                   </div>
 
                   <div className="flex flex-wrap items-center justify-end gap-2">
-                    {isSuperAdmin && (
+                    {(isSuperAdmin || (tenants && tenants.length > 1)) && (
                       <Button
                         type="button"
                         className={cn(
