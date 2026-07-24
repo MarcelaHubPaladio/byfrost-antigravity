@@ -1936,13 +1936,13 @@ serve(async (req: any) => {
           if (isMeta) {
             const { data: mMsgs, error: msgsErr } = await supabase
               .from("meta_messages")
-              .select("direction, message_text, created_at")
+              .select("id, direction, message_text, created_at")
               .eq("tenant_id", tenantId)
               .eq("case_id", caseId)
-              .order("created_at", { ascending: true })
+              .order("created_at", { ascending: false })
               .limit(15);
             if (msgsErr) throw msgsErr;
-            msgs = (mMsgs || []).map(m => ({
+            msgs = (mMsgs || []).reverse().map(m => ({
               id: m.id,
               direction: m.direction,
               body_text: m.message_text,
@@ -1956,10 +1956,10 @@ serve(async (req: any) => {
               .select("id, direction, body_text, type, occurred_at, media_url, payload_json")
               .eq("tenant_id", tenantId)
               .eq("case_id", caseId)
-              .order("occurred_at", { ascending: true })
+              .order("occurred_at", { ascending: false })
               .limit(15);
             if (msgsErr) throw msgsErr;
-            msgs = wMsgs || [];
+            msgs = (wMsgs || []).reverse();
           }
 
           // 2. Fetch BeeIA configs
