@@ -401,6 +401,18 @@ export default function Admin() {
     }
   };
 
+  const deleteTenant = async (tenantId: string) => {
+    try {
+      await ensureFreshTokenForRls();
+      const { error } = await supabase.from("tenants").update({ deleted_at: new Date().toISOString() }).eq("id", tenantId);
+      if (error) throw error;
+      showSuccess("Tenant deletado com sucesso.");
+      await qc.invalidateQueries({ queryKey: ["admin_tenants"] });
+    } catch (e: any) {
+      showError(`Falha ao deletar tenant: ${e?.message ?? "erro"}`);
+    }
+  };
+
   const updateTenantFull = async (tenantId: string, patch: any, planId: string | null, overrides: any) => {
     setUpdatingTenant(true);
     try {
@@ -1345,14 +1357,45 @@ export default function Admin() {
                             )}
                             <div className="flex items-center gap-2">
                               {!softDeleted && (
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-8 w-8 rounded-xl text-slate-400 hover:bg-white hover:text-slate-900"
-                                  onClick={() => setEditingTenant(t)}
-                                >
-                                  <Edit2 className="h-4 w-4" />
-                                </Button>
+                                <>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-8 w-8 rounded-xl text-slate-400 hover:bg-white hover:text-slate-900"
+                                    onClick={() => setEditingTenant(t)}
+                                  >
+                                    <Edit2 className="h-4 w-4" />
+                                  </Button>
+                                  <AlertDialog>
+                                    <AlertDialogTrigger asChild>
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-8 w-8 rounded-xl text-slate-400 hover:bg-rose-50 hover:text-rose-600"
+                                      >
+                                        <Trash2 className="h-4 w-4" />
+                                      </Button>
+                                    </AlertDialogTrigger>
+                                    <AlertDialogContent className="rounded-3xl p-6 border-rose-200">
+                                      <AlertDialogHeader>
+                                        <AlertDialogTitle className="text-rose-900">Deletar tenant?</AlertDialogTitle>
+                                        <AlertDialogDescription className="text-slate-600 text-sm leading-relaxed mt-2">
+                                          Tem certeza que deseja deletar o tenant <strong className="text-slate-800">{t.name}</strong>?
+                                          Isso fará um soft delete e o ocultará do sistema.
+                                        </AlertDialogDescription>
+                                      </AlertDialogHeader>
+                                      <AlertDialogFooter className="mt-6 gap-2">
+                                        <AlertDialogCancel className="rounded-2xl h-11 border-slate-200">Cancelar</AlertDialogCancel>
+                                        <AlertDialogAction
+                                          className="rounded-2xl h-11 bg-rose-600 hover:bg-rose-700 text-white"
+                                          onClick={() => deleteTenant(t.id)}
+                                        >
+                                          Sim, deletar
+                                        </AlertDialogAction>
+                                      </AlertDialogFooter>
+                                    </AlertDialogContent>
+                                  </AlertDialog>
+                                </>
                               )}
                               {softDeleted ? (
                                 <Badge className="rounded-full border-0 bg-rose-100 text-rose-900 hover:bg-rose-100">deletado</Badge>
