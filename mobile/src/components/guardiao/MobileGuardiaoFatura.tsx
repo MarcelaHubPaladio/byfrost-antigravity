@@ -18,8 +18,7 @@ export function MobileGuardiaoFatura() {
         .select("id, type, qty, ref_type, meta_json, occurred_at")
         .eq("tenant_id", activeTenantId!)
         .eq("type", "ai_token")
-        .order("occurred_at", { ascending: false })
-        .limit(100);
+        .order("occurred_at", { ascending: false });
       if (error) throw error;
       return data || [];
     }
@@ -57,7 +56,7 @@ export function MobileGuardiaoFatura() {
         </View>
       ) : (
         <FlatList
-          data={usageEventsQ.data}
+          data={usageEventsQ.data.slice(0, 100)}
           keyExtractor={i => i.id}
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
