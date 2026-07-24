@@ -917,7 +917,11 @@ export function AppShell({
     const logo = activeTenant?.branding_json?.logo;
     if (!logo?.bucket || !logo?.path) return null;
     try {
-      return supabase.storage.from(logo.bucket).getPublicUrl(logo.path).data.publicUrl;
+      const base = supabase.storage.from(logo.bucket).getPublicUrl(logo.path).data.publicUrl;
+      if (!base) return null;
+      return logo.updated_at 
+        ? `${base}?t=${new Date(logo.updated_at).getTime()}`
+        : base;
     } catch {
       return null;
     }
