@@ -144,7 +144,7 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
       // Regular users: tenant list comes from users_profile membership.
       const { data, error } = await supabase
         .from("users_profile")
-        .select("tenant_id, role, tenants(id,name,slug,branding_json,modules_json)")
+        .select("tenant_id, role, tenants(id,name,slug,branding_json,modules_json,deleted_at)")
         .eq("user_id", user.id)
         .is("deleted_at", null);
 
@@ -156,6 +156,7 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
       }
 
       const mapped: TenantInfo[] = (data ?? [])
+        .filter((row: any) => row.tenants && !row.tenants.deleted_at)
         .map((row: any) => ({
           id: row.tenants?.id ?? row.tenant_id,
           name: row.tenants?.name ?? "Tenant",
