@@ -198,6 +198,20 @@ export function CaseDetailScreen() {
     },
   });
 
+  const { data: messagesQ, isLoading: isLoadingMessages } = useQuery({
+    queryKey: ['case_messages', caseId],
+    enabled: Boolean(caseId),
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('wa_messages')
+        .select('*')
+        .eq('case_id', caseId)
+        .order('occurred_at', { ascending: true });
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+
   const { data: caseData, isLoading } = useQuery({
     queryKey: ['case_detail', caseId],
     enabled: Boolean(caseId),
@@ -211,6 +225,9 @@ export function CaseDetailScreen() {
       return data;
     },
   });
+
+  const isBeeia = caseData?.journeys?.key === 'beeia_crm' || caseData?.meta_json?.journey_key === 'beeia_crm';
+  const isBeeiaPaused = caseData?.beeia_paused === true;
 
   const { data: usersQ } = useQuery({
     queryKey: ['crm_assignable_users', activeTenantId],
@@ -270,6 +287,32 @@ export function CaseDetailScreen() {
       queryClient.invalidateQueries({ queryKey: ['case_detail', caseId] });
     },
     onError: () => Alert.alert('Erro', 'Não foi possível atualizar.'),
+  });
+
+  const toggleBeeia = useMutation({
+    mutationFn: async () => {
+      const newStatus = !isBeeiaPaused;
+      const { error } = await supabase
+        .from('cases')
+        .update({ beeia_paused: newStatus })
+        .eq('id', caseId);
+      if (error) throw error;
+
+      await supabase.from('timeline_events').insert({
+        tenant_id: activeTenantId,
+        case_id: caseId,
+        event_type: "card_updated",
+        actor_type: "admin",
+        actor_id: user?.id || null,
+        message: newStatus ? "Atendimento da IA pausado" : "Atendimento da IA retomado",
+        occurred_at: new Date().toISOString()
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['case_detail', caseId] });
+      queryClient.invalidateQueries({ queryKey: ['beeia_cases_mobile'] });
+    },
+    onError: () => Alert.alert('Erro', 'Não foi possível alterar o status da IA.'),
   });
 
   const updateCustomer = useMutation({
@@ -525,6 +568,33 @@ export function CaseDetailScreen() {
             <Text style={styles.idText}>{caseId?.split('-')[0]}</Text>
           </View>
 
+          {/* ── Status BeeIA ── */}
+          {isBeeia && (
+            <SectionCard title="Status da BeeIA">
+              <View style={[styles.selectRow, { justifyContent: 'space-between' }]}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <View style={[styles.stateDot, { backgroundColor: isBeeiaPaused ? '#EF4444' : neon }]} />
+                  <Text style={styles.selectRowText}>
+                    {isBeeiaPaused ? 'IA Pausada' : 'IA Ativa (Respondendo)'}
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  style={[styles.saveChip, { backgroundColor: isBeeiaPaused ? neon : '#374151' }]}
+                  onPress={() => toggleBeeia.mutate()}
+                  disabled={toggleBeeia.isPending}
+                >
+                  {toggleBeeia.isPending ? (
+                    <ActivityIndicator size="small" color={isBeeiaPaused ? '#000' : '#D1D5DB'} />
+                  ) : (
+                    <Text style={[styles.saveChipText, { color: isBeeiaPaused ? '#000' : '#D1D5DB' }]}>
+                      {isBeeiaPaused ? 'Retomar IA' : 'Pausar IA'}
+                    </Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </SectionCard>
+          )}
+
           {/* ── Fase ── */}
           <SectionCard title="Fase Atual">
             <TouchableOpacity style={styles.selectRow} onPress={() => setShowStateModal(true)}>
@@ -675,10 +745,39 @@ export function CaseDetailScreen() {
 
         </ScrollView>
       ) : (
-        <View style={styles.center}>
-          <MessageSquare size={48} color="#2A2A2A" />
-          <Text style={styles.emptyTitle}>Chat em breve</Text>
-          <Text style={styles.emptyText}>Timeline do WhatsApp aparecerá aqui.</Text>
+        <View style={{ flex: 1 }}>
+          {isLoadingMessages ? (
+            <View style={styles.center}><ActivityIndicator size="large" color={neon} /></View>
+          ) : (
+            <ScrollView style={styles.chatScroll} contentContainerStyle={styles.chatContent}>
+              {(messagesQ ?? []).map((msg: any) => {
+                const isInbound = msg.direction === 'inbound';
+                const isInternal = msg.meta_json?.internal === true;
+                const dateStr = new Date(msg.occurred_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+                
+                return (
+                  <View key={msg.id} style={[styles.msgRow, isInbound ? styles.msgInRow : styles.msgOutRow, isInternal && styles.msgInternalRow]}>
+                    <View style={[styles.msgBubble, isInbound ? styles.msgInBubble : styles.msgOutBubble, isInternal && styles.msgInternalBubble]}>
+                      {isInternal && <Text style={styles.msgInternalLabel}>NOTA INTERNA</Text>}
+                      <Text style={[styles.msgText, isInbound ? styles.msgInText : styles.msgOutText, isInternal && styles.msgInternalText]}>
+                        {msg.body_text}
+                      </Text>
+                      <Text style={[styles.msgDate, isInbound ? styles.msgInDate : styles.msgOutDate, isInternal && styles.msgInternalDate]}>
+                        {dateStr}
+                      </Text>
+                    </View>
+                  </View>
+                );
+              })}
+              {(messagesQ ?? []).length === 0 && (
+                <Text style={styles.emptyText}>Nenhuma mensagem encontrada.</Text>
+              )}
+            </ScrollView>
+          )}
+          {/* Simple input placeholder - sending logic to be added later if needed */}
+          <View style={styles.chatInputContainer}>
+             <Text style={styles.chatInputNotice}>Respostas pelo mobile em breve. Use a Web.</Text>
+          </View>
         </View>
       )}
 
@@ -887,6 +986,29 @@ const styles = StyleSheet.create({
   submitChip: { backgroundColor: '#A3FF47', paddingVertical: 14, borderRadius: 14, alignItems: 'center' },
   submitChipDisabled: { backgroundColor: '#2A3A1A' },
   submitChipText: { fontSize: 15, fontWeight: '800', color: '#000' },
+
+  // Chat
+  chatScroll: { flex: 1, backgroundColor: '#050505' },
+  chatContent: { padding: 16, gap: 12 },
+  msgRow: { flexDirection: 'row', width: '100%', marginBottom: 4 },
+  msgInRow: { justifyContent: 'flex-start' },
+  msgOutRow: { justifyContent: 'flex-end' },
+  msgInternalRow: { justifyContent: 'center' },
+  msgBubble: { maxWidth: '80%', padding: 12, borderRadius: 16 },
+  msgInBubble: { backgroundColor: '#1A1A1A', borderBottomLeftRadius: 4, borderWidth: 1, borderColor: '#2A2A2A' },
+  msgOutBubble: { backgroundColor: '#A3FF47', borderBottomRightRadius: 4 },
+  msgInternalBubble: { backgroundColor: '#1A1A1A', borderWidth: 1, borderColor: '#4A4A00', borderRadius: 12 },
+  msgText: { fontSize: 15, lineHeight: 22 },
+  msgInText: { color: '#F9FAFB' },
+  msgOutText: { color: '#000000', fontWeight: '500' },
+  msgInternalText: { color: '#FCD34D', fontSize: 13, fontStyle: 'italic' },
+  msgDate: { fontSize: 11, marginTop: 4, alignSelf: 'flex-end' },
+  msgInDate: { color: '#6B7280' },
+  msgOutDate: { color: '#4d7c22' },
+  msgInternalDate: { color: '#A1A1AA' },
+  msgInternalLabel: { color: '#FBBF24', fontSize: 10, fontWeight: '700', marginBottom: 4 },
+  chatInputContainer: { padding: 16, backgroundColor: '#0A0A0A', borderTopWidth: 1, borderTopColor: '#1A1A1A', alignItems: 'center' },
+  chatInputNotice: { color: '#6B7280', fontSize: 13, fontWeight: '500' },
 
   // Empty
   emptyText: { fontSize: 13, color: '#4B5563', textAlign: 'center' },

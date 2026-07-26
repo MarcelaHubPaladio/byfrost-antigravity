@@ -801,7 +801,16 @@ function BeeIAPage() {
     if (!activeTenantId || !isSuperAdminUi) return;
     setSavingAutoPause(true);
     try {
-      const current = tenantSettingsQ.data?.branding_json ?? {};
+      // 1) Fetch LATEST directly from DB to avoid overwriting with stale/empty UI state
+      const { data: tenantData, error: fetchErr } = await supabase
+        .from("tenants")
+        .select("branding_json")
+        .eq("id", activeTenantId)
+        .single();
+      
+      if (fetchErr) throw fetchErr;
+
+      const current = tenantData?.branding_json ?? {};
       const next = {
         ...current,
         features: {
@@ -809,13 +818,19 @@ function BeeIAPage() {
           beeia_auto_pause_manual_msg: checked,
         },
       };
+      
+      // 2) Update with merged object
       const { error } = await supabase
         .from("tenants")
         .update({ branding_json: next })
         .eq("id", activeTenantId);
+        
       if (error) throw error;
       showSuccess(`Pausa automática ${checked ? "Ativada" : "Desativada"}!`);
+      
+      // Invalidate to refresh UI globally
       await qc.invalidateQueries({ queryKey: ["tenant_settings", activeTenantId] });
+      await qc.invalidateQueries({ queryKey: ["tenants"] }); // if the provider uses this
     } catch (e: any) {
       showError(`Falha ao alterar: ${e.message}`);
     } finally {

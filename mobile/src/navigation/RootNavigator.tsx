@@ -24,6 +24,8 @@ import { NewOrderScreen } from '../screens/orders/NewOrderScreen';
 import { OrderDetailScreen } from '../screens/orders/OrderDetailScreen';
 import { ClientesM30Screen } from '../screens/m30/ClientesM30Screen';
 import { M30ClientNavigator } from './M30ClientNavigator';
+import { BeeIAScreen } from '../screens/beeia/BeeIAScreen';
+import { Bot } from 'lucide-react-native';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -116,6 +118,7 @@ function AppTabs() {
   const hasCrm = activeTenant?.modules_json?.crm !== false;
   const hasOrders = isAgroforteTenant(activeTenant);
   const hasM30 = isM30Tenant(activeTenant);
+  const hasBeeIA = activeTenant?.modules_json?.beeia_enabled === true;
 
   return (
     <Tab.Navigator
@@ -123,6 +126,7 @@ function AppTabs() {
       screenOptions={{ headerShown: false }}
     >
       {isAdmin && <Tab.Screen name="Guardiao" component={GuardiaoScreen} options={{ title: 'Guardião', tabBarIcon: ({ color, size }) => <ShieldAlert color={color} size={size || 24} /> }} />}
+      {hasBeeIA && <Tab.Screen name="BeeIA" component={BeeIAScreen} options={{ title: 'BeeIA', tabBarIcon: ({ color, size }) => <Bot color={color} size={size || 24} /> }} />}
       {hasCrm && <Tab.Screen name="CRM" component={CrmScreen} options={{ title: 'CRM', tabBarIcon: ({ color, size }) => <Package color={color} size={size || 24} /> }} />}
       {hasM30 && <Tab.Screen name="ClientesM30" component={ClientesM30Screen} options={{ title: 'Clientes M30', tabBarIcon: ({ color, size }) => <Users color={color} size={size || 24} /> }} />}
       {hasOrders && <Tab.Screen name="Orders" component={OrdersScreen} options={{ title: 'Pedidos', tabBarIcon: ({ color, size }) => <ShoppingBag color={color} size={size || 24} /> }} />}
