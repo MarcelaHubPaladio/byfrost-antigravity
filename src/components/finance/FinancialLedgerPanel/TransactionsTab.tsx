@@ -116,6 +116,7 @@ export function TransactionsTab() {
   });
 
   // Sorting & Filtering State
+  const [filterAccountIds, setFilterAccountIds] = useSessionState<string[]>("fin_tx_account", []);
   const [filterEntityIds, setFilterEntityIds] = useSessionState<string[]>("fin_tx_entity", []);
   const [filterCategoryIds, setFilterCategoryIds] = useSessionState<string[]>("fin_tx_category", []);
   const [sortKey, setSortKey] = useSessionState<string | null>("fin_tx_sort_key", "transaction_date");
@@ -174,6 +175,9 @@ export function TransactionsTab() {
     let data = [...(transactionsQ.data || [])];
 
     // 1. Filtering
+    if (filterAccountIds && filterAccountIds.length > 0) {
+      data = data.filter((t) => t.account_id && filterAccountIds.includes(t.account_id));
+    }
     if (filterEntityIds && filterEntityIds.length > 0) {
       data = data.filter((t) => t.entity_id && filterEntityIds.includes(t.entity_id));
     }
@@ -229,7 +233,7 @@ export function TransactionsTab() {
     });
 
     return data;
-  }, [transactionsQ.data, filterEntityIds, filterCategoryIds, filterType, sortKey, sortDir, txSearchText, accountById, categoryById]);
+  }, [transactionsQ.data, filterAccountIds, filterEntityIds, filterCategoryIds, filterType, sortKey, sortDir, txSearchText, accountById, categoryById]);
 
   const groupedTransactions = useMemo(() => {
     const mainTxs: any[] = [];
@@ -259,6 +263,7 @@ export function TransactionsTab() {
   }, [selectedTxs]);
 
   const hasActiveFilters = Boolean(
+    (filterAccountIds && filterAccountIds.length > 0) || 
     (filterEntityIds && filterEntityIds.length > 0) || 
     (filterCategoryIds && filterCategoryIds.length > 0) || 
     (filterType && filterType !== "all") || 
@@ -266,6 +271,7 @@ export function TransactionsTab() {
   );
 
   const clearFilters = () => {
+    setFilterAccountIds([]);
     setFilterEntityIds([]);
     setFilterCategoryIds([]);
     setFilterType("all");
@@ -1384,6 +1390,12 @@ export function TransactionsTab() {
               {/* Show which column filters are active */}
               {((filterEntityIds && filterEntityIds.length > 0) || (filterCategoryIds && filterCategoryIds.length > 0)) && (
                 <div className="mt-2 flex flex-wrap gap-2">
+                  {filterAccountIds && filterAccountIds.length > 0 && (
+                    <Badge variant="outline" className="bg-white border-indigo-200 text-indigo-700 text-[10px] font-bold gap-1 pr-1">
+                      Contas ({filterAccountIds.length})
+                      <button onClick={() => setFilterAccountIds([])} className="hover:bg-indigo-100 rounded-full p-0.5"><X className="h-3 w-3" /></button>
+                    </Badge>
+                  )}
                   {filterEntityIds && filterEntityIds.length > 0 && (
                     <Badge variant="outline" className="bg-white border-indigo-200 text-indigo-700 text-[10px] font-bold gap-1 pr-1">
                       Entidades ({filterEntityIds.length})
@@ -1432,6 +1444,19 @@ export function TransactionsTab() {
                     const all = categoriesQ.data || [];
                     if (!val) return all.slice(0, 50).map(c => ({ value: c.id, label: c.name }));
                     return all.filter(c => normalizeStr(c.name).includes(normalizeStr(val))).slice(0, 50).map(c => ({ value: c.id, label: c.name }));
+                  }}
+                />
+              </div>
+              <div className="w-[150px]">
+                <AsyncMultiSelect
+                  className="mt-1 h-9 rounded-2xl bg-white dark:bg-slate-950 font-medium text-xs transition-all"
+                  values={filterAccountIds || []}
+                  onChange={setFilterAccountIds}
+                  placeholder="Contas"
+                  loadOptions={async (val) => {
+                    const all = accountsQ.data || [];
+                    if (!val) return all.slice(0, 50).map(a => ({ value: a.id, label: a.account_name }));
+                    return all.filter(a => normalizeStr(a.account_name).includes(normalizeStr(val))).slice(0, 50).map(a => ({ value: a.id, label: a.account_name }));
                   }}
                 />
               </div>
@@ -1679,6 +1704,19 @@ export function TransactionsTab() {
                           <div className="truncate text-[11px]" title={acc?.account_name}>
                             {acc ? acc.account_name : String(t.account_id).slice(0, 8)}
                           </div>
+                          {t.account_id && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="mt-1 h-5 w-full text-[10px] text-slate-400 opacity-0 group-hover:opacity-100"
+                              onClick={() => {
+                                const current = filterAccountIds || [];
+                                if (!current.includes(t.account_id)) setFilterAccountIds([...current, t.account_id]);
+                              }}
+                            >
+                              Adicionar ao filtro
+                            </Button>
+                          )}
                         </TableCell>
                         <TableCell className="w-[80px] text-[11px] font-medium text-slate-900 dark:text-slate-100">
                           {(t.type || "").toLowerCase().trim() === 'credit' ? 'Entrada' : (t.type || "").toLowerCase().trim() === 'debit' ? 'Saída' : t.type}
