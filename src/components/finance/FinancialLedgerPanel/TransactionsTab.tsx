@@ -1323,7 +1323,7 @@ export function TransactionsTab() {
                             .from("core_entities")
                             .select("id, display_name")
                             .eq("tenant_id", activeTenantId)
-                            .ilike("display_name", makeIlikePattern(val))
+                            .or(`display_name.ilike.${makeIlikePattern(val)},metadata->>internal_label.ilike.${makeIlikePattern(val)},metadata->>label.ilike.${makeIlikePattern(val)}`)
                             .is("deleted_at", null)
                             .limit(10);
                           return (data || []).map((d) => ({ value: d.id, label: d.display_name }));
@@ -1447,7 +1447,7 @@ export function TransactionsTab() {
                       .from("core_entities")
                       .select("id, display_name")
                       .eq("tenant_id", activeTenantId)
-                      .ilike("display_name", makeIlikePattern(val))
+                      .or(`display_name.ilike.${makeIlikePattern(val)},metadata->>internal_label.ilike.${makeIlikePattern(val)},metadata->>label.ilike.${makeIlikePattern(val)}`)
                       .is("deleted_at", null)
                       .limit(10);
                     return (data || []).map((d) => ({ value: d.id, label: d.display_name }));
@@ -1655,7 +1655,7 @@ export function TransactionsTab() {
                                 .from("core_entities")
                                 .select("id, display_name")
                                 .eq("tenant_id", activeTenantId)
-                                .ilike("display_name", makeIlikePattern(val))
+                                .or(`display_name.ilike.${makeIlikePattern(val)},metadata->>internal_label.ilike.${makeIlikePattern(val)},metadata->>label.ilike.${makeIlikePattern(val)}`)
                                 .is("deleted_at", null)
                                 .limit(10);
                               return (data || []).map((d) => ({ value: d.id, label: d.display_name }));
@@ -2122,7 +2122,7 @@ export function TransactionsTab() {
                             .from("core_entities")
                             .select("id, display_name")
                             .eq("tenant_id", activeTenantId)
-                            .ilike("display_name", makeIlikePattern(val))
+                            .or(`display_name.ilike.${makeIlikePattern(val)},metadata->>internal_label.ilike.${makeIlikePattern(val)},metadata->>label.ilike.${makeIlikePattern(val)}`)
                             .is("deleted_at", null)
                             .limit(10);
                           return (data || []).map((d) => ({ value: d.id, label: d.display_name }));
@@ -2424,7 +2424,7 @@ export function TransactionsTab() {
                       .from("core_entities")
                       .select("id, display_name")
                       .eq("tenant_id", activeTenantId)
-                      .ilike("display_name", makeIlikePattern(val))
+                      .or(`display_name.ilike.${makeIlikePattern(val)},metadata->>internal_label.ilike.${makeIlikePattern(val)},metadata->>label.ilike.${makeIlikePattern(val)}`)
                       .is("deleted_at", null)
                       .limit(10);
                     return (data || []).map((d) => ({ value: d.id, label: d.display_name }));
