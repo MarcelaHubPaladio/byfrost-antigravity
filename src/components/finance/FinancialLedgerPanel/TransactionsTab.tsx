@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { cn, formatMoneyBRL } from "@/lib/utils";
+import { cn, formatMoneyBRL, makeIlikePattern, normalizeStr } from "@/lib/utils";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { useTenant } from "@/providers/TenantProvider";
@@ -1323,7 +1323,7 @@ export function TransactionsTab() {
                             .from("core_entities")
                             .select("id, display_name")
                             .eq("tenant_id", activeTenantId)
-                            .ilike("display_name", `%${val}%`)
+                            .ilike("display_name", makeIlikePattern(val))
                             .is("deleted_at", null)
                             .limit(10);
                           return (data || []).map((d) => ({ value: d.id, label: d.display_name }));
@@ -1431,7 +1431,7 @@ export function TransactionsTab() {
                   loadOptions={async (val) => {
                     const all = categoriesQ.data || [];
                     if (!val) return all.slice(0, 50).map(c => ({ value: c.id, label: c.name }));
-                    return all.filter(c => c.name.toLowerCase().includes(val.toLowerCase())).slice(0, 50).map(c => ({ value: c.id, label: c.name }));
+                    return all.filter(c => normalizeStr(c.name).includes(normalizeStr(val))).slice(0, 50).map(c => ({ value: c.id, label: c.name }));
                   }}
                 />
               </div>
@@ -1447,7 +1447,7 @@ export function TransactionsTab() {
                       .from("core_entities")
                       .select("id, display_name")
                       .eq("tenant_id", activeTenantId)
-                      .ilike("display_name", `%${val}%`)
+                      .ilike("display_name", makeIlikePattern(val))
                       .is("deleted_at", null)
                       .limit(10);
                     return (data || []).map((d) => ({ value: d.id, label: d.display_name }));
@@ -1655,7 +1655,7 @@ export function TransactionsTab() {
                                 .from("core_entities")
                                 .select("id, display_name")
                                 .eq("tenant_id", activeTenantId)
-                                .ilike("display_name", `%${val}%`)
+                                .ilike("display_name", makeIlikePattern(val))
                                 .is("deleted_at", null)
                                 .limit(10);
                               return (data || []).map((d) => ({ value: d.id, label: d.display_name }));
@@ -1710,7 +1710,7 @@ export function TransactionsTab() {
                                 .limit(20);
 
                               if (val.trim()) {
-                                query.ilike("name", `%${val}%`);
+                                query.ilike("name", makeIlikePattern(val));
                               }
 
                               const { data } = await query;
@@ -2122,7 +2122,7 @@ export function TransactionsTab() {
                             .from("core_entities")
                             .select("id, display_name")
                             .eq("tenant_id", activeTenantId)
-                            .ilike("display_name", `%${val}%`)
+                            .ilike("display_name", makeIlikePattern(val))
                             .is("deleted_at", null)
                             .limit(10);
                           return (data || []).map((d) => ({ value: d.id, label: d.display_name }));
@@ -2198,7 +2198,7 @@ export function TransactionsTab() {
                             .from("financial_categories")
                             .select("id, name")
                             .eq("tenant_id", activeTenantId)
-                            .ilike("name", `%${val}%`)
+                            .ilike("name", makeIlikePattern(val))
                             .limit(10);
                           return (data || []).map((d) => ({ value: d.id, label: d.name }));
                         }}
@@ -2403,7 +2403,7 @@ export function TransactionsTab() {
                       .eq("tenant_id", activeTenantId)
                       .order("name", { ascending: true })
                       .limit(20);
-                    if (val.trim()) query.ilike("name", `%${val}%`);
+                    if (val.trim()) query.ilike("name", makeIlikePattern(val));
                     const { data } = await query;
                     return (data || []).map((c) => ({ value: c.id, label: `${c.name} (${c.type})` }));
                   }}
@@ -2424,7 +2424,7 @@ export function TransactionsTab() {
                       .from("core_entities")
                       .select("id, display_name")
                       .eq("tenant_id", activeTenantId)
-                      .ilike("display_name", `%${val}%`)
+                      .ilike("display_name", makeIlikePattern(val))
                       .is("deleted_at", null)
                       .limit(10);
                     return (data || []).map((d) => ({ value: d.id, label: d.display_name }));

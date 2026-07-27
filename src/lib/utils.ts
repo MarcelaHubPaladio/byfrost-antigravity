@@ -26,3 +26,16 @@ export function formatMoneyBRL(n: number | null | undefined) {
     return `R$ ${x.toFixed(2)}`;
   }
 }
+
+export function normalizeStr(str: string) {
+  if (!str) return "";
+  return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+}
+
+export function makeIlikePattern(str: string) {
+  if (!str) return "%";
+  // Replaces any vowel or its accented variants (and c/ç) with SQL wildcard `_`
+  // This allows `ilike` in Postgres to match both accented and unaccented inputs.
+  const mapped = str.replace(/[aeiouáàãâäéèêëíìîïóòõôöúùûüçc]/gi, '_');
+  return `%${mapped}%`;
+}
