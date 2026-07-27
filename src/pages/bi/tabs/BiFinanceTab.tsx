@@ -139,6 +139,11 @@ export function BiFinanceTab({ dateRange }: BiFinanceTabProps) {
       const catName = (t.financial_categories as any)?.name || "Sem Categoria";
       const entName = (t.core_entities as any)?.display_name || "Diversos / Não Informado";
 
+      // Ignora categorias de transferência para não inflacionar falsamente as receitas/despesas
+      if (catName.toLowerCase().includes("transferência") || catName.toLowerCase().includes("transferencia")) {
+        return;
+      }
+
       if (isCredit) {
         recSum += val;
         catEntradasMap.set(catName, (catEntradasMap.get(catName) || 0) + val);
