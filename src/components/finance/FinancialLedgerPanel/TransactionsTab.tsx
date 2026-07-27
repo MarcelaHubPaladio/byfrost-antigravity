@@ -40,6 +40,7 @@ import { ptBR } from "date-fns/locale";
 import {
   Download, Landmark, Pencil, Plus, Upload, Link2, CheckCircle2, Search, Info, Trash2, X, ChevronRight, ChevronLeft, Calendar as CalendarIcon, UploadCloud, Network, CornerDownRight, Scissors } from "lucide-react";
 import { AsyncSelect } from "@/components/ui/async-select";
+import { AsyncMultiSelect } from "@/components/ui/async-multi-select";
 import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Link } from "react-router-dom";
@@ -115,8 +116,8 @@ export function TransactionsTab() {
   });
 
   // Sorting & Filtering State
-  const [filterEntityId, setFilterEntityId] = useSessionState<string | null>("fin_tx_entity", null);
-  const [filterCategoryId, setFilterCategoryId] = useSessionState<string | null>("fin_tx_category", null);
+  const [filterEntityIds, setFilterEntityIds] = useSessionState<string[]>("fin_tx_entity", []);
+  const [filterCategoryIds, setFilterCategoryIds] = useSessionState<string[]>("fin_tx_category", []);
   const [sortKey, setSortKey] = useSessionState<string | null>("fin_tx_sort_key", "transaction_date");
   const [sortDir, setSortDir] = useSessionState<"asc" | "desc">("fin_tx_sort_dir", "desc");
   const [txSearchText, setTxSearchText] = useSessionState("fin_tx_search", "");
@@ -173,11 +174,11 @@ export function TransactionsTab() {
     let data = [...(transactionsQ.data || [])];
 
     // 1. Filtering
-    if (filterEntityId) {
-      data = data.filter((t) => t.entity_id === filterEntityId);
+    if (filterEntityIds && filterEntityIds.length > 0) {
+      data = data.filter((t) => t.entity_id && filterEntityIds.includes(t.entity_id));
     }
-    if (filterCategoryId) {
-      data = data.filter((t) => t.category_id === filterCategoryId);
+    if (filterCategoryIds && filterCategoryIds.length > 0) {
+      data = data.filter((t) => t.category_id && filterCategoryIds.includes(t.category_id));
     }
     if (filterType && filterType !== "all") {
       if (filterType === "incomplete") {
@@ -228,7 +229,7 @@ export function TransactionsTab() {
     });
 
     return data;
-  }, [transactionsQ.data, filterEntityId, filterCategoryId, filterType, sortKey, sortDir, txSearchText, accountById, categoryById]);
+  }, [transactionsQ.data, filterEntityIds, filterCategoryIds, filterType, sortKey, sortDir, txSearchText, accountById, categoryById]);
 
   const groupedTransactions = useMemo(() => {
     const mainTxs: any[] = [];
@@ -258,15 +259,15 @@ export function TransactionsTab() {
   }, [selectedTxs]);
 
   const hasActiveFilters = Boolean(
-    filterEntityId || 
-    filterCategoryId || 
+    (filterEntityIds && filterEntityIds.length > 0) || 
+    (filterCategoryIds && filterCategoryIds.length > 0) || 
     (filterType && filterType !== "all") || 
     txSearchText
   );
 
   const clearFilters = () => {
-    setFilterEntityId(null);
-    setFilterCategoryId(null);
+    setFilterEntityIds([]);
+    setFilterCategoryIds([]);
     setFilterType("all");
     setTxSearchText("");
   };
@@ -1381,18 +1382,18 @@ export function TransactionsTab() {
               <div className="mt-1 text-xs text-slate-600 dark:text-slate-400">Filtre por período (padrão: mês atual).</div>
               
               {/* Show which column filters are active */}
-              {(filterEntityId || filterCategoryId) && (
+              {((filterEntityIds && filterEntityIds.length > 0) || (filterCategoryIds && filterCategoryIds.length > 0)) && (
                 <div className="mt-2 flex flex-wrap gap-2">
-                  {filterEntityId && (
+                  {filterEntityIds && filterEntityIds.length > 0 && (
                     <Badge variant="outline" className="bg-white border-indigo-200 text-indigo-700 text-[10px] font-bold gap-1 pr-1">
-                      Entidade Específica
-                      <button onClick={() => setFilterEntityId(null)} className="hover:bg-indigo-100 rounded-full p-0.5"><X className="h-3 w-3" /></button>
+                      Entidades ({filterEntityIds.length})
+                      <button onClick={() => setFilterEntityIds([])} className="hover:bg-indigo-100 rounded-full p-0.5"><X className="h-3 w-3" /></button>
                     </Badge>
                   )}
-                  {filterCategoryId && (
+                  {filterCategoryIds && filterCategoryIds.length > 0 && (
                     <Badge variant="outline" className="bg-white border-indigo-200 text-indigo-700 text-[10px] font-bold gap-1 pr-1">
-                      Categoria Específica
-                      <button onClick={() => setFilterCategoryId(null)} className="hover:bg-indigo-100 rounded-full p-0.5"><X className="h-3 w-3" /></button>
+                      Categorias ({filterCategoryIds.length})
+                      <button onClick={() => setFilterCategoryIds([])} className="hover:bg-indigo-100 rounded-full p-0.5"><X className="h-3 w-3" /></button>
                     </Badge>
                   )}
                 </div>
@@ -1413,12 +1414,44 @@ export function TransactionsTab() {
                 <Search className={cn("absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4", txSearchText ? "text-indigo-500" : "text-slate-400")} />
                 <Input
                   className={cn(
-                    "mt-1 h-9 w-[200px] rounded-2xl pl-9 transition-all",
+                    "mt-1 h-9 w-[150px] rounded-2xl pl-9 transition-all",
                     txSearchText ? "border-indigo-300 bg-indigo-50/50 text-indigo-900 placeholder:text-indigo-400" : "bg-white dark:bg-slate-950"
                   )}
-                  placeholder="Buscar lançamentos..."
+                  placeholder="Buscar..."
                   value={txSearchText}
                   onChange={(e) => setTxSearchText(e.target.value)}
+                />
+              </div>
+              <div className="w-[150px]">
+                <AsyncMultiSelect
+                  className="mt-1 h-9 rounded-2xl bg-white dark:bg-slate-950 font-medium text-xs transition-all"
+                  values={filterCategoryIds || []}
+                  onChange={setFilterCategoryIds}
+                  placeholder="Categorias"
+                  loadOptions={async (val) => {
+                    const all = categoriesQ.data || [];
+                    if (!val) return all.slice(0, 50).map(c => ({ value: c.id, label: c.name }));
+                    return all.filter(c => c.name.toLowerCase().includes(val.toLowerCase())).slice(0, 50).map(c => ({ value: c.id, label: c.name }));
+                  }}
+                />
+              </div>
+              <div className="w-[150px]">
+                <AsyncMultiSelect
+                  className="mt-1 h-9 rounded-2xl bg-white dark:bg-slate-950 font-medium text-xs transition-all"
+                  values={filterEntityIds || []}
+                  onChange={setFilterEntityIds}
+                  placeholder="Entidades"
+                  loadOptions={async (val) => {
+                    if (!activeTenantId || val.length < 2) return [];
+                    const { data } = await supabase
+                      .from("core_entities")
+                      .select("id, display_name")
+                      .eq("tenant_id", activeTenantId)
+                      .ilike("display_name", `%${val}%`)
+                      .is("deleted_at", null)
+                      .limit(10);
+                    return (data || []).map((d) => ({ value: d.id, label: d.display_name }));
+                  }}
                 />
               </div>
               <Select value={filterType} onValueChange={setFilterType}>
@@ -1546,8 +1579,8 @@ export function TransactionsTab() {
                   <TableHead className="w-[180px]">
                     <div className="flex items-center justify-between">
                       <span className="cursor-pointer" onClick={() => toggleSort("entity_id")}>Entidade</span>
-                      {filterEntityId && (
-                        <Button variant="ghost" size="sm" className="h-6 px-1 text-[10px]" onClick={() => setFilterEntityId(null)}>Limpar</Button>
+                      {filterEntityIds && filterEntityIds.length > 0 && (
+                        <Button variant="ghost" size="sm" className="h-6 px-1 text-[10px]" onClick={() => setFilterEntityIds([])}>Limpar</Button>
                       )}
                     </div>
                   </TableHead>
@@ -1559,8 +1592,8 @@ export function TransactionsTab() {
                   <TableHead className="w-[180px]">
                     <div className="flex items-center justify-between">
                       <span className="cursor-pointer" onClick={() => toggleSort("category_id")}>Categoria</span>
-                      {filterCategoryId && (
-                        <Button variant="ghost" size="sm" className="h-6 px-1 text-[10px]" onClick={() => setFilterCategoryId(null)}>Limpar</Button>
+                      {filterCategoryIds && filterCategoryIds.length > 0 && (
+                        <Button variant="ghost" size="sm" className="h-6 px-1 text-[10px]" onClick={() => setFilterCategoryIds([])}>Limpar</Button>
                       )}
                     </div>
                   </TableHead>
@@ -1633,9 +1666,12 @@ export function TransactionsTab() {
                               variant="ghost"
                               size="sm"
                               className="mt-1 h-5 w-full text-[10px] text-slate-400 opacity-0 group-hover:opacity-100"
-                              onClick={() => setFilterEntityId(t.entity_id)}
+                              onClick={() => {
+                                const current = filterEntityIds || [];
+                                if (!current.includes(t.entity_id)) setFilterEntityIds([...current, t.entity_id]);
+                              }}
                             >
-                              Filtrar este
+                              Adicionar ao filtro
                             </Button>
                           )}
                         </TableCell>
@@ -1691,9 +1727,12 @@ export function TransactionsTab() {
                                 variant="ghost"
                                 size="sm"
                                 className="mt-1 h-5 text-[10px] text-slate-400 opacity-0 group-hover:opacity-100"
-                                onClick={() => setFilterCategoryId(t.category_id)}
+                                onClick={() => {
+                                  const current = filterCategoryIds || [];
+                                  if (!current.includes(t.category_id)) setFilterCategoryIds([...current, t.category_id]);
+                                }}
                               >
-                                Filtrar
+                                Adicionar ao filtro
                               </Button>
                             )}
                           </div>
