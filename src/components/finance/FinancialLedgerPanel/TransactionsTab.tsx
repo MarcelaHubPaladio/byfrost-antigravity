@@ -1375,7 +1375,7 @@ export function TransactionsTab() {
                 Transações
                 {hasActiveFilters && (
                   <Badge variant="secondary" className="bg-indigo-100 text-indigo-700 border-indigo-200 text-[9px] font-black uppercase tracking-widest px-1.5 py-0">
-                    Filtros Ativos
+                    Filtros Ativos ({sortedTransactions.length})
                   </Badge>
                 )}
               </div>
