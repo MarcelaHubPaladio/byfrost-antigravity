@@ -180,7 +180,11 @@ export function TransactionsTab() {
       data = data.filter((t) => t.category_id === filterCategoryId);
     }
     if (filterType && filterType !== "all") {
-      data = data.filter((t) => (t.type || "").toLowerCase().trim() === filterType);
+      if (filterType === "incomplete") {
+        data = data.filter((t) => !t.category_id || !t.entity_id);
+      } else {
+        data = data.filter((t) => (t.type || "").toLowerCase().trim() === filterType);
+      }
     }
     
     if (txSearchText) {
@@ -1426,6 +1430,7 @@ export function TransactionsTab() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Todos</SelectItem>
+                  <SelectItem value="incomplete">Pendentes (Amarelos)</SelectItem>
                   <SelectItem value="credit">Entradas (Crédito)</SelectItem>
                   <SelectItem value="debit">Saídas (Débito)</SelectItem>
                 </SelectContent>
