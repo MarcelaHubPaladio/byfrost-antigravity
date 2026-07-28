@@ -79,7 +79,13 @@ serve(async (req) => {
             let purchases = 0;
             if (Array.isArray(row.actions)) {
               for (const act of row.actions) {
-                if (act.action_type === "lead") leads += parseInt(act.value || "0", 10);
+                if (
+                  act.action_type === "lead" || 
+                  act.action_type === "onsite_conversion.lead_grouped" || 
+                  act.action_type === "offsite_conversion.fb_pixel_lead"
+                ) {
+                  leads += parseInt(act.value || "0", 10);
+                }
                 if (act.action_type === "purchase") purchases += parseInt(act.value || "0", 10);
               }
             }

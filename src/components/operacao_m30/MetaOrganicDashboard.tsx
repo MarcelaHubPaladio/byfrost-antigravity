@@ -1,8 +1,32 @@
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useTenant } from "@/providers/TenantProvider";
 import { supabase } from "@/lib/supabase";
 import { Heart, MessageCircle, Share2, Instagram, Facebook, LayoutTemplate } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+
+const PostImage = ({ url, permalink }: { url: string; permalink: string }) => {
+  const [error, setError] = useState(false);
+
+  if (error || !url) {
+    return (
+      <div className="w-10 h-10 rounded-lg bg-slate-100 flex items-center justify-center">
+        <LayoutTemplate className="w-4 h-4 text-slate-300" />
+      </div>
+    );
+  }
+
+  return (
+    <a href={permalink} target="_blank" rel="noreferrer">
+      <img 
+        src={url} 
+        alt="thumbnail" 
+        className="w-10 h-10 rounded-lg object-cover border border-slate-200" 
+        onError={() => setError(true)}
+      />
+    </a>
+  );
+};
 
 export function MetaOrganicDashboard({ startDate, endDate }: { startDate?: string; endDate?: string }) {
   const { activeTenantId } = useTenant();
@@ -155,15 +179,7 @@ export function MetaOrganicDashboard({ startDate, endDate }: { startDate?: strin
                   return (
                     <tr key={post.id} className="hover:bg-slate-50/50">
                       <td className="py-3 px-4">
-                        {post.picture_url ? (
-                          <a href={post.permalink} target="_blank" rel="noreferrer">
-                            <img src={post.picture_url} alt="thumbnail" className="w-10 h-10 rounded-lg object-cover border border-slate-200" />
-                          </a>
-                        ) : (
-                          <div className="w-10 h-10 rounded-lg bg-slate-100 flex items-center justify-center">
-                            <LayoutTemplate className="w-4 h-4 text-slate-300" />
-                          </div>
-                        )}
+                        <PostImage url={post.picture_url} permalink={post.permalink} />
                       </td>
                       <td className="py-3 px-4 font-medium text-slate-800 max-w-xs truncate">
                         <a href={post.permalink} target="_blank" rel="noreferrer" className="hover:underline">

@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { corsHeaders } from "../_shared/cors.ts";
 import { createSupabaseAdmin } from "../_shared/supabaseAdmin.ts";
+import { decryptText } from "../_shared/encryption.ts";
 
 function json(data: any, status = 200) {
   return new Response(JSON.stringify(data), {
