@@ -82,11 +82,20 @@ serve(async (req) => {
                 if (
                   act.action_type === "lead" || 
                   act.action_type === "onsite_conversion.lead_grouped" || 
-                  act.action_type === "offsite_conversion.fb_pixel_lead"
+                  act.action_type === "offsite_conversion.fb_pixel_lead" ||
+                  act.action_type === "messaging_conversation_started_7d" ||
+                  act.action_type === "onsite_conversion.messaging_conversation_started_7d" ||
+                  act.action_type === "omni_messaging_conversation_started_7d"
                 ) {
                   leads += parseInt(act.value || "0", 10);
                 }
-                if (act.action_type === "purchase") purchases += parseInt(act.value || "0", 10);
+                if (
+                  act.action_type === "purchase" ||
+                  act.action_type === "onsite_conversion.purchase" ||
+                  act.action_type === "offsite_conversion.fb_pixel_purchase"
+                ) {
+                  purchases += parseInt(act.value || "0", 10);
+                }
               }
             }
 

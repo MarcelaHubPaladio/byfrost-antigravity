@@ -1,14 +1,17 @@
 import { createClient } from '@supabase/supabase-js';
 import fs from 'fs';
 
-const env = fs.readFileSync('.env.local', 'utf-8');
-const url = env.match(/VITE_SUPABASE_URL=(.*)/)[1];
-const key = env.match(/VITE_SUPABASE_ANON_KEY=(.*)/)[1];
+const envFile = fs.readFileSync('.env.local', 'utf8');
+const env = {};
+envFile.split('\n').forEach(line => {
+  const match = line.match(/^([^=]+)=(.*)$/);
+  if (match) env[match[1]] = match[2];
+});
 
-const supabase = createClient(url, key);
+const supabase = createClient(env.VITE_SUPABASE_URL, env.VITE_SUPABASE_ANON_KEY);
 
 async function run() {
-  const { data, error } = await supabase.from('commercial_commitments').select('id, metadata').limit(5);
-  console.log(JSON.stringify(data, null, 2));
+  const { data } = await supabase.from('meta_ads_metrics_daily').select('*').limit(1);
+  console.log(data);
 }
 run();
