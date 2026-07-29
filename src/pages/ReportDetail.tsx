@@ -1328,43 +1328,7 @@ function ReportFormDialog({ onSave, isLoading, initialData, existingUnits = [], 
                 </div>
 
                 <div className="space-y-4 bg-slate-50 p-6 rounded-3xl dark:bg-slate-900/50">
-                    <div className="flex items-center justify-between mb-4">
-                        <h4 className="text-xs font-black text-slate-500 uppercase tracking-widest">Métricas do Funil</h4>
-                        {metaAds && (
-                            <Button
-                                type="button"
-                                variant="outline"
-                                size="sm"
-                                className="h-7 text-[10px] gap-1.5 rounded-full border-amber-200 text-amber-700 bg-amber-50 hover:bg-amber-100"
-                                onClick={() => {
-                                    if (!metaAds.metrics) return;
-                                    const periodMetrics = metaAds.metrics.filter((m: any) => m.date >= formData.start_date && m.date <= formData.end_date);
-                                    if (periodMetrics.length === 0) {
-                                        showError("Nenhuma métrica de anúncio encontrada no período selecionado.");
-                                        return;
-                                    }
-                                    const spend = periodMetrics.reduce((acc: number, m: any) => acc + Number(m.spend || 0), 0);
-                                    const impressions = periodMetrics.reduce((acc: number, m: any) => acc + Number(m.impressions || 0), 0);
-                                    const clicks = periodMetrics.reduce((acc: number, m: any) => acc + Number(m.clicks || 0), 0);
-                                    const leads = periodMetrics.reduce((acc: number, m: any) => acc + Number(m.leads || 0), 0);
-                                    const purchases = periodMetrics.reduce((acc: number, m: any) => acc + Number(m.purchases || 0), 0);
-                                    
-                                    setFormData({
-                                        ...formData,
-                                        visualizations: impressions,
-                                        profile_visits: clicks,
-                                        initiated_conversations: leads,
-                                        tracked_sales: purchases,
-                                        ad_spend: spend
-                                    });
-                                    showSuccess("Métricas do Meta Ads sincronizadas!");
-                                }}
-                            >
-                                <Zap className="h-3 w-3 text-amber-500" />
-                                Preencher com Meta Ads
-                            </Button>
-                        )}
-                    </div>
+                    <h4 className="text-xs font-black text-slate-500 uppercase tracking-widest mb-4">Métricas do Funil</h4>
                     <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
                             <Label className="flex items-center gap-1.5"><Eye className="h-3 w-3" /> Visualizações</Label>
