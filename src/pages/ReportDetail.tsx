@@ -115,6 +115,23 @@ export default function ReportDetail() {
     },
   });
 
+  const metaPostsQ = useQuery({
+    queryKey: ["meta_scheduled_posts", activeTenantId],
+    enabled: Boolean(activeTenantId),
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("meta_scheduled_posts")
+        .select(`
+          *,
+          meta_organic_pages ( name, platform )
+        `)
+        .eq("tenant_id", activeTenantId!)
+        .order("scheduled_at", { ascending: false });
+      if (error) throw error;
+      return data || [];
+    },
+  });
+
   const units = useMemo(() => {
     const u = new Set<string>(["Geral"]);
     (reportsQ.data || []).forEach(r => {
@@ -502,9 +519,53 @@ export default function ReportDetail() {
                               </div>
                               <h3 className="text-xl font-black uppercase tracking-tight">Produção do Período</h3>
                             </div>
-                            <p className="text-indigo-100/80 leading-relaxed italic text-lg">
-                              {selectedReport.production_notes || "Nenhuma nota de produção cadastrada para este período."}
-                            </p>
+                            <div className="space-y-6">
+                              <p className="text-indigo-100/80 leading-relaxed italic text-lg">
+                                {selectedReport.production_notes || "Nenhuma nota de produção cadastrada para este período."}
+                              </p>
+                              
+                              {(() => {
+                                const postsForReport = (metaPostsQ.data || []).filter(p => 
+                                  p.scheduled_at >= selectedReport.start_date && p.scheduled_at <= selectedReport.end_date
+                                );
+                                
+                                if (metaPostsQ.isLoading) {
+                                  return <div className="text-indigo-200 text-sm animate-pulse">Carregando publicações do período...</div>;
+                                }
+                                
+                                if (postsForReport.length > 0) {
+                                  return (
+                                    <div className="pt-6 border-t border-indigo-500/30">
+                                      <h4 className="text-sm font-bold uppercase tracking-wider text-indigo-200 mb-4 flex items-center gap-2">
+                                        <MessageCircle className="w-4 h-4" /> Posts Publicados no Período ({postsForReport.length})
+                                      </h4>
+                                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        {postsForReport.map(post => (
+                                          <div key={post.id} className="flex gap-4 bg-indigo-700/30 rounded-2xl p-4 border border-indigo-500/20">
+                                            {post.media_url && (
+                                              <div className="w-20 h-20 shrink-0 rounded-xl overflow-hidden bg-indigo-800">
+                                                <img src={post.media_url} alt="Post" className="w-full h-full object-cover" />
+                                              </div>
+                                            )}
+                                            <div className="flex-1 min-w-0 flex flex-col justify-center">
+                                              <div className="text-xs font-semibold text-indigo-200 mb-1 flex items-center gap-1.5">
+                                                <span className="truncate">{post.meta_organic_pages?.name || "Meta"}</span>
+                                                <span className="opacity-50">•</span>
+                                                <span className="opacity-75">{format(new Date(post.scheduled_at), "dd/MMM", { locale: ptBR })}</span>
+                                              </div>
+                                              <p className="text-sm text-indigo-50 line-clamp-2 leading-snug">
+                                                {post.message}
+                                              </p>
+                                            </div>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  );
+                                }
+                                return null;
+                              })()}
+                            </div>
                           </Card>
                         </div>
 
@@ -644,6 +705,39 @@ export default function ReportDetail() {
                               <p className="text-[9px] opacity-90 leading-relaxed italic line-clamp-2">
                                 {report.production_notes || "Nenhuma nota de produção cadastrada."}
                               </p>
+                              
+                              {(() => {
+                                const postsForReport = (metaPostsQ.data || []).filter(p => 
+                                  p.scheduled_at >= report.start_date && p.scheduled_at <= report.end_date
+                                );
+                                
+                                if (postsForReport.length > 0) {
+                                  return (
+                                    <div className="mt-2 pt-2 border-t border-indigo-500/30">
+                                      <h4 className="text-[8px] font-bold uppercase tracking-wider text-indigo-200 mb-2 flex items-center gap-1">
+                                        Posts ({postsForReport.length})
+                                      </h4>
+                                      <div className="grid grid-cols-2 gap-2">
+                                        {postsForReport.slice(0, 4).map(post => (
+                                          <div key={post.id} className="flex gap-2 bg-indigo-700/30 rounded p-2 border border-indigo-500/20">
+                                            {post.media_url && (
+                                              <div className="w-8 h-8 shrink-0 rounded overflow-hidden bg-indigo-800">
+                                                <img src={post.media_url} alt="Post" className="w-full h-full object-cover" />
+                                              </div>
+                                            )}
+                                            <div className="flex-1 min-w-0">
+                                              <p className="text-[7px] text-indigo-50 line-clamp-2 leading-snug">
+                                                {post.message}
+                                              </p>
+                                            </div>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  );
+                                }
+                                return null;
+                              })()}
                             </div>
                           </div>
 
@@ -774,6 +868,38 @@ export default function ReportDetail() {
                           <p className="text-[10px] opacity-90 leading-relaxed italic line-clamp-2">
                             {report.production_notes || "Nenhuma nota de produção cadastrada."}
                           </p>
+                          {(() => {
+                              const postsForReport = (metaPostsQ.data || []).filter(p => 
+                                p.scheduled_at >= report.start_date && p.scheduled_at <= report.end_date
+                              );
+                              
+                              if (postsForReport.length > 0) {
+                                return (
+                                  <div className="mt-2 pt-2 border-t border-indigo-500/30">
+                                    <h4 className="text-[8px] font-bold uppercase tracking-wider text-indigo-200 mb-2 flex items-center gap-1">
+                                      Posts ({postsForReport.length})
+                                    </h4>
+                                    <div className="grid grid-cols-2 gap-2">
+                                      {postsForReport.slice(0, 4).map(post => (
+                                        <div key={post.id} className="flex gap-2 bg-indigo-700/30 rounded p-2 border border-indigo-500/20">
+                                          {post.media_url && (
+                                            <div className="w-8 h-8 shrink-0 rounded overflow-hidden bg-indigo-800">
+                                              <img src={post.media_url} alt="Post" className="w-full h-full object-cover" />
+                                            </div>
+                                          )}
+                                          <div className="flex-1 min-w-0">
+                                            <p className="text-[7px] text-indigo-50 line-clamp-2 leading-snug">
+                                              {post.message}
+                                            </p>
+                                          </div>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>
+                                );
+                              }
+                              return null;
+                            })()}
                         </div>
                       </div>
                   </div>
