@@ -149,10 +149,17 @@ export default function ReportDetail() {
   });
 
   const metaPostsQ = useQuery({
-    queryKey: ["meta_scheduled_posts", activeTenantId],
+    queryKey: ["meta_scheduled_posts", activeTenantId, (reportsQ.data || []).map(r => `${r.start_date}_${r.end_date}`).join(",")],
     enabled: Boolean(activeTenantId),
     queryFn: async () => {
-      const { data, error } = await supabase
+      let minDate = "";
+      let maxDate = "";
+      (reportsQ.data || []).forEach(r => {
+        if (!minDate || r.start_date < minDate) minDate = r.start_date;
+        if (!maxDate || r.end_date > maxDate) maxDate = r.end_date;
+      });
+
+      let q = supabase
         .from("meta_scheduled_posts")
         .select(`
           *,
@@ -160,13 +167,19 @@ export default function ReportDetail() {
         `)
         .eq("tenant_id", activeTenantId!)
         .order("scheduled_at", { ascending: false });
+        
+      if (minDate) q = q.gte("scheduled_at", minDate + "T00:00:00Z");
+      // Add 23:59:59 to maxDate to include the whole day
+      if (maxDate) q = q.lte("scheduled_at", maxDate + "T23:59:59Z");
+
+      const { data, error } = await q.limit(10000);
       if (error) throw error;
       return data || [];
     },
   });
 
   const metaAdsQ = useQuery({
-    queryKey: ["meta_ads_for_report", activeTenantId],
+    queryKey: ["meta_ads_for_report", activeTenantId, (reportsQ.data || []).map(r => `${r.start_date}_${r.end_date}`).join(",")],
     enabled: Boolean(activeTenantId),
     queryFn: async () => {
       const { data: accounts } = await supabase
@@ -188,10 +201,23 @@ export default function ReportDetail() {
         .select("id, meta_ads_campaign_id, name")
         .in("meta_ads_campaign_id", campIds);
 
-      const { data: metrics } = await supabase
+      // Find min and max dates from reports to avoid hitting 1000 row limits for old unused data
+      let minDate = "";
+      let maxDate = "";
+      (reportsQ.data || []).forEach(r => {
+        if (!minDate || r.start_date < minDate) minDate = r.start_date;
+        if (!maxDate || r.end_date > maxDate) maxDate = r.end_date;
+      });
+
+      let q = supabase
         .from("meta_ads_metrics_daily")
         .select("*")
         .in("campaign_id", campIds);
+      
+      if (minDate) q = q.gte("date", minDate);
+      if (maxDate) q = q.lte("date", maxDate);
+
+      const { data: metrics } = await q.limit(10000);
 
       return { campaigns, ads: ads || [], metrics: metrics || [] };
     }
