@@ -24,7 +24,8 @@ import {
     Folder,
     MousePointerClick,
     Video,
-    Star
+    Star,
+    Copy
 } from "lucide-react";
 import { toast } from "sonner";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -425,6 +426,41 @@ export default function PortalEditor() {
                 };
             }
             return { ...s, blocks: (s.blocks || []).filter(b => b.id !== blockId) };
+        }));
+    };
+
+    const duplicateBlock = (sectionId: string, blockId: string) => {
+        pushHistory();
+        
+        const duplicateData = (block: any) => {
+            const newBlock = JSON.parse(JSON.stringify(block));
+            const regenerateIds = (b: any) => {
+                b.id = Math.random().toString(36).substr(2, 9);
+                if (b.blocks) b.blocks.forEach(regenerateIds);
+            };
+            regenerateIds(newBlock);
+            return newBlock;
+        };
+
+        setSections(sections.map(s => {
+            if (s.id !== sectionId) return s;
+            if (s.columns) {
+                return {
+                    ...s,
+                    columns: s.columns.map(c => {
+                        const blockIndex = c.blocks.findIndex(b => b.id === blockId);
+                        if (blockIndex === -1) return c;
+                        const newBlocks = [...c.blocks];
+                        newBlocks.splice(blockIndex + 1, 0, duplicateData(c.blocks[blockIndex]));
+                        return { ...c, blocks: newBlocks };
+                    })
+                };
+            }
+            const blockIndex = (s.blocks || []).findIndex(b => b.id === blockId);
+            if (blockIndex === -1) return s;
+            const newBlocks = [...(s.blocks || [])];
+            newBlocks.splice(blockIndex + 1, 0, duplicateData(newBlocks[blockIndex]));
+            return { ...s, blocks: newBlocks };
         }));
     };
 
@@ -989,6 +1025,7 @@ export default function PortalEditor() {
                                         onUpdateSettings={(settings: any) => updateSectionSettings(customSection.id, settings)}
                                         onUpdateBlock={(blockId: string, updates: any) => updateBlock(customSection.id, blockId, updates)}
                                         onRemoveBlock={(blockId: string) => removeBlock(customSection.id, blockId)}
+                                        onDuplicateBlock={(blockId: string) => duplicateBlock(customSection.id, blockId)}
                                         onAddColumn={() => addColumn(customSection.id)}
                                         onSettingsClick={(blockId?: string) => {
                                             if (blockId) {
@@ -1572,7 +1609,7 @@ function DroppableEmptyColumn({ sectionId, colId, onAddWidgetClick }: { sectionI
     );
 }
 
-function SortableSectionItem({ section, previewMode, active, onSelect, onRemove, onUpdateSettings, onUpdateBlock, onRemoveBlock, onAddSectionAbove, onAddSectionBelow, onSettingsClick, onAddWidgetClick, onResizeStart, onAddColumn }: any) {
+function SortableSectionItem({ section, previewMode, active, onSelect, onRemove, onUpdateSettings, onUpdateBlock, onRemoveBlock, onDuplicateBlock, onAddSectionAbove, onAddSectionBelow, onSettingsClick, onAddWidgetClick, onResizeStart, onAddColumn }: any) {
     const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: section.id });
     const style = { transform: CSS.Transform.toString(transform), transition, zIndex: isDragging ? 50 : 1, opacity: isDragging ? 0.8 : 1 };
     const sectionPadding = section.settings?.paddingY || '12';
@@ -1677,6 +1714,7 @@ function SortableSectionItem({ section, previewMode, active, onSelect, onRemove,
                                                     previewMode={previewMode}
                                                     onUpdate={(updates: any) => onUpdateBlock(block.id, updates)}
                                                     onRemove={() => onRemoveBlock(block.id)}
+                                                    onDuplicate={() => onDuplicateBlock(block.id)}
                                                     onSettingsClick={() => onSettingsClick(block.id)}
                                                 />
                                             ))}
@@ -1722,6 +1760,7 @@ function SortableSectionItem({ section, previewMode, active, onSelect, onRemove,
                                             previewMode={previewMode}
                                             onUpdate={(updates: any) => onUpdateBlock(block.id, updates)}
                                             onRemove={() => onRemoveBlock(block.id)}
+                                            onDuplicate={() => onDuplicateBlock(block.id)}
                                             onSettingsClick={() => onSettingsClick(block.id)}
                                         />
                                     ))}
@@ -1740,7 +1779,7 @@ function SortableSectionItem({ section, previewMode, active, onSelect, onRemove,
     );
 }
 
-function SortableBlockItem({ block, sectionId, previewMode, isNested, onUpdate, onRemove, onSettingsClick }: any) {
+function SortableBlockItem({ block, sectionId, previewMode, isNested, onUpdate, onRemove, onDuplicate, onSettingsClick }: any) {
     const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: block.id });
     const style = { transform: CSS.Transform.toString(transform), transition, zIndex: isDragging ? 50 : 1, opacity: isDragging ? 0.5 : 1 };
 
@@ -1753,6 +1792,11 @@ function SortableBlockItem({ block, sectionId, previewMode, isNested, onUpdate, 
                 <button onClick={(e) => { e.stopPropagation(); onSettingsClick(); }} className="p-1 px-2 hover:bg-slate-50 text-slate-400 hover:text-slate-600 transition-colors" title="Configurações">
                     <Settings className="h-3.5 w-3.5" />
                 </button>
+                {onDuplicate && (
+                    <button onClick={(e) => { e.stopPropagation(); onDuplicate(); }} className="p-1 px-2 hover:bg-slate-50 text-slate-400 hover:text-slate-600 transition-colors" title="Duplicar">
+                        <Copy className="h-3.5 w-3.5" />
+                    </button>
+                )}
                 <button onClick={(e) => { e.stopPropagation(); onRemove(); }} className="p-1 px-2 hover:bg-red-50 text-slate-400 hover:text-red-600 transition-colors" title="Remover">
                     <Trash2 className="h-3.5 w-3.5" />
                 </button>
@@ -1778,6 +1822,23 @@ function SortableBlockItem({ block, sectionId, previewMode, isNested, onUpdate, 
                             onRemove={() => {
                                 const newBlocks = (block.blocks || []).filter((b: any) => b.id !== innerBlock.id);
                                 onUpdate({ blocks: newBlocks });
+                            }}
+                            onDuplicate={() => {
+                                const newBlocks = [...(block.blocks || [])];
+                                const index = newBlocks.findIndex((b: any) => b.id === innerBlock.id);
+                                if (index > -1) {
+                                    const duplicateData = (bData: any) => {
+                                        const nb = JSON.parse(JSON.stringify(bData));
+                                        const regen = (x: any) => {
+                                            x.id = Math.random().toString(36).substr(2, 9);
+                                            if (x.blocks) x.blocks.forEach(regen);
+                                        };
+                                        regen(nb);
+                                        return nb;
+                                    };
+                                    newBlocks.splice(index + 1, 0, duplicateData(innerBlock));
+                                    onUpdate({ blocks: newBlocks });
+                                }
                             }}
                             onSettingsClick={() => onSettingsClick(innerBlock.id)}
                         />
