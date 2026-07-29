@@ -1042,8 +1042,9 @@ export default function ReportDetail() {
                                 </div>
                               ))}
                               </div>
-                            );
-                          })()}
+                            </div>
+                          );
+                        })()}
 
                           {/* Desempenho de Anúncios para PDF */}
                           {(() => {
