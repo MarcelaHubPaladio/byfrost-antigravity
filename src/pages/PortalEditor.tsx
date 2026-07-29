@@ -1508,6 +1508,7 @@ export default function PortalEditor() {
                         </div>
                     )
                 ) : null}
+            </DragOverlay>
             <GlobalSettingsModal
                 open={isGlobalSettingsOpen}
                 onOpenChange={setIsGlobalSettingsOpen}
