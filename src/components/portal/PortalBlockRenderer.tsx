@@ -3,6 +3,19 @@ import { DynamicIcon } from "./DynamicIcon";
 import useEmblaCarousel from 'embla-carousel-react';
 import { Search, ChevronRight, ArrowRight } from "lucide-react";
 
+const getYouTubeVideoId = (url: string) => {
+    if (!url) return '';
+    const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
+    const match = url.match(regExp);
+    return (match && match[2].length === 11) ? match[2] : url;
+};
+
+const getVimeoVideoId = (url: string) => {
+    if (!url) return '';
+    const match = url.match(/(?:vimeo\.com\/|video\/)(\d+)/);
+    return match ? match[1] : url;
+};
+
 export function PremiumSlider({ items }: { items: any[] }) {
     const [emblaRef] = useEmblaCarousel({ loop: true });
     
@@ -334,14 +347,14 @@ export function PortalBlockRenderer({ block, isPremium, isMobile, onRenderInnerB
                         <div className="relative w-full aspect-video rounded-3xl overflow-hidden shadow-2xl bg-black">
                             {block.content.source === 'youtube' ? (
                                 <iframe 
-                                    src={`https://www.youtube.com/embed/${block.content.url}?autoplay=${block.content.autoplay ? 1 : 0}&controls=${block.content.controls === false ? 0 : 1}&loop=${block.content.loop ? 1 : 0}&mute=${block.content.autoplay ? 1 : 0}`} 
+                                    src={`https://www.youtube.com/embed/${getYouTubeVideoId(block.content.url)}?autoplay=${block.content.autoplay ? 1 : 0}&controls=${block.content.controls === false ? 0 : 1}&loop=${block.content.loop ? 1 : 0}&mute=${block.content.autoplay ? 1 : 0}`} 
                                     className="absolute top-0 left-0 w-full h-full border-0"
                                     allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
                                     allowFullScreen
                                 />
                             ) : block.content.source === 'vimeo' ? (
                                 <iframe 
-                                    src={`https://player.vimeo.com/video/${block.content.url}?autoplay=${block.content.autoplay ? 1 : 0}&loop=${block.content.loop ? 1 : 0}&muted=${block.content.autoplay ? 1 : 0}`} 
+                                    src={`https://player.vimeo.com/video/${getVimeoVideoId(block.content.url)}?autoplay=${block.content.autoplay ? 1 : 0}&loop=${block.content.loop ? 1 : 0}&muted=${block.content.autoplay ? 1 : 0}`} 
                                     className="absolute top-0 left-0 w-full h-full border-0"
                                     allow="autoplay; fullscreen; picture-in-picture" 
                                     allowFullScreen
