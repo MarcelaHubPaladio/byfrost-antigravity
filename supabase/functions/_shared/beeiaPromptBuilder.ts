@@ -383,6 +383,7 @@ export async function buildBeeIASystemPrompt(options: {
         sysPrompt += `\n[INTEGRAÇÃO - CATÁLOGO/CARDÁPIO]:\n`;
         sysPrompt += `- REGRA DE ENVIO: ${triggerText}\n`;
         sysPrompt += `- AÇÃO EXIGIDA: Quando a regra acima for atendida, você OBRIGATORIAMENTE deve enviar o catálogo/cardápio em formato de imagem. Para isso, inclua EXATAMENTE o texto em Markdown no meio da sua resposta: ![Catálogo/Cardápio](${imageUrl})\n`;
+        sysPrompt += `- ATENÇÃO CRÍTICA: Não descreva os itens apenas em texto. Se o assunto for catálogo/cardápio, você DEVE retornar a tag Markdown da imagem acima na sua resposta.\n`;
       }
     }
   }
