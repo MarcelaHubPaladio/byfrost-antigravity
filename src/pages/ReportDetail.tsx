@@ -81,7 +81,7 @@ export default function ReportDetail() {
 
   const contractQ = useQuery({
     queryKey: ["contract_for_report", contractId],
-    enabled: Boolean(contractId),
+    enabled: Boolean(contractId && contractId !== "self"),
     queryFn: async () => {
       const { data, error } = await supabase
         .from("commercial_commitments")
@@ -97,16 +97,47 @@ export default function ReportDetail() {
     },
   });
 
-  const reportsQ = useQuery({
-    queryKey: ["entity_reports", contractId],
-    enabled: Boolean(contractId),
+  const activeTenantQ = useQuery({
+    queryKey: ["active_tenant_details", activeTenantId],
+    enabled: contractId === "self" && Boolean(activeTenantId),
     queryFn: async () => {
       const { data, error } = await supabase
+        .from("core_tenants")
+        .select("name, id")
+        .eq("id", activeTenantId!)
+        .single();
+      if (error) throw error;
+      return data;
+    }
+  });
+
+  const contractData = contractId === "self" ? {
+    id: "self",
+    status: "active",
+    customer: {
+      id: activeTenantId,
+      display_name: activeTenantQ.data?.name || "Relatório Interno",
+      metadata: {}
+    }
+  } : contractQ.data;
+
+  const reportsQ = useQuery({
+    queryKey: ["entity_reports", contractId, activeTenantId],
+    enabled: Boolean(contractId),
+    queryFn: async () => {
+      let query = supabase
         .from("entity_reports")
         .select("*")
-        .eq("contract_id", contractId!)
         .is("deleted_at", null)
         .order("start_date", { ascending: true });
+        
+      if (contractId === "self") {
+         query = query.is("contract_id", null).eq("tenant_id", activeTenantId!);
+      } else {
+         query = query.eq("contract_id", contractId!);
+      }
+      
+      const { data, error } = await query;
       if (error) {
         console.error("Error fetching reports:", error);
         throw error;
@@ -191,8 +222,8 @@ export default function ReportDetail() {
       const payload = {
         ...report,
         tenant_id: activeTenantId,
-        entity_id: contractQ.data?.customer?.id,
-        contract_id: contractId,
+        entity_id: contractData?.customer?.id,
+        contract_id: contractId === "self" ? null : contractId,
       };
 
       if (report.id) {
@@ -265,7 +296,7 @@ export default function ReportDetail() {
           height: 800
         });
         const link = document.createElement('a');
-        link.download = `Relatorio-${contractQ.data?.customer?.display_name}-${report.period_name}.png`;
+        link.download = `Relatorio-${contractData?.customer?.display_name}-${report.period_name}.png`;
         link.href = dataUrl;
         link.click();
         
@@ -336,7 +367,7 @@ export default function ReportDetail() {
                   <div>
                     <h1 className="text-2xl font-black text-slate-900 dark:text-white flex items-center gap-2">
                       <BarChart3 className="h-6 w-6 text-indigo-500" />
-                      Relatórios: {contractQ.data?.customer?.display_name}
+                      Relatórios: {contractData?.customer?.display_name}
                     </h1>
                     <p className="text-sm text-slate-500">Contrato #{contractId?.slice(0, 8)}</p>
                   </div>
@@ -614,7 +645,7 @@ export default function ReportDetail() {
                           <div className="mb-6 border-b-2 border-slate-900 pb-6 flex justify-between items-end">
                             <div className="flex-1">
                               <p className="text-[10px] font-black uppercase tracking-[0.4em] text-indigo-600 mb-2">Relatório Executivo de Performance</p>
-                              <h1 className="text-3xl font-black uppercase tracking-tighter text-slate-900 leading-none mb-3">{contractQ.data?.customer?.display_name}</h1>
+                              <h1 className="text-3xl font-black uppercase tracking-tighter text-slate-900 leading-none mb-3">{contractData?.customer?.display_name}</h1>
                               <div className="flex items-center gap-6">
                                 <p className="text-lg font-bold text-slate-500 uppercase tracking-widest">{report.unit_name}</p>
                                 <div className="h-4 w-px bg-slate-200" />
@@ -782,7 +813,7 @@ export default function ReportDetail() {
                       <div className="mb-6 border-b-2 border-slate-900 pb-6 flex justify-between items-end">
                         <div className="flex-1">
                           <p className="text-[10px] font-black uppercase tracking-[0.4em] text-indigo-600 mb-2">Relatório Executivo de Performance</p>
-                          <h1 className="text-3xl font-black uppercase tracking-tighter text-slate-900 leading-none mb-3">{contractQ.data?.customer?.display_name}</h1>
+                          <h1 className="text-3xl font-black uppercase tracking-tighter text-slate-900 leading-none mb-3">{contractData?.customer?.display_name}</h1>
                           <div className="flex items-center gap-6">
                             <p className="text-lg font-bold text-slate-500 uppercase tracking-widest">{report.unit_name}</p>
                             <div className="h-4 w-px bg-slate-200" />

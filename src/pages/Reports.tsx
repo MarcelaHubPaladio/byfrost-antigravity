@@ -162,22 +162,55 @@ export default function Reports() {
                   <span>Carregando entidades...</span>
                 </div>
               </div>
-            ) : filteredEntities.length === 0 ? (
-              <div className="flex h-64 flex-col items-center justify-center rounded-3xl border border-dashed border-slate-200 bg-slate-50 p-12 text-center dark:border-slate-800 dark:bg-slate-950/50">
-                <User className="mb-4 h-12 w-12 text-slate-300" />
-                <h3 className="text-lg font-semibold text-slate-900 dark:text-white">Nenhuma entidade ativa</h3>
-                <p className="mt-1 text-sm text-slate-500">
-                  Apenas entidades com contratos em status "Ativo" aparecem aqui.
-                </p>
-              </div>
             ) : (
               <div className={cn(
                 "grid gap-6",
                 viewMode === "grid" ? "grid-cols-1 md:grid-cols-2 lg:grid-cols-3" : "grid-cols-1"
               )}>
+                <Card className="group overflow-hidden border-indigo-200 bg-indigo-50/50 transition-all duration-300 hover:-translate-y-1 hover:border-indigo-300 hover:shadow-xl hover:shadow-indigo-500/10 dark:border-indigo-900/50 dark:bg-indigo-950/20">
+                  <div className="p-6">
+                    <div className="flex items-center gap-4 mb-6">
+                      <div className="h-12 w-12 rounded-2xl bg-indigo-600 flex items-center justify-center shadow-lg shadow-indigo-200 dark:shadow-none">
+                        <BarChart3 className="h-6 w-6 text-white" />
+                      </div>
+                      <div>
+                        <h3 className="font-bold text-slate-900 dark:text-white leading-tight">
+                          Relatório Interno
+                        </h3>
+                        <p className="text-xs text-indigo-600 dark:text-indigo-400 mt-0.5">Métricas do próprio tenant</p>
+                      </div>
+                    </div>
+
+                    <div className="space-y-3">
+                      <Link 
+                        to={`/app/reports/self`}
+                        className="flex items-center justify-between p-3 rounded-xl bg-white dark:bg-slate-900 hover:bg-indigo-50 dark:hover:bg-indigo-900/40 transition-all border border-transparent hover:border-indigo-200 group/item shadow-sm"
+                      >
+                        <div className="flex items-center gap-3">
+                          <FileText className="h-4 w-4 text-indigo-400 group-hover/item:text-indigo-600" />
+                          <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Acessar Relatório</span>
+                        </div>
+                        <div className="flex items-center gap-2 text-indigo-600">
+                          <ChevronRight className="h-4 w-4 transition-transform group-hover/item:translate-x-1" />
+                        </div>
+                      </Link>
+                    </div>
+                  </div>
+                </Card>
+
                 {filteredEntities.map(entity => (
                   <EntityReportCard key={entity.id} entity={entity} viewMode={viewMode} />
                 ))}
+                
+                {filteredEntities.length === 0 && (
+                  <div className="flex flex-col items-center justify-center rounded-3xl border border-dashed border-slate-200 bg-slate-50 p-12 text-center dark:border-slate-800 dark:bg-slate-950/50 md:col-span-2">
+                    <User className="mb-4 h-12 w-12 text-slate-300" />
+                    <h3 className="text-lg font-semibold text-slate-900 dark:text-white">Nenhuma entidade ativa</h3>
+                    <p className="mt-1 text-sm text-slate-500">
+                      Apenas entidades com contratos em status "Ativo" aparecem aqui.
+                    </p>
+                  </div>
+                )}
               </div>
             )}
           </div>
