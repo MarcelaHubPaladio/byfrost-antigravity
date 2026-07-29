@@ -488,7 +488,8 @@ export default function ReportDetail() {
                   {/* Funnel & Main Stats */}
                   <div className="report-main-grid grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
                     {/* Left: Stats & Funnel */}
-                    <Card className="lg:col-span-8 p-8 rounded-[40px] border-none bg-white shadow-xl shadow-slate-100">
+                    <div className="lg:col-span-8 flex flex-col gap-8">
+                      <Card className="p-8 rounded-[40px] border-none bg-white shadow-xl shadow-slate-100">
                       <div className="flex items-center justify-between mb-8">
                         <h3 className="text-lg font-bold flex items-center gap-2">
                           <TrendingUp className="h-5 w-5 text-indigo-500" />
@@ -579,123 +580,7 @@ export default function ReportDetail() {
                             </p>
                           </Card>
 
-                          <Card className="p-8 rounded-[40px] border-none bg-indigo-600 text-white shadow-2xl shadow-indigo-100">
-                            <div className="flex items-center gap-4 mb-6">
-                              <div className="h-12 w-12 rounded-2xl bg-white/10 flex items-center justify-center">
-                                <Calendar className="h-6 w-6 text-indigo-100" />
-                              </div>
-                              <h3 className="text-xl font-black uppercase tracking-tight">Produção do Período</h3>
-                            </div>
-                            <div className="space-y-6">
-                              <p className="text-indigo-100/80 leading-relaxed italic text-lg">
-                                {selectedReport.production_notes || "Nenhuma nota de produção cadastrada para este período."}
-                              </p>
-                              
-                              {(() => {
-                                const postsForReport = (metaPostsQ.data || []).filter(p => 
-                                  p.scheduled_at.substring(0, 10) >= selectedReport.start_date && p.scheduled_at.substring(0, 10) <= selectedReport.end_date
-                                );
-                                
-                                if (metaPostsQ.isLoading) {
-                                  return <div className="text-indigo-200 text-sm animate-pulse">Carregando publicações do período...</div>;
-                                }
-                                
-                                if (postsForReport.length > 0) {
-                                  return (
-                                    <div className="pt-6 border-t border-indigo-500/30">
-                                      <h4 className="text-sm font-bold uppercase tracking-wider text-indigo-200 mb-4 flex items-center gap-2">
-                                        <MessageCircle className="w-4 h-4" /> Posts Publicados no Período ({postsForReport.length})
-                                      </h4>
-                                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                        {postsForReport.map(post => (
-                                          <div key={post.id} className="flex gap-4 bg-indigo-700/30 rounded-2xl p-4 border border-indigo-500/20">
-                                            {post.media_url && (
-                                              <div className="w-20 h-20 shrink-0 rounded-xl overflow-hidden bg-indigo-800">
-                                                <img src={post.media_url} alt="Post" className="w-full h-full object-cover" />
-                                              </div>
-                                            )}
-                                            <div className="flex-1 min-w-0 flex flex-col justify-center">
-                                              <div className="text-xs font-semibold text-indigo-200 mb-1 flex items-center gap-1.5">
-                                                <span className="truncate">{post.meta_organic_pages?.name || "Meta"}</span>
-                                                <span className="opacity-50">•</span>
-                                                <span className="opacity-75">{format(new Date(post.scheduled_at), "dd/MMM", { locale: ptBR })}</span>
-                                              </div>
-                                              <p className="text-sm text-indigo-50 line-clamp-2 leading-snug">
-                                                {post.message}
-                                              </p>
-                                            </div>
-                                          </div>
-                                        ))}
-                                      </div>
-                                    </div>
-                                  );
-                                }
-                                return null;
-                              })()}
-
-                              {/* UI Ads Block */}
-                              {(() => {
-                                const { campaigns, ads, metrics } = metaAdsQ.data || { campaigns: [], ads: [], metrics: [] };
-                                if (campaigns.length === 0 || ads.length === 0 || metrics.length === 0) return null;
-
-                                const periodMetrics = metrics.filter(m => 
-                                  m.date.substring(0, 10) >= selectedReport.start_date && m.date.substring(0, 10) <= selectedReport.end_date
-                                );
-                                if (periodMetrics.length === 0) return null;
-
-                                const adStats = ads.map(ad => {
-                                  const adMetrics = periodMetrics.filter(m => m.meta_ads_ad_id === ad.id);
-                                  if (adMetrics.length === 0) return null;
-                                  const camp = campaigns.find(c => c.id === ad.meta_ads_campaign_id);
-                                  
-                                  const spend = adMetrics.reduce((acc, m) => acc + Number(m.spend || 0), 0);
-                                  const impressions = adMetrics.reduce((acc, m) => acc + Number(m.impressions || 0), 0);
-                                  const clicks = adMetrics.reduce((acc, m) => acc + Number(m.clicks || 0), 0);
-                                  const leads = adMetrics.reduce((acc, m) => acc + Number(m.leads || 0), 0);
-                                  const purchases = adMetrics.reduce((acc, m) => acc + Number(m.purchases || 0), 0);
-                                  
-                                  return { ad, campName: camp?.name, spend, impressions, clicks, leads, purchases };
-                                }).filter(Boolean);
-
-                                if (adStats.length === 0) return null;
-
-                                return (
-                                  <div className="pt-6 mt-6 border-t border-indigo-500/30">
-                                    <h4 className="text-sm font-bold uppercase tracking-wider text-indigo-200 mb-4 flex items-center gap-2">
-                                      <Megaphone className="w-4 h-4" /> Desempenho de Anúncios ({adStats.length})
-                                    </h4>
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                      {adStats.map((stat, i) => (
-                                        <div key={i} className="flex flex-col gap-3 bg-indigo-700/30 rounded-2xl p-4 border border-indigo-500/20">
-                                          <div>
-                                            <p className="text-[10px] font-bold uppercase tracking-widest text-indigo-300 mb-1 line-clamp-1">{stat.campName}</p>
-                                            <p className="text-sm font-bold text-white leading-tight line-clamp-2">{stat.ad.name}</p>
-                                          </div>
-                                          <div className="grid grid-cols-3 gap-2 mt-auto">
-                                            <div className="bg-indigo-800/50 rounded-xl p-2 text-center">
-                                              <p className="text-[9px] font-bold text-indigo-300 uppercase">Gasto</p>
-                                              <p className="text-xs font-black text-emerald-400">R$ {stat.spend.toFixed(2)}</p>
-                                            </div>
-                                            <div className="bg-indigo-800/50 rounded-xl p-2 text-center">
-                                              <p className="text-[9px] font-bold text-indigo-300 uppercase">Cliques</p>
-                                              <p className="text-xs font-black text-white">{stat.clicks.toLocaleString()}</p>
-                                            </div>
-                                            <div className="bg-indigo-800/50 rounded-xl p-2 text-center">
-                                              <p className="text-[9px] font-bold text-indigo-300 uppercase">Leads</p>
-                                              <p className="text-xs font-black text-white">{stat.leads.toLocaleString()}</p>
-                                            </div>
-                                          </div>
-                                        </div>
-                                      ))}
-                                    </div>
-                                  </div>
-                                );
-                              })()}
-                            </div>
-                          </Card>
-                        </div>
-
-                        <Card className="p-8 rounded-[40px] border-none bg-white shadow-xl shadow-slate-100">
+                          <Card className="p-8 rounded-[40px] border-none bg-white shadow-xl shadow-slate-100">
                           <div className="flex items-center gap-4 mb-6">
                             <div className="h-12 w-12 rounded-2xl bg-indigo-50 flex items-center justify-center">
                               <BarChart3 className="h-6 w-6 text-indigo-600" />
