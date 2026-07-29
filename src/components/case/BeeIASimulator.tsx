@@ -8,9 +8,35 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card } from "@/components/ui/card";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Textarea } from "@/components/ui/textarea";
+import { Badge } from "@/components/ui/badge";
 import { showError, showSuccess } from "@/utils/toast";
 import { Bot, User, Send, Plus, MessageSquare, ThumbsDown, Activity, CheckCircle2, Sparkles, GraduationCap, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+
+function renderMessageContent(content: string) {
+  const mdImgRegex = /!\[([^\]]*)\]\(([^)]+)\)/g;
+  const parts = [];
+  let lastIdx = 0;
+  let match;
+  
+  while ((match = mdImgRegex.exec(content)) !== null) {
+    if (match.index > lastIdx) {
+      parts.push(<span key={`text-${lastIdx}`}>{content.substring(lastIdx, match.index)}</span>);
+    }
+    parts.push(
+      <div key={`img-${match.index}`} className="my-2">
+        <img src={match[2]} alt={match[1]} className="max-w-full rounded-md max-h-[300px] object-cover" />
+      </div>
+    );
+    lastIdx = mdImgRegex.lastIndex;
+  }
+  
+  if (lastIdx < content.length) {
+    parts.push(<span key={`text-${lastIdx}`}>{content.substring(lastIdx)}</span>);
+  }
+  
+  return parts.length > 0 ? <>{parts}</> : <>{content}</>;
+}
 
 type SimMessage = {
   id: string;
@@ -374,7 +400,7 @@ export function BeeIASimulator({ sessionId, onSelectSession }: { sessionId?: str
                         ? "bg-amber-500 text-white rounded-br-none" 
                         : "bg-white text-slate-800 border border-slate-100 rounded-bl-none dark:bg-slate-800 dark:text-slate-100 dark:border-slate-700"
                     )}>
-                      {m.content}
+                      {renderMessageContent(m.content)}
                       {m.feedback_json?.comment && (
                         <div className="mt-2 pt-2 border-t border-slate-100 dark:border-slate-700 text-xs text-rose-500 dark:text-rose-400 bg-rose-50/50 dark:bg-rose-950/20 p-2 rounded-lg">
                           <strong>Seu feedback:</strong> {m.feedback_json.comment}

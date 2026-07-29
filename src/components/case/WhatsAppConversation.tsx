@@ -13,6 +13,31 @@ import { showError, showSuccess } from "@/utils/toast";
 import { Paperclip, Send, Image as ImageIcon, Mic, Users, MessagesSquare, MapPin, Bot, BotOff, Sparkles, GraduationCap } from "lucide-react";
 import { useMutation } from "@tanstack/react-query";
 
+function renderMessageContent(content: string) {
+  const mdImgRegex = /!\[([^\]]*)\]\(([^)]+)\)/g;
+  const parts = [];
+  let lastIdx = 0;
+  let match;
+  
+  while ((match = mdImgRegex.exec(content)) !== null) {
+    if (match.index > lastIdx) {
+      parts.push(<span key={`text-${lastIdx}`}>{content.substring(lastIdx, match.index)}</span>);
+    }
+    parts.push(
+      <div key={`img-${match.index}`} className="my-2">
+        <img src={match[2]} alt={match[1]} className="max-w-full rounded-md max-h-[300px] object-cover" />
+      </div>
+    );
+    lastIdx = mdImgRegex.lastIndex;
+  }
+  
+  if (lastIdx < content.length) {
+    parts.push(<span key={`text-${lastIdx}`}>{content.substring(lastIdx)}</span>);
+  }
+  
+  return parts.length > 0 ? <>{parts}</> : <>{content}</>;
+}
+
 type WaMessageRow = {
   id: string;
   direction: "inbound" | "outbound";
@@ -1413,7 +1438,7 @@ export function WhatsAppConversation({
                                   : "text-white"
                             )}
                           >
-                            {msgText || "(sem texto)"}
+                            {renderMessageContent(msgText || "") || "(sem texto)"}
                           </div>
                         )}
                         </div>
