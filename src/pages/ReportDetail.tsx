@@ -593,7 +593,7 @@ export default function ReportDetail() {
                               
                               {(() => {
                                 const postsForReport = (metaPostsQ.data || []).filter(p => 
-                                  p.scheduled_at >= selectedReport.start_date && p.scheduled_at <= selectedReport.end_date
+                                  p.scheduled_at.substring(0, 10) >= selectedReport.start_date && p.scheduled_at.substring(0, 10) <= selectedReport.end_date
                                 );
                                 
                                 if (metaPostsQ.isLoading) {
@@ -631,6 +631,65 @@ export default function ReportDetail() {
                                   );
                                 }
                                 return null;
+                              })()}
+
+                              {/* UI Ads Block */}
+                              {(() => {
+                                const { campaigns, ads, metrics } = metaAdsQ.data || { campaigns: [], ads: [], metrics: [] };
+                                if (campaigns.length === 0 || ads.length === 0 || metrics.length === 0) return null;
+
+                                const periodMetrics = metrics.filter(m => 
+                                  m.date.substring(0, 10) >= selectedReport.start_date && m.date.substring(0, 10) <= selectedReport.end_date
+                                );
+                                if (periodMetrics.length === 0) return null;
+
+                                const adStats = ads.map(ad => {
+                                  const adMetrics = periodMetrics.filter(m => m.meta_ads_ad_id === ad.id);
+                                  if (adMetrics.length === 0) return null;
+                                  const camp = campaigns.find(c => c.id === ad.meta_ads_campaign_id);
+                                  
+                                  const spend = adMetrics.reduce((acc, m) => acc + Number(m.spend || 0), 0);
+                                  const impressions = adMetrics.reduce((acc, m) => acc + Number(m.impressions || 0), 0);
+                                  const clicks = adMetrics.reduce((acc, m) => acc + Number(m.clicks || 0), 0);
+                                  const leads = adMetrics.reduce((acc, m) => acc + Number(m.leads || 0), 0);
+                                  const purchases = adMetrics.reduce((acc, m) => acc + Number(m.purchases || 0), 0);
+                                  
+                                  return { ad, campName: camp?.name, spend, impressions, clicks, leads, purchases };
+                                }).filter(Boolean);
+
+                                if (adStats.length === 0) return null;
+
+                                return (
+                                  <div className="pt-6 mt-6 border-t border-indigo-500/30">
+                                    <h4 className="text-sm font-bold uppercase tracking-wider text-indigo-200 mb-4 flex items-center gap-2">
+                                      <Megaphone className="w-4 h-4" /> Desempenho de Anúncios ({adStats.length})
+                                    </h4>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                      {adStats.map((stat, i) => (
+                                        <div key={i} className="flex flex-col gap-3 bg-indigo-700/30 rounded-2xl p-4 border border-indigo-500/20">
+                                          <div>
+                                            <p className="text-[10px] font-bold uppercase tracking-widest text-indigo-300 mb-1 line-clamp-1">{stat.campName}</p>
+                                            <p className="text-sm font-bold text-white leading-tight line-clamp-2">{stat.ad.name}</p>
+                                          </div>
+                                          <div className="grid grid-cols-3 gap-2 mt-auto">
+                                            <div className="bg-indigo-800/50 rounded-xl p-2 text-center">
+                                              <p className="text-[9px] font-bold text-indigo-300 uppercase">Gasto</p>
+                                              <p className="text-xs font-black text-emerald-400">R$ {stat.spend.toFixed(2)}</p>
+                                            </div>
+                                            <div className="bg-indigo-800/50 rounded-xl p-2 text-center">
+                                              <p className="text-[9px] font-bold text-indigo-300 uppercase">Cliques</p>
+                                              <p className="text-xs font-black text-white">{stat.clicks.toLocaleString()}</p>
+                                            </div>
+                                            <div className="bg-indigo-800/50 rounded-xl p-2 text-center">
+                                              <p className="text-[9px] font-bold text-indigo-300 uppercase">Leads</p>
+                                              <p className="text-xs font-black text-white">{stat.leads.toLocaleString()}</p>
+                                            </div>
+                                          </div>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>
+                                );
                               })()}
                             </div>
                           </Card>
