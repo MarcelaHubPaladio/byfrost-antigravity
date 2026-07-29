@@ -78,7 +78,7 @@ export function PortalBlockRenderer({ block, isPremium, isMobile, onRenderInnerB
                     name={content.iconName} 
                     lib={content.iconLib} 
                     style={{ 
-                        color: content.iconColor || '#000000',
+                        color: content.iconColor || 'var(--section-heading-color, #000000)',
                         width: content.iconSize ? `${content.iconSize}px` : '48px',
                         height: content.iconSize ? `${content.iconSize}px` : '48px'
                     }} 
@@ -223,10 +223,10 @@ export function PortalBlockRenderer({ block, isPremium, isMobile, onRenderInnerB
                     <div className={cn("w-full py-4", alignClass)}>
                         {block.content?.link ? (
                             <a href={block.content.link} className="hover:opacity-80 transition-opacity">
-                                <Tag className={sizeClass}>{content}</Tag>
+                                <Tag className={sizeClass} style={{ color: 'var(--section-heading-color, inherit)' }}>{content}</Tag>
                             </a>
                         ) : (
-                            <Tag className={sizeClass}>{content}</Tag>
+                            <Tag className={sizeClass} style={{ color: 'var(--section-heading-color, inherit)' }}>{content}</Tag>
                         )}
                     </div>
                 );
@@ -247,8 +247,12 @@ export function PortalBlockRenderer({ block, isPremium, isMobile, onRenderInnerB
                             )}
                             style={{ 
                                 columnCount: cols > 1 ? cols : undefined, 
-                                columnGap: cols > 1 ? `${gap}px` : undefined 
-                            }}
+                                columnGap: cols > 1 ? `${gap}px` : undefined,
+                                '--tw-prose-body': 'var(--section-text-color, inherit)',
+                                '--tw-prose-headings': 'var(--section-heading-color, inherit)',
+                                '--tw-prose-links': 'var(--section-link-color, inherit)',
+                                color: 'var(--section-text-color, inherit)',
+                            } as React.CSSProperties}
                             dangerouslySetInnerHTML={{ __html: block.content?.text || '<p>Digite seu texto aqui...</p>' }}
                         />
                     </div>

@@ -1635,7 +1635,11 @@ function SortableSectionItem({ section, previewMode, active, onSelect, onRemove,
                     borderRadius: section.settings?.style?.border?.radius ? `${section.settings.style.border.radius}px` : undefined,
                     justifyContent: section.settings?.alignItems === 'middle' ? 'center' : section.settings?.alignItems || 'flex-start',
                     alignItems: section.settings?.justifyContent || 'stretch',
-                }}
+                    '--section-heading-color': section.settings?.typography?.headingColor,
+                    '--section-text-color': section.settings?.typography?.textColor,
+                    '--section-link-color': section.settings?.typography?.linkColor,
+                    '--section-link-hover-color': section.settings?.typography?.linkHoverColor,
+                } as React.CSSProperties}
             >
                 {(section.settings?.style?.background?.overlay?.color || section.settings?.backgroundOverlay) && (
                     <div className="absolute inset-0 z-0" style={{ backgroundColor: section.settings?.style?.background?.overlay?.color || section.settings?.backgroundOverlay }}></div>

@@ -444,7 +444,11 @@ export default function PublicPortal() {
                         paddingRight: isMobile ? '16px' : effectiveSettings.paddingX ? `${effectiveSettings.paddingX}px` : '32px',
                         justifyContent: effectiveSettings.alignItems === 'middle' ? 'center' : effectiveSettings.alignItems || 'flex-start',
                         alignItems: effectiveSettings.justifyContent || 'stretch',
-                    }}
+                        '--section-heading-color': effectiveSettings.typography?.headingColor,
+                        '--section-text-color': effectiveSettings.typography?.textColor,
+                        '--section-link-color': effectiveSettings.typography?.linkColor,
+                        '--section-link-hover-color': effectiveSettings.typography?.linkHoverColor,
+                    } as React.CSSProperties}
                 >
                     {(effectiveSettings.style?.background?.overlay?.color || effectiveSettings.backgroundOverlay) && (
                         <div className="absolute inset-0 z-0" style={{ backgroundColor: effectiveSettings.style?.background?.overlay?.color || effectiveSettings.backgroundOverlay }}></div>

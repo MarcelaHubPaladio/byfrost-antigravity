@@ -471,16 +471,33 @@ export function SectionPropertiesPanel({ section, block, onChange }: { section?:
                                 Tipografia
                             </AccordionTrigger>
                             <AccordionContent className="px-4 pb-4 space-y-4">
-                                {['Cor de cabeçalho', 'Cor de texto', 'Cor do link', 'Cor do link ao passar o mouse'].map(label => (
+                                {[
+                                    { label: 'Cor de cabeçalho', key: 'headingColor' },
+                                    { label: 'Cor de texto', key: 'textColor' },
+                                    { label: 'Cor do link', key: 'linkColor' },
+                                    { label: 'Cor do link ao passar o mouse', key: 'linkHoverColor' }
+                                ].map(({label, key}) => (
                                     <div key={label} className="flex items-center justify-between">
                                         <Label className="text-xs text-slate-600 font-medium">{label}</Label>
-                                        <div className="flex border border-slate-200 rounded-md overflow-hidden shadow-sm">
-                                            <div className="h-7 w-7 bg-white flex items-center justify-center border-r border-slate-200 cursor-pointer hover:bg-slate-50">
-                                                <Globe className="h-3.5 w-3.5 text-slate-400" />
-                                            </div>
-                                            <div className="h-7 w-7 bg-white flex items-center justify-center cursor-pointer relative overflow-hidden hover:bg-slate-50">
-                                                <div className="absolute inset-0 border-t-[1.5px] border-red-500/80 -rotate-45 scale-150"></div>
-                                            </div>
+                                        <div className="flex border border-slate-200 rounded-md overflow-hidden shadow-sm items-center bg-white h-7">
+                                            <input
+                                                type="color"
+                                                className="h-8 w-8 -m-1 p-0 border-0 bg-transparent cursor-pointer"
+                                                value={settings.typography?.[key] || '#000000'}
+                                                onChange={e => updateSettings({ typography: { ...(settings.typography || {}), [key]: e.target.value } })}
+                                            />
+                                            {settings.typography?.[key] && (
+                                                <button 
+                                                    className="px-2 text-slate-400 hover:text-red-500 hover:bg-slate-50 h-full border-l border-slate-200 flex items-center justify-center"
+                                                    onClick={() => {
+                                                        const newTypo = { ...settings.typography };
+                                                        delete newTypo[key];
+                                                        updateSettings({ typography: newTypo });
+                                                    }}
+                                                >
+                                                    <span className="text-[10px]">✕</span>
+                                                </button>
+                                            )}
                                         </div>
                                     </div>
                                 ))}
@@ -488,10 +505,23 @@ export function SectionPropertiesPanel({ section, block, onChange }: { section?:
                                 <div className="flex items-center justify-between pt-2">
                                     <Label className="text-xs text-slate-600 font-medium">Alinhamento de texto</Label>
                                     <div className="flex border border-slate-200 rounded-md overflow-hidden bg-slate-50">
-                                        <button className="p-1.5 hover:bg-slate-200 text-slate-500"><AlignLeft className="h-3.5 w-3.5" /></button>
-                                        <button className="p-1.5 hover:bg-slate-200 text-slate-500"><AlignCenter className="h-3.5 w-3.5" /></button>
-                                        <button className="p-1.5 hover:bg-slate-200 text-slate-500"><AlignRight className="h-3.5 w-3.5" /></button>
-                                        <button className="p-1.5 hover:bg-slate-200 text-slate-500"><AlignJustify className="h-3.5 w-3.5" /></button>
+                                        {[
+                                            { icon: <AlignLeft className="h-3.5 w-3.5" />, value: 'left' },
+                                            { icon: <AlignCenter className="h-3.5 w-3.5" />, value: 'center' },
+                                            { icon: <AlignRight className="h-3.5 w-3.5" />, value: 'right' },
+                                            { icon: <AlignJustify className="h-3.5 w-3.5" />, value: 'justify' }
+                                        ].map(btn => (
+                                            <button 
+                                                key={btn.value}
+                                                onClick={() => updateSettings({ typography: { ...(settings.typography || {}), textAlign: btn.value } })}
+                                                className={cn(
+                                                    "p-1.5 hover:bg-slate-200 transition-colors", 
+                                                    settings.typography?.textAlign === btn.value ? "bg-slate-200 text-blue-600" : "text-slate-500"
+                                                )}
+                                            >
+                                                {btn.icon}
+                                            </button>
+                                        ))}
                                     </div>
                                 </div>
                             </AccordionContent>
