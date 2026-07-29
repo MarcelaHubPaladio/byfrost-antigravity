@@ -1293,8 +1293,20 @@ export default function PortalEditor() {
                         </div>
                         <div className="flex items-center gap-3">
                             <span className="text-sm text-slate-500 font-medium">{page?.title}</span>
-                            <Button variant="outline" size="sm" className="rounded-lg h-9 gap-2" onClick={() => window.open(`/l/${page?.slug}`, '_blank')}>
+                            <div className="h-4 w-[1px] bg-slate-200" />
+                            <Button variant="outline" size="sm" className="rounded-lg h-9 gap-2" onClick={async () => {
+                                await handleSaveAsync();
+                                window.open(`/l/${page?.slug}`, '_blank');
+                            }} disabled={saveM.isPending}>
                                 <Eye className="h-4 w-4" /> Visualizar
+                            </Button>
+                            <Button 
+                                variant="outline" 
+                                size="sm" 
+                                className="rounded-lg h-9 gap-2 text-blue-600 hover:text-blue-700" 
+                                onClick={() => setIsGlobalSettingsOpen(true)}
+                            >
+                                <Settings className="h-4 w-4" /> Configurações Gerais
                             </Button>
                         </div>
                     </div>
@@ -1317,6 +1329,12 @@ export default function PortalEditor() {
                 </div>
             </div>
             {dndOverlay}
+            <GlobalSettingsModal
+                open={isGlobalSettingsOpen}
+                onOpenChange={setIsGlobalSettingsOpen}
+                data={agroforteData}
+                onChange={(updates) => setAgroforteData((prev) => prev ? { ...prev, ...updates } : { _template: 'custom', customSections: sections, ...updates } as any)}
+            />
             </DndContext>
         );
     }
