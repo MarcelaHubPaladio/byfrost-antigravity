@@ -51,7 +51,8 @@ import {
   Bell,
   Hand,
   Headphones,
-  Eye
+  Eye,
+  ImageIcon
 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -62,6 +63,7 @@ import { BeeIASimulator } from "@/components/case/BeeIASimulator";
 import { FaWhatsapp, FaInstagram, FaFacebook } from "react-icons/fa";
 import { LabelsManagerModal } from "@/components/case/LabelsManagerModal";
 import { Tags, Edit2, Check } from "lucide-react";
+import { ImageUpload } from "@/components/portal/ImageUpload";
 
 type CaseRow = {
   id: string;
@@ -3021,6 +3023,9 @@ function BeeIAPlugsTab({
   const [consultingRules, setConsultingRules] = useState("");
   const [googleCalendarId, setGoogleCalendarId] = useState("");
 
+  const [catalogImageUrl, setCatalogImageUrl] = useState("");
+  const [catalogTriggerInstructions, setCatalogTriggerInstructions] = useState("Sempre que o cliente pedir o catálogo, portfólio ou cardápio de produtos.");
+
   const googleCalendarsQ = useQuery({
     queryKey: ["google_calendars"],
     queryFn: async () => {
@@ -3074,6 +3079,14 @@ function BeeIAPlugsTab({
       if (consultingPlug) {
         setConsultingRules(consultingPlug.config_json?.scheduling_rules || "");
         setGoogleCalendarId(consultingPlug.config_json?.google_calendar_id || "");
+      }
+
+      const catalogPlug = plugs.find((p) => p.plug_key === "catalog_image");
+      if (catalogPlug) {
+        setCatalogImageUrl(catalogPlug.config_json?.image_url || "");
+        if (catalogPlug.config_json?.trigger_instructions) {
+          setCatalogTriggerInstructions(catalogPlug.config_json?.trigger_instructions);
+        }
       }
     }
   }, [plugs]);
@@ -3131,6 +3144,13 @@ function BeeIAPlugsTab({
     onSave("consulting_schedule", isPlugEnabled("consulting_schedule"), {
       scheduling_rules: consultingRules,
       google_calendar_id: googleCalendarId,
+    });
+  };
+
+  const handleSaveCatalog = () => {
+    onSave("catalog_image", isPlugEnabled("catalog_image"), {
+      image_url: catalogImageUrl,
+      trigger_instructions: catalogTriggerInstructions,
     });
   };
 
@@ -3687,6 +3707,63 @@ function BeeIAPlugsTab({
                   className="rounded-xl bg-slate-900 text-white font-semibold text-xs px-4 dark:bg-slate-50 dark:text-slate-950"
                 >
                   <Save className="mr-1.5 h-3.5 w-3.5" /> Salvar Configurações
+                </Button>
+              </div>
+            </div>
+          )}
+        </Card>
+
+        {/* Plug 7: Catalog Image */}
+        <Card className="rounded-[22px] border-slate-200/80 p-5 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900 transition-all hover:border-slate-350 dark:hover:border-slate-700">
+          <div className="flex items-center justify-between gap-4 border-b border-slate-100 pb-3 dark:border-slate-850">
+            <div className="flex items-center gap-3">
+              <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-pink-100 text-pink-600 dark:bg-pink-950/40 dark:text-pink-400">
+                <ImageIcon className="h-5 w-5" />
+              </span>
+              <div>
+                <h4 className="font-semibold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+                  Catálogo / Cardápio em Imagem <span className="text-[10px] font-bold bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full dark:bg-amber-900/50 dark:text-amber-400">NOVO</span>
+                </h4>
+                <p className="text-[11px] text-slate-500 mt-0.5">
+                  Permite à IA enviar automaticamente uma imagem com o seu catálogo ou cardápio quando solicitado.
+                </p>
+              </div>
+            </div>
+            <Switch
+              checked={isPlugEnabled("catalog_image")}
+              disabled={isSaving}
+              onCheckedChange={(checked) => handleTogglePlug("catalog_image", checked)}
+            />
+          </div>
+
+          {isPlugEnabled("catalog_image") && (
+            <div className="mt-4 flex flex-col gap-4 animate-in fade-in slide-in-from-top-2 duration-200">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="flex flex-col gap-1.5">
+                  <ImageUpload 
+                    value={catalogImageUrl} 
+                    onChange={setCatalogImageUrl} 
+                    label="Imagem do Catálogo/Cardápio"
+                  />
+                </div>
+
+                <div className="flex flex-col gap-1.5">
+                  <Label className="text-[10px] font-bold uppercase text-slate-400 tracking-wider flex items-center gap-2">
+                    Regra de Envio (Quando notificar?)
+                  </Label>
+                  <Textarea
+                    placeholder="Ex: Sempre que o cliente pedir o catálogo, portfólio ou cardápio de produtos."
+                    value={catalogTriggerInstructions}
+                    onChange={(e) => setCatalogTriggerInstructions(e.target.value)}
+                    className="min-h-[100px] border-slate-200 bg-slate-50 focus-visible:ring-amber-500 dark:border-slate-800 dark:bg-slate-950/50"
+                  />
+                </div>
+              </div>
+
+              <div className="flex justify-end pt-2 border-t border-slate-100 dark:border-slate-850 mt-2">
+                <Button onClick={handleSaveCatalog} disabled={isSaving} className="gap-2 bg-slate-800 hover:bg-slate-700 text-white dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-slate-200 shadow-sm rounded-xl px-6">
+                  <Save className="h-4 w-4" />
+                  Salvar Configuração do Catálogo
                 </Button>
               </div>
             </div>

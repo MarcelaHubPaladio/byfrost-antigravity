@@ -2361,6 +2361,18 @@ serve(async (req: any) => {
             }
           }
 
+          // 7. Catalog Image Plugue
+          const catalogPlug = plugs.find(p => p.plug_key === "catalog_image");
+          if (catalogPlug) {
+            const imageUrl = catalogPlug.config_json?.image_url;
+            const triggerText = catalogPlug.config_json?.trigger_instructions || "Sempre que o cliente pedir o catálogo, portfólio ou cardápio de produtos.";
+            if (imageUrl) {
+              sysPrompt += `\n[INTEGRAÇÃO - CATÁLOGO/CARDÁPIO]:\n`;
+              sysPrompt += `- REGRA DE ENVIO: ${triggerText}\n`;
+              sysPrompt += `- AÇÃO EXIGIDA: Quando a regra acima for atendida, você OBRIGATORIAMENTE deve enviar o catálogo/cardápio em formato de imagem. Para isso, inclua EXATAMENTE o texto em Markdown no meio da sua resposta: ![Catálogo/Cardápio](${imageUrl})\n`;
+            }
+          }
+
           // 3. Fetch wa_instance to verify beeia_enabled is true
           if (!isMeta) {
             const { data: inst, error: instErr } = await supabase
