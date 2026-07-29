@@ -35,7 +35,8 @@ import {
     Maximize,
     AlignCenter,
     StretchHorizontal,
-    AlignLeft
+    AlignLeft,
+    ArrowUp
 } from "lucide-react";
 import {
   Popover,
@@ -1334,6 +1335,8 @@ export default function PortalEditor() {
                 onOpenChange={setIsGlobalSettingsOpen}
                 data={agroforteData}
                 onChange={(updates) => setAgroforteData((prev) => prev ? { ...prev, ...updates } : { _template: 'custom', customSections: sections, ...updates } as any)}
+                onSave={handleSave}
+                isSaving={saveM.isPending}
             />
             </DndContext>
         );
@@ -1532,6 +1535,8 @@ export default function PortalEditor() {
                 onOpenChange={setIsGlobalSettingsOpen}
                 data={agroforteData}
                 onChange={(updates) => setAgroforteData((prev) => prev ? { ...prev, ...updates } : { _template: 'custom', customSections: sections, ...updates } as any)}
+                onSave={handleSave}
+                isSaving={saveM.isPending}
             />
         </DndContext>
     );
@@ -1756,7 +1761,11 @@ function SortableSectionItem({ section, previewMode, active, onSelect, onRemove,
                                                     onUpdate={(updates: any) => onUpdateBlock(block.id, updates)}
                                                     onRemove={() => onRemoveBlock(block.id)}
                                                     onDuplicate={() => onDuplicateBlock(block.id)}
-                                                    onSettingsClick={() => onSettingsClick(block.id)}
+                                                    onSettingsClick={(target?: 'parent' | 'self' | string) => {
+                                                        if (target === 'parent') onSettingsClick();
+                                                        else if (typeof target === 'string' && target !== 'self') onSettingsClick(target);
+                                                        else onSettingsClick(block.id);
+                                                    }}
                                                 />
                                             ))}
                                         </SortableContext>
@@ -1830,7 +1839,10 @@ function SortableBlockItem({ block, sectionId, previewMode, isNested, onUpdate, 
                 <div {...attributes} {...listeners} className="p-1 px-2 hover:bg-slate-50 text-slate-400 hover:text-slate-600 cursor-grab active:cursor-grabbing" title="Arrastar">
                     <GripVertical className="h-3.5 w-3.5" />
                 </div>
-                <button onClick={(e) => { e.stopPropagation(); onSettingsClick(); }} className="p-1 px-2 hover:bg-slate-50 text-slate-400 hover:text-slate-600 transition-colors" title="Configurações">
+                <button onClick={(e) => { e.stopPropagation(); onSettingsClick('parent'); }} className="p-1 px-2 hover:bg-slate-50 text-slate-400 hover:text-blue-600 transition-colors" title="Selecionar Container Pai">
+                    <ArrowUp className="h-3.5 w-3.5" />
+                </button>
+                <button onClick={(e) => { e.stopPropagation(); onSettingsClick('self'); }} className="p-1 px-2 hover:bg-slate-50 text-slate-400 hover:text-slate-600 transition-colors" title="Configurações">
                     <Settings className="h-3.5 w-3.5" />
                 </button>
                 {onDuplicate && (
@@ -1863,6 +1875,11 @@ function SortableBlockItem({ block, sectionId, previewMode, isNested, onUpdate, 
                             onRemove={() => {
                                 const newBlocks = (block.blocks || []).filter((b: any) => b.id !== innerBlock.id);
                                 onUpdate({ blocks: newBlocks });
+                            }}
+                            onSettingsClick={(target?: 'parent' | 'self' | string) => {
+                                if (target === 'parent') onSettingsClick('self');
+                                else if (typeof target === 'string' && target !== 'self') onSettingsClick(target);
+                                else onSettingsClick(innerBlock.id);
                             }}
                             onDuplicate={() => {
                                 const newBlocks = [...(block.blocks || [])];

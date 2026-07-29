@@ -21,6 +21,8 @@ interface GlobalSettingsModalProps {
   onOpenChange: (open: boolean) => void;
   data: AgroForteData | null;
   onChange: (updates: Partial<AgroForteData>) => void;
+  onSave?: () => void;
+  isSaving?: boolean;
 }
 
 const FONTS = [
@@ -34,7 +36,7 @@ const FONTS = [
   'sans-serif'
 ];
 
-export function GlobalSettingsModal({ open, onOpenChange, data, onChange }: GlobalSettingsModalProps) {
+export function GlobalSettingsModal({ open, onOpenChange, data, onChange, onSave, isSaving }: GlobalSettingsModalProps) {
   const globalSettings = data?.globalSettings || {};
   const typography = globalSettings.typography || {};
 
@@ -149,6 +151,18 @@ export function GlobalSettingsModal({ open, onOpenChange, data, onChange }: Glob
               Deixe em branco para usar o tamanho padrão do tema.
             </p>
           </div>
+        </div>
+        <div className="flex justify-end pt-4 border-t mt-4">
+            <button 
+                onClick={() => {
+                    if (onSave) onSave();
+                    onOpenChange(false);
+                }}
+                disabled={isSaving}
+                className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-xl font-bold transition-colors disabled:opacity-50"
+            >
+                {isSaving ? "Salvando..." : "Salvar Alterações"}
+            </button>
         </div>
       </DialogContent>
     </Dialog>
