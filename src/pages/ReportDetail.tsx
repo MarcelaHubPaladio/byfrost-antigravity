@@ -488,7 +488,8 @@ export default function ReportDetail() {
                   {/* Funnel & Main Stats */}
                   <div className="report-main-grid grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
                     {/* Left: Stats & Funnel */}
-                    <Card className="lg:col-span-8 p-8 rounded-[40px] border-none bg-white shadow-xl shadow-slate-100">
+                    <div className="lg:col-span-8 flex flex-col gap-8">
+                      <Card className="p-8 rounded-[40px] border-none bg-white shadow-xl shadow-slate-100">
                       <div className="flex items-center justify-between mb-8">
                         <h3 className="text-lg font-bold flex items-center gap-2">
                           <TrendingUp className="h-5 w-5 text-indigo-500" />
@@ -564,21 +565,6 @@ export default function ReportDetail() {
                              ))}
                       </div>
                     </Card>
-
-                    <div className="lg:col-span-4 flex flex-col gap-6">
-                      <div className="grid grid-cols-1 gap-6">
-                          <Card className="p-8 rounded-[40px] border-none bg-slate-900 text-white shadow-2xl shadow-slate-200">
-                            <div className="flex items-center gap-4 mb-6">
-                              <div className="h-12 w-12 rounded-2xl bg-indigo-500/20 flex items-center justify-center">
-                                <ShoppingCart className="h-6 w-6 text-indigo-400" />
-                              </div>
-                              <h3 className="text-xl font-black uppercase tracking-tight">Produtos Anunciados</h3>
-                            </div>
-                            <p className="text-slate-400 leading-relaxed italic text-lg">
-                              {selectedReport.advertised_products || "Nenhum produto listado para este período."}
-                            </p>
-                          </Card>
-
                           <Card className="p-8 rounded-[40px] border-none bg-indigo-600 text-white shadow-2xl shadow-indigo-100">
                             <div className="flex items-center gap-4 mb-6">
                               <div className="h-12 w-12 rounded-2xl bg-white/10 flex items-center justify-center">
@@ -664,35 +650,78 @@ export default function ReportDetail() {
                                     <h4 className="text-sm font-bold uppercase tracking-wider text-indigo-200 mb-4 flex items-center gap-2">
                                       <Megaphone className="w-4 h-4" /> Desempenho de Anúncios ({adStats.length})
                                     </h4>
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                      {adStats.map((stat, i) => (
-                                        <div key={i} className="flex flex-col gap-3 bg-indigo-700/30 rounded-2xl p-4 border border-indigo-500/20">
-                                          <div>
-                                            <p className="text-[10px] font-bold uppercase tracking-widest text-indigo-300 mb-1 line-clamp-1">{stat.campName}</p>
-                                            <p className="text-sm font-bold text-white leading-tight line-clamp-2">{stat.ad.name}</p>
-                                          </div>
-                                          <div className="grid grid-cols-3 gap-2 mt-auto">
-                                            <div className="bg-indigo-800/50 rounded-xl p-2 text-center">
-                                              <p className="text-[9px] font-bold text-indigo-300 uppercase">Gasto</p>
-                                              <p className="text-xs font-black text-emerald-400">R$ {stat.spend.toFixed(2)}</p>
-                                            </div>
-                                            <div className="bg-indigo-800/50 rounded-xl p-2 text-center">
-                                              <p className="text-[9px] font-bold text-indigo-300 uppercase">Cliques</p>
-                                              <p className="text-xs font-black text-white">{stat.clicks.toLocaleString()}</p>
-                                            </div>
-                                            <div className="bg-indigo-800/50 rounded-xl p-2 text-center">
-                                              <p className="text-[9px] font-bold text-indigo-300 uppercase">Leads</p>
-                                              <p className="text-xs font-black text-white">{stat.leads.toLocaleString()}</p>
-                                            </div>
-                                          </div>
-                                        </div>
-                                      ))}
-                                    </div>
+                                  <div className="overflow-x-auto mt-4">
+                                    <table className="w-full text-left text-sm text-indigo-100">
+                                      <thead>
+                                        <tr className="border-b border-indigo-500/30 text-[10px] uppercase tracking-widest text-indigo-300">
+                                          <th className="py-2 px-3 font-bold">Campanha / Anúncio</th>
+                                          <th className="py-2 px-3 font-bold text-right">Gasto</th>
+                                          <th className="py-2 px-3 font-bold text-right">Cliques</th>
+                                          <th className="py-2 px-3 font-bold text-right">Leads</th>
+                                          <th className="py-2 px-3 font-bold text-right">CPL</th>
+                                        </tr>
+                                      </thead>
+                                      <tbody>
+                                        {adStats.map((stat, i) => {
+                                          const cpl = stat.leads > 0 ? stat.spend / stat.leads : 0;
+                                          return (
+                                            <tr key={i} className="border-b border-indigo-500/10 hover:bg-indigo-700/20">
+                                              <td className="py-3 px-3">
+                                                <p className="text-[10px] text-indigo-300 font-bold uppercase truncate max-w-[250px]">{stat.campName}</p>
+                                                <p className="font-semibold text-white truncate max-w-[250px]">{stat.ad.name}</p>
+                                              </td>
+                                              <td className="py-3 px-3 text-right font-black text-emerald-400 whitespace-nowrap">R$ {stat.spend.toFixed(2)}</td>
+                                              <td className="py-3 px-3 text-right font-bold">{stat.clicks.toLocaleString()}</td>
+                                              <td className="py-3 px-3 text-right font-bold">{stat.leads.toLocaleString()}</td>
+                                              <td className="py-3 px-3 text-right font-bold text-blue-300 whitespace-nowrap">R$ {cpl.toFixed(2)}</td>
+                                            </tr>
+                                          );
+                                        })}
+                                      </tbody>
+                                      <tfoot>
+                                        <tr className="bg-indigo-800/50 text-white font-black text-sm">
+                                          <td className="py-3 px-3">TOTAL</td>
+                                          <td className="py-3 px-3 text-right text-emerald-400 whitespace-nowrap">
+                                            R$ {adStats.reduce((acc, s) => acc + s.spend, 0).toFixed(2)}
+                                          </td>
+                                          <td className="py-3 px-3 text-right">
+                                            {adStats.reduce((acc, s) => acc + s.clicks, 0).toLocaleString()}
+                                          </td>
+                                          <td className="py-3 px-3 text-right">
+                                            {adStats.reduce((acc, s) => acc + s.leads, 0).toLocaleString()}
+                                          </td>
+                                          <td className="py-3 px-3 text-right text-blue-300 whitespace-nowrap">
+                                            {(() => {
+                                              const totalSpend = adStats.reduce((acc, s) => acc + s.spend, 0);
+                                              const totalLeads = adStats.reduce((acc, s) => acc + s.leads, 0);
+                                              return `R$ ${(totalLeads > 0 ? totalSpend / totalLeads : 0).toFixed(2)}`;
+                                            })()}
+                                          </td>
+                                        </tr>
+                                      </tfoot>
+                                    </table>
+                                  </div>
                                   </div>
                                 );
                               })()}
                             </div>
                           </Card>
+                    </div>
+
+                    <div className="lg:col-span-4 flex flex-col gap-6">
+                      <div className="grid grid-cols-1 gap-6">
+                          <Card className="p-8 rounded-[40px] border-none bg-slate-900 text-white shadow-2xl shadow-slate-200">
+                            <div className="flex items-center gap-4 mb-6">
+                              <div className="h-12 w-12 rounded-2xl bg-indigo-500/20 flex items-center justify-center">
+                                <ShoppingCart className="h-6 w-6 text-indigo-400" />
+                              </div>
+                              <h3 className="text-xl font-black uppercase tracking-tight">Produtos Anunciados</h3>
+                            </div>
+                            <p className="text-slate-400 leading-relaxed italic text-lg">
+                              {selectedReport.advertised_products || "Nenhum produto listado para este período."}
+                            </p>
+                          </Card>
+
                         </div>
 
                         <Card className="p-8 rounded-[40px] border-none bg-white shadow-xl shadow-slate-100">
