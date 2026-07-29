@@ -20,6 +20,7 @@ import { useState, useEffect } from "react";
 import { AgroForteRenderer } from "@/components/portal/AgroForteRenderer";
 import { AGROFORTE_DEFAULT } from "@/components/portal/agroforte-types";
 import { PortalBlockRenderer } from "@/components/portal/PortalBlockRenderer";
+import { GlobalTypographyStyles } from "@/components/portal/GlobalTypographyStyles";
 
 type BlockType = 'header' | 'hero' | 'text' | 'image' | 'links' | 'divider' | 'html' | 'slider' | 'info-cards' | 'grid' | 'gallery';
 
@@ -491,13 +492,22 @@ export default function PublicPortal() {
             );
         });
 
-        return <AgroForteRenderer data={agroData} customSectionsMap={customSectionsMap} />;
+        return (
+            <div className="portal-global-root">
+                <GlobalTypographyStyles data={agroData as any} />
+                <AgroForteRenderer data={agroData} customSectionsMap={customSectionsMap} />
+            </div>
+        );
     }
     // ────────────────────────────────────────────────────────────────────────
 
-    const sections: Section[] = (Array.isArray(content) && content.length > 0 && !content[0].blocks)
+    const isCustomTemplate = Array.isArray(content) && content.length > 0 && content[0]?._template === 'custom';
+    const sections: Section[] = isCustomTemplate ? (content[0].customSections || []) : 
+        (Array.isArray(content) && content.length > 0 && !content[0].blocks && !content[0]._template)
         ? [{ id: 'migrated', settings: { paddingY: '12' }, blocks: content as Block[] }]
         : content as Section[];
+
+    const globalData = isCustomTemplate ? content[0] : null;
 
     return (
         <div className={cn(
@@ -526,9 +536,10 @@ export default function PublicPortal() {
             )}
 
             <main className={cn(
-                "relative transition-all duration-700",
+                "relative transition-all duration-700 portal-global-root",
                 isPremium && "lg:pl-[80px]"
             )}>
+                <GlobalTypographyStyles data={globalData} />
                 {sections.map((section: Section) => {
                     const effectiveSettings = getEffectiveSettings(section.settings, section.mobileSettings, isMobile);
                     return (

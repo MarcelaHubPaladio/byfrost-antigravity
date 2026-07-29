@@ -23,6 +23,18 @@ export interface AgroForteData {
   theme: 'dark' | 'light' | 'green' | 'blue';
   layoutOrder?: string[];
   layoutSettings?: Record<string, any>;
+  globalSettings?: {
+    typography?: {
+      fontFamily?: string;
+      h1Size?: string;
+      h2Size?: string;
+      h3Size?: string;
+      h4Size?: string;
+      pSize?: string;
+      iSize?: string;
+      bSize?: string;
+    };
+  };
   brand: {
     name: string;
     tagline: string;

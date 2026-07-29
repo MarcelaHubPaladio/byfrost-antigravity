@@ -58,6 +58,8 @@ import { PortalBlockRenderer } from "@/components/portal/PortalBlockRenderer";
 import { FixedSectionLayoutEditor } from "@/components/portal/FixedSectionLayoutEditor";
 import { BlockPropertiesPanel } from "@/components/portal/BlockPropertiesPanel";
 import { SectionPropertiesPanel } from "@/components/portal/SectionPropertiesPanel";
+import { GlobalSettingsModal } from "@/components/portal/GlobalSettingsModal";
+import { GlobalTypographyStyles } from "@/components/portal/GlobalTypographyStyles";
 import { AGROFORTE_DEFAULT, type AgroForteData } from "@/components/portal/agroforte-types";
 import { useTenant } from "@/providers/TenantProvider";
 import { 
@@ -153,6 +155,7 @@ export default function PortalEditor() {
     const queryClient = useQueryClient();
     const [sections, setSections] = useState<Section[]>([]);
     const [agroforteData, setAgroforteData] = useState<AgroForteData | null>(null);
+    const [isGlobalSettingsOpen, setIsGlobalSettingsOpen] = useState(false);
     const [previewMode, setPreviewMode] = useState<'desktop' | 'mobile'>('desktop');
     const [activeSectionId, setActiveSectionId] = useState<string | null>(null);
     const [activeElementId, setActiveElementId] = useState<string | null>(null);
@@ -258,9 +261,14 @@ export default function PortalEditor() {
                 setSections(content[0].customSections || []);
                 return;
             }
+            if (Array.isArray(content) && content.length > 0 && content[0]?._template === 'custom') {
+                setAgroforteData(content[0]);
+                setSections(content[0].customSections || []);
+                return;
+            }
             setAgroforteData(null);
             // Migration for old structure if necessary
-            if (Array.isArray(content) && content.length > 0 && !content[0].blocks) {
+            if (Array.isArray(content) && content.length > 0 && !content[0].blocks && !content[0]._template) {
                 setSections([{
                     id: 'default-section',
                     settings: { paddingY: '12' },
@@ -1434,6 +1442,14 @@ export default function PortalEditor() {
                             <Eye className="h-4 w-4" /> Visualizar
                         </Button>
                         <Button 
+                            variant="outline" 
+                            size="sm" 
+                            className="rounded-lg h-9 gap-2 text-blue-600 hover:text-blue-700" 
+                            onClick={() => setIsGlobalSettingsOpen(true)}
+                        >
+                            <Settings className="h-4 w-4" /> Configurações Gerais
+                        </Button>
+                        <Button 
                             variant="secondary" 
                             size="sm" 
                             className="rounded-lg h-9 gap-2" 
@@ -1461,7 +1477,8 @@ export default function PortalEditor() {
                         previewMode === 'desktop' ? "w-full max-w-[95%] rounded-[40px]" : "w-[375px] rounded-[60px] border-[12px] border-slate-800"
                     )}>
                         {/* Render Editor Blocks */}
-                        <div className="relative" id="editor-stage">
+                        <div className="relative portal-global-root" id="editor-stage">
+                            <GlobalTypographyStyles data={agroforteData} />
                             {renderCustomSections}
                         </div>
                     </div>
@@ -1491,7 +1508,12 @@ export default function PortalEditor() {
                         </div>
                     )
                 ) : null}
-            </DragOverlay>
+            <GlobalSettingsModal
+                open={isGlobalSettingsOpen}
+                onOpenChange={setIsGlobalSettingsOpen}
+                data={agroforteData}
+                onChange={(updates) => setAgroforteData((prev) => prev ? { ...prev, ...updates } : { _template: 'custom', customSections: sections, ...updates } as any)}
+            />
         </DndContext>
     );
 }
