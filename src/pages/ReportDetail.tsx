@@ -780,7 +780,7 @@ export default function ReportDetail() {
                           {/* Histórico de Postagens */}
                           {(() => {
                             const postsForReport = (metaPostsQ.data || []).filter(p => 
-                              p.scheduled_at >= report.start_date && p.scheduled_at <= report.end_date
+                              p.scheduled_at.substring(0, 10) >= report.start_date && p.scheduled_at.substring(0, 10) <= report.end_date
                             );
                             if (postsForReport.length === 0) return null;
                             return (
@@ -822,7 +822,7 @@ export default function ReportDetail() {
                             if (campaigns.length === 0 || ads.length === 0 || metrics.length === 0) return null;
 
                             const periodMetrics = metrics.filter(m => 
-                              m.date >= report.start_date && m.date <= report.end_date
+                              m.date.substring(0, 10) >= report.start_date && m.date.substring(0, 10) <= report.end_date
                             );
                             if (periodMetrics.length === 0) return null;
 
@@ -1010,7 +1010,7 @@ export default function ReportDetail() {
                       {/* Histórico de Postagens para PDF */}
                       {(() => {
                         const postsForReport = (metaPostsQ.data || []).filter(p => 
-                          p.scheduled_at >= report.start_date && p.scheduled_at <= report.end_date
+                          p.scheduled_at.substring(0, 10) >= report.start_date && p.scheduled_at.substring(0, 10) <= report.end_date
                         );
                         if (postsForReport.length === 0) return null;
                         return (
@@ -1052,7 +1052,7 @@ export default function ReportDetail() {
                             if (campaigns.length === 0 || ads.length === 0 || metrics.length === 0) return null;
 
                             const periodMetrics = metrics.filter(m => 
-                              m.date >= report.start_date && m.date <= report.end_date
+                              m.date.substring(0, 10) >= report.start_date && m.date.substring(0, 10) <= report.end_date
                             );
                             if (periodMetrics.length === 0) return null;
 
