@@ -340,6 +340,29 @@ export default function PortalEditor() {
         });
     };
 
+    const addColumn = (sectionId: string) => {
+        pushHistory();
+        setSections(sections.map(s => {
+            if (s.id !== sectionId) return s;
+            const currentCols = s.columns || [];
+            
+            const newColCount = currentCols.length + 1;
+            const newSize = 100 / newColCount;
+            
+            const newColumns = currentCols.map(c => ({ ...c, size: newSize }));
+            newColumns.push({
+                id: Math.random().toString(36).substr(2, 9),
+                size: newSize,
+                blocks: []
+            });
+            
+            return {
+                ...s,
+                columns: newColumns
+            };
+        }));
+    };
+
     const addBlock = (sectionId: string, type: BlockType, colId?: string) => {
         pushHistory();
         let content = {};
@@ -966,6 +989,7 @@ export default function PortalEditor() {
                                         onUpdateSettings={(settings: any) => updateSectionSettings(customSection.id, settings)}
                                         onUpdateBlock={(blockId: string, updates: any) => updateBlock(customSection.id, blockId, updates)}
                                         onRemoveBlock={(blockId: string) => removeBlock(customSection.id, blockId)}
+                                        onAddColumn={() => addColumn(customSection.id)}
                                         onSettingsClick={(blockId?: string) => {
                                             if (blockId) {
                                                 setActiveSettingsTarget({ type: 'block', id: customSection.id, blockId });
@@ -1548,7 +1572,7 @@ function DroppableEmptyColumn({ sectionId, colId, onAddWidgetClick }: { sectionI
     );
 }
 
-function SortableSectionItem({ section, previewMode, active, onSelect, onRemove, onUpdateSettings, onUpdateBlock, onRemoveBlock, onAddSectionAbove, onAddSectionBelow, onSettingsClick, onAddWidgetClick, onResizeStart }: any) {
+function SortableSectionItem({ section, previewMode, active, onSelect, onRemove, onUpdateSettings, onUpdateBlock, onRemoveBlock, onAddSectionAbove, onAddSectionBelow, onSettingsClick, onAddWidgetClick, onResizeStart, onAddColumn }: any) {
     const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: section.id });
     const style = { transform: CSS.Transform.toString(transform), transition, zIndex: isDragging ? 50 : 1, opacity: isDragging ? 0.8 : 1 };
     const sectionPadding = section.settings?.paddingY || '12';
@@ -1559,6 +1583,11 @@ function SortableSectionItem({ section, previewMode, active, onSelect, onRemove,
                 <div onClick={(e) => { e.stopPropagation(); onSettingsClick(); }} className="px-3 h-full flex items-center text-[10px] font-bold uppercase tracking-widest text-blue-600 bg-blue-50/50 cursor-pointer hover:bg-blue-100 transition-colors">
                     Seção Livre
                 </div>
+                {section.columns && (
+                    <button onClick={(e) => { e.stopPropagation(); onAddColumn?.(); }} className="p-1.5 px-3 hover:bg-slate-50 transition-colors text-slate-400 hover:text-slate-600 focus:outline-none" title="Adicionar Coluna">
+                        <Plus className="h-4 w-4" />
+                    </button>
+                )}
                 <button onClick={(e) => { e.stopPropagation(); onSettingsClick(); }} className="p-1.5 px-3 hover:bg-slate-50 transition-colors text-slate-400 hover:text-slate-600 focus:outline-none" title="Configurações">
                     <Settings className="h-4 w-4" />
                 </button>
