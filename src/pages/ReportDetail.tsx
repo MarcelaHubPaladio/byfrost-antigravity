@@ -352,8 +352,7 @@ export default function ReportDetail() {
           quality: 1,
           pixelRatio: 2,
           backgroundColor: '#fff',
-          width: 1200,
-          height: 800
+          width: 1200
         });
         const link = document.createElement('a');
         link.download = `Relatorio-${contractData?.customer?.display_name}-${report.period_name}.png`;
@@ -395,17 +394,19 @@ export default function ReportDetail() {
               .no-print { display: none !important; }
               
               .report-page {
-                height: 100vh !important;
                 width: 100vw !important;
+                min-height: 100vh !important;
                 margin: 0 !important;
                 padding: 1.5rem 2rem !important;
                 box-sizing: border-box !important;
                 display: flex !important;
                 flex-direction: column !important;
                 page-break-after: always !important;
-                page-break-inside: avoid !important;
                 background: white !important;
-                overflow: hidden !important;
+              }
+              .print-section {
+                page-break-inside: avoid !important;
+                break-inside: avoid !important;
               }
 
               .text-slate-900 { color: #0f172a !important; }
@@ -819,7 +820,7 @@ export default function ReportDetail() {
                           {/* Main Content Area: Funnel & Indicators Side-by-Side */}
                           <div className="flex gap-8 flex-1 min-h-0 overflow-hidden items-stretch">
                             {/* Left: Funnel */}
-                            <div className="flex-[1.8] flex flex-col">
+                            <div className="flex-[1.8] flex flex-col print-section">
                               <h3 className="text-xl font-black uppercase tracking-tighter mb-4 flex items-center gap-3 text-slate-800">
                                 <TrendingUp className="h-6 w-6 text-indigo-600" />
                                 Funil de Conversão
@@ -832,7 +833,7 @@ export default function ReportDetail() {
                             </div>
 
                             {/* Right: Performance Grid */}
-                            <div className="flex-1 flex flex-col">
+                            <div className="flex-1 flex flex-col print-section">
                               <h3 className="text-xl font-black uppercase tracking-tighter mb-4 flex items-center gap-3 text-slate-800">
                                 <BarChart3 className="h-6 w-6 text-indigo-600" />
                                 Indicadores
@@ -905,7 +906,7 @@ export default function ReportDetail() {
                                 </h3>
                                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
                                   {postsForReport.map(post => (
-                                    <div key={post.id} className="flex gap-4 p-4 rounded-3xl bg-slate-50 border border-slate-100 items-center">
+                                    <div key={post.id} className="flex gap-4 p-4 rounded-3xl bg-slate-50 border border-slate-100 items-center print-section">
                                       {post.media_url ? (
                                         <div className="w-16 h-16 shrink-0 rounded-2xl overflow-hidden bg-slate-200">
                                           <img src={post.media_url} alt="Post" className="w-full h-full object-cover" />
@@ -957,14 +958,14 @@ export default function ReportDetail() {
                             if (adStats.length === 0) return null;
 
                             return (
-                              <div className="mt-8 pt-8 border-t border-slate-100 break-inside-avoid">
+                              <div className="mt-8 pt-8 border-t border-slate-100">
                                 <h3 className="text-lg font-bold flex items-center gap-2 mb-6 text-slate-800">
                                   <Megaphone className="h-5 w-5 text-amber-500" />
                                   Desempenho de Anúncios (Meta Ads)
                                 </h3>
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                   {adStats.map((stat, i) => (
-                                    <div key={i} className="bg-amber-50/30 border border-amber-100 rounded-2xl p-4 flex flex-col gap-3">
+                                    <div key={i} className="bg-amber-50/30 border border-amber-100 rounded-2xl p-4 flex flex-col gap-3 print-section">
                                       <div>
                                         <p className="text-[10px] font-bold uppercase tracking-widest text-amber-600 mb-1">{stat.campName}</p>
                                         <p className="text-sm font-bold text-slate-800 leading-tight">{stat.ad.name}</p>
@@ -1099,7 +1100,7 @@ export default function ReportDetail() {
                         </div>
                       </div>
 
-                      <div className="grid grid-cols-2 gap-4 mt-6">
+                      <div className="grid grid-cols-2 gap-4 mt-6 print-section">
                         <div className="p-4 rounded-[30px] bg-slate-900 text-white flex flex-col gap-2">
                           <div className="flex items-center gap-3">
                             <ShoppingCart className="h-4 w-4 text-indigo-400" />
@@ -1128,14 +1129,14 @@ export default function ReportDetail() {
                         );
                         if (postsForReport.length === 0) return null;
                         return (
-                          <div className="mt-8 pt-8 border-t border-slate-100">
+                          <div className="mt-8 pt-8 border-t border-slate-100 print-section">
                             <h3 className="text-lg font-bold flex items-center gap-2 mb-6 text-slate-800">
                               <Camera className="h-5 w-5 text-indigo-500" />
                               Postagens do Período ({postsForReport.length})
                             </h3>
                             <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                               {postsForReport.map(post => (
-                                <div key={post.id} className="flex gap-4 p-4 rounded-3xl bg-slate-50 border border-slate-100 items-center break-inside-avoid">
+                                <div key={post.id} className="flex gap-4 p-4 rounded-3xl bg-slate-50 border border-slate-100 items-center print-section">
                                   {post.media_url ? (
                                     <div className="w-16 h-16 shrink-0 rounded-2xl overflow-hidden bg-slate-200">
                                       <img src={post.media_url} alt="Post" className="w-full h-full object-cover" />
@@ -1187,7 +1188,7 @@ export default function ReportDetail() {
                             if (adStats.length === 0) return null;
 
                             return (
-                              <div className="mt-8 pt-8 border-t border-slate-100 break-inside-avoid">
+                              <div className="mt-8 pt-8 border-t border-slate-100">
                                 <h3 className="text-lg font-bold flex items-center gap-2 mb-6 text-slate-800">
                                   <Megaphone className="h-5 w-5 text-amber-500" />
                                   Desempenho de Anúncios (Meta Ads)
