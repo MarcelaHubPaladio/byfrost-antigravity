@@ -26,7 +26,9 @@ import {
   User,
   Percent,
   Camera,
-  Check
+  Check,
+  Megaphone,
+  Zap
 } from "lucide-react";
 import { format } from "date-fns";
 import { toPng } from 'html-to-image';
@@ -161,6 +163,38 @@ export default function ReportDetail() {
       if (error) throw error;
       return data || [];
     },
+  });
+
+  const metaAdsQ = useQuery({
+    queryKey: ["meta_ads_for_report", activeTenantId],
+    enabled: Boolean(activeTenantId),
+    queryFn: async () => {
+      const { data: accounts } = await supabase
+        .from("meta_ads_accounts")
+        .select("id")
+        .eq("tenant_id", activeTenantId!);
+      if (!accounts || accounts.length === 0) return { campaigns: [], ads: [], metrics: [] };
+
+      const accIds = accounts.map(a => a.id);
+      const { data: campaigns } = await supabase
+        .from("meta_ads_campaigns")
+        .select("id, name")
+        .in("meta_ads_account_id", accIds);
+      if (!campaigns || campaigns.length === 0) return { campaigns: [], ads: [], metrics: [] };
+
+      const campIds = campaigns.map(c => c.id);
+      const { data: ads } = await supabase
+        .from("meta_ads_ads")
+        .select("id, meta_ads_campaign_id, name")
+        .in("meta_ads_campaign_id", campIds);
+
+      const { data: metrics } = await supabase
+        .from("meta_ads_metrics_daily")
+        .select("*")
+        .in("campaign_id", campIds);
+
+      return { campaigns, ads: ads || [], metrics: metrics || [] };
+    }
   });
 
   const units = useMemo(() => {
@@ -392,6 +426,7 @@ export default function ReportDetail() {
                       onSave={(data) => upsertReportM.mutate(data)} 
                       isLoading={upsertReportM.isPending}
                       existingUnits={units}
+                      metaAds={metaAdsQ.data}
                     />
                   </Dialog>
                 </div>
@@ -471,6 +506,7 @@ export default function ReportDetail() {
                                  onSave={(data) => upsertReportM.mutate({ ...data, id: selectedReport?.id })} 
                                  isLoading={upsertReportM.isPending}
                                  existingUnits={units}
+                                 metaAds={metaAdsQ.data}
                               />
                            </Dialog>
                            <Button 
@@ -737,40 +773,108 @@ export default function ReportDetail() {
                                 {report.production_notes || "Nenhuma nota de produção cadastrada."}
                               </p>
                               
-                              {(() => {
-                                const postsForReport = (metaPostsQ.data || []).filter(p => 
-                                  p.scheduled_at >= report.start_date && p.scheduled_at <= report.end_date
-                                );
-                                
-                                if (postsForReport.length > 0) {
-                                  return (
-                                    <div className="mt-2 pt-2 border-t border-indigo-500/30">
-                                      <h4 className="text-[8px] font-bold uppercase tracking-wider text-indigo-200 mb-2 flex items-center gap-1">
-                                        Posts ({postsForReport.length})
-                                      </h4>
-                                      <div className="grid grid-cols-2 gap-2">
-                                        {postsForReport.slice(0, 4).map(post => (
-                                          <div key={post.id} className="flex gap-2 bg-indigo-700/30 rounded p-2 border border-indigo-500/20">
-                                            {post.media_url && (
-                                              <div className="w-8 h-8 shrink-0 rounded overflow-hidden bg-indigo-800">
-                                                <img src={post.media_url} alt="Post" className="w-full h-full object-cover" />
-                                              </div>
-                                            )}
-                                            <div className="flex-1 min-w-0">
-                                              <p className="text-[7px] text-indigo-50 line-clamp-2 leading-snug">
-                                                {post.message}
-                                              </p>
-                                            </div>
-                                          </div>
-                                        ))}
-                                      </div>
-                                    </div>
-                                  );
-                                }
-                                return null;
-                              })()}
+
                             </div>
                           </div>
+
+                          {/* Histórico de Postagens */}
+                          {(() => {
+                            const postsForReport = (metaPostsQ.data || []).filter(p => 
+                              p.scheduled_at >= report.start_date && p.scheduled_at <= report.end_date
+                            );
+                            if (postsForReport.length === 0) return null;
+                            return (
+                              <div className="mt-8 pt-8 border-t border-slate-100">
+                                <h3 className="text-lg font-bold flex items-center gap-2 mb-6 text-slate-800">
+                                  <Camera className="h-5 w-5 text-indigo-500" />
+                                  Postagens do Período ({postsForReport.length})
+                                </h3>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                                  {postsForReport.map(post => (
+                                    <div key={post.id} className="flex gap-4 p-4 rounded-3xl bg-slate-50 border border-slate-100 items-center">
+                                      {post.media_url ? (
+                                        <div className="w-16 h-16 shrink-0 rounded-2xl overflow-hidden bg-slate-200">
+                                          <img src={post.media_url} alt="Post" className="w-full h-full object-cover" />
+                                        </div>
+                                      ) : (
+                                        <div className="w-16 h-16 shrink-0 rounded-2xl bg-slate-200 flex items-center justify-center">
+                                          <Camera className="h-6 w-6 text-slate-400" />
+                                        </div>
+                                      )}
+                                      <div className="flex-1 min-w-0">
+                                        <p className="text-xs font-medium text-slate-700 line-clamp-2 leading-snug">
+                                          {post.message || "Sem legenda..."}
+                                        </p>
+                                        <p className="text-[10px] text-slate-400 mt-1 font-bold uppercase tracking-wider">
+                                          {format(new Date(post.scheduled_at), "dd/MM/yyyy HH:mm")}
+                                        </p>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            );
+                          })()}
+
+                          {/* Desempenho de Anúncios */}
+                          {(() => {
+                            const { campaigns, ads, metrics } = metaAdsQ.data || { campaigns: [], ads: [], metrics: [] };
+                            if (campaigns.length === 0 || ads.length === 0 || metrics.length === 0) return null;
+
+                            const periodMetrics = metrics.filter(m => 
+                              m.date >= report.start_date && m.date <= report.end_date
+                            );
+                            if (periodMetrics.length === 0) return null;
+
+                            const adStats = ads.map(ad => {
+                              const adMetrics = periodMetrics.filter(m => m.meta_ads_ad_id === ad.id);
+                              if (adMetrics.length === 0) return null;
+                              const camp = campaigns.find(c => c.id === ad.meta_ads_campaign_id);
+                              
+                              const spend = adMetrics.reduce((acc, m) => acc + Number(m.spend || 0), 0);
+                              const impressions = adMetrics.reduce((acc, m) => acc + Number(m.impressions || 0), 0);
+                              const clicks = adMetrics.reduce((acc, m) => acc + Number(m.clicks || 0), 0);
+                              const leads = adMetrics.reduce((acc, m) => acc + Number(m.leads || 0), 0);
+                              const purchases = adMetrics.reduce((acc, m) => acc + Number(m.purchases || 0), 0);
+                              
+                              return { ad, campName: camp?.name, spend, impressions, clicks, leads, purchases };
+                            }).filter(Boolean);
+
+                            if (adStats.length === 0) return null;
+
+                            return (
+                              <div className="mt-8 pt-8 border-t border-slate-100 break-inside-avoid">
+                                <h3 className="text-lg font-bold flex items-center gap-2 mb-6 text-slate-800">
+                                  <Megaphone className="h-5 w-5 text-amber-500" />
+                                  Desempenho de Anúncios (Meta Ads)
+                                </h3>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                  {adStats.map((stat, i) => (
+                                    <div key={i} className="bg-amber-50/30 border border-amber-100 rounded-2xl p-4 flex flex-col gap-3">
+                                      <div>
+                                        <p className="text-[10px] font-bold uppercase tracking-widest text-amber-600 mb-1">{stat.campName}</p>
+                                        <p className="text-sm font-bold text-slate-800 leading-tight">{stat.ad.name}</p>
+                                      </div>
+                                      <div className="grid grid-cols-3 gap-2 mt-auto">
+                                        <div className="bg-white rounded-xl p-2 border border-slate-100 text-center">
+                                          <p className="text-[9px] font-bold text-slate-400 uppercase">Gasto</p>
+                                          <p className="text-xs font-black text-amber-600">R$ {stat.spend.toFixed(2)}</p>
+                                        </div>
+                                        <div className="bg-white rounded-xl p-2 border border-slate-100 text-center">
+                                          <p className="text-[9px] font-bold text-slate-400 uppercase">Cliques</p>
+                                          <p className="text-xs font-black text-slate-700">{stat.clicks.toLocaleString()}</p>
+                                        </div>
+                                        <div className="bg-white rounded-xl p-2 border border-slate-100 text-center">
+                                          <p className="text-[9px] font-bold text-slate-400 uppercase">Leads</p>
+                                          <p className="text-xs font-black text-emerald-600">{stat.leads.toLocaleString()}</p>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            );
+                          })()}
 
                           {/* Footer Info */}
                           <div className="mt-4 pt-3 border-t border-slate-100 flex justify-between items-center text-slate-400 text-[8px]">
@@ -808,7 +912,7 @@ export default function ReportDetail() {
                 ];
 
                 return (
-                  <div key={report.id} id={`report-slide-capture-${report.id}`} style={{ width: '1200px', height: '800px' }} className="bg-white p-10 flex flex-col">
+                  <div key={report.id} id={`report-slide-capture-${report.id}`} style={{ width: '1200px', minHeight: '800px', height: 'auto' }} className="bg-white p-10 flex flex-col">
                       {/* High Impact Header */}
                       <div className="mb-6 border-b-2 border-slate-900 pb-6 flex justify-between items-end">
                         <div className="flex-1">
@@ -899,40 +1003,107 @@ export default function ReportDetail() {
                           <p className="text-[10px] opacity-90 leading-relaxed italic line-clamp-2">
                             {report.production_notes || "Nenhuma nota de produção cadastrada."}
                           </p>
-                          {(() => {
-                              const postsForReport = (metaPostsQ.data || []).filter(p => 
-                                p.scheduled_at >= report.start_date && p.scheduled_at <= report.end_date
-                              );
-                              
-                              if (postsForReport.length > 0) {
-                                return (
-                                  <div className="mt-2 pt-2 border-t border-indigo-500/30">
-                                    <h4 className="text-[8px] font-bold uppercase tracking-wider text-indigo-200 mb-2 flex items-center gap-1">
-                                      Posts ({postsForReport.length})
-                                    </h4>
-                                    <div className="grid grid-cols-2 gap-2">
-                                      {postsForReport.slice(0, 4).map(post => (
-                                        <div key={post.id} className="flex gap-2 bg-indigo-700/30 rounded p-2 border border-indigo-500/20">
-                                          {post.media_url && (
-                                            <div className="w-8 h-8 shrink-0 rounded overflow-hidden bg-indigo-800">
-                                              <img src={post.media_url} alt="Post" className="w-full h-full object-cover" />
-                                            </div>
-                                          )}
-                                          <div className="flex-1 min-w-0">
-                                            <p className="text-[7px] text-indigo-50 line-clamp-2 leading-snug">
-                                              {post.message}
-                                            </p>
-                                          </div>
-                                        </div>
-                                      ))}
-                                    </div>
-                                  </div>
-                                );
-                              }
-                              return null;
-                            })()}
+
                         </div>
                       </div>
+
+                      {/* Histórico de Postagens para PDF */}
+                      {(() => {
+                        const postsForReport = (metaPostsQ.data || []).filter(p => 
+                          p.scheduled_at >= report.start_date && p.scheduled_at <= report.end_date
+                        );
+                        if (postsForReport.length === 0) return null;
+                        return (
+                          <div className="mt-8 pt-8 border-t border-slate-100">
+                            <h3 className="text-lg font-bold flex items-center gap-2 mb-6 text-slate-800">
+                              <Camera className="h-5 w-5 text-indigo-500" />
+                              Postagens do Período ({postsForReport.length})
+                            </h3>
+                            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                              {postsForReport.map(post => (
+                                <div key={post.id} className="flex gap-4 p-4 rounded-3xl bg-slate-50 border border-slate-100 items-center break-inside-avoid">
+                                  {post.media_url ? (
+                                    <div className="w-16 h-16 shrink-0 rounded-2xl overflow-hidden bg-slate-200">
+                                      <img src={post.media_url} alt="Post" className="w-full h-full object-cover" />
+                                    </div>
+                                  ) : (
+                                    <div className="w-16 h-16 shrink-0 rounded-2xl bg-slate-200 flex items-center justify-center">
+                                      <Camera className="h-6 w-6 text-slate-400" />
+                                    </div>
+                                  )}
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-xs font-medium text-slate-700 line-clamp-2 leading-snug">
+                                      {post.message || "Sem legenda..."}
+                                    </p>
+                                    <p className="text-[10px] text-slate-400 mt-1 font-bold uppercase tracking-wider">
+                                      {format(new Date(post.scheduled_at), "dd/MM/yyyy HH:mm")}
+                                    </p>
+                                  </div>
+                                </div>
+                              ))}
+                              </div>
+                            );
+                          })()}
+
+                          {/* Desempenho de Anúncios para PDF */}
+                          {(() => {
+                            const { campaigns, ads, metrics } = metaAdsQ.data || { campaigns: [], ads: [], metrics: [] };
+                            if (campaigns.length === 0 || ads.length === 0 || metrics.length === 0) return null;
+
+                            const periodMetrics = metrics.filter(m => 
+                              m.date >= report.start_date && m.date <= report.end_date
+                            );
+                            if (periodMetrics.length === 0) return null;
+
+                            const adStats = ads.map(ad => {
+                              const adMetrics = periodMetrics.filter(m => m.meta_ads_ad_id === ad.id);
+                              if (adMetrics.length === 0) return null;
+                              const camp = campaigns.find(c => c.id === ad.meta_ads_campaign_id);
+                              
+                              const spend = adMetrics.reduce((acc, m) => acc + Number(m.spend || 0), 0);
+                              const impressions = adMetrics.reduce((acc, m) => acc + Number(m.impressions || 0), 0);
+                              const clicks = adMetrics.reduce((acc, m) => acc + Number(m.clicks || 0), 0);
+                              const leads = adMetrics.reduce((acc, m) => acc + Number(m.leads || 0), 0);
+                              const purchases = adMetrics.reduce((acc, m) => acc + Number(m.purchases || 0), 0);
+                              
+                              return { ad, campName: camp?.name, spend, impressions, clicks, leads, purchases };
+                            }).filter(Boolean);
+
+                            if (adStats.length === 0) return null;
+
+                            return (
+                              <div className="mt-8 pt-8 border-t border-slate-100 break-inside-avoid">
+                                <h3 className="text-lg font-bold flex items-center gap-2 mb-6 text-slate-800">
+                                  <Megaphone className="h-5 w-5 text-amber-500" />
+                                  Desempenho de Anúncios (Meta Ads)
+                                </h3>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                  {adStats.map((stat, i) => (
+                                    <div key={i} className="bg-amber-50/30 border border-amber-100 rounded-2xl p-4 flex flex-col gap-3 break-inside-avoid">
+                                      <div>
+                                        <p className="text-[10px] font-bold uppercase tracking-widest text-amber-600 mb-1">{stat.campName}</p>
+                                        <p className="text-sm font-bold text-slate-800 leading-tight">{stat.ad.name}</p>
+                                      </div>
+                                      <div className="grid grid-cols-3 gap-2 mt-auto">
+                                        <div className="bg-white rounded-xl p-2 border border-slate-100 text-center">
+                                          <p className="text-[9px] font-bold text-slate-400 uppercase">Gasto</p>
+                                          <p className="text-xs font-black text-amber-600">R$ {stat.spend.toFixed(2)}</p>
+                                        </div>
+                                        <div className="bg-white rounded-xl p-2 border border-slate-100 text-center">
+                                          <p className="text-[9px] font-bold text-slate-400 uppercase">Cliques</p>
+                                          <p className="text-xs font-black text-slate-700">{stat.clicks.toLocaleString()}</p>
+                                        </div>
+                                        <div className="bg-white rounded-xl p-2 border border-slate-100 text-center">
+                                          <p className="text-[9px] font-bold text-slate-400 uppercase">Leads</p>
+                                          <p className="text-xs font-black text-emerald-600">{stat.leads.toLocaleString()}</p>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            );
+                          })()}
                   </div>
                 );
              })}
@@ -1036,7 +1207,7 @@ function PrintSelectionDialog({
   );
 }
 
-function ReportFormDialog({ onSave, isLoading, initialData, existingUnits = [] }: { onSave: (data: any) => void, isLoading: boolean, initialData?: EntityReport, existingUnits?: string[] }) {
+function ReportFormDialog({ onSave, isLoading, initialData, existingUnits = [], metaAds }: { onSave: (data: any) => void, isLoading: boolean, initialData?: EntityReport, existingUnits?: string[], metaAds?: any }) {
     const [formData, setFormData] = useState({
         unit_name: "Geral",
         period_name: "",
@@ -1156,7 +1327,43 @@ function ReportFormDialog({ onSave, isLoading, initialData, existingUnits = [] }
                 </div>
 
                 <div className="space-y-4 bg-slate-50 p-6 rounded-3xl dark:bg-slate-900/50">
-                    <h4 className="text-xs font-black text-slate-500 uppercase tracking-widest mb-4">Métricas do Funil</h4>
+                    <div className="flex items-center justify-between mb-4">
+                        <h4 className="text-xs font-black text-slate-500 uppercase tracking-widest">Métricas do Funil</h4>
+                        {metaAds && (
+                            <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                className="h-7 text-[10px] gap-1.5 rounded-full border-amber-200 text-amber-700 bg-amber-50 hover:bg-amber-100"
+                                onClick={() => {
+                                    if (!metaAds.metrics) return;
+                                    const periodMetrics = metaAds.metrics.filter((m: any) => m.date >= formData.start_date && m.date <= formData.end_date);
+                                    if (periodMetrics.length === 0) {
+                                        showError("Nenhuma métrica de anúncio encontrada no período selecionado.");
+                                        return;
+                                    }
+                                    const spend = periodMetrics.reduce((acc: number, m: any) => acc + Number(m.spend || 0), 0);
+                                    const impressions = periodMetrics.reduce((acc: number, m: any) => acc + Number(m.impressions || 0), 0);
+                                    const clicks = periodMetrics.reduce((acc: number, m: any) => acc + Number(m.clicks || 0), 0);
+                                    const leads = periodMetrics.reduce((acc: number, m: any) => acc + Number(m.leads || 0), 0);
+                                    const purchases = periodMetrics.reduce((acc: number, m: any) => acc + Number(m.purchases || 0), 0);
+                                    
+                                    setFormData({
+                                        ...formData,
+                                        visualizations: impressions,
+                                        profile_visits: clicks,
+                                        initiated_conversations: leads,
+                                        tracked_sales: purchases,
+                                        ad_spend: spend
+                                    });
+                                    showSuccess("Métricas do Meta Ads sincronizadas!");
+                                }}
+                            >
+                                <Zap className="h-3 w-3 text-amber-500" />
+                                Preencher com Meta Ads
+                            </Button>
+                        )}
+                    </div>
                     <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
                             <Label className="flex items-center gap-1.5"><Eye className="h-3 w-3" /> Visualizações</Label>
