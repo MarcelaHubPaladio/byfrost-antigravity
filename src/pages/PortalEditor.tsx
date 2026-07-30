@@ -1248,6 +1248,8 @@ export default function PortalEditor() {
         </DragOverlay>
     );
 
+    const layerItems = useMemo(() => layoutOrder.map(id => 'layer-' + id), [layoutOrder]);
+
     const layersSheet = (
         <Sheet open={isLayersOpen} onOpenChange={setIsLayersOpen}>
             <SheetContent side="right" className="w-[300px] p-0 flex flex-col bg-slate-50 border-l-slate-200">
@@ -1257,7 +1259,7 @@ export default function PortalEditor() {
                     </SheetTitle>
                 </SheetHeader>
                 <div className="flex-1 overflow-y-auto p-4">
-                    <SortableContext items={layoutOrder.map(id => 'layer-' + id)} strategy={verticalListSortingStrategy}>
+                    <SortableContext items={layerItems} strategy={verticalListSortingStrategy}>
                         <div className="space-y-2">
                             {layoutOrder.map((id) => {
                                 let label = id;
@@ -1910,6 +1912,14 @@ function SortableSectionItem({ section, previewMode, active, onSelect, onRemove,
     const style = { transform: CSS.Transform.toString(transform), transition, zIndex: isDragging ? 50 : 1, opacity: isDragging ? 0.8 : 1 };
     const sectionPadding = section.settings?.paddingY || '12';
 
+    const columnItemsLists = useMemo(() => {
+        return section.columns?.map((col: any) => (col.blocks || []).map((b: any) => b.id)) || [];
+    }, [section.columns]);
+
+    const sectionItems = useMemo(() => {
+        return (section.blocks || []).map((b: any) => b.id);
+    }, [section.blocks]);
+
     return (
         <div id={`section-${section.id}`} ref={setNodeRef} style={style} className={cn("group relative border-2 transition-all mb-8 rounded-[32px]", active ? "border-blue-500 bg-blue-50/50 ring-4 ring-blue-500/20" : "border-transparent hover:border-blue-500/50")} onClick={(e) => { e.stopPropagation(); onSettingsClick(); }}>
             <div className={cn("absolute right-6 top-0 z-50 bg-white border border-slate-200 text-slate-700 rounded-b-xl shadow-xl flex items-center h-8 transition-all overflow-hidden divide-x divide-slate-100", active ? "translate-y-0 opacity-100" : "opacity-0 group-hover:opacity-100 translate-y-[-100%] group-hover:translate-y-0")}>
@@ -2006,7 +2016,7 @@ function SortableSectionItem({ section, previewMode, active, onSelect, onRemove,
                                         width: previewMode === 'mobile' ? '100%' : `${col.size}%`,
                                         alignItems: 'stretch'
                                     }} className="flex flex-col gap-4 relative group/col">
-                                        <SortableContext items={(col.blocks || []).map((b: any) => b.id)} strategy={verticalListSortingStrategy}>
+                                        <SortableContext items={columnItemsLists[colIdx] || []} strategy={verticalListSortingStrategy}>
                                             {(col.blocks || []).map((block: any) => (
                                                 <SortableBlockItem 
                                                     key={block.id} 
@@ -2056,7 +2066,7 @@ function SortableSectionItem({ section, previewMode, active, onSelect, onRemove,
                         ) : (
                             // Legacy blocks
                             <div className="w-full flex flex-col gap-4">
-                                <SortableContext items={(section.blocks || []).map((b: any) => b.id)} strategy={verticalListSortingStrategy}>
+                                <SortableContext items={sectionItems} strategy={verticalListSortingStrategy}>
                                     {(section.blocks || []).map((block: any) => (
                                         <SortableBlockItem 
                                             key={block.id} 
