@@ -17,7 +17,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-export function SectionPropertiesPanel({ section, block, onChange }: { section?: any, block?: any, onChange: (updates: any) => void }) {
+export function SectionPropertiesPanel({ section, block, onChange, onUpdateColumns }: { section?: any, block?: any, onChange: (updates: any) => void, onUpdateColumns?: (columns: any[]) => void }) {
     const element = section || block;
     if (!element) return null;
     
@@ -115,8 +115,47 @@ export function SectionPropertiesPanel({ section, block, onChange }: { section?:
                                             {settings.widthValue || 1280}
                                         </div>
                                     </div>
+                                    </div>
                                 </div>
-                                <div className="flex items-center justify-between">
+                                {!isBlock && section?.columns && section.columns.length > 0 && onUpdateColumns && (
+                                    <div className="pt-4 border-t border-slate-100">
+                                        <Label className="text-xs text-slate-600 font-bold mb-3 block uppercase tracking-wider">Largura das Colunas (%)</Label>
+                                        <div className="space-y-3">
+                                            {section.columns.map((col: any, idx: number) => (
+                                                <div key={col.id} className="flex items-center gap-3">
+                                                    <div className="w-5 h-5 rounded-full bg-slate-100 flex items-center justify-center text-[10px] font-bold text-slate-500">
+                                                        {idx + 1}
+                                                    </div>
+                                                    <Slider
+                                                        className="flex-1"
+                                                        value={[col.size]}
+                                                        min={5}
+                                                        max={100}
+                                                        step={1}
+                                                        onValueChange={([v]) => {
+                                                            const newCols = [...section.columns];
+                                                            const diff = v - newCols[idx].size;
+                                                            newCols[idx] = { ...newCols[idx], size: v };
+                                                            
+                                                            if (newCols.length > 1) {
+                                                                const adjIdx = idx < newCols.length - 1 ? idx + 1 : idx - 1;
+                                                                newCols[adjIdx] = { 
+                                                                    ...newCols[adjIdx], 
+                                                                    size: Math.max(5, newCols[adjIdx].size - diff) 
+                                                                };
+                                                            }
+                                                            onUpdateColumns(newCols);
+                                                        }}
+                                                    />
+                                                    <div className="w-12 h-8 bg-slate-50 border border-slate-200 rounded text-center text-xs flex items-center justify-center font-medium">
+                                                        {Math.round(col.size)}%
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+                                <div className="flex items-center justify-between pt-4 border-t border-slate-100">
                                     <Label className="text-xs text-slate-600 font-medium">Espaçamento da coluna</Label>
                                     <Select value={settings.columnGap || 'padrao'} onValueChange={v => updateSettings({ columnGap: v })}>
                                         <SelectTrigger className="w-32 h-8 text-xs"><SelectValue /></SelectTrigger>

@@ -373,6 +373,24 @@ export default function PortalEditor() {
         }));
     };
 
+    const removeColumn = (sectionId: string, colId: string) => {
+        pushHistory();
+        setSections(sections.map(s => {
+            if (s.id !== sectionId || !s.columns) return s;
+            const currentCols = s.columns;
+            if (currentCols.length <= 1) return s; // Cannot remove the last column
+            
+            const newColumns = currentCols.filter(c => c.id !== colId);
+            const newSize = 100 / newColumns.length;
+            const balancedColumns = newColumns.map(c => ({ ...c, size: newSize }));
+            
+            return {
+                ...s,
+                columns: balancedColumns
+            };
+        }));
+    };
+
     const addBlock = (sectionId: string, type: BlockType, colId?: string) => {
         pushHistory();
         let content = {};
@@ -1046,7 +1064,12 @@ export default function PortalEditor() {
                                         onResizeStart={setResizingCol}
                                         onAddSectionAbove={() => {
                                             pushHistory();
-                                            const newSection: Section = { id: Math.random().toString(36).substr(2, 9), blocks: [], settings: {} };
+                                            const newSection: Section = { 
+                                                id: Math.random().toString(36).substr(2, 9), 
+                                                blocks: [], 
+                                                settings: {},
+                                                columns: [{ id: Math.random().toString(36).substr(2, 9), size: 100, blocks: [] }]
+                                            };
                                             setSections([...sections, newSection]);
                                             setAgroforteData(prev => {
                                                 if (!prev) return prev;
@@ -1059,7 +1082,12 @@ export default function PortalEditor() {
                                         }}
                                         onAddSectionBelow={() => {
                                             pushHistory();
-                                            const newSection: Section = { id: Math.random().toString(36).substr(2, 9), blocks: [], settings: {} };
+                                            const newSection: Section = { 
+                                                id: Math.random().toString(36).substr(2, 9), 
+                                                blocks: [], 
+                                                settings: {},
+                                                columns: [{ id: Math.random().toString(36).substr(2, 9), size: 100, blocks: [] }]
+                                            };
                                             setSections([...sections, newSection]);
                                             setAgroforteData(prev => {
                                                 if (!prev) return prev;
@@ -1234,6 +1262,10 @@ export default function PortalEditor() {
                                                     <SectionPropertiesPanel 
                                                         section={sections.find(s => s.id === activeSettingsTarget.id)}
                                                         onChange={(updates) => updateSectionSettings(activeSettingsTarget.id, updates)}
+                                                        onUpdateColumns={(newColumns) => {
+                                                            pushHistory();
+                                                            setSections(sections.map(s => s.id === activeSettingsTarget.id ? { ...s, columns: newColumns } : s));
+                                                        }}
                                                     />
                                                 ) : (
                                                     <p className="text-sm text-slate-500">Selecione um bloco para editar as propriedades.</p>
@@ -1632,7 +1664,7 @@ function SortableFixedSectionItem({ id, children, previewMode, active, onSetting
     );
 }
 
-function DroppableEmptyColumn({ sectionId, colId, onAddWidgetClick }: { sectionId: string, colId: string, onAddWidgetClick: any }) {
+function DroppableEmptyColumn({ sectionId, colId, onAddWidgetClick, onRemoveColumn }: { sectionId: string, colId: string, onAddWidgetClick: any, onRemoveColumn?: any }) {
     const { activeTenant } = useTenant();
     const { setNodeRef, isOver } = useDroppable({
         id: `empty-col-${sectionId}-${colId}`,
@@ -1642,7 +1674,7 @@ function DroppableEmptyColumn({ sectionId, colId, onAddWidgetClick }: { sectionI
     return (
         <div 
             ref={setNodeRef}
-            className={cn("h-24 border border-dashed rounded-lg flex items-center justify-center transition-colors", isOver ? "border-blue-500 bg-blue-100 ring-2 ring-blue-500/30" : "border-slate-300 bg-slate-50/50 group-hover/col:border-blue-300")}
+            className={cn("h-24 border border-dashed rounded-lg flex flex-col items-center justify-center transition-colors relative group/empty", isOver ? "border-blue-500 bg-blue-100 ring-2 ring-blue-500/30" : "border-slate-300 bg-slate-50/50 hover:border-blue-300")}
         >
             <button 
                 onClick={(e) => { e.stopPropagation(); onAddWidgetClick?.(sectionId, colId); }}
@@ -1651,6 +1683,15 @@ function DroppableEmptyColumn({ sectionId, colId, onAddWidgetClick }: { sectionI
             >
                 <Plus className="h-4 w-4" />
             </button>
+            {onRemoveColumn && (
+                <button 
+                    onClick={(e) => { e.stopPropagation(); onRemoveColumn(sectionId, colId); }}
+                    className="absolute top-2 right-2 p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-md transition-colors opacity-0 group-hover/empty:opacity-100"
+                    title="Remover Coluna"
+                >
+                    <Trash2 className="h-3.5 w-3.5" />
+                </button>
+            )}
         </div>
     );
 }
@@ -1677,10 +1718,8 @@ function SortableSectionItem({ section, previewMode, active, onSelect, onRemove,
                 <div 
                     {...attributes} 
                     {...listeners} 
-                    onClick={(e) => { e.stopPropagation(); onSettingsClick(); }}
-                    onPointerUp={(e) => { e.stopPropagation(); onSettingsClick(); }}
                     className="p-1.5 px-3 hover:bg-slate-50 transition-colors text-slate-400 hover:text-slate-600 cursor-grab active:cursor-grabbing focus:outline-none" 
-                    title="Arrastar ou Configurar"
+                    title="Arrastar"
                 >
                     <GripVertical className="h-4 w-4" />
                 </div>
@@ -1771,7 +1810,7 @@ function SortableSectionItem({ section, previewMode, active, onSelect, onRemove,
                                         </SortableContext>
                                         
                                         {(!col.blocks || col.blocks.length === 0) && (
-                                            <DroppableEmptyColumn sectionId={section.id} colId={col.id} onAddWidgetClick={onAddWidgetClick} />
+                                            <DroppableEmptyColumn sectionId={section.id} colId={col.id} onAddWidgetClick={onAddWidgetClick} onRemoveColumn={removeColumn} />
                                         )}
                                     </div>
                                     {colIdx < section.columns.length - 1 && previewMode === 'desktop' && (
