@@ -634,15 +634,30 @@ export function SectionPropertiesPanel({ section, block, onChange, onUpdateColum
                                         <Label className="text-xs text-slate-600 font-medium w-20">Z-Index</Label>
                                         <Monitor className="h-3 w-3 text-slate-400" />
                                     </div>
-                                    <Input className="w-24 h-8 text-xs" />
+                                    <Input 
+                                        className="w-24 h-8 text-xs" 
+                                        value={localSettings.zIndex || ''}
+                                        onChange={(e) => updateSettings({ zIndex: e.target.value })}
+                                        placeholder="auto"
+                                    />
                                 </div>
                                 <div className="flex items-center gap-4">
                                     <Label className="text-xs text-slate-600 font-medium w-20">ID CSS</Label>
-                                    <Input className="flex-1 h-8 text-xs" />
+                                    <Input 
+                                        className="flex-1 h-8 text-xs"
+                                        value={localSettings.cssId || ''}
+                                        onChange={(e) => updateSettings({ cssId: e.target.value })}
+                                        placeholder="Ex: contact"
+                                    />
                                 </div>
                                 <div className="flex items-center gap-4">
                                     <Label className="text-xs text-slate-600 font-medium w-20">Classe CSS</Label>
-                                    <Input className="flex-1 h-8 text-xs" />
+                                    <Input 
+                                        className="flex-1 h-8 text-xs" 
+                                        value={localSettings.cssClasses || ''}
+                                        onChange={(e) => updateSettings({ cssClasses: e.target.value })}
+                                        placeholder="Ex: my-class"
+                                    />
                                 </div>
                             </AccordionContent>
                         </AccordionItem>

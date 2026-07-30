@@ -443,6 +443,31 @@ export default function PortalEditor() {
         if (activeSettingsTarget?.id === sectionId) setActiveSettingsTarget(null);
     };
 
+    const duplicateSection = (sectionId: string) => {
+        pushHistory();
+        const sectionToDuplicate = sections.find(s => s.id === sectionId);
+        if (!sectionToDuplicate) return;
+
+        const newSection = JSON.parse(JSON.stringify(sectionToDuplicate));
+        const regenerateIds = (item: any) => {
+            if (item.id) item.id = Math.random().toString(36).substr(2, 9);
+            if (item.blocks) item.blocks.forEach(regenerateIds);
+            if (item.columns) item.columns.forEach(regenerateIds);
+        };
+        regenerateIds(newSection);
+
+        setSections([...sections, newSection]);
+        setAgroforteData(prev => {
+            if (!prev) return prev;
+            const order = prev.layoutOrder || layoutOrder;
+            let newOrder = [...order];
+            const idx = newOrder.indexOf(sectionId);
+            if (idx !== -1) newOrder.splice(idx + 1, 0, newSection.id);
+            else newOrder.push(newSection.id);
+            return { ...prev, layoutOrder: newOrder };
+        });
+    };
+
     const removeBlock = (sectionId: string, blockId: string) => {
         pushHistory();
         setSections(sections.map(s => {
@@ -1074,6 +1099,7 @@ export default function PortalEditor() {
                                         onUpdateBlock={(blockId: string, updates: any) => updateBlock(customSection.id, blockId, updates)}
                                         onRemoveBlock={(blockId: string) => removeBlock(customSection.id, blockId)}
                                         onDuplicateBlock={(blockId: string) => duplicateBlock(customSection.id, blockId)}
+                                        onDuplicateSection={() => duplicateSection(customSection.id)}
                                         onAddColumn={() => addColumn(customSection.id)}
                                         onRemoveColumn={removeColumn}
                                         onSettingsClick={(blockId?: string) => {
@@ -1879,7 +1905,7 @@ function SortableLayerItem({ id, label, onClick, onRename }: { id: string, label
     );
 }
 
-function SortableSectionItem({ section, previewMode, active, onSelect, onRemove, onUpdateSettings, onUpdateBlock, onRemoveBlock, onDuplicateBlock, onAddSectionAbove, onAddSectionBelow, onSettingsClick, onAddWidgetClick, onResizeStart, onAddColumn, onRemoveColumn }: any) {
+function SortableSectionItem({ section, previewMode, active, onSelect, onRemove, onUpdateSettings, onUpdateBlock, onRemoveBlock, onDuplicateBlock, onDuplicateSection, onAddSectionAbove, onAddSectionBelow, onSettingsClick, onAddWidgetClick, onResizeStart, onAddColumn, onRemoveColumn }: any) {
     const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: section.id });
     const style = { transform: CSS.Transform.toString(transform), transition, zIndex: isDragging ? 50 : 1, opacity: isDragging ? 0.8 : 1 };
     const sectionPadding = section.settings?.paddingY || '12';
@@ -1898,6 +1924,11 @@ function SortableSectionItem({ section, previewMode, active, onSelect, onRemove,
                 <button onClick={(e) => { e.stopPropagation(); onSettingsClick(); }} className="p-1.5 px-3 hover:bg-slate-50 transition-colors text-slate-400 hover:text-slate-600 focus:outline-none" title="Configurações">
                     <Settings className="h-4 w-4" />
                 </button>
+                {onDuplicateSection && (
+                    <button onClick={(e) => { e.stopPropagation(); onDuplicateSection(); }} className="p-1.5 px-3 hover:bg-slate-50 transition-colors text-slate-400 hover:text-slate-600 focus:outline-none" title="Duplicar Seção">
+                        <Copy className="h-4 w-4" />
+                    </button>
+                )}
                 <div 
                     {...attributes} 
                     {...listeners} 
