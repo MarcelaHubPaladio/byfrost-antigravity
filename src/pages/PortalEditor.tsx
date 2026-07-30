@@ -37,7 +37,8 @@ import {
     StretchHorizontal,
     AlignLeft,
     ArrowUp,
-    Layers
+    Layers,
+    Pencil
 } from "lucide-react";
 import {
   Popover,
@@ -1223,7 +1224,7 @@ export default function PortalEditor() {
 
     const layersSheet = (
         <Sheet open={isLayersOpen} onOpenChange={setIsLayersOpen}>
-            <SheetContent side="left" className="w-[300px] p-0 flex flex-col bg-slate-50 border-r-slate-200">
+            <SheetContent side="right" className="w-[300px] p-0 flex flex-col bg-slate-50 border-l-slate-200">
                 <SheetHeader className="p-4 border-b border-slate-200 bg-white">
                     <SheetTitle className="text-sm font-bold text-slate-700 flex items-center gap-2">
                         <Layers className="h-4 w-4" /> Camadas do Site
@@ -1235,23 +1236,47 @@ export default function PortalEditor() {
                             {layoutOrder.map((id) => {
                                 let label = id;
                                 const customSection = sections.find(s => s.id === id);
-                                if (id === 'nav') label = 'Menu / Header';
-                                else if (id === 'hero') label = 'Destaque (Hero)';
-                                else if (id === 'catalogs_categories') label = 'Categorias';
-                                else if (id === 'featured_products') label = 'Produtos em Destaque';
-                                else if (id === 'catalogs_lists') label = 'Listas de Catálogos';
-                                else if (id === 'about') label = 'Sobre Nós';
-                                else if (id === 'cta') label = 'Call to Action';
-                                else if (id === 'footer') label = 'Rodapé';
+                                
+                                const layoutSettings = agroforteData?.layoutSettings || {};
+                                
+                                if (id === 'nav') label = layoutSettings['nav']?.name || 'Menu / Header';
+                                else if (id === 'hero') label = layoutSettings['hero']?.name || 'Destaque (Hero)';
+                                else if (id === 'catalogs_categories') label = layoutSettings['catalogs_categories']?.name || 'Categorias';
+                                else if (id === 'featured_products') label = layoutSettings['featured_products']?.name || 'Produtos em Destaque';
+                                else if (id === 'catalogs_lists') label = layoutSettings['catalogs_lists']?.name || 'Listas de Catálogos';
+                                else if (id === 'about') label = layoutSettings['about']?.name || 'Sobre Nós';
+                                else if (id === 'cta') label = layoutSettings['cta']?.name || 'Call to Action';
+                                else if (id === 'footer') label = layoutSettings['footer']?.name || 'Rodapé';
                                 else if (customSection) {
-                                    label = `Seção Livre (${customSection.blocks?.length || 0} blocos)`;
+                                    label = customSection.settings?.name || `Seção Livre (${customSection.blocks?.length || 0} blocos)`;
                                 }
+
+                                const handleRename = (newName: string) => {
+                                    if (customSection) {
+                                        updateSectionSettings(customSection.id, { ...customSection.settings, name: newName });
+                                    } else {
+                                        setAgroforteData(prev => {
+                                            if (!prev) return prev;
+                                            return {
+                                                ...prev,
+                                                layoutSettings: {
+                                                    ...(prev.layoutSettings || {}),
+                                                    [id]: {
+                                                        ...((prev.layoutSettings || {})[id] || {}),
+                                                        name: newName
+                                                    }
+                                                }
+                                            }
+                                        });
+                                    }
+                                };
                                 
                                 return (
                                     <SortableLayerItem 
                                         key={id} 
                                         id={id} 
                                         label={label}
+                                        onRename={handleRename}
                                         onClick={() => {
                                             const el = document.getElementById('section-' + id);
                                             if (el) {
@@ -1783,23 +1808,73 @@ function DroppableEmptyColumn({ sectionId, colId, onAddWidgetClick, onRemoveColu
     );
 }
 
-function SortableLayerItem({ id, label, onClick }: { id: string, label: string, onClick: () => void }) {
+function SortableLayerItem({ id, label, onClick, onRename }: { id: string, label: string, onClick: () => void, onRename?: (newName: string) => void }) {
     const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: 'layer-' + id });
     const style = { transform: CSS.Transform.toString(transform), transition, zIndex: isDragging ? 50 : 1, opacity: isDragging ? 0.5 : 1 };
+    
+    const [isEditing, setIsEditing] = useState(false);
+    const [editValue, setEditValue] = useState(label);
+
+    useEffect(() => {
+        setEditValue(label);
+    }, [label]);
     
     return (
         <div 
             ref={setNodeRef} 
             style={style} 
-            className={cn("flex items-center gap-2 p-2 px-3 bg-white border border-slate-200 rounded-lg shadow-sm cursor-pointer hover:border-blue-300 transition-colors", isDragging && "border-blue-500 shadow-md")}
-            onClick={onClick}
+            className={cn("flex items-center gap-2 p-2 px-3 bg-white border border-slate-200 rounded-lg shadow-sm cursor-pointer hover:border-blue-300 transition-colors group", isDragging && "border-blue-500 shadow-md")}
+            onClick={() => {
+                if (!isEditing) onClick();
+            }}
         >
-            <div {...attributes} {...listeners} className="p-1 -ml-1 cursor-grab active:cursor-grabbing text-slate-400 hover:text-slate-600">
+            <div {...attributes} {...listeners} className="p-1 -ml-1 cursor-grab active:cursor-grabbing text-slate-400 hover:text-slate-600" onClick={(e) => e.stopPropagation()}>
                 <GripVertical className="h-4 w-4" />
             </div>
-            <div className="flex-1 text-xs font-semibold text-slate-700 truncate">
-                {label}
-            </div>
+            
+            {isEditing ? (
+                <input 
+                    autoFocus
+                    className="flex-1 text-xs font-semibold text-slate-700 bg-transparent border-b border-blue-500 focus:outline-none px-1 py-0.5"
+                    value={editValue}
+                    onChange={(e) => setEditValue(e.target.value)}
+                    onBlur={() => {
+                        setIsEditing(false);
+                        if (editValue.trim() && editValue !== label) {
+                            onRename?.(editValue.trim());
+                        } else {
+                            setEditValue(label);
+                        }
+                    }}
+                    onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                            e.currentTarget.blur();
+                        }
+                        if (e.key === 'Escape') {
+                            setIsEditing(false);
+                            setEditValue(label);
+                        }
+                    }}
+                    onClick={(e) => e.stopPropagation()}
+                />
+            ) : (
+                <div className="flex-1 flex justify-between items-center overflow-hidden">
+                    <div className="text-xs font-semibold text-slate-700 truncate">
+                        {label}
+                    </div>
+                    {onRename && (
+                        <button 
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                setIsEditing(true);
+                            }}
+                            className="p-1 opacity-0 group-hover:opacity-100 transition-opacity text-slate-400 hover:text-blue-500 focus:outline-none"
+                        >
+                            <Pencil className="h-3.5 w-3.5" />
+                        </button>
+                    )}
+                </div>
+            )}
         </div>
     );
 }
