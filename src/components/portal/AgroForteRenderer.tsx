@@ -245,10 +245,11 @@ export function AgroForteRenderer({ data, editMode, onSelectElement, customSecti
         combinedStyle.marginRight = `${Number(layout.marginX) * 4}px`;
     }
 
-    if (!editMode) return <Tag className={combinedClassName} style={combinedStyle}>{children}</Tag>;
+    if (!editMode) return <Tag id={`section-${id}`} className={combinedClassName} style={combinedStyle}>{children}</Tag>;
     
     return (
       <Tag 
+        id={`section-${id}`}
         className={combinedClassName} 
         style={combinedStyle}
         onClick={(e: React.MouseEvent) => {

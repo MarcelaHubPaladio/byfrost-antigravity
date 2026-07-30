@@ -36,7 +36,8 @@ import {
     AlignCenter,
     StretchHorizontal,
     AlignLeft,
-    ArrowUp
+    ArrowUp,
+    Layers
 } from "lucide-react";
 import {
   Popover,
@@ -60,6 +61,7 @@ import { FixedSectionLayoutEditor } from "@/components/portal/FixedSectionLayout
 import { BlockPropertiesPanel } from "@/components/portal/BlockPropertiesPanel";
 import { SectionPropertiesPanel } from "@/components/portal/SectionPropertiesPanel";
 import { GlobalSettingsModal } from "@/components/portal/GlobalSettingsModal";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { GlobalTypographyStyles } from "@/components/portal/GlobalTypographyStyles";
 import { AGROFORTE_DEFAULT, type AgroForteData } from "@/components/portal/agroforte-types";
 import { useTenant } from "@/providers/TenantProvider";
@@ -157,6 +159,7 @@ export default function PortalEditor() {
     const [sections, setSections] = useState<Section[]>([]);
     const [agroforteData, setAgroforteData] = useState<AgroForteData | null>(null);
     const [isGlobalSettingsOpen, setIsGlobalSettingsOpen] = useState(false);
+    const [isLayersOpen, setIsLayersOpen] = useState(false);
     const [previewMode, setPreviewMode] = useState<'desktop' | 'mobile'>('desktop');
     const [activeSectionId, setActiveSectionId] = useState<string | null>(null);
     const [activeElementId, setActiveElementId] = useState<string | null>(null);
@@ -737,6 +740,23 @@ export default function PortalEditor() {
             return;
         }
 
+        // Case 1.5: Reordering Layers
+        if (typeof activeId === 'string' && activeId.startsWith('layer-') && typeof overId === 'string' && overId.startsWith('layer-')) {
+            const realActive = activeId.replace('layer-', '');
+            const realOver = overId.replace('layer-', '');
+            const oldIndex = layoutOrder.indexOf(realActive);
+            const newIndex = layoutOrder.indexOf(realOver);
+            if (oldIndex !== -1 && newIndex !== -1 && oldIndex !== newIndex) {
+                pushHistory();
+                setAgroforteData(prev => {
+                    const base = prev || AGROFORTE_DEFAULT;
+                    const newOrder = arrayMove(base.layoutOrder || layoutOrder, oldIndex, newIndex);
+                    return { ...base, layoutOrder: newOrder };
+                });
+            }
+            return;
+        }
+
         const activeItem = findContainer(activeId);
         const overItem = findContainer(overId);
 
@@ -1201,6 +1221,54 @@ export default function PortalEditor() {
         </DragOverlay>
     );
 
+    const layersSheet = (
+        <Sheet open={isLayersOpen} onOpenChange={setIsLayersOpen}>
+            <SheetContent side="left" className="w-[300px] p-0 flex flex-col bg-slate-50 border-r-slate-200">
+                <SheetHeader className="p-4 border-b border-slate-200 bg-white">
+                    <SheetTitle className="text-sm font-bold text-slate-700 flex items-center gap-2">
+                        <Layers className="h-4 w-4" /> Camadas do Site
+                    </SheetTitle>
+                </SheetHeader>
+                <div className="flex-1 overflow-y-auto p-4">
+                    <SortableContext items={layoutOrder.map(id => 'layer-' + id)} strategy={verticalListSortingStrategy}>
+                        <div className="space-y-2">
+                            {layoutOrder.map((id) => {
+                                let label = id;
+                                const customSection = sections.find(s => s.id === id);
+                                if (id === 'nav') label = 'Menu / Header';
+                                else if (id === 'hero') label = 'Destaque (Hero)';
+                                else if (id === 'catalogs_categories') label = 'Categorias';
+                                else if (id === 'featured_products') label = 'Produtos em Destaque';
+                                else if (id === 'catalogs_lists') label = 'Listas de Catálogos';
+                                else if (id === 'about') label = 'Sobre Nós';
+                                else if (id === 'cta') label = 'Call to Action';
+                                else if (id === 'footer') label = 'Rodapé';
+                                else if (customSection) {
+                                    label = `Seção Livre (${customSection.blocks?.length || 0} blocos)`;
+                                }
+                                
+                                return (
+                                    <SortableLayerItem 
+                                        key={id} 
+                                        id={id} 
+                                        label={label}
+                                        onClick={() => {
+                                            const el = document.getElementById('section-' + id);
+                                            if (el) {
+                                                el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                                setIsLayersOpen(false);
+                                            }
+                                        }}
+                                    />
+                                );
+                            })}
+                        </div>
+                    </SortableContext>
+                </div>
+            </SheetContent>
+        </Sheet>
+    );
+
     if (agroforteData) {
         return (
             <DndContext 
@@ -1337,6 +1405,14 @@ export default function PortalEditor() {
                             <Button 
                                 variant="outline" 
                                 size="sm" 
+                                className="rounded-lg h-9 gap-2 text-slate-600 hover:text-slate-900" 
+                                onClick={() => setIsLayersOpen(true)}
+                            >
+                                <Layers className="h-4 w-4" /> Camadas
+                            </Button>
+                            <Button 
+                                variant="outline" 
+                                size="sm" 
                                 className="rounded-lg h-9 gap-2 text-blue-600 hover:text-blue-700" 
                                 onClick={() => setIsGlobalSettingsOpen(true)}
                             >
@@ -1371,6 +1447,7 @@ export default function PortalEditor() {
                 onSave={handleSave}
                 isSaving={saveM.isPending}
             />
+            {layersSheet}
             </DndContext>
         );
     }
@@ -1498,6 +1575,14 @@ export default function PortalEditor() {
                         <Button 
                             variant="outline" 
                             size="sm" 
+                            className="rounded-lg h-9 gap-2 text-slate-600 hover:text-slate-900" 
+                            onClick={() => setIsLayersOpen(true)}
+                        >
+                            <Layers className="h-4 w-4" /> Camadas
+                        </Button>
+                        <Button 
+                            variant="outline" 
+                            size="sm" 
                             className="rounded-lg h-9 gap-2 text-blue-600 hover:text-blue-700" 
                             onClick={() => setIsGlobalSettingsOpen(true)}
                         >
@@ -1571,6 +1656,7 @@ export default function PortalEditor() {
                 onSave={handleSave}
                 isSaving={saveM.isPending}
             />
+            {layersSheet}
         </DndContext>
     );
 }
@@ -1697,13 +1783,34 @@ function DroppableEmptyColumn({ sectionId, colId, onAddWidgetClick, onRemoveColu
     );
 }
 
+function SortableLayerItem({ id, label, onClick }: { id: string, label: string, onClick: () => void }) {
+    const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: 'layer-' + id });
+    const style = { transform: CSS.Transform.toString(transform), transition, zIndex: isDragging ? 50 : 1, opacity: isDragging ? 0.5 : 1 };
+    
+    return (
+        <div 
+            ref={setNodeRef} 
+            style={style} 
+            className={cn("flex items-center gap-2 p-2 px-3 bg-white border border-slate-200 rounded-lg shadow-sm cursor-pointer hover:border-blue-300 transition-colors", isDragging && "border-blue-500 shadow-md")}
+            onClick={onClick}
+        >
+            <div {...attributes} {...listeners} className="p-1 -ml-1 cursor-grab active:cursor-grabbing text-slate-400 hover:text-slate-600">
+                <GripVertical className="h-4 w-4" />
+            </div>
+            <div className="flex-1 text-xs font-semibold text-slate-700 truncate">
+                {label}
+            </div>
+        </div>
+    );
+}
+
 function SortableSectionItem({ section, previewMode, active, onSelect, onRemove, onUpdateSettings, onUpdateBlock, onRemoveBlock, onDuplicateBlock, onAddSectionAbove, onAddSectionBelow, onSettingsClick, onAddWidgetClick, onResizeStart, onAddColumn, onRemoveColumn }: any) {
     const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: section.id });
     const style = { transform: CSS.Transform.toString(transform), transition, zIndex: isDragging ? 50 : 1, opacity: isDragging ? 0.8 : 1 };
     const sectionPadding = section.settings?.paddingY || '12';
 
     return (
-        <div ref={setNodeRef} style={style} className={cn("group relative border-2 transition-all mb-8 rounded-[32px]", active ? "border-blue-500 bg-blue-50/50 ring-4 ring-blue-500/20" : "border-transparent hover:border-blue-500/50")} onClick={(e) => { e.stopPropagation(); onSettingsClick(); }}>
+        <div id={`section-${section.id}`} ref={setNodeRef} style={style} className={cn("group relative border-2 transition-all mb-8 rounded-[32px]", active ? "border-blue-500 bg-blue-50/50 ring-4 ring-blue-500/20" : "border-transparent hover:border-blue-500/50")} onClick={(e) => { e.stopPropagation(); onSettingsClick(); }}>
             <div className={cn("absolute right-6 top-0 z-50 bg-white border border-slate-200 text-slate-700 rounded-b-xl shadow-xl flex items-center h-8 transition-all overflow-hidden divide-x divide-slate-100", active ? "translate-y-0 opacity-100" : "opacity-0 group-hover:opacity-100 translate-y-[-100%] group-hover:translate-y-0")}>
                 <div onClick={(e) => { e.stopPropagation(); onSettingsClick(); }} className="px-3 h-full flex items-center text-[10px] font-bold uppercase tracking-widest text-blue-600 bg-blue-50/50 cursor-pointer hover:bg-blue-100 transition-colors">
                     Seção Livre
