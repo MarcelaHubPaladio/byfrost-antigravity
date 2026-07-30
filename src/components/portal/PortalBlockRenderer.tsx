@@ -193,10 +193,13 @@ export function PortalBlockRenderer({ block, isPremium, isMobile, onRenderInnerB
                     block.content?.variant === 'logo-center' && "flex-col gap-6"
                 )}>
                     <nav className={cn(
-                        "flex flex-1 items-center gap-8 mx-auto",
+                        "flex flex-1 gap-8 mx-auto w-full",
                         block.content?.variant === 'logo-left' && "ml-12",
                         block.content?.variant === 'logo-center' && "justify-center"
-                    )}>
+                    )} style={{
+                        justifyContent: block.content?.justifyContent || 'center',
+                        alignItems: block.content?.alignItems || 'center'
+                    }}>
                         {(block.content?.links || []).map((link: any, idx: number) => (
                             <a 
                                 key={idx} 

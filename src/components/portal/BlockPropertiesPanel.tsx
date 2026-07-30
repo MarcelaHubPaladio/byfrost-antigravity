@@ -80,6 +80,33 @@ export function BlockPropertiesPanel({ block, onChange }: { block: any, onChange
                     </div>
                 </div>
 
+                <div className="grid grid-cols-2 gap-4 mt-4">
+                    <div className="space-y-2">
+                        <Label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Alinhamento Horizontal</Label>
+                        <Select value={content.justifyContent || 'center'} onValueChange={v => updateContent({ justifyContent: v })}>
+                            <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="flex-start">Esquerda</SelectItem>
+                                <SelectItem value="center">Centro</SelectItem>
+                                <SelectItem value="flex-end">Direita</SelectItem>
+                                <SelectItem value="space-between">Espaçado</SelectItem>
+                                <SelectItem value="space-around">Espaço ao redor</SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
+                    <div className="space-y-2">
+                        <Label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Alinhamento Vertical</Label>
+                        <Select value={content.alignItems || 'center'} onValueChange={v => updateContent({ alignItems: v })}>
+                            <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="flex-start">Topo</SelectItem>
+                                <SelectItem value="center">Centro</SelectItem>
+                                <SelectItem value="flex-end">Fundo</SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
+                </div>
+
             </div>
         );
     }

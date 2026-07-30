@@ -190,6 +190,24 @@ export function AgroForteRenderer({ data, editMode, onSelectElement, customSecti
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const topRef = useRef<HTMLDivElement>(null);
 
+  useEffect(() => {
+    const handleAnchorClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      const anchor = target.closest('a');
+      if (anchor && anchor.hash && anchor.hash.startsWith('#') && anchor.getAttribute('href')?.startsWith('#')) {
+        const id = anchor.hash.substring(1);
+        const element = document.getElementById(id) || document.getElementById(`section-${id}`);
+        if (element) {
+          e.preventDefault();
+          element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          setIsMobileMenuOpen(false);
+        }
+      }
+    };
+    document.addEventListener('click', handleAnchorClick);
+    return () => document.removeEventListener('click', handleAnchorClick);
+  }, []);
+
   // Helper for edit mode interactivity
   const EditableBlock = ({ id, label, children, className = '', style = {} }: { id: string, label: string, children: React.ReactNode, className?: string, style?: React.CSSProperties }) => {
     const layout = data.layoutSettings?.[id] || {};
