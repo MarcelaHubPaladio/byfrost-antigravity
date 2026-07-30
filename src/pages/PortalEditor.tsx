@@ -1969,8 +1969,8 @@ function SortableSectionItem({ section, previewMode, active, onSelect, onRemove,
                     borderWidth: section.settings?.style?.border?.width ? `${section.settings.style.border.width}px` : undefined,
                     borderColor: section.settings?.style?.border?.color,
                     borderRadius: section.settings?.style?.border?.radius ? `${section.settings.style.border.radius}px` : undefined,
-                    justifyContent: section.settings?.alignItems === 'middle' ? 'center' : section.settings?.alignItems || 'flex-start',
-                    alignItems: section.settings?.justifyContent || 'stretch',
+                    justifyContent: section.settings?.verticalAlign === 'middle' ? 'center' : section.settings?.verticalAlign === 'bottom' ? 'flex-end' : 'flex-start',
+                    alignItems: 'stretch',
                     '--section-heading-color': section.settings?.typography?.headingColor,
                     '--section-text-color': section.settings?.typography?.textColor,
                     '--section-link-color': section.settings?.typography?.linkColor,
@@ -1994,7 +1994,9 @@ function SortableSectionItem({ section, previewMode, active, onSelect, onRemove,
                         style={{
                             maxWidth: section.settings?.contentWidth === 'full' ? undefined : section.settings?.widthValue ? `${section.settings.widthValue}px` : '1280px',
                             justifyContent: section.settings?.justifyContent === 'center' ? 'center' : section.settings?.justifyContent === 'right' ? 'flex-end' : section.settings?.justifyContent === 'space-between' ? 'space-between' : section.settings?.justifyContent === 'space-around' ? 'space-around' : 'flex-start',
-                            alignItems: section.settings?.alignItems === 'middle' ? 'center' : section.settings?.alignItems === 'bottom' ? 'flex-end' : 'stretch'
+                            alignItems: section.settings?.verticalAlign === 'middle' ? 'center' : section.settings?.verticalAlign === 'bottom' ? 'flex-end' : 'stretch',
+                            flexDirection: previewMode === 'mobile' ? 'column' : (section.settings?.flexDirection || 'row'),
+                            flexWrap: section.settings?.flexWrap || 'nowrap'
                         }}
                     >
                         {section.columns ? (
@@ -2002,7 +2004,7 @@ function SortableSectionItem({ section, previewMode, active, onSelect, onRemove,
                                 <React.Fragment key={col.id}>
                                     <div style={{ 
                                         width: previewMode === 'mobile' ? '100%' : `${col.size}%`,
-                                        alignItems: section.settings?.justifyContent === 'center' ? 'center' : section.settings?.justifyContent === 'right' ? 'flex-end' : 'stretch'
+                                        alignItems: 'stretch'
                                     }} className="flex flex-col gap-4 relative group/col">
                                         <SortableContext items={(col.blocks || []).map((b: any) => b.id)} strategy={verticalListSortingStrategy}>
                                             {(col.blocks || []).map((block: any) => (

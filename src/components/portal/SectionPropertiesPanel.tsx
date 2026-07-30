@@ -192,7 +192,30 @@ export function SectionPropertiesPanel({ section, block, onChange, onUpdateColum
                                     </Select>
                                 </div>
                                 <div className="flex items-center justify-between">
-                                    <Label className="text-xs text-slate-600 font-medium">Alinhamento horizontal</Label>
+                                    <Label className="text-xs text-slate-600 font-medium">Direção (Grid)</Label>
+                                    <Select value={settings.flexDirection || 'row'} onValueChange={v => updateSettings({ flexDirection: v })}>
+                                        <SelectTrigger className="w-32 h-8 text-xs"><SelectValue /></SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="row">Linha (Row)</SelectItem>
+                                            <SelectItem value="column">Coluna (Col)</SelectItem>
+                                            <SelectItem value="row-reverse">Linha Reversa</SelectItem>
+                                            <SelectItem value="column-reverse">Coluna Reversa</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                                <div className="flex items-center justify-between">
+                                    <Label className="text-xs text-slate-600 font-medium">Quebra de Linha (Wrap)</Label>
+                                    <Select value={settings.flexWrap || 'nowrap'} onValueChange={v => updateSettings({ flexWrap: v })}>
+                                        <SelectTrigger className="w-32 h-8 text-xs"><SelectValue /></SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="nowrap">Não Quebrar</SelectItem>
+                                            <SelectItem value="wrap">Quebrar</SelectItem>
+                                            <SelectItem value="wrap-reverse">Quebrar Reverso</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                                <div className="flex items-center justify-between">
+                                    <Label className="text-xs text-slate-600 font-medium" title="justify-content">Alinhamento das colunas</Label>
                                     <Select value={settings.justifyContent || 'padrao'} onValueChange={v => updateSettings({ justifyContent: v })}>
                                         <SelectTrigger className="w-32 h-8 text-xs"><SelectValue /></SelectTrigger>
                                         <SelectContent>
