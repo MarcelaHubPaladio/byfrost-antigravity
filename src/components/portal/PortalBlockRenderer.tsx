@@ -188,14 +188,11 @@ export function PortalBlockRenderer({ block, isPremium, isMobile, onRenderInnerB
 
             {block.type === 'header' && (
                 <header className={cn(
-                    "w-full py-6 px-6 md:px-12 flex items-center transition-all bg-white/80 backdrop-blur-md sticky top-0 z-[100] border-b border-slate-100 rounded-[32px] shadow-sm",
-                    isPremium && "bg-transparent border-none text-white backdrop-blur-none static px-12",
-                    block.content?.variant === 'logo-center' && "flex-col gap-6"
+                    "w-full py-4 px-6 flex items-center transition-all bg-white/80 backdrop-blur-md border border-slate-100 rounded-[32px] shadow-sm",
+                    isPremium && "bg-transparent border-none text-white backdrop-blur-none"
                 )}>
                     <nav className={cn(
-                        "flex flex-1 gap-8 mx-auto w-full",
-                        block.content?.variant === 'logo-left' && "ml-12",
-                        block.content?.variant === 'logo-center' && "justify-center"
+                        "flex flex-1 gap-8 mx-auto w-full"
                     )} style={{
                         justifyContent: block.content?.justifyContent || 'center',
                         alignItems: block.content?.alignItems || 'center'
@@ -213,12 +210,6 @@ export function PortalBlockRenderer({ block, isPremium, isMobile, onRenderInnerB
                             </a>
                         ))}
                     </nav>
-
-                    <div className={cn(
-                        "flex items-center gap-8",
-                        block.content?.variant === 'logo-center' && "hidden"
-                    )}>
-                    </div>
                 </header>
             )}
 
