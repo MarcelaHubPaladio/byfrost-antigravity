@@ -1995,7 +1995,7 @@ serve(async (req: any) => {
             inboundHistoryMsgs = [...inboundHistoryMsgs, ...history.reverse()];
           }
 
-          const { sysPrompt, crmTargetStage, crmAssigneeId } = await buildBeeIASystemPrompt({
+          let { sysPrompt, crmTargetStage, crmAssigneeId, plugs, isAudioActive, isVisionActive } = await buildBeeIASystemPrompt({
             supabase,
             tenantId,
             caseId,
@@ -2503,6 +2503,14 @@ serve(async (req: any) => {
               confidence_json: { overall: 0 },
               occurred_at: new Date().toISOString(),
             });
+
+            await supabase.from("timeline_events").insert({
+              tenant_id: tenantId,
+              case_id: caseId,
+              event_type: "system_note",
+              message: `Falha no OCR: ${ocr.error}`
+            });
+
             // Keep job as failed
             await supabase.from("job_queue").update({ status: "failed", attempts: job.attempts + 1 }).eq("id", job.id);
             results.push({ id: job.id, ok: false, error: ocr.error });
@@ -2993,7 +3001,20 @@ serve(async (req: any) => {
           }
         }
 
-        await supabase.from("job_queue").update({ status: "failed", attempts: job.attempts + 1 }).eq("id", job.id);
+        if (job.type === "BEEIA_PROCESS_MESSAGE") {
+          const debugPayload = {
+            ...(typeof job.payload_json === 'object' ? job.payload_json : {}),
+            debug_error: `DEBUG ERROR: ${e?.message ?? String(e)} \n\n Stack: ${e?.stack ?? ""}`
+          };
+          await supabase.from("job_queue").update({ 
+            status: "failed", 
+            attempts: job.attempts + 1,
+            payload_json: debugPayload
+          }).eq("id", job.id);
+        } else {
+          await supabase.from("job_queue").update({ status: "failed", attempts: job.attempts + 1 }).eq("id", job.id);
+        }
+        
         results.push({ id: job.id, ok: false, error: e?.message ?? String(e) });
       }
     }

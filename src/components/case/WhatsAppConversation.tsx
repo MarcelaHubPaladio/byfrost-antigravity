@@ -554,19 +554,25 @@ export function WhatsAppConversation({
     enabled: Boolean(activeTenantId && caseId),
     refetchInterval: 15_000,
     queryFn: async () => {
-      const twoMinAgo = new Date(Date.now() - 2 * 60 * 1000).toISOString();
       const { data } = await supabase
         .from("job_queue")
         .select("id, status, created_at")
         .eq("tenant_id", activeTenantId!)
         .eq("type", "BEEIA_PROCESS_MESSAGE")
         .contains("payload_json", { case_id: caseId })
-        .in("status", ["pending", "failed"])
-        .lte("created_at", twoMinAgo)
         .order("created_at", { ascending: false })
         .limit(1)
         .maybeSingle();
-      return data as { id: string; status: string; created_at: string } | null;
+
+      if (!data || data.status === "done") {
+        return null; // No active stuck job if the latest one is done
+      }
+
+      // If pending or failed, check if it's older than 2 minutes
+      const twoMinAgo = new Date(Date.now() - 2 * 60 * 1000);
+      const isOld = new Date(data.created_at) <= twoMinAgo;
+      
+      return isOld ? (data as { id: string; status: string; created_at: string }) : null;
     },
   });
   const beeiaIsStuck = Boolean(beeiaStuckQ.data);

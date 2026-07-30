@@ -388,9 +388,15 @@ export async function buildBeeIASystemPrompt(options: {
     }
   }
 
+  const isAudioActive = plugs?.some((p: any) => p.plug_key === "audio_transcription") ?? false;
+  const isVisionActive = plugs?.some((p: any) => p.plug_key === "vision_interpretation") ?? false;
+
   return {
     sysPrompt,
     crmTargetStage,
-    crmAssigneeId
+    crmAssigneeId,
+    plugs: plugs || [],
+    isAudioActive,
+    isVisionActive
   };
 }
