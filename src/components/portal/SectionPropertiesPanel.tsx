@@ -636,7 +636,7 @@ export function SectionPropertiesPanel({ section, block, onChange, onUpdateColum
                                     </div>
                                     <Input 
                                         className="w-24 h-8 text-xs" 
-                                        value={localSettings.zIndex || ''}
+                                        value={settings.zIndex || ''}
                                         onChange={(e) => updateSettings({ zIndex: e.target.value })}
                                         placeholder="auto"
                                     />
@@ -645,7 +645,7 @@ export function SectionPropertiesPanel({ section, block, onChange, onUpdateColum
                                     <Label className="text-xs text-slate-600 font-medium w-20">ID CSS</Label>
                                     <Input 
                                         className="flex-1 h-8 text-xs"
-                                        value={localSettings.cssId || ''}
+                                        value={settings.cssId || ''}
                                         onChange={(e) => updateSettings({ cssId: e.target.value })}
                                         placeholder="Ex: contact"
                                     />
@@ -654,7 +654,7 @@ export function SectionPropertiesPanel({ section, block, onChange, onUpdateColum
                                     <Label className="text-xs text-slate-600 font-medium w-20">Classe CSS</Label>
                                     <Input 
                                         className="flex-1 h-8 text-xs" 
-                                        value={localSettings.cssClasses || ''}
+                                        value={settings.cssClasses || ''}
                                         onChange={(e) => updateSettings({ cssClasses: e.target.value })}
                                         placeholder="Ex: my-class"
                                     />
