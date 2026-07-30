@@ -1054,6 +1054,7 @@ export default function PortalEditor() {
                                         onRemoveBlock={(blockId: string) => removeBlock(customSection.id, blockId)}
                                         onDuplicateBlock={(blockId: string) => duplicateBlock(customSection.id, blockId)}
                                         onAddColumn={() => addColumn(customSection.id)}
+                                        onRemoveColumn={removeColumn}
                                         onSettingsClick={(blockId?: string) => {
                                             if (blockId) {
                                                 setActiveSettingsTarget({ type: 'block', id: customSection.id, blockId });
@@ -1696,7 +1697,7 @@ function DroppableEmptyColumn({ sectionId, colId, onAddWidgetClick, onRemoveColu
     );
 }
 
-function SortableSectionItem({ section, previewMode, active, onSelect, onRemove, onUpdateSettings, onUpdateBlock, onRemoveBlock, onDuplicateBlock, onAddSectionAbove, onAddSectionBelow, onSettingsClick, onAddWidgetClick, onResizeStart, onAddColumn }: any) {
+function SortableSectionItem({ section, previewMode, active, onSelect, onRemove, onUpdateSettings, onUpdateBlock, onRemoveBlock, onDuplicateBlock, onAddSectionAbove, onAddSectionBelow, onSettingsClick, onAddWidgetClick, onResizeStart, onAddColumn, onRemoveColumn }: any) {
     const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: section.id });
     const style = { transform: CSS.Transform.toString(transform), transition, zIndex: isDragging ? 50 : 1, opacity: isDragging ? 0.8 : 1 };
     const sectionPadding = section.settings?.paddingY || '12';
@@ -1810,7 +1811,7 @@ function SortableSectionItem({ section, previewMode, active, onSelect, onRemove,
                                         </SortableContext>
                                         
                                         {(!col.blocks || col.blocks.length === 0) && (
-                                            <DroppableEmptyColumn sectionId={section.id} colId={col.id} onAddWidgetClick={onAddWidgetClick} onRemoveColumn={removeColumn} />
+                                            <DroppableEmptyColumn sectionId={section.id} colId={col.id} onAddWidgetClick={onAddWidgetClick} onRemoveColumn={onRemoveColumn} />
                                         )}
                                     </div>
                                     {colIdx < section.columns.length - 1 && previewMode === 'desktop' && (
