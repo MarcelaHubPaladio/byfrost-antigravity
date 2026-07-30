@@ -115,7 +115,6 @@ export function SectionPropertiesPanel({ section, block, onChange, onUpdateColum
                                             {settings.widthValue || 1280}
                                         </div>
                                     </div>
-                                    </div>
                                 </div>
                                 {!isBlock && section?.columns && section.columns.length > 0 && onUpdateColumns && (
                                     <div className="pt-4 border-t border-slate-100">
