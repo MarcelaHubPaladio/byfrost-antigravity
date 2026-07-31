@@ -1332,7 +1332,7 @@ export default function PortalEditor() {
         return (
             <DndContext 
                 sensors={sensors}
-                collisionDetection={closestCenter}
+                collisionDetection={pointerWithin}
                 onDragStart={handleDragStart}
                 onDragOver={handleDragOver}
                 onDragEnd={handleDragEnd}
