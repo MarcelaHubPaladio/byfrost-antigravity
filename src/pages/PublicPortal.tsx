@@ -384,45 +384,43 @@ export default function PublicPortal() {
                                 }}
                             >
                                 {section.columns ? (
-                                    <div className={cn("mx-auto flex gap-4 w-full", isMobile ? 'flex-col' : '')}>
-                                        {section.columns.map((col: any) => {
-                                            const colSettings = col.settings || {};
-                                            const colStyleSettings = colSettings.style || {};
-                                            return (
-                                                <div 
-                                                    key={col.id} 
-                                                    id={colSettings.cssId ? colSettings.cssId.replace(/^#/, '') : undefined}
-                                                    style={{ 
-                                                        width: isMobile ? '100%' : `${col.size}%`,
-                                                        alignItems: effectiveSettings.justifyContent === 'center' ? 'center' : effectiveSettings.justifyContent === 'right' ? 'flex-end' : 'stretch',
-                                                        backgroundColor: colStyleSettings.background?.color || colSettings.backgroundColor, 
-                                                        backgroundImage: colStyleSettings.background?.image ? `url(${colStyleSettings.background.image})` : undefined, 
-                                                        backgroundSize: colStyleSettings.background?.size || 'cover', 
-                                                        backgroundPosition: colStyleSettings.background?.position || 'center',
-                                                        backgroundRepeat: colStyleSettings.background?.repeat || 'no-repeat',
-                                                        borderStyle: colStyleSettings.border?.type && colStyleSettings.border?.type !== 'none' ? colStyleSettings.border.type : undefined,
-                                                        borderWidth: colStyleSettings.border?.width ? `${colStyleSettings.border.width}px` : undefined,
-                                                        borderColor: colStyleSettings.border?.color,
-                                                        borderRadius: colStyleSettings.border?.radius ? `${colStyleSettings.border.radius}px` : undefined,
-                                                        paddingTop: colSettings.paddingY ? `${Number(colSettings.paddingY) * 4}px` : undefined,
-                                                        paddingBottom: colSettings.paddingY ? `${Number(colSettings.paddingY) * 4}px` : undefined,
-                                                        paddingLeft: colSettings.paddingX ? `${Number(colSettings.paddingX) * 4}px` : undefined,
-                                                        paddingRight: colSettings.paddingX ? `${Number(colSettings.paddingX) * 4}px` : undefined,
-                                                    }} 
-                                                    className={cn("flex flex-col gap-4", colSettings.cssClasses || '')}
-                                                >
-                                                {(col.blocks || []).map((block: any) => (
-                                                    <PortalBlockRenderer 
-                                                        key={block.id} 
-                                                        block={block} 
-                                                        isPremium={isPremium} 
-                                                        isMobile={isMobile}
-                                                    />
-                                                ))}
-                                            </div>
-                                            );
-                                        })}
-                                    </div>
+                                    section.columns.map((col: any) => {
+                                        const colSettings = col.settings || {};
+                                        const colStyleSettings = colSettings.style || {};
+                                        return (
+                                            <div 
+                                                key={col.id} 
+                                                id={colSettings.cssId ? colSettings.cssId.replace(/^#/, '') : undefined}
+                                                style={{ 
+                                                    width: isMobile ? '100%' : `${col.size}%`,
+                                                    alignItems: 'stretch',
+                                                    backgroundColor: colStyleSettings.background?.color || colSettings.backgroundColor, 
+                                                    backgroundImage: colStyleSettings.background?.image ? `url(${colStyleSettings.background.image})` : undefined, 
+                                                    backgroundSize: colStyleSettings.background?.size || 'cover', 
+                                                    backgroundPosition: colStyleSettings.background?.position || 'center',
+                                                    backgroundRepeat: colStyleSettings.background?.repeat || 'no-repeat',
+                                                    borderStyle: colStyleSettings.border?.type && colStyleSettings.border?.type !== 'none' ? colStyleSettings.border.type : undefined,
+                                                    borderWidth: colStyleSettings.border?.width ? `${colStyleSettings.border.width}px` : undefined,
+                                                    borderColor: colStyleSettings.border?.color,
+                                                    borderRadius: colStyleSettings.border?.radius ? `${colStyleSettings.border.radius}px` : undefined,
+                                                    paddingTop: colSettings.paddingY ? `${Number(colSettings.paddingY) * 4}px` : undefined,
+                                                    paddingBottom: colSettings.paddingY ? `${Number(colSettings.paddingY) * 4}px` : undefined,
+                                                    paddingLeft: colSettings.paddingX ? `${Number(colSettings.paddingX) * 4}px` : undefined,
+                                                    paddingRight: colSettings.paddingX ? `${Number(colSettings.paddingX) * 4}px` : undefined,
+                                                }} 
+                                                className={cn("flex flex-col gap-4", colSettings.cssClasses || '')}
+                                            >
+                                            {(col.blocks || []).map((block: any) => (
+                                                <PortalBlockRenderer 
+                                                    key={block.id} 
+                                                    block={block} 
+                                                    isPremium={isPremium} 
+                                                    isMobile={isMobile}
+                                                />
+                                            ))}
+                                        </div>
+                                        );
+                                    })
                                 ) : (
                                     (section.blocks || []).map((block) => (
                                         <PortalBlockRenderer 
