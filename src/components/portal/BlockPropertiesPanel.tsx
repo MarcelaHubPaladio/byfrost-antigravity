@@ -498,7 +498,15 @@ export function BlockPropertiesPanel({ block, onChange }: { block: any, onChange
 
     if (block.type === 'product-carousel') {
         const items = content.items || [];
-        const cardStyle = content.cardStyle || { background: '#ffffff', hasShadow: true, hasBorder: true, padding: '24', margin: '8', buttonColor: '#2563eb' };
+        const defaultCardStyle = {
+            background: '#ffffff',
+            hasShadow: true,
+            hasBorder: true,
+            padding: '24',
+            margin: '8',
+            buttonColor: '#2563eb'
+        };
+        const cardStyle = { ...defaultCardStyle, ...(content.cardStyle || {}) };
         
         return (
             <div className="space-y-6">

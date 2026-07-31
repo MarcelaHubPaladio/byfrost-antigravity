@@ -464,7 +464,7 @@ export function PortalBlockRenderer({ block, isPremium, isMobile, onRenderInnerB
                 const itemsPerView = parseInt(block.content?.itemsPerView || '3');
                 const ratio = block.content?.imageAspectRatio || 'video';
                 
-                const cardStyle = block.content?.cardStyle || {
+                const defaultCardStyle = {
                     background: '#ffffff',
                     hasShadow: true,
                     hasBorder: true,
@@ -472,6 +472,7 @@ export function PortalBlockRenderer({ block, isPremium, isMobile, onRenderInnerB
                     margin: '8',
                     buttonColor: '#2563eb'
                 };
+                const cardStyle = { ...defaultCardStyle, ...(block.content?.cardStyle || {}) };
 
                 const gridCols = isMobile ? 'grid-cols-1' : 
                     itemsPerView === 1 ? 'grid-cols-1' : 

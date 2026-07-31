@@ -155,6 +155,14 @@ const getEffectiveSettings = (settings: any, mobileSettings: any, mode: 'desktop
     return settings || {};
 };
 
+function formatUnit(val: string | number | undefined): string | undefined {
+    if (val === undefined || val === null || val === '') return undefined;
+    if (typeof val === 'number') return `${val}px`;
+    const str = String(val).trim();
+    if (/^-?\d+$/.test(str)) return `${str}px`;
+    return str;
+}
+
 export default function PortalEditor() {
     const { id } = useParams();
     const navigate = useNavigate();
@@ -2054,10 +2062,10 @@ function SortableSectionItem({ section, previewMode, active, onSelect, onRemove,
                     borderWidth: section.settings?.style?.border?.width ? `${section.settings.style.border.width}px` : undefined,
                     borderColor: section.settings?.style?.border?.color,
                     borderRadius: section.settings?.style?.border?.radius ? `${section.settings.style.border.radius}px` : undefined,
-                    marginTop: section.settings?.style?.margin?.top ? `${section.settings.style.margin.top}px` : section.settings?.marginY ? `${Number(section.settings.marginY) * 4}px` : undefined,
-                    marginBottom: section.settings?.style?.margin?.bottom ? `${section.settings.style.margin.bottom}px` : section.settings?.marginY ? `${Number(section.settings.marginY) * 4}px` : undefined,
-                    marginLeft: section.settings?.style?.margin?.left ? `${section.settings.style.margin.left}px` : previewMode === 'mobile' ? undefined : section.settings?.marginX ? `${Number(section.settings.marginX) * 4}px` : undefined,
-                    marginRight: section.settings?.style?.margin?.right ? `${section.settings.style.margin.right}px` : previewMode === 'mobile' ? undefined : section.settings?.marginX ? `${Number(section.settings.marginX) * 4}px` : undefined,
+                    marginTop: formatUnit(section.settings?.style?.margin?.top) || (section.settings?.marginY ? `${Number(section.settings.marginY) * 4}px` : undefined),
+                    marginBottom: formatUnit(section.settings?.style?.margin?.bottom) || (section.settings?.marginY ? `${Number(section.settings.marginY) * 4}px` : undefined),
+                    marginLeft: formatUnit(section.settings?.style?.margin?.left) || (previewMode === 'mobile' ? undefined : section.settings?.marginX ? `${Number(section.settings.marginX) * 4}px` : undefined),
+                    marginRight: formatUnit(section.settings?.style?.margin?.right) || (previewMode === 'mobile' ? undefined : section.settings?.marginX ? `${Number(section.settings.marginX) * 4}px` : undefined),
                     justifyContent: section.settings?.verticalAlign === 'middle' ? 'center' : section.settings?.verticalAlign === 'bottom' ? 'flex-end' : 'flex-start',
                     alignItems: 'stretch',
                     '--section-heading-color': section.settings?.typography?.headingColor,
@@ -2072,10 +2080,10 @@ function SortableSectionItem({ section, previewMode, active, onSelect, onRemove,
                 <div 
                     className="relative z-10"
                     style={{
-                        paddingTop: section.settings?.style?.padding?.top ? `${section.settings.style.padding.top}px` : section.settings?.paddingY ? `${Number(section.settings.paddingY) * 4}px` : undefined,
-                        paddingBottom: section.settings?.style?.padding?.bottom ? `${section.settings.style.padding.bottom}px` : section.settings?.paddingY ? `${Number(section.settings.paddingY) * 4}px` : undefined,
-                        paddingLeft: section.settings?.style?.padding?.left ? `${section.settings.style.padding.left}px` : previewMode === 'mobile' ? '16px' : section.settings?.paddingX ? `${Number(section.settings.paddingX) * 4}px` : '32px',
-                        paddingRight: section.settings?.style?.padding?.right ? `${section.settings.style.padding.right}px` : previewMode === 'mobile' ? '16px' : section.settings?.paddingX ? `${Number(section.settings.paddingX) * 4}px` : '32px',
+                        paddingTop: formatUnit(section.settings?.style?.padding?.top) || (section.settings?.paddingY ? `${Number(section.settings.paddingY) * 4}px` : undefined),
+                        paddingBottom: formatUnit(section.settings?.style?.padding?.bottom) || (section.settings?.paddingY ? `${Number(section.settings.paddingY) * 4}px` : undefined),
+                        paddingLeft: formatUnit(section.settings?.style?.padding?.left) || (previewMode === 'mobile' ? '16px' : section.settings?.paddingX ? `${Number(section.settings.paddingX) * 4}px` : '32px'),
+                        paddingRight: formatUnit(section.settings?.style?.padding?.right) || (previewMode === 'mobile' ? '16px' : section.settings?.paddingX ? `${Number(section.settings.paddingX) * 4}px` : '32px'),
                     }}
                 >
                     <div 
@@ -2105,10 +2113,10 @@ function SortableSectionItem({ section, previewMode, active, onSelect, onRemove,
                                         borderWidth: col.settings?.style?.border?.width ? `${col.settings.style.border.width}px` : undefined,
                                         borderColor: col.settings?.style?.border?.color,
                                         borderRadius: col.settings?.style?.border?.radius ? `${col.settings.style.border.radius}px` : undefined,
-                                        paddingTop: col.settings?.paddingY ? `${Number(col.settings.paddingY) * 4}px` : undefined,
-                                        paddingBottom: col.settings?.paddingY ? `${Number(col.settings.paddingY) * 4}px` : undefined,
-                                        paddingLeft: col.settings?.paddingX ? `${Number(col.settings.paddingX) * 4}px` : undefined,
-                                        paddingRight: col.settings?.paddingX ? `${Number(col.settings.paddingX) * 4}px` : undefined,
+                                        paddingTop: formatUnit(col.settings?.style?.padding?.top) || (col.settings?.paddingY ? `${Number(col.settings.paddingY) * 4}px` : undefined),
+                                        paddingBottom: formatUnit(col.settings?.style?.padding?.bottom) || (col.settings?.paddingY ? `${Number(col.settings.paddingY) * 4}px` : undefined),
+                                        paddingLeft: formatUnit(col.settings?.style?.padding?.left) || (col.settings?.paddingX ? `${Number(col.settings.paddingX) * 4}px` : undefined),
+                                        paddingRight: formatUnit(col.settings?.style?.padding?.right) || (col.settings?.paddingX ? `${Number(col.settings.paddingX) * 4}px` : undefined),
                                     }} className={cn("flex flex-col gap-4 relative group/col", col.settings?.cssClasses || '')}>
                                         <div className="absolute top-2 right-2 z-[60] opacity-0 group-hover/col:opacity-100 transition-opacity">
                                             <button 

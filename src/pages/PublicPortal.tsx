@@ -67,6 +67,14 @@ function getEffectiveSettings(desktop: any, mobile: any, isMobile: boolean) {
 }
 
 
+function formatUnit(val: string | number | undefined): string | undefined {
+    if (val === undefined || val === null || val === '') return undefined;
+    if (typeof val === 'number') return `${val}px`;
+    const str = String(val).trim();
+    if (/^-?\d+$/.test(str)) return `${str}px`;
+    return str;
+}
+
 export default function PublicPortal() {
     const { tenantSlug, slug } = useParams();
     const isMobile = useIsMobile();
@@ -384,16 +392,16 @@ export default function PublicPortal() {
                                 borderWidth: effectiveSettings.style?.border?.width ? `${effectiveSettings.style.border.width}px` : undefined,
                                 borderColor: effectiveSettings.style?.border?.color,
                                 borderRadius: effectiveSettings.style?.border?.radius ? `${effectiveSettings.style.border.radius}px` : undefined,
-                                marginTop: effectiveSettings.style?.margin?.top ? `${effectiveSettings.style.margin.top}px` : effectiveSettings.marginY ? `${Number(effectiveSettings.marginY) * 4}px` : undefined,
-                                marginBottom: effectiveSettings.style?.margin?.bottom ? `${effectiveSettings.style.margin.bottom}px` : effectiveSettings.marginY ? `${Number(effectiveSettings.marginY) * 4}px` : undefined,
-                                marginLeft: effectiveSettings.style?.margin?.left ? `${effectiveSettings.style.margin.left}px` : isMobile ? undefined : effectiveSettings.marginX ? `${Number(effectiveSettings.marginX) * 4}px` : undefined,
-                                marginRight: effectiveSettings.style?.margin?.right ? `${effectiveSettings.style.margin.right}px` : isMobile ? undefined : effectiveSettings.marginX ? `${Number(effectiveSettings.marginX) * 4}px` : undefined,
-                                paddingTop: effectiveSettings.style?.padding?.top ? `${effectiveSettings.style.padding.top}px` : effectiveSettings.paddingY ? `${Number(effectiveSettings.paddingY) * 4}px` : undefined,
-                                paddingBottom: effectiveSettings.style?.padding?.bottom ? `${effectiveSettings.style.padding.bottom}px` : effectiveSettings.paddingY ? `${Number(effectiveSettings.paddingY) * 4}px` : undefined,
-                                paddingLeft: effectiveSettings.style?.padding?.left ? `${effectiveSettings.style.padding.left}px` : isMobile ? '16px' : effectiveSettings.paddingX ? `${Number(effectiveSettings.paddingX) * 4}px` : '32px',
-                                paddingRight: effectiveSettings.style?.padding?.right ? `${effectiveSettings.style.padding.right}px` : isMobile ? '16px' : effectiveSettings.paddingX ? `${Number(effectiveSettings.paddingX) * 4}px` : '32px',
-                                justifyContent: effectiveSettings.alignItems || 'flex-start',
-                                alignItems: effectiveSettings.justifyContent || 'stretch',
+                                marginTop: formatUnit(effectiveSettings.style?.margin?.top) || (effectiveSettings.marginY ? `${Number(effectiveSettings.marginY) * 4}px` : undefined),
+                                marginBottom: formatUnit(effectiveSettings.style?.margin?.bottom) || (effectiveSettings.marginY ? `${Number(effectiveSettings.marginY) * 4}px` : undefined),
+                                marginLeft: formatUnit(effectiveSettings.style?.margin?.left) || (isMobile ? undefined : effectiveSettings.marginX ? `${Number(effectiveSettings.marginX) * 4}px` : undefined),
+                                marginRight: formatUnit(effectiveSettings.style?.margin?.right) || (isMobile ? undefined : effectiveSettings.marginX ? `${Number(effectiveSettings.marginX) * 4}px` : undefined),
+                                paddingTop: formatUnit(effectiveSettings.style?.padding?.top) || (effectiveSettings.paddingY ? `${Number(effectiveSettings.paddingY) * 4}px` : undefined),
+                                paddingBottom: formatUnit(effectiveSettings.style?.padding?.bottom) || (effectiveSettings.paddingY ? `${Number(effectiveSettings.paddingY) * 4}px` : undefined),
+                                paddingLeft: formatUnit(effectiveSettings.style?.padding?.left) || (isMobile ? '16px' : effectiveSettings.paddingX ? `${Number(effectiveSettings.paddingX) * 4}px` : '32px'),
+                                paddingRight: formatUnit(effectiveSettings.style?.padding?.right) || (isMobile ? '16px' : effectiveSettings.paddingX ? `${Number(effectiveSettings.paddingX) * 4}px` : '32px'),
+                                justifyContent: effectiveSettings.verticalAlign === 'middle' ? 'center' : effectiveSettings.verticalAlign === 'bottom' ? 'flex-end' : 'flex-start',
+                                alignItems: 'stretch',
                             }}
                         >
                             {(effectiveSettings.style?.background?.overlay?.color || effectiveSettings.backgroundOverlay) && (
@@ -433,10 +441,10 @@ export default function PublicPortal() {
                                                     borderWidth: colStyleSettings.border?.width ? `${colStyleSettings.border.width}px` : undefined,
                                                     borderColor: colStyleSettings.border?.color,
                                                     borderRadius: colStyleSettings.border?.radius ? `${colStyleSettings.border.radius}px` : undefined,
-                                                    paddingTop: colSettings.paddingY ? `${Number(colSettings.paddingY) * 4}px` : undefined,
-                                                    paddingBottom: colSettings.paddingY ? `${Number(colSettings.paddingY) * 4}px` : undefined,
-                                                    paddingLeft: colSettings.paddingX ? `${Number(colSettings.paddingX) * 4}px` : undefined,
-                                                    paddingRight: colSettings.paddingX ? `${Number(colSettings.paddingX) * 4}px` : undefined,
+                                                    paddingTop: formatUnit(colStyleSettings.padding?.top) || (colSettings.paddingY ? `${Number(colSettings.paddingY) * 4}px` : undefined),
+                                                    paddingBottom: formatUnit(colStyleSettings.padding?.bottom) || (colSettings.paddingY ? `${Number(colSettings.paddingY) * 4}px` : undefined),
+                                                    paddingLeft: formatUnit(colStyleSettings.padding?.left) || (colSettings.paddingX ? `${Number(colSettings.paddingX) * 4}px` : undefined),
+                                                    paddingRight: formatUnit(colStyleSettings.padding?.right) || (colSettings.paddingX ? `${Number(colSettings.paddingX) * 4}px` : undefined),
                                                 }} 
                                                 className={cn("flex flex-col gap-4", colSettings.cssClasses || '')}
                                             >
