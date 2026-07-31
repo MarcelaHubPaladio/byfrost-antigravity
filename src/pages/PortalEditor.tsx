@@ -2224,7 +2224,7 @@ function SortableBlockItem({ block, sectionId, previewMode, isNested, onUpdate, 
                                     onUpdate({ blocks: newBlocks });
                                 }
                             }}
-                            onSettingsClick={() => onSettingsClick(innerBlock.id)}
+
                         />
                     )}
                 />

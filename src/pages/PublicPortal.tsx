@@ -634,6 +634,7 @@ export default function PublicPortal() {
                                                     />
                                                 ))}
                                             </div>
+                                            );
                                         })}
                                     </div>
                                 ) : (
