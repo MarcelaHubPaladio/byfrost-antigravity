@@ -230,6 +230,8 @@ export default function PortalEditor() {
         return sections.map(s => s.id);
     }, [agroforteData, sections]);
 
+    const layerItems = React.useMemo(() => layoutOrder.map(id => 'layer-' + id), [layoutOrder]);
+
 
     const { activeTenant } = useTenant();
     const sensors = useSensors(
@@ -1247,8 +1249,6 @@ export default function PortalEditor() {
             ) : null}
         </DragOverlay>
     );
-
-    const layerItems = useMemo(() => layoutOrder.map(id => 'layer-' + id), [layoutOrder]);
 
     const layersSheet = (
         <Sheet open={isLayersOpen} onOpenChange={setIsLayersOpen}>

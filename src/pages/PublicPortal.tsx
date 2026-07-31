@@ -591,7 +591,9 @@ export default function PublicPortal() {
                                 style={{
                                     maxWidth: effectiveSettings.contentWidth === 'full' ? undefined : effectiveSettings.widthValue ? `${effectiveSettings.widthValue}px` : '1280px',
                                     justifyContent: effectiveSettings.justifyContent === 'center' ? 'center' : effectiveSettings.justifyContent === 'right' ? 'flex-end' : effectiveSettings.justifyContent === 'space-between' ? 'space-between' : effectiveSettings.justifyContent === 'space-around' ? 'space-around' : 'flex-start',
-                                    alignItems: effectiveSettings.alignItems === 'middle' ? 'center' : effectiveSettings.alignItems === 'bottom' ? 'flex-end' : 'stretch'
+                                    alignItems: effectiveSettings.verticalAlign === 'middle' ? 'center' : effectiveSettings.verticalAlign === 'bottom' ? 'flex-end' : 'stretch',
+                                    flexDirection: isMobile ? 'column' : (effectiveSettings.flexDirection || 'row'),
+                                    flexWrap: effectiveSettings.flexWrap || 'nowrap'
                                 }}
                             >
                                 {section.columns ? (
