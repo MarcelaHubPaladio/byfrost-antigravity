@@ -61,6 +61,7 @@ import { PortalBlockRenderer } from "@/components/portal/PortalBlockRenderer";
 import { FixedSectionLayoutEditor } from "@/components/portal/FixedSectionLayoutEditor";
 import { BlockPropertiesPanel } from "@/components/portal/BlockPropertiesPanel";
 import { SectionPropertiesPanel } from "@/components/portal/SectionPropertiesPanel";
+import { ColumnPropertiesPanel } from "@/components/portal/ColumnPropertiesPanel";
 import { GlobalSettingsModal } from "@/components/portal/GlobalSettingsModal";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { GlobalTypographyStyles } from "@/components/portal/GlobalTypographyStyles";
@@ -165,7 +166,7 @@ export default function PortalEditor() {
     const [activeSectionId, setActiveSectionId] = useState<string | null>(null);
     const [activeElementId, setActiveElementId] = useState<string | null>(null);
     const [activeId, setActiveId] = useState<string | null>(null);
-    const [activeSettingsTarget, setActiveSettingsTarget] = useState<{type: 'section' | 'block' | 'fixed_section', id: string, blockId?: string} | null>(null);
+    const [activeSettingsTarget, setActiveSettingsTarget] = useState<{type: 'section' | 'block' | 'fixed_section' | 'column', id: string, blockId?: string, colId?: string} | null>(null);
     const [activeData, setActiveData] = useState<any>(null);
     const [isAddingSection, setIsAddingSection] = useState(false);
     const [activeColumnId, setActiveColumnId] = useState<{sectionId: string, colId: string} | null>(null);
@@ -566,6 +567,21 @@ export default function PortalEditor() {
             settings: previewMode === 'mobile' ? s.settings : { ...s.settings, ...settings },
             mobileSettings: previewMode === 'mobile' ? { ...(s.mobileSettings || {}), ...settings } : s.mobileSettings
         } : s));
+    };
+
+    const updateColumnSettings = (sectionId: string, colId: string, settings: any) => {
+        pushHistory();
+        setSections(sections.map(s => {
+            if (s.id !== sectionId || !s.columns) return s;
+            return {
+                ...s,
+                columns: s.columns.map(c => c.id === colId ? {
+                    ...c,
+                    settings: previewMode === 'mobile' ? c.settings : { ...c.settings, ...settings },
+                    mobileSettings: previewMode === 'mobile' ? { ...(c.mobileSettings || {}), ...settings } : c.mobileSettings
+                } : c)
+            };
+        }));
     };
 
     const handleDragStart = (event: DragStartEvent) => {
@@ -1376,9 +1392,11 @@ export default function PortalEditor() {
                                             }} 
                                         />
                                     )}
-                                    {(activeSettingsTarget.type === 'section' || activeSettingsTarget.type === 'block') && (() => {
+                                    {(activeSettingsTarget.type === 'section' || activeSettingsTarget.type === 'block' || activeSettingsTarget.type === 'column') && (() => {
                                         const activeBlockItem = activeSettingsTarget.type === 'block' && activeSettingsTarget.blockId ? findContainer(activeSettingsTarget.blockId) : null;
                                         const activeBlock = activeBlockItem?.block;
+                                        const section = sections.find(s => s.id === activeSettingsTarget.id);
+                                        const activeColumn = activeSettingsTarget.type === 'column' && activeSettingsTarget.colId ? section?.columns?.find(c => c.id === activeSettingsTarget.colId) : null;
                                         return (
                                             <div className="space-y-4">
                                                 {activeBlock ? (
@@ -1386,9 +1404,14 @@ export default function PortalEditor() {
                                                         block={activeBlock} 
                                                         onChange={(updates) => updateBlock(activeSettingsTarget.id, activeSettingsTarget.blockId!, updates)}
                                                     />
+                                                ) : activeSettingsTarget.type === 'column' && activeColumn ? (
+                                                    <ColumnPropertiesPanel 
+                                                        column={activeColumn}
+                                                        onChange={(updates) => updateColumnSettings(activeSettingsTarget.id, activeSettingsTarget.colId!, updates)}
+                                                    />
                                                 ) : activeSettingsTarget.type === 'section' ? (
                                                     <SectionPropertiesPanel 
-                                                        section={sections.find(s => s.id === activeSettingsTarget.id)}
+                                                        section={section}
                                                         onChange={(updates) => updateSectionSettings(activeSettingsTarget.id, updates)}
                                                         onUpdateColumns={(newColumns) => {
                                                             pushHistory();
@@ -1528,7 +1551,7 @@ export default function PortalEditor() {
                         <Button variant="ghost" size="icon" className="rounded-full h-8 w-8" onClick={() => activeSettingsTarget ? setActiveSettingsTarget(null) : navigate('/app/portal')}>
                             {activeSettingsTarget ? <GripVertical className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
                         </Button>
-                        <h2 className="font-semibold">{activeSettingsTarget ? (activeSettingsTarget.type === 'section' || activeSettingsTarget.type === 'fixed_section' ? 'Editar Seção' : 'Editar Bloco') : 'Editor'}</h2>
+                        <h2 className="font-semibold">{activeSettingsTarget ? (activeSettingsTarget.type === 'section' || activeSettingsTarget.type === 'fixed_section' ? 'Editar Seção' : activeSettingsTarget.type === 'column' ? 'Editar Coluna' : 'Editar Bloco') : 'Editor'}</h2>
                     </div>
                 </div>
                 
@@ -1552,9 +1575,11 @@ export default function PortalEditor() {
                                         }} 
                                     />
                                 )}
-                                {(activeSettingsTarget.type === 'section' || activeSettingsTarget.type === 'block') && (() => {
+                                {(activeSettingsTarget.type === 'section' || activeSettingsTarget.type === 'block' || activeSettingsTarget.type === 'column') && (() => {
                                     const activeBlockItem = activeSettingsTarget.type === 'block' && activeSettingsTarget.blockId ? findContainer(activeSettingsTarget.blockId) : null;
                                     const activeBlock = activeBlockItem?.block;
+                                    const section = sections.find(s => s.id === activeSettingsTarget.id);
+                                    const activeColumn = activeSettingsTarget.type === 'column' && activeSettingsTarget.colId ? section?.columns?.find(c => c.id === activeSettingsTarget.colId) : null;
                                     return (
                                         <div className="space-y-4">
                                             {activeBlock ? (
@@ -1562,9 +1587,14 @@ export default function PortalEditor() {
                                                     block={activeBlock} 
                                                     onChange={(updates) => updateBlock(activeSettingsTarget.id, activeSettingsTarget.blockId!, updates)}
                                                 />
+                                            ) : activeSettingsTarget.type === 'column' && activeColumn ? (
+                                                <ColumnPropertiesPanel 
+                                                    column={activeColumn}
+                                                    onChange={(updates) => updateColumnSettings(activeSettingsTarget.id, activeSettingsTarget.colId!, updates)}
+                                                />
                                             ) : activeSettingsTarget.type === 'section' ? (
                                                 <SectionPropertiesPanel 
-                                                    section={sections.find(s => s.id === activeSettingsTarget.id)}
+                                                    section={section}
                                                     onChange={(updates) => updateSectionSettings(activeSettingsTarget.id, updates)}
                                                 />
                                             ) : (
@@ -2019,10 +2049,34 @@ function SortableSectionItem({ section, previewMode, active, onSelect, onRemove,
                         {section.columns ? (
                             section.columns.map((col: any, colIdx: number) => (
                                 <React.Fragment key={col.id}>
-                                    <div style={{ 
+                                    <div 
+                                        id={col.settings?.cssId ? col.settings.cssId.replace(/^#/, '') : undefined}
+                                        style={{ 
                                         width: previewMode === 'mobile' ? '100%' : `${col.size}%`,
-                                        alignItems: 'stretch'
-                                    }} className="flex flex-col gap-4 relative group/col">
+                                        alignItems: 'stretch',
+                                        backgroundColor: col.settings?.style?.background?.color || col.settings?.backgroundColor, 
+                                        backgroundImage: col.settings?.style?.background?.image ? `url(${col.settings.style.background.image})` : undefined, 
+                                        backgroundSize: col.settings?.style?.background?.size || 'cover', 
+                                        backgroundPosition: col.settings?.style?.background?.position || 'center',
+                                        backgroundRepeat: col.settings?.style?.background?.repeat || 'no-repeat',
+                                        borderStyle: col.settings?.style?.border?.type && col.settings?.style?.border?.type !== 'none' ? col.settings.style.border.type : undefined,
+                                        borderWidth: col.settings?.style?.border?.width ? `${col.settings.style.border.width}px` : undefined,
+                                        borderColor: col.settings?.style?.border?.color,
+                                        borderRadius: col.settings?.style?.border?.radius ? `${col.settings.style.border.radius}px` : undefined,
+                                        paddingTop: col.settings?.paddingY ? `${Number(col.settings.paddingY) * 4}px` : undefined,
+                                        paddingBottom: col.settings?.paddingY ? `${Number(col.settings.paddingY) * 4}px` : undefined,
+                                        paddingLeft: col.settings?.paddingX ? `${Number(col.settings.paddingX) * 4}px` : undefined,
+                                        paddingRight: col.settings?.paddingX ? `${Number(col.settings.paddingX) * 4}px` : undefined,
+                                    }} className={cn("flex flex-col gap-4 relative group/col", col.settings?.cssClasses || '')}>
+                                        <div className="absolute top-2 right-2 z-[60] opacity-0 group-hover/col:opacity-100 transition-opacity">
+                                            <button 
+                                                onClick={(e) => { e.stopPropagation(); onSettingsClick({ type: 'column', id: section.id, sectionId: section.id, colId: col.id }); }} 
+                                                className="p-1.5 bg-white border border-slate-200 text-slate-500 rounded-md shadow-sm hover:bg-blue-50 hover:text-blue-600 transition-colors"
+                                                title="Configurar Coluna"
+                                            >
+                                                <Settings className="w-3 h-3" />
+                                            </button>
+                                        </div>
                                         <SortableContext items={columnItemsLists[colIdx] || []} strategy={verticalListSortingStrategy}>
                                             {(col.blocks || []).map((block: any) => (
                                                 <SortableBlockItem 

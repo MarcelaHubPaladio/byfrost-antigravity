@@ -16,6 +16,20 @@ const getVimeoVideoId = (url: string) => {
     return match ? match[1] : url;
 };
 
+export const handleAnchorClick = (e: React.MouseEvent<HTMLAnchorElement>, url?: string) => {
+    if (!url) return;
+    const isAnchor = url.startsWith('#') || (!url.startsWith('http') && !url.startsWith('/'));
+    if (isAnchor) {
+        const id = url.startsWith('#') ? url.substring(1) : url;
+        const el = document.getElementById(id);
+        if (el) {
+            e.preventDefault();
+            el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            window.history.pushState(null, '', `#${id}`);
+        }
+    }
+};
+
 export function PremiumSlider({ items }: { items: any[] }) {
     const [emblaRef] = useEmblaCarousel({ loop: true });
     
@@ -200,7 +214,8 @@ export function PortalBlockRenderer({ block, isPremium, isMobile, onRenderInnerB
                         {(block.content?.links || []).map((link: any, idx: number) => (
                             <a 
                                 key={idx} 
-                                href={link.url} 
+                                href={link.url?.startsWith('http') || link.url?.startsWith('/') || link.url?.startsWith('#') ? link.url : `#${link.url}`} 
+                                onClick={(e) => handleAnchorClick(e, link.url)}
                                 className={cn(
                                     "text-sm font-bold transition-colors",
                                     isPremium ? "text-white/70 hover:text-white" : "text-slate-600 hover:text-slate-900"
@@ -229,7 +244,11 @@ export function PortalBlockRenderer({ block, isPremium, isMobile, onRenderInnerB
                 return (
                     <div className={cn("w-full py-4", alignClass)}>
                         {block.content?.link ? (
-                            <a href={block.content.link} className="hover:opacity-80 transition-opacity">
+                            <a 
+                                href={block.content.link?.startsWith('http') || block.content.link?.startsWith('/') || block.content.link?.startsWith('#') ? block.content.link : `#${block.content.link}`}
+                                onClick={(e) => handleAnchorClick(e, block.content.link)}
+                                className="hover:opacity-80 transition-opacity"
+                            >
                                 <Tag className={sizeClass} style={{ color: 'var(--section-heading-color, inherit)' }}>{content}</Tag>
                             </a>
                         ) : (
@@ -297,7 +316,8 @@ export function PortalBlockRenderer({ block, isPremium, isMobile, onRenderInnerB
                         {(block.content?.items || []).map((item: any, idx: number) => (
                             <a 
                                 key={idx} 
-                                href={item.url} 
+                                href={item.url?.startsWith('http') || item.url?.startsWith('/') || item.url?.startsWith('#') ? item.url : `#${item.url}`} 
+                                onClick={(e) => handleAnchorClick(e, item.url)}
                                 className={cn(
                                     "w-full py-5 px-8 rounded-[24px] flex items-center justify-center font-bold text-lg shadow-xl hover:scale-[1.02] active:scale-[0.98] transition-all",
                                     isPremium ? "bg-white text-[#0a0b10]" : "bg-slate-900 text-white"
@@ -316,7 +336,8 @@ export function PortalBlockRenderer({ block, isPremium, isMobile, onRenderInnerB
                     block.content?.alignment === 'right' ? 'justify-end' : 'justify-start'
                 )}>
                     <a 
-                        href={block.content?.link || '#'} 
+                        href={block.content?.linkUrl?.startsWith('http') || block.content?.linkUrl?.startsWith('/') || block.content?.linkUrl?.startsWith('#') ? block.content?.linkUrl : `#${block.content?.linkUrl}`}
+                        onClick={(e) => handleAnchorClick(e, block.content?.linkUrl)}
                         className={cn(
                             "inline-flex items-center justify-center font-bold rounded-2xl transition-all shadow-md hover:scale-105 active:scale-95",
                             block.content?.size === 'small' ? 'h-9 px-4 text-sm' :
@@ -378,7 +399,11 @@ export function PortalBlockRenderer({ block, isPremium, isMobile, onRenderInnerB
                     block.content?.alignment === 'right' ? 'justify-end' : 'justify-start'
                 )}>
                     {block.content?.link ? (
-                        <a href={block.content.link} className="block transition-transform hover:scale-105">
+                        <a 
+                            href={block.content.link?.startsWith('http') || block.content.link?.startsWith('/') || block.content.link?.startsWith('#') ? block.content.link : `#${block.content.link}`}
+                            onClick={(e) => handleAnchorClick(e, block.content.link)}
+                            className="block transition-transform hover:scale-105"
+                        >
                             {renderIconInner(block.content)}
                         </a>
                     ) : (
