@@ -89,10 +89,9 @@ export default function PublicPortal() {
                     .or(`page_settings->>custom_domain.eq.${hostname},page_settings->>custom_domain.eq.${domainSearch}`)
                     .eq("is_published", true)
                     .order('created_at', { ascending: false })
-                    .limit(1)
-                    .maybeSingle();
+                    .limit(1);
                 
-                if (customPage) return customPage;
+                if (customPage && customPage.length > 0) return customPage[0];
             }
 
             let effectiveTenantSlug = tenantSlug;
@@ -119,10 +118,10 @@ export default function PublicPortal() {
                     .select("*")
                     .eq("slug", effectiveSlug)
                     .eq("is_published", true)
-                    .limit(1)
-                    .maybeSingle();
+                    .order('created_at', { ascending: false })
+                    .limit(1);
                 if (pError) throw pError;
-                return data;
+                return data && data.length > 0 ? data[0] : null;
             }
 
             const { data, error: pError } = await supabase
@@ -132,10 +131,9 @@ export default function PublicPortal() {
                 .eq("slug", effectiveSlug)
                 .eq("is_published", true)
                 .order('created_at', { ascending: false })
-                .limit(1)
-                .maybeSingle();
+                .limit(1);
             if (pError) throw pError;
-            return data;
+            return data && data.length > 0 ? data[0] : null;
         }
     });
 
