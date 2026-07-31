@@ -1126,9 +1126,11 @@ export default function PortalEditor() {
                                         onDuplicateSection={() => duplicateSection(customSection.id)}
                                         onAddColumn={() => addColumn(customSection.id)}
                                         onRemoveColumn={removeColumn}
-                                        onSettingsClick={(blockId?: string) => {
-                                            if (blockId) {
-                                                setActiveSettingsTarget({ type: 'block', id: customSection.id, blockId });
+                                        onSettingsClick={(target?: string | any) => {
+                                            if (typeof target === 'object' && target !== null) {
+                                                setActiveSettingsTarget(target);
+                                            } else if (target) {
+                                                setActiveSettingsTarget({ type: 'block', id: customSection.id, blockId: target as string });
                                             } else {
                                                 setActiveSettingsTarget({ type: 'section', id: customSection.id });
                                             }
