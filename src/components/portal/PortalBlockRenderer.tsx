@@ -1,6 +1,7 @@
 import { cn } from "@/lib/utils";
 import { DynamicIcon } from "./DynamicIcon";
 import useEmblaCarousel from 'embla-carousel-react';
+import { Carousel, CarouselContent, CarouselItem, CarouselNext, CarouselPrevious } from "@/components/ui/carousel";
 import { Search, ChevronRight, ArrowRight } from "lucide-react";
 
 const getYouTubeVideoId = (url: string) => {
@@ -457,6 +458,113 @@ export function PortalBlockRenderer({ block, isPremium, isMobile, onRenderInnerB
                     </div>
                 </div>
             )}
+            {block.type === 'product-carousel' && (() => {
+                const items = block.content?.items || [];
+                const isCarousel = block.content?.isCarousel !== false;
+                const itemsPerView = parseInt(block.content?.itemsPerView || '3');
+                const ratio = block.content?.imageAspectRatio || 'video';
+                
+                const cardStyle = block.content?.cardStyle || {
+                    background: '#ffffff',
+                    hasShadow: true,
+                    hasBorder: true,
+                    padding: '24',
+                    margin: '8',
+                    buttonColor: '#2563eb'
+                };
+
+                const gridCols = isMobile ? 'grid-cols-1' : 
+                    itemsPerView === 1 ? 'grid-cols-1' : 
+                    itemsPerView === 2 ? 'grid-cols-2' : 
+                    itemsPerView === 3 ? 'grid-cols-3' : 
+                    itemsPerView === 4 ? 'grid-cols-4' : 'grid-cols-5';
+
+                const basisClass = isMobile ? 'basis-full' :
+                    itemsPerView === 1 ? 'basis-full' : 
+                    itemsPerView === 2 ? 'basis-1/2' : 
+                    itemsPerView === 3 ? 'basis-1/3' : 
+                    itemsPerView === 4 ? 'basis-1/4' : 'basis-1/5';
+                
+                const renderCard = (item: any, idx: number) => (
+                    <div 
+                        key={idx} 
+                        className={cn(
+                            "flex flex-col overflow-hidden h-full",
+                            cardStyle.hasShadow && "shadow-lg",
+                            cardStyle.hasBorder && "border border-slate-200",
+                            "rounded-2xl transition-transform hover:-translate-y-1"
+                        )}
+                        style={{ 
+                            backgroundColor: cardStyle.background,
+                            margin: isCarousel ? '0' : `${cardStyle.margin}px`,
+                        }}
+                    >
+                        {item.image && (
+                            <div className={cn(
+                                "w-full",
+                                ratio === 'video' ? 'aspect-video' :
+                                ratio === 'square' ? 'aspect-square' :
+                                ratio === 'portrait' ? 'aspect-[3/4]' : 'h-auto'
+                            )}>
+                                <img src={item.image} alt={item.title} className="w-full h-full object-cover" />
+                            </div>
+                        )}
+                        <div 
+                            className="flex flex-col flex-1" 
+                            style={{ padding: `${cardStyle.padding}px` }}
+                        >
+                            {item.title && <h3 className="text-xl font-bold text-slate-800 mb-2">{item.title}</h3>}
+                            {item.description && <p className="text-slate-600 text-sm mb-6 flex-1 line-clamp-3">{item.description}</p>}
+                            {item.buttonLabel && (
+                                <a 
+                                    href={item.buttonUrl || '#'} 
+                                    onClick={(e) => handleAnchorClick(e, item.buttonUrl)}
+                                    className="inline-flex justify-center items-center px-4 py-2 rounded-lg font-medium text-white transition-opacity hover:opacity-90 mt-auto"
+                                    style={{ backgroundColor: cardStyle.buttonColor }}
+                                >
+                                    {item.buttonLabel}
+                                </a>
+                            )}
+                        </div>
+                    </div>
+                );
+
+                return (
+                    <div className="py-8">
+                        {isCarousel ? (
+                            <div className="relative group px-12">
+                                <Carousel 
+                                    opts={{ 
+                                        align: "start",
+                                        loop: true
+                                    }}
+                                    className="w-full"
+                                >
+                                    <CarouselContent className={cn("-ml-4")} style={{ marginLeft: `-${cardStyle.margin}px` }}>
+                                        {items.map((item: any, idx: number) => (
+                                            <CarouselItem 
+                                                key={idx} 
+                                                className={cn("pl-4", basisClass)}
+                                                style={{ paddingLeft: `${cardStyle.margin}px` }}
+                                            >
+                                                <div className="h-full py-4">
+                                                    {renderCard(item, idx)}
+                                                </div>
+                                            </CarouselItem>
+                                        ))}
+                                    </CarouselContent>
+                                    <CarouselPrevious className="hidden md:flex -left-4" />
+                                    <CarouselNext className="hidden md:flex -right-4" />
+                                </Carousel>
+                            </div>
+                        ) : (
+                            <div className={cn("grid gap-4", gridCols)}>
+                                {items.map((item: any, idx: number) => renderCard(item, idx))}
+                            </div>
+                        )}
+                    </div>
+                );
+            })()}
             </div>
         </div>
     );

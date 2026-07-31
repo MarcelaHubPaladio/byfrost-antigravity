@@ -16,7 +16,7 @@ export interface SectionStyleOptions {
   marginBottom?: string;
 }
 
-export type BlockType = 'header' | 'hero' | 'text' | 'title' | 'image' | 'links' | 'divider' | 'html' | 'slider' | 'info-cards' | 'grid' | 'gallery';
+export type BlockType = 'header' | 'hero' | 'text' | 'title' | 'image' | 'links' | 'divider' | 'html' | 'slider' | 'info-cards' | 'grid' | 'gallery' | 'product-carousel';
 
 export interface AgroForteData {
   _template: 'agroforte';

@@ -22,7 +22,7 @@ import { AGROFORTE_DEFAULT } from "@/components/portal/agroforte-types";
 import { PortalBlockRenderer } from "@/components/portal/PortalBlockRenderer";
 import { GlobalTypographyStyles } from "@/components/portal/GlobalTypographyStyles";
 
-type BlockType = 'header' | 'hero' | 'text' | 'image' | 'links' | 'divider' | 'html' | 'slider' | 'info-cards' | 'grid' | 'gallery';
+type BlockType = 'header' | 'hero' | 'text' | 'image' | 'links' | 'divider' | 'html' | 'slider' | 'info-cards' | 'grid' | 'gallery' | 'product-carousel';
 
 type Block = {
     id: string;

@@ -25,7 +25,8 @@ import {
     MousePointerClick,
     Video,
     Star,
-    Copy
+    Copy,
+    LayoutGrid
 } from "lucide-react";
 import { toast } from "sonner";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -91,7 +92,7 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 
-type BlockType = 'header' | 'hero' | 'text' | 'title' | 'image' | 'links' | 'divider' | 'html' | 'slider' | 'info-cards' | 'grid' | 'gallery';
+type BlockType = 'header' | 'hero' | 'text' | 'title' | 'image' | 'links' | 'divider' | 'html' | 'slider' | 'info-cards' | 'grid' | 'gallery' | 'product-carousel';
 
 type Block = {
     id: string;
@@ -415,6 +416,23 @@ export default function PortalEditor() {
         if (type === 'info-cards') content = { items: [{ title: 'Explore', date: 'Hoje', text: 'Descrição curta...', image: '' }] };
         if (type === 'grid') content = { columns: 2 };
         if (type === 'gallery') content = { items: [] };
+        if (type === 'product-carousel') content = { 
+            items: [
+                { id: '1', title: 'Produto 1', description: 'Descrição breve do produto', buttonLabel: 'Comprar', buttonUrl: '#', image: '' },
+                { id: '2', title: 'Produto 2', description: 'Descrição breve do produto', buttonLabel: 'Comprar', buttonUrl: '#', image: '' },
+                { id: '3', title: 'Produto 3', description: 'Descrição breve do produto', buttonLabel: 'Comprar', buttonUrl: '#', image: '' },
+            ],
+            isCarousel: true,
+            itemsPerView: '3',
+            cardStyle: {
+                background: '#ffffff',
+                hasShadow: true,
+                hasBorder: true,
+                padding: '24',
+                margin: '8',
+                buttonColor: '#2563eb'
+            }
+        };
 
         const newBlock: Block = {
             id: Math.random().toString(36).substr(2, 9),
@@ -748,6 +766,23 @@ export default function PortalEditor() {
                 if (blockType === 'text') content = { text: 'Conteúdo de texto', dropCap: false, columns: 'Padrão', columnGap: 16 };
                 if (blockType === 'grid') content = { columns: 2 };
                 if (blockType === 'gallery') content = { items: [] };
+                if (blockType === 'product-carousel') content = { 
+                    items: [
+                        { id: '1', title: 'Produto 1', description: 'Descrição breve do produto', buttonLabel: 'Comprar', buttonUrl: '#', image: '' },
+                        { id: '2', title: 'Produto 2', description: 'Descrição breve do produto', buttonLabel: 'Comprar', buttonUrl: '#', image: '' },
+                        { id: '3', title: 'Produto 3', description: 'Descrição breve do produto', buttonLabel: 'Comprar', buttonUrl: '#', image: '' },
+                    ],
+                    isCarousel: true,
+                    itemsPerView: '3',
+                    cardStyle: {
+                        background: '#ffffff',
+                        hasShadow: true,
+                        hasBorder: true,
+                        padding: '24',
+                        margin: '8',
+                        buttonColor: '#2563eb'
+                    }
+                };
 
                 const newBlock: Block = {
                     id: Math.random().toString(36).substr(2, 9),
@@ -1095,6 +1130,7 @@ export default function PortalEditor() {
                     <DraggableBlockButton icon={<MousePointerClick />} label="Botão" type="button" onClick={() => activeColumnId && addBlock(activeColumnId.sectionId, 'button', activeColumnId.colId)} />
                     <DraggableBlockButton icon={<Video />} label="Vídeo" type="video" onClick={() => activeColumnId && addBlock(activeColumnId.sectionId, 'video', activeColumnId.colId)} />
                     <DraggableBlockButton icon={<Star />} label="Ícone" type="icon" onClick={() => activeColumnId && addBlock(activeColumnId.sectionId, 'icon', activeColumnId.colId)} />
+                    <DraggableBlockButton icon={<LayoutGrid />} label="Cards/Carrossel" type="product-carousel" onClick={() => activeColumnId && addBlock(activeColumnId.sectionId, 'product-carousel', activeColumnId.colId)} />
                     <DraggableBlockButton icon={<Plus />} label="HTML" type="html" onClick={() => activeColumnId && addBlock(activeColumnId.sectionId, 'html', activeColumnId.colId)} />
                 </div>
                 <p className="text-[10px] text-blue-600 bg-blue-50 p-3 rounded-xl leading-relaxed">

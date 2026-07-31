@@ -496,6 +496,239 @@ export function BlockPropertiesPanel({ block, onChange }: { block: any, onChange
         return <IconBlockEditor content={content} updateContent={updateContent} />;
     }
 
+    if (block.type === 'product-carousel') {
+        const items = content.items || [];
+        const cardStyle = content.cardStyle || { background: '#ffffff', hasShadow: true, hasBorder: true, padding: '24', margin: '8', buttonColor: '#2563eb' };
+        
+        return (
+            <div className="space-y-6">
+                {/* ITEMS */}
+                <div className="space-y-4">
+                    <Label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Itens do Carrossel/Grid</Label>
+                    
+                    <div className="space-y-3">
+                        {items.map((item: any, i: number) => (
+                            <div key={item.id || i} className="border border-slate-200 rounded-lg p-4 space-y-4 relative bg-white shadow-sm">
+                                <button 
+                                    onClick={() => {
+                                        const newItems = [...items];
+                                        newItems.splice(i, 1);
+                                        updateContent({ items: newItems });
+                                    }} 
+                                    className="absolute top-2 right-2 h-6 w-6 flex items-center justify-center text-red-500 hover:bg-red-50 rounded transition-colors"
+                                >
+                                    <Trash2 className="h-3 w-3" />
+                                </button>
+                                
+                                <div className="space-y-2 pt-2">
+                                    <Label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Imagem</Label>
+                                    <ImageUpload 
+                                        value={item.image || ''}
+                                        onChange={v => {
+                                            const newItems = [...items];
+                                            newItems[i].image = v;
+                                            updateContent({ items: newItems });
+                                        }}
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <Label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Título</Label>
+                                    <Input 
+                                        value={item.title || ''} 
+                                        onChange={e => {
+                                            const newItems = [...items];
+                                            newItems[i].title = e.target.value;
+                                            updateContent({ items: newItems });
+                                        }} 
+                                        placeholder="Nome do produto" 
+                                        className="h-8 text-sm" 
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <Label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Descrição Curta</Label>
+                                    <Textarea 
+                                        value={item.description || ''} 
+                                        onChange={e => {
+                                            const newItems = [...items];
+                                            newItems[i].description = e.target.value;
+                                            updateContent({ items: newItems });
+                                        }} 
+                                        placeholder="Breve descrição" 
+                                        className="text-sm min-h-[60px]" 
+                                    />
+                                </div>
+                                <div className="grid grid-cols-2 gap-2">
+                                    <div className="space-y-2">
+                                        <Label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Texto do Botão</Label>
+                                        <Input 
+                                            value={item.buttonLabel || ''} 
+                                            onChange={e => {
+                                                const newItems = [...items];
+                                                newItems[i].buttonLabel = e.target.value;
+                                                updateContent({ items: newItems });
+                                            }} 
+                                            placeholder="Ex: Comprar" 
+                                            className="h-8 text-sm" 
+                                        />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label className="text-xs font-bold text-slate-500 uppercase tracking-wider">URL do Botão</Label>
+                                        <Input 
+                                            value={item.buttonUrl || ''} 
+                                            onChange={e => {
+                                                const newItems = [...items];
+                                                newItems[i].buttonUrl = e.target.value;
+                                                updateContent({ items: newItems });
+                                            }} 
+                                            placeholder="https://..." 
+                                            className="h-8 text-sm" 
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+                        <button 
+                            onClick={() => {
+                                updateContent({ 
+                                    items: [...items, { 
+                                        id: Math.random().toString(36).substr(2, 9), 
+                                        title: 'Novo Item', 
+                                        description: '', 
+                                        buttonLabel: 'Ver Mais', 
+                                        buttonUrl: '#', 
+                                        image: '' 
+                                    }] 
+                                });
+                            }} 
+                            className="w-full flex items-center justify-center gap-2 text-sm text-green-600 hover:bg-green-50 py-3 rounded-lg transition-colors border-2 border-dashed border-green-200"
+                        >
+                            <Plus className="h-4 w-4" /> Adicionar Item
+                        </button>
+                    </div>
+                </div>
+
+                <div className="space-y-4 border-t border-slate-200 pt-4">
+                    <Label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Configurações de Layout</Label>
+                    
+                    <div className="flex items-center justify-between">
+                        <Label className="text-xs text-slate-600 font-medium">Ativar Carrossel Animado</Label>
+                        <Switch 
+                            checked={content.isCarousel !== false}
+                            onCheckedChange={(c) => updateContent({ isCarousel: c })}
+                        />
+                    </div>
+                    
+                    <div className="space-y-2">
+                        <Label className="text-xs text-slate-600 font-medium">Itens por linha (Grid/Carrossel)</Label>
+                        <Select value={content.itemsPerView?.toString() || '3'} onValueChange={v => updateContent({ itemsPerView: v })}>
+                            <SelectTrigger className="h-8 text-xs bg-white"><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="1">1 Item</SelectItem>
+                                <SelectItem value="2">2 Itens</SelectItem>
+                                <SelectItem value="3">3 Itens</SelectItem>
+                                <SelectItem value="4">4 Itens</SelectItem>
+                                <SelectItem value="5">5 Itens</SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
+                    
+                    <div className="space-y-2">
+                        <Label className="text-xs text-slate-600 font-medium">Aspect Ratio da Imagem</Label>
+                        <Select value={content.imageAspectRatio || 'video'} onValueChange={v => updateContent({ imageAspectRatio: v })}>
+                            <SelectTrigger className="h-8 text-xs bg-white"><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="video">Widescreen (16:9)</SelectItem>
+                                <SelectItem value="square">Quadrado (1:1)</SelectItem>
+                                <SelectItem value="portrait">Retrato (3:4)</SelectItem>
+                                <SelectItem value="auto">Automático (Tamanho original)</SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
+                </div>
+
+                <div className="space-y-4 border-t border-slate-200 pt-4">
+                    <Label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Estilo do Card</Label>
+                    
+                    <div className="flex items-center justify-between">
+                        <Label className="text-xs text-slate-600 font-medium">Mostrar Sombra</Label>
+                        <Switch 
+                            checked={cardStyle.hasShadow !== false}
+                            onCheckedChange={(c) => updateContent({ cardStyle: { ...cardStyle, hasShadow: c } })}
+                        />
+                    </div>
+                    
+                    <div className="flex items-center justify-between">
+                        <Label className="text-xs text-slate-600 font-medium">Mostrar Borda</Label>
+                        <Switch 
+                            checked={cardStyle.hasBorder !== false}
+                            onCheckedChange={(c) => updateContent({ cardStyle: { ...cardStyle, hasBorder: c } })}
+                        />
+                    </div>
+
+                    <div className="space-y-2 pt-2">
+                        <Label className="text-xs text-slate-600 font-medium">Cor de Fundo do Card</Label>
+                        <div className="flex gap-2">
+                            <Input 
+                                type="color" 
+                                value={cardStyle.background || '#ffffff'}
+                                onChange={e => updateContent({ cardStyle: { ...cardStyle, background: e.target.value } })}
+                                className="w-8 h-8 p-0 border-0 rounded cursor-pointer"
+                            />
+                            <Input 
+                                type="text" 
+                                value={cardStyle.background || '#ffffff'}
+                                onChange={e => updateContent({ cardStyle: { ...cardStyle, background: e.target.value } })}
+                                className="flex-1 h-8 text-xs font-mono bg-white"
+                            />
+                        </div>
+                    </div>
+                    
+                    <div className="space-y-2 pt-2">
+                        <Label className="text-xs text-slate-600 font-medium">Cor Principal (Botões)</Label>
+                        <div className="flex gap-2">
+                            <Input 
+                                type="color" 
+                                value={cardStyle.buttonColor || '#2563eb'}
+                                onChange={e => updateContent({ cardStyle: { ...cardStyle, buttonColor: e.target.value } })}
+                                className="w-8 h-8 p-0 border-0 rounded cursor-pointer"
+                            />
+                            <Input 
+                                type="text" 
+                                value={cardStyle.buttonColor || '#2563eb'}
+                                onChange={e => updateContent({ cardStyle: { ...cardStyle, buttonColor: e.target.value } })}
+                                className="flex-1 h-8 text-xs font-mono bg-white"
+                            />
+                        </div>
+                    </div>
+
+                    <div className="space-y-2">
+                        <Label className="text-xs font-bold text-slate-500 uppercase tracking-wider flex justify-between">
+                            <span>Padding Interno</span>
+                            <span>{cardStyle.padding || 24}px</span>
+                        </Label>
+                        <Slider 
+                            value={[cardStyle.padding ? Number(cardStyle.padding) : 24]} 
+                            min={0} max={64} step={4}
+                            onValueChange={v => updateContent({ cardStyle: { ...cardStyle, padding: v[0].toString() } })}
+                        />
+                    </div>
+                    
+                    <div className="space-y-2">
+                        <Label className="text-xs font-bold text-slate-500 uppercase tracking-wider flex justify-between">
+                            <span>Espaçamento (Gaps)</span>
+                            <span>{cardStyle.margin || 8}px</span>
+                        </Label>
+                        <Slider 
+                            value={[cardStyle.margin ? Number(cardStyle.margin) : 8]} 
+                            min={0} max={32} step={4}
+                            onValueChange={v => updateContent({ cardStyle: { ...cardStyle, margin: v[0].toString() } })}
+                        />
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
     return (
         <div className="p-4 bg-slate-50 border border-slate-100 rounded-lg text-sm text-slate-500">
             Propriedades específicas para o bloco <strong>{block.type}</strong> serão exibidas aqui.
