@@ -1820,7 +1820,7 @@ function DroppableEmptyColumn({ sectionId, colId, onAddWidgetClick, onRemoveColu
     return (
         <div 
             ref={setNodeRef}
-            className={cn("h-full min-h-[120px] w-full border border-dashed rounded-lg flex flex-col items-center justify-center transition-colors relative group/empty", isOver ? "border-blue-500 bg-blue-100 ring-2 ring-blue-500/30" : "border-slate-300 bg-slate-50/50 hover:border-blue-300")}
+            className={cn("h-full min-h-[60px] w-full border border-dashed rounded-lg flex flex-col items-center justify-center transition-colors relative group/empty", isOver ? "border-blue-500 bg-blue-100 ring-2 ring-blue-500/30" : "border-slate-300 bg-slate-50/50 hover:border-blue-300")}
         >
             <button 
                 onClick={(e) => { e.stopPropagation(); onAddWidgetClick?.(sectionId, colId); }}
@@ -1967,6 +1967,7 @@ function SortableSectionItem({ section, previewMode, active, onSelect, onRemove,
                 </button>
             )}
             <div 
+                id={section.settings?.cssId ? section.settings.cssId.replace(/^#/, '') : `section-${section.id}`}
                 className={cn("w-full relative rounded-[32px] overflow-hidden flex flex-col", section.settings?.htmlTag || '',
                     section.settings?.height === 'fit-screen' ? "min-h-screen" : section.settings?.height === 'min-height' ? "min-h-[500px]" : "min-h-0"
                 )} 
@@ -2021,7 +2022,7 @@ function SortableSectionItem({ section, previewMode, active, onSelect, onRemove,
                                     <div style={{ 
                                         width: previewMode === 'mobile' ? '100%' : `${col.size}%`,
                                         alignItems: 'stretch'
-                                    }} className="flex flex-col gap-4 relative group/col min-h-[120px]">
+                                    }} className="flex flex-col gap-4 relative group/col">
                                         <SortableContext items={columnItemsLists[colIdx] || []} strategy={verticalListSortingStrategy}>
                                             {(col.blocks || []).map((block: any) => (
                                                 <SortableBlockItem 

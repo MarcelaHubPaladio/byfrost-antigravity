@@ -545,6 +545,7 @@ export default function PublicPortal() {
                     return (
                         <section 
                             key={section.id} 
+                            id={effectiveSettings.cssId ? effectiveSettings.cssId.replace(/^#/, '') : `section-${section.id}`}
                             className={cn(
                                 "relative w-full overflow-hidden transition-all duration-700",
                                 effectiveSettings.height === 'fit-screen' ? "min-h-screen" : effectiveSettings.height === 'min-height' ? "min-h-[500px]" : "min-h-0",
