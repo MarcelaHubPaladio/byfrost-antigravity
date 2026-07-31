@@ -68,7 +68,7 @@ import { AGROFORTE_DEFAULT, type AgroForteData } from "@/components/portal/agrof
 import { useTenant } from "@/providers/TenantProvider";
 import { 
     DndContext, 
-    closestCenter,
+    pointerWithin,
     KeyboardSensor,
     PointerSensor,
     useSensor,
@@ -1515,7 +1515,7 @@ export default function PortalEditor() {
     return (
         <DndContext 
             sensors={sensors}
-            collisionDetection={closestCenter}
+            collisionDetection={pointerWithin}
             onDragStart={handleDragStart}
             onDragOver={handleDragOver}
             onDragEnd={handleDragEnd}
@@ -1820,7 +1820,7 @@ function DroppableEmptyColumn({ sectionId, colId, onAddWidgetClick, onRemoveColu
     return (
         <div 
             ref={setNodeRef}
-            className={cn("h-24 border border-dashed rounded-lg flex flex-col items-center justify-center transition-colors relative group/empty", isOver ? "border-blue-500 bg-blue-100 ring-2 ring-blue-500/30" : "border-slate-300 bg-slate-50/50 hover:border-blue-300")}
+            className={cn("h-full min-h-[120px] w-full border border-dashed rounded-lg flex flex-col items-center justify-center transition-colors relative group/empty", isOver ? "border-blue-500 bg-blue-100 ring-2 ring-blue-500/30" : "border-slate-300 bg-slate-50/50 hover:border-blue-300")}
         >
             <button 
                 onClick={(e) => { e.stopPropagation(); onAddWidgetClick?.(sectionId, colId); }}
@@ -2021,7 +2021,7 @@ function SortableSectionItem({ section, previewMode, active, onSelect, onRemove,
                                     <div style={{ 
                                         width: previewMode === 'mobile' ? '100%' : `${col.size}%`,
                                         alignItems: 'stretch'
-                                    }} className="flex flex-col gap-4 relative group/col">
+                                    }} className="flex flex-col gap-4 relative group/col min-h-[120px]">
                                         <SortableContext items={columnItemsLists[colIdx] || []} strategy={verticalListSortingStrategy}>
                                             {(col.blocks || []).map((block: any) => (
                                                 <SortableBlockItem 
