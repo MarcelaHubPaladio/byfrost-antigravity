@@ -634,6 +634,12 @@ export default function PortalEditor() {
             return; // Same container, handle in DragEnd
         }
 
+        // Prevent moving a block into the section's direct blocks array if that section has columns,
+        // because those blocks wouldn't be rendered, causing an infinite layout shift loop (Error #185).
+        if (!overItem.col && overItem.section.columns && overItem.section.columns.length > 0) {
+            return;
+        }
+
         setSections(prev => {
             const newSections = JSON.parse(JSON.stringify(prev)); // Deep clone for safety
             
