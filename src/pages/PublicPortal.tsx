@@ -89,6 +89,7 @@ export default function PublicPortal() {
                     .or(`page_settings->>custom_domain.eq.${hostname},page_settings->>custom_domain.eq.${domainSearch}`)
                     .eq("is_published", true)
                     .order('created_at', { ascending: false })
+                    .limit(1)
                     .maybeSingle();
                 
                 if (customPage) return customPage;
@@ -130,7 +131,9 @@ export default function PublicPortal() {
                 .eq("tenant_id", tenant.id)
                 .eq("slug", effectiveSlug)
                 .eq("is_published", true)
-                .single();
+                .order('created_at', { ascending: false })
+                .limit(1)
+                .maybeSingle();
             if (pError) throw pError;
             return data;
         }
