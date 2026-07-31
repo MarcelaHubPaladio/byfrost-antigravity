@@ -2018,6 +2018,10 @@ function SortableSectionItem({ section, previewMode, active, onSelect, onRemove,
                     borderWidth: section.settings?.style?.border?.width ? `${section.settings.style.border.width}px` : undefined,
                     borderColor: section.settings?.style?.border?.color,
                     borderRadius: section.settings?.style?.border?.radius ? `${section.settings.style.border.radius}px` : undefined,
+                    marginTop: section.settings?.style?.margin?.top ? `${section.settings.style.margin.top}px` : section.settings?.marginY ? `${Number(section.settings.marginY) * 4}px` : undefined,
+                    marginBottom: section.settings?.style?.margin?.bottom ? `${section.settings.style.margin.bottom}px` : section.settings?.marginY ? `${Number(section.settings.marginY) * 4}px` : undefined,
+                    marginLeft: section.settings?.style?.margin?.left ? `${section.settings.style.margin.left}px` : previewMode === 'mobile' ? undefined : section.settings?.marginX ? `${Number(section.settings.marginX) * 4}px` : undefined,
+                    marginRight: section.settings?.style?.margin?.right ? `${section.settings.style.margin.right}px` : previewMode === 'mobile' ? undefined : section.settings?.marginX ? `${Number(section.settings.marginX) * 4}px` : undefined,
                     justifyContent: section.settings?.verticalAlign === 'middle' ? 'center' : section.settings?.verticalAlign === 'bottom' ? 'flex-end' : 'flex-start',
                     alignItems: 'stretch',
                     '--section-heading-color': section.settings?.typography?.headingColor,
@@ -2032,10 +2036,10 @@ function SortableSectionItem({ section, previewMode, active, onSelect, onRemove,
                 <div 
                     className="relative z-10"
                     style={{
-                        paddingTop: section.settings?.paddingY ? `${Number(section.settings.paddingY) * 4}px` : undefined,
-                        paddingBottom: section.settings?.paddingY ? `${Number(section.settings.paddingY) * 4}px` : undefined,
-                        paddingLeft: previewMode === 'mobile' ? '16px' : section.settings?.paddingX ? `${Number(section.settings.paddingX) * 4}px` : '32px',
-                        paddingRight: previewMode === 'mobile' ? '16px' : section.settings?.paddingX ? `${Number(section.settings.paddingX) * 4}px` : '32px',
+                        paddingTop: section.settings?.style?.padding?.top ? `${section.settings.style.padding.top}px` : section.settings?.paddingY ? `${Number(section.settings.paddingY) * 4}px` : undefined,
+                        paddingBottom: section.settings?.style?.padding?.bottom ? `${section.settings.style.padding.bottom}px` : section.settings?.paddingY ? `${Number(section.settings.paddingY) * 4}px` : undefined,
+                        paddingLeft: section.settings?.style?.padding?.left ? `${section.settings.style.padding.left}px` : previewMode === 'mobile' ? '16px' : section.settings?.paddingX ? `${Number(section.settings.paddingX) * 4}px` : '32px',
+                        paddingRight: section.settings?.style?.padding?.right ? `${section.settings.style.padding.right}px` : previewMode === 'mobile' ? '16px' : section.settings?.paddingX ? `${Number(section.settings.paddingX) * 4}px` : '32px',
                     }}
                 >
                     <div 

@@ -600,6 +600,15 @@ export function SectionPropertiesPanel({ section, block, onChange, onUpdateColum
                                 Avançado
                             </AccordionTrigger>
                             <AccordionContent className="px-4 pb-4 space-y-4">
+                                {(() => {
+                                    const DIR_MAP: Record<string, string> = {
+                                        'SUPERIOR': 'top',
+                                        'DIREITA': 'right',
+                                        'INFERIOR': 'bottom',
+                                        'ESQUERDA': 'left'
+                                    };
+                                    return (
+                                        <>
                                 <div className="space-y-2">
                                     <div className="flex items-center justify-between">
                                         <div className="flex items-center gap-2">
@@ -616,7 +625,12 @@ export function SectionPropertiesPanel({ section, block, onChange, onUpdateColum
                                     <div className="flex bg-slate-50 border border-slate-200 rounded-md overflow-hidden">
                                         {['SUPERIOR', 'DIREITA', 'INFERIOR', 'ESQUERDA'].map(dir => (
                                             <div key={dir} className="flex-1 border-r border-slate-200">
-                                                <Input className="h-8 bg-transparent border-0 text-center text-xs p-0 focus-visible:ring-0" placeholder="0" />
+                                                <Input 
+                                                    className="h-8 bg-transparent border-0 text-center text-xs p-0 focus-visible:ring-0" 
+                                                    placeholder="0" 
+                                                    value={styleSettings.margin?.[DIR_MAP[dir]] || ''}
+                                                    onChange={(e) => updateStyle('margin', { [DIR_MAP[dir]]: e.target.value })}
+                                                />
                                                 <div className="text-[8px] text-center text-slate-400 pb-1">{dir}</div>
                                             </div>
                                         ))}
@@ -642,7 +656,12 @@ export function SectionPropertiesPanel({ section, block, onChange, onUpdateColum
                                     <div className="flex bg-slate-50 border border-slate-200 rounded-md overflow-hidden">
                                         {['SUPERIOR', 'DIREITA', 'INFERIOR', 'ESQUERDA'].map(dir => (
                                             <div key={dir} className="flex-1 border-r border-slate-200">
-                                                <Input className="h-8 bg-transparent border-0 text-center text-xs p-0 focus-visible:ring-0" placeholder="0" />
+                                                <Input 
+                                                    className="h-8 bg-transparent border-0 text-center text-xs p-0 focus-visible:ring-0" 
+                                                    placeholder="0" 
+                                                    value={styleSettings.padding?.[DIR_MAP[dir]] || ''}
+                                                    onChange={(e) => updateStyle('padding', { [DIR_MAP[dir]]: e.target.value })}
+                                                />
                                                 <div className="text-[8px] text-center text-slate-400 pb-1">{dir}</div>
                                             </div>
                                         ))}
@@ -682,6 +701,9 @@ export function SectionPropertiesPanel({ section, block, onChange, onUpdateColum
                                         placeholder="Ex: my-class"
                                     />
                                 </div>
+                                        </>
+                                    );
+                                })()}
                             </AccordionContent>
                         </AccordionItem>
 
