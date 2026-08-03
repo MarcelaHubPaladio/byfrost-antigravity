@@ -40,10 +40,22 @@ export function WeeklyTaskCalendar({ tenantId, userId }: WeeklyTaskCalendarProps
     return []; // Se vazio, backend assume ["primary"]
   });
 
+  const [showEvents, setShowEvents] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem(`gcal_show_events_${userId}`);
+      if (saved !== null) return JSON.parse(saved);
+    } catch(e) {}
+    return true;
+  });
+
   // Salva no localStorage quando muda
   useEffect(() => {
     localStorage.setItem(`gcal_selection_${userId}`, JSON.stringify(selectedCalendarIds));
   }, [selectedCalendarIds, userId]);
+
+  useEffect(() => {
+    localStorage.setItem(`gcal_show_events_${userId}`, JSON.stringify(showEvents));
+  }, [showEvents, userId]);
 
   const toggleCalendarSelection = (id: string) => {
     setSelectedCalendarIds(prev => {
@@ -125,7 +137,7 @@ export function WeeklyTaskCalendar({ tenantId, userId }: WeeklyTaskCalendarProps
   // Busca eventos do Google Calendar se estiver conectado
   const eventsQ = useQuery({
     queryKey: ["google_events", userId, weekDays[0].toISOString(), weekDays[6].toISOString(), selectedCalendarIds],
-    enabled: !!googleIntegration,
+    enabled: !!googleIntegration && showEvents,
     queryFn: async () => {
       const timeMin = startOfDay(weekDays[0]).toISOString();
       const timeMax = endOfDay(weekDays[6]).toISOString();
@@ -186,7 +198,7 @@ export function WeeklyTaskCalendar({ tenantId, userId }: WeeklyTaskCalendarProps
     }
 
     // 2. Adiciona os eventos do Google (formatados como Task para a UI)
-    if (eventsQ.data) {
+    if (showEvents && eventsQ.data) {
       const dayEvents = eventsQ.data.filter((evt: any) => {
         if (!evt.start) return false;
         const evtDate = startOfDay(parseISO(evt.start));
@@ -233,26 +245,38 @@ export function WeeklyTaskCalendar({ tenantId, userId }: WeeklyTaskCalendarProps
                   </Button>
                 </PopoverTrigger>
                 <PopoverContent className="w-64 p-4" align="start">
-                  <h4 className="font-semibold text-sm mb-3">Minhas Agendas</h4>
-                  {availableCalendarsQ.isLoading ? (
-                    <div className="flex justify-center p-4"><Loader2 className="w-4 h-4 animate-spin text-slate-400" /></div>
-                  ) : availableCalendarsQ.data?.length > 0 ? (
-                    <div className="space-y-3 max-h-[300px] overflow-y-auto custom-scrollbar">
-                      {availableCalendarsQ.data.map((cal: any) => (
-                        <div key={cal.id} className="flex items-center space-x-2">
-                          <Checkbox 
-                            id={cal.id} 
-                            checked={selectedCalendarIds.length === 0 ? cal.primary : selectedCalendarIds.includes(cal.id)}
-                            onCheckedChange={() => toggleCalendarSelection(cal.id)}
-                          />
-                          <label htmlFor={cal.id} className="text-sm font-medium leading-none cursor-pointer line-clamp-1" title={cal.summary}>
-                            {cal.summary} {cal.primary && <span className="text-xs text-slate-400 ml-1">(Principal)</span>}
-                          </label>
+                  <div className="flex items-center justify-between mb-4 pb-4 border-b">
+                    <h4 className="font-semibold text-sm">Exibir Agenda</h4>
+                    <Checkbox 
+                      checked={showEvents}
+                      onCheckedChange={(c) => setShowEvents(!!c)}
+                    />
+                  </div>
+
+                  {showEvents && (
+                    <>
+                      <h4 className="font-semibold text-sm mb-3">Minhas Agendas</h4>
+                      {availableCalendarsQ.isLoading ? (
+                        <div className="flex justify-center p-4"><Loader2 className="w-4 h-4 animate-spin text-slate-400" /></div>
+                      ) : availableCalendarsQ.data?.length > 0 ? (
+                        <div className="space-y-3 max-h-[300px] overflow-y-auto custom-scrollbar">
+                          {availableCalendarsQ.data.map((cal: any) => (
+                            <div key={cal.id} className="flex items-center space-x-2">
+                              <Checkbox 
+                                id={cal.id} 
+                                checked={selectedCalendarIds.length === 0 ? cal.primary : selectedCalendarIds.includes(cal.id)}
+                                onCheckedChange={() => toggleCalendarSelection(cal.id)}
+                              />
+                              <label htmlFor={cal.id} className="text-sm font-medium leading-none cursor-pointer line-clamp-1" title={cal.summary}>
+                                {cal.summary} {cal.primary && <span className="text-xs text-slate-400 ml-1">(Principal)</span>}
+                              </label>
+                            </div>
+                          ))}
                         </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="text-sm text-slate-500">Nenhuma agenda encontrada.</div>
+                      ) : (
+                        <div className="text-sm text-slate-500">Nenhuma agenda encontrada.</div>
+                      )}
+                    </>
                   )}
                 </PopoverContent>
               </Popover>
