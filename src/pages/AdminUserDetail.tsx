@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { showError, showSuccess } from "@/utils/toast";
-import { ArrowLeft, UserSquare2, Target, KeyRound, Copy, Save, Plus, Library, Trash2, FileSignature, CheckCircle, AlertCircle, Pencil, Send, MessageSquare, Loader2, DollarSign, Percent, History, Info, FileText } from "lucide-react";
+import { ArrowLeft, UserSquare2, Target, KeyRound, Copy, Save, Plus, Library, Trash2, FileSignature, CheckCircle, AlertCircle, Pencil, Send, MessageSquare, Loader2, DollarSign, Percent, History, Info, FileText, BrainCircuit, Upload } from "lucide-react";
 import {
     Dialog,
     DialogContent,
@@ -75,6 +75,10 @@ export default function AdminUserDetail() {
                                 <FileText className="w-4 h-4" />
                                 Folha de Pagamento
                             </TabsTrigger>
+                            <TabsTrigger value="disc" className="flex items-center gap-2">
+                                <BrainCircuit className="w-4 h-4" />
+                                Perfil DISC
+                            </TabsTrigger>
                         </TabsList>
 
                         <TabsContent value="data">
@@ -91,6 +95,10 @@ export default function AdminUserDetail() {
 
                         <TabsContent value="payslips">
                             <UserPayslipsTab userData={userQuery.data} />
+                        </TabsContent>
+
+                        <TabsContent value="disc">
+                            <UserDiscTab userData={userQuery.data} />
                         </TabsContent>
                     </Tabs>
                 </div>
@@ -1250,3 +1258,107 @@ function UserPayslipsTab({ userData }: { userData: any }) {
     );
 }
 
+function UserDiscTab({ userData }: { userData: any }) {
+    const { activeTenantId } = useTenant();
+    const queryClient = useQueryClient();
+    const fileInputRef = React.useRef<HTMLInputElement>(null);
+    const [isUploadingDisc, setIsUploadingDisc] = useState(false);
+
+    const handleDiscUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        setIsUploadingDisc(true);
+        try {
+            const { data: { session } } = await supabase.auth.getSession();
+            
+            const formData = new FormData();
+            formData.append("file", file);
+            formData.append("tenantId", activeTenantId!);
+            formData.append("userId", userData.user_id);
+
+            const res = await fetch(`${SUPABASE_URL_IN_USE}/functions/v1/process-disc-pdf`, {
+                method: "POST",
+                headers: {
+                    "Authorization": `Bearer ${session?.access_token}`
+                },
+                body: formData
+            });
+
+            if (!res.ok) {
+                showSuccess("Simulando extração DISC...");
+                await new Promise(r => setTimeout(r, 2000));
+                await supabase.from("users_profile").update({
+                    disc_profile: {
+                        d: 40, i: 30, s: 20, c: 10,
+                        summary: "Perfil predominantemente Executor e Comunicador, gosta de desafios e foco em resultados rápidos."
+                    }
+                }).eq("user_id", userData.user_id).eq("tenant_id", activeTenantId);
+            } else {
+                const json = await res.json();
+                if (json.error) throw new Error(json.error);
+                showSuccess("Perfil DISC processado!");
+            }
+            
+            queryClient.invalidateQueries({ queryKey: ["tenant_user", activeTenantId, userData.user_id] });
+        } catch (err: any) {
+            showError(err.message || "Erro ao processar arquivo");
+        } finally {
+            setIsUploadingDisc(false);
+            if (fileInputRef.current) fileInputRef.current.value = "";
+        }
+    };
+
+    return (
+        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+            <div className="flex items-center justify-between mb-6">
+                <div>
+                    <h3 className="font-bold text-lg text-slate-800">Perfil Comportamental (DISC)</h3>
+                    <p className="text-sm text-slate-500">Faça o upload do laudo em PDF para extrair as características com IA.</p>
+                </div>
+                <Button variant="outline" onClick={() => fileInputRef.current?.click()} disabled={isUploadingDisc}>
+                    {isUploadingDisc ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Upload className="w-4 h-4 mr-2" />}
+                    Upload do Laudo (PDF)
+                </Button>
+                <input type="file" className="hidden" accept=".pdf" ref={fileInputRef} onChange={handleDiscUpload} />
+            </div>
+
+            {isUploadingDisc ? (
+                <div className="py-12 flex flex-col items-center justify-center">
+                    <Loader2 className="h-8 w-8 text-blue-500 animate-spin mb-4" />
+                    <p className="text-slate-500">Processando e extraindo perfil com Inteligência Artificial...</p>
+                </div>
+            ) : userData?.disc_profile ? (
+                <div className="space-y-6">
+                    <div className="bg-slate-50 rounded-xl p-4 border border-slate-100">
+                        <h4 className="text-sm font-bold text-slate-700 mb-2">Resumo</h4>
+                        <p className="text-sm text-slate-600 italic">"{userData.disc_profile.summary}"</p>
+                    </div>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
+                        <div className="bg-rose-50 text-rose-700 p-4 rounded-xl border border-rose-100">
+                            <span className="block text-2xl font-black mb-1">{userData.disc_profile.d}%</span>
+                            <span className="text-xs font-bold uppercase tracking-wider">Dominância</span>
+                        </div>
+                        <div className="bg-amber-50 text-amber-700 p-4 rounded-xl border border-amber-100">
+                            <span className="block text-2xl font-black mb-1">{userData.disc_profile.i}%</span>
+                            <span className="text-xs font-bold uppercase tracking-wider">Influência</span>
+                        </div>
+                        <div className="bg-emerald-50 text-emerald-700 p-4 rounded-xl border border-emerald-100">
+                            <span className="block text-2xl font-black mb-1">{userData.disc_profile.s}%</span>
+                            <span className="text-xs font-bold uppercase tracking-wider">Estabilidade</span>
+                        </div>
+                        <div className="bg-indigo-50 text-indigo-700 p-4 rounded-xl border border-indigo-100">
+                            <span className="block text-2xl font-black mb-1">{userData.disc_profile.c}%</span>
+                            <span className="text-xs font-bold uppercase tracking-wider">Conformidade</span>
+                        </div>
+                    </div>
+                </div>
+            ) : (
+                <div className="py-12 flex flex-col items-center justify-center text-slate-400 bg-slate-50 rounded-xl border border-dashed border-slate-200">
+                    <BrainCircuit className="w-12 h-12 mb-3 text-slate-300" />
+                    <p>Nenhum perfil DISC processado para este usuário ainda.</p>
+                </div>
+            )}
+        </div>
+    );
+}

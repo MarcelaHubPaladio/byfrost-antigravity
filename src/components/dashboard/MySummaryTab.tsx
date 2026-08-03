@@ -9,11 +9,13 @@ import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { showError, showSuccess } from "@/utils/toast";
 import { Badge } from "@/components/ui/badge";
+import { useNavigate } from "react-router-dom";
 
 export function MySummaryTab() {
   const { activeTenantId } = useTenant();
   const { user } = useSession();
   const queryClient = useQueryClient();
+  const nav = useNavigate();
 
   if (!activeTenantId || !user) return null;
 
@@ -136,60 +138,7 @@ export function MySummaryTab() {
     },
   });
 
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const [isUploadingDisc, setIsUploadingDisc] = useState(false);
 
-  const handleDiscUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    setIsUploadingDisc(true);
-    try {
-      // Usar a edge function de extract-pdf (hipotética) ou job queue
-      // Para simular, vamos fazer um upload para o storage e chamar o GPT vision / function
-      const { data: { session } } = await supabase.auth.getSession();
-      
-      const formData = new FormData();
-      formData.append("file", file);
-      formData.append("tenantId", activeTenantId);
-      formData.append("userId", user.id);
-
-      // Vamos usar uma chamada para uma Edge Function que faz a leitura do PDF
-      // Assumindo que temos uma function "process-disc-pdf"
-      const res = await fetch(`${SUPABASE_URL_IN_USE}/functions/v1/process-disc-pdf`, {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${session?.access_token}`
-        },
-        body: formData
-      });
-
-      // Se a function process-disc-pdf não existir ainda, vamos simular por enquanto
-      // simulando retorno:
-      if (!res.ok) {
-        // Mocking para o frontend não quebrar se não tivermos a edge function
-        showSuccess("Simulando extração DISC...");
-        await new Promise(r => setTimeout(r, 2000));
-        await supabase.from("users_profile").update({
-          disc_profile: {
-            d: 40, i: 30, s: 20, c: 10,
-            summary: "Perfil predominantemente Executor e Comunicador, gosta de desafios e foco em resultados rápidos."
-          }
-        }).eq("user_id", user.id).eq("tenant_id", activeTenantId);
-      } else {
-        const json = await res.json();
-        if (json.error) throw new Error(json.error);
-        showSuccess("Perfil DISC processado!");
-      }
-      
-      queryClient.invalidateQueries({ queryKey: ["my_profile_disc"] });
-    } catch (err: any) {
-      showError(err.message || "Erro ao processar arquivo");
-    } finally {
-      setIsUploadingDisc(false);
-      if (fileInputRef.current) fileInputRef.current.value = "";
-    }
-  };
 
   return (
     <div className="space-y-6">
@@ -313,18 +262,9 @@ export function MySummaryTab() {
                 </div>
                 <h3 className="font-bold text-lg text-slate-800">Perfil DISC</h3>
               </div>
-              <Button variant="outline" size="sm" className="h-8 text-xs rounded-full" onClick={() => fileInputRef.current?.click()}>
-                <Upload className="w-3 h-3 mr-1" /> PDF do DISC
-              </Button>
-              <input type="file" className="hidden" accept=".pdf" ref={fileInputRef} onChange={handleDiscUpload} />
             </div>
 
-            {isUploadingDisc ? (
-              <div className="py-6 flex flex-col items-center justify-center">
-                <Loader2 className="h-6 w-6 text-blue-500 animate-spin mb-2" />
-                <p className="text-xs text-slate-500 text-center">O Guardião está lendo o seu PDF com IA e extraindo seu perfil...</p>
-              </div>
-            ) : profileQ.data?.disc_profile ? (
+            {profileQ.data?.disc_profile ? (
               <div className="space-y-4">
                 <p className="text-sm text-slate-600 italic">"{profileQ.data.disc_profile.summary}"</p>
                 <div className="grid grid-cols-4 gap-2 text-center">
@@ -351,15 +291,18 @@ export function MySummaryTab() {
                 Você ainda não enviou seu teste DISC.
               </div>
             )}
-          </div>
-
-          {/* FOLHA DE PAGAMENTO */}
+          {/* FOLHA DE PAGAMENTO & PONTO */}
           <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-sm">
-            <div className="flex items-center gap-2 mb-4">
-              <div className="p-2 bg-teal-50 text-teal-600 rounded-xl">
-                <FileText className="h-5 w-5" />
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
+              <div className="flex items-center gap-2">
+                <div className="p-2 bg-teal-50 text-teal-600 rounded-xl">
+                  <FileText className="h-5 w-5" />
+                </div>
+                <h3 className="font-bold text-lg text-slate-800">Folha e Ponto</h3>
               </div>
-              <h3 className="font-bold text-lg text-slate-800">Folha de Pagamento</h3>
+              <Button variant="outline" size="sm" onClick={() => nav("/app/presence")}>
+                Acessar Relógio de Ponto
+              </Button>
             </div>
 
             <div className="space-y-2">
