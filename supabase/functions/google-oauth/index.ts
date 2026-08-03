@@ -282,6 +282,85 @@ serve(async (req) => {
       return new Response(JSON.stringify({ ok: true }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
+    // 6. Create Event
+    if (action === "create_event") {
+      const authHeader = req.headers.get("Authorization");
+      if (!authHeader) throw new Error("Missing Authorization header");
+
+      const { calendarId = "primary", summary, description, startDateTime, endDateTime } = reqBody;
+      if (!summary || !startDateTime || !endDateTime) {
+        throw new Error("Missing required event fields");
+      }
+
+      const supabase = createSupabaseAdmin();
+      const { data: { user }, error: userError } = await supabase.auth.getUser(authHeader.replace("Bearer ", ""));
+      if (userError || !user) throw new Error("Unauthorized");
+
+      // Get the integration
+      const { data: integration, error: intError } = await supabase
+        .from("user_integrations")
+        .select("*")
+        .eq("user_id", user.id)
+        .eq("provider", "google_calendar")
+        .single();
+
+      if (intError || !integration) throw new Error("Google Calendar integration not found");
+
+      let { access_token, refresh_token, expires_at } = integration;
+
+      // Check if token is expired
+      if (new Date(expires_at) <= new Date()) {
+        if (!refresh_token) throw new Error("Token expired and no refresh token available");
+
+        const refreshRes = await fetch("https://oauth2.googleapis.com/token", {
+          method: "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body: new URLSearchParams({
+            client_id: GOOGLE_CLIENT_ID,
+            client_secret: GOOGLE_CLIENT_SECRET,
+            refresh_token,
+            grant_type: "refresh_token",
+          }),
+        });
+
+        if (!refreshRes.ok) throw new Error("Failed to refresh token");
+
+        const tokenData = await refreshRes.json();
+        access_token = tokenData.access_token;
+        expires_at = new Date(Date.now() + tokenData.expires_in * 1000).toISOString();
+
+        // Save new token
+        await supabase
+          .from("user_integrations")
+          .update({ access_token, expires_at, updated_at: new Date().toISOString() })
+          .eq("id", integration.id);
+      }
+
+      const eventPayload = {
+        summary,
+        description,
+        start: { dateTime: startDateTime },
+        end: { dateTime: endDateTime }
+      };
+
+      const res = await fetch(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events`, {
+        method: "POST",
+        headers: { 
+          Authorization: `Bearer ${access_token}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(eventPayload)
+      });
+
+      if (!res.ok) {
+        const errorText = await res.text();
+        throw new Error(`Failed to create event: ${errorText}`);
+      }
+
+      const createdEvent = await res.json();
+      return new Response(JSON.stringify({ event: createdEvent }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
     return new Response("Unknown action", { status: 400, headers: corsHeaders });
 
   } catch (error: any) {

@@ -9,6 +9,7 @@ import { Switch } from "@/components/ui/switch";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { showError } from "@/utils/toast";
+import { CreateEventDialog } from "./CreateEventDialog";
 
 interface Task {
   id: string;
@@ -31,6 +32,7 @@ export function WeeklyTaskCalendar({ tenantId, userId }: WeeklyTaskCalendarProps
   const [selectedDate, setSelectedDate] = useState(new Date());
   const queryClient = useQueryClient();
   const [isConnecting, setIsConnecting] = useState(false);
+  const [isEventDialogOpen, setIsEventDialogOpen] = useState(false);
 
   // Carrega seleção do localStorage ao iniciar
   const [selectedCalendarIds, setSelectedCalendarIds] = useState<string[]>(() => {
@@ -326,11 +328,11 @@ export function WeeklyTaskCalendar({ tenantId, userId }: WeeklyTaskCalendarProps
             {googleIntegration && (
               <Button 
                 size="sm" 
-                onClick={() => window.open('https://calendar.google.com/calendar/r/eventedit', '_blank')}
+                onClick={() => setIsEventDialogOpen(true)}
                 className="rounded-full bg-rose-50 text-rose-600 hover:bg-rose-100 border-none shadow-sm h-8 px-3"
               >
                 <Plus className="w-4 h-4 mr-1" />
-                <span className="hidden sm:inline">Nova agenda</span>
+                <span className="hidden sm:inline">Novo evento</span>
               </Button>
             )}
           </div>
@@ -443,6 +445,13 @@ export function WeeklyTaskCalendar({ tenantId, userId }: WeeklyTaskCalendarProps
           
         </div>
       </div>
+
+      <CreateEventDialog 
+        isOpen={isEventDialogOpen} 
+        onOpenChange={setIsEventDialogOpen} 
+        calendars={availableCalendarsQ.data || []}
+        initialDate={selectedDate}
+      />
     </div>
   );
 }
