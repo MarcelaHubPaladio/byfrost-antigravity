@@ -295,26 +295,28 @@ export function GlobalDashboardOverview() {
             </p>
           </div>
           
-          <div className="flex flex-col sm:flex-row items-center gap-4">
-            <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm min-w-[200px]">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Tokens de IA</span>
-                <Database className="h-4 w-4 text-indigo-500" />
-              </div>
-              <div className="flex items-baseline gap-2">
-                <span className="text-xl font-black text-slate-800">{usedTokens.toLocaleString()}</span>
-                <span className="text-xs font-medium text-slate-400">/ {maxTokens === -1 ? "∞" : maxTokens.toLocaleString()}</span>
-              </div>
-              {maxTokens > 0 && (
-                <div className="mt-3 h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
-                  <div 
-                    className={`h-full rounded-full ${percentUsed > 90 ? 'bg-rose-500' : percentUsed > 75 ? 'bg-amber-400' : 'bg-indigo-500'}`}
-                    style={{ width: `${percentUsed}%` }}
-                  />
+          {isAdmin && (
+            <div className="flex flex-col sm:flex-row items-center gap-4">
+              <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm min-w-[200px]">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Tokens de IA</span>
+                  <Database className="h-4 w-4 text-indigo-500" />
                 </div>
-              )}
+                <div className="flex items-baseline gap-2">
+                  <span className="text-xl font-black text-slate-800">{usedTokens.toLocaleString()}</span>
+                  <span className="text-xs font-medium text-slate-400">/ {maxTokens === -1 ? "∞" : maxTokens.toLocaleString()}</span>
+                </div>
+                {maxTokens > 0 && (
+                  <div className="mt-3 h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
+                    <div 
+                      className={`h-full rounded-full ${percentUsed > 90 ? 'bg-rose-500' : percentUsed > 75 ? 'bg-amber-400' : 'bg-indigo-500'}`}
+                      style={{ width: `${percentUsed}%` }}
+                    />
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
+          )}
         </div>
 
         <Tabs defaultValue="my_summary" className="w-full">
