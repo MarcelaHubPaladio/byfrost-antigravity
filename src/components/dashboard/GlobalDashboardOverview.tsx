@@ -861,8 +861,6 @@ export function GlobalDashboardOverview() {
             </div>
           </TabsContent>
         )}
-      </>
-        )}
 
       </Tabs>
       </div>
