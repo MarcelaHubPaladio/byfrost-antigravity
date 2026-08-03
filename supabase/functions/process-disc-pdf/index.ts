@@ -82,13 +82,31 @@ Não inclua nenhuma outra chave. Certifique-se de extrair as porcentagens corret
     
     const discProfile = JSON.parse(responseContent);
 
+    // 3. Fazer upload do arquivo PDF para o Storage
+    const fileName = `disc_${Date.now()}.pdf`;
+    const filePath = `${tenantId}/${userId}/${fileName}`;
+    
+    const { data: uploadData, error: uploadError } = await supabaseClient
+      .storage
+      .from("employee_documents")
+      .upload(filePath, arrayBuffer, {
+        contentType: file.type || 'application/pdf',
+        upsert: false
+      });
+
+    if (uploadError) {
+      console.error("Storage upload error:", uploadError);
+      // Podemos prosseguir mesmo sem o upload do arquivo se der erro, mas o ideal é registrar.
+    }
+
     const newProfile = {
       id: crypto.randomUUID(),
       created_at: new Date().toISOString(),
+      file_path: uploadError ? null : filePath,
       ...discProfile
     };
 
-    // 3. Salvar no Supabase (Buscar o atual primeiro para fazer append)
+    // 4. Salvar no Supabase (Buscar o atual primeiro para fazer append)
     const { data: userData, error: fetchError } = await supabaseClient
       .from("users_profile")
       .select("disc_profile")

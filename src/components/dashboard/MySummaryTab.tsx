@@ -11,6 +11,8 @@ import { showError, showSuccess } from "@/utils/toast";
 import { Badge } from "@/components/ui/badge";
 import { useNavigate } from "react-router-dom";
 
+import { WeeklyTaskCalendar } from "./WeeklyTaskCalendar";
+
 export function MySummaryTab() {
   const { activeTenantId } = useTenant();
   const { user } = useSession();
@@ -18,32 +20,6 @@ export function MySummaryTab() {
   const nav = useNavigate();
 
   if (!activeTenantId || !user) return null;
-
-  // 1. TAREFAS E COMBINADOS
-  const tasksQ = useQuery({
-    queryKey: ["my_tasks", activeTenantId, user.id],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("super_tasks")
-        .select("*")
-        .eq("tenant_id", activeTenantId)
-        .eq("assigned_to", user.id)
-        .eq("is_completed", false)
-        .order("is_commitment", { ascending: false }) // combinados primeiro
-        .order("order_index", { ascending: true });
-      if (error) throw error;
-      return data;
-    },
-  });
-
-  const toggleTaskCompleted = async (id: string, current: boolean) => {
-    try {
-      await supabase.from("super_tasks").update({ is_completed: !current }).eq("id", id);
-      queryClient.invalidateQueries({ queryKey: ["my_tasks"] });
-    } catch (e: any) {
-      showError(e.message);
-    }
-  };
 
   // 2. METAS
   const goalsQ = useQuery({
@@ -157,39 +133,9 @@ export function MySummaryTab() {
     <div className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         
-        {/* TAREFAS & COMBINADOS */}
-        <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-sm col-span-1 lg:col-span-2 space-y-4">
-          <div className="flex items-center gap-2 mb-4">
-            <div className="p-2 bg-indigo-50 text-indigo-600 rounded-xl">
-              <ListTodo className="h-5 w-5" />
-            </div>
-            <h3 className="font-bold text-lg text-slate-800">Minhas Tarefas e Combinados</h3>
-          </div>
-
-          <div className="space-y-2 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
-            {tasksQ.isLoading ? (
-              <Loader2 className="w-5 h-5 animate-spin text-slate-400 mx-auto" />
-            ) : tasksQ.data?.length === 0 ? (
-              <p className="text-sm text-slate-500 text-center py-4">Tudo limpo por aqui!</p>
-            ) : (
-              tasksQ.data?.map(task => (
-                <div key={task.id} className={`flex items-center gap-3 p-3 rounded-2xl border ${task.is_commitment ? 'bg-amber-50/30 border-amber-100' : 'bg-slate-50 border-slate-100'}`}>
-                  <button 
-                    onClick={() => toggleTaskCompleted(task.id, task.is_completed)}
-                    className="w-5 h-5 rounded-full border-2 border-slate-300 hover:border-indigo-500 flex items-center justify-center transition-colors"
-                  />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-slate-700 truncate">{task.title}</p>
-                  </div>
-                  {task.is_commitment && (
-                    <Badge variant="secondary" className="bg-amber-100 text-amber-700 hover:bg-amber-100 shadow-none">
-                      <Handshake className="w-3 h-3 mr-1" /> Combinado
-                    </Badge>
-                  )}
-                </div>
-              ))
-            )}
-          </div>
+        {/* TAREFAS & COMBINADOS (Componente Novo) */}
+        <div className="col-span-1 lg:col-span-2">
+          <WeeklyTaskCalendar tenantId={activeTenantId} userId={user.id} />
         </div>
 
         {/* ACESSOS RÁPIDOS */}
