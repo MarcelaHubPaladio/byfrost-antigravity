@@ -161,12 +161,23 @@ export function WeeklyTaskCalendar({ tenantId, userId }: WeeklyTaskCalendarProps
     },
   });
 
-  const toggleTaskCompleted = async (id: string, current: boolean) => {
+  const toggleTaskCompleted = async (id: string, current: boolean, originalDueDate: string | null) => {
     try {
-      await supabase.from("super_tasks").update({ 
+      const updates: any = {
         is_completed: !current,
         completed_at: !current ? new Date().toISOString() : null
-      }).eq("id", id);
+      };
+      
+      // Se estiver concluindo uma tarefa atrasada no dia selecionado, atualiza a data dela para o dia selecionado
+      if (!current && originalDueDate) {
+        const dueDateObj = startOfDay(parseISO(originalDueDate));
+        const selectedDateObj = startOfDay(selectedDate);
+        if (!isSameDay(dueDateObj, selectedDateObj)) {
+          updates.due_date = format(selectedDateObj, "yyyy-MM-dd");
+        }
+      }
+
+      await supabase.from("super_tasks").update(updates).eq("id", id);
       queryClient.invalidateQueries({ queryKey: ["weekly_tasks"] });
       // também invalida a query global do dashboard caso exista
       queryClient.invalidateQueries({ queryKey: ["my_tasks"] }); 
@@ -222,8 +233,13 @@ export function WeeklyTaskCalendar({ tenantId, userId }: WeeklyTaskCalendarProps
       items = [...items, ...dayEvents];
     }
 
-    // 3. Ordena tudo por horário
+    // 3. Ordena tudo por horário e concluídas por último
     return items.sort((a, b) => {
+      // Joga concluídas pro final
+      if (a.is_completed !== b.is_completed) {
+        return a.is_completed ? 1 : -1;
+      }
+      
       if (a.due_date && b.due_date) {
         return new Date(a.due_date).getTime() - new Date(b.due_date).getTime();
       }
@@ -411,9 +427,9 @@ export function WeeklyTaskCalendar({ tenantId, userId }: WeeklyTaskCalendarProps
                   </div>
                   <div className="divide-y divide-slate-100">
                     {displayedItems.filter(i => !i.is_event).map(item => (
-                      <div key={item.id} className="p-4 flex items-center gap-4 hover:bg-slate-50/50 transition-colors">
+                      <div key={item.id} className={`p-4 flex items-center gap-4 hover:bg-slate-50/50 transition-colors border-b border-slate-100 last:border-0 ${item.is_completed ? 'opacity-50' : ''}`}>
                         <button 
-                          onClick={() => toggleTaskCompleted(item.id, item.is_completed)}
+                          onClick={() => toggleTaskCompleted(item.id, item.is_completed, item.due_date)}
                           className={`w-5 h-5 rounded flex-shrink-0 flex items-center justify-center border transition-all ${
                             item.is_completed 
                               ? 'bg-emerald-500 border-emerald-500 text-white' 
