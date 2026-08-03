@@ -173,7 +173,7 @@ export function WeeklyTaskCalendar({ tenantId, userId }: WeeklyTaskCalendarProps
         const dueDateObj = startOfDay(parseISO(originalDueDate));
         const selectedDateObj = startOfDay(selectedDate);
         if (!isSameDay(dueDateObj, selectedDateObj)) {
-          updates.due_date = format(selectedDateObj, "yyyy-MM-dd");
+          updates.due_date = new Date(format(selectedDateObj, "yyyy-MM-dd") + "T12:00:00").toISOString();
         }
       }
 

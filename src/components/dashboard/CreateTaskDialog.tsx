@@ -41,7 +41,7 @@ export function CreateTaskDialog({ isOpen, onOpenChange, initialDate = new Date(
       
       await upsertTask.mutateAsync({
         title,
-        due_date: date,
+        due_date: new Date(`${date}T12:00:00`).toISOString(),
         is_completed: false,
         is_commitment: false // For now, we just create simple tasks
       });
