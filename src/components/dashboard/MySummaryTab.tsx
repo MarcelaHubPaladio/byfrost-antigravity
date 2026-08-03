@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase, SUPABASE_URL_IN_USE } from "@/lib/supabase";
 import { useTenant } from "@/providers/TenantProvider";
 import { useSession } from "@/providers/SessionProvider";
-import { Loader2, ExternalLink, Plus, Trash2, FileText, Target, ListTodo, Handshake, Upload, Zap, BrainCircuit, ExternalLinkIcon } from "lucide-react";
+import { Loader2, ExternalLink, Plus, Trash2, FileText, Target, ListTodo, Handshake, Upload, Zap, BrainCircuit, ExternalLinkIcon, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
@@ -68,6 +68,9 @@ export function MySummaryTab() {
   });
 
   const [isLinkModalOpen, setIsLinkModalOpen] = useState(false);
+  const [editingLinkId, setEditingLinkId] = useState<string | null>(null);
+  const [linkTitle, setLinkTitle] = useState("");
+  const [linkUrl, setLinkUrl] = useState("");
   const [newLink, setNewLink] = useState({ title: "", url: "" });
 
   const handleViewPdf = async (filePath: string) => {
@@ -81,20 +84,41 @@ export function MySummaryTab() {
       showError("Erro ao abrir o PDF");
     }
   };
-  const [linkTitle, setLinkTitle] = useState("");
-  const [linkUrl, setLinkUrl] = useState("");
   
-  const addLink = async () => {
+  const openNewLinkModal = () => {
+    setEditingLinkId(null);
+    setLinkTitle("");
+    setLinkUrl("");
+    setIsLinkModalOpen(true);
+  };
+
+  const openEditLinkModal = (link: any) => {
+    setEditingLinkId(link.id);
+    setLinkTitle(link.title);
+    setLinkUrl(link.url);
+    setIsLinkModalOpen(true);
+  };
+
+  const saveLink = async () => {
     if (!linkTitle || !linkUrl) return;
     try {
-      await supabase.from("quick_links").insert({
-        tenant_id: activeTenantId,
-        user_id: user.id,
-        title: linkTitle,
-        url: linkUrl,
-      });
-      showSuccess("Link adicionado");
+      if (editingLinkId) {
+        await supabase.from("quick_links").update({
+          title: linkTitle,
+          url: linkUrl,
+        }).eq("id", editingLinkId);
+        showSuccess("Link atualizado");
+      } else {
+        await supabase.from("quick_links").insert({
+          tenant_id: activeTenantId,
+          user_id: user.id,
+          title: linkTitle,
+          url: linkUrl,
+        });
+        showSuccess("Link adicionado");
+      }
       setIsLinkModalOpen(false);
+      setEditingLinkId(null);
       setLinkTitle("");
       setLinkUrl("");
       queryClient.invalidateQueries({ queryKey: ["my_quick_links"] });
@@ -160,26 +184,35 @@ export function MySummaryTab() {
               </div>
               <h3 className="font-bold text-lg text-slate-800">Acessos Rápidos</h3>
             </div>
-            <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full" onClick={() => setIsLinkModalOpen(true)}>
+            <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full" onClick={openNewLinkModal}>
               <Plus className="h-4 w-4" />
             </Button>
           </div>
 
-          <div className="flex flex-col gap-2">
+          <div className="grid grid-cols-2 gap-3">
             {linksQ.isLoading ? (
-              <Loader2 className="w-5 h-5 animate-spin text-slate-400 mx-auto" />
+              <div className="col-span-2 flex justify-center py-4">
+                <Loader2 className="w-5 h-5 animate-spin text-slate-400" />
+              </div>
             ) : linksQ.data?.length === 0 ? (
-              <p className="text-sm text-slate-500 text-center py-4">Nenhum link salvo.</p>
+              <p className="col-span-2 text-sm text-slate-500 text-center py-4">Nenhum link salvo.</p>
             ) : (
               linksQ.data?.map(link => (
-                <div key={link.id} className="group flex items-center justify-between p-3 rounded-2xl border border-slate-100 hover:border-emerald-200 hover:bg-emerald-50/30 transition-all">
-                  <a href={link.url} target="_blank" rel="noreferrer" className="flex items-center gap-2 flex-1 min-w-0 text-sm font-medium text-slate-700 hover:text-emerald-700">
-                    <ExternalLinkIcon className="h-3 w-3 text-slate-400" />
-                    <span className="truncate">{link.title}</span>
+                <div key={link.id} className="group relative flex flex-col justify-center p-4 rounded-2xl border border-slate-100 hover:border-emerald-200 hover:bg-emerald-50/30 transition-all bg-slate-50/50 min-h-[90px]">
+                  <a href={link.url} target="_blank" rel="noreferrer" className="flex flex-col items-start gap-2 flex-1 w-full text-sm font-medium text-slate-700 hover:text-emerald-700">
+                    <div className="w-8 h-8 rounded-full bg-white shadow-sm flex items-center justify-center border border-slate-100 group-hover:border-emerald-200 transition-colors">
+                      <ExternalLinkIcon className="h-3.5 w-3.5 text-slate-500 group-hover:text-emerald-600" />
+                    </div>
+                    <span className="truncate w-full">{link.title}</span>
                   </a>
-                  <button onClick={() => removeLink(link.id)} className="opacity-0 group-hover:opacity-100 text-rose-400 hover:text-rose-600 transition-opacity">
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </button>
+                  <div className="absolute top-2 right-2 flex opacity-0 group-hover:opacity-100 transition-opacity bg-white/80 backdrop-blur-sm rounded-lg shadow-sm border border-slate-100">
+                    <button onClick={(e) => { e.preventDefault(); openEditLinkModal(link); }} className="p-1.5 text-slate-400 hover:text-indigo-600 transition-colors">
+                      <Pencil className="h-3 w-3" />
+                    </button>
+                    <button onClick={(e) => { e.preventDefault(); removeLink(link.id); }} className="p-1.5 text-slate-400 hover:text-rose-600 transition-colors">
+                      <Trash2 className="h-3 w-3" />
+                    </button>
+                  </div>
                 </div>
               ))
             )}
@@ -317,8 +350,10 @@ export function MySummaryTab() {
       <Dialog open={isLinkModalOpen} onOpenChange={setIsLinkModalOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Novo Acesso Rápido</DialogTitle>
-            <DialogDescription>Adicione um link para acessar facilmente pelo seu resumo.</DialogDescription>
+            <DialogTitle>{editingLinkId ? "Editar Acesso Rápido" : "Novo Acesso Rápido"}</DialogTitle>
+            <DialogDescription>
+              {editingLinkId ? "Altere o título ou link do seu atalho." : "Adicione um link para acessar facilmente pelo seu resumo."}
+            </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
@@ -332,7 +367,7 @@ export function MySummaryTab() {
           </div>
           <div className="flex justify-end gap-2">
             <Button variant="outline" onClick={() => setIsLinkModalOpen(false)}>Cancelar</Button>
-            <Button onClick={addLink}>Salvar Link</Button>
+            <Button onClick={saveLink}>Salvar Link</Button>
           </div>
         </DialogContent>
       </Dialog>

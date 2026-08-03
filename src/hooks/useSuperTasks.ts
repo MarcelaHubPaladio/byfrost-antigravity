@@ -132,7 +132,7 @@ export function useSuperTasks(tenantId?: string | null) {
 
   const upsertTask = useMutation({
     mutationFn: async (task: Partial<SuperTask>) => {
-      const payload = { ...task, updated_at: new Date().toISOString() };
+      const payload: any = { ...task, updated_at: new Date().toISOString() };
 
       if (task.id) {
         // Existing task: only UPDATE the provided fields (no full row needed)
@@ -146,7 +146,10 @@ export function useSuperTasks(tenantId?: string | null) {
         if (error) throw error;
         return data;
       } else {
-        // New task: INSERT via upsert (tenant_id and all required fields must be present)
+        // New task: INSERT
+        payload.tenant_id = payload.tenant_id || tenantId;
+        payload.assigned_to = payload.assigned_to || user?.id;
+        
         const { data, error } = await supabase
           .from("super_tasks")
           .insert(payload)
