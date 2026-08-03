@@ -315,6 +315,24 @@ export function WeeklyTaskCalendar({ tenantId, userId }: WeeklyTaskCalendarProps
           <Button variant="secondary" size="sm" onClick={handleToday} className="rounded-full ml-2 bg-indigo-50 text-indigo-600 hover:bg-indigo-100 border-none">
             Hoje
           </Button>
+
+          <div className="flex gap-2 ml-4 pl-4 border-l border-slate-200">
+            <Button size="sm" className="rounded-full bg-indigo-600 hover:bg-indigo-700 text-white border-none shadow-sm h-8 px-3">
+              <Plus className="w-4 h-4 mr-1" />
+              <span className="hidden sm:inline">Nova tarefa</span>
+            </Button>
+            
+            {googleIntegration && (
+              <Button 
+                size="sm" 
+                onClick={() => window.open('https://calendar.google.com/calendar/r/eventedit', '_blank')}
+                className="rounded-full bg-rose-50 text-rose-600 hover:bg-rose-100 border-none shadow-sm h-8 px-3"
+              >
+                <Plus className="w-4 h-4 mr-1" />
+                <span className="hidden sm:inline">Nova agenda</span>
+              </Button>
+            )}
+          </div>
         </div>
       </div>
 
@@ -422,12 +440,6 @@ export function WeeklyTaskCalendar({ tenantId, userId }: WeeklyTaskCalendarProps
             ))
           )}
           
-          <div className="p-3">
-            <Button variant="ghost" className="w-full justify-start text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 font-semibold h-10">
-              <Plus className="w-4 h-4 mr-2" />
-              Nova tarefa
-            </Button>
-          </div>
         </div>
       </div>
     </div>
