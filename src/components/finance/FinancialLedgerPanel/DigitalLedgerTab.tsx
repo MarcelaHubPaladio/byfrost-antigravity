@@ -12,7 +12,7 @@ import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { format, startOfMonth, endOfMonth, subMonths, addMonths } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { BookOpen, ChevronLeft, ChevronRight, Plus, Pencil, Trash2, Calendar, Wallet, Check, Cloud, ArrowDownCircle, ArrowUpCircle } from "lucide-react";
+import { BookOpen, ChevronLeft, ChevronRight, Plus, Pencil, Trash2, Calendar, Wallet, Check, Cloud, ArrowDownCircle, ArrowUpCircle, Copy } from "lucide-react";
 import { showError, showSuccess } from "@/utils/toast";
 import { ComposedChart, Line, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, Cell } from "recharts";
 
@@ -298,6 +298,50 @@ export function DigitalLedgerTab() {
     onError: (err: any) => showError(err.message ?? "Erro ao remover anotação"),
   });
 
+  const duplicatePreviousMonthM = useMutation({
+    mutationFn: async () => {
+      if (!activeTenantId) throw new Error("Tenant inválido");
+      const prevStart = format(startOfMonth(subMonths(currentMonth, 1)), "yyyy-MM-dd");
+      const prevEnd = format(endOfMonth(subMonths(currentMonth, 1)), "yyyy-MM-dd");
+
+      const { data, error } = await supabase
+        .from("digital_ledger_entries")
+        .select("*")
+        .eq("tenant_id", activeTenantId)
+        .gte("entry_date", prevStart)
+        .lte("entry_date", prevEnd);
+
+      if (error) throw error;
+      if (!data || data.length === 0) throw new Error("Não há lançamentos no mês anterior para duplicar");
+
+      const newEntries = data.map(entry => {
+        const [year, month, day] = entry.entry_date.split('-');
+        const oldDate = new Date(Number(year), Number(month) - 1, Number(day));
+        const newDate = addMonths(oldDate, 1);
+        
+        return {
+          tenant_id: activeTenantId,
+          entry_date: format(newDate, "yyyy-MM-dd"),
+          description: entry.description,
+          amount: entry.amount,
+          type: entry.type,
+          is_paid: false,
+        };
+      });
+
+      const { error: insertError } = await supabase
+        .from("digital_ledger_entries")
+        .insert(newEntries);
+
+      if (insertError) throw insertError;
+    },
+    onSuccess: () => {
+      showSuccess("Mês anterior duplicado com sucesso.");
+      qc.invalidateQueries({ queryKey: ["digital_ledger_entries", activeTenantId] });
+    },
+    onError: (err: any) => showError(err.message ?? "Erro ao duplicar mês anterior"),
+  });
+
   // Helpers
   const formatCurrency = (val: number) => {
     return new Intl.NumberFormat("pt-BR", {
@@ -412,6 +456,21 @@ export function DigitalLedgerTab() {
             <Cloud className="h-3.5 w-3.5 text-slate-400" />
             Seus dados são salvos automaticamente
           </div>
+
+          <Button
+            variant="outline"
+            className="h-8 px-3 rounded-lg text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 text-xs font-medium flex items-center gap-1.5 border-slate-200 dark:border-slate-700"
+            onClick={() => {
+              if (window.confirm("Deseja duplicar os lançamentos do mês anterior para o mês atual?")) {
+                duplicatePreviousMonthM.mutate();
+              }
+            }}
+            disabled={duplicatePreviousMonthM.isPending}
+          >
+            <Copy className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">Copiar mês anterior</span>
+            <span className="sm:hidden">Copiar</span>
+          </Button>
         </div>
       </div>
 
