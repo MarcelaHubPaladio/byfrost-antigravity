@@ -1,15 +1,17 @@
 import { useState, useMemo, useEffect } from "react";
 import { format, addDays, subDays, startOfWeek, isSameDay, isBefore, startOfDay, endOfDay, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { ChevronLeft, ChevronRight, Check, Plus, Loader2, Calendar as CalendarIcon, ExternalLink, Settings } from "lucide-react";
+import { ChevronLeft, ChevronRight, Check, Plus, Loader2, Calendar as CalendarIcon, ExternalLink, Settings, CheckSquare } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { showError } from "@/utils/toast";
 import { CreateEventDialog } from "./CreateEventDialog";
+import { CreateTaskDialog } from "./CreateTaskDialog";
 
 interface Task {
   id: string;
@@ -33,6 +35,7 @@ export function WeeklyTaskCalendar({ tenantId, userId }: WeeklyTaskCalendarProps
   const queryClient = useQueryClient();
   const [isConnecting, setIsConnecting] = useState(false);
   const [isEventDialogOpen, setIsEventDialogOpen] = useState(false);
+  const [isTaskDialogOpen, setIsTaskDialogOpen] = useState(false);
 
   // Carrega seleção do localStorage ao iniciar
   const [selectedCalendarIds, setSelectedCalendarIds] = useState<string[]>(() => {
@@ -320,19 +323,29 @@ export function WeeklyTaskCalendar({ tenantId, userId }: WeeklyTaskCalendarProps
           </Button>
 
           <div className="flex gap-2 ml-4 pl-4 border-l border-slate-200">
-            <Button size="sm" className="rounded-full bg-indigo-600 hover:bg-indigo-700 text-white border-none shadow-sm h-8 px-3">
-              <Plus className="w-4 h-4 mr-1" />
-              <span className="hidden sm:inline">Nova tarefa</span>
-            </Button>
-            
-            {googleIntegration && (
-              <Button 
-                size="sm" 
-                onClick={() => setIsEventDialogOpen(true)}
-                className="rounded-full bg-rose-50 text-rose-600 hover:bg-rose-100 border-none shadow-sm h-8 px-3"
-              >
+            {googleIntegration ? (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button size="sm" className="rounded-full bg-indigo-600 hover:bg-indigo-700 text-white border-none shadow-sm h-8 px-4">
+                    <Plus className="w-4 h-4 mr-1" />
+                    Adicionar
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-48">
+                  <DropdownMenuItem onClick={() => setIsTaskDialogOpen(true)} className="cursor-pointer py-2">
+                    <CheckSquare className="w-4 h-4 mr-2" />
+                    Nova Tarefa
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setIsEventDialogOpen(true)} className="cursor-pointer py-2">
+                    <CalendarIcon className="w-4 h-4 mr-2" />
+                    Novo Evento
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            ) : (
+              <Button size="sm" onClick={() => setIsTaskDialogOpen(true)} className="rounded-full bg-indigo-600 hover:bg-indigo-700 text-white border-none shadow-sm h-8 px-4">
                 <Plus className="w-4 h-4 mr-1" />
-                <span className="hidden sm:inline">Novo evento</span>
+                Nova tarefa
               </Button>
             )}
           </div>
@@ -389,14 +402,15 @@ export function WeeklyTaskCalendar({ tenantId, userId }: WeeklyTaskCalendarProps
               Nenhuma tarefa ou evento para este dia.
             </div>
           ) : (
-            displayedItems.map(item => (
-              <div key={item.id} className="p-4 flex items-center gap-4 hover:bg-slate-50/50 transition-colors">
-                
-                {item.is_event ? (
-                  <div className="w-5 h-5 rounded flex-shrink-0 flex items-center justify-center">
-                    <CalendarIcon className="w-4 h-4 text-rose-500" />
-                  </div>
-                ) : (
+            <div className="flex flex-col">
+              {/* Tarefas Section */}
+              {displayedItems.filter(i => !i.is_event).length > 0 && (
+                <div className="bg-slate-50/80 py-2 px-4 text-xs font-bold text-slate-500 uppercase tracking-wider sticky top-0 backdrop-blur-md z-10 border-b">
+                  Tarefas do Sistema
+                </div>
+              )}
+              {displayedItems.filter(i => !i.is_event).map(item => (
+                <div key={item.id} className="p-4 flex items-center gap-4 hover:bg-slate-50/50 transition-colors border-b border-slate-100 last:border-0">
                   <button 
                     onClick={() => toggleTaskCompleted(item.id, item.is_completed)}
                     className={`w-5 h-5 rounded flex-shrink-0 flex items-center justify-center border transition-all ${
@@ -407,42 +421,71 @@ export function WeeklyTaskCalendar({ tenantId, userId }: WeeklyTaskCalendarProps
                   >
                     {item.is_completed && <Check className="w-3.5 h-3.5" strokeWidth={3} />}
                   </button>
-                )}
-                
-                <div className="flex-1 flex items-center min-w-0 gap-2">
-                  <span className={`text-sm font-medium truncate ${item.is_completed ? 'text-slate-400 line-through' : 'text-slate-700'}`}>
-                    {item.title}
-                  </span>
-                  {item.is_event && item.htmlLink && (
-                    <a href={item.htmlLink} target="_blank" rel="noreferrer" className="text-slate-400 hover:text-indigo-600 transition-colors">
-                      <ExternalLink className="w-3.5 h-3.5" />
-                    </a>
-                  )}
-                </div>
+                  
+                  <div className="flex-1 flex items-center min-w-0 gap-2">
+                    <span className={`text-sm font-medium truncate ${item.is_completed ? 'text-slate-400 line-through' : 'text-slate-700'}`}>
+                      {item.title}
+                    </span>
+                  </div>
 
-                <div className="flex items-center gap-3 flex-shrink-0">
-                  <span className={`text-[10px] font-bold px-2.5 py-1 rounded-md ${
-                    item.is_event
-                      ? 'bg-rose-50 text-rose-600'
-                      : item.is_completed 
+                  <div className="flex items-center gap-3 flex-shrink-0">
+                    <span className={`text-[10px] font-bold px-2.5 py-1 rounded-md ${
+                      item.is_completed 
                         ? 'bg-emerald-100 text-emerald-700'
                         : item.is_commitment 
                           ? 'bg-amber-100 text-amber-700'
                           : 'bg-indigo-50 text-indigo-700'
-                  }`}>
-                    {item.is_event ? 'Agenda' : item.is_completed ? 'Concluída' : item.is_commitment ? 'Combinado' : 'Trabalho'}
-                  </span>
-                  
-                  {item.due_date && (
-                    <span className="text-sm font-medium text-slate-500 w-12 text-right">
-                      {format(parseISO(item.due_date), "HH:mm")}
+                    }`}>
+                      {item.is_completed ? 'Concluída' : item.is_commitment ? 'Combinado' : 'Trabalho'}
                     </span>
-                  )}
+                    
+                    {item.due_date && (
+                      <span className="text-sm font-medium text-slate-500 w-12 text-right">
+                        {format(parseISO(item.due_date), "HH:mm")}
+                      </span>
+                    )}
+                  </div>
                 </div>
-              </div>
-            ))
+              ))}
+
+              {/* Eventos Section */}
+              {displayedItems.filter(i => i.is_event).length > 0 && (
+                <div className="bg-rose-50/80 py-2 px-4 text-xs font-bold text-rose-600 uppercase tracking-wider sticky top-0 backdrop-blur-md z-10 border-y">
+                  Agenda do Google
+                </div>
+              )}
+              {displayedItems.filter(i => i.is_event).map(item => (
+                <div key={item.id} className="p-4 flex items-center gap-4 hover:bg-slate-50/50 transition-colors border-b border-slate-100 last:border-0">
+                  <div className="w-5 h-5 rounded flex-shrink-0 flex items-center justify-center">
+                    <CalendarIcon className="w-4 h-4 text-rose-500" />
+                  </div>
+                  
+                  <div className="flex-1 flex items-center min-w-0 gap-2">
+                    <span className="text-sm font-medium truncate text-slate-700">
+                      {item.title}
+                    </span>
+                    {item.htmlLink && (
+                      <a href={item.htmlLink} target="_blank" rel="noreferrer" className="text-slate-400 hover:text-indigo-600 transition-colors">
+                        <ExternalLink className="w-3.5 h-3.5" />
+                      </a>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-3 flex-shrink-0">
+                    <span className="text-[10px] font-bold px-2.5 py-1 rounded-md bg-rose-50 text-rose-600">
+                      Agenda
+                    </span>
+                    
+                    {item.due_date && (
+                      <span className="text-sm font-medium text-slate-500 w-12 text-right">
+                        {format(parseISO(item.due_date), "HH:mm")}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
           )}
-          
         </div>
       </div>
 
@@ -451,6 +494,13 @@ export function WeeklyTaskCalendar({ tenantId, userId }: WeeklyTaskCalendarProps
         onOpenChange={setIsEventDialogOpen} 
         calendars={availableCalendarsQ.data || []}
         initialDate={selectedDate}
+      />
+      
+      <CreateTaskDialog
+        isOpen={isTaskDialogOpen}
+        onOpenChange={setIsTaskDialogOpen}
+        initialDate={selectedDate}
+        tenantId={tenantId}
       />
     </div>
   );

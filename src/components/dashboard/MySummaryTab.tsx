@@ -144,10 +144,10 @@ export function MySummaryTab() {
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-6">
         
         {/* TAREFAS & COMBINADOS (Componente Novo) */}
-        <div className="col-span-1 lg:col-span-2">
+        <div className="col-span-1 md:col-span-2 lg:col-span-3">
           <WeeklyTaskCalendar tenantId={activeTenantId} userId={user.id} />
         </div>
 
