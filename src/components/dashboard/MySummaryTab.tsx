@@ -140,6 +140,19 @@ export function MySummaryTab() {
 
 
 
+  const discHistory = Array.isArray(profileQ.data?.disc_profile)
+      ? profileQ.data.disc_profile
+      : (profileQ.data?.disc_profile && Object.keys(profileQ.data.disc_profile).length > 0)
+          ? [profileQ.data.disc_profile]
+          : [];
+          
+  const latestDiscProfile = [...discHistory].sort((a, b) => {
+      if (a.created_at && b.created_at) {
+          return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+      }
+      return 0;
+  })[0];
+
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -264,25 +277,25 @@ export function MySummaryTab() {
               </div>
             </div>
 
-            {profileQ.data?.disc_profile ? (
+            {latestDiscProfile ? (
               <div className="space-y-4">
-                <p className="text-sm text-slate-600 italic">"{profileQ.data.disc_profile.summary}"</p>
+                <p className="text-sm text-slate-600 italic">"{latestDiscProfile.summary}"</p>
                 <div className="grid grid-cols-4 gap-2 text-center">
                   <div className="bg-red-50 text-red-700 p-2 rounded-xl">
                     <span className="block text-xs font-bold opacity-70">D</span>
-                    <span className="block text-lg font-black">{profileQ.data.disc_profile.d}%</span>
+                    <span className="block text-lg font-black">{latestDiscProfile.d}%</span>
                   </div>
                   <div className="bg-yellow-50 text-yellow-700 p-2 rounded-xl">
                     <span className="block text-xs font-bold opacity-70">I</span>
-                    <span className="block text-lg font-black">{profileQ.data.disc_profile.i}%</span>
+                    <span className="block text-lg font-black">{latestDiscProfile.i}%</span>
                   </div>
                   <div className="bg-green-50 text-green-700 p-2 rounded-xl">
                     <span className="block text-xs font-bold opacity-70">S</span>
-                    <span className="block text-lg font-black">{profileQ.data.disc_profile.s}%</span>
+                    <span className="block text-lg font-black">{latestDiscProfile.s}%</span>
                   </div>
                   <div className="bg-blue-50 text-blue-700 p-2 rounded-xl">
                     <span className="block text-xs font-bold opacity-70">C</span>
-                    <span className="block text-lg font-black">{profileQ.data.disc_profile.c}%</span>
+                    <span className="block text-lg font-black">{latestDiscProfile.c}%</span>
                   </div>
                 </div>
               </div>

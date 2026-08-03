@@ -1269,6 +1269,7 @@ function UserDiscTab({ userData }: { userData: any }) {
         if (!file) return;
 
         setIsUploadingDisc(true);
+        showSuccess("Enviando laudo para a Inteligência Artificial. Isso pode levar alguns segundos...");
         try {
             const { data: { session } } = await supabase.auth.getSession();
             
@@ -1303,16 +1304,43 @@ function UserDiscTab({ userData }: { userData: any }) {
         }
     };
 
+    const discHistory = Array.isArray(userData?.disc_profile)
+        ? userData.disc_profile
+        : (userData?.disc_profile && Object.keys(userData.disc_profile).length > 0)
+            ? [userData.disc_profile]
+            : [];
+            
+    const sortedHistory = [...discHistory].sort((a, b) => {
+        if (a.created_at && b.created_at) {
+            return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+        }
+        return 0;
+    });
+
+    const handleDeleteDisc = async (discId?: string) => {
+        if (!discId) return;
+        if (!confirm("Tem certeza que deseja excluir este laudo do histórico?")) return;
+        try {
+            const newHistory = sortedHistory.filter(d => d.id !== discId);
+            const { error } = await supabase.from("users_profile").update({ disc_profile: newHistory }).eq("user_id", userData.user_id).eq("tenant_id", activeTenantId);
+            if (error) throw error;
+            showSuccess("Laudo excluído com sucesso!");
+            queryClient.invalidateQueries({ queryKey: ["tenant_user", activeTenantId, userData.user_id] });
+        } catch (err: any) {
+            showError("Erro ao excluir laudo");
+        }
+    };
+
     return (
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-            <div className="flex items-center justify-between mb-6">
+            <div className="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-4">
                 <div>
                     <h3 className="font-bold text-lg text-slate-800">Perfil Comportamental (DISC)</h3>
                     <p className="text-sm text-slate-500">Faça o upload do laudo em PDF para extrair as características com IA.</p>
                 </div>
                 <Button variant="outline" onClick={() => fileInputRef.current?.click()} disabled={isUploadingDisc}>
                     {isUploadingDisc ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Upload className="w-4 h-4 mr-2" />}
-                    Upload do Laudo (PDF)
+                    Upload de Novo Laudo
                 </Button>
                 <input type="file" className="hidden" accept=".pdf" ref={fileInputRef} onChange={handleDiscUpload} />
             </div>
@@ -1322,71 +1350,96 @@ function UserDiscTab({ userData }: { userData: any }) {
                     <Loader2 className="h-8 w-8 text-blue-500 animate-spin mb-4" />
                     <p className="text-slate-500">Processando e extraindo perfil com Inteligência Artificial...</p>
                 </div>
-            ) : userData?.disc_profile ? (
-                <div className="space-y-6">
-                    <div className="bg-slate-50 rounded-xl p-4 border border-slate-100">
-                        <h4 className="text-sm font-bold text-slate-700 mb-2">Resumo</h4>
-                        <p className="text-sm text-slate-600 italic">"{userData.disc_profile.summary}"</p>
-                    </div>
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
-                        <div className="bg-rose-50 text-rose-700 p-4 rounded-xl border border-rose-100">
-                            <span className="block text-2xl font-black mb-1">{userData.disc_profile.d}%</span>
-                            <span className="text-xs font-bold uppercase tracking-wider">Dominância</span>
-                        </div>
-                        <div className="bg-amber-50 text-amber-700 p-4 rounded-xl border border-amber-100">
-                            <span className="block text-2xl font-black mb-1">{userData.disc_profile.i}%</span>
-                            <span className="text-xs font-bold uppercase tracking-wider">Influência</span>
-                        </div>
-                        <div className="bg-emerald-50 text-emerald-700 p-4 rounded-xl border border-emerald-100">
-                            <span className="block text-2xl font-black mb-1">{userData.disc_profile.s}%</span>
-                            <span className="text-xs font-bold uppercase tracking-wider">Estabilidade</span>
-                        </div>
-                        <div className="bg-indigo-50 text-indigo-700 p-4 rounded-xl border border-indigo-100">
-                            <span className="block text-2xl font-black mb-1">{userData.disc_profile.c}%</span>
-                            <span className="text-xs font-bold uppercase tracking-wider">Conformidade</span>
-                        </div>
-                    </div>
+            ) : sortedHistory.length > 0 ? (
+                <div className="space-y-12">
+                    {sortedHistory.map((profile, index) => (
+                        <div key={profile.id || index} className="space-y-6 relative">
+                            {sortedHistory.length > 1 && (
+                                <div className="flex items-center justify-between bg-slate-50 p-3 rounded-lg border border-slate-100">
+                                    <h4 className="font-bold text-sm text-slate-700">
+                                        Laudo processado em {profile.created_at ? new Date(profile.created_at).toLocaleDateString() : 'Data desconhecida'} 
+                                        {index === 0 && <span className="ml-2 text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded-full">Atual</span>}
+                                    </h4>
+                                    <Button variant="ghost" size="sm" className="text-rose-500 hover:text-rose-600 hover:bg-rose-50" onClick={() => handleDeleteDisc(profile.id)}>
+                                        <Trash2 className="w-4 h-4 mr-2" /> Excluir
+                                    </Button>
+                                </div>
+                            )}
 
-                    {userData.disc_profile.hr_analysis && (
-                        <div className="mt-8 space-y-6 border-t border-slate-100 pt-6">
-                            <h4 className="text-lg font-bold text-slate-800 flex items-center gap-2">
-                                Análise Detalhada (RH)
-                            </h4>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                <div className="space-y-3">
-                                    <h5 className="font-bold text-sm text-emerald-700 flex items-center gap-1"><CheckCircle className="w-4 h-4"/> Pontos Fortes</h5>
-                                    <ul className="list-disc pl-5 text-sm text-slate-600 space-y-1">
-                                        {userData.disc_profile.hr_analysis.strengths.map((s: string, i: number) => <li key={i}>{s}</li>)}
-                                    </ul>
+                            <div className="bg-slate-50 rounded-xl p-4 border border-slate-100 relative">
+                                {sortedHistory.length === 1 && profile.id && (
+                                    <Button variant="ghost" size="icon" className="absolute top-2 right-2 text-slate-400 hover:text-rose-500" onClick={() => handleDeleteDisc(profile.id)}>
+                                        <Trash2 className="w-4 h-4" />
+                                    </Button>
+                                )}
+                                <h4 className="text-sm font-bold text-slate-700 mb-2">Resumo</h4>
+                                <p className="text-sm text-slate-600 italic">"{profile.summary}"</p>
+                            </div>
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
+                                <div className="bg-rose-50 text-rose-700 p-4 rounded-xl border border-rose-100">
+                                    <span className="block text-2xl font-black mb-1">{profile.d}%</span>
+                                    <span className="text-xs font-bold uppercase tracking-wider">Dominância</span>
                                 </div>
-                                <div className="space-y-3">
-                                    <h5 className="font-bold text-sm text-rose-700 flex items-center gap-1"><AlertCircle className="w-4 h-4"/> Pontos de Melhoria</h5>
-                                    <ul className="list-disc pl-5 text-sm text-slate-600 space-y-1">
-                                        {userData.disc_profile.hr_analysis.improvement_points.map((s: string, i: number) => <li key={i}>{s}</li>)}
-                                    </ul>
+                                <div className="bg-amber-50 text-amber-700 p-4 rounded-xl border border-amber-100">
+                                    <span className="block text-2xl font-black mb-1">{profile.i}%</span>
+                                    <span className="text-xs font-bold uppercase tracking-wider">Influência</span>
+                                </div>
+                                <div className="bg-emerald-50 text-emerald-700 p-4 rounded-xl border border-emerald-100">
+                                    <span className="block text-2xl font-black mb-1">{profile.s}%</span>
+                                    <span className="text-xs font-bold uppercase tracking-wider">Estabilidade</span>
+                                </div>
+                                <div className="bg-indigo-50 text-indigo-700 p-4 rounded-xl border border-indigo-100">
+                                    <span className="block text-2xl font-black mb-1">{profile.c}%</span>
+                                    <span className="text-xs font-bold uppercase tracking-wider">Conformidade</span>
                                 </div>
                             </div>
+
+                            {profile.hr_analysis && (
+                                <div className="mt-8 space-y-6 border-t border-slate-100 pt-6">
+                                    <h4 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+                                        Análise Detalhada (RH)
+                                    </h4>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                        <div className="space-y-3">
+                                            <h5 className="font-bold text-sm text-emerald-700 flex items-center gap-1"><CheckCircle className="w-4 h-4"/> Pontos Fortes</h5>
+                                            <ul className="list-disc pl-5 text-sm text-slate-600 space-y-1">
+                                                {profile.hr_analysis.strengths?.map((s: string, i: number) => <li key={i}>{s}</li>)}
+                                            </ul>
+                                        </div>
+                                        <div className="space-y-3">
+                                            <h5 className="font-bold text-sm text-rose-700 flex items-center gap-1"><AlertCircle className="w-4 h-4"/> Pontos de Melhoria</h5>
+                                            <ul className="list-disc pl-5 text-sm text-slate-600 space-y-1">
+                                                {profile.hr_analysis.improvement_points?.map((s: string, i: number) => <li key={i}>{s}</li>)}
+                                            </ul>
+                                        </div>
+                                    </div>
+                                    
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
+                                            <h5 className="font-bold text-xs text-slate-500 uppercase tracking-wider mb-2">Estilo de Comunicação</h5>
+                                            <p className="text-sm text-slate-700">{profile.hr_analysis.communication_style}</p>
+                                        </div>
+                                        <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
+                                            <h5 className="font-bold text-xs text-slate-500 uppercase tracking-wider mb-2">Ambiente Ideal</h5>
+                                            <p className="text-sm text-slate-700">{profile.hr_analysis.ideal_environment}</p>
+                                        </div>
+                                        <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
+                                            <h5 className="font-bold text-xs text-slate-500 uppercase tracking-wider mb-2">Tomada de Decisão</h5>
+                                            <p className="text-sm text-slate-700">{profile.hr_analysis.decision_making}</p>
+                                        </div>
+                                        <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
+                                            <h5 className="font-bold text-xs text-slate-500 uppercase tracking-wider mb-2">Potencial de Liderança</h5>
+                                            <p className="text-sm text-slate-700">{profile.hr_analysis.leadership_potential}</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
                             
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
-                                    <h5 className="font-bold text-xs text-slate-500 uppercase tracking-wider mb-2">Estilo de Comunicação</h5>
-                                    <p className="text-sm text-slate-700">{userData.disc_profile.hr_analysis.communication_style}</p>
-                                </div>
-                                <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
-                                    <h5 className="font-bold text-xs text-slate-500 uppercase tracking-wider mb-2">Ambiente Ideal</h5>
-                                    <p className="text-sm text-slate-700">{userData.disc_profile.hr_analysis.ideal_environment}</p>
-                                </div>
-                                <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
-                                    <h5 className="font-bold text-xs text-slate-500 uppercase tracking-wider mb-2">Tomada de Decisão</h5>
-                                    <p className="text-sm text-slate-700">{userData.disc_profile.hr_analysis.decision_making}</p>
-                                </div>
-                                <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
-                                    <h5 className="font-bold text-xs text-slate-500 uppercase tracking-wider mb-2">Potencial de Liderança</h5>
-                                    <p className="text-sm text-slate-700">{userData.disc_profile.hr_analysis.leadership_potential}</p>
-                                </div>
-                            </div>
+                            {sortedHistory.length > 1 && index < sortedHistory.length - 1 && (
+                                <div className="border-b-2 border-dashed border-slate-200 my-8"></div>
+                            )}
                         </div>
-                    )}
+                    ))}
                 </div>
             ) : (
                 <div className="py-12 flex flex-col items-center justify-center text-slate-400 bg-slate-50 rounded-xl border border-dashed border-slate-200">

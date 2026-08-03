@@ -82,11 +82,37 @@ Não inclua nenhuma outra chave. Certifique-se de extrair as porcentagens corret
     
     const discProfile = JSON.parse(responseContent);
 
-    // 3. Salvar no Supabase
+    const newProfile = {
+      id: crypto.randomUUID(),
+      created_at: new Date().toISOString(),
+      ...discProfile
+    };
+
+    // 3. Salvar no Supabase (Buscar o atual primeiro para fazer append)
+    const { data: userData, error: fetchError } = await supabaseClient
+      .from("users_profile")
+      .select("disc_profile")
+      .eq("user_id", userId)
+      .eq("tenant_id", tenantId)
+      .single();
+
+    if (fetchError) throw fetchError;
+
+    let currentHistory = userData?.disc_profile;
+    if (!Array.isArray(currentHistory)) {
+        if (currentHistory && typeof currentHistory === 'object' && Object.keys(currentHistory).length > 0) {
+            currentHistory = [{ id: crypto.randomUUID(), created_at: new Date().toISOString(), ...currentHistory }];
+        } else {
+            currentHistory = [];
+        }
+    }
+
+    currentHistory.push(newProfile);
+
     const { error: updateError } = await supabaseClient
       .from("users_profile")
       .update({
-        disc_profile: discProfile
+        disc_profile: currentHistory
       })
       .eq("user_id", userId)
       .eq("tenant_id", tenantId);
@@ -96,7 +122,7 @@ Não inclua nenhuma outra chave. Certifique-se de extrair as porcentagens corret
       throw updateError;
     }
 
-    return new Response(JSON.stringify({ success: true, profile: discProfile }), {
+    return new Response(JSON.stringify({ success: true, profile: currentHistory }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
       status: 200,
     });
