@@ -16,7 +16,7 @@ interface CreateTaskDialogProps {
 }
 
 export function CreateTaskDialog({ isOpen, onOpenChange, initialDate = new Date(), tenantId }: CreateTaskDialogProps) {
-  const { upsertTask } = useSuperTasks({ tenantId });
+  const { upsertTask } = useSuperTasks(tenantId);
   const [isSubmitting, setIsSubmitting] = useState(false);
   
   const [title, setTitle] = useState("");

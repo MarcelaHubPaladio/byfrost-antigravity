@@ -203,7 +203,7 @@ export function MySummaryTab() {
                     <div className="w-8 h-8 rounded-full bg-white shadow-sm flex items-center justify-center border border-slate-100 group-hover:border-emerald-200 transition-colors">
                       <ExternalLinkIcon className="h-3.5 w-3.5 text-slate-500 group-hover:text-emerald-600" />
                     </div>
-                    <span className="truncate w-full">{link.title}</span>
+                    <span className="w-full text-left break-words leading-tight">{link.title}</span>
                   </a>
                   <div className="absolute top-2 right-2 flex opacity-0 group-hover:opacity-100 transition-opacity bg-white/80 backdrop-blur-sm rounded-lg shadow-sm border border-slate-100">
                     <button onClick={(e) => { e.preventDefault(); openEditLinkModal(link); }} className="p-1.5 text-slate-400 hover:text-indigo-600 transition-colors">

@@ -161,6 +161,8 @@ export function useSuperTasks(tenantId?: string | null) {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["super_tasks"] });
+      qc.invalidateQueries({ queryKey: ["weekly_tasks"] });
+      qc.invalidateQueries({ queryKey: ["my_tasks"] });
     },
   });
 
@@ -171,6 +173,8 @@ export function useSuperTasks(tenantId?: string | null) {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["super_tasks"] });
+      qc.invalidateQueries({ queryKey: ["weekly_tasks"] });
+      qc.invalidateQueries({ queryKey: ["my_tasks"] });
     },
   });
 
