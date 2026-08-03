@@ -5,6 +5,7 @@ import { ChevronLeft, ChevronRight, Check, Plus, Loader2, Calendar as CalendarIc
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Switch } from "@/components/ui/switch";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { showError } from "@/utils/toast";
@@ -225,7 +226,7 @@ export function WeeklyTaskCalendar({ tenantId, userId }: WeeklyTaskCalendarProps
       if (b.due_date) return 1;
       return 0;
     });
-  }, [tasksQ.data, eventsQ.data, selectedDate]);
+  }, [tasksQ.data, eventsQ.data, selectedDate, showEvents]);
 
   return (
     <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-sm w-full">
@@ -247,9 +248,9 @@ export function WeeklyTaskCalendar({ tenantId, userId }: WeeklyTaskCalendarProps
                 <PopoverContent className="w-64 p-4" align="start">
                   <div className="flex items-center justify-between mb-4 pb-4 border-b">
                     <h4 className="font-semibold text-sm">Exibir Agenda</h4>
-                    <Checkbox 
+                    <Switch 
                       checked={showEvents}
-                      onCheckedChange={(c) => setShowEvents(!!c)}
+                      onCheckedChange={setShowEvents}
                     />
                   </div>
 
