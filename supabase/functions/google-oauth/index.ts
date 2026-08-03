@@ -187,8 +187,11 @@ serve(async (req) => {
       const authHeader = req.headers.get("Authorization");
       if (!authHeader) throw new Error("Missing Authorization header");
       
-      const { timeMin, timeMax } = reqBody;
+      let { timeMin, timeMax, calendarIds } = reqBody;
       if (!timeMin || !timeMax) throw new Error("Missing timeMin or timeMax");
+      if (!calendarIds || !Array.isArray(calendarIds) || calendarIds.length === 0) {
+        calendarIds = ["primary"];
+      }
 
       const supabase = createSupabaseAdmin();
       const { data: { user }, error: userError } = await supabase.auth.getUser(authHeader.replace("Bearer ", ""));
@@ -234,17 +237,21 @@ serve(async (req) => {
           .eq("id", integration.id);
       }
 
-      // Fetch events
-      const eventsRes = await fetch(`https://www.googleapis.com/calendar/v3/calendars/primary/events?timeMin=${encodeURIComponent(timeMin)}&timeMax=${encodeURIComponent(timeMax)}&singleEvents=true&orderBy=startTime`, {
-        headers: { Authorization: `Bearer ${access_token}` },
+      // Fetch events from all calendars
+      const fetchPromises = calendarIds.map(async (calId: string) => {
+        const res = await fetch(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calId)}/events?timeMin=${encodeURIComponent(timeMin)}&timeMax=${encodeURIComponent(timeMax)}&singleEvents=true&orderBy=startTime`, {
+          headers: { Authorization: `Bearer ${access_token}` },
+        });
+        if (!res.ok) return [];
+        const data = await res.json();
+        return data.items || [];
       });
 
-      if (!eventsRes.ok) throw new Error("Failed to fetch events");
-
-      const eventsData = await eventsRes.json();
+      const results = await Promise.all(fetchPromises);
+      const allEventsData = results.flat();
       
       // Simplify events structure
-      const events = (eventsData.items || []).map((item: any) => ({
+      const events = allEventsData.map((item: any) => ({
         id: item.id,
         summary: item.summary || "Sem Título",
         start: item.start?.dateTime || item.start?.date,

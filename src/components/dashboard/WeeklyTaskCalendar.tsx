@@ -1,8 +1,10 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { format, addDays, subDays, startOfWeek, isSameDay, isBefore, startOfDay, endOfDay, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { ChevronLeft, ChevronRight, Check, Plus, Loader2, Calendar as CalendarIcon, ExternalLink } from "lucide-react";
+import { ChevronLeft, ChevronRight, Check, Plus, Loader2, Calendar as CalendarIcon, ExternalLink, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { showError } from "@/utils/toast";
@@ -28,6 +30,27 @@ export function WeeklyTaskCalendar({ tenantId, userId }: WeeklyTaskCalendarProps
   const [selectedDate, setSelectedDate] = useState(new Date());
   const queryClient = useQueryClient();
   const [isConnecting, setIsConnecting] = useState(false);
+
+  // Carrega seleção do localStorage ao iniciar
+  const [selectedCalendarIds, setSelectedCalendarIds] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem(`gcal_selection_${userId}`);
+      if (saved) return JSON.parse(saved);
+    } catch(e) {}
+    return []; // Se vazio, backend assume ["primary"]
+  });
+
+  // Salva no localStorage quando muda
+  useEffect(() => {
+    localStorage.setItem(`gcal_selection_${userId}`, JSON.stringify(selectedCalendarIds));
+  }, [selectedCalendarIds, userId]);
+
+  const toggleCalendarSelection = (id: string) => {
+    setSelectedCalendarIds(prev => {
+      if (prev.includes(id)) return prev.filter(i => i !== id);
+      return [...prev, id];
+    });
+  };
 
   const handlePrevWeek = () => setSelectedDate(subDays(selectedDate, 7));
   const handleNextWeek = () => setSelectedDate(addDays(selectedDate, 7));
@@ -86,16 +109,34 @@ export function WeeklyTaskCalendar({ tenantId, userId }: WeeklyTaskCalendarProps
     },
   });
 
+  // Busca lista de agendas do Google Calendar se estiver conectado
+  const availableCalendarsQ = useQuery({
+    queryKey: ["google_calendars_list", userId],
+    enabled: !!googleIntegration,
+    queryFn: async () => {
+      const { data, error } = await supabase.functions.invoke("google-oauth", {
+        body: { action: "calendars" },
+      });
+      if (error) throw error;
+      return data?.calendars || [];
+    },
+  });
+
   // Busca eventos do Google Calendar se estiver conectado
   const eventsQ = useQuery({
-    queryKey: ["google_events", userId, weekDays[0].toISOString(), weekDays[6].toISOString()],
+    queryKey: ["google_events", userId, weekDays[0].toISOString(), weekDays[6].toISOString(), selectedCalendarIds],
     enabled: !!googleIntegration,
     queryFn: async () => {
       const timeMin = startOfDay(weekDays[0]).toISOString();
       const timeMax = endOfDay(weekDays[6]).toISOString();
       
       const { data, error } = await supabase.functions.invoke("google-oauth", {
-        body: { action: "events", timeMin, timeMax },
+        body: { 
+          action: "events", 
+          timeMin, 
+          timeMax, 
+          calendarIds: selectedCalendarIds.length > 0 ? selectedCalendarIds : undefined 
+        },
       });
       if (error) throw error;
       return data?.events || [];
@@ -184,6 +225,38 @@ export function WeeklyTaskCalendar({ tenantId, userId }: WeeklyTaskCalendarProps
               <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M9 15h6"/><path d="M9 11h6"/></svg>
             </div>
             Tarefas & Agenda
+            {googleIntegration && (
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="ghost" size="icon" className="w-8 h-8 rounded-full text-slate-400 hover:text-slate-600 focus-visible:ring-0">
+                    <Settings className="w-4 h-4" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-64 p-4" align="start">
+                  <h4 className="font-semibold text-sm mb-3">Minhas Agendas</h4>
+                  {availableCalendarsQ.isLoading ? (
+                    <div className="flex justify-center p-4"><Loader2 className="w-4 h-4 animate-spin text-slate-400" /></div>
+                  ) : availableCalendarsQ.data?.length > 0 ? (
+                    <div className="space-y-3 max-h-[300px] overflow-y-auto custom-scrollbar">
+                      {availableCalendarsQ.data.map((cal: any) => (
+                        <div key={cal.id} className="flex items-center space-x-2">
+                          <Checkbox 
+                            id={cal.id} 
+                            checked={selectedCalendarIds.length === 0 ? cal.primary : selectedCalendarIds.includes(cal.id)}
+                            onCheckedChange={() => toggleCalendarSelection(cal.id)}
+                          />
+                          <label htmlFor={cal.id} className="text-sm font-medium leading-none cursor-pointer line-clamp-1" title={cal.summary}>
+                            {cal.summary} {cal.primary && <span className="text-xs text-slate-400 ml-1">(Principal)</span>}
+                          </label>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-sm text-slate-500">Nenhuma agenda encontrada.</div>
+                  )}
+                </PopoverContent>
+              </Popover>
+            )}
           </h2>
           <p className="text-sm text-slate-500 mt-1">Seu caderno de planejamento diário</p>
         </div>
