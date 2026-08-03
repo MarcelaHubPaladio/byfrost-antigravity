@@ -1286,27 +1286,13 @@ function UserDiscTab({ userData }: { userData: any }) {
             });
 
             if (!res.ok) {
-                showSuccess("Simulando extração DISC...");
-                await new Promise(r => setTimeout(r, 2000));
-                await supabase.from("users_profile").update({
-                    disc_profile: {
-                        d: 40, i: 30, s: 20, c: 10,
-                        summary: "Perfil predominantemente Executor e Comunicador, gosta de desafios e foco em resultados rápidos.",
-                        hr_analysis: {
-                            strengths: ["Forte orientação para resultados", "Comunicação persuasiva", "Decisão rápida sob pressão"],
-                            improvement_points: ["Pode ser visto como impaciente", "Tendência a pular detalhes importantes"],
-                            communication_style: "Direto, verbal e focado no quadro geral.",
-                            ideal_environment: "Ambientes dinâmicos com liberdade de ação e ausência de microgerenciamento.",
-                            decision_making: "Rápida, baseada em intuição e resultados esperados, com certa tolerância a riscos.",
-                            leadership_potential: "Alto para liderança em cenários de crise ou metas agressivas, mas precisa de suporte em organização."
-                        }
-                    }
-                }).eq("user_id", userData.user_id).eq("tenant_id", activeTenantId);
-            } else {
-                const json = await res.json();
-                if (json.error) throw new Error(json.error);
-                showSuccess("Perfil DISC processado!");
+                const json = await res.json().catch(() => ({}));
+                throw new Error(json.error || "Erro na comunicação com a Edge Function");
             }
+            
+            const json = await res.json();
+            if (json.error) throw new Error(json.error);
+            showSuccess("Perfil DISC processado!");
             
             queryClient.invalidateQueries({ queryKey: ["tenant_user", activeTenantId, userData.user_id] });
         } catch (err: any) {
