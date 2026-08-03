@@ -320,7 +320,7 @@ export function GlobalDashboardOverview() {
         </div>
 
         <Tabs defaultValue="my_summary" className="w-full">
-          <TabsList className={`mb-6 grid w-full ${!isAdmin ? "max-w-xs grid-cols-1" : isSuperAdmin ? "max-w-4xl grid-cols-6" : "max-w-4xl grid-cols-5"} bg-slate-100/80 p-1 rounded-xl`}>
+          <TabsList className="mb-6 flex flex-wrap w-full justify-start h-auto bg-slate-100/80 p-1 rounded-xl gap-1">
             <TabsTrigger value="my_summary" className="rounded-lg">Meu Resumo</TabsTrigger>
             {isAdmin && (
               <>
