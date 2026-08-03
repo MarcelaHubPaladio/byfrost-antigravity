@@ -291,6 +291,8 @@ export function MySummaryTab() {
                 Você ainda não enviou seu teste DISC.
               </div>
             )}
+          </div>
+          
           {/* FOLHA DE PAGAMENTO & PONTO */}
           <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-sm">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
