@@ -1291,7 +1291,15 @@ function UserDiscTab({ userData }: { userData: any }) {
                 await supabase.from("users_profile").update({
                     disc_profile: {
                         d: 40, i: 30, s: 20, c: 10,
-                        summary: "Perfil predominantemente Executor e Comunicador, gosta de desafios e foco em resultados rápidos."
+                        summary: "Perfil predominantemente Executor e Comunicador, gosta de desafios e foco em resultados rápidos.",
+                        hr_analysis: {
+                            strengths: ["Forte orientação para resultados", "Comunicação persuasiva", "Decisão rápida sob pressão"],
+                            improvement_points: ["Pode ser visto como impaciente", "Tendência a pular detalhes importantes"],
+                            communication_style: "Direto, verbal e focado no quadro geral.",
+                            ideal_environment: "Ambientes dinâmicos com liberdade de ação e ausência de microgerenciamento.",
+                            decision_making: "Rápida, baseada em intuição e resultados esperados, com certa tolerância a riscos.",
+                            leadership_potential: "Alto para liderança em cenários de crise ou metas agressivas, mas precisa de suporte em organização."
+                        }
                     }
                 }).eq("user_id", userData.user_id).eq("tenant_id", activeTenantId);
             } else {
@@ -1352,6 +1360,47 @@ function UserDiscTab({ userData }: { userData: any }) {
                             <span className="text-xs font-bold uppercase tracking-wider">Conformidade</span>
                         </div>
                     </div>
+
+                    {userData.disc_profile.hr_analysis && (
+                        <div className="mt-8 space-y-6 border-t border-slate-100 pt-6">
+                            <h4 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+                                Análise Detalhada (RH)
+                            </h4>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div className="space-y-3">
+                                    <h5 className="font-bold text-sm text-emerald-700 flex items-center gap-1"><CheckCircle className="w-4 h-4"/> Pontos Fortes</h5>
+                                    <ul className="list-disc pl-5 text-sm text-slate-600 space-y-1">
+                                        {userData.disc_profile.hr_analysis.strengths.map((s: string, i: number) => <li key={i}>{s}</li>)}
+                                    </ul>
+                                </div>
+                                <div className="space-y-3">
+                                    <h5 className="font-bold text-sm text-rose-700 flex items-center gap-1"><AlertCircle className="w-4 h-4"/> Pontos de Melhoria</h5>
+                                    <ul className="list-disc pl-5 text-sm text-slate-600 space-y-1">
+                                        {userData.disc_profile.hr_analysis.improvement_points.map((s: string, i: number) => <li key={i}>{s}</li>)}
+                                    </ul>
+                                </div>
+                            </div>
+                            
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
+                                    <h5 className="font-bold text-xs text-slate-500 uppercase tracking-wider mb-2">Estilo de Comunicação</h5>
+                                    <p className="text-sm text-slate-700">{userData.disc_profile.hr_analysis.communication_style}</p>
+                                </div>
+                                <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
+                                    <h5 className="font-bold text-xs text-slate-500 uppercase tracking-wider mb-2">Ambiente Ideal</h5>
+                                    <p className="text-sm text-slate-700">{userData.disc_profile.hr_analysis.ideal_environment}</p>
+                                </div>
+                                <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
+                                    <h5 className="font-bold text-xs text-slate-500 uppercase tracking-wider mb-2">Tomada de Decisão</h5>
+                                    <p className="text-sm text-slate-700">{userData.disc_profile.hr_analysis.decision_making}</p>
+                                </div>
+                                <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
+                                    <h5 className="font-bold text-xs text-slate-500 uppercase tracking-wider mb-2">Potencial de Liderança</h5>
+                                    <p className="text-sm text-slate-700">{userData.disc_profile.hr_analysis.leadership_potential}</p>
+                                </div>
+                            </div>
+                        </div>
+                    )}
                 </div>
             ) : (
                 <div className="py-12 flex flex-col items-center justify-center text-slate-400 bg-slate-50 rounded-xl border border-dashed border-slate-200">
