@@ -68,6 +68,19 @@ export function MySummaryTab() {
   });
 
   const [isLinkModalOpen, setIsLinkModalOpen] = useState(false);
+  const [newLink, setNewLink] = useState({ title: "", url: "" });
+
+  const handleViewPdf = async (filePath: string) => {
+    try {
+      const { data, error } = await supabase.storage.from("employee_documents").createSignedUrl(filePath, 60 * 60);
+      if (error) throw error;
+      if (data?.signedUrl) {
+        window.open(data.signedUrl, '_blank');
+      }
+    } catch (err) {
+      showError("Erro ao abrir o PDF");
+    }
+  };
   const [linkTitle, setLinkTitle] = useState("");
   const [linkUrl, setLinkUrl] = useState("");
   
@@ -221,6 +234,17 @@ export function MySummaryTab() {
                 </div>
                 <h3 className="font-bold text-lg text-slate-800">Perfil DISC</h3>
               </div>
+              {latestDiscProfile?.file_path && (
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  className="rounded-full text-xs font-semibold h-8"
+                  onClick={() => handleViewPdf(latestDiscProfile.file_path)}
+                >
+                  <FileText className="w-3 h-3 mr-1" />
+                  Ver PDF
+                </Button>
+              )}
             </div>
 
             {latestDiscProfile ? (

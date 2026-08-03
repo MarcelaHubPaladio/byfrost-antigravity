@@ -1331,6 +1331,22 @@ function UserDiscTab({ userData }: { userData: any }) {
         }
     };
 
+    const handleViewDiscPdf = async (filePath?: string) => {
+        if (!filePath) {
+            showError("PDF não disponível para este laudo antigo.");
+            return;
+        }
+        try {
+            const { data, error } = await supabase.storage.from("employee_documents").createSignedUrl(filePath, 60 * 60);
+            if (error) throw error;
+            if (data?.signedUrl) {
+                window.open(data.signedUrl, '_blank');
+            }
+        } catch (err) {
+            showError("Erro ao abrir o PDF");
+        }
+    };
+
     return (
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
             <div className="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-4">
@@ -1360,17 +1376,31 @@ function UserDiscTab({ userData }: { userData: any }) {
                                         Laudo processado em {profile.created_at ? new Date(profile.created_at).toLocaleDateString() : 'Data desconhecida'} 
                                         {index === 0 && <span className="ml-2 text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded-full">Atual</span>}
                                     </h4>
-                                    <Button variant="ghost" size="sm" className="text-rose-500 hover:text-rose-600 hover:bg-rose-50" onClick={() => handleDeleteDisc(profile.id)}>
-                                        <Trash2 className="w-4 h-4 mr-2" /> Excluir
-                                    </Button>
+                                    <div className="flex gap-2">
+                                        {profile.file_path && (
+                                            <Button variant="outline" size="sm" onClick={() => handleViewDiscPdf(profile.file_path)}>
+                                                <FileText className="w-4 h-4 mr-2" /> Ver PDF
+                                            </Button>
+                                        )}
+                                        <Button variant="ghost" size="sm" className="text-rose-500 hover:text-rose-600 hover:bg-rose-50" onClick={() => handleDeleteDisc(profile.id)}>
+                                            <Trash2 className="w-4 h-4 mr-2" /> Excluir
+                                        </Button>
+                                    </div>
                                 </div>
                             )}
 
                             <div className="bg-slate-50 rounded-xl p-4 border border-slate-100 relative">
                                 {sortedHistory.length === 1 && profile.id && (
-                                    <Button variant="ghost" size="icon" className="absolute top-2 right-2 text-slate-400 hover:text-rose-500" onClick={() => handleDeleteDisc(profile.id)}>
-                                        <Trash2 className="w-4 h-4" />
-                                    </Button>
+                                    <div className="absolute top-2 right-2 flex gap-1">
+                                        {profile.file_path && (
+                                            <Button variant="ghost" size="icon" className="text-slate-400 hover:text-blue-600" onClick={() => handleViewDiscPdf(profile.file_path)}>
+                                                <FileText className="w-4 h-4" />
+                                            </Button>
+                                        )}
+                                        <Button variant="ghost" size="icon" className="text-slate-400 hover:text-rose-500" onClick={() => handleDeleteDisc(profile.id)}>
+                                            <Trash2 className="w-4 h-4" />
+                                        </Button>
+                                    </div>
                                 )}
                                 <h4 className="text-sm font-bold text-slate-700 mb-2">Resumo</h4>
                                 <p className="text-sm text-slate-600 italic">"{profile.summary}"</p>
