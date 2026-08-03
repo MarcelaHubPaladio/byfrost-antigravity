@@ -1,7 +1,7 @@
 import { useState, useMemo } from "react";
-import { format, addDays, subDays, startOfWeek, isSameDay, isBefore, startOfDay, parseISO } from "date-fns";
+import { format, addDays, subDays, startOfWeek, isSameDay, isBefore, startOfDay, endOfDay, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { ChevronLeft, ChevronRight, Check, Plus, Loader2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, Check, Plus, Loader2, Calendar as CalendarIcon, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
@@ -14,6 +14,9 @@ interface Task {
   is_completed: boolean;
   is_commitment: boolean;
   completed_at: string | null;
+  // new properties to differentiate from google calendar events
+  is_event?: boolean;
+  htmlLink?: string;
 }
 
 interface WeeklyTaskCalendarProps {
@@ -24,6 +27,7 @@ interface WeeklyTaskCalendarProps {
 export function WeeklyTaskCalendar({ tenantId, userId }: WeeklyTaskCalendarProps) {
   const [selectedDate, setSelectedDate] = useState(new Date());
   const queryClient = useQueryClient();
+  const [isConnecting, setIsConnecting] = useState(false);
 
   const handlePrevWeek = () => setSelectedDate(subDays(selectedDate, 7));
   const handleNextWeek = () => setSelectedDate(addDays(selectedDate, 7));
@@ -36,11 +40,41 @@ export function WeeklyTaskCalendar({ tenantId, userId }: WeeklyTaskCalendarProps
     return Array.from({ length: 7 }).map((_, i) => addDays(start, i));
   }, [selectedDate]);
 
+  // Integrações (Google Calendar)
+  const integrationsQ = useQuery({
+    queryKey: ["user_integrations", userId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("user_integrations")
+        .select("*")
+        .eq("user_id", userId);
+      if (error) throw error;
+      return data || [];
+    },
+  });
+
+  const googleIntegration = integrationsQ.data?.find((i: any) => i.provider === "google_calendar");
+
+  const handleConnectCalendar = async () => {
+    setIsConnecting(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("google-oauth", {
+        body: { action: "url", redirect_uri: `${window.location.origin}/app/oauth/google/callback` },
+      });
+      if (error) throw error;
+      if (data?.url) {
+        window.location.href = data.url;
+      }
+    } catch (e: any) {
+      showError(e.message);
+      setIsConnecting(false);
+    }
+  };
+
   // Busca todas as tarefas do usuário (não concluídas ou recém concluídas)
   const tasksQ = useQuery({
     queryKey: ["weekly_tasks", tenantId, userId],
     queryFn: async () => {
-      // Busca tarefas em aberto OU concluídas nos últimos 30 dias (para aparecerem no histórico recente)
       const { data, error } = await supabase
         .from("super_tasks")
         .select("id, title, due_date, is_completed, is_commitment, completed_at")
@@ -49,6 +83,22 @@ export function WeeklyTaskCalendar({ tenantId, userId }: WeeklyTaskCalendarProps
         
       if (error) throw error;
       return data as Task[];
+    },
+  });
+
+  // Busca eventos do Google Calendar se estiver conectado
+  const eventsQ = useQuery({
+    queryKey: ["google_events", userId, weekDays[0].toISOString(), weekDays[6].toISOString()],
+    enabled: !!googleIntegration,
+    queryFn: async () => {
+      const timeMin = startOfDay(weekDays[0]).toISOString();
+      const timeMax = endOfDay(weekDays[6]).toISOString();
+      
+      const { data, error } = await supabase.functions.invoke("google-oauth", {
+        body: { action: "events", timeMin, timeMax },
+      });
+      if (error) throw error;
+      return data?.events || [];
     },
   });
 
@@ -66,44 +116,63 @@ export function WeeklyTaskCalendar({ tenantId, userId }: WeeklyTaskCalendarProps
     }
   };
 
-  // Filtra as tarefas a serem exibidas no dia selecionado
-  const displayedTasks = useMemo(() => {
-    if (!tasksQ.data) return [];
-    
+  // Filtra as tarefas e mescla com eventos no dia selecionado
+  const displayedItems = useMemo(() => {
     const today = startOfDay(new Date());
     const isSelectedToday = isSameDay(selectedDate, today);
+    let items: Task[] = [];
 
-    return tasksQ.data.filter(task => {
-      // Se não tem data, vamos decidir onde mostrar. Por enquanto, só mostra se a data existir ou for "Hoje".
-      // Para simular um backlog, tarefas sem data aparecem no "Hoje"
-      if (!task.due_date) {
-        return isSelectedToday && !task.is_completed;
-      }
+    // 1. Adiciona as tarefas
+    if (tasksQ.data) {
+      const filteredTasks = tasksQ.data.filter(task => {
+        if (!task.due_date) {
+          return isSelectedToday && !task.is_completed;
+        }
 
-      const dueDate = startOfDay(parseISO(task.due_date));
+        const dueDate = startOfDay(parseISO(task.due_date));
 
-      // Se a tarefa já está concluída, ela deve aparecer apenas no dia em que era devida (ou no dia em que foi concluída).
-      // Vamos assumir que ela aparece no due_date dela.
-      if (task.is_completed) {
+        if (task.is_completed) {
+          return isSameDay(dueDate, selectedDate);
+        }
+
+        if (isSelectedToday && isBefore(dueDate, today)) {
+          return true;
+        }
+
         return isSameDay(dueDate, selectedDate);
-      }
+      });
+      items = [...items, ...filteredTasks];
+    }
 
-      // Se a tarefa não está concluída:
-      // Se a data de vencimento é hoje ou antes de hoje (atrasada), E o usuário está olhando o dia de "Hoje", exibe ela.
-      if (isSelectedToday && isBefore(dueDate, today)) {
-        return true;
-      }
+    // 2. Adiciona os eventos do Google (formatados como Task para a UI)
+    if (eventsQ.data) {
+      const dayEvents = eventsQ.data.filter((evt: any) => {
+        if (!evt.start) return false;
+        const evtDate = startOfDay(parseISO(evt.start));
+        return isSameDay(evtDate, selectedDate);
+      }).map((evt: any) => ({
+        id: `gcal-${evt.id}`,
+        title: evt.summary,
+        due_date: evt.start,
+        is_completed: false, // eventos não são "concluíveis" com checkbox
+        is_commitment: false,
+        completed_at: null,
+        is_event: true,
+        htmlLink: evt.htmlLink,
+      }));
+      items = [...items, ...dayEvents];
+    }
 
-      // Caso contrário, exibe ela apenas no seu dia correto.
-      return isSameDay(dueDate, selectedDate);
-    }).sort((a, b) => {
-      // Ordena por horário (se tiver)
+    // 3. Ordena tudo por horário
+    return items.sort((a, b) => {
       if (a.due_date && b.due_date) {
         return new Date(a.due_date).getTime() - new Date(b.due_date).getTime();
       }
+      if (a.due_date) return -1;
+      if (b.due_date) return 1;
       return 0;
     });
-  }, [tasksQ.data, selectedDate]);
+  }, [tasksQ.data, eventsQ.data, selectedDate]);
 
   return (
     <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-sm w-full">
@@ -114,12 +183,29 @@ export function WeeklyTaskCalendar({ tenantId, userId }: WeeklyTaskCalendarProps
             <div className="p-2 bg-indigo-50 text-indigo-600 rounded-xl">
               <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M9 15h6"/><path d="M9 11h6"/></svg>
             </div>
-            Tarefas
+            Tarefas & Agenda
           </h2>
-          <p className="text-sm text-slate-500 mt-1">Seu caderno de planejamento</p>
+          <p className="text-sm text-slate-500 mt-1">Seu caderno de planejamento diário</p>
         </div>
 
         <div className="flex items-center gap-2">
+          {!googleIntegration && (
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={handleConnectCalendar}
+              disabled={isConnecting}
+              className="mr-2 text-slate-600 bg-white border-slate-200 hover:bg-slate-50 rounded-xl font-semibold"
+            >
+              {isConnecting ? (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <CalendarIcon className="w-4 h-4 mr-2" />
+              )}
+              Conectar Google Agenda
+            </Button>
+          )}
+
           <Button variant="outline" size="icon" onClick={handlePrevWeek} className="rounded-full w-8 h-8">
             <ChevronLeft className="w-4 h-4" />
           </Button>
@@ -164,58 +250,74 @@ export function WeeklyTaskCalendar({ tenantId, userId }: WeeklyTaskCalendarProps
         })}
       </div>
 
-      {/* Lista de Tarefas */}
+      {/* Lista de Tarefas / Eventos */}
       <div className="border rounded-2xl overflow-hidden bg-white">
         <div className="bg-slate-50 border-b px-4 py-3 flex justify-between items-center">
           <span className="text-sm font-bold text-slate-700 capitalize">
             {format(selectedDate, "EEEE, d 'de' MMMM", { locale: ptBR })}
           </span>
           <span className="text-xs font-semibold text-slate-500">
-            {displayedTasks.length} {displayedTasks.length === 1 ? 'tarefa' : 'tarefas'}
+            {displayedItems.length} {displayedItems.length === 1 ? 'item' : 'itens'}
           </span>
         </div>
 
         <div className="divide-y divide-slate-100 max-h-[350px] overflow-y-auto custom-scrollbar">
-          {tasksQ.isLoading ? (
+          {tasksQ.isLoading || (googleIntegration && eventsQ.isLoading) ? (
             <div className="p-8 flex justify-center">
               <Loader2 className="w-6 h-6 animate-spin text-slate-400" />
             </div>
-          ) : displayedTasks.length === 0 ? (
+          ) : displayedItems.length === 0 ? (
             <div className="p-8 text-center text-slate-400 text-sm">
-              Nenhuma tarefa para este dia.
+              Nenhuma tarefa ou evento para este dia.
             </div>
           ) : (
-            displayedTasks.map(task => (
-              <div key={task.id} className="p-4 flex items-center gap-4 hover:bg-slate-50/50 transition-colors">
-                <button 
-                  onClick={() => toggleTaskCompleted(task.id, task.is_completed)}
-                  className={`w-5 h-5 rounded flex-shrink-0 flex items-center justify-center border transition-all ${
-                    task.is_completed 
-                      ? 'bg-emerald-500 border-emerald-500 text-white' 
-                      : 'border-slate-300 hover:border-indigo-500 bg-white'
-                  }`}
-                >
-                  {task.is_completed && <Check className="w-3.5 h-3.5" strokeWidth={3} />}
-                </button>
+            displayedItems.map(item => (
+              <div key={item.id} className="p-4 flex items-center gap-4 hover:bg-slate-50/50 transition-colors">
                 
-                <span className={`flex-1 text-sm font-medium ${task.is_completed ? 'text-slate-400 line-through' : 'text-slate-700'}`}>
-                  {task.title}
-                </span>
+                {item.is_event ? (
+                  <div className="w-5 h-5 rounded flex-shrink-0 flex items-center justify-center">
+                    <CalendarIcon className="w-4 h-4 text-rose-500" />
+                  </div>
+                ) : (
+                  <button 
+                    onClick={() => toggleTaskCompleted(item.id, item.is_completed)}
+                    className={`w-5 h-5 rounded flex-shrink-0 flex items-center justify-center border transition-all ${
+                      item.is_completed 
+                        ? 'bg-emerald-500 border-emerald-500 text-white' 
+                        : 'border-slate-300 hover:border-indigo-500 bg-white'
+                    }`}
+                  >
+                    {item.is_completed && <Check className="w-3.5 h-3.5" strokeWidth={3} />}
+                  </button>
+                )}
+                
+                <div className="flex-1 flex items-center min-w-0 gap-2">
+                  <span className={`text-sm font-medium truncate ${item.is_completed ? 'text-slate-400 line-through' : 'text-slate-700'}`}>
+                    {item.title}
+                  </span>
+                  {item.is_event && item.htmlLink && (
+                    <a href={item.htmlLink} target="_blank" rel="noreferrer" className="text-slate-400 hover:text-indigo-600 transition-colors">
+                      <ExternalLink className="w-3.5 h-3.5" />
+                    </a>
+                  )}
+                </div>
 
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3 flex-shrink-0">
                   <span className={`text-[10px] font-bold px-2.5 py-1 rounded-md ${
-                    task.is_completed 
-                      ? 'bg-emerald-100 text-emerald-700'
-                      : task.is_commitment 
-                        ? 'bg-amber-100 text-amber-700'
-                        : 'bg-indigo-50 text-indigo-700'
+                    item.is_event
+                      ? 'bg-rose-50 text-rose-600'
+                      : item.is_completed 
+                        ? 'bg-emerald-100 text-emerald-700'
+                        : item.is_commitment 
+                          ? 'bg-amber-100 text-amber-700'
+                          : 'bg-indigo-50 text-indigo-700'
                   }`}>
-                    {task.is_completed ? 'Concluída' : task.is_commitment ? 'Combinado' : 'Trabalho'}
+                    {item.is_event ? 'Agenda' : item.is_completed ? 'Concluída' : item.is_commitment ? 'Combinado' : 'Trabalho'}
                   </span>
                   
-                  {task.due_date && (
+                  {item.due_date && (
                     <span className="text-sm font-medium text-slate-500 w-12 text-right">
-                      {format(parseISO(task.due_date), "HH:mm")}
+                      {format(parseISO(item.due_date), "HH:mm")}
                     </span>
                   )}
                 </div>
