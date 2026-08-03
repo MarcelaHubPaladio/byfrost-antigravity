@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { SuperTask, useSuperTasks } from "@/hooks/useSuperTasks";
-import { Trash2, Plus, ChevronDown, CornerDownRight, Calendar as CalendarIcon, Clock, GripVertical } from "lucide-react";
+import { Trash2, Plus, ChevronDown, CornerDownRight, Calendar as CalendarIcon, Clock, GripVertical, Handshake } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { isPast, isToday, startOfDay, parseISO } from "date-fns";
@@ -16,7 +16,7 @@ interface TaskItemProps {
 }
 
 export function TaskItem({ task, isSubtask = false }: TaskItemProps) {
-  const { toggleTask, deleteTask, upsertTask } = useSuperTasks();
+  const { toggleTask, deleteTask, upsertTask, isAdmin } = useSuperTasks();
   const [showSubtasks, setShowSubtasks] = useState(false);
   const [newSubtaskTitle, setNewSubtaskTitle] = useState("");
   const [isEditing, setIsEditing] = useState(false);
@@ -134,6 +134,7 @@ export function TaskItem({ task, isSubtask = false }: TaskItemProps) {
           "group flex items-center gap-2 px-1.5 py-1 rounded-xl transition-all",
           "hover:bg-slate-100/80 dark:hover:bg-slate-800/60",
           task.is_completed && "opacity-60",
+          task.is_commitment && !task.is_completed && !isOverdue && "bg-amber-50/50 dark:bg-amber-950/20 ring-1 ring-amber-100 dark:ring-amber-900/50",
           isOverdue && !task.is_completed && "bg-rose-50/60 dark:bg-rose-950/20 ring-1 ring-rose-200 dark:ring-rose-900/50"
         )}
       >
@@ -243,6 +244,21 @@ export function TaskItem({ task, isSubtask = false }: TaskItemProps) {
               onChange={handleDueDateChange}
             />
           </div>
+
+          {isAdmin && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className={cn(
+                "h-6 w-6 rounded-lg hover:bg-white shadow-sm transition-colors",
+                task.is_commitment ? "text-amber-500 bg-amber-50" : "text-slate-300 hover:text-amber-500"
+              )}
+              onClick={() => upsertTask.mutateAsync({ id: task.id, is_commitment: !task.is_commitment })}
+              title={task.is_commitment ? "Desmarcar Combinado" : "Marcar como Combinado"}
+            >
+              <Handshake className="h-3.5 w-3.5" />
+            </Button>
+          )}
 
           {!isSubtask && (
             <Button

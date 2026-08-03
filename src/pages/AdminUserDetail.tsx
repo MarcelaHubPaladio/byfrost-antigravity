@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { showError, showSuccess } from "@/utils/toast";
-import { ArrowLeft, UserSquare2, Target, KeyRound, Copy, Save, Plus, Library, Trash2, FileSignature, CheckCircle, AlertCircle, Pencil, Send, MessageSquare, Loader2, DollarSign, Percent, History, Info } from "lucide-react";
+import { ArrowLeft, UserSquare2, Target, KeyRound, Copy, Save, Plus, Library, Trash2, FileSignature, CheckCircle, AlertCircle, Pencil, Send, MessageSquare, Loader2, DollarSign, Percent, History, Info, FileText } from "lucide-react";
 import {
     Dialog,
     DialogContent,
@@ -71,6 +71,10 @@ export default function AdminUserDetail() {
                                 <DollarSign className="w-4 h-4" />
                                 Comissões
                             </TabsTrigger>
+                            <TabsTrigger value="payslips" className="flex items-center gap-2">
+                                <FileText className="w-4 h-4" />
+                                Folha de Pagamento
+                            </TabsTrigger>
                         </TabsList>
 
                         <TabsContent value="data">
@@ -83,6 +87,10 @@ export default function AdminUserDetail() {
 
                         <TabsContent value="commissions">
                             <UserCommissionsTab userData={userQuery.data} />
+                        </TabsContent>
+
+                        <TabsContent value="payslips">
+                            <UserPayslipsTab userData={userQuery.data} />
                         </TabsContent>
                     </Tabs>
                 </div>
@@ -920,7 +928,7 @@ function UserGoalsTab({ userData }: { userData: any }) {
                 </div>
             )}
 
-            <div className="flex-1 space-y-3">
+            <div className="flex-1 space-y-3 mt-4">
                 {goalsQ.data?.map((g) => (
                     <div key={g.id} className="p-4 rounded-lg border flex justify-between items-center">
                         <div>
@@ -950,6 +958,7 @@ function UserGoalsTab({ userData }: { userData: any }) {
                                     setMetricKey(g.metric_key);
                                     setTargetValue(String(g.target_value));
                                     setFrequency(g.frequency);
+                                    setTargetType(g.target_type || "quantity");
                                     setIsModalOpen(true);
                                 }}
                             >
@@ -1060,3 +1069,184 @@ function UserGoalsTab({ userData }: { userData: any }) {
         </div>
     );
 }
+
+function UserPayslipsTab({ userData }: { userData: any }) {
+    const { activeTenantId } = useTenant();
+    const queryClient = useQueryClient();
+    
+    const [isModalOpen, setIsModalOpen] = useState(false);
+    const [month, setMonth] = useState<string>((new Date().getMonth() + 1).toString());
+    const [year, setYear] = useState<string>(new Date().getFullYear().toString());
+    const [fileUrl, setFileUrl] = useState("");
+    const [notes, setNotes] = useState("");
+    const [isSaving, setIsSaving] = useState(false);
+
+    const payslipsQ = useQuery({
+        queryKey: ["employee_payslips", activeTenantId, userData.user_id],
+        queryFn: async () => {
+            const { data, error } = await supabase
+                .from("employee_payslips")
+                .select("*")
+                .eq("tenant_id", activeTenantId)
+                .eq("user_id", userData.user_id)
+                .order("reference_year", { ascending: false })
+                .order("reference_month", { ascending: false });
+            if (error) throw error;
+            return data;
+        },
+        enabled: !!activeTenantId && !!userData.user_id,
+    });
+
+    const savePayslip = async () => {
+        if (!fileUrl.trim()) {
+            showError("A URL do arquivo é obrigatória.");
+            return;
+        }
+        
+        setIsSaving(true);
+        try {
+            const { error } = await supabase
+                .from("employee_payslips")
+                .insert({
+                    tenant_id: activeTenantId,
+                    user_id: userData.user_id,
+                    reference_month: parseInt(month, 10),
+                    reference_year: parseInt(year, 10),
+                    file_url: fileUrl,
+                    notes: notes || null
+                });
+            if (error) {
+                if (error.code === '23505') {
+                    throw new Error("Já existe um holerite cadastrado para este mês/ano.");
+                }
+                throw error;
+            }
+            showSuccess("Holerite adicionado com sucesso!");
+            setIsModalOpen(false);
+            setFileUrl("");
+            setNotes("");
+            queryClient.invalidateQueries({ queryKey: ["employee_payslips", activeTenantId, userData.user_id] });
+        } catch (e: any) {
+            showError(e.message);
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    const deletePayslip = async (id: string) => {
+        if (!confirm("Excluir este holerite? A ação não pode ser desfeita.")) return;
+        try {
+            const { error } = await supabase.from("employee_payslips").delete().eq("id", id);
+            if (error) throw error;
+            showSuccess("Holerite removido.");
+            queryClient.invalidateQueries({ queryKey: ["employee_payslips", activeTenantId, userData.user_id] });
+        } catch (e: any) {
+            showError(e.message);
+        }
+    };
+
+    const getMonthName = (m: number) => {
+        const months = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
+        return months[m - 1] || "Desconhecido";
+    };
+
+    return (
+        <div className="bg-white p-6 rounded-lg border shadow-sm flex flex-col min-h-[500px]">
+            <div className="flex justify-between items-center mb-6">
+                <div>
+                    <h2 className="text-lg font-bold">Folha de Pagamento</h2>
+                    <p className="text-sm text-slate-500">Gerencie os holerites e comprovantes de pagamento deste usuário.</p>
+                </div>
+                <Button onClick={() => setIsModalOpen(true)}>
+                    <Plus className="w-4 h-4 mr-1" />
+                    Novo Holerite
+                </Button>
+            </div>
+
+            <div className="flex-1 space-y-3">
+                {payslipsQ.isLoading ? (
+                    <div className="py-12 flex justify-center"><Loader2 className="w-8 h-8 animate-spin text-indigo-500" /></div>
+                ) : payslipsQ.data?.length === 0 ? (
+                    <div className="text-center py-12 text-slate-500 bg-slate-50 rounded-xl border border-dashed border-slate-200">
+                        <FileText className="w-12 h-12 mx-auto mb-3 opacity-20" />
+                        <p className="font-medium">Nenhum holerite cadastrado.</p>
+                        <p className="text-xs">Clique em "Novo Holerite" para adicionar o primeiro.</p>
+                    </div>
+                ) : (
+                    payslipsQ.data?.map(p => (
+                        <div key={p.id} className="p-4 rounded-xl border flex justify-between items-center bg-slate-50 hover:bg-white transition-colors">
+                            <div className="flex items-center gap-4">
+                                <div className="w-12 h-12 rounded-xl bg-indigo-100 flex items-center justify-center text-indigo-600 font-bold flex-col leading-none">
+                                    <span className="text-[10px] uppercase">{getMonthName(p.reference_month).slice(0,3)}</span>
+                                    <span className="text-sm">{p.reference_year}</span>
+                                </div>
+                                <div>
+                                    <h4 className="font-bold text-slate-800">Holerite - {getMonthName(p.reference_month)}/{p.reference_year}</h4>
+                                    {p.notes && <p className="text-xs text-slate-500 mt-1">{p.notes}</p>}
+                                </div>
+                            </div>
+                            <div className="flex gap-2">
+                                <Button variant="secondary" size="sm" onClick={() => window.open(p.file_url, '_blank')}>
+                                    Ver Arquivo
+                                </Button>
+                                <Button variant="outline" size="sm" className="text-rose-600 hover:text-rose-700 hover:bg-rose-50" onClick={() => deletePayslip(p.id)}>
+                                    <Trash2 className="w-4 h-4" />
+                                </Button>
+                            </div>
+                        </div>
+                    ))
+                )}
+            </div>
+
+            <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Novo Holerite</DialogTitle>
+                        <DialogDescription>Adicione o comprovante de pagamento ou holerite para que o usuário possa visualizar em seu painel.</DialogDescription>
+                    </DialogHeader>
+                    
+                    <div className="space-y-4 py-4">
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                                <label className="text-xs font-bold text-slate-600 uppercase">Mês de Referência</label>
+                                <select 
+                                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                                    value={month}
+                                    onChange={e => setMonth(e.target.value)}
+                                >
+                                    {Array.from({ length: 12 }, (_, i) => i + 1).map(m => (
+                                        <option key={m} value={m}>{getMonthName(m)}</option>
+                                    ))}
+                                </select>
+                            </div>
+                            <div className="space-y-2">
+                                <label className="text-xs font-bold text-slate-600 uppercase">Ano</label>
+                                <Input type="number" value={year} onChange={e => setYear(e.target.value)} min="2000" max="2100" />
+                            </div>
+                        </div>
+                        
+                        <div className="space-y-2">
+                            <label className="text-xs font-bold text-slate-600 uppercase">URL do Arquivo</label>
+                            <Input placeholder="Ex: https://link.com/arquivo.pdf" value={fileUrl} onChange={e => setFileUrl(e.target.value)} />
+                            <p className="text-[10px] text-slate-500">Por enquanto, insira um link direto para o PDF/Imagem.</p>
+                        </div>
+                        
+                        <div className="space-y-2">
+                            <label className="text-xs font-bold text-slate-600 uppercase">Anotações (Opcional)</label>
+                            <Input placeholder="Ex: Referente a adiantamento..." value={notes} onChange={e => setNotes(e.target.value)} />
+                        </div>
+                    </div>
+                    
+                    <div className="flex justify-end gap-2">
+                        <Button variant="outline" onClick={() => setIsModalOpen(false)}>Cancelar</Button>
+                        <Button onClick={savePayslip} disabled={isSaving}>
+                            {isSaving && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                            Adicionar Holerite
+                        </Button>
+                    </div>
+                </DialogContent>
+            </Dialog>
+        </div>
+    );
+}
+

@@ -18,6 +18,7 @@ export type SuperTask = {
   created_at: string;
   created_by: string | null;
   assigned_to: string | null;
+  is_commitment?: boolean;
   users_profile?: { display_name: string | null; email: string | null } | null;
   subtasks?: SuperTask[];
 };

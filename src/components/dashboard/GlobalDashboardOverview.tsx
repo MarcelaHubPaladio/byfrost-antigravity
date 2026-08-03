@@ -19,6 +19,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import GlobalTimeline from "@/pages/GlobalTimeline";
 import { useToast } from "@/hooks/use-toast";
 import { OracleChat } from "./OracleChat";
+import { MySummaryTab } from "./MySummaryTab";
 
 type TimelineEvent = {
   id: string;
@@ -53,6 +54,8 @@ export function GlobalDashboardOverview() {
   const { activeTenantId, activeTenant, isSuperAdmin } = useTenant();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+
+  const isAdmin = isSuperAdmin || ["owner", "admin", "manager"].includes(activeTenant?.role || "");
 
   const [generatingJourneyId, setGeneratingJourneyId] = useState<string | null>(null);
   const [selectedModel, setSelectedModel] = useState<"openai" | "gemini">("openai");
@@ -314,16 +317,25 @@ export function GlobalDashboardOverview() {
           </div>
         </div>
 
-        <Tabs defaultValue="overview" className="w-full">
-          <TabsList className={`mb-6 grid w-full max-w-3xl ${isSuperAdmin ? "grid-cols-5" : "grid-cols-4"} bg-slate-100/80 p-1 rounded-xl`}>
-            <TabsTrigger value="overview" className="rounded-lg">Visão Geral</TabsTrigger>
-            <TabsTrigger value="timeline" className="rounded-lg">Linha do Tempo Global</TabsTrigger>
-            <TabsTrigger value="oracle" className="rounded-lg">Oráculo (IA)</TabsTrigger>
-            <TabsTrigger value="invoice" className="rounded-lg">Fatura</TabsTrigger>
-            {isSuperAdmin && (
-              <TabsTrigger value="token_usage" className="rounded-lg">Extrato de Tokens</TabsTrigger>
+        <Tabs defaultValue="my_summary" className="w-full">
+          <TabsList className={`mb-6 grid w-full ${!isAdmin ? "max-w-xs grid-cols-1" : isSuperAdmin ? "max-w-4xl grid-cols-6" : "max-w-4xl grid-cols-5"} bg-slate-100/80 p-1 rounded-xl`}>
+            <TabsTrigger value="my_summary" className="rounded-lg">Meu Resumo</TabsTrigger>
+            {isAdmin && (
+              <>
+                <TabsTrigger value="overview" className="rounded-lg">Visão Geral (Guardião)</TabsTrigger>
+                <TabsTrigger value="timeline" className="rounded-lg">Linha do Tempo Global</TabsTrigger>
+                <TabsTrigger value="oracle" className="rounded-lg">Oráculo (IA)</TabsTrigger>
+                <TabsTrigger value="invoice" className="rounded-lg">Fatura</TabsTrigger>
+                {isSuperAdmin && (
+                  <TabsTrigger value="token_usage" className="rounded-lg">Extrato de Tokens</TabsTrigger>
+                )}
+              </>
             )}
           </TabsList>
+
+          <TabsContent value="my_summary" className="mt-0">
+            <MySummaryTab />
+          </TabsContent>
 
           <TabsContent value="overview" className="space-y-6 mt-0">
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -848,6 +860,8 @@ export function GlobalDashboardOverview() {
               )}
             </div>
           </TabsContent>
+        )}
+      </>
         )}
 
       </Tabs>
