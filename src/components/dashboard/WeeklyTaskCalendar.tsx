@@ -402,88 +402,96 @@ export function WeeklyTaskCalendar({ tenantId, userId }: WeeklyTaskCalendarProps
               Nenhuma tarefa ou evento para este dia.
             </div>
           ) : (
-            <div className="flex flex-col">
+            <div className={`grid grid-cols-1 ${displayedItems.some(i => i.is_event) && displayedItems.some(i => !i.is_event) ? 'lg:grid-cols-2 lg:divide-x' : ''} divide-y lg:divide-y-0 divide-slate-100`}>
               {/* Tarefas Section */}
-              {displayedItems.filter(i => !i.is_event).length > 0 && (
-                <div className="bg-slate-50/80 py-2 px-4 text-xs font-bold text-slate-500 uppercase tracking-wider sticky top-0 backdrop-blur-md z-10 border-b">
-                  Tarefas do Sistema
+              {displayedItems.some(i => !i.is_event) && (
+                <div className="flex flex-col h-full">
+                  <div className="bg-slate-50/80 py-2 px-4 text-xs font-bold text-slate-500 uppercase tracking-wider sticky top-0 backdrop-blur-md z-10 border-b">
+                    Tarefas do Sistema
+                  </div>
+                  <div className="divide-y divide-slate-100">
+                    {displayedItems.filter(i => !i.is_event).map(item => (
+                      <div key={item.id} className="p-4 flex items-center gap-4 hover:bg-slate-50/50 transition-colors">
+                        <button 
+                          onClick={() => toggleTaskCompleted(item.id, item.is_completed)}
+                          className={`w-5 h-5 rounded flex-shrink-0 flex items-center justify-center border transition-all ${
+                            item.is_completed 
+                              ? 'bg-emerald-500 border-emerald-500 text-white' 
+                              : 'border-slate-300 hover:border-indigo-500 bg-white'
+                          }`}
+                        >
+                          {item.is_completed && <Check className="w-3.5 h-3.5" strokeWidth={3} />}
+                        </button>
+                        
+                        <div className="flex-1 flex items-center min-w-0 gap-2">
+                          <span className={`text-sm font-medium truncate ${item.is_completed ? 'text-slate-400 line-through' : 'text-slate-700'}`}>
+                            {item.title}
+                          </span>
+                        </div>
+
+                        <div className="flex items-center gap-3 flex-shrink-0">
+                          <span className={`text-[10px] font-bold px-2.5 py-1 rounded-md ${
+                            item.is_completed 
+                              ? 'bg-emerald-100 text-emerald-700'
+                              : item.is_commitment 
+                                ? 'bg-amber-100 text-amber-700'
+                                : 'bg-indigo-50 text-indigo-700'
+                          }`}>
+                            {item.is_completed ? 'Concluída' : item.is_commitment ? 'Combinado' : 'Trabalho'}
+                          </span>
+                          
+                          {item.due_date && (
+                            <span className="text-sm font-medium text-slate-500 w-12 text-right">
+                              {format(parseISO(item.due_date), "HH:mm")}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
-              {displayedItems.filter(i => !i.is_event).map(item => (
-                <div key={item.id} className="p-4 flex items-center gap-4 hover:bg-slate-50/50 transition-colors border-b border-slate-100 last:border-0">
-                  <button 
-                    onClick={() => toggleTaskCompleted(item.id, item.is_completed)}
-                    className={`w-5 h-5 rounded flex-shrink-0 flex items-center justify-center border transition-all ${
-                      item.is_completed 
-                        ? 'bg-emerald-500 border-emerald-500 text-white' 
-                        : 'border-slate-300 hover:border-indigo-500 bg-white'
-                    }`}
-                  >
-                    {item.is_completed && <Check className="w-3.5 h-3.5" strokeWidth={3} />}
-                  </button>
-                  
-                  <div className="flex-1 flex items-center min-w-0 gap-2">
-                    <span className={`text-sm font-medium truncate ${item.is_completed ? 'text-slate-400 line-through' : 'text-slate-700'}`}>
-                      {item.title}
-                    </span>
-                  </div>
-
-                  <div className="flex items-center gap-3 flex-shrink-0">
-                    <span className={`text-[10px] font-bold px-2.5 py-1 rounded-md ${
-                      item.is_completed 
-                        ? 'bg-emerald-100 text-emerald-700'
-                        : item.is_commitment 
-                          ? 'bg-amber-100 text-amber-700'
-                          : 'bg-indigo-50 text-indigo-700'
-                    }`}>
-                      {item.is_completed ? 'Concluída' : item.is_commitment ? 'Combinado' : 'Trabalho'}
-                    </span>
-                    
-                    {item.due_date && (
-                      <span className="text-sm font-medium text-slate-500 w-12 text-right">
-                        {format(parseISO(item.due_date), "HH:mm")}
-                      </span>
-                    )}
-                  </div>
-                </div>
-              ))}
 
               {/* Eventos Section */}
-              {displayedItems.filter(i => i.is_event).length > 0 && (
-                <div className="bg-rose-50/80 py-2 px-4 text-xs font-bold text-rose-600 uppercase tracking-wider sticky top-0 backdrop-blur-md z-10 border-y">
-                  Agenda do Google
+              {displayedItems.some(i => i.is_event) && (
+                <div className="flex flex-col h-full">
+                  <div className="bg-rose-50/80 py-2 px-4 text-xs font-bold text-rose-600 uppercase tracking-wider sticky top-0 backdrop-blur-md z-10 border-b">
+                    Agenda do Google
+                  </div>
+                  <div className="divide-y divide-slate-100">
+                    {displayedItems.filter(i => i.is_event).map(item => (
+                      <div key={item.id} className="p-4 flex items-center gap-4 hover:bg-slate-50/50 transition-colors">
+                        <div className="w-5 h-5 rounded flex-shrink-0 flex items-center justify-center">
+                          <CalendarIcon className="w-4 h-4 text-rose-500" />
+                        </div>
+                        
+                        <div className="flex-1 flex items-center min-w-0 gap-2">
+                          <span className="text-sm font-medium truncate text-slate-700">
+                            {item.title}
+                          </span>
+                          {item.htmlLink && (
+                            <a href={item.htmlLink} target="_blank" rel="noreferrer" className="text-slate-400 hover:text-indigo-600 transition-colors">
+                              <ExternalLink className="w-3.5 h-3.5" />
+                            </a>
+                          )}
+                        </div>
+
+                        <div className="flex items-center gap-3 flex-shrink-0">
+                          <span className="text-[10px] font-bold px-2.5 py-1 rounded-md bg-rose-50 text-rose-600">
+                            Agenda
+                          </span>
+                          
+                          {item.due_date && (
+                            <span className="text-sm font-medium text-slate-500 w-12 text-right">
+                              {format(parseISO(item.due_date), "HH:mm")}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
-              {displayedItems.filter(i => i.is_event).map(item => (
-                <div key={item.id} className="p-4 flex items-center gap-4 hover:bg-slate-50/50 transition-colors border-b border-slate-100 last:border-0">
-                  <div className="w-5 h-5 rounded flex-shrink-0 flex items-center justify-center">
-                    <CalendarIcon className="w-4 h-4 text-rose-500" />
-                  </div>
-                  
-                  <div className="flex-1 flex items-center min-w-0 gap-2">
-                    <span className="text-sm font-medium truncate text-slate-700">
-                      {item.title}
-                    </span>
-                    {item.htmlLink && (
-                      <a href={item.htmlLink} target="_blank" rel="noreferrer" className="text-slate-400 hover:text-indigo-600 transition-colors">
-                        <ExternalLink className="w-3.5 h-3.5" />
-                      </a>
-                    )}
-                  </div>
-
-                  <div className="flex items-center gap-3 flex-shrink-0">
-                    <span className="text-[10px] font-bold px-2.5 py-1 rounded-md bg-rose-50 text-rose-600">
-                      Agenda
-                    </span>
-                    
-                    {item.due_date && (
-                      <span className="text-sm font-medium text-slate-500 w-12 text-right">
-                        {format(parseISO(item.due_date), "HH:mm")}
-                      </span>
-                    )}
-                  </div>
-                </div>
-              ))}
             </div>
           )}
         </div>
