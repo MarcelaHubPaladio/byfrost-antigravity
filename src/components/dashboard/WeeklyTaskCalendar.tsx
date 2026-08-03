@@ -455,12 +455,6 @@ export function WeeklyTaskCalendar({ tenantId, userId }: WeeklyTaskCalendarProps
                           }`}>
                             {item.is_completed ? 'Concluída' : item.is_commitment ? 'Combinado' : 'Trabalho'}
                           </span>
-                          
-                          {item.due_date && (
-                            <span className="text-sm font-medium text-slate-500 w-12 text-right">
-                              {format(parseISO(item.due_date), "HH:mm")}
-                            </span>
-                          )}
                         </div>
                       </div>
                     ))}
