@@ -676,6 +676,7 @@ export function CaseCustomerDataEditorCard(props: {
                 <SelectItem value="Faturado Parcial">Faturado Parcial</SelectItem>
                 <SelectItem value="Cancelado">Cancelado</SelectItem>
                 <SelectItem value="Boleto">Boleto</SelectItem>
+                <SelectItem value="Boleto 30/04">Boleto 30/04</SelectItem>
                 <SelectItem value="Aguardando Banco">Aguardando Banco</SelectItem>
               </SelectContent>
             </Select>

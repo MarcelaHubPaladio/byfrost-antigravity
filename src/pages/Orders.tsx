@@ -198,7 +198,7 @@ function normalizeBillingStatus(raw: string): string {
 }
 
 const billingStatusOptions = ["Pendente", "Faturado", "Faturado Parcial", "Cancelado"];
-const allBillingStatusOptions = ["Pendente", "Faturado", "Faturado Parcial", "Cancelado", "Boleto", "Aguardando Banco"];
+const allBillingStatusOptions = ["Pendente", "Faturado", "Faturado Parcial", "Cancelado", "Boleto", "Boleto 30/04", "Aguardando Banco"];
 
 export default function Orders() {
   const { activeTenantId } = useTenant();
@@ -886,6 +886,7 @@ export default function Orders() {
       "Faturado Parcial", 
       "Cancelado", 
       "Boleto", 
+      "Boleto 30/04",
       "Aguardando Banco"
     ];
 
@@ -1866,6 +1867,7 @@ export default function Orders() {
                                   className={cn(
                                     "h-8 w-[140px] rounded-xl text-[10px] font-black uppercase border-none",
                                     billingStatus === "Boleto" ? "bg-indigo-100 text-indigo-700" :
+                                    billingStatus === "Boleto 30/04" ? "bg-indigo-100 text-indigo-700" :
                                     billingStatus === "Faturado" ? "bg-emerald-100 text-emerald-700" :
                                     billingStatus === "Faturado Parcial" ? "bg-emerald-50 text-emerald-600" :
                                     billingStatus === "Cancelado" ? "bg-rose-100 text-rose-700" :
