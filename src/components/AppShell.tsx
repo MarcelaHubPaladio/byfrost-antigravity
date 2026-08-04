@@ -463,8 +463,10 @@ function DesktopHoverMenu({
   trigger,
   title,
   children,
+  disabled,
 }: {
   trigger: React.ReactNode;
+  title: string;
   children: React.ReactNode;
   disabled?: boolean;
 }) {
