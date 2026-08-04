@@ -127,20 +127,19 @@ export function GoalTriggersTab() {
           <div className="flex flex-col md:flex-row items-end gap-4">
             <div className="flex-1 space-y-2 w-full">
               <Label>Evento do Guardião (Gatilho)</Label>
-              <Select value={eventType} onValueChange={setEventType}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecione um evento mapeado" />
-                </SelectTrigger>
-                <SelectContent>
-                  {eventTypesQ.isLoading && <div className="p-4 text-center"><Loader2 className="w-4 h-4 animate-spin mx-auto" /></div>}
-                  {eventTypesQ.data?.map(t => (
-                    <SelectItem key={t} value={t}>{t}</SelectItem>
-                  ))}
-                  {!eventTypesQ.isLoading && eventTypesQ.data?.length === 0 && (
-                    <div className="p-4 text-center text-sm text-slate-500">Nenhum evento encontrado na linha do tempo.</div>
-                  )}
-                </SelectContent>
-              </Select>
+              <Input
+                type="text"
+                value={eventType}
+                onChange={(e) => setEventType(e.target.value)}
+                placeholder="Ex: case_moved (digite ou selecione)"
+                list="eventTypesList"
+              />
+              <datalist id="eventTypesList">
+                {eventTypesQ.data?.map(t => (
+                  <option key={t} value={t} />
+                ))}
+              </datalist>
+              {eventTypesQ.isLoading && <div className="text-xs text-slate-400 mt-1 flex items-center gap-1"><Loader2 className="w-3 h-3 animate-spin" /> Carregando sugestões...</div>}
             </div>
 
             <div className="flex-1 space-y-2 w-full">
