@@ -43,6 +43,7 @@ export function GoalTriggersTab() {
   const [eventType, setEventType] = useState("");
   const [metricKey, setMetricKey] = useState("");
   const [multiplier, setMultiplier] = useState("1");
+  const [filterJourneyId, setFilterJourneyId] = useState("all");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(false);
 
@@ -58,6 +59,23 @@ export function GoalTriggersTab() {
         .order("created_at", { ascending: false });
       if (error) throw error;
       return data || [];
+    }
+  });
+
+  // Fetch tenant journeys
+  const journeysQ = useQuery({
+    queryKey: ["tenant_journeys_list", activeTenantId],
+    enabled: Boolean(activeTenantId),
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("tenant_journeys")
+        .select("journey_id, journeys(name)")
+        .eq("tenant_id", activeTenantId!);
+      if (error) throw error;
+      return (data || []).map(d => ({
+        id: d.journey_id,
+        name: (d.journeys as any)?.name || "Jornada Desconhecida"
+      })).sort((a, b) => a.name.localeCompare(b.name));
     }
   });
 
@@ -104,7 +122,8 @@ export function GoalTriggersTab() {
         tenant_id: activeTenantId!,
         event_type: eventType,
         metric_key: metricKey,
-        value_multiplier: Number(multiplier)
+        value_multiplier: Number(multiplier),
+        filter_journey_id: filterJourneyId === "all" ? null : filterJourneyId
       });
       if (error) {
         if (error.code === '23505') throw new Error("Este gatilho já existe.");
@@ -115,6 +134,7 @@ export function GoalTriggersTab() {
       showSuccess("Gatilho criado com sucesso!");
       setEventType("");
       setMetricKey("");
+      setFilterJourneyId("all");
       qc.invalidateQueries({ queryKey: ["goal_triggers"] });
     },
     onError: (err: any) => showError(err.message)
@@ -213,6 +233,23 @@ export function GoalTriggersTab() {
                 </SelectContent>
               </Select>
             </div>
+          </div>
+          
+          <div className="flex flex-col md:flex-row items-end gap-4 mt-4">
+            <div className="flex-1 space-y-2 w-full">
+              <Label>Restringir à Jornada <span className="text-slate-400 font-normal">(Opcional)</span></Label>
+              <Select value={filterJourneyId} onValueChange={setFilterJourneyId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Aplicar a todas as jornadas" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todas as Jornadas</SelectItem>
+                  {journeysQ.data?.map(j => (
+                    <SelectItem key={j.id} value={j.id}>{j.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
 
             <div className="w-24 space-y-2">
               <Label>Multiplicador</Label>
@@ -245,6 +282,8 @@ export function GoalTriggersTab() {
             <div className="divide-y border rounded-xl overflow-hidden">
               {triggersQ.data?.map(trigger => {
                 const dict = EVENT_DICTIONARY[trigger.event_type];
+                const journeyName = trigger.filter_journey_id ? journeysQ.data?.find(j => j.id === trigger.filter_journey_id)?.name || "Jornada específica" : null;
+                
                 return (
                   <div key={trigger.id} className="flex justify-between items-center p-4 hover:bg-slate-50">
                     <div className="flex items-center gap-3">
@@ -252,8 +291,15 @@ export function GoalTriggersTab() {
                         <Zap className="w-4 h-4 text-indigo-600" />
                       </div>
                       <div>
-                        <div className="text-sm font-semibold text-slate-800 flex items-center gap-2">
+                        <div className="text-sm font-semibold text-slate-800 flex items-center gap-2 flex-wrap">
                           Se <span className="underline decoration-indigo-200 underline-offset-4">{dict ? dict.label : trigger.event_type}</span> 
+                          
+                          {journeyName && (
+                            <span className="bg-purple-100 text-purple-700 text-xs px-2 py-0.5 rounded-full border border-purple-200">
+                              em: {journeyName}
+                            </span>
+                          )}
+
                           <span className="text-slate-400 font-normal mx-1">➜</span> 
                           Somar <span className="bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded font-bold">{trigger.value_multiplier}</span> em <code className="bg-slate-100 px-1 py-0.5 rounded text-xs">{trigger.metric_key}</code>
                         </div>
