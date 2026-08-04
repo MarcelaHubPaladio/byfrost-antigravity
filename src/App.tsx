@@ -600,11 +600,9 @@ const App = () => (
                   <Route
                     path="/app/presence/manage"
                     element={
-                      <RequireTenantRole roles={["admin", "manager"]}>
                         <RequireRouteAccess routeKey="app.presence_manage">
                           <PresenceManage />
                         </RequireRouteAccess>
-                      </RequireTenantRole>
                     }
                   />
 
@@ -766,9 +764,7 @@ const App = () => (
                     element={
                       <RequireProcessesEnabled>
                         <RequireRouteAccess routeKey="app.processes">
-                          <RequireTenantRole roles={["admin"]}>
                             <ProcessEditor />
-                          </RequireTenantRole>
                         </RequireRouteAccess>
                       </RequireProcessesEnabled>
                     }
@@ -778,9 +774,7 @@ const App = () => (
                     element={
                       <RequireProcessesEnabled>
                         <RequireRouteAccess routeKey="app.processes">
-                          <RequireTenantRole roles={["admin"]}>
                             <ProcessEditor />
-                          </RequireTenantRole>
                         </RequireRouteAccess>
                       </RequireProcessesEnabled>
                     }
@@ -789,11 +783,9 @@ const App = () => (
                   <Route
                     path="/app/admin"
                     element={
-                      <RequireTenantRole roles={["admin"]}>
                         <RequireRouteAccess routeKey="app.admin">
                           <Admin />
                         </RequireRouteAccess>
-                      </RequireTenantRole>
                     }
                   />
                   <Route
@@ -809,11 +801,9 @@ const App = () => (
                   <Route
                     path="/app/admin/users/:id"
                     element={
-                      <RequireTenantRole roles={["admin"]}>
                         <RequireRouteAccess routeKey="app.admin">
                           <AdminUserDetail />
                         </RequireRouteAccess>
-                      </RequireTenantRole>
                     }
                   />
 

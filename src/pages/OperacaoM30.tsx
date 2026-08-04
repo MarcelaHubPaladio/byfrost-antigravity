@@ -1293,7 +1293,7 @@ export default function OperacaoM30() {
                 />
               </div>
 
-              {activeTenantId && selectedJourney?.id && (isSuperAdmin || activeTenant?.role === "admin") ? (
+              {activeTenantId && selectedJourney?.id ? (
                 <NewOperacaoM30CardDialog tenantId={activeTenantId} journeyId={selectedJourney.id} />
               ) : null}
 
