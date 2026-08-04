@@ -7,8 +7,9 @@ import { AppShell } from "@/components/AppShell";
 import { RequireAuth } from "@/components/RequireAuth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Plus, Pencil, Trash2, Target, FileText, Save, Library, Users, ChevronRight, Zap } from "lucide-react";
+import { Plus, Pencil, Trash2, Target, FileText, Save, Library, Users, ChevronRight, Zap, User } from "lucide-react";
 import { GoalTriggersTab } from "@/components/goals/GoalTriggersTab";
+import { UserGoalsEditor } from "@/components/goals/UserGoalsEditor";
 import { RichTextEditor } from "@/components/RichTextEditor";
 import { showSuccess, showError } from "@/utils/toast";
 import {
@@ -34,6 +35,8 @@ import { checkRouteAccess } from "@/lib/access";
 export default function GoalsCenter() {
     const { activeTenantId } = useTenant();
     const [selectedRole, setSelectedRole] = useState<string | null>(null);
+    const [manageMode, setManageMode] = useState<'role'|'user'>('role');
+    const [selectedManageUserId, setSelectedManageUserId] = useState<string>("");
 
     // Get current user role and access
     const { activeTenant, isSuperAdmin } = useTenant();
@@ -75,6 +78,21 @@ export default function GoalsCenter() {
 
             return list;
         }
+    });
+
+    const usersManageQ = useQuery({
+        queryKey: ["manage_goals_users", activeTenantId],
+        queryFn: async () => {
+            if (!activeTenantId) return [];
+            const { data: profiles, error: pErr } = await supabase
+                .from("users_profile")
+                .select("user_id, display_name, email, role")
+                .eq("tenant_id", activeTenantId)
+                .is("deleted_at", null);
+            if (pErr) throw pErr;
+            return profiles.sort((a, b) => (a.display_name || "").localeCompare(b.display_name || ""));
+        },
+        enabled: manageMode === 'user' && Boolean(activeTenantId)
     });
 
     const isAuthorized = Boolean(manageAccessQ.data);
@@ -135,64 +153,112 @@ export default function GoalsCenter() {
                             <TabsContent value="manage">
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-4">
                                     <div className="border bg-white rounded-lg p-4 shadow-sm h-full max-h-[70vh] flex flex-col">
-                                        <div className="flex justify-between items-center mb-4">
-                                            <h2 className="font-semibold text-lg">Cargos</h2>
+                                        <div className="flex bg-slate-100 p-1 rounded-lg mb-4">
+                                            <button
+                                                className={`flex-1 text-sm font-medium py-1.5 rounded-md transition-colors ${manageMode === 'role' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                                                onClick={() => setManageMode('role')}
+                                            >
+                                                Por Cargo
+                                            </button>
+                                            <button
+                                                className={`flex-1 text-sm font-medium py-1.5 rounded-md transition-colors ${manageMode === 'user' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                                                onClick={() => setManageMode('user')}
+                                            >
+                                                Por Pessoa
+                                            </button>
                                         </div>
 
                                         <div className="flex-1 overflow-y-auto space-y-2">
-                                            {tenantRolesQ.isLoading ? (
-                                                <div className="text-center py-8 text-sm text-slate-400 italic">Carregando cargos...</div>
-                                            ) : roles.map((role) => (
-                                                <div
-                                                    key={role.id}
-                                                    onClick={() => setSelectedRole(role.id)}
-                                                    className={`p-3 rounded-md cursor-pointer border flex justify-between items-center transition-colors ${selectedRole === role.id
-                                                        ? "border-indigo-600 bg-indigo-50"
-                                                        : "hover:bg-slate-50 border-slate-200"
-                                                        }`}
-                                                >
-                                                    <div>
-                                                        <div className="font-medium text-sm text-slate-800">{role.name}</div>
-                                                        <div className="text-[10px] text-slate-500 font-mono mt-0.5 uppercase tracking-wider">{role.id}</div>
+                                            {manageMode === 'role' ? (
+                                                tenantRolesQ.isLoading ? (
+                                                    <div className="text-center py-8 text-sm text-slate-400 italic">Carregando cargos...</div>
+                                                ) : roles.map((role) => (
+                                                    <div
+                                                        key={role.id}
+                                                        onClick={() => setSelectedRole(role.id)}
+                                                        className={`p-3 rounded-md cursor-pointer border flex justify-between items-center transition-colors ${selectedRole === role.id
+                                                            ? "border-indigo-600 bg-indigo-50"
+                                                            : "hover:bg-slate-50 border-slate-200"
+                                                            }`}
+                                                    >
+                                                        <div>
+                                                            <div className="font-medium text-sm text-slate-800">{role.name}</div>
+                                                            <div className="text-[10px] text-slate-500 font-mono mt-0.5 uppercase tracking-wider">{role.id}</div>
+                                                        </div>
                                                     </div>
-                                                </div>
-                                            ))}
-                                            {!tenantRolesQ.isLoading && roles.length === 0 && (
-                                                <div className="text-center py-8 text-sm text-slate-400">Nenhum cargo ativo encontrado.</div>
+                                                ))
+                                            ) : (
+                                                usersManageQ.isLoading ? (
+                                                    <div className="text-center py-8 text-sm text-slate-400 italic">Carregando usuários...</div>
+                                                ) : usersManageQ.data?.map((u) => (
+                                                    <div
+                                                        key={u.user_id}
+                                                        onClick={() => setSelectedManageUserId(u.user_id)}
+                                                        className={`p-3 rounded-md cursor-pointer border flex items-center gap-3 transition-colors ${selectedManageUserId === u.user_id
+                                                            ? "border-indigo-600 bg-indigo-50"
+                                                            : "hover:bg-slate-50 border-slate-200"
+                                                            }`}
+                                                    >
+                                                        <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs ${selectedManageUserId === u.user_id ? 'bg-indigo-600 text-white' : 'bg-slate-200 text-slate-600'}`}>
+                                                            {u.display_name ? u.display_name.charAt(0).toUpperCase() : <User className="w-4 h-4" />}
+                                                        </div>
+                                                        <div className="flex-1 overflow-hidden">
+                                                            <div className="font-medium text-sm text-slate-800 truncate">{u.display_name || "Usuário"}</div>
+                                                            <div className="text-[10px] text-slate-500 truncate">{u.role || "Sem cargo"}</div>
+                                                        </div>
+                                                    </div>
+                                                ))
                                             )}
                                         </div>
                                     </div>
 
                                     <div className="md:col-span-2 border bg-white rounded-lg p-0 shadow-sm max-h-[70vh] flex flex-col h-full overflow-hidden">
-                                        {selectedRole ? (
-                                            <Tabs defaultValue="templates" className="flex flex-col h-full w-full">
-                                                <div className="px-4 pt-4 border-b bg-slate-50/50 flex justify-between items-center">
-                                                    <TabsList className="bg-transparent p-0 gap-4 justify-start">
-                                                        <TabsTrigger value="templates" className="data-[state=active]:bg-white data-[state=active]:shadow-sm border border-transparent data-[state=active]:border-slate-200 rounded-t-lg rounded-b-none px-4 py-2 flex gap-2">
-                                                            <Target className="w-4 h-4" />
-                                                            Templates de Objetivos
-                                                        </TabsTrigger>
-                                                        <TabsTrigger value="rules" className="data-[state=active]:bg-white data-[state=active]:shadow-sm border border-transparent data-[state=active]:border-slate-200 rounded-t-lg rounded-b-none px-4 py-2 flex gap-2">
-                                                            <FileText className="w-4 h-4" />
-                                                            Regras e Termos (Assinatura)
-                                                        </TabsTrigger>
-                                                    </TabsList>
-                                                </div>
+                                        {manageMode === 'role' ? (
+                                            selectedRole ? (
+                                                <Tabs defaultValue="templates" className="flex flex-col h-full w-full">
+                                                    <div className="px-4 pt-4 border-b bg-slate-50/50 flex justify-between items-center">
+                                                        <TabsList className="bg-transparent p-0 gap-4 justify-start">
+                                                            <TabsTrigger value="templates" className="data-[state=active]:bg-white data-[state=active]:shadow-sm border border-transparent data-[state=active]:border-slate-200 rounded-t-lg rounded-b-none px-4 py-2 flex gap-2">
+                                                                <Target className="w-4 h-4" />
+                                                                Templates de Objetivos
+                                                            </TabsTrigger>
+                                                            <TabsTrigger value="rules" className="data-[state=active]:bg-white data-[state=active]:shadow-sm border border-transparent data-[state=active]:border-slate-200 rounded-t-lg rounded-b-none px-4 py-2 flex gap-2">
+                                                                <FileText className="w-4 h-4" />
+                                                                Regras e Termos (Assinatura)
+                                                            </TabsTrigger>
+                                                        </TabsList>
+                                                    </div>
 
-                                                <div className="flex-1 overflow-y-auto p-4 bg-white">
-                                                    <TabsContent value="templates" className="mt-0 h-full data-[state=inactive]:hidden">
-                                                        <TemplatesEditor roleKey={selectedRole} roles={roles} />
-                                                    </TabsContent>
-                                                    <TabsContent value="rules" className="mt-0 h-full data-[state=inactive]:hidden">
-                                                        <RoleRulesEditor roleKey={selectedRole} />
-                                                    </TabsContent>
+                                                    <div className="flex-1 overflow-y-auto p-4 bg-white">
+                                                        <TabsContent value="templates" className="mt-0 h-full data-[state=inactive]:hidden">
+                                                            <TemplatesEditor roleKey={selectedRole} roles={roles} />
+                                                        </TabsContent>
+                                                        <TabsContent value="rules" className="mt-0 h-full data-[state=inactive]:hidden">
+                                                            <RoleRulesEditor roleKey={selectedRole} />
+                                                        </TabsContent>
+                                                    </div>
+                                                </Tabs>
+                                            ) : (
+                                                <div className="flex-1 flex flex-col items-center justify-center text-slate-400 p-8">
+                                                    <Target className="w-12 h-12 mb-2 opacity-50" />
+                                                    <p>Selecione um cargo para configurar as metas e regras.</p>
                                                 </div>
-                                            </Tabs>
+                                            )
                                         ) : (
-                                            <div className="flex-1 flex flex-col items-center justify-center text-slate-400 p-8">
-                                                <Target className="w-12 h-12 mb-2 opacity-50" />
-                                                <p>Selecione um cargo para configurar as metas e regras.</p>
-                                            </div>
+                                            selectedManageUserId ? (
+                                                <div className="flex-1 overflow-y-auto p-4 bg-white">
+                                                    <UserGoalsEditor 
+                                                        userId={selectedManageUserId} 
+                                                        userName={usersManageQ.data?.find(u => u.user_id === selectedManageUserId)?.display_name || "Usuário"} 
+                                                        roleKey={usersManageQ.data?.find(u => u.user_id === selectedManageUserId)?.role || null} 
+                                                    />
+                                                </div>
+                                            ) : (
+                                                <div className="flex-1 flex flex-col items-center justify-center text-slate-400 p-8">
+                                                    <User className="w-12 h-12 mb-2 opacity-50" />
+                                                    <p>Selecione um membro da equipe para personalizar metas.</p>
+                                                </div>
+                                            )
                                         )}
                                     </div>
                                 </div>
