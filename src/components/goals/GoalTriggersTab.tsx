@@ -26,6 +26,7 @@ const EVENT_DICTIONARY: Record<string, { label: string; description: string }> =
   customer_updated: { label: "Cliente Atualizado", description: "Os dados de contato do cliente foram editados." },
   inbound_image: { label: "Imagem Recebida", description: "O cliente enviou uma imagem pelo WhatsApp." },
   late_arrival: { label: "Atraso no Ponto", description: "O colaborador registrou entrada atrasada." },
+  lead_created: { label: "Lead Criado", description: "Um novo lead foi criado no sistema." },
   lead_imported: { label: "Lead Importado", description: "Um lead foi importado via planilha/integração." },
   lead_merged: { label: "Lead Mesclado", description: "Dois cadastros de leads foram unificados." },
   lead_reactivated: { label: "Lead Reativado", description: "Um lead antigo voltou a entrar em contato." },
