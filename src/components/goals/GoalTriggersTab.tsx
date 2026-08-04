@@ -7,8 +7,34 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Loader2, Trash2, Zap } from "lucide-react";
+import { Loader2, Trash2, Zap, Info } from "lucide-react";
 import { showSuccess, showError } from "@/utils/toast";
+
+const EVENT_DICTIONARY: Record<string, { label: string; description: string }> = {
+  automation_executed: { label: "Automação Executada", description: "Quando uma regra automática de sistema é ativada." },
+  bank_hour_ledger_adjusted: { label: "Banco de Horas Ajustado", description: "Ajuste manual feito no banco de horas." },
+  bank_hour_ledger_posted: { label: "Banco de Horas Registrado", description: "Nova entrada lançada no banco de horas." },
+  card_created: { label: "Card Criado", description: "Um novo card foi adicionado no Kanban." },
+  case_created: { label: "Caso/Card Criado", description: "Um novo caso de atendimento foi criado." },
+  case_deleted: { label: "Caso Deletado", description: "Um card foi excluído do sistema." },
+  case_opened: { label: "Caso Aberto", description: "O card do cliente foi aberto/visualizado." },
+  case_state_changed: { label: "Fase Alterada", description: "O card foi movido para outra etapa/coluna." },
+  case_updated: { label: "Caso Atualizado", description: "Dados do card foram modificados." },
+  contract_sent: { label: "Contrato Enviado", description: "Um contrato foi enviado para o cliente." },
+  contract_signed: { label: "Contrato Assinado", description: "O cliente finalizou a assinatura do contrato." },
+  customer_reply: { label: "Mensagem do Cliente", description: "O cliente enviou uma resposta no chat." },
+  customer_updated: { label: "Cliente Atualizado", description: "Os dados de contato do cliente foram editados." },
+  inbound_image: { label: "Imagem Recebida", description: "O cliente enviou uma imagem pelo WhatsApp." },
+  late_arrival: { label: "Atraso no Ponto", description: "O colaborador registrou entrada atrasada." },
+  lead_imported: { label: "Lead Importado", description: "Um lead foi importado via planilha/integração." },
+  lead_merged: { label: "Lead Mesclado", description: "Dois cadastros de leads foram unificados." },
+  lead_reactivated: { label: "Lead Reativado", description: "Um lead antigo voltou a entrar em contato." },
+  note_updated: { label: "Anotação Atualizada", description: "Uma nota interna no card foi editada." },
+  presence_close_attempt: { label: "Tentativa de Fechar Ponto", description: "Ação de tentar encerrar o expediente." },
+  presence_punch: { label: "Batida de Ponto", description: "Registro normal de entrada ou saída." },
+  presence_state_manual_override: { label: "Ponto Forçado (Admin)", description: "Status do ponto foi alterado manualmente por gestor." },
+  whatsapp_message_sent: { label: "Mensagem Enviada", description: "Uma mensagem saiu via WhatsApp." }
+};
 
 export function GoalTriggersTab() {
   const { activeTenantId } = useTenant();
@@ -18,6 +44,7 @@ export function GoalTriggersTab() {
   const [metricKey, setMetricKey] = useState("");
   const [multiplier, setMultiplier] = useState("1");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showSuggestions, setShowSuggestions] = useState(false);
 
   // Fetch configured triggers
   const triggersQ = useQuery({
@@ -124,22 +151,52 @@ export function GoalTriggersTab() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="flex flex-col md:flex-row items-end gap-4">
-            <div className="flex-1 space-y-2 w-full">
+          <div className="flex flex-col md:flex-row items-end gap-4 relative">
+            <div className="flex-1 space-y-2 w-full relative">
               <Label>Evento do Guardião (Gatilho)</Label>
               <Input
                 type="text"
                 value={eventType}
-                onChange={(e) => setEventType(e.target.value)}
-                placeholder="Ex: case_moved (digite ou selecione)"
-                list="eventTypesList"
+                onChange={(e) => {
+                  setEventType(e.target.value);
+                  setShowSuggestions(true);
+                }}
+                onFocus={() => setShowSuggestions(true)}
+                onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
+                placeholder="Ex: case_moved (digite ou selecione da lista)"
               />
-              <datalist id="eventTypesList">
-                {eventTypesQ.data?.map(t => (
-                  <option key={t} value={t} />
-                ))}
-              </datalist>
-              {eventTypesQ.isLoading && <div className="text-xs text-slate-400 mt-1 flex items-center gap-1"><Loader2 className="w-3 h-3 animate-spin" /> Carregando sugestões...</div>}
+              
+              {showSuggestions && (
+                <div className="absolute top-full left-0 w-full mt-1 bg-white border border-slate-200 rounded-lg shadow-xl max-h-64 overflow-y-auto z-50">
+                  {eventTypesQ.isLoading && <div className="p-3 text-xs text-slate-500 flex items-center gap-2"><Loader2 className="w-3 h-3 animate-spin" /> Carregando sugestões...</div>}
+                  {!eventTypesQ.isLoading && eventTypesQ.data?.filter(t => t.toLowerCase().includes(eventType.toLowerCase())).map(t => {
+                    const dict = EVENT_DICTIONARY[t];
+                    return (
+                      <div 
+                        key={t} 
+                        className="p-3 hover:bg-slate-50 cursor-pointer border-b border-slate-50 last:border-0 transition-colors"
+                        onClick={() => {
+                          setEventType(t);
+                          setShowSuggestions(false);
+                        }}
+                      >
+                        <div className="font-semibold text-sm text-slate-800">{dict ? dict.label : t}</div>
+                        {dict && <div className="text-xs text-slate-500 mt-0.5">{dict.description}</div>}
+                        <div className="text-[10px] text-slate-400 font-mono mt-1 opacity-70">{t}</div>
+                      </div>
+                    );
+                  })}
+                  {!eventTypesQ.isLoading && eventType && !eventTypesQ.data?.includes(eventType) && (
+                    <div 
+                      className="p-3 bg-indigo-50/50 hover:bg-indigo-50 cursor-pointer text-indigo-700 transition-colors"
+                      onClick={() => setShowSuggestions(false)}
+                    >
+                      <div className="font-semibold text-sm">Usar evento customizado</div>
+                      <div className="text-xs mt-0.5">O sistema escutará pelo evento exato: <code className="font-mono bg-indigo-100 px-1 rounded">{eventType}</code></div>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             <div className="flex-1 space-y-2 w-full">
@@ -186,24 +243,32 @@ export function GoalTriggersTab() {
             </div>
           ) : (
             <div className="divide-y border rounded-xl overflow-hidden">
-              {triggersQ.data?.map(trigger => (
-                <div key={trigger.id} className="flex justify-between items-center p-4 hover:bg-slate-50">
-                  <div className="flex items-center gap-3">
-                    <div className="bg-indigo-100 p-2 rounded-lg">
-                      <Zap className="w-4 h-4 text-indigo-600" />
-                    </div>
-                    <div>
-                      <div className="text-sm font-semibold text-slate-800">
-                        Se {trigger.event_type} <span className="text-slate-400 font-normal mx-1">➜</span> Somar {trigger.value_multiplier} em {trigger.metric_key}
+              {triggersQ.data?.map(trigger => {
+                const dict = EVENT_DICTIONARY[trigger.event_type];
+                return (
+                  <div key={trigger.id} className="flex justify-between items-center p-4 hover:bg-slate-50">
+                    <div className="flex items-center gap-3">
+                      <div className="bg-indigo-100 p-2 rounded-lg">
+                        <Zap className="w-4 h-4 text-indigo-600" />
                       </div>
-                      <div className="text-xs text-slate-500 mt-1">Criado em {new Date(trigger.created_at).toLocaleDateString()}</div>
+                      <div>
+                        <div className="text-sm font-semibold text-slate-800 flex items-center gap-2">
+                          Se <span className="underline decoration-indigo-200 underline-offset-4">{dict ? dict.label : trigger.event_type}</span> 
+                          <span className="text-slate-400 font-normal mx-1">➜</span> 
+                          Somar <span className="bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded font-bold">{trigger.value_multiplier}</span> em <code className="bg-slate-100 px-1 py-0.5 rounded text-xs">{trigger.metric_key}</code>
+                        </div>
+                        <div className="text-xs text-slate-500 mt-1 flex items-center gap-2">
+                          {dict && <span className="text-slate-400 truncate max-w-xs" title={dict.description}><Info className="w-3 h-3 inline mr-1 opacity-70"/>{dict.description} • </span>}
+                          <span className="font-mono text-[10px] opacity-70">({trigger.event_type})</span>
+                        </div>
+                      </div>
                     </div>
+                    <Button variant="ghost" size="sm" onClick={() => deleteTrigger.mutate(trigger.id)} className="text-rose-500 hover:text-rose-700 hover:bg-rose-50">
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
                   </div>
-                  <Button variant="ghost" size="sm" onClick={() => deleteTrigger.mutate(trigger.id)} className="text-rose-500 hover:text-rose-700 hover:bg-rose-50">
-                    <Trash2 className="w-4 h-4" />
-                  </Button>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </CardContent>
