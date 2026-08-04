@@ -7,7 +7,8 @@ import { AppShell } from "@/components/AppShell";
 import { RequireAuth } from "@/components/RequireAuth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Plus, Pencil, Trash2, Target, FileText, Save, Library, Users, ChevronRight } from "lucide-react";
+import { Plus, Pencil, Trash2, Target, FileText, Save, Library, Users, ChevronRight, Zap } from "lucide-react";
+import { GoalTriggersTab } from "@/components/goals/GoalTriggersTab";
 import { RichTextEditor } from "@/components/RichTextEditor";
 import { showSuccess, showError } from "@/utils/toast";
 import {
@@ -108,6 +109,12 @@ export default function GoalsCenter() {
                                     Configuração
                                 </TabsTrigger>
                             )}
+                            {isAuthorized && (
+                                <TabsTrigger value="triggers" className="flex items-center gap-2">
+                                    <Zap className="w-4 h-4" />
+                                    Gatilhos
+                                </TabsTrigger>
+                            )}
                         </TabsList>
 
                         <TabsContent value="team">
@@ -117,6 +124,12 @@ export default function GoalsCenter() {
                         <TabsContent value="my-goals">
                             <MyGoalsDashboard />
                         </TabsContent>
+
+                        {isAuthorized && (
+                            <TabsContent value="triggers">
+                                <GoalTriggersTab />
+                            </TabsContent>
+                        )}
 
                         {isAuthorized && (
                             <TabsContent value="manage">
