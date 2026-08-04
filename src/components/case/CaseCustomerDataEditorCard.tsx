@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { showError, showSuccess } from "@/utils/toast";
 import { cn } from "@/lib/utils";
-import { Banknote, ExternalLink, IdCard, MapPin, Save, Mail, MessageSquare, DollarSign } from "lucide-react";
+import { Banknote, ExternalLink, IdCard, MapPin, Save, Mail, MessageSquare, DollarSign, Calendar as CalendarIcon } from "lucide-react";
 import { useTenant } from "@/providers/TenantProvider";
 import { useSession } from "@/providers/SessionProvider";
 import { Link } from "react-router-dom";
@@ -19,6 +19,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
+import { format as dateFnsFormat } from "date-fns";
+import { ptBR } from "date-fns/locale";
 
 type FieldRow = {
   key: string;
@@ -76,6 +80,7 @@ export function CaseCustomerDataEditorCard(props: {
       billing_status: getField(fields, "billing_status"),
       partial_paid_value: getField(fields, "partial_paid_value"),
       payment_method: getField(fields, "payment_method"),
+      sale_date_text: getField(fields, "sale_date_text"),
 
       // Financeiro (nomes alinhados com a extração)
       payment_terms: getFieldAny(fields, ["payment_terms", "payment_conditions"]),
@@ -134,6 +139,7 @@ export function CaseCustomerDataEditorCard(props: {
         { key: "cep", value_text: cleanOrNull(draft.cep) },
         { key: "state", value_text: cleanOrNull(draft.state) },
         { key: "uf", value_text: cleanOrNull(draft.uf) },
+        { key: "sale_date_text", value_text: cleanOrNull(draft.sale_date_text) },
 
         // Financeiro
         { key: "payment_terms", value_text: cleanOrNull(draft.payment_terms) },
@@ -196,6 +202,7 @@ export function CaseCustomerDataEditorCard(props: {
         "cep",
         "state",
         "uf",
+        "sale_date_text",
         // financeiro
         "payment_terms",
         "payment_signal_value_raw",
@@ -414,14 +421,56 @@ export function CaseCustomerDataEditorCard(props: {
       </div>
 
       <div className="mt-4 grid gap-3">
-        <div>
-          <Label className="text-xs">Nome do Cliente</Label>
-          <Input
-            value={draft.name}
-            onChange={(e) => setDraft((p) => ({ ...p, name: e.target.value }))}
-            className="mt-1 h-10 rounded-2xl"
-            placeholder="Nome completo"
-          />
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div>
+            <Label className="text-xs">Nome do Cliente</Label>
+            <Input
+              value={draft.name}
+              onChange={(e) => setDraft((p) => ({ ...p, name: e.target.value }))}
+              className="mt-1 h-10 rounded-2xl"
+              placeholder="Nome completo"
+            />
+          </div>
+          <div className="flex flex-col">
+            <Label className="text-xs">Data do Pedido</Label>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  className={cn(
+                    "mt-1 h-10 w-full justify-start text-left font-normal rounded-2xl border-slate-200",
+                    !draft.sale_date_text && "text-slate-500"
+                  )}
+                >
+                  <CalendarIcon className="mr-2 h-4 w-4 opacity-50" />
+                  {draft.sale_date_text ? draft.sale_date_text : <span>Selecione uma data</span>}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0 rounded-2xl border-slate-200" align="start">
+                <Calendar
+                  mode="single"
+                  selected={
+                    (() => {
+                      if (!draft.sale_date_text) return undefined;
+                      const parts = draft.sale_date_text.split("/");
+                      if (parts.length === 3) {
+                        return new Date(Number(parts[2]), Number(parts[1]) - 1, Number(parts[0]));
+                      }
+                      return undefined;
+                    })()
+                  }
+                  onSelect={(date) => {
+                    setDraft((p) => ({
+                      ...p,
+                      sale_date_text: date ? dateFnsFormat(date, "dd/MM/yyyy", { locale: ptBR }) : ""
+                    }));
+                  }}
+                  initialFocus
+                  locale={ptBR}
+                />
+              </PopoverContent>
+            </Popover>
+          </div>
         </div>
 
         <div className="grid gap-3 sm:grid-cols-2">
