@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Loader2, Trash2, Zap, Info } from "lucide-react";
+import { Loader2, Trash2, Zap, Info, Pencil, X } from "lucide-react";
 import { showSuccess, showError } from "@/utils/toast";
 
 const EVENT_DICTIONARY: Record<string, { label: string; description: string }> = {
@@ -47,6 +47,7 @@ export function GoalTriggersTab() {
   const [filterJourneyId, setFilterJourneyId] = useState("all");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(false);
+  const [editingTriggerId, setEditingTriggerId] = useState<string | null>(null);
 
   // Fetch configured triggers
   const triggersQ = useQuery({
@@ -157,6 +158,28 @@ export function GoalTriggersTab() {
     onError: (err: any) => showError(err.message)
   });
 
+  const updateTrigger = useMutation({
+    mutationFn: async () => {
+      if (!eventType || !metricKey || !editingTriggerId) throw new Error("Preencha o evento e a métrica");
+      const { error } = await supabase.from("goal_triggers").update({
+        event_type: eventType,
+        metric_key: metricKey,
+        value_multiplier: Number(multiplier),
+        filter_journey_id: filterJourneyId === "all" ? null : filterJourneyId
+      }).eq("id", editingTriggerId);
+      if (error) {
+        if (error.code === '23505') throw new Error("Já existe um gatilho para esta combinação.");
+        throw error;
+      }
+    },
+    onSuccess: () => {
+      showSuccess("Gatilho atualizado com sucesso!");
+      handleCancelEdit();
+      qc.invalidateQueries({ queryKey: ["goal_triggers"] });
+    },
+    onError: (err: any) => showError(err.message)
+  });
+
   const deleteTrigger = useMutation({
     mutationFn: async (id: string) => {
       const { error } = await supabase.from("goal_triggers").delete().eq("id", id);
@@ -169,22 +192,43 @@ export function GoalTriggersTab() {
     onError: (err: any) => showError(err.message)
   });
 
-  const handleCreate = async () => {
+  const handleSubmit = async () => {
     setIsSubmitting(true);
-    await createTrigger.mutateAsync();
+    if (editingTriggerId) {
+      await updateTrigger.mutateAsync();
+    } else {
+      await createTrigger.mutateAsync();
+    }
     setIsSubmitting(false);
+  };
+
+  const handleEdit = (trigger: any) => {
+    setEditingTriggerId(trigger.id);
+    setEventType(trigger.event_type);
+    setMetricKey(trigger.metric_key);
+    setMultiplier(String(trigger.value_multiplier));
+    setFilterJourneyId(trigger.filter_journey_id || "all");
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleCancelEdit = () => {
+    setEditingTriggerId(null);
+    setEventType("");
+    setMetricKey("");
+    setMultiplier("1");
+    setFilterJourneyId("all");
   };
 
   return (
     <div className="space-y-6 mt-6">
-      <Card>
+      <Card className={editingTriggerId ? "border-indigo-300 shadow-md ring-2 ring-indigo-50" : ""}>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Zap className="w-5 h-5 text-indigo-500" />
-            Novo Gatilho
+            {editingTriggerId ? "Editar Gatilho" : "Novo Gatilho"}
           </CardTitle>
           <CardDescription>
-            Automatize o progresso das suas metas. Sempre que o Guardião rastrear um evento específico na linha do tempo, nós somaremos pontos na métrica vinculada.
+            {editingTriggerId ? "Modifique as configurações deste gatilho." : "Automatize o progresso das suas metas. Sempre que o Guardião rastrear um evento específico na linha do tempo, nós somaremos pontos na métrica vinculada."}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -273,10 +317,17 @@ export function GoalTriggersTab() {
               <Input type="number" min="1" value={multiplier} onChange={e => setMultiplier(e.target.value)} />
             </div>
 
-            <Button onClick={handleCreate} disabled={isSubmitting || !eventType || !metricKey} className="bg-indigo-600 hover:bg-indigo-700 text-white w-full md:w-auto">
-              {isSubmitting ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
-              Criar
-            </Button>
+            <div className="flex gap-2 w-full md:w-auto">
+              {editingTriggerId && (
+                <Button onClick={handleCancelEdit} variant="outline" disabled={isSubmitting} className="flex-1 md:flex-none">
+                  Cancelar
+                </Button>
+              )}
+              <Button onClick={handleSubmit} disabled={isSubmitting || !eventType || !metricKey} className="bg-indigo-600 hover:bg-indigo-700 text-white flex-1 md:flex-none">
+                {isSubmitting ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : (editingTriggerId ? <Pencil className="w-4 h-4 mr-2" /> : null)}
+                {editingTriggerId ? "Salvar" : "Criar"}
+              </Button>
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -326,9 +377,14 @@ export function GoalTriggersTab() {
                         </div>
                       </div>
                     </div>
-                    <Button variant="ghost" size="sm" onClick={() => deleteTrigger.mutate(trigger.id)} className="text-rose-500 hover:text-rose-700 hover:bg-rose-50">
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
+                    <div className="flex items-center gap-1">
+                      <Button variant="ghost" size="sm" onClick={() => handleEdit(trigger)} className="text-slate-500 hover:text-indigo-600 hover:bg-indigo-50">
+                        <Pencil className="w-4 h-4" />
+                      </Button>
+                      <Button variant="ghost" size="sm" onClick={() => deleteTrigger.mutate(trigger.id)} className="text-rose-500 hover:text-rose-700 hover:bg-rose-50">
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </div>
                   </div>
                 );
               })}
