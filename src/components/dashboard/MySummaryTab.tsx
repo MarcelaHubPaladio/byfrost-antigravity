@@ -25,13 +25,53 @@ export function MySummaryTab() {
   const goalsQ = useQuery({
     queryKey: ["my_goals", activeTenantId, user.id],
     queryFn: async () => {
-      const { data, error } = await supabase
+      const { data: goals, error } = await supabase
         .from("user_goals")
         .select("*")
         .eq("tenant_id", activeTenantId)
         .eq("user_id", user.id);
       if (error) throw error;
-      return data;
+      if (!goals || goals.length === 0) return [];
+
+      const startOfMonth = new Date();
+      startOfMonth.setDate(1);
+      startOfMonth.setHours(0, 0, 0, 0);
+
+      const { data: participant } = await supabase
+          .from("incentive_participants")
+          .select("id")
+          .eq("tenant_id", activeTenantId)
+          .eq("user_id", user.id)
+          .maybeSingle();
+
+      if (!participant) {
+        return goals.map(g => ({ ...g, achieved: 0, remaining: g.target_value || 0 }));
+      }
+
+      const { data: userEvents, error: eErr } = await supabase
+          .from("incentive_events")
+          .select("event_type, value, points")
+          .eq("tenant_id", activeTenantId)
+          .eq("participant_id", participant.id)
+          .gte("created_at", startOfMonth.toISOString());
+
+      if (eErr) throw eErr;
+
+      return goals.map(g => {
+          const relevantEvents = (userEvents || []).filter(e => e.event_type === g.metric_key);
+          let achieved = 0;
+          if (g.target_type === 'money') {
+              achieved = relevantEvents.reduce((acc, curr) => acc + (Number(curr.value) || 0), 0);
+          } else {
+              achieved = relevantEvents.length;
+          }
+
+          return {
+              ...g,
+              achieved,
+              remaining: Math.max(0, (g.target_value || 0) - achieved)
+          };
+      });
     },
   });
 
@@ -237,20 +277,57 @@ export function MySummaryTab() {
             ) : goalsQ.data?.length === 0 ? (
               <p className="text-sm text-slate-500 text-center py-4">Nenhuma meta configurada.</p>
             ) : (
-              goalsQ.data?.map(goal => (
-                <div key={goal.id} className="flex justify-between items-center p-4 rounded-2xl bg-slate-50 border border-slate-100">
-                  <div>
-                    <h4 className="font-semibold text-slate-800">{goal.name}</h4>
-                    <p className="text-xs text-slate-500">Chave: {goal.metric_key}</p>
+              goalsQ.data?.map(goal => {
+                const isMoney = goal.target_type === 'money';
+                const formatValue = (val: number) => isMoney 
+                  ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val)
+                  : val;
+                  
+                const progressPct = goal.target_value ? Math.min(100, Math.round((goal.achieved / goal.target_value) * 100)) : 0;
+                
+                return (
+                  <div key={goal.id} className="flex flex-col p-4 rounded-2xl bg-slate-50 border border-slate-100 gap-3">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <h4 className="font-semibold text-slate-800">{goal.name}</h4>
+                        <div className="flex items-center gap-2 mt-1">
+                          <Badge variant="outline" className="text-[10px] bg-white">
+                            {goal.frequency}
+                          </Badge>
+                          <span className="text-xs text-slate-500 font-medium">{goal.metric_key}</span>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-xs text-slate-500 font-medium block">Alvo</span>
+                        <span className="text-lg font-black text-rose-600">
+                          {formatValue(goal.target_value)}
+                        </span>
+                      </div>
+                    </div>
+                    
+                    <div className="space-y-1.5 mt-1">
+                      <div className="flex justify-between items-end text-sm">
+                        <span className="font-bold text-slate-700">{progressPct}%</span>
+                        <div className="text-right">
+                          <span className="text-xs text-slate-500 block">Progresso</span>
+                          <span className="font-bold text-slate-800">{formatValue(goal.achieved)}</span>
+                        </div>
+                      </div>
+                      <div className="h-2.5 w-full bg-slate-200 rounded-full overflow-hidden">
+                        <div 
+                          className="h-full bg-rose-500 rounded-full transition-all duration-500" 
+                          style={{ width: `${progressPct}%` }}
+                        />
+                      </div>
+                      {goal.remaining > 0 && (
+                        <p className="text-right text-[10px] font-medium text-rose-600 mt-1">
+                          Faltam {formatValue(goal.remaining)}
+                        </p>
+                      )}
+                    </div>
                   </div>
-                  <div className="text-right">
-                    <span className="text-lg font-black text-rose-600">
-                      {goal.target_type === 'money' ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(goal.target_value) : goal.target_value}
-                    </span>
-                    <span className="block text-[10px] text-slate-400 uppercase tracking-widest">{goal.frequency}</span>
-                  </div>
-                </div>
-              ))
+                );
+              })
             )}
           </div>
         </div>
