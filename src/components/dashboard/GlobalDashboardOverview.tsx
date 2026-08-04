@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { useTenant } from "@/providers/TenantProvider";
-import { Activity, Sparkles, Database, ShieldAlert, Zap, Clock, Users, Loader2, Landmark } from "lucide-react";
+import { Activity, Sparkles, Database, ShieldAlert, Zap, Clock, Users, Loader2, Landmark, AlertTriangle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { AppShell } from "@/components/AppShell";
@@ -270,9 +270,41 @@ export function GlobalDashboardOverview() {
     }
   });
 
+  const zapiSubscriptionErrorQ = useQuery({
+    queryKey: ["zapi_subscription_error_global", activeTenantId],
+    enabled: Boolean(activeTenantId) && isSuperAdmin,
+    refetchInterval: 30000,
+    queryFn: async () => {
+      const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+      const { data, error } = await supabase
+        .from("audit_ledger")
+        .select("payload_json, created_at")
+        .eq("tenant_id", activeTenantId!)
+        .gte("created_at", yesterday)
+        .contains("payload_json", { kind: "wa_outbound_attempt" })
+        .order("created_at", { ascending: false })
+        .limit(20);
+      
+      if (error) {
+        console.error("Error fetching audit_ledger for ZAPI:", error);
+        return false;
+      }
+      
+      const hasError = data?.some((row: any) => {
+        const payload = row.payload_json;
+        if (payload?.external?.ok === false && payload?.external?.status === 400) {
+          const errorMsg = payload?.external?.body?.error || "";
+          return errorMsg.includes("must subscribe to this instance again");
+        }
+        return false;
+      });
+      
+      return hasError || false;
+    }
+  });
+
   const { maxTokens, usedTokens } = tenantPlanQ.data || { maxTokens: 10000, usedTokens: 0 };
   const percentUsed = maxTokens > 0 ? Math.min(100, Math.round((usedTokens / maxTokens) * 100)) : 0;
-
   const isFinanceEnabled = activeTenant?.modules_json?.finance_enabled === true;
   const isTasksEnabled = activeTenant?.modules_json?.tasks_enabled === true;
   const isGlobalEnabled = isFinanceEnabled || isTasksEnabled;
@@ -282,6 +314,21 @@ export function GlobalDashboardOverview() {
     <AppShell title="Dashboard Global (Guardião)">
       <div className="w-full h-full px-4 py-8">
         
+        {isSuperAdmin && zapiSubscriptionErrorQ.data && (
+          <div className="mb-6 bg-red-50 border border-red-200 p-4 rounded-2xl flex items-start gap-4 shadow-sm animate-pulse">
+            <div className="bg-red-100 p-2 rounded-xl flex-shrink-0 mt-0.5">
+              <AlertTriangle className="h-6 w-6 text-red-600" />
+            </div>
+            <div>
+              <h3 className="font-bold text-red-800 text-sm">Alerta Crítico de Conexão: Assinatura Z-API Expirada (Visão Exclusiva Super-Admin)</h3>
+              <p className="text-red-700 text-xs mt-1 leading-relaxed">
+                A instância do Z-API deste tenant está bloqueando os envios de mensagens ativamente (incluindo as respostas da BeeIA). O erro retornado pela API nas últimas horas é: <strong>"To continue sending a message, you must subscribe to this instance again"</strong>. <br/><br/>
+                Para resolver: O cliente precisará acessar o painel do Z-API e regularizar/renovar a assinatura da instância correspondente.
+              </p>
+            </div>
+          </div>
+        )}
+
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
           <div>
             <h1 className="text-2xl font-bold text-slate-800 tracking-tight flex items-center gap-3">
