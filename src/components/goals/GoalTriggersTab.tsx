@@ -96,22 +96,38 @@ export function GoalTriggersTab() {
     }
   });
 
-  // Fetch unique metric_keys from goal_templates
+  // Fetch unique metric_keys from goal_templates and user_goals
   const metricKeysQ = useQuery({
     queryKey: ["goal_metric_keys", activeTenantId],
     enabled: Boolean(activeTenantId),
     queryFn: async () => {
-      const { data, error } = await supabase
+      // 1. Fetch from templates
+      const { data: templatesData, error: templatesErr } = await supabase
         .from("goal_templates")
         .select("metric_key, name")
         .eq("tenant_id", activeTenantId!);
+      if (templatesErr) throw templatesErr;
+
+      // 2. Fetch from user specific goals
+      const { data: usersData, error: usersErr } = await supabase
+        .from("user_goals")
+        .select("metric_key, name")
+        .eq("tenant_id", activeTenantId!);
+      if (usersErr) throw usersErr;
         
-      if (error) throw error;
       const map = new Map();
-      (data || []).forEach(d => {
+      
+      (templatesData || []).forEach(d => {
         map.set(d.metric_key, d.name);
       });
-      return Array.from(map.entries()).map(([key, name]) => ({ key, name }));
+      
+      (usersData || []).forEach(d => {
+        if (!map.has(d.metric_key) || d.name) {
+          map.set(d.metric_key, d.name || map.get(d.metric_key) || d.metric_key);
+        }
+      });
+      
+      return Array.from(map.entries()).map(([key, name]) => ({ key, name })).sort((a, b) => a.name.localeCompare(b.name));
     }
   });
 
