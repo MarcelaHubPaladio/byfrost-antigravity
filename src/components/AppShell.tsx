@@ -214,6 +214,7 @@ function NavTile({
   disabled?: boolean;
   onClick?: (e: React.MouseEvent) => void;
 }) {
+  if (disabled) return null;
   const base = "mx-auto flex w-[78px] flex-col items-center gap-1 rounded-2xl border px-2 py-2 text-center transition-all cursor-pointer";
 
   const content = (
@@ -295,7 +296,7 @@ function MobileNavItem({
   disabled?: boolean;
   onNavigate: () => void;
 }) {
-  if (disabled) {
+  if (disabled) return null;
     return (
       <div
         className={cn(
@@ -505,9 +506,10 @@ function DesktopHoverMenu({
   children,
 }: {
   trigger: React.ReactNode;
-  title: string;
   children: React.ReactNode;
+  disabled?: boolean;
 }) {
+  if (disabled) return null;
   return (
     <HoverCardPrimitive.Root openDelay={80} closeDelay={120}>
       <HoverCardPrimitive.Trigger asChild>{trigger as any}</HoverCardPrimitive.Trigger>
@@ -542,6 +544,7 @@ function DesktopHoverMenuLink({
   active: boolean;
   disabled: boolean;
 }) {
+  if (disabled) return null;
   return (
     <NavLink
       to={to}
@@ -1048,7 +1051,8 @@ export function AppShell({
                 {hasOperacaoM30 && (
                   <DesktopHoverMenu
                     title="M30"
-                    trigger={<div className="w-full"><NavTile to="/app/operacao-m30" icon={Users} label="Clientes M30" disabled={!can("app.operacao_m30")} /></div>}
+                    disabled={!can("app.operacao_m30")}
+                    trigger={<div className="w-full"><NavTile to="/app/operacao-m30" icon={Users} label="Clientes M30" /></div>}
                   >
                     {M30_NAV_CHILDREN.filter(c => {
                       if (c.to === "/app/reports" && !reportsEnabledForTenant) return false;
@@ -1077,7 +1081,8 @@ export function AppShell({
                 {createHasAnyAccess && (
                   <DesktopHoverMenu
                     title="Criar"
-                    trigger={<div className="w-full"><NavTile to="/app/create" icon={Zap} label="Criar" disabled={false} /></div>}
+                    disabled={false}
+                    trigger={<div className="w-full"><NavTile to="/app/create" icon={Zap} label="Criar" /></div>}
                   >
                     {CREATE_NAV_CHILDREN.filter(c => {
                       if (c.to === "/app/link-manager" && !linkManagerEnabledForTenant) return false;
@@ -1120,7 +1125,8 @@ export function AppShell({
                 {coreHasAnyAccess && (
                   <DesktopHoverMenu
                     title="Core"
-                    trigger={<div className="w-full"><NavTile to="/app/entities" icon={Building2} label="Core" disabled={!can("app.entities")} /></div>}
+                    disabled={!can("app.entities")}
+                    trigger={<div className="w-full"><NavTile to="/app/entities" icon={Building2} label="Core" /></div>}
                   >
                     {CORE_NAV_CHILDREN.map(({ to, label, icon, routeKey }) => (
                       <DesktopHoverMenuLink
@@ -1139,7 +1145,8 @@ export function AppShell({
                 {hasPresence && (
                   <DesktopHoverMenu
                     title="Presença"
-                    trigger={<div className="w-full"><NavTile to="/app/presence" icon={Clock3} label="Ponto" disabled={!can("app.presence")} /></div>}
+                    disabled={!can("app.presence")}
+                    trigger={<div className="w-full"><NavTile to="/app/presence" icon={Clock3} label="Ponto" /></div>}
                   >
                     {PRESENCE_NAV_CHILDREN.filter((c) =>
                       c.enabled ? c.enabled({ hasPresence, isPresenceManager }) : true
@@ -1160,7 +1167,8 @@ export function AppShell({
                 {financeHasAnyAccess && (
                   <DesktopHoverMenu
                     title="Financeiro"
-                    trigger={<div className="w-full"><NavTile to="/app/finance/ledger?tab=transactions" icon={Gauge} label="Cockpit" disabled={!can("app.finance.cockpit")} /></div>}
+                    disabled={!can("app.finance.cockpit")}
+                    trigger={<div className="w-full"><NavTile to="/app/finance/ledger?tab=transactions" icon={Gauge} label="Cockpit" /></div>}
                   >
                     {FINANCE_NAV_CHILDREN.map(({ to, label, icon, routeKey }) => (
                       <DesktopHoverMenuLink
