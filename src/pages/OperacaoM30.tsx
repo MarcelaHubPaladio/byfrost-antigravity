@@ -462,19 +462,6 @@ export default function OperacaoM30() {
     enabled: Boolean(activeTenantId && user?.id),
     staleTime: 60_000,
     queryFn: async () => {
-      let isAdmin = isSuperAdmin;
-      
-      if (!isAdmin) {
-        const { data: meProfile } = await supabase
-          .from("users_profile")
-          .select("role")
-          .eq("tenant_id", activeTenantId!)
-          .eq("user_id", user!.id)
-          .maybeSingle();
-
-        isAdmin = meProfile?.role === "admin";
-      }
-
       const { data: allUsers, error: usersErr } = await supabase
         .from("users_profile")
         .select("user_id, display_name, email")
@@ -483,19 +470,7 @@ export default function OperacaoM30() {
         .order("display_name", { ascending: true });
 
       if (usersErr) throw usersErr;
-      const list = (allUsers ?? []) as Array<{ user_id: string; display_name: string | null; email: string | null }>;
-
-      if (isAdmin) return list;
-
-      const { data: subordinateIds, error: rpcErr } = await supabase
-        .rpc("get_subordinates", { p_tenant_id: activeTenantId!, p_user_id: user!.id });
-
-      if (rpcErr) {
-        return list.filter(u => u.user_id === user!.id);
-      }
-
-      const subSet = new Set(subordinateIds as string[]);
-      return list.filter(u => u.user_id === user!.id || subSet.has(u.user_id));
+      return (allUsers ?? []) as Array<{ user_id: string; display_name: string | null; email: string | null }>;
     },
   });
 
