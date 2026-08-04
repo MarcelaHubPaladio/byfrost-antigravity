@@ -224,26 +224,7 @@ function NavTile({
     </>
   );
 
-  if (disabled) {
-    return (
-      <div
-        className={cn(
-          base,
-          "border-slate-200 bg-white/40 text-slate-400 opacity-60 cursor-not-allowed",
-          "dark:border-slate-800 dark:bg-slate-950/30 dark:text-slate-500"
-        )}
-        title={`${label} (sem permissão)`}
-      >
-        <div className="relative">
-          <Icon className="h-5 w-5" />
-          <div className="absolute -right-1.5 -top-1.5 grid h-4 w-4 place-items-center rounded-full bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-300">
-            <Lock className="h-2.5 w-2.5" />
-          </div>
-        </div>
-        <span className="text-[11px] font-semibold tracking-tight leading-none">{label}</span>
-      </div>
-    );
-  }
+
 
   if (!to && onClick) {
     return (
@@ -297,28 +278,6 @@ function MobileNavItem({
   onNavigate: () => void;
 }) {
   if (disabled) return null;
-    return (
-      <div
-        className={cn(
-          "flex w-full items-center justify-between gap-3 rounded-2xl border px-4 py-3",
-          "border-slate-200 bg-white/40 text-slate-400",
-          "dark:border-slate-800 dark:bg-slate-950/30 dark:text-slate-500"
-        )}
-        title={`${label} (sem permissão)`}
-      >
-        <div className="flex items-center gap-3">
-          <div className="relative">
-            <Icon className="h-5 w-5" />
-            <div className="absolute -right-1.5 -top-1.5 grid h-4 w-4 place-items-center rounded-full bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-300">
-              <Lock className="h-2.5 w-2.5" />
-            </div>
-          </div>
-          <span className="text-sm font-semibold tracking-tight text-slate-500 dark:text-slate-400">{label}</span>
-        </div>
-        <span className="text-[11px] font-semibold">bloqueado</span>
-      </div>
-    );
-  }
 
   return (
     <NavLink
