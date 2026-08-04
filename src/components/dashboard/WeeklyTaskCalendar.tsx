@@ -195,15 +195,23 @@ export function WeeklyTaskCalendar({ tenantId, userId }: WeeklyTaskCalendarProps
     // 1. Adiciona as tarefas
     if (tasksQ.data) {
       const filteredTasks = tasksQ.data.filter(task => {
+        if (task.is_completed) {
+          if (task.completed_at) {
+            const completedDate = startOfDay(parseISO(task.completed_at));
+            return isSameDay(completedDate, selectedDate);
+          }
+          if (task.due_date) {
+            const dueDate = startOfDay(parseISO(task.due_date));
+            return isSameDay(dueDate, selectedDate);
+          }
+          return false;
+        }
+
         if (!task.due_date) {
-          return isSelectedToday && !task.is_completed;
+          return isSelectedToday;
         }
 
         const dueDate = startOfDay(parseISO(task.due_date));
-
-        if (task.is_completed) {
-          return isSameDay(dueDate, selectedDate);
-        }
 
         if (isSelectedToday && isBefore(dueDate, today)) {
           return true;
