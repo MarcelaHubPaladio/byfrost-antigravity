@@ -76,7 +76,10 @@ import {
     Save,
     Trash2,
     X,
-    Tag
+    Tag,
+    Bot,
+    Sparkles,
+    Upload
 } from "lucide-react";
 
 const CheckIcon = Check;
@@ -755,6 +758,9 @@ export default function OperacaoM30Case() {
     const [mainTitle, setMainTitle] = useState("");
     const [mainSummary, setMainSummary] = useState("");
     const [mainScript, setMainScript] = useState("");
+    const [meetingTranscription, setMeetingTranscription] = useState("");
+    const [aiPlanningContext, setAiPlanningContext] = useState("");
+    const [generatingSummary, setGeneratingSummary] = useState(false);
     const [entityComboOpen, setEntityComboOpen] = useState(false);
     const [entitySearch, setEntitySearch] = useState("");
 
@@ -766,6 +772,8 @@ export default function OperacaoM30Case() {
             setMainTitle(caseQ.data.title || "");
             setMainSummary(caseQ.data.summary_text || "");
             setMainScript(meta.script_raw || "");
+            setMeetingTranscription(meta.meeting_transcription || "");
+            setAiPlanningContext(meta.ai_planning_context || "");
         }
     }, [caseQ.data]);
 
@@ -1420,7 +1428,9 @@ export default function OperacaoM30Case() {
                         ...latestMeta,
                         video_url: videoUrl,
                         important_links: importantLinks,
-                        script_raw: mainScript
+                        script_raw: mainScript,
+                        meeting_transcription: meetingTranscription,
+                        ai_planning_context: aiPlanningContext
                     },
                     updated_at: new Date().toISOString()
                 })
@@ -1435,6 +1445,50 @@ export default function OperacaoM30Case() {
             showError(`Erro ao salvar: ${e?.message}`);
         } finally {
             setSaving(false);
+        }
+    };
+
+    const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            const text = e.target?.result as string;
+            if (text) {
+                setMeetingTranscription(prev => prev + (prev ? "\n\n" : "") + text);
+                showSuccess("Arquivo lido com sucesso.");
+            }
+        };
+        reader.readAsText(file);
+    };
+
+    const handleGeneratePlanningSummary = async () => {
+        if (!activeTenantId || !id || !meetingTranscription.trim()) {
+            showError("A transcrição não pode estar vazia.");
+            return;
+        }
+        setGeneratingSummary(true);
+        try {
+            const { data, error } = await supabase.functions.invoke("m30-planning-ai", {
+                body: {
+                    tenantId: activeTenantId,
+                    caseId: id,
+                    transcription: meetingTranscription
+                }
+            });
+            if (error) throw error;
+            if (data?.ok) {
+                setAiPlanningContext(data.summary);
+                showSuccess("Resumo IA gerado e salvo com sucesso!");
+                caseQ.refetch();
+            } else {
+                throw new Error(data?.error || "Erro desconhecido ao chamar IA");
+            }
+        } catch (e: any) {
+            console.error(e);
+            showError(`Falha ao gerar resumo: ${e.message}`);
+        } finally {
+            setGeneratingSummary(false);
         }
     };
 
@@ -1883,6 +1937,85 @@ export default function OperacaoM30Case() {
                                             setImportantLinks={setImportantLinks}
                                             isVideo={caseQ.data?.case_type === 'edicao' || caseQ.data?.case_type === 'video'}
                                         />
+                                    </div>
+                                )}
+
+                                {(caseQ.data?.case_type === "planejamento" && caseQ.data?.state === "planejamento") && (
+                                    <div className="space-y-6 mb-6">
+                                        <div className="flex items-center justify-between">
+                                            <h3 className="text-sm font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                                                <Bot className="h-4 w-4" /> CONTEXTO DE PLANEJAMENTO (IA)
+                                            </h3>
+                                            <Button 
+                                                onClick={handleSaveMainCard} 
+                                                disabled={saving}
+                                                className="h-8 rounded-xl bg-slate-900 text-white font-bold text-[10px] gap-2 shadow-lg shadow-slate-100"
+                                            >
+                                                {saving ? <RefreshCw className="h-3 w-3 animate-spin"/> : <Save className="h-3 w-3"/>}
+                                                SALVAR CARD ⚓️
+                                            </Button>
+                                        </div>
+
+                                        <div className="space-y-4">
+                                            <Tabs defaultValue="transcricao" className="w-full">
+                                                <TabsList className="bg-slate-100/50 p-1 rounded-2xl h-12 mb-4 w-full sm:w-auto">
+                                                    <TabsTrigger value="transcricao" className="rounded-xl text-xs font-bold data-[state=active]:bg-white data-[state=active]:shadow-sm gap-2 px-6">
+                                                        <FileText className="h-4 w-4" /> Transcrição da Reunião
+                                                    </TabsTrigger>
+                                                    <TabsTrigger value="ia" className="rounded-xl text-xs font-bold data-[state=active]:bg-white data-[state=active]:shadow-sm gap-2 px-6">
+                                                        <Sparkles className="h-4 w-4" /> Resumo IA
+                                                    </TabsTrigger>
+                                                </TabsList>
+                                                
+                                                <TabsContent value="transcricao" className="mt-0 focus-visible:ring-0">
+                                                    <div className="space-y-2">
+                                                        <Textarea 
+                                                            placeholder="Cole aqui a transcrição da reunião de planejamento (ex: gerada pelo Google Meet, Zoom, etc)..."
+                                                            className="min-h-[250px] rounded-[24px] border-slate-200 text-sm focus:ring-2 focus:ring-indigo-500 bg-white p-4 leading-relaxed"
+                                                            value={meetingTranscription}
+                                                            onChange={(e) => setMeetingTranscription(e.target.value)}
+                                                        />
+                                                        <div className="flex items-center justify-between pt-2">
+                                                            <div className="flex items-center gap-2">
+                                                                <Label htmlFor="upload-txt" className="cursor-pointer h-10 px-4 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 flex items-center justify-center text-xs font-bold text-slate-600 gap-2 transition-colors">
+                                                                    <Upload className="h-4 w-4" /> Importar .txt
+                                                                </Label>
+                                                                <input 
+                                                                    id="upload-txt" 
+                                                                    type="file" 
+                                                                    accept=".txt"
+                                                                    className="hidden"
+                                                                    onChange={handleFileUpload}
+                                                                />
+                                                            </div>
+                                                            <Button 
+                                                                onClick={handleGeneratePlanningSummary} 
+                                                                disabled={generatingSummary || !meetingTranscription.trim()}
+                                                                className="h-10 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold gap-2 shadow-md shadow-indigo-100"
+                                                            >
+                                                                {generatingSummary ? <RefreshCw className="h-4 w-4 animate-spin"/> : <Sparkles className="h-4 w-4"/>}
+                                                                Analisar e Resumir com IA
+                                                            </Button>
+                                                        </div>
+                                                    </div>
+                                                </TabsContent>
+
+                                                <TabsContent value="ia" className="mt-0 focus-visible:ring-0">
+                                                    <div className="space-y-2">
+                                                        <div className="rounded-[24px] border-slate-200 bg-white p-1">
+                                                            <RichTextEditor 
+                                                                value={aiPlanningContext}
+                                                                minHeightClassName="min-h-[200px]"
+                                                                onChange={setAiPlanningContext}
+                                                            />
+                                                        </div>
+                                                        <p className="text-[10px] text-slate-400 italic px-2">
+                                                            Este resumo pode ser editado livremente para servir de base na criação das pautas. Ao final não esqueça de Salvar o Card.
+                                                        </p>
+                                                    </div>
+                                                </TabsContent>
+                                            </Tabs>
+                                        </div>
                                     </div>
                                 )}
 
