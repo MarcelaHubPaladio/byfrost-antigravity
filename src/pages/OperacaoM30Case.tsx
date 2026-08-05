@@ -156,6 +156,9 @@ function SubtaskItemContent({
     const [scriptRaw, setScriptRaw] = useState(st.script_raw || "");
     const [scriptItems, setScriptItems] = useState<any[]>(st.script_items || []);
     
+    const [activeTab, setActiveTab] = useState("briefing");
+    const [generatingAi, setGeneratingAi] = useState(false);
+    
     const [saving, setSaving] = useState(false);
     const [lastSaved, setLastSaved] = useState<Date | null>(null);
 
@@ -211,6 +214,37 @@ function SubtaskItemContent({
             showError(`Erro ao salvar: ${e.message || "Desconhecido"}`);
         } finally {
             setSaving(false);
+        }
+    };
+
+    const handleGenerateScriptAI = async () => {
+        if (!caseData?.tenant_id) return showError("Tenant não encontrado.");
+        if (!description.trim() && !(caseMeta?.ai_planning_context)) {
+            return showError("Precisa de contexto de planejamento ou briefing para gerar o roteiro.");
+        }
+        
+        setGeneratingAi(true);
+        try {
+            const { data, error } = await supabase.functions.invoke("m30-subtask-script-ai", {
+                body: {
+                    tenantId: caseData.tenant_id,
+                    caseId: caseId,
+                    briefing: description,
+                    title: title,
+                    planningContext: caseMeta?.ai_planning_context || "",
+                }
+            });
+            if (error) throw error;
+            if (!data?.ok) throw new Error(data?.error || "Erro desconhecido");
+            
+            setScriptRaw(data.script);
+            setActiveTab("roteiro");
+            showSuccess("Roteiro mágico gerado com sucesso!");
+        } catch(e: any) {
+            console.error("Erro na geração de IA", e);
+            showError("Falha ao gerar roteiro por IA");
+        } finally {
+            setGeneratingAi(false);
         }
     };
 
@@ -437,13 +471,16 @@ function SubtaskItemContent({
                 </div>
             </div>
 
-            <Tabs defaultValue="briefing" className="w-full">
+            <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
                 <TabsList className="bg-slate-100/50 p-1 rounded-xl h-10 mb-4">
                     <TabsTrigger value="briefing" className="rounded-lg text-xs font-bold data-[state=active]:bg-white data-[state=active]:shadow-sm gap-2">
                         <FileText className="h-3.5 w-3.5" /> Briefing
                     </TabsTrigger>
                     <TabsTrigger value="roteiro" className="rounded-lg text-xs font-bold data-[state=active]:bg-white data-[state=active]:shadow-sm gap-2">
                         <ListChecks className="h-3.5 w-3.5" /> Roteiro
+                    </TabsTrigger>
+                    <TabsTrigger value="ia" className="rounded-lg text-xs font-bold data-[state=active]:bg-white data-[state=active]:shadow-sm gap-2 text-indigo-600 data-[state=active]:text-indigo-700">
+                        <Sparkles className="h-3.5 w-3.5" /> IA
                     </TabsTrigger>
                 </TabsList>
                 
@@ -455,6 +492,39 @@ function SubtaskItemContent({
                             minHeightClassName="min-h-[150px]"
                             onChange={setDescription}
                         />
+                    </div>
+                </TabsContent>
+
+                <TabsContent value="ia" className="mt-0 focus-visible:ring-0">
+                    <div className="space-y-4">
+                        <div className="bg-indigo-50 border border-indigo-100 rounded-2xl p-4 flex gap-3 text-indigo-900">
+                            <Sparkles className="h-5 w-5 text-indigo-500 shrink-0 mt-0.5" />
+                            <div className="space-y-1">
+                                <h4 className="text-xs font-bold">Assistente de Roteiro Mágico</h4>
+                                <p className="text-xs text-indigo-700/80 leading-relaxed">
+                                    O roteiro será gerado unindo o <strong>Contexto do Planejamento</strong> com as <strong>Instruções do Briefing</strong>. 
+                                    A estrutura do roteiro gerado seguirá um padrão validado para vídeos curtos (Gancho, Frases e CTA).
+                                </p>
+                            </div>
+                        </div>
+
+                        <Button
+                            className="w-full h-10 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold gap-2 text-xs"
+                            onClick={handleGenerateScriptAI}
+                            disabled={generatingAi}
+                        >
+                            {generatingAi ? (
+                                <>
+                                    <RefreshCw className="h-4 w-4 animate-spin" />
+                                    Gerando Roteiro Mágico...
+                                </>
+                            ) : (
+                                <>
+                                    <Sparkles className="h-4 w-4" />
+                                    Gerar Roteiro com IA
+                                </>
+                            )}
+                        </Button>
                     </div>
                 </TabsContent>
 

@@ -109,6 +109,16 @@ serve(async (req) => {
       });
     }
 
+    // Add to timeline_events so Guardião do Negócio can read it
+    await supabase.from("timeline_events").insert({
+      tenant_id: tenantId,
+      case_id: caseId,
+      event_type: "planejamento_ai_summary",
+      actor_type: "ai",
+      message: `Resumo do Planejamento gerado:\n\n${summary}`,
+      occurred_at: new Date().toISOString()
+    });
+
     return json({ ok: true, summary, provider: out.provider });
   } catch (e: any) {
     console.error(`[${fn}] unhandled`, { error: e?.message ?? String(e) });
