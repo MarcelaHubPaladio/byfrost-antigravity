@@ -211,7 +211,10 @@ Deno.serve(async (req) => {
       signerEmail: userEmail,
     });
 
-    const signerPublicId = created.signatures?.[0]?.public_id;
+    const signerObj = (created.signatures ?? []).find(
+      (s: any) => String(s?.email ?? "").toLowerCase() === String(userEmail ?? "").toLowerCase()
+    );
+    const signerPublicId = signerObj?.public_id;
     if (!signerPublicId) return err("autentique_signer_missing", 500);
 
     // 5. Create signing link
