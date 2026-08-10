@@ -1083,9 +1083,9 @@ function UserPayslipsTab({ userData }: { userData: any }) {
     const queryClient = useQueryClient();
     
     const [isModalOpen, setIsModalOpen] = useState(false);
-    const [month, setMonth] = useState<string>((new Date().getMonth() + 1).toString());
-    const [year, setYear] = useState<string>(new Date().getFullYear().toString());
-    const [fileUrl, setFileUrl] = useState("");
+    const [month, setMonth] = useState(new Date().getMonth() + 1 + "");
+    const [year, setYear] = useState(new Date().getFullYear() + "");
+    const [file, setFile] = useState<File | null>(null);
     const [notes, setNotes] = useState("");
     const [isSaving, setIsSaving] = useState(false);
 
@@ -1106,32 +1106,53 @@ function UserPayslipsTab({ userData }: { userData: any }) {
     });
 
     const savePayslip = async () => {
-        if (!fileUrl.trim()) {
-            showError("A URL do arquivo é obrigatória.");
+        if (!file) {
+            showError("O arquivo do holerite é obrigatório.");
             return;
         }
         
         setIsSaving(true);
         try {
-            const { error } = await supabase
+            const fileExt = file.name.split('.').pop();
+            const fileName = `${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`;
+            const filePath = `${activeTenantId}/${userData.user_id}/${fileName}`;
+            
+            const { error: uploadError } = await supabase.storage.from('employee_documents').upload(filePath, file);
+            if (uploadError) throw uploadError;
+            
+            const { data: publicUrlData } = supabase.storage.from('employee_documents').getPublicUrl(filePath);
+            const publicUrl = publicUrlData.publicUrl;
+
+            const { data: newPayslip, error } = await supabase
                 .from("employee_payslips")
                 .insert({
                     tenant_id: activeTenantId,
                     user_id: userData.user_id,
                     reference_month: parseInt(month, 10),
                     reference_year: parseInt(year, 10),
-                    file_url: fileUrl,
+                    file_url: publicUrl,
                     notes: notes || null
-                });
+                }).select().single();
             if (error) {
                 if (error.code === '23505') {
                     throw new Error("Já existe um holerite cadastrado para este mês/ano.");
                 }
                 throw error;
             }
+            
+            // Trigger Autentique integration in background
+            if (newPayslip) {
+                supabase.functions.invoke("autentique-payslips", {
+                    body: { payslip_id: newPayslip.id }
+                }).then(({ error: fnError }) => {
+                    if (fnError) console.error("Autentique integration error:", fnError);
+                    queryClient.invalidateQueries({ queryKey: ["employee_payslips", activeTenantId, userData.user_id] });
+                });
+            }
+
             showSuccess("Holerite adicionado com sucesso!");
             setIsModalOpen(false);
-            setFileUrl("");
+            setFile(null);
             setNotes("");
             queryClient.invalidateQueries({ queryKey: ["employee_payslips", activeTenantId, userData.user_id] });
         } catch (e: any) {
@@ -1189,7 +1210,14 @@ function UserPayslipsTab({ userData }: { userData: any }) {
                                     <span className="text-sm">{p.reference_year}</span>
                                 </div>
                                 <div>
-                                    <h4 className="font-bold text-slate-800">Holerite - {getMonthName(p.reference_month)}/{p.reference_year}</h4>
+                                    <h4 className="font-bold text-slate-800 flex items-center gap-2">
+                                        Holerite - {getMonthName(p.reference_month)}/{p.reference_year}
+                                        {p.autentique_status === "signed" ? (
+                                            <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 ml-2">Assinado</Badge>
+                                        ) : p.autentique_status === "pending" ? (
+                                            <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200 ml-2">Pendente de Assinatura</Badge>
+                                        ) : null}
+                                    </h4>
                                     {p.notes && <p className="text-xs text-slate-500 mt-1">{p.notes}</p>}
                                 </div>
                             </div>
@@ -1234,9 +1262,9 @@ function UserPayslipsTab({ userData }: { userData: any }) {
                         </div>
                         
                         <div className="space-y-2">
-                            <label className="text-xs font-bold text-slate-600 uppercase">URL do Arquivo</label>
-                            <Input placeholder="Ex: https://link.com/arquivo.pdf" value={fileUrl} onChange={e => setFileUrl(e.target.value)} />
-                            <p className="text-[10px] text-slate-500">Por enquanto, insira um link direto para o PDF/Imagem.</p>
+                            <label className="text-xs font-bold text-slate-600 uppercase">Arquivo do Holerite (PDF)</label>
+                            <Input type="file" accept="application/pdf" onChange={e => setFile(e.target.files?.[0] || null)} />
+                            <p className="text-[10px] text-slate-500">Selecione o arquivo PDF do holerite. Ele será enviado automaticamente para assinatura no Autentique.</p>
                         </div>
                         
                         <div className="space-y-2">

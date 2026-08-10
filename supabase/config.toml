@@ -49,3 +49,8 @@ verify_jwt = false
 
 [functions.financial-ingestion-upload]
 verify_jwt = false
+
+[functions.autentique-payslips]
+verify_jwt = true
+import_map = "./functions/autentique-payslips/deno.json"
+entrypoint = "./functions/autentique-payslips/index.ts"

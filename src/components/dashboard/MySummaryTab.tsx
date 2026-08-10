@@ -408,13 +408,23 @@ export function MySummaryTab() {
               ) : (
                 payslipsQ.data?.map(p => (
                   <div key={p.id} className="flex items-center justify-between p-3 rounded-2xl border border-slate-100 bg-slate-50 hover:bg-white transition-colors">
-                    <div>
-                      <h4 className="font-bold text-slate-700 text-sm">{p.reference_month.toString().padStart(2, '0')}/{p.reference_year}</h4>
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2">
+                        <h4 className="font-bold text-slate-700 text-sm">{p.reference_month.toString().padStart(2, '0')}/{p.reference_year}</h4>
+                        {p.autentique_status === "signed" && <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 text-[10px] h-5">Assinado</Badge>}
+                      </div>
                       {p.notes && <p className="text-[10px] text-slate-500">{p.notes}</p>}
                     </div>
-                    <Button variant="outline" size="sm" className="h-8 rounded-full" onClick={() => window.open(p.file_url, '_blank')}>
-                      <ExternalLink className="w-3 h-3 mr-1" /> Acessar
-                    </Button>
+                    <div className="flex gap-2">
+                      {p.autentique_status === "pending" && p.signing_link && (
+                        <Button size="sm" className="h-8 rounded-full bg-indigo-600 hover:bg-indigo-700 text-white" onClick={() => window.open(p.signing_link, '_blank')}>
+                          Assinar Holerite
+                        </Button>
+                      )}
+                      <Button variant="outline" size="sm" className="h-8 rounded-full" onClick={() => window.open(p.file_url, '_blank')}>
+                        <ExternalLink className="w-3 h-3 mr-1" /> Arquivo
+                      </Button>
+                    </div>
                   </div>
                 ))
               )}
