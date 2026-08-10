@@ -785,7 +785,8 @@ export default function Orders() {
     // Filter by seller
     if (selectedSellerId !== "all") {
       const selectedVendor = vendorsQ.data?.find(v => v.id === selectedSellerId);
-      const sellerName = selectedVendor?.display_name?.toLowerCase();
+      const selectedUser = usersQ.data?.find(u => u.user_id === selectedSellerId);
+      const sellerName = (selectedVendor?.display_name || selectedUser?.display_name)?.toLowerCase();
 
       rows = rows.filter(r => {
         if (r.assigned_vendor_id === selectedSellerId) return true;
@@ -1195,12 +1196,21 @@ export default function Orders() {
                   value={selectedSellerId}
                   onChange={(e) => setSelectedSellerId(e.target.value)}
                 >
-                  <option value="all">Vendedor: Todos</option>
-                  {(vendorsQ.data ?? []).map((v) => (
-                    <option key={v.id} value={v.id}>
-                      {v.display_name || v.phone_e164}
-                    </option>
-                  ))}
+                  <option value="all">Responsável: Todos</option>
+                  <optgroup label="Usuários Internos">
+                    {(usersQ.data ?? []).map((u) => (
+                      <option key={u.user_id} value={u.user_id}>
+                        {u.display_name || u.email}
+                      </option>
+                    ))}
+                  </optgroup>
+                  <optgroup label="Vendedores">
+                    {(vendorsQ.data ?? []).map((v) => (
+                      <option key={v.id} value={v.id}>
+                        {v.display_name || v.phone_e164}
+                      </option>
+                    ))}
+                  </optgroup>
                 </select>
               </div>
               
