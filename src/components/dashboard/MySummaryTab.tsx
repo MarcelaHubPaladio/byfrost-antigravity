@@ -285,45 +285,37 @@ export function MySummaryTab() {
                   
                 const progressPct = goal.target_value ? Math.min(100, Math.round((goal.achieved / goal.target_value) * 100)) : 0;
                 
+                const translateFrequency = (freq: string) => {
+                  const map: Record<string, string> = {
+                    daily: "Diário",
+                    weekly: "Semanal",
+                    monthly: "Mensal",
+                    yearly: "Anual"
+                  };
+                  return map[freq] || freq;
+                };
+                
                 return (
-                  <div key={goal.id} className="flex flex-col p-4 rounded-2xl bg-slate-50 border border-slate-100 gap-3">
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <h4 className="font-semibold text-slate-800">{goal.name}</h4>
-                        <div className="flex items-center gap-2 mt-1">
-                          <Badge variant="outline" className="text-[10px] bg-white">
-                            {goal.frequency}
-                          </Badge>
-                          <span className="text-xs text-slate-500 font-medium">{goal.metric_key}</span>
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <span className="text-xs text-slate-500 font-medium block">Alvo</span>
-                        <span className="text-lg font-black text-rose-600">
-                          {formatValue(goal.target_value)}
-                        </span>
-                      </div>
-                    </div>
+                  <div key={goal.id} className="flex items-center gap-4 p-3 rounded-2xl bg-slate-50 border border-slate-100 hover:bg-slate-100/50 transition-colors">
+                    <h4 className="font-semibold text-slate-800 text-sm min-w-[140px] max-w-[200px] truncate" title={goal.name}>
+                      {goal.name}
+                    </h4>
                     
-                    <div className="space-y-1.5 mt-1">
-                      <div className="flex justify-between items-end text-sm">
-                        <span className="font-bold text-slate-700">{progressPct}%</span>
-                        <div className="text-right">
-                          <span className="text-xs text-slate-500 block">Progresso</span>
-                          <span className="font-bold text-slate-800">{formatValue(goal.achieved)}</span>
-                        </div>
-                      </div>
-                      <div className="h-2.5 w-full bg-slate-200 rounded-full overflow-hidden">
+                    <div className="flex-1 flex items-center gap-3">
+                      <div className="flex-1 h-2 bg-slate-200 rounded-full overflow-hidden">
                         <div 
                           className="h-full bg-rose-500 rounded-full transition-all duration-500" 
                           style={{ width: `${progressPct}%` }}
                         />
                       </div>
-                      {goal.remaining > 0 && (
-                        <p className="text-right text-[10px] font-medium text-rose-600 mt-1">
-                          Faltam {formatValue(goal.remaining)}
-                        </p>
-                      )}
+                    </div>
+
+                    <div className="text-xs font-medium text-slate-600 flex items-center justify-end gap-1.5 whitespace-nowrap w-[180px]">
+                      <span className="text-slate-900 font-bold">{formatValue(goal.achieved)}</span>
+                      <span className="text-slate-400">/</span>
+                      <span className="text-rose-600 font-bold">{formatValue(goal.target_value)}</span>
+                      <span className="text-slate-300 mx-0.5">·</span>
+                      <span className="text-slate-500">{translateFrequency(goal.frequency)}</span>
                     </div>
                   </div>
                 );
