@@ -152,6 +152,7 @@ Deno.serve(async (req) => {
     const { data: userProfile } = await supabase
       .from("users_profile")
       .select("display_name, email")
+      .eq("tenant_id", payslip.tenant_id)
       .eq("user_id", payslip.user_id)
       .single();
 
@@ -185,7 +186,13 @@ Deno.serve(async (req) => {
     if (!apiToken) return err("missing_autentique_token", 500);
 
     const userName = userProfile?.display_name || "Colaborador";
-    const userEmail = userProfile?.email;
+    let userEmail = userProfile?.email;
+
+    if (!userEmail) {
+      // Fallback to auth.users if email is not in profile
+      const { data: authUser } = await supabase.auth.admin.getUserById(payslip.user_id);
+      userEmail = authUser?.user?.email;
+    }
 
     if (!userEmail) {
       return err("user_has_no_email", 400);
