@@ -59,7 +59,7 @@ export function NewSalesOrderDialog(props: {
   // Form State
   const [customerName, setCustomerName] = useState("");
   const [city, setCity] = useState("");
-  const [sellerId, setSellerId] = useState("");
+  const [userId, setUserId] = useState("");
   const [orderFile, setOrderFile] = useState<File | null>(null);
   const [docFiles, setDocFiles] = useState<File[]>([]);
   const [observations, setObservations] = useState("");
@@ -67,25 +67,23 @@ export function NewSalesOrderDialog(props: {
   
   const [openCity, setOpenCity] = useState(false);
 
-  const vendorsQ = useQuery({
-    queryKey: ["tenant_vendors", tenantId],
+  const usersQ = useQuery({
+    queryKey: ["tenant_users_all", tenantId],
     enabled: Boolean(open && tenantId),
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("vendors")
-        .select("id, display_name, phone_e164")
-        .eq("tenant_id", tenantId)
-        .is("deleted_at", null)
-        .order("display_name", { ascending: true });
+      const { data, error } = await supabase.rpc("list_tenant_users_profiles", {
+        p_tenant_id: tenantId,
+        p_include_deleted: false,
+      });
       if (error) throw error;
-      return data ?? [];
+      return (data ?? []) as any[];
     }
   });
 
   const resetForm = () => {
     setCustomerName("");
     setCity("");
-    setSellerId("");
+    setUserId("");
     setOrderFile(null);
     setDocFiles([]);
     setObservations("");
@@ -119,8 +117,8 @@ export function NewSalesOrderDialog(props: {
           status: "open",
           state: "new",
           title: customerName,
-          assigned_vendor_id: sellerId || null,
-          assigned_user_id: null, // Responsável deve ser atribuído manualmente após a criação
+          assigned_vendor_id: null,
+          assigned_user_id: userId || null,
           created_by_channel: "panel",
           meta_json: { created_from: "simplified_modal" }
         })
@@ -289,16 +287,16 @@ export function NewSalesOrderDialog(props: {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
             <div className="space-y-2">
               <Label className="text-xs font-black uppercase tracking-widest text-slate-400 flex items-center gap-2">
-                <ClipboardList className="w-3 h-3" /> Vendedor
+                <ClipboardList className="w-3 h-3" /> Responsável
               </Label>
-              <Select value={sellerId} onValueChange={setSellerId}>
+              <Select value={userId} onValueChange={setUserId}>
                 <SelectTrigger className="h-12 rounded-2xl border-slate-200">
-                  <SelectValue placeholder="Selecione um vendedor..." />
+                  <SelectValue placeholder="Selecione um responsável..." />
                 </SelectTrigger>
                 <SelectContent className="rounded-2xl">
-                  {vendorsQ.data?.map(v => (
-                    <SelectItem key={v.id} value={v.id} className="rounded-xl">
-                      {v.display_name}
+                  {usersQ.data?.map(u => (
+                    <SelectItem key={u.user_id} value={u.user_id} className="rounded-xl">
+                      {u.display_name}
                     </SelectItem>
                   ))}
                 </SelectContent>
