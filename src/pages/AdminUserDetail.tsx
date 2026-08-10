@@ -1174,6 +1174,18 @@ function UserPayslipsTab({ userData }: { userData: any }) {
         }
     };
 
+    const toggleManualSignature = async (id: string, currentStatus: string) => {
+        try {
+            const newStatus = currentStatus === "signed" ? "pending" : "signed";
+            const { error } = await supabase.from("employee_payslips").update({ autentique_status: newStatus }).eq("id", id);
+            if (error) throw error;
+            showSuccess(`Documento marcado como ${newStatus === 'signed' ? 'Assinado' : 'Pendente'}.`);
+            queryClient.invalidateQueries({ queryKey: ["employee_payslips", activeTenantId, userData.user_id] });
+        } catch (e: any) {
+            showError(e.message);
+        }
+    };
+
     const openFile = async (urlOrPath: string) => {
         if (urlOrPath.startsWith('http')) {
             window.open(urlOrPath, '_blank');
@@ -1237,6 +1249,15 @@ function UserPayslipsTab({ userData }: { userData: any }) {
                             <div className="flex gap-2">
                                 <Button variant="secondary" size="sm" onClick={() => openFile(p.file_url)}>
                                     Ver Arquivo
+                                </Button>
+                                <Button 
+                                    variant="outline" 
+                                    size="sm"
+                                    onClick={() => toggleManualSignature(p.id, p.autentique_status)}
+                                    title={p.autentique_status === "signed" ? "Desfazer Assinatura" : "Marcar como Assinado manualmente"}
+                                    className={p.autentique_status === "signed" ? "text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50" : "text-slate-500 hover:text-slate-700"}
+                                >
+                                    {p.autentique_status === "signed" ? <CheckCircle className="w-4 h-4" /> : <FileSignature className="w-4 h-4" />}
                                 </Button>
                                 <Button variant="outline" size="sm" className="text-rose-600 hover:text-rose-700 hover:bg-rose-50" onClick={() => deletePayslip(p.id)}>
                                     <Trash2 className="w-4 h-4" />
