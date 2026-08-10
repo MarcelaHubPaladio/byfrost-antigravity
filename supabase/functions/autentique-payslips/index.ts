@@ -89,8 +89,8 @@ async function autentiqueCreateDocument(params: {
 async function autentiqueCreateSignatureLink(params: { apiToken: string; signerPublicId: string }) {
   const url = getAutentiqueGraphqlUrl();
 
-  const query = `mutation signDocumentMutation($id: UUID!) {
-    signDocument(id: $id)
+  const query = `mutation CreateLink($publicId: UUID!) {
+    createLinkToSignature(public_id: $publicId) { short_link }
   }`;
 
   const res = await fetch(url, {
@@ -101,7 +101,7 @@ async function autentiqueCreateSignatureLink(params: { apiToken: string; signerP
     },
     body: JSON.stringify({
       query,
-      variables: { id: params.signerPublicId },
+      variables: { publicId: params.signerPublicId },
     }),
   });
 
@@ -111,13 +111,13 @@ async function autentiqueCreateSignatureLink(params: { apiToken: string; signerP
     json2 = JSON.parse(text);
   } catch {}
 
-  if (!res.ok || !json2?.data?.signDocument) {
+  if (!res.ok || !json2?.data?.createLinkToSignature?.short_link) {
     const gqlErr = String(json2?.errors?.[0]?.message ?? "").trim();
     const hint = res.status === 404 ? " (verifique AUTENTIQUE_GQL_URL)" : "";
     throw new Error(gqlErr ? `autentique_${gqlErr}` : `autentique_http_${res.status}${hint}`);
   }
 
-  return json2.data.signDocument as string;
+  return json2.data.createLinkToSignature.short_link as string;
 }
 
 Deno.serve(async (req) => {
