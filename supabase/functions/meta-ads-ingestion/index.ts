@@ -1,12 +1,17 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createSupabaseAdmin } from "../_shared/supabaseAdmin.ts";
 import { decryptText } from "../_shared/encryption.ts";
+import { corsHeaders } from "../_shared/cors.ts";
 
 function json(data: any, status = 200) {
-  return new Response(JSON.stringify(data), { status, headers: { "Content-Type": "application/json" } });
+  return new Response(JSON.stringify(data), { status, headers: { "Content-Type": "application/json", ...corsHeaders } });
 }
 
 serve(async (req) => {
+  if (req.method === "OPTIONS") {
+    return new Response("ok", { headers: corsHeaders });
+  }
+
   // Can be called via pg_cron or manually by a super admin
   if (req.method !== "POST") return json({ error: "method_not_allowed" }, 405);
 
