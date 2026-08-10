@@ -136,7 +136,7 @@ export default function TenantSelect() {
               <div className="relative w-full sm:w-72">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                 <Input 
-                  placeholder="Buscar tenant..." 
+                  placeholder="Buscar empresa..." 
                   value={searchQuery}
                   onChange={e => setSearchQuery(e.target.value)}
                   className="pl-9 h-11 rounded-2xl bg-white/70 backdrop-blur"
