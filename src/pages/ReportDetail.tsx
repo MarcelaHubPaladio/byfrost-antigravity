@@ -104,7 +104,7 @@ export default function ReportDetail() {
     enabled: contractId === "self" && Boolean(activeTenantId),
     queryFn: async () => {
       const { data, error } = await supabase
-        .from("core_tenants")
+        .from("tenants")
         .select("name, id")
         .eq("id", activeTenantId!)
         .single();
