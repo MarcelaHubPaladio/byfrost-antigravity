@@ -178,6 +178,68 @@ export default function ReportDetail() {
     },
   });
 
+  const metaOrganicQ = useQuery({
+    queryKey: ["meta_organic_posts", activeTenantId, (reportsQ.data || []).map(r => `${r.start_date}_${r.end_date}`).join(",")],
+    enabled: Boolean(activeTenantId),
+    queryFn: async () => {
+      let minDate = "";
+      let maxDate = "";
+      (reportsQ.data || []).forEach(r => {
+        if (!minDate || r.start_date < minDate) minDate = r.start_date;
+        if (!maxDate || r.end_date > maxDate) maxDate = r.end_date;
+      });
+
+      let q = supabase
+        .from("meta_organic_posts")
+        .select(`
+          *,
+          meta_organic_pages!inner ( tenant_id, name, platform )
+        `)
+        .eq("meta_organic_pages.tenant_id", activeTenantId!)
+        .order("posted_at", { ascending: false });
+        
+      if (minDate) q = q.gte("posted_at", minDate + "T00:00:00Z");
+      if (maxDate) q = q.lte("posted_at", maxDate + "T23:59:59Z");
+
+      const { data, error } = await q.limit(10000);
+      if (error) throw error;
+      return data || [];
+    },
+  });
+
+  const combinedPosts = useMemo(() => {
+    const scheduled = (metaPostsQ.data || []).map(p => ({
+      id: p.id,
+      scheduled_at: p.scheduled_at,
+      message: p.message || p.caption || "",
+      media_url: p.media_url || "",
+      page_name: p.meta_organic_pages?.name || "Meta",
+      type: "scheduled"
+    }));
+
+    const organic = (metaOrganicQ.data || []).map(p => ({
+      id: p.id,
+      scheduled_at: p.posted_at,
+      message: p.message || "",
+      media_url: p.picture_url || "",
+      page_name: p.meta_organic_pages?.name || "Meta",
+      type: "organic"
+    }));
+    
+    const combined = [...scheduled, ...organic].sort((a, b) => new Date(b.scheduled_at).getTime() - new Date(a.scheduled_at).getTime());
+    
+    const unique = [];
+    const seen = new Set();
+    for (const p of combined) {
+      const key = `${p.page_name}_${p.message.substring(0, 30).trim()}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        unique.push(p);
+      }
+    }
+    return unique;
+  }, [metaPostsQ.data, metaOrganicQ.data]);
+
   const metaAdsQ = useQuery({
     queryKey: ["meta_ads_for_report", activeTenantId, (reportsQ.data || []).map(r => `${r.start_date}_${r.end_date}`).join(",")],
     enabled: Boolean(activeTenantId),
@@ -605,11 +667,11 @@ export default function ReportDetail() {
                               </p>
                               
                               {(() => {
-                                const postsForReport = (metaPostsQ.data || []).filter(p => 
+                                const postsForReport = combinedPosts.filter(p => 
                                   p.scheduled_at.substring(0, 10) >= selectedReport.start_date && p.scheduled_at.substring(0, 10) <= selectedReport.end_date
                                 );
                                 
-                                if (metaPostsQ.isLoading) {
+                                if (metaPostsQ.isLoading || metaOrganicQ.isLoading) {
                                   return <div className="text-indigo-200 text-sm animate-pulse">Carregando publicações do período...</div>;
                                 }
                                 
@@ -621,7 +683,10 @@ export default function ReportDetail() {
                                       </h4>
                                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                         {postsForReport.map(post => (
-                                          <div key={post.id} className="flex gap-4 bg-indigo-700/30 rounded-2xl p-4 border border-indigo-500/20">
+                                          <div key={post.id} className="flex gap-4 bg-indigo-700/30 rounded-2xl p-4 border border-indigo-500/20 relative overflow-hidden">
+                                            {post.type === "organic" && (
+                                              <div className="absolute top-0 right-0 bg-indigo-500 text-white text-[9px] font-bold px-2 py-0.5 rounded-bl-lg tracking-wider uppercase shadow-sm">Nativo</div>
+                                            )}
                                             {post.media_url && (
                                               <div className="w-20 h-20 shrink-0 rounded-xl overflow-hidden bg-indigo-800">
                                                 <img src={post.media_url} alt="Post" className="w-full h-full object-cover" />
@@ -629,7 +694,7 @@ export default function ReportDetail() {
                                             )}
                                             <div className="flex-1 min-w-0 flex flex-col justify-center">
                                               <div className="text-xs font-semibold text-indigo-200 mb-1 flex items-center gap-1.5">
-                                                <span className="truncate">{post.meta_organic_pages?.name || "Meta"}</span>
+                                                <span className="truncate">{post.page_name}</span>
                                                 <span className="opacity-50">•</span>
                                                 <span className="opacity-75">{format(new Date(post.scheduled_at), "dd/MMM", { locale: ptBR })}</span>
                                               </div>
@@ -887,49 +952,50 @@ export default function ReportDetail() {
                               <p className="text-[9px] opacity-90 leading-relaxed italic line-clamp-2">
                                 {report.production_notes || "Nenhuma nota de produção cadastrada."}
                               </p>
-                              
-
+                              {(() => {
+                                const postsForReport = combinedPosts.filter(p => 
+                                  p.scheduled_at.substring(0, 10) >= report.start_date && p.scheduled_at.substring(0, 10) <= report.end_date
+                                );
+                                if (postsForReport.length === 0) return null;
+                                return (
+                                  <div className="mt-8 pt-8 border-t border-slate-100 print-section">
+                                    <h3 className="text-lg font-bold flex items-center gap-2 mb-6 text-slate-800">
+                                      <Camera className="h-5 w-5 text-indigo-500" />
+                                      Postagens do Período ({postsForReport.length})
+                                    </h3>
+                                    <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                                      {postsForReport.map(post => (
+                                        <div key={post.id} className="flex gap-4 p-4 rounded-3xl bg-slate-50 border border-slate-100 items-center print-section relative overflow-hidden">
+                                          {post.type === "organic" && (
+                                            <div className="absolute top-0 right-0 bg-indigo-100 text-indigo-700 text-[8px] font-bold px-2 py-0.5 rounded-bl-lg tracking-wider uppercase">Nativo</div>
+                                          )}
+                                          {post.media_url ? (
+                                            <div className="w-16 h-16 shrink-0 rounded-2xl overflow-hidden bg-slate-200">
+                                              <img src={post.media_url} alt="Post" className="w-full h-full object-cover" />
+                                            </div>
+                                          ) : (
+                                            <div className="w-16 h-16 shrink-0 rounded-2xl bg-slate-200 flex items-center justify-center">
+                                              <Camera className="h-6 w-6 text-slate-400" />
+                                            </div>
+                                          )}
+                                          <div className="flex-1 min-w-0">
+                                            <p className="text-xs font-medium text-slate-700 line-clamp-2 leading-snug">
+                                              {post.message}
+                                            </p>
+                                            <div className="text-[10px] text-slate-400 mt-1 flex items-center gap-1.5">
+                                              <span className="truncate">{post.page_name}</span>
+                                              <span>•</span>
+                                              <span>{format(new Date(post.scheduled_at), "dd/MM", { locale: ptBR })}</span>
+                                            </div>
+                                          </div>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>
+                                );
+                              })()}
                             </div>
                           </div>
-
-                          {/* Histórico de Postagens */}
-                          {(() => {
-                            const postsForReport = (metaPostsQ.data || []).filter(p => 
-                              p.scheduled_at.substring(0, 10) >= report.start_date && p.scheduled_at.substring(0, 10) <= report.end_date
-                            );
-                            if (postsForReport.length === 0) return null;
-                            return (
-                              <div className="mt-8 pt-8 border-t border-slate-100">
-                                <h3 className="text-lg font-bold flex items-center gap-2 mb-6 text-slate-800">
-                                  <Camera className="h-5 w-5 text-indigo-500" />
-                                  Postagens do Período ({postsForReport.length})
-                                </h3>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-                                  {postsForReport.map(post => (
-                                    <div key={post.id} className="flex gap-4 p-4 rounded-3xl bg-slate-50 border border-slate-100 items-center print-section">
-                                      {post.media_url ? (
-                                        <div className="w-16 h-16 shrink-0 rounded-2xl overflow-hidden bg-slate-200">
-                                          <img src={post.media_url} alt="Post" className="w-full h-full object-cover" />
-                                        </div>
-                                      ) : (
-                                        <div className="w-16 h-16 shrink-0 rounded-2xl bg-slate-200 flex items-center justify-center">
-                                          <Camera className="h-6 w-6 text-slate-400" />
-                                        </div>
-                                      )}
-                                      <div className="flex-1 min-w-0">
-                                        <p className="text-xs font-medium text-slate-700 line-clamp-2 leading-snug">
-                                          {post.message || "Sem legenda..."}
-                                        </p>
-                                        <p className="text-[10px] text-slate-400 mt-1 font-bold uppercase tracking-wider">
-                                          {format(new Date(post.scheduled_at), "dd/MM/yyyy HH:mm")}
-                                        </p>
-                                      </div>
-                                    </div>
-                                  ))}
-                                </div>
-                              </div>
-                            );
-                          })()}
 
                           {/* Desempenho de Anúncios */}
                           {(() => {
@@ -1118,13 +1184,12 @@ export default function ReportDetail() {
                           <p className="text-[10px] opacity-90 leading-relaxed italic line-clamp-2">
                             {report.production_notes || "Nenhuma nota de produção cadastrada."}
                           </p>
-
                         </div>
                       </div>
 
                       {/* Histórico de Postagens para PDF */}
                       {(() => {
-                        const postsForReport = (metaPostsQ.data || []).filter(p => 
+                        const postsForReport = combinedPosts.filter(p => 
                           p.scheduled_at.substring(0, 10) >= report.start_date && p.scheduled_at.substring(0, 10) <= report.end_date
                         );
                         if (postsForReport.length === 0) return null;
@@ -1136,7 +1201,10 @@ export default function ReportDetail() {
                             </h3>
                             <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                               {postsForReport.map(post => (
-                                <div key={post.id} className="flex gap-4 p-4 rounded-3xl bg-slate-50 border border-slate-100 items-center print-section">
+                                <div key={post.id} className="flex gap-4 p-4 rounded-3xl bg-slate-50 border border-slate-100 items-center print-section relative overflow-hidden">
+                                  {post.type === "organic" && (
+                                    <div className="absolute top-0 right-0 bg-indigo-100 text-indigo-700 text-[8px] font-bold px-2 py-0.5 rounded-bl-lg tracking-wider uppercase">Nativo</div>
+                                  )}
                                   {post.media_url ? (
                                     <div className="w-16 h-16 shrink-0 rounded-2xl overflow-hidden bg-slate-200">
                                       <img src={post.media_url} alt="Post" className="w-full h-full object-cover" />
@@ -1148,11 +1216,13 @@ export default function ReportDetail() {
                                   )}
                                   <div className="flex-1 min-w-0">
                                     <p className="text-xs font-medium text-slate-700 line-clamp-2 leading-snug">
-                                      {post.message || "Sem legenda..."}
+                                      {post.message}
                                     </p>
-                                    <p className="text-[10px] text-slate-400 mt-1 font-bold uppercase tracking-wider">
-                                      {format(new Date(post.scheduled_at), "dd/MM/yyyy HH:mm")}
-                                    </p>
+                                    <div className="text-[10px] text-slate-400 mt-1 flex items-center gap-1.5">
+                                      <span className="truncate">{post.page_name}</span>
+                                      <span>•</span>
+                                      <span>{format(new Date(post.scheduled_at), "dd/MM", { locale: ptBR })}</span>
+                                    </div>
                                   </div>
                                 </div>
                               ))}
