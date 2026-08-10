@@ -794,6 +794,35 @@ function VideoDeliverySection({
     );
 }
 
+const SortableAccordionItem = ({ sortableId, value, className, children }: { sortableId: string, value: string, className?: string, children: (attributes: any, listeners: any) => React.ReactNode }) => {
+    const {
+        attributes,
+        listeners,
+        setNodeRef,
+        transform,
+        transition,
+        isDragging,
+    } = useSortable({ id: sortableId });
+
+    const style = {
+        transform: CSS.Transform.toString(transform),
+        transition,
+        zIndex: isDragging ? 50 : undefined,
+        ...(isDragging ? { position: 'relative' } as any : {})
+    } as React.CSSProperties;
+
+    return (
+        <AccordionItem 
+            ref={setNodeRef} 
+            style={style} 
+            value={value} 
+            className={cn(className, isDragging && "opacity-50 shadow-xl border-indigo-200 bg-slate-50")}
+        >
+            {children(attributes, listeners)}
+        </AccordionItem>
+    );
+};
+
 export default function OperacaoM30Case() {
     const { id } = useParams();
     const nav = useNavigate();
@@ -838,7 +867,7 @@ export default function OperacaoM30Case() {
         if (caseQ.data) {
             const meta = caseQ.data.meta_json as any;
             setVideoUrl(meta.video_url || "");
-            setImportantLinks(meta.important_links || []);
+                        setImportantLinks(meta.important_links || []);
             setMainTitle(caseQ.data.title || "");
             setMainSummary(caseQ.data.summary_text || "");
             setMainScript(meta.script_raw || "");
@@ -852,6 +881,52 @@ export default function OperacaoM30Case() {
         nextStateName: string;
         reasons: TransitionBlockReason[];
     }>({ open: false, nextStateName: "", reasons: [] });
+
+    const subtasksSensors = useSensors(
+        useSensor(PointerSensor, {
+            activationConstraint: {
+                distance: 8,
+            },
+        }),
+        useSensor(KeyboardSensor, {
+            coordinateGetter: sortableKeyboardCoordinates,
+        })
+    );
+
+    const pendingSubtasks = useMemo(() => {
+        const subtasks = (caseQ.data?.meta_json as any)?.pending_subtasks || [];
+        return subtasks.map((st: any, idx: number) => ({
+            ...st,
+            _dndId: st.id || `st-${idx}`,
+            _originalIdx: idx
+        }));
+    }, [caseQ.data?.meta_json]);
+
+    const handleSubtaskDragEnd = async (event: DragEndEvent) => {
+        const { active, over } = event;
+
+        if (over && active.id !== over.id) {
+            const oldIndex = pendingSubtasks.findIndex((it: any) => it._dndId === active.id);
+            const newIndex = pendingSubtasks.findIndex((it: any) => it._dndId === over.id);
+            
+            if (oldIndex !== -1 && newIndex !== -1) {
+                const currentSubtasks = (caseQ.data?.meta_json as any)?.pending_subtasks || [];
+                const subtasksWithIds = currentSubtasks.map((st: any, i: number) => ({
+                    ...st,
+                    id: st.id || pendingSubtasks[i]._dndId
+                }));
+                
+                const nextSubtasks = arrayMove(subtasksWithIds, oldIndex, newIndex);
+                
+                const latestMeta = caseQ.data?.meta_json as any || {};
+                await supabase.from("cases").update({
+                    meta_json: { ...latestMeta, pending_subtasks: nextSubtasks }
+                }).eq("id", id!);
+                
+                caseQ.refetch();
+            }
+        }
+    };
 
     const deliverableQ = useQuery({
         queryKey: ["case_deliverable", activeTenantId, caseQ.data?.deliverable_id],
@@ -2120,62 +2195,77 @@ export default function OperacaoM30Case() {
                                             </div>
                                         </div>
                                         <div className="space-y-4">
-                                            <Accordion type="multiple" className="space-y-2">
-                                                {((caseQ.data?.meta_json as any)?.pending_subtasks || []).map((st: any, idx: number) => (
-                                                    <AccordionItem 
-                                                        key={idx} 
-                                                        value={`st-${idx}`}
-                                                        className={cn(
-                                                            "rounded-2xl bg-white border border-slate-100 shadow-sm overflow-hidden px-0",
-                                                            st.priority ? "border-rose-500 ring-1 ring-rose-500/20" : "border-slate-100"
-                                                        )}
-                                                    >
-                                                        <div className="flex items-center justify-between p-1 pr-3">
-                                                            <AccordionTrigger className="flex-1 hover:no-underline py-2 px-3">
-                                                                <div className="flex flex-wrap items-center gap-2 sm:gap-3 flex-1 w-full">
-                                                                    <Badge variant="secondary" className="text-[10px] h-5 shrink-0">
-                                                                        {st.type === "arte_estatica" ? "ARTE" : "VÍDEO"}
-                                                                    </Badge>
-                                                                    <span className="text-sm text-slate-700 font-bold text-left flex-1 min-w-[150px] leading-tight break-words">{st.title}</span>
-                                                                    {st.is_approved && (
-                                                                        <Badge className="bg-emerald-500 text-white border-none h-4 px-1.5 text-[8px] font-black animate-in fade-in zoom-in duration-300">
-                                                                            APROVADO PELO CLIENTE
-                                                                        </Badge>
-                                                                    )}
-                                                                    {st.script_items?.some((it: any) => it.comment && it.comment.trim() !== "") && (
-                                                                        <Badge className="bg-amber-500 hover:bg-amber-600 text-white border-none h-4 px-1.5 text-[8px] font-black animate-in fade-in zoom-in duration-300">
-                                                                            <MessageSquareWarning className="h-2.5 w-2.5 mr-1" /> OBSERVAÇÃO DO CLIENTE
-                                                                        </Badge>
-                                                                    )}
-                                                                    {st.linked_case_id && (
-                                                                        <Badge variant="outline" className="text-[9px] border-indigo-200 text-indigo-600 bg-indigo-50/50 flex items-center gap-1 font-bold">
-                                                                            <LinkIcon className="h-2.5 w-2.5" /> VINCULADO
-                                                                        </Badge>
-                                                                    )}
-                                                                    {st.post_date && (
-                                                                        <span className="text-[10px] text-slate-400 flex items-center gap-1 font-normal">
-                                                                            <Calendar className="h-3 w-3" />
-                                                                            {new Date(st.post_date).toLocaleDateString()}
-                                                                        </span>
-                                                                    )}
-                                                                </div>
-                                                            </AccordionTrigger>
+                                            <DndContext
+                                                sensors={subtasksSensors}
+                                                collisionDetection={closestCenter}
+                                                onDragEnd={handleSubtaskDragEnd}
+                                            >
+                                                <SortableContext 
+                                                    items={pendingSubtasks.map((st: any) => st._dndId)}
+                                                    strategy={verticalListSortingStrategy}
+                                                >
+                                                    <Accordion type="multiple" className="space-y-2">
+                                                        {pendingSubtasks.map((st: any) => (
+                                                            <SortableAccordionItem 
+                                                                key={st._dndId} 
+                                                                sortableId={st._dndId}
+                                                                value={`st-${st._originalIdx}`}
+                                                                className={cn(
+                                                                    "rounded-2xl bg-white border border-slate-100 shadow-sm overflow-hidden px-0",
+                                                                    st.priority ? "border-rose-500 ring-1 ring-rose-500/20" : "border-slate-100"
+                                                                )}
+                                                            >
+                                                                {(attributes, listeners) => (
+                                                                    <>
+                                                                        <div className="flex items-center justify-between p-1 pr-3">
+                                                                            <div {...attributes} {...listeners} className="cursor-grab p-2 pl-3 text-slate-300 hover:text-indigo-500 transition-colors">
+                                                                                <GripVertical className="h-4 w-4" />
+                                                                            </div>
+                                                                            <AccordionTrigger className="flex-1 hover:no-underline py-2 px-1">
+                                                                                <div className="flex flex-wrap items-center gap-2 sm:gap-3 flex-1 w-full">
+                                                                                    <Badge variant="secondary" className="text-[10px] h-5 shrink-0">
+                                                                                        {st.type === "arte_estatica" ? "ARTE" : "VÍDEO"}
+                                                                                    </Badge>
+                                                                                    <span className="text-sm text-slate-700 font-bold text-left flex-1 min-w-[150px] leading-tight break-words">{st.title}</span>
+                                                                                    {st.is_approved && (
+                                                                                        <Badge className="bg-emerald-500 text-white border-none h-4 px-1.5 text-[8px] font-black animate-in fade-in zoom-in duration-300">
+                                                                                            APROVADO PELO CLIENTE
+                                                                                        </Badge>
+                                                                                    )}
+                                                                                    {st.script_items?.some((it: any) => it.comment && it.comment.trim() !== "") && (
+                                                                                        <Badge className="bg-amber-500 hover:bg-amber-600 text-white border-none h-4 px-1.5 text-[8px] font-black animate-in fade-in zoom-in duration-300">
+                                                                                            <MessageSquareWarning className="h-2.5 w-2.5 mr-1" /> OBSERVAÇÃO DO CLIENTE
+                                                                                        </Badge>
+                                                                                    )}
+                                                                                    {st.linked_case_id && (
+                                                                                        <Badge variant="outline" className="text-[9px] border-indigo-200 text-indigo-600 bg-indigo-50/50 flex items-center gap-1 font-bold">
+                                                                                            <LinkIcon className="h-2.5 w-2.5" /> VINCULADO
+                                                                                        </Badge>
+                                                                                    )}
+                                                                                    {st.post_date && (
+                                                                                        <span className="text-[10px] text-slate-400 flex items-center gap-1 font-normal">
+                                                                                            <Calendar className="h-3 w-3" />
+                                                                                            {new Date(st.post_date).toLocaleDateString()}
+                                                                                        </span>
+                                                                                    )}
+                                                                                </div>
+                                                                            </AccordionTrigger>
                                                             
                                                             <div className="flex items-center gap-1">
-                                                                {st.is_approved && (
-                                                                    <Button 
-                                                                        size="sm" 
-                                                                        variant="ghost" 
-                                                                        className="h-9 w-9 rounded-xl flex items-center justify-center p-0 text-slate-400 hover:text-amber-600 hover:bg-amber-50 transition-all"
-                                                                        onClick={async (e) => {
-                                                                            e.stopPropagation();
-                                                                            if (!confirm("Tem certeza que deseja desaprovar este roteiro?")) return;
-                                                                            const { data: latestCase } = await supabase.from("cases").select("meta_json").eq("id", id!).single();
-                                                                            const latestMeta = latestCase?.meta_json as any || caseQ.data?.meta_json || {};
-                                                                            const current = latestMeta.pending_subtasks || [];
-                                                                            const next = [...current];
-                                                                            next[idx] = { ...next[idx], is_approved: false };
-                                                                            try {
+                                                                    {st.is_approved && (
+                                                                        <Button 
+                                                                            size="sm" 
+                                                                            variant="ghost" 
+                                                                            className="h-9 w-9 rounded-xl flex items-center justify-center p-0 text-slate-400 hover:text-amber-600 hover:bg-amber-50 transition-all"
+                                                                            onClick={async (e) => {
+                                                                                e.stopPropagation();
+                                                                                if (!confirm("Tem certeza que deseja desaprovar este roteiro?")) return;
+                                                                                const { data: latestCase } = await supabase.from("cases").select("meta_json").eq("id", id!).single();
+                                                                                const latestMeta = latestCase?.meta_json as any || caseQ.data?.meta_json || {};
+                                                                                const current = latestMeta.pending_subtasks || [];
+                                                                                const next = [...current];
+                                                                                next[st._originalIdx] = { ...next[st._originalIdx], is_approved: false };
+                                                                                try {
                                                                                 await supabase.from("cases").update({
                                                                                     meta_json: { ...latestMeta, pending_subtasks: next }
                                                                                 }).eq("id", id!);
@@ -2190,24 +2280,24 @@ export default function OperacaoM30Case() {
                                                                         <X className="h-4 w-4" />
                                                                     </Button>
                                                                 )}
-                                                                {caseQ.data?.state === 'gravao' && !st.linked_case_id && (
-                                                                    <Button 
-                                                                        size="sm" 
-                                                                        variant="ghost"
-                                                                        className={cn(
-                                                                            "h-9 w-9 rounded-xl flex items-center justify-center p-0 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition-all"
-                                                                        )}
-                                                                        disabled={creatingIndividualId === idx}
-                                                                        onClick={(e) => {
-                                                                            e.stopPropagation();
-                                                                            const bestId = getBestDeliverableId(st.type || "edicao");
-                                                                            setTaskToCreate({ st: { ...st, deliverable_id: bestId }, idx });
-                                                                        }}
-                                                                        title="Criar card de produção individual"
-                                                                    >
-                                                                        <Rocket className={cn("h-4 w-4", creatingIndividualId === idx && "animate-spin")} />
-                                                                    </Button>
-                                                                )}
+                                                                    {caseQ.data?.state === 'gravao' && !st.linked_case_id && (
+                                                                        <Button 
+                                                                            size="sm" 
+                                                                            variant="ghost"
+                                                                            className={cn(
+                                                                                "h-9 w-9 rounded-xl flex items-center justify-center p-0 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition-all"
+                                                                            )}
+                                                                            disabled={creatingIndividualId === st._originalIdx}
+                                                                            onClick={(e) => {
+                                                                                e.stopPropagation();
+                                                                                const bestId = getBestDeliverableId(st.type || "edicao");
+                                                                                setTaskToCreate({ st: { ...st, deliverable_id: bestId }, idx: st._originalIdx });
+                                                                            }}
+                                                                            title="Criar card de produção individual"
+                                                                        >
+                                                                            <Rocket className={cn("h-4 w-4", creatingIndividualId === st._originalIdx && "animate-spin")} />
+                                                                        </Button>
+                                                                    )}
 
                                                                 {st.linked_case_id && (
                                                                     <Link to={`/app/operacao-m30/${st.linked_case_id}`} onClick={(e) => e.stopPropagation()}>
@@ -2217,43 +2307,47 @@ export default function OperacaoM30Case() {
                                                                     </Link>
                                                                 )}
 
-                                                                <Button 
-                                                                    variant="ghost" 
-                                                                    size="sm" 
-                                                                    className="h-9 w-9 rounded-xl text-slate-400 hover:text-rose-600 hover:bg-rose-50"
-                                                                    onClick={async (e) => {
-                                                                        e.stopPropagation();
-                                                                        const { data: latestCase } = await supabase.from("cases").select("meta_json").eq("id", id!).single();
-                                                                        const latestMeta = latestCase?.meta_json as any || caseQ.data?.meta_json || {};
-                                                                        const current = latestMeta.pending_subtasks || [];
-                                                                        const next = current.filter((_: any, i: number) => i !== idx);
-                                                                        await supabase.from("cases").update({
-                                                                            meta_json: { ...latestMeta, pending_subtasks: next }
-                                                                        }).eq("id", id!);
-                                                                        caseQ.refetch();
-                                                                    }}
-                                                                >
-                                                                    <Trash2 className="h-4 w-4" />
-                                                                </Button>
-                                                            </div>
-                                                        </div>
-                                                        <AccordionContent className="px-4 pb-4 space-y-4 pt-1 border-t border-slate-50">
-                                                            <SubtaskItemContent 
-                                                                st={st} 
-                                                                idx={idx} 
-                                                                caseMeta={caseQ.data?.meta_json}
-                                                                caseId={id!}
-                                                                onRefetch={() => caseQ.refetch()}
-                                                                caseState={caseQ.data?.state}
-                                                                caseData={caseQ.data}
-                                                                allDeliverables={allDeliverablesQ.data || []}
-                                                                getBestDeliverableId={getBestDeliverableId}
-                                                                handleCreateIndividualTask={handleCreateIndividualTask}
-                                                            />
-                                                        </AccordionContent>
-                                                    </AccordionItem>
-                                                ))}
-                                            </Accordion>
+                                                                        <Button 
+                                                                            variant="ghost" 
+                                                                            size="sm" 
+                                                                            className="h-9 w-9 rounded-xl text-slate-400 hover:text-rose-600 hover:bg-rose-50"
+                                                                            onClick={async (e) => {
+                                                                                e.stopPropagation();
+                                                                                const { data: latestCase } = await supabase.from("cases").select("meta_json").eq("id", id!).single();
+                                                                                const latestMeta = latestCase?.meta_json as any || caseQ.data?.meta_json || {};
+                                                                                const current = latestMeta.pending_subtasks || [];
+                                                                                const next = current.filter((_: any, i: number) => i !== st._originalIdx);
+                                                                                await supabase.from("cases").update({
+                                                                                    meta_json: { ...latestMeta, pending_subtasks: next }
+                                                                                }).eq("id", id!);
+                                                                                caseQ.refetch();
+                                                                            }}
+                                                                        >
+                                                                            <Trash2 className="h-4 w-4" />
+                                                                        </Button>
+                                                                    </div>
+                                                                </div>
+                                                                <AccordionContent className="px-4 pb-4 space-y-4 pt-1 border-t border-slate-50">
+                                                                    <SubtaskItemContent 
+                                                                        st={st} 
+                                                                        idx={st._originalIdx} 
+                                                                        caseMeta={caseQ.data?.meta_json}
+                                                                        caseId={id!}
+                                                                        onRefetch={() => caseQ.refetch()}
+                                                                        caseState={caseQ.data?.state}
+                                                                        caseData={caseQ.data}
+                                                                        allDeliverables={allDeliverablesQ.data || []}
+                                                                        getBestDeliverableId={getBestDeliverableId}
+                                                                        handleCreateIndividualTask={handleCreateIndividualTask}
+                                                                    />
+                                                                </AccordionContent>
+                                                                </>
+                                                            )}
+                                                        </SortableAccordionItem>
+                                                        ))}
+                                                    </Accordion>
+                                                </SortableContext>
+                                            </DndContext>
                                             
                                             <div className="flex items-center gap-2 mt-4 pt-4 border-t border-dashed border-slate-200">
                                                 <input 
@@ -2270,7 +2364,7 @@ export default function OperacaoM30Case() {
                                                         const { data: latestCase } = await supabase.from("cases").select("meta_json").eq("id", id!).single();
                                                         const latestMeta = latestCase?.meta_json as any || caseQ.data?.meta_json || {};
                                                         const current = latestMeta.pending_subtasks || [];
-                                                        const next = [...current, { title: el.value, type: "edicao" }];
+                                                        const next = [...current, { id: `st-${Date.now()}`, title: el.value, type: "edicao" }];
                                                         await supabase.from("cases").update({
                                                             meta_json: { ...latestMeta, pending_subtasks: next }
                                                         }).eq("id", id!);
@@ -2290,7 +2384,7 @@ export default function OperacaoM30Case() {
                                                         const { data: latestCase } = await supabase.from("cases").select("meta_json").eq("id", id!).single();
                                                         const latestMeta = latestCase?.meta_json as any || caseQ.data?.meta_json || {};
                                                         const current = latestMeta.pending_subtasks || [];
-                                                        const next = [...current, { title: el.value, type: "arte_estatica" }];
+                                                        const next = [...current, { id: `st-${Date.now()}`, title: el.value, type: "arte_estatica" }];
                                                         await supabase.from("cases").update({
                                                             meta_json: { ...latestMeta, pending_subtasks: next }
                                                         }).eq("id", id!);
