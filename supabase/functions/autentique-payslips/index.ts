@@ -151,7 +151,7 @@ Deno.serve(async (req) => {
 
     const { data: userProfile } = await supabase
       .from("users_profile")
-      .select("full_name, email")
+      .select("display_name, email")
       .eq("user_id", payslip.user_id)
       .single();
 
@@ -184,7 +184,7 @@ Deno.serve(async (req) => {
     const apiToken = String(Deno.env.get("AUTENTIQUE_API_TOKEN") ?? "").trim();
     if (!apiToken) return err("missing_autentique_token", 500);
 
-    const userName = userProfile?.full_name || "Colaborador";
+    const userName = userProfile?.display_name || "Colaborador";
     const userEmail = userProfile?.email;
 
     if (!userEmail) {
