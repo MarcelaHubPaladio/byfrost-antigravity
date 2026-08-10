@@ -1260,7 +1260,7 @@ export function AppShell({
                                     setMobileNavOpen(false);
                                     nav("/tenants");
                                   }}
-                                  title="Trocar tenant"
+                                  title="Trocar Empresa"
                                 >
                                   <ArrowLeftRight className="mr-2 h-4 w-4" />
                                   Trocar
@@ -1795,10 +1795,10 @@ export function AppShell({
                           "bg-[hsl(var(--byfrost-accent))] hover:bg-[hsl(var(--byfrost-accent)/0.92)]"
                         )}
                         onClick={() => nav("/tenants")}
-                        title="Trocar tenant"
+                        title="Trocar Empresa"
                       >
                         <ArrowLeftRight className="mr-2 h-4 w-4" />
-                        Trocar tenant
+                        Trocar Empresa
                       </Button>
                     )}
 

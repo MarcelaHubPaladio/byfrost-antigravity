@@ -52,7 +52,7 @@ export function RequireChatInstanceAccess({ children }: { children: ReactNode })
         title="Chat indisponível"
         description="Seu número de WhatsApp não está vinculado a nenhuma instância ativa deste tenant."
         to="/tenants"
-        toLabel="Trocar tenant"
+        toLabel="Trocar Empresa"
         details={[
           { label: "tenant", value: activeTenantId },
           { label: "usuário", value: user.id },

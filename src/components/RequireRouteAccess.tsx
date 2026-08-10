@@ -105,7 +105,7 @@ export function RequireRouteAccess({
         title="Sem rotas liberadas"
         description="Seu usuário está vinculado ao tenant, mas não há nenhuma rota liberada para este cargo. Peça ao admin para ajustar a matriz de acesso."
         to="/tenants"
-        toLabel="Trocar tenant"
+        toLabel="Trocar Empresa"
         details={[
           { label: "tenant", value: activeTenantId },
           { label: "role", value: String(roleKey || "—") },

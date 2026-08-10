@@ -48,7 +48,7 @@ export function RequireTenantRole({
       title="Acesso restrito"
       description={`Esta área exige um cargo específico (${roles.join(", ")}).`}
       to={next?.path ?? "/tenants"}
-      toLabel={next ? `Ir para ${next.label}` : "Trocar tenant"}
+      toLabel={next ? `Ir para ${next.label}` : "Trocar Empresa"}
       details={[
         { label: "tenant", value: activeTenantId },
         { label: "seu cargo", value: roleKey || "—" },

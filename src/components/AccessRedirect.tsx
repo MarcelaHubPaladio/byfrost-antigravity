@@ -61,10 +61,10 @@ export function AccessRedirect({ title, description, to, toLabel, details = [], 
           variant="secondary"
           className="h-10 rounded-2xl"
           onClick={() => nav("/tenants", { replace: true })}
-          title="Trocar tenant"
+          title="Trocar Empresa"
         >
           <ArrowRightLeft className="mr-2 h-4 w-4" />
-          Trocar tenant
+          Trocar Empresa
         </Button>
         <Button
           variant="secondary"

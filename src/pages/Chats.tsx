@@ -494,7 +494,7 @@ export default function Chats() {
             title="Chat indisponível"
             description="Seu número de WhatsApp não está vinculado a nenhuma instância ativa deste tenant."
             to="/tenants"
-            toLabel="Trocar tenant"
+            toLabel="Trocar Empresa"
             details={[
               { label: "tenant", value: String(activeTenantId ?? "—") },
               { label: "usuário", value: String(user?.id ?? "—") },
