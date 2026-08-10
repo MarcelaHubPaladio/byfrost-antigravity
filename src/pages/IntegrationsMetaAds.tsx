@@ -27,6 +27,7 @@ export default function IntegrationsMetaAds() {
   const { user } = useSession();
 
   const [saving, setSaving] = useState(false);
+  const [syncing, setSyncing] = useState(false);
   const [formOpen, setFormOpen] = useState(false);
 
   const [adAccountId, setAdAccountId] = useState("");
@@ -94,6 +95,34 @@ export default function IntegrationsMetaAds() {
       showError(`Falha ao salvar conexão: ${e?.message ?? "erro"}`);
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleSyncNow = async () => {
+    setSyncing(true);
+    try {
+      const { data: sess } = await supabase.auth.getSession();
+      const token = sess.session?.access_token;
+      if (!token) throw new Error("Sessão inválida");
+
+      const res = await fetch("https://pryoirzeghatrgecwrci.supabase.co/functions/v1/meta-ads-ingestion", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      const json = await res.json().catch(() => null);
+      if (!res.ok || !json?.ok) {
+        throw new Error(json?.details || json?.error || `HTTP ${res.status}`);
+      }
+
+      showSuccess("Sincronização concluída com sucesso!");
+    } catch (e: any) {
+      showError(`Falha ao sincronizar: ${e?.message ?? "erro"}`);
+    } finally {
+      setSyncing(false);
     }
   };
 
@@ -194,6 +223,14 @@ export default function IntegrationsMetaAds() {
               >
                 <RefreshCw className={cn("mr-2 h-4 w-4", accountsQ.isFetching ? "animate-spin" : "")} />
                 Atualizar
+              </Button>
+              <Button
+                onClick={handleSyncNow}
+                disabled={syncing}
+                className="h-10 rounded-2xl bg-indigo-600 text-white hover:bg-indigo-700"
+              >
+                <RefreshCw className={cn("mr-2 h-4 w-4", syncing ? "animate-spin" : "")} />
+                {syncing ? "Sincronizando..." : "Sincronizar Agora"}
               </Button>
               <Button
                 onClick={() => setFormOpen(!formOpen)}
