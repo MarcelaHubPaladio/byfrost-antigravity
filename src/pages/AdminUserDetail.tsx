@@ -1246,7 +1246,13 @@ function UserPayslipsTab({ userData }: { userData: any }) {
                                     {p.notes && <p className="text-xs text-slate-500 mt-1">{p.notes}</p>}
                                 </div>
                             </div>
-                            <div className="flex gap-2">
+                            <div className="flex items-center gap-2">
+                                <div className="text-right mr-2 text-[10px] text-slate-400 hidden sm:block leading-tight">
+                                    Enviado em<br/>
+                                    <span className="font-medium text-slate-500">
+                                        {new Date(p.created_at).toLocaleDateString('pt-BR')} às {new Date(p.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                                    </span>
+                                </div>
                                 <Button variant="secondary" size="sm" onClick={() => openFile(p.file_url)}>
                                     Ver Arquivo
                                 </Button>
