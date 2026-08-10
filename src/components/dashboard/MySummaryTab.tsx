@@ -421,7 +421,14 @@ export function MySummaryTab() {
                           Assinar Holerite
                         </Button>
                       )}
-                      <Button variant="outline" size="sm" className="h-8 rounded-full" onClick={() => window.open(p.file_url, '_blank')}>
+                      <Button variant="outline" size="sm" className="h-8 rounded-full" onClick={async () => {
+                        if (p.file_url.startsWith('http')) {
+                          window.open(p.file_url, '_blank');
+                        } else {
+                          const { data, error } = await supabase.storage.from('employee_documents').createSignedUrl(p.file_url, 60);
+                          if (data) window.open(data.signedUrl, '_blank');
+                        }
+                      }}>
                         <ExternalLink className="w-3 h-3 mr-1" /> Arquivo
                       </Button>
                     </div>

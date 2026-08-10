@@ -1119,9 +1119,6 @@ function UserPayslipsTab({ userData }: { userData: any }) {
             
             const { error: uploadError } = await supabase.storage.from('employee_documents').upload(filePath, file);
             if (uploadError) throw uploadError;
-            
-            const { data: publicUrlData } = supabase.storage.from('employee_documents').getPublicUrl(filePath);
-            const publicUrl = publicUrlData.publicUrl;
 
             const { data: newPayslip, error } = await supabase
                 .from("employee_payslips")
@@ -1130,7 +1127,7 @@ function UserPayslipsTab({ userData }: { userData: any }) {
                     user_id: userData.user_id,
                     reference_month: parseInt(month, 10),
                     reference_year: parseInt(year, 10),
-                    file_url: publicUrl,
+                    file_url: filePath,
                     notes: notes || null
                 }).select().single();
             if (error) {
@@ -1172,6 +1169,19 @@ function UserPayslipsTab({ userData }: { userData: any }) {
         } catch (e: any) {
             showError(e.message);
         }
+    };
+
+    const openFile = async (urlOrPath: string) => {
+        if (urlOrPath.startsWith('http')) {
+            window.open(urlOrPath, '_blank');
+            return;
+        }
+        const { data, error } = await supabase.storage.from('employee_documents').createSignedUrl(urlOrPath, 60);
+        if (error || !data) {
+            showError("Erro ao gerar link do arquivo.");
+            return;
+        }
+        window.open(data.signedUrl, '_blank');
     };
 
     const getMonthName = (m: number) => {
@@ -1222,7 +1232,7 @@ function UserPayslipsTab({ userData }: { userData: any }) {
                                 </div>
                             </div>
                             <div className="flex gap-2">
-                                <Button variant="secondary" size="sm" onClick={() => window.open(p.file_url, '_blank')}>
+                                <Button variant="secondary" size="sm" onClick={() => openFile(p.file_url)}>
                                     Ver Arquivo
                                 </Button>
                                 <Button variant="outline" size="sm" className="text-rose-600 hover:text-rose-700 hover:bg-rose-50" onClick={() => deletePayslip(p.id)}>
