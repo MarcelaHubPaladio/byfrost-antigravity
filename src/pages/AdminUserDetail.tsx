@@ -1087,6 +1087,7 @@ function UserPayslipsTab({ userData }: { userData: any }) {
     const [year, setYear] = useState(new Date().getFullYear() + "");
     const [file, setFile] = useState<File | null>(null);
     const [notes, setNotes] = useState("");
+    const [documentType, setDocumentType] = useState("payslip");
     const [isSaving, setIsSaving] = useState(false);
 
     const payslipsQ = useQuery({
@@ -1128,6 +1129,7 @@ function UserPayslipsTab({ userData }: { userData: any }) {
                     reference_month: parseInt(month, 10),
                     reference_year: parseInt(year, 10),
                     file_url: filePath,
+                    document_type: documentType,
                     notes: notes || null
                 }).select().single();
             if (error) {
@@ -1194,11 +1196,11 @@ function UserPayslipsTab({ userData }: { userData: any }) {
             <div className="flex justify-between items-center mb-6">
                 <div>
                     <h2 className="text-lg font-bold">Folha de Pagamento</h2>
-                    <p className="text-sm text-slate-500">Gerencie os holerites e comprovantes de pagamento deste usuário.</p>
+                    <p className="text-sm text-slate-500">Gerencie os holerites e recibos de pagamento deste usuário.</p>
                 </div>
                 <Button onClick={() => setIsModalOpen(true)}>
                     <Plus className="w-4 h-4 mr-1" />
-                    Novo Holerite
+                    Novo Documento
                 </Button>
             </div>
 
@@ -1208,8 +1210,8 @@ function UserPayslipsTab({ userData }: { userData: any }) {
                 ) : payslipsQ.data?.length === 0 ? (
                     <div className="text-center py-12 text-slate-500 bg-slate-50 rounded-xl border border-dashed border-slate-200">
                         <FileText className="w-12 h-12 mx-auto mb-3 opacity-20" />
-                        <p className="font-medium">Nenhum holerite cadastrado.</p>
-                        <p className="text-xs">Clique em "Novo Holerite" para adicionar o primeiro.</p>
+                        <p className="font-medium">Nenhum documento cadastrado.</p>
+                        <p className="text-xs">Clique em "Novo Documento" para adicionar o primeiro.</p>
                     </div>
                 ) : (
                     payslipsQ.data?.map(p => (
@@ -1221,7 +1223,7 @@ function UserPayslipsTab({ userData }: { userData: any }) {
                                 </div>
                                 <div>
                                     <h4 className="font-bold text-slate-800 flex items-center gap-2">
-                                        Holerite - {getMonthName(p.reference_month)}/{p.reference_year}
+                                        {p.document_type === 'receipt' ? 'Recibo' : 'Holerite'} - {getMonthName(p.reference_month)}/{p.reference_year}
                                         {p.autentique_status === "signed" ? (
                                             <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 ml-2">Assinado</Badge>
                                         ) : p.autentique_status === "pending" ? (
@@ -1247,7 +1249,7 @@ function UserPayslipsTab({ userData }: { userData: any }) {
             <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
                 <DialogContent>
                     <DialogHeader>
-                        <DialogTitle>Novo Holerite</DialogTitle>
+                        <DialogTitle>Novo Documento</DialogTitle>
                         <DialogDescription>Adicione o comprovante de pagamento ou holerite para que o usuário possa visualizar em seu painel.</DialogDescription>
                     </DialogHeader>
                     
@@ -1270,6 +1272,18 @@ function UserPayslipsTab({ userData }: { userData: any }) {
                                 <Input type="number" value={year} onChange={e => setYear(e.target.value)} min="2000" max="2100" />
                             </div>
                         </div>
+
+                        <div className="space-y-2">
+                            <label className="text-xs font-bold text-slate-600 uppercase">Tipo de Documento</label>
+                            <select 
+                                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                                value={documentType}
+                                onChange={e => setDocumentType(e.target.value)}
+                            >
+                                <option value="payslip">Holerite (CLT)</option>
+                                <option value="receipt">Recibo de Pagamento (PJ/Informal)</option>
+                            </select>
+                        </div>
                         
                         <div className="space-y-2">
                             <label className="text-xs font-bold text-slate-600 uppercase">Arquivo do Holerite (PDF)</label>
@@ -1287,7 +1301,7 @@ function UserPayslipsTab({ userData }: { userData: any }) {
                         <Button variant="outline" onClick={() => setIsModalOpen(false)}>Cancelar</Button>
                         <Button onClick={savePayslip} disabled={isSaving}>
                             {isSaving && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-                            Adicionar Holerite
+                            Adicionar Documento
                         </Button>
                     </div>
                 </DialogContent>

@@ -89,7 +89,7 @@ async function autentiqueCreateDocument(params: {
 async function autentiqueCreateSignatureLink(params: { apiToken: string; signerPublicId: string }) {
   const url = getAutentiqueGraphqlUrl();
 
-  const query = `mutation signDocumentMutation($id: String!) {
+  const query = `mutation signDocumentMutation($id: UUID!) {
     signDocument(id: $id)
   }`;
 
@@ -198,7 +198,8 @@ Deno.serve(async (req) => {
       return err("user_has_no_email", 400);
     }
 
-    const documentName = `Holerite - ${String(payslip.reference_month).padStart(2, '0')}/${payslip.reference_year} - ${userName}`;
+    const docTypeLabel = payslip.document_type === 'receipt' ? 'Recibo de Pagamento' : 'Holerite';
+    const documentName = `${docTypeLabel} - ${String(payslip.reference_month).padStart(2, '0')}/${payslip.reference_year} - ${userName}`;
 
     // 4. Create document in Autentique
     const created = await autentiqueCreateDocument({
