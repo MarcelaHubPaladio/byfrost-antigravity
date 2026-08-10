@@ -141,13 +141,19 @@ Deno.serve(async (req) => {
     // 1. Get payslip data
     const { data: payslip, error: payslipErr } = await supabase
       .from("employee_payslips")
-      .select("*, users_profile!employee_payslips_user_id_fkey(full_name, email)")
+      .select("*")
       .eq("id", payslip_id)
       .single();
 
     if (payslipErr || !payslip) {
       return err("payslip_not_found", 404, payslipErr);
     }
+
+    const { data: userProfile } = await supabase
+      .from("users_profile")
+      .select("full_name, email")
+      .eq("user_id", payslip.user_id)
+      .single();
 
     if (payslip.signing_link) {
       return json({ ok: true, message: "Already sent to Autentique", link: payslip.signing_link });
@@ -178,8 +184,8 @@ Deno.serve(async (req) => {
     const apiToken = String(Deno.env.get("AUTENTIQUE_API_TOKEN") ?? "").trim();
     if (!apiToken) return err("missing_autentique_token", 500);
 
-    const userName = payslip.users_profile?.full_name || "Colaborador";
-    const userEmail = payslip.users_profile?.email;
+    const userName = userProfile?.full_name || "Colaborador";
+    const userEmail = userProfile?.email;
 
     if (!userEmail) {
       return err("user_has_no_email", 400);
