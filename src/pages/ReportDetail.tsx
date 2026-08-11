@@ -703,7 +703,7 @@ export default function ReportDetail() {
                                             )}
                                             {post.media_url && (
                                               <div className="w-20 h-20 shrink-0 rounded-xl overflow-hidden bg-indigo-800">
-                                                <img src={post.media_url} alt="Post" className="w-full h-full object-cover" />
+                                                <img src={post.media_url} alt="Post" crossOrigin="anonymous" className="w-full h-full object-cover" />
                                               </div>
                                             )}
                                             <div className="flex-1 min-w-0 flex flex-col justify-center">
@@ -989,7 +989,7 @@ export default function ReportDetail() {
                                           )}
                                           {post.media_url ? (
                                             <div className="w-16 h-16 shrink-0 rounded-2xl overflow-hidden bg-slate-200">
-                                              <img src={post.media_url} alt="Post" className="w-full h-full object-cover" />
+                                              <img src={post.media_url} alt="Post" crossOrigin="anonymous" className="w-full h-full object-cover" />
                                             </div>
                                           ) : (
                                             <div className="w-16 h-16 shrink-0 rounded-2xl bg-slate-200 flex items-center justify-center">
@@ -1229,7 +1229,7 @@ export default function ReportDetail() {
                                   )}
                                   {post.media_url ? (
                                     <div className="w-16 h-16 shrink-0 rounded-2xl overflow-hidden bg-slate-200">
-                                      <img src={post.media_url} alt="Post" className="w-full h-full object-cover" />
+                                      <img src={post.media_url} alt="Post" crossOrigin="anonymous" className="w-full h-full object-cover" />
                                     </div>
                                   ) : (
                                     <div className="w-16 h-16 shrink-0 rounded-2xl bg-slate-200 flex items-center justify-center">
