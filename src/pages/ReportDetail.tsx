@@ -236,7 +236,7 @@ export default function ReportDetail() {
     const seen = new Map();
     for (const p of combined) {
       const textKey = p.message.substring(0, 40).trim().toLowerCase();
-      const key = textKey || p.media_url || p.id;
+      const key = textKey || p.scheduled_at.substring(0, 10);
       if (seen.has(key)) {
         const existing = seen.get(key);
         if (!existing.platforms.includes(p.platforms[0])) {
