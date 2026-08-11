@@ -53,7 +53,7 @@ export function NewSalesOrderDialog(props: {
   // Form State
   const [customerName, setCustomerName] = useState("");
   const [city, setCity] = useState("");
-  const [vendorId, setVendorId] = useState("");
+  const [userId, setUserId] = useState("");
   const [orderFile, setOrderFile] = useState<File | null>(null);
   const [docFiles, setDocFiles] = useState<File[]>([]);
   const [observations, setObservations] = useState("");
@@ -61,6 +61,21 @@ export function NewSalesOrderDialog(props: {
   
   const [openCity, setOpenCity] = useState(false);
   const [openVendor, setOpenVendor] = useState(false);
+
+  const usersQ = useQuery({
+    queryKey: ["tenant_users_profiles", tenantId],
+    enabled: Boolean(open && tenantId),
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("users_profile")
+        .select("user_id, display_name, email")
+        .eq("tenant_id", tenantId)
+        .is("deleted_at", null)
+        .order("display_name", { ascending: true });
+      if (error) throw error;
+      return (data ?? []) as any[];
+    }
+  });
 
   const vendorsQ = useQuery({
     queryKey: ["vendors_for_filter", tenantId],
@@ -104,7 +119,19 @@ export function NewSalesOrderDialog(props: {
 
     setSaving(true);
     try {
-      // 2. Create Case
+      let assigned_user_id = null;
+      let assigned_vendor_id = null;
+
+      if (userId) {
+        if (userId.startsWith('user_')) {
+          assigned_user_id = userId.replace('user_', '');
+        } else if (userId.startsWith('vendor_')) {
+          assigned_vendor_id = userId.replace('vendor_', '');
+        } else {
+          assigned_user_id = userId;
+        }
+      }
+
       const { data: caseRow, error: caseErr } = await supabase
         .from("cases")
         .insert({
@@ -114,8 +141,8 @@ export function NewSalesOrderDialog(props: {
           status: "open",
           state: "new",
           title: customerName,
-          assigned_vendor_id: vendorId || null,
-          assigned_user_id: null,
+          assigned_vendor_id: assigned_vendor_id,
+          assigned_user_id: assigned_user_id,
           created_by_channel: "panel",
           meta_json: { created_from: "simplified_modal" }
         })
@@ -284,7 +311,7 @@ export function NewSalesOrderDialog(props: {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
             <div className="space-y-2 flex flex-col">
               <Label className="text-xs font-black uppercase tracking-widest text-slate-400 flex items-center gap-2">
-                <ClipboardList className="w-3 h-3" /> Vendedor
+                <ClipboardList className="w-3 h-3" /> Responsável / Vendedor
               </Label>
               <Popover open={openVendor} onOpenChange={setOpenVendor}>
                 <PopoverTrigger asChild>
@@ -294,38 +321,68 @@ export function NewSalesOrderDialog(props: {
                     aria-expanded={openVendor}
                     className="h-12 w-full justify-between rounded-2xl border-slate-200 font-normal hover:bg-slate-50 transition-colors"
                   >
-                    {vendorId 
-                      ? vendorsQ.data?.find((v: any) => v.id === vendorId)?.display_name || "Selecionado"
-                      : <span className="text-slate-500">Selecione um vendedor...</span>}
+                    {userId 
+                      ? (userId.startsWith('user_') 
+                          ? usersQ.data?.find((u: any) => `user_${u.user_id}` === userId)?.display_name 
+                          : vendorsQ.data?.find((v: any) => `vendor_${v.id}` === userId)?.display_name) 
+                        || "Selecionado"
+                      : <span className="text-slate-500">Selecione...</span>}
                     <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                   </Button>
                 </PopoverTrigger>
                 <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0 rounded-2xl shadow-xl border-slate-200" align="start">
                   <Command>
-                    <CommandInput placeholder="Buscar vendedor..." className="h-12" />
+                    <CommandInput placeholder="Buscar vendedor ou usuário..." className="h-12" />
                     <CommandList className="max-h-[300px]">
-                      <CommandEmpty>Vendedor não encontrado.</CommandEmpty>
-                      <CommandGroup>
-                        {vendorsQ.data?.map((v: any) => (
-                          <CommandItem
-                            key={v.id}
-                            value={v.display_name}
-                            onSelect={() => {
-                              setVendorId(v.id === vendorId ? "" : v.id);
-                              setOpenVendor(false);
-                            }}
-                            className="rounded-xl m-1"
-                          >
-                            <Check
-                              className={cn(
-                                "mr-2 h-4 w-4",
-                                vendorId === v.id ? "opacity-100" : "opacity-0"
-                              )}
-                            />
-                            {v.display_name}
-                          </CommandItem>
-                        ))}
-                      </CommandGroup>
+                      <CommandEmpty>Nenhum resultado encontrado.</CommandEmpty>
+                      
+                      {usersQ.data && usersQ.data.length > 0 && (
+                        <CommandGroup heading="Usuários">
+                          {usersQ.data.map((u: any) => (
+                            <CommandItem
+                              key={`user_${u.user_id}`}
+                              value={u.display_name}
+                              onSelect={() => {
+                                setUserId(`user_${u.user_id}` === userId ? "" : `user_${u.user_id}`);
+                                setOpenVendor(false);
+                              }}
+                              className="rounded-xl m-1"
+                            >
+                              <Check
+                                className={cn(
+                                  "mr-2 h-4 w-4",
+                                  userId === `user_${u.user_id}` ? "opacity-100" : "opacity-0"
+                                )}
+                              />
+                              {u.display_name}
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      )}
+
+                      {vendorsQ.data && vendorsQ.data.length > 0 && (
+                        <CommandGroup heading="Vendedores">
+                          {vendorsQ.data.map((v: any) => (
+                            <CommandItem
+                              key={`vendor_${v.id}`}
+                              value={v.display_name}
+                              onSelect={() => {
+                                setUserId(`vendor_${v.id}` === userId ? "" : `vendor_${v.id}`);
+                                setOpenVendor(false);
+                              }}
+                              className="rounded-xl m-1"
+                            >
+                              <Check
+                                className={cn(
+                                  "mr-2 h-4 w-4",
+                                  userId === `vendor_${v.id}` ? "opacity-100" : "opacity-0"
+                                )}
+                              />
+                              {v.display_name}
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      )}
                     </CommandList>
                   </Command>
                 </PopoverContent>
