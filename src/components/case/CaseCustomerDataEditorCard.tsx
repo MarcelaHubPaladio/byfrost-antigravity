@@ -49,6 +49,29 @@ function cleanOrNull(s: string) {
   return v ? v : null;
 }
 
+function parseCoordinates(input: string): { lat: string, lng: string } | null {
+  if (!input) return null;
+  const dmsRegex = /(\d+)[°\s]+(\d+)['\s]+([\d.]+)["\s]+([NS])\s+(\d+)[°\s]+(\d+)['\s]+([\d.]+)["\s]+([EW])/i;
+  const match = input.match(dmsRegex);
+  if (match) {
+    let lat = parseFloat(match[1]) + parseFloat(match[2]) / 60 + parseFloat(match[3]) / 3600;
+    if (match[4].toUpperCase() === 'S') lat = -lat;
+    
+    let lng = parseFloat(match[5]) + parseFloat(match[6]) / 60 + parseFloat(match[7]) / 3600;
+    if (match[8].toUpperCase() === 'W') lng = -lng;
+    
+    return { lat: lat.toFixed(6), lng: lng.toFixed(6) };
+  }
+  
+  const simpleRegex = /(-?\d+\.\d+)[\s,]+(-?\d+\.\d+)/;
+  const match2 = input.match(simpleRegex);
+  if (match2) {
+    return { lat: match2[1], lng: match2[2] };
+  }
+  
+  return null;
+}
+
 export function CaseCustomerDataEditorCard(props: {
   caseId: string;
   fields: FieldRow[] | undefined;
@@ -100,16 +123,19 @@ export function CaseCustomerDataEditorCard(props: {
       local: getField(fields, "local"),
       latitude: getField(fields, "latitude"),
       longitude: getField(fields, "longitude"),
+      google_maps_link: getField(fields, "google_maps_link"),
       obs: getFieldAny(fields, ["obs", "notes"]),
     }),
     [fields]
   );
 
   const [draft, setDraft] = useState(initial);
+  const [coordsInput, setCoordsInput] = useState(() => [initial.latitude, initial.longitude].filter(Boolean).join(", "));
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     setDraft(initial);
+    setCoordsInput([initial.latitude, initial.longitude].filter(Boolean).join(", "));
   }, [initial]);
 
   const save = async () => {
@@ -171,6 +197,7 @@ export function CaseCustomerDataEditorCard(props: {
         { key: "local", value_text: cleanOrNull(draft.local) },
         { key: "latitude", value_text: cleanOrNull(draft.latitude) },
         { key: "longitude", value_text: cleanOrNull(draft.longitude) },
+        { key: "google_maps_link", value_text: cleanOrNull(draft.google_maps_link) },
         { key: "obs", value_text: cleanOrNull(draft.obs) },
       ]
         .map((r) => ({
@@ -218,6 +245,7 @@ export function CaseCustomerDataEditorCard(props: {
         "local",
         "latitude",
         "longitude",
+        "google_maps_link",
         "obs",
 
         // legacy (para não deixar valores antigos divergirem)
@@ -588,10 +616,10 @@ export function CaseCustomerDataEditorCard(props: {
 
         <div className="rounded-2xl border border-slate-100 bg-slate-50/50 p-3">
           <div className="flex items-center justify-between gap-2">
-            <Label className="text-[11px] font-medium text-slate-500">Coordenadas GPS (opcional)</Label>
+            <Label className="text-[11px] font-medium text-slate-500">Localização e Coordenadas</Label>
             {draft.latitude && draft.longitude && (
               <a
-                href={`https://www.google.com/maps/search/?api=1&query=${draft.latitude},${draft.longitude}`}
+                href={draft.google_maps_link || `https://www.google.com/maps/search/?api=1&query=${draft.latitude},${draft.longitude}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="flex items-center text-[10px] font-medium text-blue-600 hover:underline"
@@ -600,19 +628,35 @@ export function CaseCustomerDataEditorCard(props: {
               </a>
             )}
           </div>
-          <div className="mt-2 grid gap-3 sm:grid-cols-2">
-            <Input
-              value={draft.latitude}
-              onChange={(e) => setDraft((p) => ({ ...p, latitude: e.target.value }))}
-              className="h-9 rounded-xl text-xs"
-              placeholder="Latitude (ex: -23.55)"
-            />
-            <Input
-              value={draft.longitude}
-              onChange={(e) => setDraft((p) => ({ ...p, longitude: e.target.value }))}
-              className="h-9 rounded-xl text-xs"
-              placeholder="Longitude (ex: -46.63)"
-            />
+          <div className="mt-2 grid gap-3">
+            <div className="space-y-1">
+              <Label className="text-[10px] text-slate-400">Coordenadas (Cole a coordenada completa)</Label>
+              <Input
+                value={coordsInput}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setCoordsInput(val);
+                  const parsed = parseCoordinates(val);
+                  if (parsed) {
+                    setDraft(p => ({ ...p, latitude: parsed.lat, longitude: parsed.lng }));
+                  } else if (!val.trim()) {
+                    setDraft(p => ({ ...p, latitude: "", longitude: "" }));
+                  }
+                }}
+                className="h-9 rounded-xl text-xs"
+                placeholder="Ex: 25°41'09.5&quot;S 50°52'21.9&quot;W"
+              />
+            </div>
+            
+            <div className="space-y-1">
+              <Label className="text-[10px] text-slate-400">Link do Google Maps</Label>
+              <Input
+                value={draft.google_maps_link || ""}
+                onChange={(e) => setDraft((p) => ({ ...p, google_maps_link: e.target.value }))}
+                className="h-9 rounded-xl text-xs"
+                placeholder="https://maps.google.com/..."
+              />
+            </div>
           </div>
         </div>
 
