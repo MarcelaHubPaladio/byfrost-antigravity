@@ -236,7 +236,8 @@ export default function ReportDetail() {
     const seen = new Map();
     for (const p of combined) {
       const textKey = p.message.substring(0, 40).trim().toLowerCase();
-      const key = textKey || p.scheduled_at.substring(0, 10);
+      // Group by hour if there is no text, to prevent squashing all empty posts on the same day
+      const key = textKey || p.scheduled_at.substring(0, 13);
       if (seen.has(key)) {
         const existing = seen.get(key);
         if (!existing.platforms.includes(p.platforms[0])) {
