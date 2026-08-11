@@ -428,16 +428,7 @@ export default function ReportDetail() {
           pixelRatio: 2,
           backgroundColor: '#fff',
           width: 1200,
-          imagePlaceholder: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+ip1sAAAAASUVORK5CYII=",
-          filter: (node) => {
-            if (node.tagName === 'IMG') {
-              const src = (node as HTMLImageElement).src || '';
-              if (src.includes('scontent') || src.includes('fbcdn') || src.includes('instagram')) {
-                return false;
-              }
-            }
-            return true;
-          }
+          imagePlaceholder: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+ip1sAAAAASUVORK5CYII="
         });
         const link = document.createElement('a');
         link.download = `Relatorio-${contractData?.customer?.display_name}-${report.period_name}.png`;
@@ -712,7 +703,7 @@ export default function ReportDetail() {
                                             )}
                                             {post.media_url && (
                                               <div className="w-20 h-20 shrink-0 rounded-xl overflow-hidden bg-indigo-800">
-                                                <img src={post.media_url} alt="Post" className="w-full h-full object-cover" />
+                                                <img src={post.media_url.includes('scontent') || post.media_url.includes('fbcdn') || post.media_url.includes('instagram') ? `https://pryoirzeghatrgecwrci.supabase.co/functions/v1/image-proxy?url=${encodeURIComponent(post.media_url)}` : post.media_url} alt="Post" crossOrigin="anonymous" className="w-full h-full object-cover" />
                                               </div>
                                             )}
                                             <div className="flex-1 min-w-0 flex flex-col justify-center">
@@ -998,7 +989,7 @@ export default function ReportDetail() {
                                           )}
                                           {post.media_url ? (
                                             <div className="w-16 h-16 shrink-0 rounded-2xl overflow-hidden bg-slate-200">
-                                              <img src={post.media_url} alt="Post" className="w-full h-full object-cover" />
+                                              <img src={post.media_url.includes('scontent') || post.media_url.includes('fbcdn') || post.media_url.includes('instagram') ? `https://pryoirzeghatrgecwrci.supabase.co/functions/v1/image-proxy?url=${encodeURIComponent(post.media_url)}` : post.media_url} alt="Post" crossOrigin="anonymous" className="w-full h-full object-cover" />
                                             </div>
                                           ) : (
                                             <div className="w-16 h-16 shrink-0 rounded-2xl bg-slate-200 flex items-center justify-center">
@@ -1238,7 +1229,7 @@ export default function ReportDetail() {
                                   )}
                                   {post.media_url ? (
                                     <div className="w-16 h-16 shrink-0 rounded-2xl overflow-hidden bg-slate-200">
-                                      <img src={post.media_url} alt="Post" className="w-full h-full object-cover" />
+                                      <img src={post.media_url.includes('scontent') || post.media_url.includes('fbcdn') || post.media_url.includes('instagram') ? `https://pryoirzeghatrgecwrci.supabase.co/functions/v1/image-proxy?url=${encodeURIComponent(post.media_url)}` : post.media_url} alt="Post" crossOrigin="anonymous" className="w-full h-full object-cover" />
                                     </div>
                                   ) : (
                                     <div className="w-16 h-16 shrink-0 rounded-2xl bg-slate-200 flex items-center justify-center">
