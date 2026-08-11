@@ -19,6 +19,8 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
+  SelectGroup,
+  SelectLabel,
 } from "@/components/ui/select";
 import {
   Command,
@@ -68,16 +70,33 @@ export function NewSalesOrderDialog(props: {
   const [openCity, setOpenCity] = useState(false);
 
   const usersQ = useQuery({
-    queryKey: ["tenant_users_all", tenantId],
+    queryKey: ["tenant_users_profiles", tenantId],
     enabled: Boolean(open && tenantId),
     queryFn: async () => {
-      const { data, error } = await supabase.rpc("list_tenant_users_profiles", {
-        p_tenant_id: tenantId,
-        p_include_deleted: false,
-      });
+      const { data, error } = await supabase
+        .from("users_profile")
+        .select("user_id, display_name, email")
+        .eq("tenant_id", tenantId)
+        .is("deleted_at", null)
+        .order("display_name", { ascending: true });
       if (error) throw error;
       return (data ?? []) as any[];
     }
+  });
+
+  const vendorsQ = useQuery({
+    queryKey: ["vendors_for_filter", tenantId],
+    enabled: Boolean(open && tenantId),
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("vendors")
+        .select("id, display_name")
+        .eq("tenant_id", tenantId)
+        .is("deleted_at", null)
+        .order("display_name", { ascending: true });
+      if (error) throw error;
+      return data ?? [];
+    },
   });
 
   const resetForm = () => {
@@ -108,6 +127,19 @@ export function NewSalesOrderDialog(props: {
     setSaving(true);
     try {
       // 2. Create Case
+      let assigned_user_id = null;
+      let assigned_vendor_id = null;
+
+      if (userId) {
+        if (userId.startsWith('user_')) {
+          assigned_user_id = userId.replace('user_', '');
+        } else if (userId.startsWith('vendor_')) {
+          assigned_vendor_id = userId.replace('vendor_', '');
+        } else {
+          assigned_user_id = userId;
+        }
+      }
+
       const { data: caseRow, error: caseErr } = await supabase
         .from("cases")
         .insert({
@@ -117,8 +149,8 @@ export function NewSalesOrderDialog(props: {
           status: "open",
           state: "new",
           title: customerName,
-          assigned_vendor_id: null,
-          assigned_user_id: userId || null,
+          assigned_vendor_id: assigned_vendor_id,
+          assigned_user_id: assigned_user_id,
           created_by_channel: "panel",
           meta_json: { created_from: "simplified_modal" }
         })
@@ -287,18 +319,33 @@ export function NewSalesOrderDialog(props: {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
             <div className="space-y-2">
               <Label className="text-xs font-black uppercase tracking-widest text-slate-400 flex items-center gap-2">
-                <ClipboardList className="w-3 h-3" /> Responsável
+                <ClipboardList className="w-3 h-3" /> Responsável / Vendedor
               </Label>
               <Select value={userId} onValueChange={setUserId}>
                 <SelectTrigger className="h-12 rounded-2xl border-slate-200">
-                  <SelectValue placeholder="Selecione um responsável..." />
+                  <SelectValue placeholder="Selecione..." />
                 </SelectTrigger>
                 <SelectContent className="rounded-2xl">
-                  {usersQ.data?.map(u => (
-                    <SelectItem key={u.user_id} value={u.user_id} className="rounded-xl">
-                      {u.display_name}
-                    </SelectItem>
-                  ))}
+                  {usersQ.data && usersQ.data.length > 0 && (
+                    <SelectGroup>
+                      <SelectLabel>Usuários</SelectLabel>
+                      {usersQ.data.map((u: any) => (
+                        <SelectItem key={`user_${u.user_id}`} value={`user_${u.user_id}`} className="rounded-xl">
+                          {u.display_name}
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
+                  )}
+                  {vendorsQ.data && vendorsQ.data.length > 0 && (
+                    <SelectGroup>
+                      <SelectLabel>Vendedores</SelectLabel>
+                      {vendorsQ.data.map((v: any) => (
+                        <SelectItem key={`vendor_${v.id}`} value={`vendor_${v.id}`} className="rounded-xl">
+                          {v.display_name}
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
+                  )}
                 </SelectContent>
               </Select>
             </div>
