@@ -28,7 +28,9 @@ import {
   Camera,
   Check,
   Megaphone,
-  Zap
+  Zap,
+  Facebook,
+  Instagram
 } from "lucide-react";
 import { format } from "date-fns";
 import { toPng } from 'html-to-image';
@@ -213,7 +215,8 @@ export default function ReportDetail() {
       scheduled_at: p.scheduled_at,
       message: p.message || p.caption || "",
       media_url: p.media_url || "",
-      page_name: p.meta_organic_pages?.name || "Meta",
+      page_names: [p.meta_organic_pages?.name || "Meta"],
+      platforms: [p.meta_organic_pages?.platform || "unknown"],
       type: "scheduled"
     }));
 
@@ -222,18 +225,28 @@ export default function ReportDetail() {
       scheduled_at: p.posted_at,
       message: p.message || "",
       media_url: p.picture_url || "",
-      page_name: p.meta_organic_pages?.name || "Meta",
+      page_names: [p.meta_organic_pages?.name || "Meta"],
+      platforms: [p.meta_organic_pages?.platform || "unknown"],
       type: "organic"
     }));
     
     const combined = [...scheduled, ...organic].sort((a, b) => new Date(b.scheduled_at).getTime() - new Date(a.scheduled_at).getTime());
     
     const unique = [];
-    const seen = new Set();
+    const seen = new Map();
     for (const p of combined) {
-      const key = `${p.page_name}_${p.message.substring(0, 30).trim()}`;
-      if (!seen.has(key)) {
-        seen.add(key);
+      const textKey = p.message.substring(0, 40).trim().toLowerCase();
+      const key = textKey || p.media_url || p.id;
+      if (seen.has(key)) {
+        const existing = seen.get(key);
+        if (!existing.platforms.includes(p.platforms[0])) {
+          existing.platforms.push(p.platforms[0]);
+        }
+        if (!existing.page_names.includes(p.page_names[0])) {
+          existing.page_names.push(p.page_names[0]);
+        }
+      } else {
+        seen.set(key, p);
         unique.push(p);
       }
     }
@@ -414,7 +427,8 @@ export default function ReportDetail() {
           quality: 1,
           pixelRatio: 2,
           backgroundColor: '#fff',
-          width: 1200
+          width: 1200,
+          imagePlaceholder: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+ip1sAAAAASUVORK5CYII="
         });
         const link = document.createElement('a');
         link.download = `Relatorio-${contractData?.customer?.display_name}-${report.period_name}.png`;
@@ -694,7 +708,11 @@ export default function ReportDetail() {
                                             )}
                                             <div className="flex-1 min-w-0 flex flex-col justify-center">
                                               <div className="text-xs font-semibold text-indigo-200 mb-1 flex items-center gap-1.5">
-                                                <span className="truncate">{post.page_name}</span>
+                                                <div className="flex gap-1">
+                                                  {post.platforms.includes("facebook") && <Facebook className="w-3 h-3 text-indigo-300" />}
+                                                  {post.platforms.includes("instagram") && <Instagram className="w-3 h-3 text-indigo-300" />}
+                                                </div>
+                                                <span className="truncate">{post.page_names.join(" & ")}</span>
                                                 <span className="opacity-50">•</span>
                                                 <span className="opacity-75">{format(new Date(post.scheduled_at), "dd/MMM", { locale: ptBR })}</span>
                                               </div>
@@ -983,7 +1001,11 @@ export default function ReportDetail() {
                                               {post.message}
                                             </p>
                                             <div className="text-[10px] text-slate-400 mt-1 flex items-center gap-1.5">
-                                              <span className="truncate">{post.page_name}</span>
+                                              <div className="flex gap-1">
+                                                {post.platforms.includes("facebook") && <Facebook className="w-3 h-3" />}
+                                                {post.platforms.includes("instagram") && <Instagram className="w-3 h-3" />}
+                                              </div>
+                                              <span className="truncate">{post.page_names.join(" & ")}</span>
                                               <span>•</span>
                                               <span>{format(new Date(post.scheduled_at), "dd/MM", { locale: ptBR })}</span>
                                             </div>
@@ -1219,7 +1241,11 @@ export default function ReportDetail() {
                                       {post.message}
                                     </p>
                                     <div className="text-[10px] text-slate-400 mt-1 flex items-center gap-1.5">
-                                      <span className="truncate">{post.page_name}</span>
+                                      <div className="flex gap-1">
+                                        {post.platforms.includes("facebook") && <Facebook className="w-3 h-3" />}
+                                        {post.platforms.includes("instagram") && <Instagram className="w-3 h-3" />}
+                                      </div>
+                                      <span className="truncate">{post.page_names.join(" & ")}</span>
                                       <span>•</span>
                                       <span>{format(new Date(post.scheduled_at), "dd/MM", { locale: ptBR })}</span>
                                     </div>
