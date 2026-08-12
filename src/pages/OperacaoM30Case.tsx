@@ -1364,14 +1364,29 @@ export default function OperacaoM30Case() {
         queryKey: ["active_participant", activeTenantId, user?.id],
         enabled: Boolean(activeTenantId && user?.id),
         queryFn: async () => {
-            const { data, error } = await supabase
+            const { data: partData, error: partErr } = await supabase
                 .from("incentive_participants")
-                .select("id, campaign_id")
+                .select("id")
                 .eq("tenant_id", activeTenantId!)
                 .eq("user_id", user!.id)
                 .maybeSingle();
-            if (error) throw error;
-            return data;
+            
+            if (partErr) throw partErr;
+            if (!partData) return null;
+
+            // Buscar a qual campanha o participante pertence
+            const { data: campData } = await supabase
+                .from("campaign_participants")
+                .select("campaign_id")
+                .eq("tenant_id", activeTenantId!)
+                .eq("participant_id", partData.id)
+                .limit(1)
+                .maybeSingle();
+
+            return {
+                id: partData.id,
+                campaign_id: campData?.campaign_id || null
+            };
         }
     });
 
