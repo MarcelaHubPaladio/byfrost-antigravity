@@ -1005,7 +1005,7 @@ export function AppShell({
               )}
             </div>
 
-            <div className="flex-1 overflow-y-auto p-3">
+            <div className="flex-1 overflow-y-auto p-3 scrollbar-hide">
               <div className="grid justify-items-center gap-2">
                 <NavTile to={prefs.startRoute || "/app"} icon={LayoutGrid} label="Dashboard" disabled={!can("app.dashboard")} />
                 {hasTrello && <NavTile to="/app/trello" icon={KanbanSquare} label="Tarefas" disabled={!can("app.trello")} />}
