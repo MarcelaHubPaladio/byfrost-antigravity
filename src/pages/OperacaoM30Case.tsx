@@ -1366,7 +1366,7 @@ export default function OperacaoM30Case() {
         queryFn: async () => {
             const { data, error } = await supabase
                 .from("incentive_participants")
-                .select("id")
+                .select("id, campaign_id")
                 .eq("tenant_id", activeTenantId!)
                 .eq("user_id", user!.id)
                 .maybeSingle();
@@ -1384,9 +1384,10 @@ export default function OperacaoM30Case() {
         try {
             await updateState(targetFinal);
             
-            if (selectedGoalMetric !== "none" && activeParticipantQ.data?.id) {
+            if (selectedGoalMetric !== "none" && activeParticipantQ.data?.id && activeParticipantQ.data?.campaign_id) {
                 const { error } = await supabase.from("incentive_events").insert({
                     tenant_id: activeTenantId,
+                    campaign_id: activeParticipantQ.data.campaign_id,
                     participant_id: activeParticipantQ.data.id,
                     event_type: selectedGoalMetric,
                     value: 1,
