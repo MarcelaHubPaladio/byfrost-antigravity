@@ -1375,13 +1375,29 @@ export default function OperacaoM30Case() {
             if (!partData) return null;
 
             // Buscar a qual campanha o participante pertence
-            const { data: campData } = await supabase
+            let { data: campData } = await supabase
                 .from("campaign_participants")
                 .select("campaign_id")
                 .eq("tenant_id", activeTenantId!)
                 .eq("participant_id", partData.id)
                 .limit(1)
                 .maybeSingle();
+
+            // Se o participante não está em nenhuma campanha, tenta usar a campanha ativa atual do tenant
+            if (!campData) {
+                const { data: activeCampaign } = await supabase
+                    .from("campaigns")
+                    .select("id")
+                    .eq("tenant_id", activeTenantId!)
+                    .eq("status", "active")
+                    .order("created_at", { ascending: false })
+                    .limit(1)
+                    .maybeSingle();
+                
+                if (activeCampaign) {
+                    campData = { campaign_id: activeCampaign.id };
+                }
+            }
 
             return {
                 id: partData.id,
@@ -1399,21 +1415,25 @@ export default function OperacaoM30Case() {
         try {
             await updateState(targetFinal);
             
-            if (selectedGoalMetric !== "none" && activeParticipantQ.data?.id && activeParticipantQ.data?.campaign_id) {
-                const { error } = await supabase.from("incentive_events").insert({
-                    tenant_id: activeTenantId,
-                    campaign_id: activeParticipantQ.data.campaign_id,
-                    participant_id: activeParticipantQ.data.id,
-                    event_type: selectedGoalMetric,
-                    value: 1,
-                    points: 1,
-                    metadata: { source: "operacao_m30_concluir", case_id: id }
-                });
-                if (error) {
-                    console.error("Failed to add point to goal:", error);
-                    showError("Tarefa concluída, mas falha ao pontuar meta.");
+            if (selectedGoalMetric !== "none") {
+                if (!activeParticipantQ.data?.id || !activeParticipantQ.data?.campaign_id) {
+                    showError("Tarefa concluída, mas você não está cadastrado em nenhuma campanha ativa para pontuar.");
                 } else {
-                    showSuccess("Tarefa concluída e ponto contabilizado na meta!");
+                    const { error } = await supabase.from("incentive_events").insert({
+                        tenant_id: activeTenantId,
+                        campaign_id: activeParticipantQ.data.campaign_id,
+                        participant_id: activeParticipantQ.data.id,
+                        event_type: selectedGoalMetric,
+                        value: 1,
+                        points: 1,
+                        metadata: { source: "operacao_m30_concluir", case_id: id }
+                    });
+                    if (error) {
+                        console.error("Failed to add point to goal:", error);
+                        showError("Tarefa concluída, mas falha ao pontuar meta.");
+                    } else {
+                        showSuccess("Tarefa concluída e ponto contabilizado na meta!");
+                    }
                 }
             } else {
                 showSuccess("Tarefa concluída!");
