@@ -826,33 +826,35 @@ function MyGoalsDashboard() {
                 .eq("role_key", roleKey);
             if (tplError) throw tplError;
 
-            // Merge logic: user_goals override templates based on metric_key
-            const resolved = new Map<string, any>();
-
-            // Add templates first
-            for (const t of (templates || [])) {
-                resolved.set(t.metric_key, {
-                    ...t,
-                    is_template: true,
-                    is_override: false,
-                });
-            }
+            // Merge logic: user_goals override templates based on template_id
+            const resolved: any[] = [];
+            const overriddenTemplateIds = new Set<string>();
 
             // Apply overrides or custom goals
             for (const ug of (userGoals || [])) {
-                if (resolved.has(ug.metric_key)) {
-                    // Override existing template
-                    resolved.set(ug.metric_key, {
+                if (ug.template_id) {
+                    overriddenTemplateIds.add(ug.template_id);
+                    resolved.push({
                         ...ug,
                         is_template: false,
                         is_override: true,
-                        template_id: resolved.get(ug.metric_key).id
                     });
                 } else {
                     // Custom goal just for this user
-                    resolved.set(ug.metric_key, {
+                    resolved.push({
                         ...ug,
                         is_template: false,
+                        is_override: false,
+                    });
+                }
+            }
+
+            // Add templates that haven't been overridden
+            for (const t of (templates || [])) {
+                if (!overriddenTemplateIds.has(t.id)) {
+                    resolved.push({
+                        ...t,
+                        is_template: true,
                         is_override: false,
                     });
                 }
@@ -882,7 +884,7 @@ function MyGoalsDashboard() {
             }
 
             return {
-                goals: Array.from(resolved.values()).sort((a, b) => a.name.localeCompare(b.name)),
+                goals: resolved.sort((a, b) => a.name.localeCompare(b.name)),
                 activeRule,
                 existingSig
             };

@@ -51,25 +51,28 @@ export function UserGoalsEditor({ userId, userName, roleKey }: UserGoalsEditorPr
         .eq("tenant_id", activeTenantId!)
         .eq("user_id", userId);
 
-      const resolved = new Map<string, any>();
-
-      // Load templates first
-      for (const t of templates) {
-        resolved.set(t.metric_key, { ...t, is_template: true, is_overridden: false });
-      }
+      const resolved: any[] = [];
+      const overriddenTemplateIds = new Set<string>();
 
       // Apply overrides or exclusives
       for (const ug of (userGoals || [])) {
-        if (resolved.has(ug.metric_key)) {
-          // Override
-          resolved.set(ug.metric_key, { ...ug, is_template: false, is_overridden: true, template_id: ug.template_id || resolved.get(ug.metric_key).id });
+        if (ug.template_id) {
+          overriddenTemplateIds.add(ug.template_id);
+          resolved.push({ ...ug, is_template: false, is_overridden: true });
         } else {
           // Exclusive
-          resolved.set(ug.metric_key, { ...ug, is_template: false, is_overridden: false });
+          resolved.push({ ...ug, is_template: false, is_overridden: false });
         }
       }
 
-      return Array.from(resolved.values()).sort((a, b) => a.name.localeCompare(b.name));
+      // Add non-overridden templates
+      for (const t of templates) {
+        if (!overriddenTemplateIds.has(t.id)) {
+          resolved.push({ ...t, is_template: true, is_overridden: false });
+        }
+      }
+
+      return resolved.sort((a, b) => a.name.localeCompare(b.name));
     },
     enabled: Boolean(activeTenantId && userId)
   });
