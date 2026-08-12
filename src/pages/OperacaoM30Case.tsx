@@ -28,6 +28,14 @@ import {
     AlertDialogTitle,
     AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogHeader,
+    DialogTitle,
+    DialogTrigger,
+} from "@/components/ui/dialog";
 import { WhatsAppConversation } from "@/components/case/WhatsAppConversation";
 import { checkTransitionBlocks, TransitionBlockReason } from "@/lib/journeys/validation";
 import { TransitionBlockDialog } from "@/components/case/TransitionBlockDialog";
@@ -1325,6 +1333,70 @@ export default function OperacaoM30Case() {
     const [taskToCreate, setTaskToCreate] = useState<{ st: any, idx: number } | null>(null);
     const [linkModalOpen, setLinkModalOpen] = useState(false);
 
+    const activeUserGoalsQ = useQuery({
+        queryKey: ["active_user_goals", activeTenantId, user?.id],
+        enabled: Boolean(activeTenantId && user?.id),
+        queryFn: async () => {
+            const { data, error } = await supabase
+                .from("user_goals")
+                .select("id, name, metric_key")
+                .eq("tenant_id", activeTenantId!)
+                .eq("user_id", user!.id);
+            if (error) throw error;
+            return data || [];
+        }
+    });
+
+    const activeParticipantQ = useQuery({
+        queryKey: ["active_participant", activeTenantId, user?.id],
+        enabled: Boolean(activeTenantId && user?.id),
+        queryFn: async () => {
+            const { data, error } = await supabase
+                .from("incentive_participants")
+                .select("id")
+                .eq("tenant_id", activeTenantId!)
+                .eq("user_id", user!.id)
+                .maybeSingle();
+            if (error) throw error;
+            return data;
+        }
+    });
+
+    const [concluirModalOpen, setConcluirModalOpen] = useState(false);
+    const [selectedGoalMetric, setSelectedGoalMetric] = useState<string>("none");
+    const [completingTask, setCompletingTask] = useState(false);
+    
+    const handleConcluirTarefa = async (targetFinal: string) => {
+        setCompletingTask(true);
+        try {
+            await updateState(targetFinal);
+            
+            if (selectedGoalMetric !== "none" && activeParticipantQ.data?.id) {
+                const { error } = await supabase.from("incentive_events").insert({
+                    tenant_id: activeTenantId,
+                    participant_id: activeParticipantQ.data.id,
+                    event_type: selectedGoalMetric,
+                    value: 1,
+                    points: 1,
+                    metadata: { source: "operacao_m30_concluir", case_id: id }
+                });
+                if (error) {
+                    console.error("Failed to add point to goal:", error);
+                    showError("Tarefa concluída, mas falha ao pontuar meta.");
+                } else {
+                    showSuccess("Tarefa concluída e ponto contabilizado na meta!");
+                }
+            } else {
+                showSuccess("Tarefa concluída!");
+            }
+            setConcluirModalOpen(false);
+        } catch (e: any) {
+            showError(`Erro ao concluir: ${e?.message ?? "erro"}`);
+        } finally {
+            setCompletingTask(false);
+        }
+    };
+
     const handleCreateIndividualTask = async (st: any, idx: number, deliverableId: string, type: string) => {
         if (!activeTenantId || !id || !caseQ.data) return;
         if (!deliverableId) {
@@ -1835,38 +1907,62 @@ export default function OperacaoM30Case() {
                                         if (!targetFinal) return null;
 
                                         return (
-                                            <AlertDialog>
-                                                <AlertDialogTrigger asChild>
+                                            <Dialog open={concluirModalOpen} onOpenChange={setConcluirModalOpen}>
+                                                <DialogTrigger asChild>
                                                     <Button 
                                                         variant="default" 
                                                         className="h-10 rounded-2xl bg-emerald-600 text-white hover:bg-emerald-700 shadow-sm"
                                                     >
                                                         <Check className="mr-2 h-4 w-4" /> Concluir tarefa
                                                     </Button>
-                                                </AlertDialogTrigger>
-                                                <AlertDialogContent className="rounded-[24px]">
-                                                    <AlertDialogHeader>
+                                                </DialogTrigger>
+                                                <DialogContent className="rounded-[24px]">
+                                                    <DialogHeader>
                                                         <div className="flex items-center gap-2 text-emerald-600 mb-2">
-                                                            <AlertCircle className="h-5 w-5" />
-                                                            <span className="font-bold">Ação Irreversível</span>
+                                                            <Check className="h-5 w-5" />
+                                                            <span className="font-bold">Concluir Tarefa</span>
                                                         </div>
-                                                        <AlertDialogTitle>Concluir esta tarefa?</AlertDialogTitle>
-                                                        <AlertDialogDescription>
+                                                        <DialogTitle>Ótimo trabalho!</DialogTitle>
+                                                        <DialogDescription>
                                                             Uma vez concluída, apenas um **administrador** poderá reabri-la.
-                                                            Deseja prosseguir?
-                                                        </AlertDialogDescription>
-                                                    </AlertDialogHeader>
-                                                    <AlertDialogFooter>
-                                                        <AlertDialogCancel className="rounded-2xl">Cancelar</AlertDialogCancel>
-                                                        <AlertDialogAction
-                                                            onClick={() => updateState(targetFinal)}
+                                                        </DialogDescription>
+                                                    </DialogHeader>
+                                                    
+                                                    {activeUserGoalsQ.data && activeUserGoalsQ.data.length > 0 && activeParticipantQ.data ? (
+                                                        <div className="mt-4 space-y-3">
+                                                            <label className="text-sm font-medium text-slate-700">Esta tarefa contribui para qual das suas metas?</label>
+                                                            <Select value={selectedGoalMetric} onValueChange={setSelectedGoalMetric}>
+                                                                <SelectTrigger className="w-full rounded-xl">
+                                                                    <SelectValue placeholder="Selecione uma meta..." />
+                                                                </SelectTrigger>
+                                                                <SelectContent className="rounded-2xl">
+                                                                    <SelectItem value="none" className="rounded-xl">Não pontuar meta</SelectItem>
+                                                                    {activeUserGoalsQ.data.map(g => (
+                                                                        <SelectItem key={g.id} value={g.metric_key} className="rounded-xl">
+                                                                            {g.name}
+                                                                        </SelectItem>
+                                                                    ))}
+                                                                </SelectContent>
+                                                            </Select>
+                                                        </div>
+                                                    ) : (
+                                                        <div className="mt-4 text-sm text-slate-500 bg-slate-50 p-3 rounded-xl border border-slate-100">
+                                                            Você não possui metas ativas no momento para pontuar.
+                                                        </div>
+                                                    )}
+
+                                                    <div className="flex justify-end gap-2 mt-6">
+                                                        <Button variant="outline" className="rounded-2xl" onClick={() => setConcluirModalOpen(false)}>Cancelar</Button>
+                                                        <Button 
+                                                            disabled={completingTask}
+                                                            onClick={() => handleConcluirTarefa(targetFinal)}
                                                             className="rounded-2xl bg-emerald-600 text-white hover:bg-emerald-700"
                                                         >
-                                                            Sim, concluir
-                                                        </AlertDialogAction>
-                                                    </AlertDialogFooter>
-                                                </AlertDialogContent>
-                                            </AlertDialog>
+                                                            {completingTask ? "Concluindo..." : "Sim, concluir"}
+                                                        </Button>
+                                                    </div>
+                                                </DialogContent>
+                                            </Dialog>
                                         );
                                     })()}
 
