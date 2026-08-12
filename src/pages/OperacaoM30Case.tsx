@@ -1337,13 +1337,51 @@ export default function OperacaoM30Case() {
         queryKey: ["active_user_goals", activeTenantId, user?.id],
         enabled: Boolean(activeTenantId && user?.id),
         queryFn: async () => {
-            const { data, error } = await supabase
+            // 1. Get user profile for role
+            const { data: profile } = await supabase
+                .from("users_profile")
+                .select("role")
+                .eq("tenant_id", activeTenantId!)
+                .eq("user_id", user!.id)
+                .maybeSingle();
+
+            // 2. Fetch user specific goals
+            const { data: userGoals, error: ugError } = await supabase
                 .from("user_goals")
-                .select("id, name, metric_key")
+                .select("id, name, metric_key, template_id")
                 .eq("tenant_id", activeTenantId!)
                 .eq("user_id", user!.id);
-            if (error) throw error;
-            return data || [];
+            if (ugError) throw ugError;
+
+            let templates: any[] = [];
+            // 3. Fetch role templates if user has a role
+            if (profile?.role) {
+                const { data: tpls } = await supabase
+                    .from("goal_templates")
+                    .select("id, name, metric_key")
+                    .eq("tenant_id", activeTenantId!)
+                    .eq("role_key", profile.role);
+                if (tpls) templates = tpls;
+            }
+
+            // 4. Merge based on template_id
+            const resolved: any[] = [];
+            const overriddenTemplateIds = new Set<string>();
+
+            for (const ug of (userGoals || [])) {
+                if (ug.template_id) {
+                    overriddenTemplateIds.add(ug.template_id);
+                }
+                resolved.push({ metric_key: ug.metric_key, name: ug.name });
+            }
+
+            for (const t of templates) {
+                if (!overriddenTemplateIds.has(t.id)) {
+                    resolved.push({ metric_key: t.metric_key, name: t.name });
+                }
+            }
+
+            return resolved;
         }
     });
 

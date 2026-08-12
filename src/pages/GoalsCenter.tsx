@@ -1183,12 +1183,27 @@ function TeamGoalsTab() {
                 .eq("role_key", selectedUser.role);
             if (tplError) throw tplError;
 
-            // Merge
-            const resolved = new Map<string, any>();
-            for (const t of (templates || [])) resolved.set(t.metric_key, { ...t, is_template: true });
-            for (const ug of (userGoals || [])) resolved.set(ug.metric_key, { ...ug, is_template: false });
+            // Merge: user_goals override templates based on template_id
+            const resolved: any[] = [];
+            const overriddenTemplateIds = new Set<string>();
 
-            const goals = Array.from(resolved.values());
+            for (const ug of (userGoals || [])) {
+                if (ug.template_id) {
+                    overriddenTemplateIds.add(ug.template_id);
+                    resolved.push({ ...ug, is_template: false, is_overridden: true });
+                } else {
+                    // Exclusive goal
+                    resolved.push({ ...ug, is_template: false, is_overridden: false });
+                }
+            }
+
+            for (const t of (templates || [])) {
+                if (!overriddenTemplateIds.has(t.id)) {
+                    resolved.push({ ...t, is_template: true, is_overridden: false });
+                }
+            }
+
+            const goals = resolved;
 
             // Calculate progress for each goal from incentive_events
             const startOfMonth = new Date();
