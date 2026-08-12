@@ -13,9 +13,10 @@ interface CreateTaskDialogProps {
   onOpenChange: (open: boolean) => void;
   initialDate?: Date;
   tenantId: string;
+  taskToEdit?: { id: string; title: string; due_date: string | null } | null;
 }
 
-export function CreateTaskDialog({ isOpen, onOpenChange, initialDate = new Date(), tenantId }: CreateTaskDialogProps) {
+export function CreateTaskDialog({ isOpen, onOpenChange, initialDate = new Date(), tenantId, taskToEdit }: CreateTaskDialogProps) {
   const { upsertTask } = useSuperTasks(tenantId);
   const [isSubmitting, setIsSubmitting] = useState(false);
   
@@ -24,9 +25,15 @@ export function CreateTaskDialog({ isOpen, onOpenChange, initialDate = new Date(
 
   useEffect(() => {
     if (isOpen) {
-      setDate(format(initialDate, "yyyy-MM-dd"));
+      if (taskToEdit) {
+        setTitle(taskToEdit.title);
+        setDate(taskToEdit.due_date ? taskToEdit.due_date.substring(0, 10) : format(initialDate, "yyyy-MM-dd"));
+      } else {
+        setTitle("");
+        setDate(format(initialDate, "yyyy-MM-dd"));
+      }
     }
-  }, [isOpen, initialDate]);
+  }, [isOpen, initialDate, taskToEdit]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -39,20 +46,27 @@ export function CreateTaskDialog({ isOpen, onOpenChange, initialDate = new Date(
     try {
       setIsSubmitting(true);
       
-      await upsertTask.mutateAsync({
+      const payload: any = {
         title,
         due_date: new Date(`${date}T12:00:00`).toISOString(),
-        is_completed: false,
-        is_commitment: false // For now, we just create simple tasks
-      });
+      };
+      
+      if (taskToEdit) {
+        payload.id = taskToEdit.id;
+      } else {
+        payload.is_completed = false;
+        payload.is_commitment = false;
+      }
 
-      showSuccess("Tarefa criada com sucesso!");
+      await upsertTask.mutateAsync(payload);
+
+      showSuccess(taskToEdit ? "Tarefa atualizada com sucesso!" : "Tarefa criada com sucesso!");
       
       // Reset & close
       setTitle("");
       onOpenChange(false);
     } catch (error: any) {
-      showError(error.message || "Erro ao criar tarefa.");
+      showError(error.message || "Erro ao salvar tarefa.");
     } finally {
       setIsSubmitting(false);
     }
@@ -62,7 +76,7 @@ export function CreateTaskDialog({ isOpen, onOpenChange, initialDate = new Date(
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
-          <DialogTitle>Nova Tarefa</DialogTitle>
+          <DialogTitle>{taskToEdit ? "Editar Tarefa" : "Nova Tarefa"}</DialogTitle>
         </DialogHeader>
         
         <form onSubmit={handleSubmit} className="space-y-4 mt-4">

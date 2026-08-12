@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect } from "react";
 import { format, addDays, subDays, startOfWeek, isSameDay, isBefore, startOfDay, endOfDay, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { ChevronLeft, ChevronRight, Check, Plus, Loader2, Calendar as CalendarIcon, ExternalLink, Settings, CheckSquare } from "lucide-react";
+import { ChevronLeft, ChevronRight, Check, Plus, Loader2, Calendar as CalendarIcon, ExternalLink, Settings, CheckSquare, MoreVertical, Edit2, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -12,6 +12,7 @@ import { supabase } from "@/lib/supabase";
 import { showError } from "@/utils/toast";
 import { CreateEventDialog } from "./CreateEventDialog";
 import { CreateTaskDialog } from "./CreateTaskDialog";
+import { useSuperTasks } from "@/hooks/useSuperTasks";
 
 interface Task {
   id: string;
@@ -36,6 +37,8 @@ export function WeeklyTaskCalendar({ tenantId, userId }: WeeklyTaskCalendarProps
   const [isConnecting, setIsConnecting] = useState(false);
   const [isEventDialogOpen, setIsEventDialogOpen] = useState(false);
   const [isTaskDialogOpen, setIsTaskDialogOpen] = useState(false);
+  const [taskToEdit, setTaskToEdit] = useState<{ id: string; title: string; due_date: string | null } | null>(null);
+  const { deleteTask } = useSuperTasks(tenantId);
 
   // Carrega seleção do localStorage ao iniciar
   const [selectedCalendarIds, setSelectedCalendarIds] = useState<string[]>(() => {
@@ -356,7 +359,7 @@ export function WeeklyTaskCalendar({ tenantId, userId }: WeeklyTaskCalendarProps
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-48">
-                  <DropdownMenuItem onClick={() => setIsTaskDialogOpen(true)} className="cursor-pointer py-2">
+                  <DropdownMenuItem onClick={() => { setTaskToEdit(null); setIsTaskDialogOpen(true); }} className="cursor-pointer py-2">
                     <CheckSquare className="w-4 h-4 mr-2" />
                     Nova Tarefa
                   </DropdownMenuItem>
@@ -367,7 +370,7 @@ export function WeeklyTaskCalendar({ tenantId, userId }: WeeklyTaskCalendarProps
                 </DropdownMenuContent>
               </DropdownMenu>
             ) : (
-              <Button size="sm" onClick={() => setIsTaskDialogOpen(true)} className="rounded-full bg-indigo-600 hover:bg-indigo-700 text-white border-none shadow-sm h-8 px-4">
+              <Button size="sm" onClick={() => { setTaskToEdit(null); setIsTaskDialogOpen(true); }} className="rounded-full bg-indigo-600 hover:bg-indigo-700 text-white border-none shadow-sm h-8 px-4">
                 <Plus className="w-4 h-4 mr-1" />
                 Nova tarefa
               </Button>
@@ -435,7 +438,7 @@ export function WeeklyTaskCalendar({ tenantId, userId }: WeeklyTaskCalendarProps
                   </div>
                   <div className="divide-y divide-slate-100">
                     {displayedItems.filter(i => !i.is_event).map(item => (
-                      <div key={item.id} className={`p-4 flex items-center gap-4 hover:bg-slate-50/50 transition-colors border-b border-slate-100 last:border-0 ${item.is_completed ? 'opacity-50' : ''}`}>
+                      <div key={item.id} className={`group p-4 flex items-center gap-4 hover:bg-slate-50/50 transition-colors border-b border-slate-100 last:border-0 ${item.is_completed ? 'opacity-50' : ''}`}>
                         <button 
                           onClick={() => toggleTaskCompleted(item.id, item.is_completed, item.due_date)}
                           className={`w-5 h-5 rounded flex-shrink-0 flex items-center justify-center border transition-all ${
@@ -463,6 +466,36 @@ export function WeeklyTaskCalendar({ tenantId, userId }: WeeklyTaskCalendarProps
                           }`}>
                             {item.is_completed ? 'Concluída' : item.is_commitment ? 'Combinado' : 'Trabalho'}
                           </span>
+
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-slate-600 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <MoreVertical className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem onClick={() => {
+                                setTaskToEdit({ id: item.id, title: item.title, due_date: item.due_date });
+                                setIsTaskDialogOpen(true);
+                              }}>
+                                <Edit2 className="h-4 w-4 mr-2" /> Editar
+                              </DropdownMenuItem>
+                              <DropdownMenuItem 
+                                className="text-red-600 focus:text-red-600"
+                                onClick={async () => {
+                                  if (confirm("Tem certeza que deseja excluir esta tarefa?")) {
+                                    try {
+                                      await deleteTask.mutateAsync(item.id);
+                                    } catch (e: any) {
+                                      showError(e.message);
+                                    }
+                                  }
+                                }}
+                              >
+                                <Trash2 className="h-4 w-4 mr-2" /> Excluir
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
                         </div>
                       </div>
                     ))}
@@ -524,9 +557,13 @@ export function WeeklyTaskCalendar({ tenantId, userId }: WeeklyTaskCalendarProps
       
       <CreateTaskDialog
         isOpen={isTaskDialogOpen}
-        onOpenChange={setIsTaskDialogOpen}
+        onOpenChange={(open) => {
+          setIsTaskDialogOpen(open);
+          if (!open) setTaskToEdit(null);
+        }}
         initialDate={selectedDate}
         tenantId={tenantId}
+        taskToEdit={taskToEdit}
       />
     </div>
   );
