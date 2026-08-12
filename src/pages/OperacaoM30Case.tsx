@@ -1347,6 +1347,19 @@ export default function OperacaoM30Case() {
         }
     });
 
+    const groupedUserGoals = useMemo(() => {
+        if (!activeUserGoalsQ.data) return [];
+        const map = new Map<string, string>();
+        activeUserGoalsQ.data.forEach(g => {
+            if (!map.has(g.metric_key)) {
+                // Tenta limpar prefixos comuns de nível (MMIN, MMED, MEXT, etc)
+                let cleanName = g.name.replace(/^(MMIN|MMED|MEXT|MIN|MED|MAX)\s*:\s*/i, "");
+                map.set(g.metric_key, cleanName);
+            }
+        });
+        return Array.from(map.entries()).map(([metric_key, label]) => ({ metric_key, label }));
+    }, [activeUserGoalsQ.data]);
+
     const activeParticipantQ = useQuery({
         queryKey: ["active_participant", activeTenantId, user?.id],
         enabled: Boolean(activeTenantId && user?.id),
@@ -1928,7 +1941,7 @@ export default function OperacaoM30Case() {
                                                         </DialogDescription>
                                                     </DialogHeader>
                                                     
-                                                    {activeUserGoalsQ.data && activeUserGoalsQ.data.length > 0 && activeParticipantQ.data ? (
+                                                    {groupedUserGoals && groupedUserGoals.length > 0 && activeParticipantQ.data ? (
                                                         <div className="mt-4 space-y-3">
                                                             <label className="text-sm font-medium text-slate-700">Esta tarefa contribui para qual das suas metas?</label>
                                                             <Select value={selectedGoalMetric} onValueChange={setSelectedGoalMetric}>
@@ -1937,9 +1950,9 @@ export default function OperacaoM30Case() {
                                                                 </SelectTrigger>
                                                                 <SelectContent className="rounded-2xl">
                                                                     <SelectItem value="none" className="rounded-xl">Não pontuar meta</SelectItem>
-                                                                    {activeUserGoalsQ.data.map(g => (
-                                                                        <SelectItem key={g.id} value={g.metric_key} className="rounded-xl">
-                                                                            {g.name}
+                                                                    {groupedUserGoals.map(g => (
+                                                                        <SelectItem key={g.metric_key} value={g.metric_key} className="rounded-xl">
+                                                                            {g.label}
                                                                         </SelectItem>
                                                                     ))}
                                                                 </SelectContent>
