@@ -940,7 +940,7 @@ export function AppShell({
     <div className="min-h-screen bg-[hsl(var(--byfrost-bg))]">
       <div className="w-full px-3 py-3 md:px-5 md:py-4">
         <div className={cn(
-          "grid gap-3 transition-all duration-500 ease-in-out md:gap-5 h-full",
+          "grid gap-3 transition-all duration-500 ease-in-out md:gap-6 h-full",
           isSuperTasksOpen ? "md:grid-cols-[96px_1fr_350px]" : "md:grid-cols-[96px_1fr]"
         )}>
           {/* Sidebar (desktop) */}
@@ -1005,8 +1005,8 @@ export function AppShell({
               )}
             </div>
 
-            <div className="flex-1 overflow-y-auto p-3 scrollbar-hide">
-              <div className="grid justify-items-center gap-2">
+            <div className="flex-1 overflow-y-auto py-4 scrollbar-hide">
+              <div className="grid justify-items-center gap-3">
                 <NavTile to={prefs.startRoute || "/app"} icon={LayoutGrid} label="Dashboard" disabled={!can("app.dashboard")} />
                 {hasTrello && <NavTile to="/app/trello" icon={KanbanSquare} label="Tarefas" disabled={!can("app.trello")} />}
                 {hasOperacaoM30 && (
