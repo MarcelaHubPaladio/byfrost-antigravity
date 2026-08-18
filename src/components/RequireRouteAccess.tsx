@@ -4,8 +4,23 @@ import { useQuery } from "@tanstack/react-query";
 import { useTenant } from "@/providers/TenantProvider";
 import { AccessRedirect } from "@/components/AccessRedirect";
 import { checkRouteAccess, findFirstAllowedRoute } from "@/lib/access";
+import { RequireAuth } from "@/components/RequireAuth";
 
 export function RequireRouteAccess({
+  routeKey,
+  children,
+}: {
+  routeKey: string;
+  children: ReactNode;
+}) {
+  return (
+    <RequireAuth>
+      <RequireRouteAccessInner routeKey={routeKey}>{children}</RequireRouteAccessInner>
+    </RequireAuth>
+  );
+}
+
+function RequireRouteAccessInner({
   routeKey,
   children,
 }: {

@@ -1,4 +1,5 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,6 +15,20 @@ type Mode = "signin" | "signup" | "forgot";
 export default function Login() {
   const [mode, setMode] = useState<Mode>("signin");
   const [busy, setBusy] = useState(false);
+
+  const loc = useLocation();
+  const nav = useNavigate();
+
+  useEffect(() => {
+    if (loc.state?.reason === "unauthorized") {
+      showError("Sua sessão expirou ou você precisa fazer login para acessar esta área.");
+      
+      // Clear the state so it doesn't show again on refresh
+      const stateWithoutReason = { ...loc.state };
+      delete stateWithoutReason.reason;
+      nav(loc.pathname, { replace: true, state: stateWithoutReason });
+    }
+  }, [loc.state, loc.pathname, nav]);
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
