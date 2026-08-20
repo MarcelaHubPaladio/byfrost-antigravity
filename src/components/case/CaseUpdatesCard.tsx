@@ -56,6 +56,9 @@ export function CaseUpdatesCard({ caseId, tenantId }: CaseUpdatesCardProps) {
   const [category, setCategory] = useState("faturamento");
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editCategory, setEditCategory] = useState("faturamento");
+  const [editText, setEditText] = useState("");
 
   const { data: updates, isLoading } = useQuery({
     queryKey: ["case_updates", caseId],
@@ -120,6 +123,33 @@ export function CaseUpdatesCard({ caseId, tenantId }: CaseUpdatesCardProps) {
       showError(`Falha ao excluir: ${e.message}`);
     } finally {
       setDeletingId(null);
+    }
+  };
+
+  const handleEdit = async () => {
+    if (!editingId || !editText.trim() || !tenantId) return;
+    setSaving(true);
+    try {
+      const { error } = await supabase
+        .from("timeline_events")
+        .update({
+          message: editText.trim(),
+          meta_json: { category: editCategory },
+        })
+        .eq("tenant_id", tenantId)
+        .eq("id", editingId);
+
+      if (error) throw error;
+
+      showSuccess("Atualização editada com sucesso!");
+      setEditingId(null);
+      qc.invalidateQueries({ queryKey: ["case_updates", caseId] });
+      qc.invalidateQueries({ queryKey: ["case_timeline", caseId] });
+      qc.invalidateQueries({ queryKey: ["timeline_events", caseId] });
+    } catch (e: any) {
+      showError(`Falha ao editar: ${e.message}`);
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -203,18 +233,70 @@ export function CaseUpdatesCard({ caseId, tenantId }: CaseUpdatesCardProps) {
                       </span>
                     </div>
 
-                    <button
-                      onClick={() => setDeletingId(up.id)}
-                      className="opacity-0 group-hover:opacity-100 h-8 w-8 rounded-full bg-rose-50 text-rose-500 flex items-center justify-center hover:bg-rose-100 transition-all"
-                      title="Excluir atualização"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
+                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all">
+                      <button
+                        onClick={() => {
+                          setEditingId(up.id);
+                          setEditCategory(up.meta_json?.category || "faturamento");
+                          setEditText(up.message || "");
+                        }}
+                        className="h-8 w-8 rounded-full bg-slate-50 text-slate-500 flex items-center justify-center hover:bg-slate-100 transition-all"
+                        title="Editar atualização"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
+                      </button>
+                      <button
+                        onClick={() => setDeletingId(up.id)}
+                        className="h-8 w-8 rounded-full bg-rose-50 text-rose-500 flex items-center justify-center hover:bg-rose-100 transition-all"
+                        title="Excluir atualização"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
                   </div>
                   
-                  <p className="text-sm text-slate-700 leading-relaxed font-medium">
-                    {up.message}
-                  </p>
+                  {editingId === up.id ? (
+                    <div className="mt-3 flex flex-col gap-3 bg-slate-50/50 p-4 rounded-2xl border border-slate-100">
+                      <Select value={editCategory} onValueChange={setEditCategory}>
+                        <SelectTrigger className="w-[160px] h-9 rounded-xl border-slate-200 bg-white text-xs font-bold">
+                          <SelectValue placeholder="Categoria" />
+                        </SelectTrigger>
+                        <SelectContent className="rounded-2xl border-slate-200">
+                          {UPDATE_CATEGORIES.map((cat) => (
+                            <SelectItem key={cat.value} value={cat.value} className="text-xs font-semibold">
+                              {cat.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <Textarea
+                        value={editText}
+                        onChange={(e) => setEditText(e.target.value)}
+                        className="min-h-[80px] rounded-xl border-slate-200 bg-white text-sm focus:ring-blue-500/20 resize-none p-3"
+                      />
+                      <div className="flex justify-end gap-2">
+                        <Button
+                          variant="ghost"
+                          onClick={() => setEditingId(null)}
+                          className="h-9 rounded-xl text-xs font-bold text-slate-500 hover:text-slate-700"
+                        >
+                          Cancelar
+                        </Button>
+                        <Button
+                          onClick={handleEdit}
+                          disabled={saving || !editText.trim()}
+                          className="h-9 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-md shadow-blue-600/20"
+                        >
+                          {saving ? <Clock className="h-3.5 w-3.5 animate-spin mr-1.5" /> : null}
+                          Salvar
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-sm text-slate-700 leading-relaxed font-medium">
+                      {up.message}
+                    </p>
+                  )}
                 </div>
               );
             })}
