@@ -341,7 +341,7 @@ export function NewSalesOrderDialog(props: {
                           {usersQ.data.map((u: any) => (
                             <CommandItem
                               key={`user_${u.user_id}`}
-                              value={u.display_name}
+                              value={`user_${u.user_id} ${u.display_name}`}
                               onSelect={() => {
                                 setUserId(`user_${u.user_id}` === userId ? "" : `user_${u.user_id}`);
                                 setOpenVendor(false);
@@ -365,7 +365,7 @@ export function NewSalesOrderDialog(props: {
                           {vendorsQ.data.map((v: any) => (
                             <CommandItem
                               key={`vendor_${v.id}`}
-                              value={v.display_name}
+                              value={`vendor_${v.id} ${v.display_name}`}
                               onSelect={() => {
                                 setUserId(`vendor_${v.id}` === userId ? "" : `vendor_${v.id}`);
                                 setOpenVendor(false);

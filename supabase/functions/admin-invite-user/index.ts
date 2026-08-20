@@ -236,9 +236,18 @@ serve(async (req) => {
     // Back-compat: keep vendors/leaders tables in sync when role is vendor/leader.
     if (phoneE164 && (role === "vendor" || role === "leader")) {
       const table = role === "vendor" ? "vendors" : "leaders";
+      
+      // Prevent generic phone numbers (like +55 or +1) from causing massive collisions in the upsert.
+      // If the normalized phone is suspiciously short, we append a random UUID so it becomes unique,
+      // forcing the upsert to behave like a clean insert instead of overwriting a valid old record.
+      let safePhoneE164 = phoneE164;
+      if (safePhoneE164.length <= 4) {
+        safePhoneE164 = `${safePhoneE164}_fake_${crypto.randomUUID().slice(0, 8)}`;
+      }
+
       const payload = {
         tenant_id: tenantId,
-        phone_e164: phoneE164,
+        phone_e164: safePhoneE164,
         display_name: displayName,
         active: true,
         deleted_at: null,
