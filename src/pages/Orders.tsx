@@ -1373,7 +1373,7 @@ export default function Orders() {
                     {inventoryOptions
                       .filter(opt => opt.display_name.toLowerCase().includes(inventorySearch.toLowerCase()))
                       .map((opt) => (
-                      <label key={opt.id} className="flex items-center gap-2.5 px-2 py-1.5 rounded-xl cursor-pointer hover:bg-slate-50 transition-colors">
+                      <label key={opt.id} title={opt.display_name} className="flex items-center gap-2.5 px-2 py-1.5 rounded-xl cursor-pointer hover:bg-slate-50 transition-colors">
                         <input
                           type="checkbox"
                           className="accent-blue-600 h-3.5 w-3.5 rounded"
