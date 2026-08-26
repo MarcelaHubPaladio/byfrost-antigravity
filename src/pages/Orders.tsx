@@ -233,6 +233,7 @@ export default function Orders() {
   };
 
   const [q, setQ] = useState("");
+  const [inventorySearch, setInventorySearch] = useState("");
   const [selectedSellerId, setSelectedSellerId] = useState<string>(() => {
     const saved = localStorage.getItem(ORDERS_FILTERS_V2_KEY);
     if (saved) {
@@ -461,9 +462,24 @@ export default function Orders() {
   });
 
   const inventoryOptions = useMemo(() => {
-    if (!inventoryQ.data) return [];
+    const map = new Map<string, { id: string; display_name: string; metadata?: any }>();
+    
+    if (inventoryQ.data) {
+      for (const item of inventoryQ.data) {
+        map.set(item.id, item);
+      }
+    }
+    
+    if (caseDataQ.data?.products) {
+      for (const [id, item] of caseDataQ.data.products.entries()) {
+        if (!map.has(id)) {
+          map.set(id, item);
+        }
+      }
+    }
+
     const options: { id: string; display_name: string }[] = [];
-    for (const item of inventoryQ.data) {
+    for (const item of map.values()) {
       options.push({
         id: item.id,
         display_name: item.display_name,
@@ -480,8 +496,10 @@ export default function Orders() {
         }
       }
     }
+    
+    options.sort((a, b) => (a.display_name || "").localeCompare(b.display_name || ""));
     return options;
-  }, [inventoryQ.data]);
+  }, [inventoryQ.data, caseDataQ.data?.products]);
 
   const projetistasQ = useQuery({
     queryKey: ["projetistas_for_filter", activeTenantId],
@@ -685,7 +703,8 @@ export default function Orders() {
         itemCounts: itemCountsMap, 
         inventory: inventoryIdsMap,
         negativeStockCases: casesWithNegativeStock,
-        orderCommissionCategories
+        orderCommissionCategories,
+        products: productsMap
       };
     },
   });
@@ -1341,8 +1360,19 @@ export default function Orders() {
                       <button onClick={() => setSelectedInventoryIds(new Set())} className="text-[10px] text-blue-600 font-bold hover:underline">Limpar</button>
                     )}
                   </div>
+                  <div className="px-2 mb-2">
+                    <input 
+                      type="text" 
+                      placeholder="Buscar..." 
+                      className="w-full text-xs px-2 py-1.5 border border-slate-200 rounded-lg outline-none focus:border-blue-400 bg-slate-50 focus:bg-white transition-colors"
+                      value={inventorySearch}
+                      onChange={(e) => setInventorySearch(e.target.value)}
+                    />
+                  </div>
                   <div className="max-h-[300px] overflow-y-auto space-y-0.5">
-                    {inventoryOptions.map((opt) => (
+                    {inventoryOptions
+                      .filter(opt => opt.display_name.toLowerCase().includes(inventorySearch.toLowerCase()))
+                      .map((opt) => (
                       <label key={opt.id} className="flex items-center gap-2.5 px-2 py-1.5 rounded-xl cursor-pointer hover:bg-slate-50 transition-colors">
                         <input
                           type="checkbox"
