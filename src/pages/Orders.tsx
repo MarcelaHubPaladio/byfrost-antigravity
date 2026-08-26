@@ -461,46 +461,6 @@ export default function Orders() {
     },
   });
 
-  const inventoryOptions = useMemo(() => {
-    const map = new Map<string, { id: string; display_name: string; metadata?: any }>();
-    
-    if (inventoryQ.data) {
-      for (const item of inventoryQ.data) {
-        map.set(item.id, item);
-      }
-    }
-    
-    if (caseDataQ.data?.products) {
-      for (const [id, item] of caseDataQ.data.products.entries()) {
-        if (!map.has(id)) {
-          map.set(id, item);
-        }
-      }
-    }
-
-    const options: { id: string; display_name: string }[] = [];
-    for (const item of map.values()) {
-      options.push({
-        id: item.id,
-        display_name: item.display_name,
-      });
-      const metadata = item.metadata as any;
-      if (metadata && Array.isArray(metadata.configurations)) {
-        for (const config of metadata.configurations) {
-          if (config.name) {
-            options.push({
-              id: `${item.id}:${config.id}`,
-              display_name: `${item.display_name} - ${config.name}`,
-            });
-          }
-        }
-      }
-    }
-    
-    options.sort((a, b) => (a.display_name || "").localeCompare(b.display_name || ""));
-    return options;
-  }, [inventoryQ.data, caseDataQ.data?.products]);
-
   const projetistasQ = useQuery({
     queryKey: ["projetistas_for_filter", activeTenantId],
     enabled: Boolean(activeTenantId),
@@ -708,6 +668,46 @@ export default function Orders() {
       };
     },
   });
+
+  const inventoryOptions = useMemo(() => {
+    const map = new Map<string, { id: string; display_name: string; metadata?: any }>();
+    
+    if (inventoryQ.data) {
+      for (const item of inventoryQ.data) {
+        map.set(item.id, item);
+      }
+    }
+    
+    if (caseDataQ.data?.products) {
+      for (const [id, item] of caseDataQ.data.products.entries()) {
+        if (!map.has(id)) {
+          map.set(id, item);
+        }
+      }
+    }
+
+    const options: { id: string; display_name: string }[] = [];
+    for (const item of map.values()) {
+      options.push({
+        id: item.id,
+        display_name: item.display_name,
+      });
+      const metadata = item.metadata as any;
+      if (metadata && Array.isArray(metadata.configurations)) {
+        for (const config of metadata.configurations) {
+          if (config.name) {
+            options.push({
+              id: `${item.id}:${config.id}`,
+              display_name: `${item.display_name} - ${config.name}`,
+            });
+          }
+        }
+      }
+    }
+    
+    options.sort((a, b) => (a.display_name || "").localeCompare(b.display_name || ""));
+    return options;
+  }, [inventoryQ.data, caseDataQ.data?.products]);
 
   const updateBillingStatus = async (caseId: string, status: string) => {
     if (status === "Faturado Parcial") {
