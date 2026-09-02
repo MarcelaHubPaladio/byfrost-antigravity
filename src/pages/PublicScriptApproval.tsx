@@ -659,24 +659,28 @@ export default function PublicScriptApproval() {
                 )}
 
                 {/* Terms Note */}
-                <p className="text-[11px] text-slate-400 text-center px-10 leading-relaxed font-medium">
-                    Ao aprovar este roteiro, você concorda com os termos de produção e autoriza o início da gravação/edição.
-                </p>
+                {!teleprompterMode && (
+                    <p className="text-[11px] text-slate-400 text-center px-10 leading-relaxed font-medium">
+                        Ao aprovar este roteiro, você concorda com os termos de produção e autoriza o início da gravação/edição.
+                    </p>
+                )}
             </main>
 
-            <footer className="fixed bottom-0 left-0 right-0 bg-slate-950/80 backdrop-blur-xl border-t border-white/5 p-6 z-20">
-                <div className="mx-auto max-w-2xl">
-                    <Button 
-                        onClick={handleApprove}
-                        disabled={approving}
-                        style={{ backgroundColor: primaryColor, color: primaryText }}
-                        className="w-full h-14 rounded-2xl font-black text-base shadow-2xl transition-all active:scale-95 gap-3 hover:opacity-90"
-                    >
-                        {approving ? <Loader2 className="h-5 w-5 animate-spin" /> : <CheckCircle2 className="h-5 w-5" />}
-                        APROVAR ROTEIROS AGORA
-                    </Button>
-                </div>
-            </footer>
+            {!teleprompterMode && (
+                <footer className="fixed bottom-0 left-0 right-0 bg-slate-950/80 backdrop-blur-xl border-t border-white/5 p-6 z-20">
+                    <div className="mx-auto max-w-2xl">
+                        <Button 
+                            onClick={handleApprove}
+                            disabled={approving}
+                            style={{ backgroundColor: primaryColor, color: primaryText }}
+                            className="w-full h-14 rounded-2xl font-black text-base shadow-2xl transition-all active:scale-95 gap-3 hover:opacity-90"
+                        >
+                            {approving ? <Loader2 className="h-5 w-5 animate-spin" /> : <CheckCircle2 className="h-5 w-5" />}
+                            APROVAR ROTEIROS AGORA
+                        </Button>
+                    </div>
+                </footer>
+            )}
         </div>
         </PublicPortalShell>
     );
