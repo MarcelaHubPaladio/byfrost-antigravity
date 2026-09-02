@@ -381,8 +381,7 @@ export default function PublicScriptApproval() {
                 {teleprompterMode ? (
                     <div className="space-y-12 pb-24 animate-in fade-in slide-in-from-bottom-4 duration-500">
                         {subtasks.map((st, idx) => {
-                            const currentItems = subtaskData[idx]?.script_items || st.script_items;
-                            if (!currentItems || currentItems.length === 0) return null;
+                            const currentItems = subtaskData[idx]?.script_items || st.script_items || [];
                             
                             return (
                                 <div key={idx} className="space-y-6">
