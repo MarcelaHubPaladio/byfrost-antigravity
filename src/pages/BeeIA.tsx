@@ -3026,6 +3026,10 @@ function BeeIAPlugsTab({
   const [catalogImageUrl, setCatalogImageUrl] = useState("");
   const [catalogTriggerInstructions, setCatalogTriggerInstructions] = useState("Sempre que o cliente pedir o catálogo, portfólio ou cardápio de produtos.");
 
+  const [xmlApolarUrl, setXmlApolarUrl] = useState("");
+  const [xmlApolarEndpoint, setXmlApolarEndpoint] = useState("");
+  const [xmlApolarToken, setXmlApolarToken] = useState("");
+
   const googleCalendarsQ = useQuery({
     queryKey: ["google_calendars"],
     queryFn: async () => {
@@ -3087,6 +3091,13 @@ function BeeIAPlugsTab({
         if (catalogPlug.config_json?.trigger_instructions) {
           setCatalogTriggerInstructions(catalogPlug.config_json?.trigger_instructions);
         }
+      }
+
+      const apolarPlug = plugs.find((p) => p.plug_key === "xml_apolar");
+      if (apolarPlug) {
+        setXmlApolarUrl(apolarPlug.config_json?.xml_url || "");
+        setXmlApolarEndpoint(apolarPlug.config_json?.endpoint || "");
+        setXmlApolarToken(apolarPlug.config_json?.token || "");
       }
     }
   }, [plugs]);
@@ -3153,6 +3164,27 @@ function BeeIAPlugsTab({
       trigger_instructions: catalogTriggerInstructions,
     });
   };
+
+  const handleSaveXmlApolar = () => {
+    onSave("xml_apolar", isPlugEnabled("xml_apolar"), {
+      xml_url: xmlApolarUrl,
+      endpoint: xmlApolarEndpoint,
+      token: xmlApolarToken,
+    });
+  };
+
+  const pingXmlApolarMut = useMutation({
+    mutationFn: async () => {
+      if (!xmlApolarUrl) throw new Error("A URL do XML é obrigatória para o teste.");
+      const { data, error } = await supabase.functions.invoke("integrations-apolar-ping", {
+        body: { xml_url: xmlApolarUrl }
+      });
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => showSuccess("XML acessado com sucesso! Link operante."),
+    onError: (err: any) => showError("Erro ao acessar XML: " + err.message)
+  });
 
   const handleToggleField = (field: string) => {
     if (entAllowedFields.includes(field)) {
@@ -3770,6 +3802,95 @@ function BeeIAPlugsTab({
           )}
         </Card>
 
+        {/* Plug 8: XML Apolar */}
+        <Card className="rounded-[22px] border-slate-200/80 p-5 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900 transition-all hover:border-slate-350 dark:hover:border-slate-700">
+          <div className="flex items-center justify-between gap-4 border-b border-slate-100 pb-3 dark:border-slate-850">
+            <div className="flex items-center gap-3">
+              <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-orange-100 text-orange-600 dark:bg-orange-950/40 dark:text-orange-400">
+                <BookOpen className="h-5 w-5" />
+              </span>
+              <div>
+                <h4 className="font-semibold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+                  Repertório de Imóveis (XML Apolar) <span className="text-[10px] font-bold bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full dark:bg-amber-900/50 dark:text-amber-400">NOVO</span>
+                </h4>
+                <p className="text-[11px] text-slate-500 mt-0.5">
+                  Permite à Beeia acessar o XML da Apolar para consultar imóveis e enviar fotos e informações para o cliente.
+                </p>
+              </div>
+            </div>
+            <Switch
+              checked={isPlugEnabled("xml_apolar")}
+              disabled={isSaving}
+              onCheckedChange={(checked) => handleTogglePlug("xml_apolar", checked)}
+            />
+          </div>
+
+          {isPlugEnabled("xml_apolar") && (
+            <div className="mt-4 flex flex-col gap-4 animate-in fade-in slide-in-from-top-2 duration-200">
+              <div className="flex flex-col gap-1.5">
+                <Label className="text-[10px] font-bold uppercase text-slate-400 tracking-wider">
+                  Link do XML
+                </Label>
+                <Input
+                  value={xmlApolarUrl}
+                  onChange={(e) => setXmlApolarUrl(e.target.value)}
+                  placeholder="Ex: https://imoveisxml.apolar.net/PadraoLais..."
+                  className="rounded-xl border-slate-200 text-xs dark:border-slate-850"
+                />
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="flex flex-col gap-1.5">
+                  <Label className="text-[10px] font-bold uppercase text-slate-400 tracking-wider">
+                    Endpoint de Produção
+                  </Label>
+                  <Input
+                    value={xmlApolarEndpoint}
+                    onChange={(e) => setXmlApolarEndpoint(e.target.value)}
+                    placeholder="Ex: https://sales2.ops.digital/api/1.1/wf/..."
+                    className="rounded-xl border-slate-200 text-xs dark:border-slate-850"
+                  />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <Label className="text-[10px] font-bold uppercase text-slate-400 tracking-wider">
+                    Authorization Token
+                  </Label>
+                  <Input
+                    value={xmlApolarToken}
+                    onChange={(e) => setXmlApolarToken(e.target.value)}
+                    placeholder="Token Bearer..."
+                    className="rounded-xl border-slate-200 text-xs dark:border-slate-850"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between border-t border-slate-100 pt-3 dark:border-slate-850 mt-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => pingXmlApolarMut.mutate()}
+                  disabled={pingXmlApolarMut.isPending}
+                  className="rounded-xl border-slate-200 text-xs px-4 dark:border-slate-800"
+                >
+                  {pingXmlApolarMut.isPending ? (
+                    <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Webhook className="mr-1.5 h-3.5 w-3.5" />
+                  )}
+                  Testar Acesso ao XML
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={handleSaveXmlApolar}
+                  disabled={isSaving}
+                  className="rounded-xl bg-slate-900 text-white font-semibold text-xs px-4 dark:bg-slate-50 dark:text-slate-950"
+                >
+                  <Save className="mr-1.5 h-3.5 w-3.5" /> Salvar Configurações
+                </Button>
+              </div>
+            </div>
+          )}
+        </Card>
       </div>
     </div>
   );
