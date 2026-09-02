@@ -3180,10 +3180,13 @@ function BeeIAPlugsTab({
         body: { xml_url: xmlApolarUrl }
       });
       if (error) throw error;
+      if (data && data.success === false) {
+        throw new Error(data.error || "O servidor não conseguiu acessar o XML.");
+      }
       return data;
     },
     onSuccess: () => showSuccess("XML acessado com sucesso! Link operante."),
-    onError: (err: any) => showError("Erro ao acessar XML: " + err.message)
+    onError: (err: any) => showError("Erro: " + err.message)
   });
 
   const handleToggleField = (field: string) => {

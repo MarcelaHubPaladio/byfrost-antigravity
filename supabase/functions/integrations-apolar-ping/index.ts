@@ -22,11 +22,15 @@ serve(async (req) => {
       method: "GET",
       headers: {
         "Accept": "application/xml, text/xml, */*",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
       }
     });
 
     if (!response.ok) {
-      throw new Error(`Failed to fetch XML: ${response.status} ${response.statusText}`);
+      return new Response(
+        JSON.stringify({ success: false, error: `Falha ao acessar o link: o servidor retornou código ${response.status} (${response.statusText}). Verifique se o link está correto ou se exige autenticação/liberação de IP.` }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
+      );
     }
 
     // Optionally check if the content-type is xml or just return success
@@ -40,10 +44,10 @@ serve(async (req) => {
     );
   } catch (error: any) {
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ success: false, error: `Erro na comunicação: ${error.message}` }),
       {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
-        status: 400,
+        status: 200,
       }
     );
   }
