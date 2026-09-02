@@ -4,7 +4,7 @@ import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { CheckCircle2, FileText, ListChecks, Loader2, AlertCircle, Mic, Square, Trash, Image as ImageIcon, Camera, Save } from "lucide-react";
+import { CheckCircle2, FileText, ListChecks, Loader2, AlertCircle, Mic, Square, Trash, Image as ImageIcon, Camera, Save, MonitorPlay } from "lucide-react";
 import { useRef } from "react";
 import { showSuccess, showError } from "@/utils/toast";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
@@ -24,11 +24,20 @@ export default function PublicScriptApproval() {
     const [savingItem, setSavingItem] = useState<{subIdx: number, itemIdx: number} | null>(null);
     const mediaRecorderRef = useRef<MediaRecorder | null>(null);
     const audioChunksRef = useRef<Blob[]>([]);
-
+    
+    const [teleprompterMode, setTeleprompterMode] = useState(false);
 
     useEffect(() => {
+        const savedMode = localStorage.getItem('m30-teleprompter-mode');
+        if (savedMode) setTeleprompterMode(savedMode === 'true');
         fetchCase();
     }, [token]);
+
+    const toggleTeleprompterMode = () => {
+        const newVal = !teleprompterMode;
+        setTeleprompterMode(newVal);
+        localStorage.setItem('m30-teleprompter-mode', newVal.toString());
+    };
 
     const fetchCase = async () => {
         if (!token) return;
@@ -159,6 +168,12 @@ export default function PublicScriptApproval() {
         );
         
         setSubtaskData(newData);
+        
+        // Auto-save imediatamente
+        if (token) {
+            const payload = { ...subtasks[subIdx], ...newData[subIdx] };
+            supabase.rpc('update_public_m30_subtask_meta', { p_token: token, p_idx: subIdx, p_subtask: payload }).catch(console.error);
+        }
     };
 
     const handleItemCommentChange = (subIdx: number, itemIdx: number, text: string) => {
@@ -327,7 +342,76 @@ export default function PublicScriptApproval() {
             </header>
 
             <main className="mx-auto max-w-2xl px-6 py-10 space-y-10">
-                {hasSubtasks ? (
+                <div className="flex justify-end">
+                    <Button 
+                        variant={teleprompterMode ? "default" : "outline"}
+                        size="sm"
+                        onClick={toggleTeleprompterMode}
+                        className={cn(
+                            "gap-2 text-[10px] font-bold uppercase tracking-widest",
+                            teleprompterMode ? "bg-primary text-primary-foreground hover:bg-primary/90 border-transparent shadow-lg shadow-primary/20" : "bg-slate-900 text-slate-300 border-slate-800"
+                        )}
+                    >
+                        <MonitorPlay className="h-4 w-4" />
+                        {teleprompterMode ? "Sair do Teleprompter" : "Modo Teleprompter (Leitura)"}
+                    </Button>
+                </div>
+
+                {teleprompterMode ? (
+                    <div className="space-y-12 pb-24 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                        {subtasks.map((st, idx) => {
+                            const currentItems = subtaskData[idx]?.script_items || st.script_items;
+                            if (!currentItems || currentItems.length === 0) return null;
+                            
+                            return (
+                                <div key={idx} className="space-y-6">
+                                    <div className="border-b border-slate-800 pb-4">
+                                        <h2 className="text-2xl font-black text-slate-100">{st.title}</h2>
+                                        {st.description && (
+                                            <div 
+                                                className="mt-2 text-xs text-slate-500 max-h-32 overflow-y-auto prose prose-invert prose-sm"
+                                                dangerouslySetInnerHTML={{ __html: st.description }}
+                                            />
+                                        )}
+                                    </div>
+                                    
+                                    <div className="space-y-4">
+                                        {currentItems.map((item: any, i: number) => {
+                                            const isChecked = !!item.checked;
+                                            return (
+                                                <div 
+                                                    key={i} 
+                                                    onClick={() => handleCheckItem(idx, i)}
+                                                    className={cn(
+                                                        "p-6 rounded-3xl cursor-pointer transition-all border-2 select-none",
+                                                        isChecked 
+                                                            ? "bg-slate-950/50 border-slate-800/30 opacity-40 scale-[0.98]" 
+                                                            : "bg-slate-900 border-slate-700 hover:border-primary/50 shadow-xl shadow-black/40"
+                                                    )}
+                                                >
+                                                    <div className="flex gap-6 items-start">
+                                                        <div className={cn(
+                                                            "h-8 w-8 rounded-full border-4 mt-1 shrink-0 flex items-center justify-center transition-colors",
+                                                            isChecked ? "bg-primary border-primary text-white" : "border-slate-600"
+                                                        )}>
+                                                            {isChecked && <CheckCircle2 className="h-5 w-5" />}
+                                                        </div>
+                                                        <span className={cn(
+                                                            "text-2xl md:text-3xl font-black leading-tight flex-1",
+                                                            isChecked ? "line-through text-slate-500" : "text-white"
+                                                        )}>
+                                                            {item.text}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                ) : hasSubtasks ? (
                     <div className="space-y-6">
                         <div className="flex items-center justify-between px-2">
                             <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
@@ -413,10 +497,10 @@ export default function PublicScriptApproval() {
                                                             className={`flex flex-col gap-2 p-4 bg-slate-950 border border-slate-800 rounded-2xl social-item shadow-sm ${isChecked ? 'opacity-60' : ''}`}
                                                         >
                                                             <div 
-                                                                onClick={() => isGravacaoCase && !st.is_approved ? handleCheckItem(idx, i) : null}
-                                                                className={`flex gap-3 ${isGravacaoCase && !st.is_approved ? 'cursor-pointer hover:opacity-80 transition-opacity' : ''}`}
+                                                                onClick={() => !st.is_approved ? handleCheckItem(idx, i) : null}
+                                                                className={`flex gap-3 ${!st.is_approved ? 'cursor-pointer hover:opacity-80 transition-opacity' : ''}`}
                                                             >
-                                                                {isGravacaoCase ? (
+                                                                {true ? (
                                                                     <div className={`h-5 w-5 rounded border-2 mt-0.5 shrink-0 flex items-center justify-center transition-colors ${isChecked ? 'bg-primary border-primary text-white' : 'border-slate-700'}`}>
                                                                         {isChecked && <CheckCircle2 className="h-3 w-3" />}
                                                                     </div>
