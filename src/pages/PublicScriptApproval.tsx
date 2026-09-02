@@ -327,35 +327,56 @@ export default function PublicScriptApproval() {
     return (
         <PublicPortalShell palette={{ ...palette, primary: { hex: primaryColor, text: primaryText } }}>
         <div className="min-h-screen bg-slate-950 pb-24 font-sans text-slate-300">
-            <header className="bg-slate-900/50 backdrop-blur-xl border-b border-white/5 px-6 py-4 text-center sticky top-0 z-10 shadow-sm">
-                <div className="mx-auto max-w-2xl">
-                    <Badge variant="outline" className="mb-2 bg-primary/10 text-primary border-primary/20 px-3 py-1 text-[10px] uppercase font-black tracking-widest">
-                        Aprovação de Roteiro
-                    </Badge>
-                    <h1 className="text-xl font-black text-white leading-tight">
-                        {caseData.title || "Roteiro M30"}
-                    </h1>
-                    <p className="mt-1 text-xs text-slate-400 font-medium">
-                        Cliente: <span className="text-slate-300">{caseData.customer_name || "M30 Client"}</span>
-                    </p>
-                </div>
-            </header>
-
-            <main className="mx-auto max-w-2xl px-6 py-10 space-y-10">
-                <div className="flex justify-end">
+            {teleprompterMode ? (
+                <header className="bg-rose-950/30 backdrop-blur-xl border-b border-rose-500/20 px-4 md:px-12 py-3 sticky top-0 z-10 shadow-sm flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                        <div className="h-2 w-2 rounded-full bg-rose-500 animate-pulse shrink-0" />
+                        <span className="text-xs font-black text-rose-500 uppercase tracking-widest">Modo Gravação</span>
+                        <span className="text-slate-600">|</span>
+                        <span className="text-xs font-medium text-slate-300 truncate max-w-[150px] sm:max-w-[300px]">{caseData.customer_name || "M30 Client"}</span>
+                    </div>
                     <Button 
-                        variant={teleprompterMode ? "default" : "outline"}
+                        variant="ghost"
                         size="sm"
                         onClick={toggleTeleprompterMode}
-                        className={cn(
-                            "gap-2 text-[10px] font-bold uppercase tracking-widest",
-                            teleprompterMode ? "bg-primary text-primary-foreground hover:bg-primary/90 border-transparent shadow-lg shadow-primary/20" : "bg-slate-900 text-slate-300 border-slate-800"
-                        )}
+                        className="h-8 gap-2 text-[10px] font-bold uppercase tracking-widest text-slate-400 hover:text-white hover:bg-slate-800"
                     >
-                        <MonitorPlay className="h-4 w-4" />
-                        {teleprompterMode ? "Sair do Teleprompter" : "Modo Teleprompter (Leitura)"}
+                        Sair
                     </Button>
-                </div>
+                </header>
+            ) : (
+                <header className="bg-slate-900/50 backdrop-blur-xl border-b border-white/5 px-6 py-4 text-center sticky top-0 z-10 shadow-sm">
+                    <div className="mx-auto max-w-2xl">
+                        <Badge variant="outline" className="mb-2 bg-primary/10 text-primary border-primary/20 px-3 py-1 text-[10px] uppercase font-black tracking-widest">
+                            Aprovação de Roteiro
+                        </Badge>
+                        <h1 className="text-xl font-black text-white leading-tight">
+                            {caseData.title || "Roteiro M30"}
+                        </h1>
+                        <p className="mt-1 text-xs text-slate-400 font-medium">
+                            Cliente: <span className="text-slate-300">{caseData.customer_name || "M30 Client"}</span>
+                        </p>
+                    </div>
+                </header>
+            )}
+
+            <main className={cn(
+                "mx-auto py-10 space-y-10",
+                teleprompterMode ? "w-full max-w-none px-4 md:px-12" : "max-w-2xl px-6"
+            )}>
+                {!teleprompterMode && (
+                    <div className="flex justify-end">
+                        <Button 
+                            variant="outline"
+                            size="sm"
+                            onClick={toggleTeleprompterMode}
+                            className="gap-2 text-[10px] font-bold uppercase tracking-widest bg-slate-900 text-slate-300 border-slate-800"
+                        >
+                            <MonitorPlay className="h-4 w-4" />
+                            Modo Teleprompter (Leitura)
+                        </Button>
+                    </div>
+                )}
 
                 {teleprompterMode ? (
                     <div className="space-y-12 pb-24 animate-in fade-in slide-in-from-bottom-4 duration-500">
