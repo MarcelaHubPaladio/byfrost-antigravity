@@ -140,7 +140,16 @@ export default function Contracts() {
       const items = c.items || [];
       const totalUnits = items.reduce((acc, it) => acc + Number(it.quantity || 0), 0);
       
-      const deliverables = (c.deliverables || []).filter(d => d.deleted_at === null);
+      let deliverables = (c.deliverables || []).filter(d => d.deleted_at === null);
+      
+      if (c.status === 'completed' || c.status === 'canceled') {
+        deliverables = deliverables.filter(d => 
+          String(d.status || '').toLowerCase() === 'completed' || 
+          String(d.status || '').toLowerCase() === 'done' ||
+          String(d.status || '').toLowerCase() === 'entregue'
+        );
+      }
+
       const totalDeliverables = deliverables.length;
       
       const completedDeliverablescount = deliverables.filter(d => 
@@ -224,10 +233,18 @@ export default function Contracts() {
           isOnTime = false;
           isLate = true;
         }
+
+        if (c.status === 'completed' || c.status === 'canceled') {
+          expectedCompleted = totalDeliverables;
+          expectedCompletedGrouped = totalGroups;
+          isOnTime = true;
+          isLate = false;
+        }
       }
 
       return {
         ...c,
+        deliverables,
         metrics: {
           total: totalDeliverables,
           completed: completedDeliverablescount,
@@ -329,13 +346,13 @@ export default function Contracts() {
     const activeCount = list.filter(c => c.status === 'active').length;
     const completedCount = list.filter(c => c.status === 'completed' || c.metrics.percentage === 100).length;
     
-    const activeWithDeliverables = list.filter(c => c.status === 'active' && c.metrics.total_deliverables > 0);
+    const validForMetrics = list.filter(c => c.status !== 'draft' && c.metrics.total_deliverables > 0);
     
     let totalRealized = 0;
     let totalExpected = 0;
     let totalDeliverables = 0;
     
-    activeWithDeliverables.forEach(c => {
+    validForMetrics.forEach(c => {
       totalRealized += c.metrics.completed;
       totalDeliverables += c.metrics.total_deliverables;
       if (c.metrics.hasTermData) {
@@ -351,7 +368,7 @@ export default function Contracts() {
   }, [baseProcessedContracts]);
 
   const categoryStats = useMemo(() => {
-    const list = baseProcessedContracts.filter(c => c.status === 'active');
+    const list = baseProcessedContracts.filter(c => c.status !== 'draft');
     
     const categories = [
       {
