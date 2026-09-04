@@ -176,7 +176,7 @@ export function MetaConversation({ caseId, className = "" }: { caseId: string; c
                     <p className="text-[14px] whitespace-pre-wrap break-words leading-relaxed">{msg.message_text}</p>
                     
                     <div className={`text-[10px] mt-1 flex items-center justify-end gap-1 ${isInbound ? "text-slate-400" : "text-indigo-200"}`}>
-                      {format(new Date(msg.created_at), "HH:mm")}
+                      {format(new Date(msg.created_at), "dd/MM HH:mm")}
                       {!isInbound && (
                         msg.status === "sent" ? <Check className="w-3 h-3" /> : <Clock className="w-3 h-3" />
                       )}
