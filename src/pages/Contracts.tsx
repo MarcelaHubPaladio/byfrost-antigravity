@@ -136,7 +136,9 @@ export default function Contracts() {
 
   const baseProcessedContracts = useMemo(() => {
     const list = (contractsQ.data ?? []) as ContractWithProgress[];
-    return list.map(c => {
+    return list.map(c_raw => {
+      const normalizedStatus = c_raw.status === 'cancelled' ? 'canceled' : c_raw.status;
+      const c = { ...c_raw, status: normalizedStatus };
       const items = c.items || [];
       const totalUnits = items.reduce((acc, it) => acc + Number(it.quantity || 0), 0);
       

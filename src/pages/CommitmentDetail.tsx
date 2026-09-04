@@ -930,7 +930,7 @@ export default function CommitmentDetail() {
                         <SelectItem value="draft">draft</SelectItem>
                         <SelectItem value="active">active</SelectItem>
                         <SelectItem value="completed">completed</SelectItem>
-                        <SelectItem value="cancelled">cancelled</SelectItem>
+                        <SelectItem value="canceled">canceled</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
