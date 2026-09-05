@@ -62,7 +62,7 @@ import { MetaConversation } from "@/components/case/MetaConversation";
 import { BeeIASimulator } from "@/components/case/BeeIASimulator";
 import { FaWhatsapp, FaInstagram, FaFacebook } from "react-icons/fa";
 import { LabelsManagerModal } from "@/components/case/LabelsManagerModal";
-import { Tags, Edit2, Check } from "lucide-react";
+import { Tags, Edit2, Check, Send } from "lucide-react";
 import { ImageUpload } from "@/components/portal/ImageUpload";
 import { BeeiaBulkSenderModal } from "@/components/case/BeeiaBulkSenderModal";
 
