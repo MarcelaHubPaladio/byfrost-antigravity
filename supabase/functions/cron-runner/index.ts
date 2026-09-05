@@ -4,6 +4,8 @@ import { createSupabaseAdmin } from "../_shared/supabaseAdmin.ts";
 
 const JOBS_PROCESSOR_URL =
   "https://pryoirzeghatrgecwrci.supabase.co/functions/v1/jobs-processor";
+const SMART_CAMPAIGNS_PROCESSOR_URL =
+  "https://pryoirzeghatrgecwrci.supabase.co/functions/v1/smart-campaigns-processor";
 
 function formatYyyyMmDd(date: Date) {
   const y = date.getUTCFullYear();
@@ -55,6 +57,28 @@ serve(async (req) => {
     } catch (e) {
       console.warn(`[${fn}] jobs-processor invoke failed (ignored)`, { e: String(e) });
       jobsProcessor = { ok: false, error: String(e) };
+    }
+
+    // 1.1) Kick smart campaigns processor (best-effort)
+    let smartCampaignsProcessor: any = null;
+    try {
+      const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+      const res = await fetch(SMART_CAMPAIGNS_PROCESSOR_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${serviceRoleKey}`,
+        },
+      });
+      smartCampaignsProcessor = {
+        ok: res.ok,
+        status: res.status,
+        body: await res.text(),
+      };
+      console.log(`[${fn}] smart-campaigns-processor invoked`, { ok: res.ok, status: res.status });
+    } catch (e) {
+      console.warn(`[${fn}] smart-campaigns-processor invoke failed (ignored)`, { e: String(e) });
+      smartCampaignsProcessor = { ok: false, error: String(e) };
     }
 
     const supabase = createSupabaseAdmin();
@@ -294,7 +318,7 @@ serve(async (req) => {
     }
 
     return new Response(
-      JSON.stringify({ ok: true, jobsProcessor, metaPublishEnqueued, escalated, dailySummaryEnqueued, guardiaoEnqueued, date: dateStr, timeZone }),
+      JSON.stringify({ ok: true, jobsProcessor, smartCampaignsProcessor, metaPublishEnqueued, escalated, dailySummaryEnqueued, guardiaoEnqueued, date: dateStr, timeZone }),
       {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       }
