@@ -50,7 +50,7 @@ import { NewOperacaoM30CardDialog } from "@/components/operacao_m30/NewOperacaoM
 import { DateRangePickerCustom } from "@/components/ui/date-range-picker-custom";
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, getDay, isSameMonth, isToday, addMonths, subMonths } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, ClipboardList, MessageSquareWarning, CheckCircle } from "lucide-react";
+import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, ClipboardList, MessageSquareWarning, CheckCircle, DollarSign } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { CreatePostingCalendarDialog } from "@/components/operacao_m30/CreatePostingCalendarDialog";
 import { MetaAdsDashboard } from "@/components/operacao_m30/MetaAdsDashboard";
