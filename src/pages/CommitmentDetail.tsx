@@ -11,7 +11,7 @@ import { RequireRouteAccess } from "@/components/RequireRouteAccess";
 import { RequireTenantRole } from "@/components/RequireTenantRole";
 import { useTenant } from "@/providers/TenantProvider";
 import { supabase } from "@/lib/supabase";
-import { M30_MACRO_STATES, getMacroStateKey } from "@/lib/journeys/m30MacroStates";
+import { M30_MACRO_STATES, getMacroStateKey, calculateStrategyProgress } from "@/lib/journeys/m30MacroStates";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -1927,14 +1927,77 @@ function DeliverableCaseCard({ c, clientLabels, onRefetch }: { c: any, clientLab
 }
 
 function M30KanbanCaseCard({ c, clientLabels, commitmentId, onRefetch }: { c: any, clientLabels: any[], commitmentId: string, onRefetch: () => void }) {
+  const isStrategy = (c.meta_json as any)?.case_type === 'strategy';
+
+  if (isStrategy) {
+      const prog = calculateStrategyProgress((c.meta_json as any)?.pending_subtasks || []);
+      return (
+        <Link 
+          key={c.id} 
+          to={`/app/operacao-m30/${c.id}`}
+          draggable={false}
+          className={cn(
+            "block rounded-xl border bg-white p-3 shadow-sm transition-all hover:shadow-md hover:border-indigo-300 group cursor-pointer",
+            (c.meta_json as any)?.commitment_id === commitmentId ? "ring-2 ring-indigo-500/10 border-indigo-200" : "border-slate-200"
+          )}
+          title="Cards estratégicos atualizam automaticamente"
+        >
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0 flex-1">
+              <div className="truncate text-xs font-black text-indigo-900 leading-tight group-hover:text-indigo-700 transition-colors" title={c.title || "Estratégia"}>
+                {c.title || "Estratégia"}
+              </div>
+              <div className="text-[9px] text-slate-500 font-medium truncate mt-0.5">
+                {(c.meta_json as any)?.strategy_title || "Sem título estratégico"}
+              </div>
+            </div>
+            {((c.meta_json as any)?.labels || []).length > 0 && (
+              <div className="flex flex-wrap gap-1 justify-end shrink-0 max-w-[60px]">
+                {((c.meta_json as any)?.labels || []).map((lblId: string) => {
+                  const lbl = clientLabels.find(l => l.id === lblId);
+                  if (!lbl) return null;
+                  return (
+                    <span key={lbl.id} className="w-2 h-2 rounded-full" style={{ backgroundColor: lbl.color }} title={lbl.name} />
+                  );
+                })}
+              </div>
+            )}
+          </div>
+          
+          <div className="mt-2 space-y-1">
+            <div className="flex items-center justify-between text-[9px] font-bold text-slate-600">
+              <span>Progresso</span>
+              <span>{prog.completed}/{prog.total} ({prog.percentage}%)</span>
+            </div>
+            <div className="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden">
+              <div className="bg-indigo-500 h-full rounded-full transition-all duration-500" style={{ width: `${prog.percentage}%` }} />
+            </div>
+          </div>
+
+          <div className="mt-2 flex items-center justify-between text-[9px] font-medium text-slate-400">
+            <span className="truncate">{new Date(c.updated_at).toLocaleDateString()}</span>
+            {(c.meta_json as any)?.commitment_id === commitmentId && (
+              <Badge variant="outline" className="h-3.5 px-1 py-0 text-[8px] border-indigo-200 text-indigo-500 bg-indigo-50">ESTE CONTRATO</Badge>
+            )}
+          </div>
+        </Link>
+      );
+  }
+
   return (
     <Link 
       key={c.id} 
       to={`/app/operacao-m30/${c.id}`}
+      draggable
+      onDragStart={(e) => {
+        e.dataTransfer.setData("text/caseId", c.id);
+        e.dataTransfer.effectAllowed = "move";
+      }}
       className={cn(
-        "block rounded-xl border bg-white p-3 shadow-sm transition-all hover:shadow-md hover:border-indigo-300 group",
+        "block rounded-xl border bg-white p-3 shadow-sm transition-all hover:shadow-md hover:border-indigo-300 group cursor-grab active:cursor-grabbing",
         (c.meta_json as any)?.commitment_id === commitmentId ? "ring-2 ring-indigo-500/10 border-indigo-200" : "border-slate-200"
       )}
+      title="Arraste para mudar de etapa"
     >
       <div className="flex items-start justify-between gap-2">
         <p className="text-xs font-bold text-slate-900 line-clamp-2 leading-tight group-hover:text-indigo-600 transition-colors">

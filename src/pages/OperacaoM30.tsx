@@ -44,7 +44,7 @@ import { StateMachine } from "@/lib/journeys/types"
 import { GlobalJourneyLogsDialog } from "@/components/case/GlobalJourneyLogsDialog";
 import { checkTransitionBlocks, TransitionBlockReason } from "@/lib/journeys/validation";
 import { TransitionBlockDialog } from "@/components/case/TransitionBlockDialog";
-import { M30_MACRO_STATES, getMacroStateKey } from "@/lib/journeys/m30MacroStates";
+import { M30_MACRO_STATES, getMacroStateKey, calculateStrategyProgress } from "@/lib/journeys/m30MacroStates";
 
 import { NewOperacaoM30CardDialog } from "@/components/operacao_m30/NewOperacaoM30CardDialog";
 import { DateRangePickerCustom } from "@/components/ui/date-range-picker-custom";
@@ -1473,6 +1473,11 @@ export default function OperacaoM30() {
                       onDrop={(e) => {
                         if (col.key === "__other__") return;
                         const cid = e.dataTransfer.getData("text/caseId");
+                        const droppedCase = filteredRows.find(r => r.id === cid);
+                        if (droppedCase?.meta_json?.case_type === 'strategy') {
+                            showError("Cards de estratégia não podem ser movidos manualmente. Atualize os itens internos.");
+                            return;
+                        }
                         if (!cid) return;
                         if (movingCaseId) return;
                         updateCaseState(cid, col.defaultInternalState);
@@ -1533,123 +1538,187 @@ export default function OperacaoM30() {
                             <Link
                               key={c.id}
                               to={`/app/operacao-m30/${c.id}`}
-                              draggable
+                              draggable={!((c.meta_json as any)?.case_type === 'strategy')}
                               onDragStart={(e) => {
+                                if ((c.meta_json as any)?.case_type === 'strategy') {
+                                  e.preventDefault();
+                                  return;
+                                }
                                 e.dataTransfer.setData("text/caseId", c.id);
                                 e.dataTransfer.effectAllowed = "move";
                               }}
                               className={cn(
                                 "block rounded-[22px] border bg-white p-4 shadow-sm transition hover:shadow-md",
                                 (c.meta_json as any)?.priority ? "border-rose-500 ring-2 ring-rose-500/20" : unread ? "border-rose-200 hover:border-rose-300" : "border-slate-200 hover:border-slate-300",
-                                "cursor-grab active:cursor-grabbing",
+                                !((c.meta_json as any)?.case_type === 'strategy') ? "cursor-grab active:cursor-grabbing" : "cursor-pointer",
                                 isMoving ? "opacity-60" : ""
                               )}
-                              title="Arraste para mudar de etapa"
+                              title={!((c.meta_json as any)?.case_type === 'strategy') ? "Arraste para mudar de etapa" : "Cards estratégicos atualizam automaticamente"}
                             >
                               <div className="flex items-start justify-between gap-3">
-                                <div className="min-w-0 flex-1 pr-1">
-                                  <div className="flex items-center gap-2">
-                                    <div onClick={(e) => { e.preventDefault(); e.stopPropagation(); }} className="shrink-0 flex items-center pt-0.5">
-                                      <Checkbox
-                                        checked={selectedCaseIds.includes(c.id)}
-                                        onCheckedChange={() => toggleCaseSelection(c.id)}
-                                        className="h-3.5 w-3.5 border-slate-300 data-[state=checked]:bg-indigo-600 data-[state=checked]:border-indigo-600"
-                                      />
-                                    </div>
-                                    <div className="truncate text-sm font-semibold text-slate-900" title={titlePrimary}>{titlePrimary}</div>
-                                    <div className="flex items-center gap-1 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] uppercase font-bold text-slate-600 ring-1 ring-inset ring-slate-500/20" title="Status Interno">
-                                      {c.state}
-                                    </div>
-                                    {locks[c.id] && (
-                                      <div className="flex items-center gap-1 rounded bg-rose-50 px-1.5 py-0.5 text-[10px] uppercase font-bold text-rose-600 ring-1 ring-inset ring-rose-500/20" title={`Sendo editado por ${locks[c.id].userName}`}>
-                                        <Lock className="h-3 w-3" /> Em Edição
-                                      </div>
-                                    )}
-                                    {((c.meta_json as any)?.pending_subtasks || []).some((st: any) => 
-                                      st.script_items?.some((it: any) => it.comment && it.comment.trim() !== "")
-                                    ) && (
-                                      <div className="flex items-center gap-1 rounded bg-amber-50 px-1.5 py-0.5 text-[10px] uppercase font-bold text-amber-600 ring-1 ring-inset ring-amber-500/20" title="Cliente solicitou revisão no roteiro">
-                                        <MessageSquareWarning className="h-3 w-3" /> Revisão
-                                      </div>
-                                    )}
-                                  </div>
+                                {(() => {
+                                  const isStrategy = (c.meta_json as any)?.case_type === 'strategy';
                                   
-                                  {(() => {
-                                    const eid = (c as any).customer_entity_id || (c as any).customer_id || (c.meta_json as any)?.entity_id;
-                                    const metaName = (c.meta_json as any)?.customer_entity_name || (c.meta_json as any)?.entity_name;
-                                    const entityFullName = metaName || (eid ? caseEntitiesQ.data?.get(eid) : null);
-                                    
-                                    if (!entityFullName) return null;
+                                  if (isStrategy) {
+                                      const prog = calculateStrategyProgress((c.meta_json as any)?.pending_subtasks || []);
+                                      return (
+                                          <div className="flex flex-col gap-2 p-1 pt-0">
+                                            <div className="flex items-start justify-between gap-2">
+                                              <div className="min-w-0 flex-1">
+                                                <div className="truncate text-sm font-black text-indigo-900" title={c.title || "Estratégia"}>
+                                                  {c.title || "Estratégia"}
+                                                </div>
+                                                <div className="text-[10px] text-slate-500 font-medium truncate mt-0.5">
+                                                  {(c.meta_json as any)?.strategy_title || "Sem título estratégico"}
+                                                </div>
+                                              </div>
+                                              {((c.meta_json as any)?.labels || []).length > 0 && (
+                                                <div className="flex flex-wrap gap-1 justify-end shrink-0 max-w-[60px]">
+                                                  {((c.meta_json as any)?.labels || []).map((lblId: string) => {
+                                                    const lbl = globalLabelsMap.get(lblId);
+                                                    if (!lbl) return null;
+                                                    return (
+                                                      <span key={lbl.id} className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: lbl.color }} title={lbl.name} />
+                                                    );
+                                                  })}
+                                                </div>
+                                              )}
+                                            </div>
+                                            
+                                            <div className="mt-1 space-y-1">
+                                              <div className="flex items-center justify-between text-[10px] font-bold text-slate-600">
+                                                <span>Progresso</span>
+                                                <span>{prog.completed}/{prog.total} ({prog.percentage}%)</span>
+                                              </div>
+                                              <div className="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden">
+                                                <div className="bg-indigo-500 h-full rounded-full transition-all duration-500" style={{ width: `${prog.percentage}%` }} />
+                                              </div>
+                                            </div>
 
-                                    const nameParts = entityFullName.split(" ");
-                                    const entityDisplayName = nameParts.slice(0, 2).join(" ");
-                                    
-                                    return (
-                                      <div 
-                                        onClick={(e) => {
-                                          e.preventDefault();
-                                          e.stopPropagation();
-                                          const commitmentId = (c.meta_json as any)?.commitment_id;
-                                          if (commitmentId) {
-                                            nav(`/app/commitments/${commitmentId}`);
-                                          }
-                                        }}
-                                        className="mt-1 inline-block cursor-pointer hover:bg-indigo-100 transition-colors truncate max-w-full rounded bg-indigo-50 px-1.5 py-0.5 text-[10px] uppercase tracking-wider font-bold text-indigo-700 ring-1 ring-inset ring-indigo-700/10"
-                                        title={`${entityFullName} (Ver Contrato)`}
-                                      >
-                                        {entityDisplayName}
+                                            <div className="mt-2 flex items-center justify-between gap-2 text-[10px] text-slate-500">
+                                              <div className="flex items-center gap-1 font-medium bg-slate-100 px-1.5 py-0.5 rounded text-slate-600 truncate max-w-[100px]">
+                                                <User className="h-3 w-3 shrink-0" />
+                                                <span className="truncate">{(c.users_profile?.display_name ?? c.users_profile?.email ?? "Sem dono")}</span>
+                                              </div>
+                                              <div className="flex items-center gap-1">
+                                                <Clock className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                                                <span className="truncate">{age}</span>
+                                              </div>
+                                            </div>
+                                          </div>
+                                      );
+                                  }
+
+                                  return (
+                                    <>
+                                      <div className="min-w-0 flex-1 pr-1">
+                                        <div className="flex items-center gap-2">
+                                          <div onClick={(e) => { e.preventDefault(); e.stopPropagation(); }} className="shrink-0 flex items-center pt-0.5">
+                                            <Checkbox
+                                              checked={selectedCaseIds.includes(c.id)}
+                                              onCheckedChange={() => toggleCaseSelection(c.id)}
+                                              className="h-3.5 w-3.5 border-slate-300 data-[state=checked]:bg-indigo-600 data-[state=checked]:border-indigo-600"
+                                            />
+                                          </div>
+                                          <div className="truncate text-sm font-semibold text-slate-900" title={titlePrimary}>{titlePrimary}</div>
+                                          <div className="flex items-center gap-1 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] uppercase font-bold text-slate-600 ring-1 ring-inset ring-slate-500/20" title="Status Interno">
+                                            {c.state}
+                                          </div>
+                                          {locks[c.id] && (
+                                            <div className="flex items-center gap-1 rounded bg-rose-50 px-1.5 py-0.5 text-[10px] uppercase font-bold text-rose-600 ring-1 ring-inset ring-rose-500/20" title={`Sendo editado por ${locks[c.id].userName}`}>
+                                              <Lock className="h-3 w-3" /> Em Edição
+                                            </div>
+                                          )}
+                                          {((c.meta_json as any)?.pending_subtasks || []).some((st: any) => 
+                                            st.script_items?.some((it: any) => it.comment && it.comment.trim() !== "")
+                                          ) && (
+                                            <div className="flex items-center gap-1 rounded bg-amber-50 px-1.5 py-0.5 text-[10px] uppercase font-bold text-amber-600 ring-1 ring-inset ring-amber-500/20" title="Cliente solicitou revisão no roteiro">
+                                              <MessageSquareWarning className="h-3 w-3" /> Revisão
+                                            </div>
+                                          )}
+                                        </div>
+                                        
+                                        {(() => {
+                                          const eid = (c as any).customer_entity_id || (c as any).customer_id || (c.meta_json as any)?.entity_id;
+                                          const metaName = (c.meta_json as any)?.customer_entity_name || (c.meta_json as any)?.entity_name;
+                                          const entityFullName = metaName || (eid ? caseEntitiesQ.data?.get(eid) : null);
+                                          
+                                          if (!entityFullName) return null;
+
+                                          const nameParts = entityFullName.split(" ");
+                                          const entityDisplayName = nameParts.slice(0, 2).join(" ");
+                                          
+                                          return (
+                                            <div 
+                                              onClick={(e) => {
+                                                e.preventDefault();
+                                                e.stopPropagation();
+                                                const commitmentId = (c.meta_json as any)?.commitment_id;
+                                                if (commitmentId) {
+                                                  nav(`/app/commitments/${commitmentId}`);
+                                                }
+                                              }}
+                                              className="mt-1 inline-block cursor-pointer hover:bg-indigo-100 transition-colors truncate max-w-full rounded bg-indigo-50 px-1.5 py-0.5 text-[10px] uppercase tracking-wider font-bold text-indigo-700 ring-1 ring-inset ring-indigo-700/10"
+                                              title={`${entityFullName} (Ver Contrato)`}
+                                            >
+                                              {entityDisplayName}
+                                            </div>
+                                          );
+                                        })()}
+
+                                        {((c.meta_json as any)?.labels || []).length > 0 && (
+                                          <div className="mt-1.5 flex flex-wrap gap-1">
+                                            {((c.meta_json as any)?.labels || []).map((lblId: string) => {
+                                              const lbl = globalLabelsMap.get(lblId);
+                                              if (!lbl) return null;
+                                              return (
+                                                <span key={lbl.id} className="text-[8px] font-bold px-1.5 py-0.5 rounded-sm" style={{ backgroundColor: lbl.color, color: '#fff' }}>
+                                                  {lbl.name}
+                                                </span>
+                                              );
+                                            })}
+                                          </div>
+                                        )}
+
+                                        <div className="mt-1 truncate text-xs text-slate-500">
+                                          {(c.users_profile?.display_name ?? c.users_profile?.email ?? "Sem dono")}
+                                        </div>
                                       </div>
-                                    );
-                                  })()}
 
-                                  {((c.meta_json as any)?.labels || []).length > 0 && (
-                                    <div className="mt-1.5 flex flex-wrap gap-1">
-                                      {((c.meta_json as any)?.labels || []).map((lblId: string) => {
-                                        const lbl = globalLabelsMap.get(lblId);
-                                        if (!lbl) return null;
-                                        return (
-                                          <span key={lbl.id} className="text-[8px] font-bold px-1.5 py-0.5 rounded-sm" style={{ backgroundColor: lbl.color, color: '#fff' }}>
-                                            {lbl.name}
-                                          </span>
-                                        );
-                                      })}
+                                      <div className="flex flex-col items-end gap-2">
+                                        {unread ? (
+                                          <span
+                                            className="h-2.5 w-2.5 rounded-full bg-rose-600 ring-4 ring-rose-100"
+                                            title="Mensagem nova"
+                                            aria-label="Mensagem nova"
+                                          />
+                                        ) : null}
+
+                                        {pend?.open ? (
+                                          <Badge className="rounded-full border-0 bg-amber-100 text-amber-900 hover:bg-amber-100">
+                                            {pend.open} pend.
+                                          </Badge>
+                                        ) : null}
+                                      </div>
+                                    </>
+                                  );
+                                })()}
+                              </div>
+
+                              {!((c.meta_json as any)?.case_type === 'strategy') && (
+                                <div className="mt-3 flex items-center justify-between gap-2 text-xs text-slate-600">
+                                  <div className="flex items-center gap-1">
+                                    <Clock className="h-3.5 w-3.5 text-slate-400" />
+                                    {age}
+                                  </div>
+                                  {pend?.need_location && (
+                                    <div className="flex items-center gap-1 rounded-full bg-rose-50 px-2 py-1 text-rose-700">
+                                      <MapPin className="h-3.5 w-3.5" />
+                                      localização
                                     </div>
                                   )}
-
-                                  <div className="mt-1 truncate text-xs text-slate-500">
-                                    {(c.users_profile?.display_name ?? c.users_profile?.email ?? "Sem dono")}
-                                  </div>
                                 </div>
-
-                                <div className="flex flex-col items-end gap-2">
-                                  {unread ? (
-                                    <span
-                                      className="h-2.5 w-2.5 rounded-full bg-rose-600 ring-4 ring-rose-100"
-                                      title="Mensagem nova"
-                                      aria-label="Mensagem nova"
-                                    />
-                                  ) : null}
-
-                                  {pend?.open ? (
-                                    <Badge className="rounded-full border-0 bg-amber-100 text-amber-900 hover:bg-amber-100">
-                                      {pend.open} pend.
-                                    </Badge>
-                                  ) : null}
-                                </div>
-                              </div>
-
-                              <div className="mt-3 flex items-center justify-between gap-2 text-xs text-slate-600">
-                                <div className="flex items-center gap-1">
-                                  <Clock className="h-3.5 w-3.5 text-slate-400" />
-                                  {age}
-                                </div>
-                                {pend?.need_location && (
-                                  <div className="flex items-center gap-1 rounded-full bg-rose-50 px-2 py-1 text-rose-700">
-                                    <MapPin className="h-3.5 w-3.5" />
-                                    localização
-                                  </div>
-                                )}
-                              </div>
+                              )}
                             </Link>
                           );
                         })}

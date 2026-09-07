@@ -98,6 +98,7 @@ const ExternalLinkIcon = ExternalLink;
 const CalendarIcon = Calendar;
 const PlusIcon = Plus;
 import { cn, titleizeState } from "@/lib/utils";
+import { computeStrategyState } from "@/lib/journeys/m30MacroStates";
 import { showError, showSuccess } from "@/utils/toast";
 import { getStateLabel } from "@/lib/journeyLabels";
 import { useJourneyTransition } from "@/hooks/useJourneyTransition";
@@ -160,6 +161,7 @@ function SubtaskItemContent({
     const [postDate, setPostDate] = useState(st.post_date || "");
     const [priority, setPriority] = useState(st.priority || false);
     const [deliverableId, setDeliverableId] = useState(st.deliverable_id || "");
+    const [status, setStatus] = useState(st.status || st.state || "planejamento");
     const [description, setDescription] = useState(st.description || "");
     const [scriptRaw, setScriptRaw] = useState(st.script_raw || "");
     const [scriptItems, setScriptItems] = useState<any[]>(st.script_items || []);
@@ -178,6 +180,7 @@ function SubtaskItemContent({
                 ...currentSubtasks[idx],
                 title,
                 type,
+                status,
                 post_date: postDate,
                 priority,
                 deliverable_id: deliverableId,
@@ -190,9 +193,15 @@ function SubtaskItemContent({
             const { data: latestCase } = await supabase.from("cases").select("meta_json").eq("id", caseId).single();
             const latestMeta = latestCase?.meta_json as any || caseMeta;
             
-            const { error: updateError } = await supabase.from("cases").update({
+            let updatePayload: any = {
                 meta_json: { ...latestMeta, pending_subtasks: currentSubtasks }
-            }).eq("id", caseId);
+            };
+
+            if (latestMeta.case_type === 'strategy') {
+                updatePayload.state = computeStrategyState(currentSubtasks);
+            }
+
+            const { error: updateError } = await supabase.from("cases").update(updatePayload).eq("id", caseId);
 
             if (updateError) throw updateError;
 
@@ -466,6 +475,24 @@ function SubtaskItemContent({
                         onChange={(e) => setPostDate(e.target.value)}
                     />
                 </div>
+                
+                <div className="space-y-2">
+                    <Label className="text-[10px] font-bold text-slate-500 uppercase">Status Operacional</Label>
+                    <Select value={status} onValueChange={setStatus}>
+                        <SelectTrigger className="w-full h-9 text-xs rounded-xl border-slate-200 shadow-sm bg-white">
+                            <SelectValue placeholder="Selecione..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="backlog">Backlog</SelectItem>
+                            <SelectItem value="planejamento">Planejamento / Roteiro</SelectItem>
+                            <SelectItem value="gravacao">Gravação</SelectItem>
+                            <SelectItem value="edicao">Edição</SelectItem>
+                            <SelectItem value="aprovacao">Aprovação</SelectItem>
+                            <SelectItem value="postar">Postar / Publicação</SelectItem>
+                            <SelectItem value="concluido">Concluído</SelectItem>
+                        </SelectContent>
+                    </Select>
+                </div>
 
                 <div className="space-y-2 flex flex-col justify-end pb-0.5">
                     <div className="flex items-center justify-between h-9 px-3 rounded-xl border border-slate-200 bg-white shadow-sm">
@@ -638,7 +665,7 @@ function SubtaskItemContent({
                     {saving ? "Salvando..." : (lastSaved ? "Salvo" : "Salvar Alterações")}
                 </Button>
 
-                {!st.linked_case_id && (
+                {!st.linked_case_id && caseMeta?.case_type !== 'strategy' && (
                     <Button 
                         size="sm"
                         variant="secondary"
@@ -867,6 +894,10 @@ export default function OperacaoM30Case() {
     const [mainScript, setMainScript] = useState("");
     const [meetingTranscription, setMeetingTranscription] = useState("");
     const [aiPlanningContext, setAiPlanningContext] = useState("");
+    const [strategyTitle, setStrategyTitle] = useState("");
+    const [strategyObjective, setStrategyObjective] = useState("");
+    const [strategyContext, setStrategyContext] = useState("");
+
     const [generatingSummary, setGeneratingSummary] = useState(false);
     const [entityComboOpen, setEntityComboOpen] = useState(false);
     const [entitySearch, setEntitySearch] = useState("");
@@ -881,6 +912,9 @@ export default function OperacaoM30Case() {
             setMainScript(meta.script_raw || "");
             setMeetingTranscription(meta.meeting_transcription || "");
             setAiPlanningContext(meta.ai_planning_context || "");
+            setStrategyTitle(meta.strategy_title || "");
+            setStrategyObjective(meta.strategy_objective || "");
+            setStrategyContext(meta.strategy_context || "");
         }
     }, [caseQ.data]);
 
@@ -1734,7 +1768,10 @@ export default function OperacaoM30Case() {
                         important_links: importantLinks,
                         script_raw: mainScript,
                         meeting_transcription: meetingTranscription,
-                        ai_planning_context: aiPlanningContext
+                        ai_planning_context: aiPlanningContext,
+                        strategy_title: strategyTitle,
+                        strategy_objective: strategyObjective,
+                        strategy_context: strategyContext
                     },
                     updated_at: new Date().toISOString()
                 })
@@ -2199,6 +2236,77 @@ export default function OperacaoM30Case() {
                                     </div>
                                 )}
 
+                                {(caseQ.data?.case_type === 'strategy') && (
+                                    <div className="space-y-6">
+                                        <div className="flex items-center justify-between">
+                                            <h3 className="text-sm font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                                                <Rocket className="h-4 w-4" /> INFORMAÇÕES DA ESTRATÉGIA
+                                            </h3>
+                                            <Button 
+                                                onClick={handleSaveMainCard} 
+                                                disabled={saving}
+                                                className="h-8 rounded-xl bg-slate-900 text-white font-bold text-[10px] gap-2 shadow-lg shadow-slate-100"
+                                            >
+                                                {saving ? <RefreshCw className="h-3 w-3 animate-spin"/> : <Save className="h-3 w-3"/>}
+                                                SALVAR ESTRATÉGIA ⚓️
+                                            </Button>
+                                        </div>
+
+                                        <div className="space-y-4">
+                                            <div className="space-y-2">
+                                                <Label className="text-[10px] font-bold text-slate-500 uppercase px-1">Título do Agrupamento / Pauta (Case Title)</Label>
+                                                <input 
+                                                    value={mainTitle}
+                                                    onChange={(e) => setMainTitle(e.target.value)}
+                                                    className="w-full h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-bold focus:ring-2 focus:ring-indigo-500 outline-none shadow-sm"
+                                                    placeholder="Ex: Campanha Dia das Mães"
+                                                />
+                                            </div>
+
+                                            <div className="space-y-2">
+                                                <Label className="text-[10px] font-bold text-slate-500 uppercase px-1">Subtítulo Estratégico (Opcional)</Label>
+                                                <input 
+                                                    value={strategyTitle}
+                                                    onChange={(e) => setStrategyTitle(e.target.value)}
+                                                    className="w-full h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-bold focus:ring-2 focus:ring-indigo-500 outline-none shadow-sm"
+                                                    placeholder="Ex: Reforçar laços emocionais com a marca"
+                                                />
+                                            </div>
+
+                                            <Tabs defaultValue="objective" className="w-full">
+                                                <TabsList className="bg-slate-100/50 p-1 rounded-2xl h-12 mb-4 w-full sm:w-auto">
+                                                    <TabsTrigger value="objective" className="rounded-xl text-xs font-bold data-[state=active]:bg-white data-[state=active]:shadow-sm gap-2 px-6">
+                                                        <FileText className="h-4 w-4" /> Objetivo
+                                                    </TabsTrigger>
+                                                    <TabsTrigger value="context" className="rounded-xl text-xs font-bold data-[state=active]:bg-white data-[state=active]:shadow-sm gap-2 px-6">
+                                                        <FileText className="h-4 w-4" /> Contexto Geral
+                                                    </TabsTrigger>
+                                                </TabsList>
+                                                
+                                                <TabsContent value="objective" className="mt-0 focus-visible:ring-0">
+                                                    <div className="space-y-2">
+                                                        <RichTextEditor 
+                                                            value={strategyObjective}
+                                                            minHeightClassName="min-h-[200px]"
+                                                            onChange={setStrategyObjective}
+                                                        />
+                                                    </div>
+                                                </TabsContent>
+
+                                                <TabsContent value="context" className="mt-0 focus-visible:ring-0">
+                                                    <div className="space-y-2">
+                                                        <RichTextEditor 
+                                                            value={strategyContext}
+                                                            minHeightClassName="min-h-[200px]"
+                                                            onChange={setStrategyContext}
+                                                        />
+                                                    </div>
+                                                </TabsContent>
+                                            </Tabs>
+                                        </div>
+                                    </div>
+                                )}
+
                                 {(caseQ.data?.case_type === 'edicao' || caseQ.data?.case_type === 'artes' || caseQ.data?.case_type === 'video' || caseQ.data?.case_type === 'texto' || caseQ.data?.case_type === 'campanhas') && (
                                     <div className="space-y-6">
                                         <div className="flex items-center justify-between">
@@ -2347,7 +2455,7 @@ export default function OperacaoM30Case() {
                                     </div>
                                 )}
 
-                                {(caseQ.data?.case_type === "planejamento" || caseQ.data?.case_type === "gravacao") && (
+                                {(caseQ.data?.case_type === "planejamento" || caseQ.data?.case_type === "gravacao" || caseQ.data?.case_type === "strategy") && (
                                     <div className="rounded-[32px] border border-slate-200 bg-slate-50/40 p-6 shadow-inner-sm">
                                         <div className="flex items-center justify-between mb-4">
                                             <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
