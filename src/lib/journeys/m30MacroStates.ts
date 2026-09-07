@@ -42,3 +42,21 @@ export function getMacroStateKey(internalState: string | null | undefined): stri
 
   return "__other__";
 }
+
+export function computeStrategyState(subtasks: any[]): string {
+    if (!subtasks || subtasks.length === 0) return 'planejado';
+    
+    const allDone = subtasks.every(st => st.status === 'done');
+    if (allDone) return 'concluido';
+    
+    const anyProd = subtasks.some(st => st.status === 'production' || st.status === 'done');
+    if (anyProd) return 'producao';
+    
+    return 'planejado';
+}
+
+export function calculateStrategyProgress(subtasks: any[]): number {
+    if (!subtasks || subtasks.length === 0) return 0;
+    const done = subtasks.filter(st => st.status === 'done').length;
+    return Math.round((done / subtasks.length) * 100);
+}
