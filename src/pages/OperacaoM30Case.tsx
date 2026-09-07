@@ -101,6 +101,7 @@ import { cn, titleizeState } from "@/lib/utils";
 import { computeStrategyState } from "@/lib/journeys/m30MacroStates";
 import { showError, showSuccess } from "@/utils/toast";
 import { getStateLabel } from "@/lib/journeyLabels";
+import { getClientOperationalContext } from "@/lib/journeys/m30OperationalContext";
 import { useJourneyTransition } from "@/hooks/useJourneyTransition";
 import { StateMachine } from "@/lib/journeys/types";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
@@ -242,13 +243,33 @@ function SubtaskItemContent({
         
         setGeneratingAi(true);
         try {
+            let finalContext = caseMeta?.ai_planning_context || "";
+            
+            const commitmentId = (caseMeta as any)?.commitment_id || deliverableQ.data?.commitment_id;
+            if (commitmentId && caseData.tenant_id) {
+                const opCtx = await getClientOperationalContext(supabase, caseData.tenant_id, commitmentId);
+                if (opCtx?.account_context) {
+                    const ctxParts = [];
+                    if (opCtx.account_context.objective) ctxParts.push(`Objetivo do Cliente: ${opCtx.account_context.objective}`);
+                    if (opCtx.account_context.positioning) ctxParts.push(`Posicionamento: ${opCtx.account_context.positioning}`);
+                    if (opCtx.account_context.audience) ctxParts.push(`Público-Alvo: ${opCtx.account_context.audience}`);
+                    if (opCtx.account_context.tone) ctxParts.push(`Tom de Voz: ${opCtx.account_context.tone}`);
+                    if (opCtx.account_context.rules) ctxParts.push(`Regras da Conta: ${opCtx.account_context.rules}`);
+                    if (opCtx.account_context.production_notes) ctxParts.push(`Notas de Produção: ${opCtx.account_context.production_notes}`);
+                    
+                    if (ctxParts.length > 0) {
+                        finalContext += `\n\n--- CONTEXTO DA CONTA ---\n` + ctxParts.join('\n');
+                    }
+                }
+            }
+
             const { data, error } = await supabase.functions.invoke("m30-subtask-script-ai", {
                 body: {
                     tenantId: caseData.tenant_id,
                     caseId: caseId,
                     briefing: description,
                     title: title,
-                    planningContext: caseMeta?.ai_planning_context || "",
+                    planningContext: finalContext,
                 }
             });
             if (error) throw error;

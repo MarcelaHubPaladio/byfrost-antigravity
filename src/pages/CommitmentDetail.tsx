@@ -8,6 +8,7 @@ import { M30ClientUsersPanel } from "@/components/operacao_m30/M30ClientUsersPan
 import { ClientCalendarView } from "@/components/operacao_m30/ClientCalendarView";
 import { EntityFilesTab } from "@/components/entities/EntityFilesTab";
 import { PlanCycleWizardDialog } from "@/components/operacao_m30/PlanCycleWizardDialog";
+import { useClientOperationalContext } from "@/hooks/useClientOperationalContext";
 import { RequireRouteAccess } from "@/components/RequireRouteAccess";
 import { RequireTenantRole } from "@/components/RequireTenantRole";
 import { useTenant } from "@/providers/TenantProvider";
@@ -136,6 +137,9 @@ export default function CommitmentDetail() {
   const [newDeliverableQty, setNewDeliverableQty] = useState(1);
   const [isEditingStart, setIsEditingStart] = useState(false);
   const [newStartDate, setNewStartDate] = useState("");
+
+  const opCtxQ = useClientOperationalContext(activeTenantId, commitmentId);
+  const opCtx = opCtxQ.data;
 
   const updateStartDate = async (dateStr: string) => {
     if (!dateStr) return;
@@ -280,11 +284,14 @@ export default function CommitmentDetail() {
     if (commitmentQ.data?.metadata?.notes) {
       setNotes(commitmentQ.data.metadata.notes);
     }
+    if (commitmentQ.data?.metadata?.default_posting_days) {
+      setDefaultPostingDays(commitmentQ.data.metadata.default_posting_days);
+    }
     if (commitmentQ.data?.metadata?.labels) {
       setClientLabels(commitmentQ.data.metadata.labels);
     }
-    if (commitmentQ.data?.metadata?.default_posting_days) {
-      setDefaultPostingDays(commitmentQ.data.metadata.default_posting_days);
+    if (commitmentQ.data?.metadata?.account_context) {
+      setAccountContext(commitmentQ.data.metadata.account_context);
     }
   }, [commitmentQ.data]);
 
@@ -297,6 +304,7 @@ export default function CommitmentDetail() {
         notes, 
         labels: clientLabels, 
         default_posting_days: defaultPostingDays,
+        account_context: accountContext,
         ...(overrides || {}) 
       };
       
@@ -1249,7 +1257,69 @@ export default function CommitmentDetail() {
               </Card>
             )}
 
-            <div className="grid gap-4 lg:grid-cols-2">
+            {isM30Journey && opCtx && (
+              <div className="grid gap-4 lg:grid-cols-2 mt-4">
+                <Card className="rounded-2xl border-slate-200 p-4 bg-gradient-to-br from-indigo-50 to-white">
+                  <div className="mb-2 text-sm font-semibold text-slate-900 flex items-center gap-2">
+                    <Rocket className="h-4 w-4 text-indigo-500" />
+                    Ciclo Atual
+                  </div>
+                  {opCtx.current_cycle ? (
+                    <div className="space-y-3">
+                      <div>
+                        <h4 className="font-black text-slate-800 text-lg">{opCtx.current_cycle.name}</h4>
+                        <p className="text-xs text-slate-500">{opCtx.current_cycle.objective || 'Sem objetivo principal'}</p>
+                      </div>
+                      <div>
+                        <div className="flex justify-between text-[10px] font-bold text-slate-500 mb-1">
+                          <span>Progresso</span>
+                          <span>{opCtx.current_cycle.progress}%</span>
+                        </div>
+                        <div className="h-2 bg-indigo-100 rounded-full overflow-hidden">
+                          <div className="h-full bg-indigo-500 transition-all" style={{ width: `${opCtx.current_cycle.progress}%` }} />
+                        </div>
+                      </div>
+                      <div className="flex gap-4 pt-2">
+                        <div>
+                          <p className="text-[10px] font-bold text-slate-400 uppercase">Ativos</p>
+                          <p className="font-black text-slate-700">{opCtx.current_cycle.activeCasesCount} cases</p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] font-bold text-amber-400 uppercase">Aguardando Aprovação</p>
+                          <p className="font-black text-amber-600">{opCtx.current_cycle.pendingApprovalsCount} cases</p>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="text-sm text-slate-500 py-6 text-center italic">Nenhum ciclo ativo.</div>
+                  )}
+                </Card>
+
+                <Card className="rounded-2xl border-slate-200 p-4">
+                  <div className="mb-4 text-sm font-semibold text-slate-900 flex items-center gap-2">
+                    <Calendar className="h-4 w-4 text-slate-500" />
+                    Próximos Passos
+                  </div>
+                  {opCtx.next_events.length > 0 ? (
+                    <div className="space-y-3">
+                      {opCtx.next_events.map((ev, idx) => (
+                        <div key={idx} className="flex items-center gap-3">
+                          <div className="w-2 h-2 rounded-full bg-indigo-400" />
+                          <div className="flex-1 text-sm font-bold text-slate-800">{ev.name}</div>
+                          <div className="text-xs font-semibold text-slate-500 bg-slate-100 px-2 py-1 rounded-md">
+                            {new Date(ev.date + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-sm text-slate-500 py-6 text-center italic">Nenhum evento mapeado.</div>
+                  )}
+                </Card>
+              </div>
+            )}
+
+            <div className="grid gap-4 lg:grid-cols-2 mt-4">
               <Card className="rounded-2xl border-slate-200 p-4">
                 <div className="mb-2 text-sm font-semibold text-slate-900">Itens</div>
                 <div className="space-y-2">
@@ -1605,6 +1675,94 @@ export default function CommitmentDetail() {
                       </Button>
                     </div>
                   </Card>
+
+                  {/* CONTEXTO DA CONTA (M30) */}
+                  {isM30Journey && (
+                    <Card className="rounded-2xl border-slate-200 p-6 flex flex-col col-span-1 md:col-span-2">
+                      <h3 className="text-sm font-bold uppercase tracking-wider text-slate-800 mb-2">Contexto da Conta</h3>
+                      <p className="text-xs text-slate-500 mb-6">Informações consolidadas sobre o cliente. Esse contexto ajuda a guiar a equipe e as automações de IA (BeeIA).</p>
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                        <div className="space-y-2">
+                          <Label className="text-xs font-bold text-slate-700">Objetivo do Cliente</Label>
+                          <Textarea 
+                            className="text-sm" rows={2} 
+                            value={accountContext.objective || ""}
+                            onChange={e => setAccountContext({...accountContext, objective: e.target.value})}
+                            placeholder="O que o cliente quer alcançar?"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label className="text-xs font-bold text-slate-700">Posicionamento</Label>
+                          <Textarea 
+                            className="text-sm" rows={2} 
+                            value={accountContext.positioning || ""}
+                            onChange={e => setAccountContext({...accountContext, positioning: e.target.value})}
+                            placeholder="Como a marca se posiciona?"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label className="text-xs font-bold text-slate-700">Público-Alvo</Label>
+                          <Textarea 
+                            className="text-sm" rows={2} 
+                            value={accountContext.audience || ""}
+                            onChange={e => setAccountContext({...accountContext, audience: e.target.value})}
+                            placeholder="Quem é o cliente ideal?"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label className="text-xs font-bold text-slate-700">Tom de Voz</Label>
+                          <Textarea 
+                            className="text-sm" rows={2} 
+                            value={accountContext.tone || ""}
+                            onChange={e => setAccountContext({...accountContext, tone: e.target.value})}
+                            placeholder="Formal, descontraído, didático..."
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label className="text-xs font-bold text-slate-700">Produtos/Serviços Prioritários</Label>
+                          <Textarea 
+                            className="text-sm" rows={2} 
+                            value={accountContext.products || ""}
+                            onChange={e => setAccountContext({...accountContext, products: e.target.value})}
+                            placeholder="O que vamos vender ou divulgar mais?"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label className="text-xs font-bold text-slate-700">O que está incluso</Label>
+                          <Textarea 
+                            className="text-sm" rows={2} 
+                            value={accountContext.included || ""}
+                            onChange={e => setAccountContext({...accountContext, included: e.target.value})}
+                            placeholder="Ex: 4 vídeos, 8 artes"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label className="text-xs font-bold text-slate-700">Regras Operacionais</Label>
+                          <Textarea 
+                            className="text-sm" rows={2} 
+                            value={accountContext.rules || ""}
+                            onChange={e => setAccountContext({...accountContext, rules: e.target.value})}
+                            placeholder="Regras de atendimento, gravação, horários"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label className="text-xs font-bold text-slate-700">Observações de Produção (Direção/Edição)</Label>
+                          <Textarea 
+                            className="text-sm" rows={2} 
+                            value={accountContext.production_notes || ""}
+                            onChange={e => setAccountContext({...accountContext, production_notes: e.target.value})}
+                            placeholder="Não usar vermelho, usar sempre logotipo X..."
+                          />
+                        </div>
+                      </div>
+                      <div className="flex justify-end">
+                        <Button onClick={updateMetadata} disabled={saving} className="rounded-xl px-6">
+                          {saving ? "Salvando..." : "Salvar Contexto"}
+                        </Button>
+                      </div>
+                    </Card>
+                  )}
 
                   {/* LABELS E DIAS PADRÕES */}
                   <Card className="rounded-2xl border-slate-200 p-6 flex flex-col h-full space-y-6">
