@@ -1684,72 +1684,72 @@ export default function CommitmentDetail() {
                       
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
                         <div className="space-y-2">
-                          <Label className="text-xs font-bold text-slate-700">Objetivo do Cliente</Label>
-                          <Textarea 
-                            className="text-sm" rows={2} 
+                          <label className="text-xs font-bold text-slate-700">Objetivo do Cliente</label>
+                          <textarea 
+                            className="text-sm w-full p-2 border rounded-md" rows={2} 
                             value={accountContext.objective || ""}
                             onChange={e => setAccountContext({...accountContext, objective: e.target.value})}
                             placeholder="O que o cliente quer alcançar?"
                           />
                         </div>
                         <div className="space-y-2">
-                          <Label className="text-xs font-bold text-slate-700">Posicionamento</Label>
-                          <Textarea 
-                            className="text-sm" rows={2} 
+                          <label className="text-xs font-bold text-slate-700">Posicionamento</label>
+                          <textarea 
+                            className="text-sm w-full p-2 border rounded-md" rows={2} 
                             value={accountContext.positioning || ""}
                             onChange={e => setAccountContext({...accountContext, positioning: e.target.value})}
                             placeholder="Como a marca se posiciona?"
                           />
                         </div>
                         <div className="space-y-2">
-                          <Label className="text-xs font-bold text-slate-700">Público-Alvo</Label>
-                          <Textarea 
-                            className="text-sm" rows={2} 
+                          <label className="text-xs font-bold text-slate-700">Público-Alvo</label>
+                          <textarea 
+                            className="text-sm w-full p-2 border rounded-md" rows={2} 
                             value={accountContext.audience || ""}
                             onChange={e => setAccountContext({...accountContext, audience: e.target.value})}
                             placeholder="Quem é o cliente ideal?"
                           />
                         </div>
                         <div className="space-y-2">
-                          <Label className="text-xs font-bold text-slate-700">Tom de Voz</Label>
-                          <Textarea 
-                            className="text-sm" rows={2} 
+                          <label className="text-xs font-bold text-slate-700">Tom de Voz</label>
+                          <textarea 
+                            className="text-sm w-full p-2 border rounded-md" rows={2} 
                             value={accountContext.tone || ""}
                             onChange={e => setAccountContext({...accountContext, tone: e.target.value})}
                             placeholder="Formal, descontraído, didático..."
                           />
                         </div>
                         <div className="space-y-2">
-                          <Label className="text-xs font-bold text-slate-700">Produtos/Serviços Prioritários</Label>
-                          <Textarea 
-                            className="text-sm" rows={2} 
+                          <label className="text-xs font-bold text-slate-700">Produtos/Serviços Prioritários</label>
+                          <textarea 
+                            className="text-sm w-full p-2 border rounded-md" rows={2} 
                             value={accountContext.products || ""}
                             onChange={e => setAccountContext({...accountContext, products: e.target.value})}
                             placeholder="O que vamos vender ou divulgar mais?"
                           />
                         </div>
                         <div className="space-y-2">
-                          <Label className="text-xs font-bold text-slate-700">O que está incluso</Label>
-                          <Textarea 
-                            className="text-sm" rows={2} 
+                          <label className="text-xs font-bold text-slate-700">O que está incluso</label>
+                          <textarea 
+                            className="text-sm w-full p-2 border rounded-md" rows={2} 
                             value={accountContext.included || ""}
                             onChange={e => setAccountContext({...accountContext, included: e.target.value})}
                             placeholder="Ex: 4 vídeos, 8 artes"
                           />
                         </div>
                         <div className="space-y-2">
-                          <Label className="text-xs font-bold text-slate-700">Regras Operacionais</Label>
-                          <Textarea 
-                            className="text-sm" rows={2} 
+                          <label className="text-xs font-bold text-slate-700">Regras Operacionais</label>
+                          <textarea 
+                            className="text-sm w-full p-2 border rounded-md" rows={2} 
                             value={accountContext.rules || ""}
                             onChange={e => setAccountContext({...accountContext, rules: e.target.value})}
                             placeholder="Regras de atendimento, gravação, horários"
                           />
                         </div>
                         <div className="space-y-2">
-                          <Label className="text-xs font-bold text-slate-700">Observações de Produção (Direção/Edição)</Label>
-                          <Textarea 
-                            className="text-sm" rows={2} 
+                          <label className="text-xs font-bold text-slate-700">Observações de Produção (Direção/Edição)</label>
+                          <textarea 
+                            className="text-sm w-full p-2 border rounded-md" rows={2} 
                             value={accountContext.production_notes || ""}
                             onChange={e => setAccountContext({...accountContext, production_notes: e.target.value})}
                             placeholder="Não usar vermelho, usar sempre logotipo X..."

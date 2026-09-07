@@ -24,15 +24,15 @@ export function getMacroStateKey(internalState: string | null | undefined): stri
     return "planejado";
   }
 
-  if (st.includes("gravacao") || st.includes("gravação") || st.includes("decupagem") || st.includes("edicao") || st.includes("edição") || st.includes("validacao") || st.includes("validação")) {
+  if (st.includes("producao") || st.includes("produção") || st.includes("gravacao") || st.includes("gravação") || st.includes("gravao") || st.includes("decupagem") || st.includes("edicao") || st.includes("edição") || st.includes("edio") || st.includes("ediçao") || st.includes("validacao") || st.includes("validação") || st.includes("validao")) {
     return "producao";
   }
 
-  if (st.includes("aprovacao") || st.includes("aprovação")) {
+  if (st.includes("aprovacao") || st.includes("aprovação") || st.includes("aprovao")) {
     return "aprovacao";
   }
 
-  if (st.includes("postar") || st.includes("trafego_pago") || st.includes("tráfego_pago") || st.includes("relatorio") || st.includes("relatório")) {
+  if (st.includes("postar") || st.includes("trafego_pago") || st.includes("tráfego_pago") || st.includes("relatorio") || st.includes("relatório") || st.includes("relatrio")) {
     return "publicacao";
   }
 
