@@ -279,6 +279,7 @@ export default function CommitmentDetail() {
   const [searchCases, setSearchCases] = useState("");
   const [clientLabels, setClientLabels] = useState<{id: string, name: string, color: string}[]>([]);
   const [defaultPostingDays, setDefaultPostingDays] = useState<number[]>([]);
+  const [accountContext, setAccountContext] = useState<any>({});
 
   useEffect(() => {
     if (commitmentQ.data?.metadata?.notes) {
