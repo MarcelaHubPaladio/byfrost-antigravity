@@ -7,6 +7,7 @@ import { DeliverablesPipelineChart } from "@/components/case/DeliverablesPipelin
 import { M30ClientUsersPanel } from "@/components/operacao_m30/M30ClientUsersPanel";
 import { ClientCalendarView } from "@/components/operacao_m30/ClientCalendarView";
 import { EntityFilesTab } from "@/components/entities/EntityFilesTab";
+import { PlanCycleWizardDialog } from "@/components/operacao_m30/PlanCycleWizardDialog";
 import { RequireRouteAccess } from "@/components/RequireRouteAccess";
 import { RequireTenantRole } from "@/components/RequireTenantRole";
 import { useTenant } from "@/providers/TenantProvider";
@@ -126,6 +127,8 @@ export default function CommitmentDetail() {
   const [targetCaseType, setTargetCaseType] = useState<string>("order");
   const [targetPriority, setTargetPriority] = useState(false);
   const [targetState, setTargetState] = useState<string>("");
+
+  const [planCycleOpen, setPlanCycleOpen] = useState(false);
 
   const [createDeliverableOpen, setCreateDeliverableOpen] = useState(false);
   const [newDeliverableName, setNewDeliverableName] = useState("");
@@ -1198,9 +1201,9 @@ export default function CommitmentDetail() {
 
                   <div className="flex gap-4">
                     <div className="text-center">
-                      <p className="text-[10px] font-bold uppercase opacity-50">Restantes</p>
-                      <p className="text-xl font-black text-amber-400">
-                        {(deliverablesQ.data ?? []).length - (deliverablesQ.data ?? []).filter(d => d.status === 'completed').length}
+                      <p className="text-[10px] font-bold uppercase opacity-50">Contratado</p>
+                      <p className="text-xl font-black text-slate-800">
+                        {(deliverablesQ.data ?? []).length}
                       </p>
                     </div>
                     <div className="w-[1px] bg-white/10" />
@@ -1208,6 +1211,26 @@ export default function CommitmentDetail() {
                       <p className="text-[10px] font-bold uppercase opacity-50">Realizado</p>
                       <p className="text-xl font-black text-emerald-400">
                         {(deliverablesQ.data ?? []).filter(d => d.status === 'completed').length}
+                      </p>
+                    </div>
+                    <div className="w-[1px] bg-white/10" />
+                    <div className="text-center">
+                      <p className="text-[10px] font-bold uppercase opacity-50">Alocado</p>
+                      <p className="text-xl font-black text-amber-400">
+                        {(deliverablesQ.data ?? []).filter(d => 
+                          d.status !== 'completed' && 
+                          (allTenantCasesQ.data ?? []).some(c => c.deliverable_id === d.id && !c.deleted_at)
+                        ).length}
+                      </p>
+                    </div>
+                    <div className="w-[1px] bg-white/10" />
+                    <div className="text-center">
+                      <p className="text-[10px] font-bold uppercase opacity-50">Disponível</p>
+                      <p className="text-xl font-black text-blue-400">
+                        {(deliverablesQ.data ?? []).filter(d => 
+                          d.status !== 'completed' && 
+                          !(allTenantCasesQ.data ?? []).some(c => c.deliverable_id === d.id && !c.deleted_at)
+                        ).length}
                       </p>
                     </div>
                     {hasTermData && (
@@ -1272,6 +1295,14 @@ export default function CommitmentDetail() {
                     >
                       <Plus className="w-3 h-3" />
                       Adicionar Entregável
+                    </Button>
+                    <Button 
+                      size="sm" 
+                      className="h-6 px-2 gap-1.5 bg-slate-900 text-[9px] font-bold uppercase hover:bg-slate-800 text-white"
+                      onClick={() => setPlanCycleOpen(true)}
+                    >
+                      <Rocket className="w-3 h-3" />
+                      Planejar Ciclo
                     </Button>
                     {selectedIds.length > 0 && (
                       <Button 
@@ -1785,6 +1816,23 @@ export default function CommitmentDetail() {
                 </pre>
               </DialogContent>
             </Dialog>
+
+            <PlanCycleWizardDialog
+              open={planCycleOpen}
+              onOpenChange={setPlanCycleOpen}
+              activeTenantId={activeTenantId!}
+              commitmentId={commitmentId}
+              journeyId={m30JourneyQ.data?.id}
+              customerEntityId={commitmentQ.data?.customer_entity_id}
+              customerEntityName={commitmentQ.data?.customer?.display_name || ''}
+              deliverables={deliverablesQ.data ?? []}
+              allTenantCases={allTenantCasesQ.data ?? []}
+              onSuccess={() => {
+                deliverablesQ.refetch();
+                m30CasesQ.refetch();
+                allTenantCasesQ.refetch();
+              }}
+            />
 
             <Dialog open={createDeliverableOpen} onOpenChange={setCreateDeliverableOpen}>
               <DialogContent className="max-w-md">

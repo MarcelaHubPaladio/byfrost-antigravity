@@ -1520,7 +1520,10 @@ export default function OperacaoM30Case() {
 
     const handleCreateIndividualTask = async (st: any, idx: number, deliverableId: string, type: string) => {
         if (!activeTenantId || !id || !caseQ.data) return;
-        if (!deliverableId) {
+        
+        const targetDeliverableId = st.deliverable_id || deliverableId;
+        
+        if (!targetDeliverableId) {
             showError("Falha técnica: entregável não identificado.");
             return;
         }
@@ -1536,7 +1539,7 @@ export default function OperacaoM30Case() {
                 title: st.title,
                 summary_text: st.description || st.summary_text || null, // MAP BRIEFING
                 customer_entity_id: caseQ.data.customer_entity_id,
-                deliverable_id: deliverableId,
+                deliverable_id: targetDeliverableId,
                 state: "gravao",
                 meta_json: {
                     parent_case_id: id,
