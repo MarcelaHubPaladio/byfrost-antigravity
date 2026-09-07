@@ -44,6 +44,7 @@ import { StateMachine } from "@/lib/journeys/types"
 import { GlobalJourneyLogsDialog } from "@/components/case/GlobalJourneyLogsDialog";
 import { checkTransitionBlocks, TransitionBlockReason } from "@/lib/journeys/validation";
 import { TransitionBlockDialog } from "@/components/case/TransitionBlockDialog";
+import { M30_MACRO_STATES, getMacroStateKey } from "@/lib/journeys/m30MacroStates";
 
 import { NewOperacaoM30CardDialog } from "@/components/operacao_m30/NewOperacaoM30CardDialog";
 import { DateRangePickerCustom } from "@/components/ui/date-range-picker-custom";
@@ -1060,13 +1061,6 @@ export default function OperacaoM30() {
   });
 
   const columns = useMemo(() => {
-    const baseStates = states.length ? states : Array.from(new Set(filteredRows.map((r) => r.state)));
-
-    const known = new Set(baseStates);
-    const extras = Array.from(new Set(filteredRows.map((r) => r.state))).filter((s) => !known.has(s));
-
-    const all = [...baseStates, ...(extras.length ? ["__other__"] : [])];
-
     const sortCases = (a: CaseRow, b: CaseRow) => {
       const ap = Boolean((a.meta_json as any)?.priority);
       const bp = Boolean((b.meta_json as any)?.priority);
@@ -1081,32 +1075,18 @@ export default function OperacaoM30() {
       return new Date(bt).getTime() - new Date(at).getTime();
     };
 
-    return all.map((st) => {
-      const isAnalise = st === "em_anlise" || st === "em_analise";
-
-      const itemsRaw =
-        st === "__other__"
-          ? filteredRows.filter((r) => {
-            if (known.has(r.state)) return false;
-            // If current state column is analise-related, maybe it's "known" via typo
-            if (isAnalise && (r.state === "em_anlise" || r.state === "em_analise")) return false;
-            return true;
-          })
-          : filteredRows.filter((r) => {
-            if (r.state === st) return true;
-            if (isAnalise && (r.state === "em_anlise" || r.state === "em_analise")) return true;
-            return false;
-          });
-
+    return M30_MACRO_STATES.map((macro) => {
+      const itemsRaw = filteredRows.filter((r) => getMacroStateKey(r.state) === macro.key);
       const items = [...itemsRaw].sort(sortCases);
 
       return {
-        key: st,
-        label: st === "__other__" ? "Outros" : getStateLabel(selectedJourney as any, st),
+        key: macro.key,
+        label: macro.label,
+        defaultInternalState: macro.defaultInternalState,
         items,
       };
     });
-  }, [filteredRows, states, unreadByCase, lastInboundAtByCase, selectedJourney]);
+  }, [filteredRows, unreadByCase, lastInboundAtByCase]);
 
   const listStateOptions = useMemo(() => {
     const baseStates = states.length ? states : Array.from(new Set(filteredRows.map((r) => r.state)));
@@ -1495,7 +1475,7 @@ export default function OperacaoM30() {
                         const cid = e.dataTransfer.getData("text/caseId");
                         if (!cid) return;
                         if (movingCaseId) return;
-                        updateCaseState(cid, col.key);
+                        updateCaseState(cid, col.defaultInternalState);
                       }}
                     >
                       <div className="flex items-center justify-between px-1 mb-2">
@@ -1577,6 +1557,9 @@ export default function OperacaoM30() {
                                       />
                                     </div>
                                     <div className="truncate text-sm font-semibold text-slate-900" title={titlePrimary}>{titlePrimary}</div>
+                                    <div className="flex items-center gap-1 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] uppercase font-bold text-slate-600 ring-1 ring-inset ring-slate-500/20" title="Status Interno">
+                                      {c.state}
+                                    </div>
                                     {locks[c.id] && (
                                       <div className="flex items-center gap-1 rounded bg-rose-50 px-1.5 py-0.5 text-[10px] uppercase font-bold text-rose-600 ring-1 ring-inset ring-rose-500/20" title={`Sendo editado por ${locks[c.id].userName}`}>
                                         <Lock className="h-3 w-3" /> Em Edição

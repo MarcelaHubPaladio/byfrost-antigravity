@@ -11,6 +11,7 @@ import { RequireRouteAccess } from "@/components/RequireRouteAccess";
 import { RequireTenantRole } from "@/components/RequireTenantRole";
 import { useTenant } from "@/providers/TenantProvider";
 import { supabase } from "@/lib/supabase";
+import { M30_MACRO_STATES, getMacroStateKey } from "@/lib/journeys/m30MacroStates";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -507,8 +508,7 @@ export default function CommitmentDetail() {
   });
 
   const m30KanbanData = useMemo(() => {
-    const states = (m30JourneyQ.data?.default_state_machine_json?.states ?? []) as string[];
-    const list = states.map(s => ({ state: s, items: [] as any[] }));
+    const list = M30_MACRO_STATES.map(m => ({ state: m.label, key: m.key, items: [] as any[] }));
     
     const filteredCases = (m30CasesQ.data ?? []).filter(c => {
       if (!searchCases.trim()) return true;
@@ -523,7 +523,8 @@ export default function CommitmentDetail() {
     });
 
     for (const c of filteredCases) {
-      const col = list.find(l => l.state === c.state);
+      const macroKey = getMacroStateKey(c.state);
+      const col = list.find(l => l.key === macroKey);
       if (col) col.items.push(c);
       else {
         // fallback
@@ -532,7 +533,7 @@ export default function CommitmentDetail() {
       }
     }
     return list;
-  }, [m30JourneyQ.data, m30CasesQ.data, searchCases, clientLabels]);
+  }, [m30CasesQ.data, searchCases, clientLabels]);
 
   const journeysQ = useQuery({
     queryKey: ["active_journeys", activeTenantId],
@@ -1481,7 +1482,7 @@ export default function CommitmentDetail() {
 
                 <div className="flex gap-4 overflow-x-auto pb-4 no-scrollbar">
                   {m30KanbanData.map((col) => (
-                    <div key={col.state} className="min-w-[280px] flex-1">
+                    <div key={col.key} className="min-w-[280px] flex-1">
                       <div className="flex items-center justify-between mb-3 px-2">
                         <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">
                           {col.state}
@@ -1942,6 +1943,10 @@ function M30KanbanCaseCard({ c, clientLabels, commitmentId, onRefetch }: { c: an
         {(c.meta_json as any)?.priority && (
           <AlertCircle className="h-3 w-3 text-rose-500 shrink-0" />
         )}
+      </div>
+      
+      <div className="mt-2 flex items-center gap-1 rounded bg-slate-100 px-1.5 py-0.5 text-[9px] uppercase font-bold text-slate-600 ring-1 ring-inset ring-slate-500/20 w-fit" title="Status Interno">
+        {c.state}
       </div>
       
       <div className="mt-2 flex flex-wrap gap-1">
