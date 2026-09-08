@@ -164,7 +164,6 @@ function SubtaskItemContent({
     const [postDate, setPostDate] = useState(st.post_date || "");
     const [priority, setPriority] = useState(st.priority || false);
     const [postado, setPostado] = useState(st.postado || false);
-    const [sendingWhatsApp, setSendingWhatsApp] = useState(false);
     const [deliverableId, setDeliverableId] = useState(st.deliverable_id || "");
     const [status, setStatus] = useState(st.status || st.state || "planejamento");
     const [description, setDescription] = useState(st.description || "");
@@ -179,6 +178,26 @@ function SubtaskItemContent({
     
     const [saving, setSaving] = useState(false);
     const [lastSaved, setLastSaved] = useState<Date | null>(null);
+    const initialRender = useRef(true);
+
+    const handleOpenApprovalModal = () => {
+        (window as any).openGlobalApprovalModal({
+            initialLink: approvalLink,
+            title,
+            idx,
+            deliverableId,
+            description,
+            scriptRaw,
+            scriptItems,
+            type,
+            postDate,
+            priority,
+            onSuccess: () => {
+                setStatus("aprovacao");
+                onRefetch();
+            }
+        });
+    };
 
     const handleSave = async () => {
         setSaving(true);
@@ -527,7 +546,7 @@ function SubtaskItemContent({
                         setStatus(val);
                         if (val === "aprovacao") {
                             setTimeout(() => {
-                                setApprovalModalOpen(true);
+                                handleOpenApprovalModal();
                             }, 300);
                         }
                     }}>
@@ -585,7 +604,7 @@ function SubtaskItemContent({
                                 onClick={(e) => {
                                     e.preventDefault();
                                     e.stopPropagation();
-                                    setApprovalModalOpen(true);
+                                    handleOpenApprovalModal();
                                 }}
                                 className="h-9 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-4 shadow-sm"
                             >
@@ -916,133 +935,6 @@ function VideoDeliverySection({
                     </div>
                 </div>
             </div>
-
-            <Dialog open={approvalModalOpen} onOpenChange={setApprovalModalOpen}>
-                <DialogContent className="max-w-md rounded-3xl border-slate-200">
-                    <DialogHeader>
-                        <DialogTitle className="text-xl font-bold flex items-center gap-2">
-                            <MessageSquareWarning className="h-5 w-5 text-emerald-600" />
-                            Enviar para Aprovação
-                        </DialogTitle>
-                        <DialogDescription className="text-slate-500 text-sm">
-                            Informe o link final do Drive para esta subtarefa.
-                        </DialogDescription>
-                    </DialogHeader>
-
-                    <div className="space-y-4 py-4">
-                        <div className="space-y-2">
-                            <Label className="text-xs font-bold text-slate-500 uppercase px-1">Link do Google Drive</Label>
-                            <input 
-                                value={approvalLink}
-                                onChange={(e) => setApprovalLink(e.target.value)}
-                                className="w-full h-11 rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm font-medium focus:ring-2 focus:ring-emerald-500 outline-none shadow-sm"
-                                placeholder="https://drive.google.com/..."
-                            />
-                        </div>
-                    </div>
-
-                    <div className="flex flex-col sm:flex-row justify-end gap-2 pt-2">
-                        <Button 
-                            variant="outline" 
-                            className="h-10 rounded-2xl font-bold px-4 border-slate-200 hover:bg-slate-50 text-slate-600"
-                            onClick={() => setApprovalModalOpen(false)}
-                            disabled={saving || sendingWhatsApp}
-                        >
-                            Cancelar
-                        </Button>
-                        <Button 
-                            variant="secondary"
-                            className="h-10 rounded-2xl font-bold px-4 hover:bg-slate-200"
-                            disabled={saving || sendingWhatsApp}
-                            onClick={async () => {
-                                if (!approvalLink) {
-                                    showError("Informe o link do Drive para aprovação!");
-                                    return;
-                                }
-                                setSaving(true);
-                                try {
-                                    const { data: latestCase } = await supabase.from("cases").select("meta_json").eq("id", caseId).single();
-                                    const latestMeta = latestCase?.meta_json as any || caseMeta;
-                                    const currentSubtasks = [...(latestMeta?.pending_subtasks || [])];
-                                    currentSubtasks[idx] = {
-                                        ...currentSubtasks[idx],
-                                        title, type, status: "aprovacao", post_date: postDate, priority,
-                                        deliverable_id: deliverableId, description, script_raw: scriptRaw,
-                                        script_items: scriptItems, drive_link: approvalLink
-                                    };
-                                    let updatePayload: any = { meta_json: { ...latestMeta, pending_subtasks: currentSubtasks } };
-                                    if (latestMeta.case_type === 'strategy') {
-                                        updatePayload.state = computeStrategyState(currentSubtasks);
-                                    }
-                                    await supabase.from("cases").update(updatePayload).eq("id", caseId);
-                                    onRefetch();
-                                    setStatus("aprovacao");
-                                    setApprovalModalOpen(false);
-                                    showSuccess("Status alterado para Aprovação.");
-                                } catch (e: any) {
-                                    showError(`Erro ao salvar: ${e.message}`);
-                                } finally {
-                                    setSaving(false);
-                                }
-                            }}
-                        >
-                            {saving && !sendingWhatsApp ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
-                            Apenas Salvar
-                        </Button>
-                        <Button 
-                            className="h-10 rounded-2xl font-bold px-4 bg-emerald-600 hover:bg-emerald-700 text-white gap-2 shadow-sm"
-                            disabled={saving || sendingWhatsApp}
-                            onClick={async () => {
-                                if (!approvalLink) {
-                                    showError("Informe o link do Drive para aprovação!");
-                                    return;
-                                }
-                                setSendingWhatsApp(true);
-                                try {
-                                    const { data: latestCase } = await supabase.from("cases").select("meta_json, title").eq("id", caseId).single();
-                                    const latestMeta = latestCase?.meta_json as any || caseMeta;
-                                    const currentSubtasks = [...(latestMeta?.pending_subtasks || [])];
-                                    currentSubtasks[idx] = {
-                                        ...currentSubtasks[idx],
-                                        title, type, status: "aprovacao", post_date: postDate, priority,
-                                        deliverable_id: deliverableId, description, script_raw: scriptRaw,
-                                        script_items: scriptItems, drive_link: approvalLink
-                                    };
-                                    let updatePayload: any = { meta_json: { ...latestMeta, pending_subtasks: currentSubtasks } };
-                                    if (latestMeta.case_type === 'strategy') {
-                                        updatePayload.state = computeStrategyState(currentSubtasks);
-                                    }
-                                    await supabase.from("cases").update(updatePayload).eq("id", caseId);
-                                    onRefetch();
-                                    
-                                    const { data: cEntity } = await supabase.from("core_entities").select("wa_group_id").eq("id", latestMeta.entity_id || caseData?.customer_entity_id).maybeSingle();
-                                    const waGroupId = cEntity?.wa_group_id;
-                                    
-                                    if (waGroupId && title) {
-                                        const msg = `🚀 *Aprovação de Conteúdo*\n\nTemos um novo material pronto para aprovação!\n\n*Material*: ${title}\n*Link*: ${approvalLink}\n\nPor favor, confira o link acima e nos retorne com a sua aprovação ou considerações.`;
-                                        const { data: inst } = await supabase.from("whatsapp_instances").select("id").eq("tenant_id", caseData?.tenant_id!).limit(1).maybeSingle();
-                                        if (inst) {
-                                            await supabase.functions.invoke("integrations-zapi-send", {
-                                                body: { tenantId: caseData?.tenant_id, instanceId: inst.id, to: waGroupId, type: "text", text: msg, meta: { case_id: caseId } }
-                                            });
-                                        }
-                                    }
-                                    setStatus("aprovacao");
-                                    setApprovalModalOpen(false);
-                                    showSuccess("Aprovação salva e enviada para o WhatsApp do cliente!");
-                                } catch (e: any) {
-                                    showError(`Erro ao salvar/enviar: ${e.message}`);
-                                } finally {
-                                    setSendingWhatsApp(false);
-                                }
-                            }}
-                        >
-                            {sendingWhatsApp ? <Loader2 className="h-4 w-4 animate-spin" /> : <Rocket className="h-4 w-4" />}
-                            {sendingWhatsApp ? "Enviando..." : "Salvar + Enviar"}
-                        </Button>
-                    </div>
-                </DialogContent>
-            </Dialog>
         </div>
     );
 }
@@ -1078,6 +970,36 @@ const SortableAccordionItem = ({ sortableId, value, className, children }: { sor
 
 export default function OperacaoM30Case() {
     const { id } = useParams();
+    
+    // Global Approval Modal State
+    const [globalApprovalModal, setGlobalApprovalModal] = useState<{
+        isOpen: boolean;
+        initialLink: string;
+        title: string;
+        idx: number;
+        deliverableId: string;
+        description: string;
+        scriptRaw: string;
+        scriptItems: any[];
+        type: string;
+        postDate: string;
+        priority: boolean;
+        onSuccess: () => void;
+    } | null>(null);
+    const [approvalModalLink, setApprovalModalLink] = useState("");
+    const [approvalModalSaving, setApprovalModalSaving] = useState(false);
+    const [approvalModalSending, setApprovalModalSending] = useState(false);
+
+    useEffect(() => {
+        (window as any).openGlobalApprovalModal = (data: any) => {
+            setGlobalApprovalModal({ ...data, isOpen: true });
+            setApprovalModalLink(data.initialLink || "");
+        };
+        return () => {
+            delete (window as any).openGlobalApprovalModal;
+        };
+    }, []);
+
     const nav = useNavigate();
     const qc = useQueryClient();
     const { activeTenantId, isSuperAdmin } = useTenant();
