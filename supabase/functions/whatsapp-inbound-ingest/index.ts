@@ -332,6 +332,43 @@ serve(async (req) => {
 
         const { conversation_id, message_id, case_id, journey_id, ok: ingestOk, event: ingestEvent } = auditResult;
 
+        // 5.5. Customer Success (CS) Groups AI Trigger
+        if (ingestOk && direction === "inbound" && message_id) {
+            try {
+                const targetJid = isGroup ? groupId : msgParticipantPhone;
+                if (targetJid) {
+                    const { data: csGroup } = await supabase
+                        .from("beeia_cs_groups")
+                        .select("id, beeia_enabled")
+                        .eq("tenant_id", instance.tenant_id)
+                        .eq("wa_instance_id", instance.id)
+                        .eq("group_jid", targetJid)
+                        .is("deleted_at", null)
+                        .maybeSingle();
+
+                    if (csGroup && csGroup.beeia_enabled) {
+                        await supabase.from("job_queue").insert({
+                            tenant_id: instance.tenant_id,
+                            type: "BEEIA_PROCESS_CS_MESSAGE",
+                            status: "pending",
+                            payload_json: {
+                                cs_group_id: csGroup.id,
+                                message_id,
+                                conversation_id,
+                                instance_id: instance.id,
+                                zapi_instance_id: zapiId,
+                                from: normalized.from,
+                                participant: msgParticipantPhone
+                            }
+                        });
+                        console.log(`[${fn}] Enqueued BEEIA_PROCESS_CS_MESSAGE for targetJid: ${targetJid}`);
+                    }
+                }
+            } catch(e) {
+                console.error(`[${fn}] Failed to check CS Groups`, e);
+            }
+        }
+
         // 6. DIAGNOSTIC LOGGING (wa_webhook_inbox)
         try {
             const inboxRecord = {

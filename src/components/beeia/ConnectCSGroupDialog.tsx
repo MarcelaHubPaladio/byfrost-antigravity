@@ -65,13 +65,17 @@ export function ConnectCSGroupDialog({ open, onOpenChange, tenantId }: ConnectCS
     queryFn: async () => {
       const { data, error } = await supabase
         .from("core_entities")
-        .select("id, display_name")
+        .select("id, display_name, commercial_commitments!commercial_commitments_customer_fk!inner(id)")
         .eq("tenant_id", tenantId)
         .eq("entity_type", "party")
         .is("deleted_at", null)
+        .is("commercial_commitments.deleted_at", null)
         .order("display_name");
       if (error) throw error;
-      return data || [];
+      
+      // Deduplicate in case of multiple contracts
+      const uniqueData = Array.from(new Map(data?.map(item => [item.id, item])).values());
+      return uniqueData || [];
     }
   });
 
