@@ -14,13 +14,19 @@ async function main() {
 
   console.log("Group:", bg.group_name, bg.commitment_id);
 
-  const { data: opContextRes, error } = await supabase.functions.invoke("m30-operational-context", {
-    body: { tenantId: bg.tenant_id, commitmentId: bg.commitment_id }
+  const res = await fetch(`${supabaseUrl}/functions/v1/m30-operational-context`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${supabaseKey}`
+    },
+    body: JSON.stringify({ tenantId: bg.tenant_id, commitmentId: bg.commitment_id })
   });
+  
+  const opContextRes = await res.json();
 
   console.log("Operational Context Response:");
   console.log(JSON.stringify(opContextRes, null, 2));
-  if (error) console.error("Error:", error);
 }
 
 main();

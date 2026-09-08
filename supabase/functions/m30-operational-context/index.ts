@@ -33,10 +33,13 @@ serve(async (req) => {
     const supabase = createSupabaseAdmin();
 
     // Verify auth
-    const { data: userRes, error: userErr } = await supabase.auth.getUser(token);
-    if (userErr || !userRes?.user) {
-      console.error(`[${fn}] auth.getUser failed`, { error: userErr?.message });
-      return err("unauthorized", 401);
+    const isServiceRole = token === Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    if (!isServiceRole) {
+      const { data: userRes, error: userErr } = await supabase.auth.getUser(token);
+      if (userErr || !userRes?.user) {
+        console.error(`[${fn}] auth.getUser failed`, { error: userErr?.message });
+        return err("unauthorized", 401);
+      }
     }
 
     // 1. Fetch Commitment & Deliverables
