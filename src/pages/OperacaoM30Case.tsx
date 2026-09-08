@@ -996,8 +996,10 @@ export default function OperacaoM30Case() {
     useEffect(() => {
         const handler = (e: any) => {
             console.log("Global modal event received!", e.detail);
-            setGlobalApprovalModal({ ...e.detail, isOpen: true });
-            setApprovalModalLink(e.detail.initialLink || "");
+            setTimeout(() => {
+                setGlobalApprovalModal({ ...e.detail, isOpen: true });
+                setApprovalModalLink(e.detail.initialLink || "");
+            }, 100);
         };
         window.addEventListener('open-approval-modal', handler);
         return () => window.removeEventListener('open-approval-modal', handler);
