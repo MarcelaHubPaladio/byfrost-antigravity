@@ -119,6 +119,15 @@ function normalizeInbound(payload: any) {
 
     const externalMessageId = pickFirst<string>(payload?.messageId, payload?.id) ?? null;
 
+    const contactName = pickFirst<string>(
+        payload?.groupName,
+        payload?.data?.groupName,
+        payload?.senderName,
+        payload?.data?.senderName,
+        payload?.contactName,
+        payload?.pushName
+    );
+
     return {
         zapiInstanceId,
         isGroup,
@@ -129,6 +138,7 @@ function normalizeInbound(payload: any) {
         text: messageText ?? null,
         mediaUrl: mediaUrl ?? null,
         externalMessageId,
+        contactName: contactName ?? null,
         raw: payload
     };
 }
@@ -190,6 +200,40 @@ serve(async (req) => {
         const msgParticipantPhone = isGroup
             ? (fromMe ? instPhone : normalized.participant || normalized.from)
             : participantPhone;
+
+        // 3.5 Auto-Save Groups to wa_contacts (makes them appear in UI Combobox)
+        if (isGroup && groupId) {
+            try {
+                const { data: existingGroup } = await supabase
+                    .from("wa_contacts")
+                    .select("id, name")
+                    .eq("tenant_id", instance.tenant_id)
+                    .eq("phone_e164", groupId)
+                    .is("deleted_at", null)
+                    .maybeSingle();
+
+                const newName = normalized.contactName || undefined;
+
+                if (!existingGroup) {
+                    await supabase
+                        .from("wa_contacts")
+                        .insert({
+                            tenant_id: instance.tenant_id,
+                            phone_e164: groupId,
+                            name: newName || "Grupo Desconhecido",
+                            role_hint: "lead",
+                            meta_json: { auto_mapped_group: true }
+                        });
+                } else if (!existingGroup.name && newName) {
+                    await supabase
+                        .from("wa_contacts")
+                        .update({ name: newName })
+                        .eq("id", existingGroup.id);
+                }
+            } catch(e) {
+                console.error(`[${fn}] Failed to auto-save group ${groupId}`, e);
+            }
+        }
 
         // 4. Atomic Ingestion via RPC (ONLY for messages/chat events)
         let auditResult = { conversation_id: null, message_id: null, case_id: null, journey_id: null, ok: true, event: "none" };
