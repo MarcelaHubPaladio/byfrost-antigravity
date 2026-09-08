@@ -87,6 +87,7 @@ import {
     Tag,
     Bot,
     Sparkles,
+    Send,
     Upload,
     UserCircle
 } from "lucide-react";
