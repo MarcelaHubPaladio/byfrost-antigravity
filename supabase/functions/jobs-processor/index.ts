@@ -1324,13 +1324,13 @@ async function processBeeIaCSMessageJob(opts: { supabase: any, job: any }) {
   // 2. Fetch Conversation History (last 15 messages)
   const { data: messages } = await supabase
     .from("wa_messages")
-    .select("body_text, type, from_phone, to_phone, participant_phone, direction, occurred_at")
+    .select("body_text, type, from_phone, to_phone, direction, occurred_at")
     .or(`from_phone.eq.${from},to_phone.eq.${from}`)
     .order("occurred_at", { ascending: false })
     .limit(15);
 
   const history = (messages || []).reverse().map((m: any) => {
-    const sender = m.direction === "outbound" ? "Assistente (Você)" : `Cliente (${m.participant_phone || m.from_phone})`;
+    const sender = m.direction === "outbound" ? "Assistente (Você)" : `Cliente (${m.from_phone})`;
     return `[${m.occurred_at}] ${sender}: ${m.body_text || "<mídia>"}`;
   }).join("\n");
 
