@@ -121,6 +121,7 @@ serve(async (req) => {
         let doneSubtasks = 0;
         let activeCount = 0;
         let pendingApprovalsCount = 0;
+        const stratsList: any[] = [];
 
         for (const sc of cycleCases) {
           const subs = (sc.meta_json as any)?.pending_subtasks || [];
@@ -129,6 +130,17 @@ serve(async (req) => {
           
           if (sc.state !== 'concluido') activeCount++;
           if (sc.state === 'aprovacao') pendingApprovalsCount++;
+
+          stratsList.push({
+            title: (sc.meta_json as any)?.strategy_title || sc.title || "Estratégia sem nome",
+            objective: (sc.meta_json as any)?.strategy_objective || "",
+            state: sc.state,
+            subtasks: subs.map((s: any) => ({
+              title: s.title || "Subtarefa",
+              type: s.type || "Geral",
+              status: s.status || "Pendente"
+            }))
+          });
         }
 
         current_cycle = {
@@ -145,6 +157,7 @@ serve(async (req) => {
           date_approval: reprMeta.date_approval || null,
           date_posting: reprMeta.date_posting || null,
           date_report: reprMeta.date_report || null,
+          strategies: stratsList,
         };
 
         if (reprMeta.date_planning) next_events.push({ name: 'Planejamento', date: reprMeta.date_planning });

@@ -87,6 +87,18 @@ export function EditCSGroupDialog({ open, onOpenChange, group }: EditCSGroupDial
           if (ctx.current_cycle.date_recording) contextText += `Data de Gravação: ${ctx.current_cycle.date_recording}\n`;
           if (ctx.current_cycle.date_approval) contextText += `Data de Aprovação: ${ctx.current_cycle.date_approval}\n`;
           if (ctx.current_cycle.date_posting) contextText += `Data de Postagem: ${ctx.current_cycle.date_posting}\n`;
+          
+          if (ctx.current_cycle.strategies && ctx.current_cycle.strategies.length > 0) {
+            contextText += `\n[ESTRATÉGIAS E SUBTAREFAS DO CICLO]\n`;
+            ctx.current_cycle.strategies.forEach((st: any) => {
+              contextText += `- ${st.title} (Status atual do card: ${st.state})\n`;
+              if (st.subtasks && st.subtasks.length > 0) {
+                st.subtasks.forEach((sub: any) => {
+                  contextText += `  * [${sub.type}] ${sub.title} - Status: ${sub.status}\n`;
+                });
+              }
+            });
+          }
         }
 
         if (ctx.account_context) {
