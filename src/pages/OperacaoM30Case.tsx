@@ -3271,8 +3271,17 @@ export default function OperacaoM30Case() {
                                             }
                                             await supabase.from("cases").update(updatePayload).eq("id", id);
                                             
-                                            const { data: cEntity } = await supabase.from("core_entities").select("wa_group_id").eq("id", latestMeta.entity_id || caseQ.data?.customer_entity_id).maybeSingle();
-                                            const waGroupId = cEntity?.wa_group_id;
+                                            let targetEntityId = latestMeta.entity_id || caseQ.data?.customer_entity_id;
+                                            if (!targetEntityId && caseQ.data?.customer_id) {
+                                                const { data: acc } = await supabase.from("customer_accounts").select("entity_id").eq("id", caseQ.data.customer_id).maybeSingle();
+                                                if (acc?.entity_id) targetEntityId = acc.entity_id;
+                                            }
+                                            
+                                            let waGroupId = null;
+                                            if (targetEntityId) {
+                                                const { data: cEntity } = await supabase.from("core_entities").select("wa_group_id").eq("id", targetEntityId).maybeSingle();
+                                                waGroupId = cEntity?.wa_group_id;
+                                            }
                                             
                                             if (waGroupId && globalApprovalModal.title) {
                                                 const msg = `🚀 *Aprovação de Conteúdo*\n\nTemos um novo material pronto para aprovação!\n\n*Material*: ${globalApprovalModal.title}\n*Link*: ${approvalModalLink}\n\nPor favor, confira o link acima e nos retorne com a sua aprovação ou considerações.`;
