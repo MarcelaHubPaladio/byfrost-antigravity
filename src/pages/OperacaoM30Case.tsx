@@ -164,6 +164,7 @@ function SubtaskItemContent({
     const [postDate, setPostDate] = useState(st.post_date || "");
     const [priority, setPriority] = useState(st.priority || false);
     const [postado, setPostado] = useState(st.postado || false);
+    const [sendingWhatsApp, setSendingWhatsApp] = useState(false);
     const [deliverableId, setDeliverableId] = useState(st.deliverable_id || "");
     const [status, setStatus] = useState(st.status || st.state || "planejamento");
     const [description, setDescription] = useState(st.description || "");
@@ -945,19 +946,19 @@ function VideoDeliverySection({
                             variant="outline" 
                             className="h-10 rounded-2xl font-bold px-4 border-slate-200 hover:bg-slate-50 text-slate-600"
                             onClick={() => setApprovalModalOpen(false)}
+                            disabled={saving || sendingWhatsApp}
                         >
                             Cancelar
                         </Button>
                         <Button 
                             variant="secondary"
                             className="h-10 rounded-2xl font-bold px-4 hover:bg-slate-200"
+                            disabled={saving || sendingWhatsApp}
                             onClick={async () => {
                                 if (!approvalLink) {
                                     showError("Informe o link do Drive para aprovação!");
                                     return;
                                 }
-                                setApprovalModalOpen(false);
-                                setStatus("aprovacao");
                                 setSaving(true);
                                 try {
                                     const { data: latestCase } = await supabase.from("cases").select("meta_json").eq("id", caseId).single();
@@ -975,6 +976,8 @@ function VideoDeliverySection({
                                     }
                                     await supabase.from("cases").update(updatePayload).eq("id", caseId);
                                     onRefetch();
+                                    setStatus("aprovacao");
+                                    setApprovalModalOpen(false);
                                     showSuccess("Status alterado para Aprovação.");
                                 } catch (e: any) {
                                     showError(`Erro ao salvar: ${e.message}`);
@@ -983,18 +986,18 @@ function VideoDeliverySection({
                                 }
                             }}
                         >
+                            {saving && !sendingWhatsApp ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
                             Apenas Salvar
                         </Button>
                         <Button 
                             className="h-10 rounded-2xl font-bold px-4 bg-emerald-600 hover:bg-emerald-700 text-white gap-2 shadow-sm"
+                            disabled={saving || sendingWhatsApp}
                             onClick={async () => {
                                 if (!approvalLink) {
                                     showError("Informe o link do Drive para aprovação!");
                                     return;
                                 }
-                                setApprovalModalOpen(false);
-                                setStatus("aprovacao");
-                                setSaving(true);
+                                setSendingWhatsApp(true);
                                 try {
                                     const { data: latestCase } = await supabase.from("cases").select("meta_json, title").eq("id", caseId).single();
                                     const latestMeta = latestCase?.meta_json as any || caseMeta;
@@ -1024,16 +1027,18 @@ function VideoDeliverySection({
                                             });
                                         }
                                     }
+                                    setStatus("aprovacao");
+                                    setApprovalModalOpen(false);
                                     showSuccess("Aprovação salva e enviada para o WhatsApp do cliente!");
                                 } catch (e: any) {
-                                    showError(`Erro ao salvar: ${e.message}`);
+                                    showError(`Erro ao salvar/enviar: ${e.message}`);
                                 } finally {
-                                    setSaving(false);
+                                    setSendingWhatsApp(false);
                                 }
                             }}
                         >
-                            <Rocket className="h-4 w-4" />
-                            Salvar + Enviar
+                            {sendingWhatsApp ? <Loader2 className="h-4 w-4 animate-spin" /> : <Rocket className="h-4 w-4" />}
+                            {sendingWhatsApp ? "Enviando..." : "Salvar + Enviar"}
                         </Button>
                     </div>
                 </DialogContent>
