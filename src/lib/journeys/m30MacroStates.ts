@@ -20,7 +20,7 @@ export function getMacroStateKey(internalState: string | null | undefined): stri
 
   if (st.includes("backlog")) return "backlog";
   
-  if (st.includes("boas_vindas") || st.includes("boas-vindas") || st.includes("planejamento") || st.includes("aprovar_roteiro") || st.includes("roteiro")) {
+  if (st.includes("boas_vindas") || st.includes("boas-vindas") || st.includes("planejado") || st.includes("planejamento") || st.includes("aprovar_roteiro") || st.includes("roteiro")) {
     return "planejado";
   }
 
