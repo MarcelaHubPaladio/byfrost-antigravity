@@ -3279,8 +3279,8 @@ export default function OperacaoM30Case() {
                                             
                                             let waGroupId = null;
                                             if (targetEntityId) {
-                                                const { data: cEntity } = await supabase.from("core_entities").select("wa_group_id").eq("id", targetEntityId).maybeSingle();
-                                                waGroupId = cEntity?.wa_group_id;
+                                                const { data: csGroup } = await supabase.from("beeia_cs_groups").select("group_jid").eq("customer_entity_id", targetEntityId).eq("tenant_id", caseQ.data?.tenant_id!).maybeSingle();
+                                                waGroupId = csGroup?.group_jid;
                                             }
                                             
                                             if (waGroupId && globalApprovalModal.title) {
