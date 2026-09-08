@@ -921,6 +921,10 @@ export default function OperacaoM30Case() {
     const [strategyContext, setStrategyContext] = useState("");
     const [assignedUserId, setAssignedUserId] = useState("");
 
+    const [approvalModalOpen, setApprovalModalOpen] = useState(false);
+    const [approvalLink, setApprovalLink] = useState("");
+    const [nextApprovalState, setNextApprovalState] = useState("");
+
     const [generatingSummary, setGeneratingSummary] = useState(false);
     const [entityComboOpen, setEntityComboOpen] = useState(false);
     const [entitySearch, setEntitySearch] = useState("");
@@ -1620,6 +1624,13 @@ export default function OperacaoM30Case() {
         if (updatingState) return;
         const prev = caseQ.data?.state ?? "";
         if (!next || next === prev) return;
+
+        if (next.includes("approve") || next.includes("aprovar") || next === "aprovacao") {
+            setApprovalLink((caseQ.data?.meta_json as any)?.video_url || "");
+            setNextApprovalState(next);
+            setApprovalModalOpen(true);
+            return;
+        }
 
         const isAdmin = profileQ.data?.role === 'admin' || (user as any)?.app_metadata?.role === 'super-admin';
         const isFinal = (s: string) => {
@@ -2532,9 +2543,33 @@ export default function OperacaoM30Case() {
                                                                             </div>
                                                                             <AccordionTrigger className="flex-1 hover:no-underline py-2 px-1">
                                                                                 <div className="flex flex-wrap items-center gap-2 sm:gap-3 flex-1 w-full">
-                                                                                    <Badge variant="secondary" className="text-[10px] h-5 shrink-0">
-                                                                                        {st.type === "arte_estatica" ? "ARTE" : "VÍDEO"}
-                                                                                    </Badge>
+                                                                                    <Select 
+                                                                                        value={st.type || "edicao"} 
+                                                                                        onValueChange={async (val) => {
+                                                                                            const { data: latestCase } = await supabase.from("cases").select("meta_json").eq("id", id!).single();
+                                                                                            const latestMeta = latestCase?.meta_json as any || caseQ.data?.meta_json || {};
+                                                                                            const current = latestMeta.pending_subtasks || [];
+                                                                                            const next = [...current];
+                                                                                            next[st._originalIdx] = { ...next[st._originalIdx], type: val };
+                                                                                            await supabase.from("cases").update({
+                                                                                                meta_json: { ...latestMeta, pending_subtasks: next }
+                                                                                            }).eq("id", id!);
+                                                                                            caseQ.refetch();
+                                                                                        }}
+                                                                                    >
+                                                                                        <SelectTrigger 
+                                                                                            className="h-6 px-2 text-[10px] font-bold rounded-xl bg-slate-100 border-none shrink-0" 
+                                                                                            onClick={(e) => e.stopPropagation()}
+                                                                                        >
+                                                                                            <SelectValue />
+                                                                                        </SelectTrigger>
+                                                                                        <SelectContent>
+                                                                                            <SelectItem value="edicao" className="text-[10px] font-bold">VÍDEO</SelectItem>
+                                                                                            <SelectItem value="arte_estatica" className="text-[10px] font-bold">ARTE</SelectItem>
+                                                                                            <SelectItem value="planejamento" className="text-[10px] font-bold">PLANEJAMENTO</SelectItem>
+                                                                                            <SelectItem value="gravacao" className="text-[10px] font-bold">GRAVAÇÃO</SelectItem>
+                                                                                        </SelectContent>
+                                                                                    </Select>
                                                                                     <span className="text-sm text-slate-700 font-bold text-left flex-1 min-w-[150px] leading-tight break-words">{st.title}</span>
                                                                                     {st.is_approved && (
                                                                                         <Badge className="bg-emerald-500 text-white border-none h-4 px-1.5 text-[8px] font-black animate-in fade-in zoom-in duration-300">
@@ -2556,6 +2591,11 @@ export default function OperacaoM30Case() {
                                                                                             <Calendar className="h-3 w-3" />
                                                                                             {new Date(st.post_date).toLocaleDateString("pt-BR", { timeZone: "UTC" })}
                                                                                         </span>
+                                                                                    )}
+                                                                                    {st.postado && (
+                                                                                        <Badge className="bg-blue-500 text-white border-none h-4 px-1.5 text-[8px] font-black animate-in fade-in zoom-in duration-300">
+                                                                                            POSTADO
+                                                                                        </Badge>
                                                                                     )}
                                                                                 </div>
                                                                             </AccordionTrigger>
@@ -2615,6 +2655,26 @@ export default function OperacaoM30Case() {
                                                                         </Button>
                                                                     </Link>
                                                                 )}
+                                                                        <Button 
+                                                                            variant="ghost" 
+                                                                            size="sm" 
+                                                                            className={cn("h-9 rounded-xl px-2 text-[10px] font-bold transition-all", st.postado ? "text-blue-600 bg-blue-50 hover:bg-blue-100" : "text-slate-400 hover:text-blue-600 hover:bg-blue-50")}
+                                                                            onClick={async (e) => {
+                                                                                e.stopPropagation();
+                                                                                const { data: latestCase } = await supabase.from("cases").select("meta_json").eq("id", id!).single();
+                                                                                const latestMeta = latestCase?.meta_json as any || caseQ.data?.meta_json || {};
+                                                                                const current = latestMeta.pending_subtasks || [];
+                                                                                const next = [...current];
+                                                                                next[st._originalIdx] = { ...next[st._originalIdx], postado: !st.postado };
+                                                                                await supabase.from("cases").update({
+                                                                                    meta_json: { ...latestMeta, pending_subtasks: next }
+                                                                                }).eq("id", id!);
+                                                                                caseQ.refetch();
+                                                                            }}
+                                                                            title="Marcar/Desmarcar como Postado"
+                                                                        >
+                                                                            {st.postado ? "POSTADO" : "POSTAR"}
+                                                                        </Button>
 
                                                                         <Button 
                                                                             variant="ghost" 
@@ -2906,9 +2966,10 @@ export default function OperacaoM30Case() {
                     </Card>
                 </div>
 
-                <TransitionBlockDialog
+                <TransitionBlockDialog 
                     open={transitionBlock.open}
-                    onOpenChange={(v) => setTransitionBlock({ ...transitionBlock, open: v })}
+                    onOpenChange={(open) => !open && setTransitionBlock({ open: false, nextStateName: "", reasons: [] })}
+                    reasons={transitionBlock.reasons}
                     nextStateName={transitionBlock.nextStateName}
                     blocks={transitionBlock.reasons}
                 />
@@ -3019,6 +3080,146 @@ export default function OperacaoM30Case() {
                         </AlertDialogFooter>
                     </AlertDialogContent>
                 </AlertDialog>
+
+                <Dialog open={approvalModalOpen} onOpenChange={setApprovalModalOpen}>
+                    <DialogContent className="max-w-md rounded-3xl border-slate-200">
+                        <DialogHeader>
+                            <DialogTitle className="text-xl font-bold flex items-center gap-2">
+                                <MessageSquareWarning className="h-5 w-5 text-emerald-600" />
+                                Enviar para Aprovação
+                            </DialogTitle>
+                            <DialogDescription className="text-slate-500 text-sm">
+                                Informe o link final do Drive para enviar ao cliente para aprovação.
+                            </DialogDescription>
+                        </DialogHeader>
+
+                        <div className="space-y-4 py-4">
+                            <div className="space-y-2">
+                                <Label className="text-xs font-bold text-slate-500 uppercase px-1">Link do Google Drive</Label>
+                                <input 
+                                    value={approvalLink}
+                                    onChange={(e) => setApprovalLink(e.target.value)}
+                                    className="w-full h-11 rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm font-medium focus:ring-2 focus:ring-emerald-500 outline-none shadow-sm"
+                                    placeholder="https://drive.google.com/..."
+                                />
+                            </div>
+                        </div>
+
+                        <div className="flex flex-col sm:flex-row justify-end gap-2 pt-2">
+                            <Button 
+                                variant="outline" 
+                                className="h-10 rounded-2xl font-bold px-4 border-slate-200 hover:bg-slate-50 text-slate-600"
+                                onClick={() => setApprovalModalOpen(false)}
+                            >
+                                Cancelar
+                            </Button>
+                            <Button 
+                                variant="secondary"
+                                className="h-10 rounded-2xl font-bold px-4 hover:bg-slate-200"
+                                onClick={async () => {
+                                    if (!approvalLink) {
+                                        showError("Informe o link do Drive para aprovação!");
+                                        return;
+                                    }
+                                    setApprovalModalOpen(false);
+                                    
+                                    const sm = journeyQ.data?.default_state_machine_json as any;
+                                    const blocksReasons = await checkTransitionBlocks(supabase, activeTenantId!, id!, caseQ.data?.state || "", nextApprovalState, sm);
+
+                                    if (blocksReasons.length > 0) {
+                                        setTransitionBlock({ open: true, nextStateName: nextApprovalState, reasons: blocksReasons });
+                                        return;
+                                    }
+
+                                    try {
+                                        const { data: latestCase } = await supabase.from("cases").select("meta_json").eq("id", id).single();
+                                        const nextMeta = { ...((latestCase?.meta_json as any) || {}), video_url: approvalLink };
+                                        await supabase.from("cases").update({ meta_json: nextMeta }).eq("id", id);
+                                        
+                                        await transitionState(
+                                            id!,
+                                            caseQ.data?.state ?? "",
+                                            nextApprovalState,
+                                            journeyQ.data?.default_state_machine_json as unknown as StateMachine
+                                        );
+                                        
+                                        showSuccess("Status alterado com sucesso!");
+                                        caseQ.refetch();
+                                    } catch (e: any) {
+                                        showError(`Erro: ${e.message}`);
+                                    }
+                                }}
+                            >
+                                Apenas Salvar
+                            </Button>
+                            <Button 
+                                className="h-10 rounded-2xl font-bold px-4 bg-emerald-600 hover:bg-emerald-700 text-white gap-2 shadow-sm"
+                                onClick={async () => {
+                                    if (!approvalLink) {
+                                        showError("Informe o link do Drive para aprovação!");
+                                        return;
+                                    }
+                                    setApprovalModalOpen(false);
+                                    
+                                    const sm = journeyQ.data?.default_state_machine_json as any;
+                                    const blocksReasons = await checkTransitionBlocks(supabase, activeTenantId!, id!, caseQ.data?.state || "", nextApprovalState, sm);
+
+                                    if (blocksReasons.length > 0) {
+                                        setTransitionBlock({ open: true, nextStateName: nextApprovalState, reasons: blocksReasons });
+                                        return;
+                                    }
+
+                                    try {
+                                        const { data: latestCase } = await supabase.from("cases").select("meta_json").eq("id", id).single();
+                                        const nextMeta = { ...((latestCase?.meta_json as any) || {}), video_url: approvalLink };
+                                        await supabase.from("cases").update({ meta_json: nextMeta }).eq("id", id);
+                                        
+                                        await transitionState(
+                                            id!,
+                                            caseQ.data?.state ?? "",
+                                            nextApprovalState,
+                                            journeyQ.data?.default_state_machine_json as unknown as StateMachine
+                                        );
+                                        
+                                        const waGroupId = entityQ.data?.wa_group_id;
+                                        if (waGroupId && caseQ.data?.title) {
+                                            const msg = `🚀 *Aprovação de Conteúdo*\n\nTemos um novo material pronto para aprovação!\n\n*Título*: ${caseQ.data.title}\n*Link*: ${approvalLink}\n\nPor favor, confira o link acima e nos retorne com a sua aprovação ou considerações.`;
+                                            
+                                            const { data: inst } = await supabase
+                                                .from("whatsapp_instances")
+                                                .select("id")
+                                                .eq("tenant_id", activeTenantId!)
+                                                .limit(1)
+                                                .maybeSingle();
+
+                                            if (inst) {
+                                                const { error: waErr } = await supabase.functions.invoke("integrations-zapi-send", {
+                                                    body: {
+                                                        tenantId: activeTenantId,
+                                                        instanceId: inst.id,
+                                                        to: waGroupId,
+                                                        type: "text",
+                                                        text: msg,
+                                                        meta: { case_id: id },
+                                                    }
+                                                });
+                                                if (waErr) console.error("Falha ao enviar WA de aprovação:", waErr);
+                                            }
+                                        }
+
+                                        showSuccess("Aprovação enviada para o WhatsApp do cliente!");
+                                        caseQ.refetch();
+                                    } catch (e: any) {
+                                        showError(`Erro: ${e.message}`);
+                                    }
+                                }}
+                            >
+                                <Rocket className="h-4 w-4" />
+                                Salvar + Enviar (WhatsApp)
+                            </Button>
+                        </div>
+                    </DialogContent>
+                </Dialog>
 
                 <LinkDnaModal 
                     tenantId={activeTenantId!}

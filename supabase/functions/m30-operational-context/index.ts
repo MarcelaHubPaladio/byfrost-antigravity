@@ -135,6 +135,7 @@ serve(async (req) => {
             title: (sc.meta_json as any)?.strategy_title || sc.title || "Estratégia sem nome",
             objective: (sc.meta_json as any)?.strategy_objective || "",
             state: sc.state,
+            video_url: (sc.meta_json as any)?.video_url || null,
             subtasks: subs.map((s: any) => {
               const statusMap: Record<string, string> = {
                 'backlog': 'Backlog',
@@ -150,7 +151,8 @@ serve(async (req) => {
                 title: s.title || "Subtarefa",
                 type: s.type || "Geral",
                 status: humanStatus,
-                post_date: s.post_date || null
+                post_date: s.post_date || null,
+                postado: s.postado === true
               };
             })
           });
