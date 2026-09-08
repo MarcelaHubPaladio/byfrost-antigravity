@@ -87,7 +87,8 @@ import {
     Tag,
     Bot,
     Sparkles,
-    Upload
+    Upload,
+    UserCircle
 } from "lucide-react";
 
 const CheckIcon = Check;
@@ -918,6 +919,7 @@ export default function OperacaoM30Case() {
     const [strategyTitle, setStrategyTitle] = useState("");
     const [strategyObjective, setStrategyObjective] = useState("");
     const [strategyContext, setStrategyContext] = useState("");
+    const [assignedUserId, setAssignedUserId] = useState("");
 
     const [generatingSummary, setGeneratingSummary] = useState(false);
     const [entityComboOpen, setEntityComboOpen] = useState(false);
@@ -936,6 +938,7 @@ export default function OperacaoM30Case() {
             setStrategyTitle(meta.strategy_title || "");
             setStrategyObjective(meta.strategy_objective || "");
             setStrategyContext(meta.strategy_context || "");
+            setAssignedUserId(caseQ.data.assigned_user_id || "");
         }
     }, [caseQ.data]);
 
@@ -1786,6 +1789,7 @@ export default function OperacaoM30Case() {
                 .update({ 
                     title: mainTitle, 
                     summary_text: mainSummary,
+                    assigned_user_id: assignedUserId || null,
                     meta_json: {
                         ...latestMeta,
                         video_url: videoUrl,
@@ -2547,10 +2551,10 @@ export default function OperacaoM30Case() {
                                                                                             <LinkIcon className="h-2.5 w-2.5" /> VINCULADO
                                                                                         </Badge>
                                                                                     )}
-                                                                                    {st.post_date && (
+                                                                                    {st.post_date && !isNaN(new Date(st.post_date).getTime()) && (
                                                                                         <span className="text-[10px] text-slate-400 flex items-center gap-1 font-normal">
                                                                                             <Calendar className="h-3 w-3" />
-                                                                                            {new Date(st.post_date).toLocaleDateString()}
+                                                                                            {new Date(st.post_date).toLocaleDateString("pt-BR", { timeZone: "UTC" })}
                                                                                         </span>
                                                                                     )}
                                                                                 </div>
@@ -2699,6 +2703,46 @@ export default function OperacaoM30Case() {
                                                 >
                                                     <Plus className="h-4 w-4 mr-1" /> Arte
                                                 </Button>
+                                                <Button 
+                                                    size="sm" 
+                                                    variant="outline"
+                                                    className="h-9 rounded-xl border-indigo-200 text-indigo-700 hover:bg-indigo-50"
+                                                    onClick={async () => {
+                                                        const el = document.getElementById("new-subtask-title") as HTMLInputElement;
+                                                        if (!el || !el.value.trim()) return;
+                                                        const { data: latestCase } = await supabase.from("cases").select("meta_json").eq("id", id!).single();
+                                                        const latestMeta = latestCase?.meta_json as any || caseQ.data?.meta_json || {};
+                                                        const current = latestMeta.pending_subtasks || [];
+                                                        const next = [...current, { id: `st-${Date.now()}`, title: el.value, type: "planejamento" }];
+                                                        await supabase.from("cases").update({
+                                                            meta_json: { ...latestMeta, pending_subtasks: next }
+                                                        }).eq("id", id!);
+                                                        el.value = "";
+                                                        caseQ.refetch();
+                                                    }}
+                                                >
+                                                    <Plus className="h-4 w-4 mr-1" /> Planejamento
+                                                </Button>
+                                                <Button 
+                                                    size="sm" 
+                                                    variant="outline"
+                                                    className="h-9 rounded-xl border-indigo-200 text-indigo-700 hover:bg-indigo-50"
+                                                    onClick={async () => {
+                                                        const el = document.getElementById("new-subtask-title") as HTMLInputElement;
+                                                        if (!el || !el.value.trim()) return;
+                                                        const { data: latestCase } = await supabase.from("cases").select("meta_json").eq("id", id!).single();
+                                                        const latestMeta = latestCase?.meta_json as any || caseQ.data?.meta_json || {};
+                                                        const current = latestMeta.pending_subtasks || [];
+                                                        const next = [...current, { id: `st-${Date.now()}`, title: el.value, type: "gravacao" }];
+                                                        await supabase.from("cases").update({
+                                                            meta_json: { ...latestMeta, pending_subtasks: next }
+                                                        }).eq("id", id!);
+                                                        el.value = "";
+                                                        caseQ.refetch();
+                                                    }}
+                                                >
+                                                    <Plus className="h-4 w-4 mr-1" /> Gravação
+                                                </Button>
                                             </div>
                                             <p className="text-[10px] text-slate-400 italic px-1 pt-1">
                                                 * Subtarefas serão transformadas em cards reais quando este planejamento for movido para "Gravação".
@@ -2761,6 +2805,27 @@ export default function OperacaoM30Case() {
                                             </Command>
                                         </PopoverContent>
                                     </Popover>
+                                </div>
+
+                                <div className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm mb-4">
+                                    <div className="flex items-center justify-between mb-4">
+                                        <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                                            <UserCircle className="h-4 w-4" /> Responsável do Ciclo
+                                        </h3>
+                                    </div>
+                                    <Select value={assignedUserId} onValueChange={setAssignedUserId}>
+                                        <SelectTrigger className="h-10 w-full justify-between rounded-xl bg-slate-50 border-slate-200 px-3 text-xs font-bold text-slate-700 shadow-sm">
+                                            <SelectValue placeholder="Sem responsável" />
+                                        </SelectTrigger>
+                                        <SelectContent className="rounded-2xl border-slate-200">
+                                            <SelectItem value="none" className="text-sm">Sem responsável</SelectItem>
+                                            {Array.from(usersQ.data?.entries() || []).map(([uid, name]) => (
+                                                <SelectItem key={uid} value={uid} className="text-sm focus:bg-indigo-50 focus:text-indigo-900 rounded-xl">
+                                                    {name}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
                                 </div>
 
                                 <div className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
