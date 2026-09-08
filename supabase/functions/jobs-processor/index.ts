@@ -1306,7 +1306,7 @@ async function processBeeIaCSMessageJob(opts: { supabase: any, job: any }) {
   const { tenant_id, payload_json } = job;
   const { cs_group_id, message_id, conversation_id, instance_id, zapi_instance_id, from, participant } = payload_json;
 
-  if (!cs_group_id || !conversation_id) throw new Error("Missing cs_group_id or conversation_id");
+  if (!cs_group_id) throw new Error("Missing cs_group_id");
 
   // 1. Fetch CS Group Config
   const { data: csGroup, error: csGroupErr } = await supabase
@@ -1324,8 +1324,8 @@ async function processBeeIaCSMessageJob(opts: { supabase: any, job: any }) {
   // 2. Fetch Conversation History (last 15 messages)
   const { data: messages } = await supabase
     .from("wa_messages")
-    .select("body_text, type, from_phone, participant_phone, direction, occurred_at")
-    .eq("conversation_id", conversation_id)
+    .select("body_text, type, from_phone, to_phone, participant_phone, direction, occurred_at")
+    .or(`from_phone.eq.${from},to_phone.eq.${from}`)
     .order("occurred_at", { ascending: false })
     .limit(15);
 
