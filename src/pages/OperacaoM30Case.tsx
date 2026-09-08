@@ -3289,7 +3289,7 @@ export default function OperacaoM30Case() {
                                             
                                             if (waGroupId && globalApprovalModal.title) {
                                                 const msg = `🚀 *Aprovação de Conteúdo*\n\nTemos um novo material pronto para aprovação!\n\n*Material*: ${globalApprovalModal.title}\n*Link*: ${approvalModalLink}\n\nPor favor, confira o link acima e nos retorne com a sua aprovação ou considerações.`;
-                                                const { data: inst } = await supabase.from("whatsapp_instances").select("id").eq("tenant_id", caseQ.data?.tenant_id!).limit(1).maybeSingle();
+                                                const { data: inst } = await supabase.from("wa_instances").select("id").eq("tenant_id", caseQ.data?.tenant_id!).limit(1).maybeSingle();
                                                 if (inst) {
                                                     await supabase.functions.invoke("integrations-zapi-send", {
                                                         body: { tenantId: caseQ.data?.tenant_id, instanceId: inst.id, to: waGroupId, type: "text", text: msg, meta: { case_id: id } }
@@ -3421,7 +3421,7 @@ export default function OperacaoM30Case() {
                                             const msg = `🚀 *Aprovação de Conteúdo*\n\nTemos um novo material pronto para aprovação!\n\n*Título*: ${caseQ.data.title}\n*Link*: ${approvalLink}\n\nPor favor, confira o link acima e nos retorne com a sua aprovação ou considerações.`;
                                             
                                             const { data: inst } = await supabase
-                                                .from("whatsapp_instances")
+                                                .from("wa_instances")
                                                 .select("id")
                                                 .eq("tenant_id", activeTenantId!)
                                                 .limit(1)
