@@ -526,7 +526,7 @@ function SubtaskItemContent({
                         if (val === "aprovacao") {
                             setTimeout(() => {
                                 setApprovalModalOpen(true);
-                            }, 150);
+                            }, 300);
                         }
                     }}>
                         <SelectTrigger className="w-full h-9 text-xs rounded-xl border-slate-200 shadow-sm bg-white">
@@ -568,13 +568,30 @@ function SubtaskItemContent({
 
                 <div className="space-y-2 sm:col-span-2 lg:col-span-4">
                     <Label className="text-[10px] font-bold text-slate-500 uppercase">Link do Drive (Para Aprovação)</Label>
-                    <input 
-                        type="url"
-                        value={approvalLink}
-                        onChange={(e) => setApprovalLink(e.target.value)}
-                        className="w-full h-9 rounded-xl border border-slate-200 bg-white px-3 text-xs focus:ring-indigo-500/20 outline-none shadow-sm"
-                        placeholder="https://drive.google.com/..."
-                    />
+                    <div className="flex gap-2">
+                        <input 
+                            type="url"
+                            value={approvalLink}
+                            onChange={(e) => setApprovalLink(e.target.value)}
+                            className="flex-1 h-9 rounded-xl border border-slate-200 bg-white px-3 text-xs focus:ring-indigo-500/20 outline-none shadow-sm"
+                            placeholder="https://drive.google.com/..."
+                        />
+                        {status === 'aprovacao' && (
+                            <Button 
+                                type="button"
+                                variant="default"
+                                onClick={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    setApprovalModalOpen(true);
+                                }}
+                                className="h-9 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-4 shadow-sm"
+                            >
+                                <Send className="h-4 w-4 mr-2" />
+                                Enviar p/ Cliente
+                            </Button>
+                        )}
+                    </div>
                 </div>
             </div>
 
