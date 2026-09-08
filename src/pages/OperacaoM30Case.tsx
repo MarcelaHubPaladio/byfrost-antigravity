@@ -181,22 +181,24 @@ function SubtaskItemContent({
     const initialRender = useRef(true);
 
     const handleOpenApprovalModal = () => {
-        (window as any).openGlobalApprovalModal({
-            initialLink: approvalLink,
-            title,
-            idx,
-            deliverableId,
-            description,
-            scriptRaw,
-            scriptItems,
-            type,
-            postDate,
-            priority,
-            onSuccess: () => {
-                setStatus("aprovacao");
-                onRefetch();
+        window.dispatchEvent(new CustomEvent('open-approval-modal', {
+            detail: {
+                initialLink: approvalLink,
+                title,
+                idx,
+                deliverableId,
+                description,
+                scriptRaw,
+                scriptItems,
+                type,
+                postDate,
+                priority,
+                onSuccess: () => {
+                    setStatus("aprovacao");
+                    onRefetch();
+                }
             }
-        });
+        }));
     };
 
     const handleSave = async () => {
@@ -991,13 +993,12 @@ export default function OperacaoM30Case() {
     const [approvalModalSending, setApprovalModalSending] = useState(false);
 
     useEffect(() => {
-        (window as any).openGlobalApprovalModal = (data: any) => {
-            setGlobalApprovalModal({ ...data, isOpen: true });
-            setApprovalModalLink(data.initialLink || "");
+        const handler = (e: any) => {
+            setGlobalApprovalModal({ ...e.detail, isOpen: true });
+            setApprovalModalLink(e.detail.initialLink || "");
         };
-        return () => {
-            delete (window as any).openGlobalApprovalModal;
-        };
+        window.addEventListener('open-approval-modal', handler);
+        return () => window.removeEventListener('open-approval-modal', handler);
     }, []);
 
     const nav = useNavigate();
