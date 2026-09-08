@@ -1303,49 +1303,50 @@ function addDaysIsoDate(dateIso: string, days: number) {
 
 async function processBeeIaCSMessageJob(opts: { supabase: any, job: any }) {
   const { supabase, job } = opts;
-  const { tenant_id, payload_json } = job;
-  const { cs_group_id, message_id, conversation_id, instance_id, zapi_instance_id, from, participant } = payload_json;
+  try {
+    const { tenant_id, payload_json } = job;
+    const { cs_group_id, message_id, conversation_id, instance_id, zapi_instance_id, from, participant } = payload_json;
 
-  if (!cs_group_id) throw new Error("Missing cs_group_id");
+    if (!cs_group_id) throw new Error("Missing cs_group_id");
 
-  // 1. Fetch CS Group Config
-  const { data: csGroup, error: csGroupErr } = await supabase
-    .from("beeia_cs_groups")
-    .select("*")
-    .eq("id", cs_group_id)
-    .single();
+    // 1. Fetch CS Group Config
+    const { data: csGroup, error: csGroupErr } = await supabase
+      .from("beeia_cs_groups")
+      .select("*")
+      .eq("id", cs_group_id)
+      .single();
 
-  if (csGroupErr || !csGroup) throw new Error("CS Group not found");
-  if (!csGroup.beeia_enabled) {
-    console.log(`[BEEIA_CS] CS Group ${cs_group_id} has BeeIA disabled, skipping`);
-    return { ok: true, skipped: true };
-  }
+    if (csGroupErr || !csGroup) throw new Error("CS Group not found");
+    if (!csGroup.beeia_enabled) {
+      console.log(`[BEEIA_CS] CS Group ${cs_group_id} has BeeIA disabled, skipping`);
+      return { ok: true, skipped: true };
+    }
 
-  // 2. Fetch Conversation History (last 15 messages)
-  const { data: messages } = await supabase
-    .from("wa_messages")
-    .select("body_text, type, from_phone, to_phone, direction, occurred_at")
-    .or(`from_phone.eq.${from},to_phone.eq.${from}`)
-    .order("occurred_at", { ascending: false })
-    .limit(15);
+    // 2. Fetch Conversation History (last 15 messages)
+    const { data: messages } = await supabase
+      .from("wa_messages")
+      .select("body_text, type, from_phone, to_phone, direction, occurred_at")
+      .or(`from_phone.eq.${from},to_phone.eq.${from}`)
+      .order("occurred_at", { ascending: false })
+      .limit(15);
 
-  const history = (messages || []).reverse().map((m: any) => {
-    const sender = m.direction === "outbound" ? "Assistente (Você)" : `Cliente (${m.from_phone})`;
-    return `[${m.occurred_at}] ${sender}: ${m.body_text || "<mídia>"}`;
-  }).join("\n");
+    const history = (messages || []).reverse().map((m: any) => {
+      const sender = m.direction === "outbound" ? "Assistente (Você)" : `Cliente (${m.from_phone})`;
+      return `[${m.occurred_at}] ${sender}: ${m.body_text || "<mídia>"}`;
+    }).join("\n");
 
-  // 3. Fetch Commitment Details for Context
-  const { data: commitment } = await supabase
-    .from("commercial_commitments")
-    .select("commitment_type, status, customer:core_entities!commercial_commitments_customer_fk(display_name)")
-    .eq("id", csGroup.commitment_id)
-    .single();
+    // 3. Fetch Commitment Details for Context
+    const { data: commitment } = await supabase
+      .from("commercial_commitments")
+      .select("commitment_type, status, customer:core_entities!commercial_commitments_customer_fk(display_name)")
+      .eq("id", csGroup.commitment_id)
+      .single();
 
-  let contextText = `Cliente: ${commitment?.customer?.display_name || "Desconhecido"}\n`;
-  contextText += `Operação M30: ${commitment?.commitment_type} - ${commitment?.status}\n`;
+    let contextText = `Cliente: ${commitment?.customer?.display_name || "Desconhecido"}\n`;
+    contextText += `Operação M30: ${commitment?.commitment_type} - ${commitment?.status}\n`;
 
-  // 4. Build Prompt
-  let systemPrompt = `Você é um especialista de Sucesso do Cliente (CS) da empresa M30.
+    // 4. Build Prompt
+    let systemPrompt = `Você é um especialista de Sucesso do Cliente (CS) da empresa M30.
 Seu objetivo é dar suporte a clientes no grupo de WhatsApp, utilizando o contexto da operação.
 Você sempre deve ser educado, prestativo e ir direto ao ponto.
 
@@ -1360,12 +1361,13 @@ ${contextText}
   const userMessage = `Histórico recente da conversa:\n${history}\n\nResponda como Assistente.`;
 
   // 5. Call LLM
-  const { askLlm } = await import("../_shared/llm.ts");
-  const aiRes = await askLlm({
-    systemPrompt,
-    userPrompt: userMessage,
-    maxTokens: 500,
-    temperature: 0.7
+  const { generateText } = await import("../_shared/llm.ts");
+  const aiRes = await generateText({
+    messages: [
+      { role: "system", content: systemPrompt },
+      { role: "user", content: userMessage }
+    ],
+    fallback: () => "Desculpe, estou em manutenção no momento."
   });
 
   if (!aiRes || !aiRes.text) throw new Error("AI returned empty response");
@@ -1381,18 +1383,25 @@ ${contextText}
     body: JSON.stringify({
       tenantId: tenant_id,
       instanceId: instance_id,
-      phone: csGroup.group_jid,
+      to: from, // integrations-zapi-send expects 'to'
       text: replyText
     })
   });
 
-  if (!sendRes.ok) {
-    const errTxt = await sendRes.text().catch(() => "");
+  const sendJson = await sendRes.json().catch(() => null);
+  if (!sendRes.ok || sendJson?.ok === false) {
+    const errTxt = sendJson?.error || await sendRes.text().catch(() => "");
     throw new Error(`Failed to send Z-API message: ${errTxt}`);
   }
 
   // Optionally mark conversation as 'ai_replied' or similar, but for now we just return ok
-  return { ok: true };
+  return { ok: true, replied: true };
+  } catch (err: any) {
+    console.error(`[BEEIA_CS] Job Failed:`, err);
+    const newPayload = { ...opts.job.payload_json, last_error: err?.message || String(err), last_stack: err?.stack };
+    await opts.supabase.from("job_queue").update({ payload_json: newPayload }).eq("id", opts.job.id);
+    throw err;
+  }
 }
 
 async function processGuardiaoInsightsGenerateJob(opts: { supabase: any, tenantId: string, journeyId: string, model: string, lookbackDays: number }) {

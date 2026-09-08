@@ -6,26 +6,20 @@ const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 async function main() {
-  const { data: inbox, error: inboxErr } = await supabase
-    .from('wa_webhook_inbox')
-    .select('id, received_at, reason, payload_json, ok, meta_json')
-    .order('received_at', { ascending: false })
-    .limit(3);
+  for (let i = 0; i < 6; i++) {
+    const { data } = await supabase
+      .from("job_queue")
+      .select("status, payload_json")
+      .eq("id", "c17bc487-1f58-4a06-bd5b-0bc1b4e8dbac")
+      .single();
 
-  console.log('Last 3 Webhook Logs:');
-  console.log(JSON.stringify(inbox, null, 2));
-  if (inboxErr) console.error('Error inbox:', inboxErr);
-
-  const { data: contacts, error: contactsErr } = await supabase
-    .from('wa_contacts')
-    .select('id, phone_e164, name, role_hint, meta_json, updated_at')
-    .ilike('phone_e164', '%@g.us%')
-    .order('updated_at', { ascending: false })
-    .limit(5);
-
-  console.log('\nLast 5 Group Contacts:');
-  console.log(JSON.stringify(contacts, null, 2));
-  if (contactsErr) console.error('Error contacts:', contactsErr);
+    console.log(`[${i}] Status: ${data.status}`);
+    if (data.status !== 'pending') {
+      console.log('Result payload:', JSON.stringify(data.payload_json, null, 2));
+      break;
+    }
+    await new Promise(r => setTimeout(r, 5000));
+  }
 }
 
 main();

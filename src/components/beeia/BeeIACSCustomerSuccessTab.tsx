@@ -4,14 +4,16 @@ import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Plus, Users, BrainCircuit } from "lucide-react";
+import { Plus, Users, BrainCircuit, Settings } from "lucide-react";
 import { showError, showSuccess } from "@/utils/toast";
 import { ConnectCSGroupDialog } from "./ConnectCSGroupDialog";
+import { EditCSGroupDialog } from "./EditCSGroupDialog";
 import { Badge } from "@/components/ui/badge";
 
 export function BeeIACSCustomerSuccessTab({ activeTenantId }: { activeTenantId: string }) {
   const qc = useQueryClient();
   const [connectOpen, setConnectOpen] = useState(false);
+  const [editGroup, setEditGroup] = useState<any>(null);
 
   const groupsQ = useQuery({
     queryKey: ["beeia_cs_groups", activeTenantId],
@@ -120,15 +122,25 @@ export function BeeIACSCustomerSuccessTab({ activeTenantId }: { activeTenantId: 
                     </p>
                   </TableCell>
                   <TableCell>
-                    <div className="flex items-center gap-2">
-                      <Switch
-                        checked={g.beeia_enabled}
-                        onCheckedChange={(val) => toggleGroupBeeIA(g.id, val)}
-                        className="data-[state=checked]:bg-indigo-500"
-                      />
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                        {g.beeia_enabled ? "Ativa" : "Inativa"}
-                      </span>
+                    <div className="flex items-center justify-end gap-3">
+                      <div className="flex items-center gap-2">
+                        <Switch
+                          checked={g.beeia_enabled}
+                          onCheckedChange={(val) => toggleGroupBeeIA(g.id, val)}
+                          className="data-[state=checked]:bg-indigo-500"
+                        />
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 min-w-[50px]">
+                          {g.beeia_enabled ? "Ativa" : "Inativa"}
+                        </span>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-slate-400 hover:text-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-500/10 transition-colors"
+                        onClick={() => setEditGroup(g)}
+                      >
+                        <Settings className="h-4 w-4" />
+                      </Button>
                     </div>
                   </TableCell>
                 </TableRow>
@@ -142,6 +154,12 @@ export function BeeIACSCustomerSuccessTab({ activeTenantId }: { activeTenantId: 
         open={connectOpen} 
         onOpenChange={setConnectOpen} 
         tenantId={activeTenantId} 
+      />
+
+      <EditCSGroupDialog
+        open={!!editGroup}
+        onOpenChange={(open) => !open && setEditGroup(null)}
+        group={editGroup}
       />
     </div>
   );
