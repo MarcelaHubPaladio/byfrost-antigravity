@@ -120,6 +120,8 @@ function normalizeInbound(payload: any) {
     const externalMessageId = pickFirst<string>(payload?.messageId, payload?.id) ?? null;
 
     const contactName = pickFirst<string>(
+        payload?.chatName,
+        payload?.data?.chatName,
         payload?.groupName,
         payload?.data?.groupName,
         payload?.senderName,
