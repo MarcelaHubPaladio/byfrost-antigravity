@@ -3158,6 +3158,151 @@ export default function OperacaoM30Case() {
                     </AlertDialogContent>
                 </AlertDialog>
 
+                {globalApprovalModal?.isOpen && (
+                    <div className="fixed inset-0 z-[9999] bg-black/60 flex items-center justify-center p-4">
+                        <div className="bg-white max-w-md w-full rounded-3xl p-6 shadow-2xl animate-in fade-in zoom-in-95 duration-200">
+                            <div className="flex flex-col space-y-1.5 text-center sm:text-left mb-4">
+                                <h2 className="text-xl font-bold flex items-center gap-2">
+                                    <MessageSquareWarning className="h-5 w-5 text-emerald-600" />
+                                    Enviar para Aprovação
+                                </h2>
+                                <p className="text-slate-500 text-sm">
+                                    Informe o link final do Drive para esta subtarefa.
+                                </p>
+                            </div>
+
+                            <div className="space-y-4 py-4">
+                                <div className="space-y-2">
+                                    <Label className="text-xs font-bold text-slate-500 uppercase px-1">Link do Google Drive</Label>
+                                    <input 
+                                        value={approvalModalLink}
+                                        onChange={(e) => setApprovalModalLink(e.target.value)}
+                                        className="w-full h-11 rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm font-medium focus:ring-2 focus:ring-emerald-500 outline-none shadow-sm"
+                                        placeholder="https://drive.google.com/..."
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="flex flex-col sm:flex-row justify-end gap-2 pt-4">
+                                <Button 
+                                    variant="outline" 
+                                    className="h-10 rounded-2xl font-bold px-4 border-slate-200 hover:bg-slate-50 text-slate-600"
+                                    onClick={() => setGlobalApprovalModal(prev => prev ? { ...prev, isOpen: false } : null)}
+                                    disabled={approvalModalSaving || approvalModalSending}
+                                >
+                                    Cancelar
+                                </Button>
+                                <Button 
+                                    variant="secondary"
+                                    className="h-10 rounded-2xl font-bold px-4 hover:bg-slate-200"
+                                    disabled={approvalModalSaving || approvalModalSending}
+                                    onClick={async () => {
+                                        if (!approvalModalLink) {
+                                            showError("Informe o link do Drive para aprovação!");
+                                            return;
+                                        }
+                                        if (!globalApprovalModal) return;
+                                        setApprovalModalSaving(true);
+                                        try {
+                                            const { data: latestCase } = await supabase.from("cases").select("meta_json").eq("id", id).single();
+                                            const latestMeta = latestCase?.meta_json as any || caseQ.data?.meta_json;
+                                            const currentSubtasks = [...(latestMeta?.pending_subtasks || [])];
+                                            currentSubtasks[globalApprovalModal.idx] = {
+                                                ...currentSubtasks[globalApprovalModal.idx],
+                                                title: globalApprovalModal.title, 
+                                                type: globalApprovalModal.type, 
+                                                status: "aprovacao", 
+                                                post_date: globalApprovalModal.postDate, 
+                                                priority: globalApprovalModal.priority,
+                                                deliverable_id: globalApprovalModal.deliverableId, 
+                                                description: globalApprovalModal.description, 
+                                                script_raw: globalApprovalModal.scriptRaw,
+                                                script_items: globalApprovalModal.scriptItems, 
+                                                drive_link: approvalModalLink
+                                            };
+                                            let updatePayload: any = { meta_json: { ...latestMeta, pending_subtasks: currentSubtasks } };
+                                            if (latestMeta.case_type === 'strategy') {
+                                                updatePayload.state = computeStrategyState(currentSubtasks);
+                                            }
+                                            await supabase.from("cases").update(updatePayload).eq("id", id);
+                                            globalApprovalModal.onSuccess();
+                                            setGlobalApprovalModal(prev => prev ? { ...prev, isOpen: false } : null);
+                                            showSuccess("Status alterado para Aprovação.");
+                                        } catch (e: any) {
+                                            showError(`Erro ao salvar: ${e.message}`);
+                                        } finally {
+                                            setApprovalModalSaving(false);
+                                        }
+                                    }}
+                                >
+                                    {approvalModalSaving && !approvalModalSending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
+                                    Apenas Salvar
+                                </Button>
+                                <Button 
+                                    className="h-10 rounded-2xl font-bold px-4 bg-emerald-600 hover:bg-emerald-700 text-white gap-2 shadow-sm"
+                                    disabled={approvalModalSaving || approvalModalSending}
+                                    onClick={async () => {
+                                        if (!approvalModalLink) {
+                                            showError("Informe o link do Drive para aprovação!");
+                                            return;
+                                        }
+                                        if (!globalApprovalModal) return;
+                                        setApprovalModalSending(true);
+                                        try {
+                                            const { data: latestCase } = await supabase.from("cases").select("meta_json").eq("id", id).single();
+                                            const latestMeta = latestCase?.meta_json as any || caseQ.data?.meta_json;
+                                            const currentSubtasks = [...(latestMeta?.pending_subtasks || [])];
+                                            currentSubtasks[globalApprovalModal.idx] = {
+                                                ...currentSubtasks[globalApprovalModal.idx],
+                                                title: globalApprovalModal.title, 
+                                                type: globalApprovalModal.type, 
+                                                status: "aprovacao", 
+                                                post_date: globalApprovalModal.postDate, 
+                                                priority: globalApprovalModal.priority,
+                                                deliverable_id: globalApprovalModal.deliverableId, 
+                                                description: globalApprovalModal.description, 
+                                                script_raw: globalApprovalModal.scriptRaw,
+                                                script_items: globalApprovalModal.scriptItems, 
+                                                drive_link: approvalModalLink
+                                            };
+                                            let updatePayload: any = { meta_json: { ...latestMeta, pending_subtasks: currentSubtasks } };
+                                            if (latestMeta.case_type === 'strategy') {
+                                                updatePayload.state = computeStrategyState(currentSubtasks);
+                                            }
+                                            await supabase.from("cases").update(updatePayload).eq("id", id);
+                                            
+                                            const { data: cEntity } = await supabase.from("core_entities").select("wa_group_id").eq("id", latestMeta.entity_id || caseQ.data?.customer_entity_id).maybeSingle();
+                                            const waGroupId = cEntity?.wa_group_id;
+                                            
+                                            if (waGroupId && globalApprovalModal.title) {
+                                                const msg = `🚀 *Aprovação de Conteúdo*\n\nTemos um novo material pronto para aprovação!\n\n*Material*: ${globalApprovalModal.title}\n*Link*: ${approvalModalLink}\n\nPor favor, confira o link acima e nos retorne com a sua aprovação ou considerações.`;
+                                                const { data: inst } = await supabase.from("whatsapp_instances").select("id").eq("tenant_id", caseQ.data?.tenant_id!).limit(1).maybeSingle();
+                                                if (inst) {
+                                                    await supabase.functions.invoke("integrations-zapi-send", {
+                                                        body: { tenantId: caseQ.data?.tenant_id, instanceId: inst.id, to: waGroupId, type: "text", text: msg, meta: { case_id: id } }
+                                                    });
+                                                }
+                                                showSuccess("Aprovação salva e enviada para o WhatsApp do cliente!");
+                                            } else {
+                                                showSuccess("Aprovação salva! (Aviso: Grupo de WhatsApp não configurado)");
+                                            }
+                                            globalApprovalModal.onSuccess();
+                                            setGlobalApprovalModal(prev => prev ? { ...prev, isOpen: false } : null);
+                                        } catch (e: any) {
+                                            showError(`Erro ao salvar/enviar: ${e.message}`);
+                                        } finally {
+                                            setApprovalModalSending(false);
+                                        }
+                                    }}
+                                >
+                                    {approvalModalSending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Rocket className="h-4 w-4" />}
+                                    {approvalModalSending ? "Enviando..." : "Salvar + Enviar"}
+                                </Button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
                 <Dialog open={approvalModalOpen} onOpenChange={setApprovalModalOpen}>
                     <DialogContent className="max-w-md rounded-3xl border-slate-200">
                         <DialogHeader>
