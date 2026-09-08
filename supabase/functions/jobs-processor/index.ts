@@ -1335,20 +1335,48 @@ async function processBeeIaCSMessageJob(opts: { supabase: any, job: any }) {
       return `[${m.occurred_at}] ${sender}: ${m.body_text || "<mídia>"}`;
     }).join("\n");
 
-    // 3. Fetch Commitment Details for Context
-    const { data: commitment } = await supabase
-      .from("commercial_commitments")
-      .select("commitment_type, status, customer:core_entities!commercial_commitments_customer_fk(display_name)")
-      .eq("id", csGroup.commitment_id)
-      .single();
+    // 3. Fetch Operational Context (Live Summary of the Contract)
+    const opContextRes = await supabase.functions.invoke("m30-operational-context", {
+      body: { tenantId: tenant_id, commitmentId: csGroup.commitment_id }
+    });
 
-    let contextText = `Cliente: ${commitment?.customer?.display_name || "Desconhecido"}\n`;
-    contextText += `Operação M30: ${commitment?.commitment_type} - ${commitment?.status}\n`;
+    let contextText = "";
+    if (opContextRes.data?.ok && opContextRes.data?.context) {
+      const ctx = opContextRes.data.context;
+      contextText += `Cliente: ${ctx.client?.name || "Desconhecido"}\n`;
+      contextText += `Status do Contrato: ${ctx.contract?.status || "N/A"}\n\n`;
+
+      contextText += `[ESCOPO E ENTREGÁVEIS]\n`;
+      if (ctx.scope && ctx.scope.length > 0) {
+        ctx.scope.forEach((s: any) => {
+          contextText += `- ${s.type}: ${s.contracted} contratados, ${s.completed} concluídos, ${s.available} disponíveis.\n`;
+        });
+      } else {
+        contextText += `(Nenhum entregável mapeado)\n`;
+      }
+
+      if (ctx.current_cycle) {
+        contextText += `\n[CICLO ATUAL]\n`;
+        contextText += `Mês: ${ctx.current_cycle.name}\n`;
+        if (ctx.current_cycle.date_planning) contextText += `Data de Planejamento: ${ctx.current_cycle.date_planning}\n`;
+        if (ctx.current_cycle.date_recording) contextText += `Data de Gravação: ${ctx.current_cycle.date_recording}\n`;
+        if (ctx.current_cycle.date_approval) contextText += `Data de Aprovação: ${ctx.current_cycle.date_approval}\n`;
+        if (ctx.current_cycle.date_posting) contextText += `Data de Postagem: ${ctx.current_cycle.date_posting}\n`;
+      }
+
+      if (ctx.account_context) {
+        contextText += `\n[CONTEXTO DA MARCA E REGRAS]\n`;
+        if (ctx.account_context.objective) contextText += `Objetivo: ${ctx.account_context.objective}\n`;
+        if (ctx.account_context.rules) contextText += `Regras de Ouro: ${ctx.account_context.rules}\n`;
+      }
+    } else {
+      contextText = "O contexto detalhado do contrato não está disponível no momento.\n";
+    }
 
     // 4. Build Prompt
     let systemPrompt = `Você é um especialista de Sucesso do Cliente (CS) da empresa M30.
 Seu objetivo é dar suporte a clientes no grupo de WhatsApp, utilizando o contexto da operação.
-Você sempre deve ser educado, prestativo e ir direto ao ponto.
+Você sempre deve ser educado, prestativo, profissional e ir direto ao ponto.
 
 Contexto da Operação:
 ${contextText}
