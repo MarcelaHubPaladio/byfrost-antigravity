@@ -135,11 +135,24 @@ serve(async (req) => {
             title: (sc.meta_json as any)?.strategy_title || sc.title || "Estratégia sem nome",
             objective: (sc.meta_json as any)?.strategy_objective || "",
             state: sc.state,
-            subtasks: subs.map((s: any) => ({
-              title: s.title || "Subtarefa",
-              type: s.type || "Geral",
-              status: s.status || "Pendente"
-            }))
+            subtasks: subs.map((s: any) => {
+              const statusMap: Record<string, string> = {
+                'backlog': 'Backlog',
+                'planejamento': 'Planejamento / Roteiro',
+                'gravacao': 'Gravação',
+                'edicao': 'Edição',
+                'aprovacao': 'Aprovação',
+                'postar': 'Postar / Publicação',
+                'concluido': 'Concluído'
+              };
+              const humanStatus = statusMap[s.status] || s.status || "Pendente";
+              return {
+                title: s.title || "Subtarefa",
+                type: s.type || "Geral",
+                status: humanStatus,
+                post_date: s.post_date || null
+              };
+            })
           });
         }
 

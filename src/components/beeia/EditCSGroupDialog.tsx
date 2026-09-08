@@ -94,7 +94,13 @@ export function EditCSGroupDialog({ open, onOpenChange, group }: EditCSGroupDial
               contextText += `- ${st.title} (Status atual do card: ${st.state})\n`;
               if (st.subtasks && st.subtasks.length > 0) {
                 st.subtasks.forEach((sub: any) => {
-                  contextText += `  * [${sub.type}] ${sub.title} - Status: ${sub.status}\n`;
+                  let dateStr = "";
+                  if (sub.post_date) {
+                    const d = new Date(sub.post_date);
+                    d.setMinutes(d.getMinutes() + d.getTimezoneOffset());
+                    dateStr = ` | Data Prevista: ${d.toLocaleDateString("pt-BR")}`;
+                  }
+                  contextText += `  * [${sub.type}] ${sub.title} - Status: ${sub.status}${dateStr}\n`;
                 });
               }
             });
