@@ -23,9 +23,12 @@ export function BeeIACSCustomerSuccessTab({ activeTenantId }: { activeTenantId: 
         .from("beeia_cs_groups")
         .select(`
           id,
+          tenant_id,
           group_jid,
           group_name,
           beeia_enabled,
+          prompt_context,
+          commitment_id,
           wa_instance:wa_instances(name),
           customer:core_entities!beeia_cs_groups_customer_entity_id_fkey(display_name),
           commitment:commercial_commitments(commitment_type, status)
