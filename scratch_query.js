@@ -6,21 +6,26 @@ const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 async function main() {
-  const { data, error } = await supabase
-    .from('tenants')
-    .select('id, name, slug, branding_json')
-    .ilike('name', '%artur%');
-    
-  console.log('Tenants:', data);
-  if (error) console.error('Error:', error);
+  const { data: inbox, error: inboxErr } = await supabase
+    .from('wa_webhook_inbox')
+    .select('id, received_at, reason, payload_json, ok, meta_json')
+    .order('received_at', { ascending: false })
+    .limit(3);
 
-  const { data: configs, error: err2 } = await supabase
-    .from('beeia_configs')
-    .select('*')
-    .in('tenant_id', data?.map(t => t.id) || []);
-    
-  console.log('Configs:', configs);
-  if (err2) console.error('Error 2:', err2);
+  console.log('Last 3 Webhook Logs:');
+  console.log(JSON.stringify(inbox, null, 2));
+  if (inboxErr) console.error('Error inbox:', inboxErr);
+
+  const { data: contacts, error: contactsErr } = await supabase
+    .from('wa_contacts')
+    .select('id, phone_e164, name, role_hint, meta_json, updated_at')
+    .ilike('phone_e164', '%@g.us%')
+    .order('updated_at', { ascending: false })
+    .limit(5);
+
+  console.log('\nLast 5 Group Contacts:');
+  console.log(JSON.stringify(contacts, null, 2));
+  if (contactsErr) console.error('Error contacts:', contactsErr);
 }
 
 main();

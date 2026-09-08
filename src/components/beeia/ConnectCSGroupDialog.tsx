@@ -51,7 +51,7 @@ export function ConnectCSGroupDialog({ open, onOpenChange, tenantId }: ConnectCS
         .from("wa_contacts")
         .select("id, phone_e164, name")
         .eq("tenant_id", tenantId)
-        .like("phone_e164", "%@g.us")
+        .or("phone_e164.ilike.%@g.us,phone_e164.ilike.%-group")
         .order("updated_at", { ascending: false })
         .limit(100);
       if (error) throw error;
