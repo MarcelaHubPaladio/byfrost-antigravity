@@ -162,6 +162,7 @@ function SubtaskItemContent({
     const [type, setType] = useState(st.type || "edicao");
     const [postDate, setPostDate] = useState(st.post_date || "");
     const [priority, setPriority] = useState(st.priority || false);
+    const [postado, setPostado] = useState(st.postado || false);
     const [deliverableId, setDeliverableId] = useState(st.deliverable_id || "");
     const [status, setStatus] = useState(st.status || st.state || "planejamento");
     const [description, setDescription] = useState(st.description || "");
@@ -188,6 +189,7 @@ function SubtaskItemContent({
                 status,
                 post_date: postDate,
                 priority,
+                postado,
                 deliverable_id: deliverableId,
                 description,
                 script_raw: scriptRaw,
@@ -491,7 +493,22 @@ function SubtaskItemContent({
                 />
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="space-y-2">
+                    <Label className="text-[10px] font-bold text-slate-500 uppercase">Tipo</Label>
+                    <Select value={type} onValueChange={setType}>
+                        <SelectTrigger className="w-full h-9 text-xs rounded-xl border-slate-200 shadow-sm bg-white">
+                            <SelectValue placeholder="Selecione..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="edicao" className="text-[10px] font-bold">VÍDEO</SelectItem>
+                            <SelectItem value="arte_estatica" className="text-[10px] font-bold">ARTE</SelectItem>
+                            <SelectItem value="planejamento" className="text-[10px] font-bold">PLANEJAMENTO</SelectItem>
+                            <SelectItem value="gravacao" className="text-[10px] font-bold">GRAVAÇÃO</SelectItem>
+                        </SelectContent>
+                    </Select>
+                </div>
+
                 <div className="space-y-2">
                     <Label className="text-[10px] font-bold text-slate-500 uppercase">Data de Postagem</Label>
                     <input 
@@ -537,7 +554,18 @@ function SubtaskItemContent({
                     </div>
                 </div>
 
-                <div className="space-y-2 sm:col-span-2">
+                <div className="space-y-2 flex flex-col justify-end pb-0.5">
+                    <div className="flex items-center justify-between h-9 px-3 rounded-xl border border-blue-100 bg-blue-50/50 shadow-sm">
+                        <Label className="text-[10px] font-bold text-blue-700 uppercase cursor-pointer" htmlFor={`postado-${idx}`}>Postado</Label>
+                        <Switch 
+                            id={`postado-${idx}`}
+                            checked={postado}
+                            onCheckedChange={setPostado}
+                        />
+                    </div>
+                </div>
+
+                <div className="space-y-2 sm:col-span-2 lg:col-span-4">
                     <Label className="text-[10px] font-bold text-slate-500 uppercase">Link do Drive (Para Aprovação)</Label>
                     <input 
                         type="url"
@@ -2687,33 +2715,9 @@ export default function OperacaoM30Case() {
                                                                             </div>
                                                                             <AccordionTrigger className="flex-1 hover:no-underline py-2 px-1">
                                                                                 <div className="flex flex-wrap items-center gap-2 sm:gap-3 flex-1 w-full">
-                                                                                    <Select 
-                                                                                        value={st.type || "edicao"} 
-                                                                                        onValueChange={async (val) => {
-                                                                                            const { data: latestCase } = await supabase.from("cases").select("meta_json").eq("id", id!).single();
-                                                                                            const latestMeta = latestCase?.meta_json as any || caseQ.data?.meta_json || {};
-                                                                                            const current = latestMeta.pending_subtasks || [];
-                                                                                            const next = [...current];
-                                                                                            next[st._originalIdx] = { ...next[st._originalIdx], type: val };
-                                                                                            await supabase.from("cases").update({
-                                                                                                meta_json: { ...latestMeta, pending_subtasks: next }
-                                                                                            }).eq("id", id!);
-                                                                                            caseQ.refetch();
-                                                                                        }}
-                                                                                    >
-                                                                                        <SelectTrigger 
-                                                                                            className="h-6 px-2 text-[10px] font-bold rounded-xl bg-slate-100 border-none shrink-0" 
-                                                                                            onClick={(e) => e.stopPropagation()}
-                                                                                        >
-                                                                                            <SelectValue />
-                                                                                        </SelectTrigger>
-                                                                                        <SelectContent>
-                                                                                            <SelectItem value="edicao" className="text-[10px] font-bold">VÍDEO</SelectItem>
-                                                                                            <SelectItem value="arte_estatica" className="text-[10px] font-bold">ARTE</SelectItem>
-                                                                                            <SelectItem value="planejamento" className="text-[10px] font-bold">PLANEJAMENTO</SelectItem>
-                                                                                            <SelectItem value="gravacao" className="text-[10px] font-bold">GRAVAÇÃO</SelectItem>
-                                                                                        </SelectContent>
-                                                                                    </Select>
+                                                                                    <Badge variant="secondary" className="bg-slate-100 text-slate-600 border-none h-6 px-2 text-[10px] font-bold">
+                                                                                        {st.type === 'arte_estatica' ? 'ARTE' : st.type === 'planejamento' ? 'PLANEJAMENTO' : st.type === 'gravacao' ? 'GRAVAÇÃO' : 'VÍDEO'}
+                                                                                    </Badge>
                                                                                     <span className="text-sm text-slate-700 font-bold text-left flex-1 min-w-[150px] leading-tight break-words">{st.title}</span>
                                                                                     {st.is_approved && (
                                                                                         <Badge className="bg-emerald-500 text-white border-none h-4 px-1.5 text-[8px] font-black animate-in fade-in zoom-in duration-300">
@@ -2798,29 +2802,7 @@ export default function OperacaoM30Case() {
                                                                             <ExternalLink className="h-4 w-4" />
                                                                         </Button>
                                                                     </Link>
-                                                                )}
-                                                                        <Button 
-                                                                            variant="ghost" 
-                                                                            size="sm" 
-                                                                            className={cn("h-9 rounded-xl px-2 text-[10px] font-bold transition-all", st.postado ? "text-blue-600 bg-blue-50 hover:bg-blue-100" : "text-slate-400 hover:text-blue-600 hover:bg-blue-50")}
-                                                                            onClick={async (e) => {
-                                                                                e.stopPropagation();
-                                                                                const { data: latestCase } = await supabase.from("cases").select("meta_json").eq("id", id!).single();
-                                                                                const latestMeta = latestCase?.meta_json as any || caseQ.data?.meta_json || {};
-                                                                                const current = latestMeta.pending_subtasks || [];
-                                                                                const next = [...current];
-                                                                                next[st._originalIdx] = { ...next[st._originalIdx], postado: !st.postado };
-                                                                                await supabase.from("cases").update({
-                                                                                    meta_json: { ...latestMeta, pending_subtasks: next }
-                                                                                }).eq("id", id!);
-                                                                                caseQ.refetch();
-                                                                            }}
-                                                                            title="Marcar/Desmarcar como Postado"
-                                                                        >
-                                                                            {st.postado ? "POSTADO" : "POSTAR"}
-                                                                        </Button>
-
-                                                                        <Button 
+                                                                )}                                                                        <Button 
                                                                             variant="ghost" 
                                                                             size="sm" 
                                                                             className="h-9 w-9 rounded-xl text-slate-400 hover:text-rose-600 hover:bg-rose-50"
