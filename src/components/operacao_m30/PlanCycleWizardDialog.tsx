@@ -245,8 +245,21 @@ export function PlanCycleWizardDialog({
         throw new Error("Nenhum case estratégico válido foi configurado.");
       }
 
-      const { error } = await supabase.from("cases").insert(casesToInsert);
+      const { error, data: insertedCases } = await supabase.from("cases").insert(casesToInsert).select("id");
       if (error) throw error;
+
+      if (insertedCases && insertedCases.length > 0) {
+        const timelineLogs = insertedCases.map(c => ({
+          tenant_id: tenantId,
+          case_id: c.id,
+          event_type: "case_created",
+          actor_type: "admin",
+          actor_id: (user as any)?.id ?? null,
+          message: `Estratégia "${casesToInsert.find(cti => cti.title === casesToInsert[insertedCases.indexOf(c)].title)?.title || 'Novo ciclo'}" iniciada através do assistente de planejamento.`,
+          occurred_at: new Date().toISOString()
+        }));
+        await supabase.from("timeline_events").insert(timelineLogs);
+      }
 
       showSuccess(`Ciclo "${cycleName}" criado com sucesso! ${casesToInsert.length} Cases Estratégicos gerados.`);
       onSuccess();

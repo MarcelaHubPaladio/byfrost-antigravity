@@ -1801,7 +1801,17 @@ export default function OperacaoM30Case() {
                 })
                 .eq("id", id);
             if (error) throw error;
-            logEvent("Informações gerais do card foram atualizadas.");
+            
+            await supabase.from("timeline_events").insert({
+                tenant_id: activeTenantId,
+                case_id: id,
+                event_type: "case_updated",
+                actor_type: "admin",
+                actor_id: user?.id ?? null,
+                message: "Informações da estratégia foram atualizadas.",
+                occurred_at: new Date().toISOString()
+            });
+            
             showSuccess("Card atualizado com sucesso.");
             caseQ.refetch();
             qc.invalidateQueries({ queryKey: ["cases_by_tenant_journey", activeTenantId] });
@@ -2277,26 +2287,6 @@ export default function OperacaoM30Case() {
                                         </div>
 
                                         <div className="space-y-4">
-                                            <div className="space-y-2">
-                                                <Label className="text-[10px] font-bold text-slate-500 uppercase px-1">Título do Agrupamento / Pauta (Case Title)</Label>
-                                                <input 
-                                                    value={mainTitle}
-                                                    onChange={(e) => setMainTitle(e.target.value)}
-                                                    className="w-full h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-bold focus:ring-2 focus:ring-indigo-500 outline-none shadow-sm"
-                                                    placeholder="Ex: Campanha Dia das Mães"
-                                                />
-                                            </div>
-
-                                            <div className="space-y-2">
-                                                <Label className="text-[10px] font-bold text-slate-500 uppercase px-1">Subtítulo Estratégico (Opcional)</Label>
-                                                <input 
-                                                    value={strategyTitle}
-                                                    onChange={(e) => setStrategyTitle(e.target.value)}
-                                                    className="w-full h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-bold focus:ring-2 focus:ring-indigo-500 outline-none shadow-sm"
-                                                    placeholder="Ex: Reforçar laços emocionais com a marca"
-                                                />
-                                            </div>
-
                                             <Tabs defaultValue="objective" className="w-full">
                                                 <TabsList className="bg-slate-100/50 p-1 rounded-2xl h-12 mb-4 w-full sm:w-auto">
                                                     <TabsTrigger value="objective" className="rounded-xl text-xs font-bold data-[state=active]:bg-white data-[state=active]:shadow-sm gap-2 px-6">
@@ -2717,11 +2707,7 @@ export default function OperacaoM30Case() {
                                     </div>
                                 )}
 
-                                {activeTenantId && id && (
-                                    <TrelloCardDetails tenantId={activeTenantId} caseId={id} />
-                                )}
-                                <CaseTimeline events={timelineEvents} />
-                            </div>
+                                </div>
 
                             <div className="space-y-4">
                                 <div className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm mb-4">
@@ -2849,6 +2835,7 @@ export default function OperacaoM30Case() {
                                         </div>
                                     )}
                                 </div>
+                                <CaseTimeline events={timelineEvents} />
                             </div>
                         </div>
                     </Card>
