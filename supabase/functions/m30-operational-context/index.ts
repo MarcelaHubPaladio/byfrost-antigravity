@@ -42,7 +42,7 @@ serve(async (req) => {
     // 1. Fetch Commitment & Deliverables
     const { data: contract, error: contractErr } = await supabase
       .from('commercial_commitments')
-      .select('*, customer:customer_entity_id(display_name)')
+      .select('*, customer:core_entities!commercial_commitments_customer_fk(display_name)')
       .eq('id', commitmentId)
       .eq('tenant_id', tenantId)
       .single();

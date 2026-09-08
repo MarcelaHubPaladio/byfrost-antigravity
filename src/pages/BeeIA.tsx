@@ -60,6 +60,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { WhatsAppConversation } from "@/components/case/WhatsAppConversation";
 import { MetaConversation } from "@/components/case/MetaConversation";
 import { BeeIASimulator } from "@/components/case/BeeIASimulator";
+import { BeeIAPlugsTab } from "@/components/beeia/BeeIAPlugsTab";
+import { BeeIACSCustomerSuccessTab } from "@/components/beeia/BeeIACSCustomerSuccessTab";
 import { FaWhatsapp, FaInstagram, FaFacebook } from "react-icons/fa";
 import { LabelsManagerModal } from "@/components/case/LabelsManagerModal";
 import { Tags, Edit2, Check, Send } from "lucide-react";
@@ -120,7 +122,7 @@ export default function BeeIA() {
 
 function BeeIAPage() {
   const qc = useQueryClient();
-  const { activeTenantId } = useTenant();
+  const { activeTenantId, activeTenant } = useTenant();
   const { user } = useSession();
   const email = (user?.email ?? "").toLowerCase();
   const isSuperAdmin = (user as any)?.app_metadata?.role === "super-admin";
@@ -1333,7 +1335,7 @@ function BeeIAPage() {
 
         {/* Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="mb-4 grid w-full max-w-[850px] grid-cols-5 rounded-2xl bg-slate-100 p-1 dark:bg-slate-900">
+          <TabsList className={cn("mb-4 grid w-full max-w-[950px] rounded-2xl bg-slate-100 p-1 dark:bg-slate-900", activeTenant?.slug === "m30" ? "grid-cols-6" : "grid-cols-5")}>
             <TabsTrigger value="crm" className="rounded-xl py-2 text-xs font-semibold">
               Fluxo CRM
             </TabsTrigger>
@@ -1349,6 +1351,11 @@ function BeeIAPage() {
             <TabsTrigger value="fatura" className="rounded-xl py-2 text-xs font-semibold">
               Fatura
             </TabsTrigger>
+            {activeTenant?.slug === "m30" && (
+              <TabsTrigger value="cs_m30" className="rounded-xl py-2 text-xs font-semibold text-indigo-600 data-[state=active]:bg-indigo-100 dark:text-indigo-400 dark:data-[state=active]:bg-indigo-900/40">
+                Sucesso do Cliente
+              </TabsTrigger>
+            )}
           </TabsList>
 
           {/* Tab Content: Kanban Board */}
@@ -2584,6 +2591,12 @@ function BeeIAPage() {
               isSaving={savePlugMut.isPending}
             />
           </TabsContent>
+
+          {activeTenant?.slug === "m30" && (
+            <TabsContent value="cs_m30" className="mt-0">
+              <BeeIACSCustomerSuccessTab activeTenantId={activeTenantId!} />
+            </TabsContent>
+          )}
         </Tabs>
 
         {/* Modal: Add WhatsApp Number */}
