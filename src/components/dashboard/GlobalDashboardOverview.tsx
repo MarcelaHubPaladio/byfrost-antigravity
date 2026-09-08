@@ -289,15 +289,21 @@ export function GlobalDashboardOverview() {
         console.error("Error fetching audit_ledger for ZAPI:", error);
         return false;
       }
-      
-      const hasError = data?.some((row: any) => {
-        const payload = row.payload_json;
-        if (payload?.external?.ok === false && payload?.external?.status === 400) {
-          const errorMsg = payload?.external?.body?.error || "";
-          return errorMsg.includes("must subscribe to this instance again");
+      const hasError = data && data.length > 0 ? (function() {
+        // Look for the most recent failure. If there's a success AFTER the failure, ignore it.
+        for (const row of data) {
+          const payload = row.payload_json;
+          if (payload?.external?.ok === false && payload?.external?.status === 400) {
+            const errorMsg = payload?.external?.body?.error || "";
+            if (errorMsg.includes("must subscribe to this instance again")) {
+              return true; // We found the error and it's the most recent relevant state
+            }
+          } else if (payload?.external?.ok === true) {
+             return false; // Found a success! The subscription must be fine now.
+          }
         }
         return false;
-      });
+      })() : false;
       
       return hasError || false;
     }
