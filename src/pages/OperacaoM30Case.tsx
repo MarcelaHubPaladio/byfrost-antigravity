@@ -181,6 +181,7 @@ function SubtaskItemContent({
     const initialRender = useRef(true);
 
     const handleOpenApprovalModal = () => {
+        showSuccess("Abrindo modal..."); // DEBUG TOAST
         window.dispatchEvent(new CustomEvent('open-approval-modal', {
             detail: {
                 initialLink: approvalLink,
@@ -603,7 +604,7 @@ function SubtaskItemContent({
                             <Button 
                                 type="button"
                                 variant="default"
-                                onClick={(e) => {
+                                onPointerDownCapture={(e) => {
                                     e.preventDefault();
                                     e.stopPropagation();
                                     handleOpenApprovalModal();
@@ -994,6 +995,7 @@ export default function OperacaoM30Case() {
 
     useEffect(() => {
         const handler = (e: any) => {
+            console.log("Global modal event received!", e.detail);
             setGlobalApprovalModal({ ...e.detail, isOpen: true });
             setApprovalModalLink(e.detail.initialLink || "");
         };
