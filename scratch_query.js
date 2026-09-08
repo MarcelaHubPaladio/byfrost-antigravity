@@ -6,20 +6,21 @@ const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 async function main() {
-  for (let i = 0; i < 6; i++) {
-    const { data } = await supabase
-      .from("job_queue")
-      .select("status, payload_json")
-      .eq("id", "c17bc487-1f58-4a06-bd5b-0bc1b4e8dbac")
-      .single();
+  const { data: bg } = await supabase
+    .from("beeia_cs_groups")
+    .select("*")
+    .limit(1)
+    .single();
 
-    console.log(`[${i}] Status: ${data.status}`);
-    if (data.status !== 'pending') {
-      console.log('Result payload:', JSON.stringify(data.payload_json, null, 2));
-      break;
-    }
-    await new Promise(r => setTimeout(r, 5000));
-  }
+  console.log("Group:", bg.group_name, bg.commitment_id);
+
+  const { data: opContextRes, error } = await supabase.functions.invoke("m30-operational-context", {
+    body: { tenantId: bg.tenant_id, commitmentId: bg.commitment_id }
+  });
+
+  console.log("Operational Context Response:");
+  console.log(JSON.stringify(opContextRes, null, 2));
+  if (error) console.error("Error:", error);
 }
 
 main();
