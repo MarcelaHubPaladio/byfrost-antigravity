@@ -522,10 +522,11 @@ function SubtaskItemContent({
                 <div className="space-y-2">
                     <Label className="text-[10px] font-bold text-slate-500 uppercase">Status Operacional</Label>
                     <Select value={status} onValueChange={(val) => {
+                        setStatus(val);
                         if (val === "aprovacao") {
-                            setApprovalModalOpen(true);
-                        } else {
-                            setStatus(val);
+                            setTimeout(() => {
+                                setApprovalModalOpen(true);
+                            }, 150);
                         }
                     }}>
                         <SelectTrigger className="w-full h-9 text-xs rounded-xl border-slate-200 shadow-sm bg-white">
