@@ -3276,6 +3276,10 @@ export default function OperacaoM30Case() {
                                                 const { data: acc } = await supabase.from("customer_accounts").select("entity_id").eq("id", caseQ.data.customer_id).maybeSingle();
                                                 if (acc?.entity_id) targetEntityId = acc.entity_id;
                                             }
+                                            if (!targetEntityId && latestMeta.customer_entity_name) {
+                                                const { data: entByName } = await supabase.from("core_entities").select("id").eq("display_name", latestMeta.customer_entity_name).eq("tenant_id", caseQ.data?.tenant_id!).limit(1).maybeSingle();
+                                                if (entByName?.id) targetEntityId = entByName.id;
+                                            }
                                             
                                             let waGroupId = null;
                                             if (targetEntityId) {
