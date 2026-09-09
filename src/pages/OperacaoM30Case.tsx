@@ -3008,7 +3008,7 @@ export default function OperacaoM30Case() {
                                                 </div>
                                             </div>
 
-                                            {(caseQ.data?.state === 'planejamento' || caseQ.data?.state === 'aprovar_roteiro') && (
+                                            {(caseQ.data?.state === 'planejamento' || caseQ.data?.state === 'aprovar_roteiro' || caseQ.data?.case_type === 'strategy') && (
                                                 <Button 
                                                     variant="default"
                                                     className="w-full h-10 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[11px] gap-2 shadow-lg shadow-indigo-100 mt-2"
