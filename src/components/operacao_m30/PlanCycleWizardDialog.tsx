@@ -249,12 +249,15 @@ export function PlanCycleWizardDialog({
       if (error) throw error;
 
       if (insertedCases && insertedCases.length > 0) {
+        const { data: userD } = await supabase.auth.getUser();
+        const userId = userD.user?.id ?? null;
+        
         const timelineLogs = insertedCases.map(c => ({
-          tenant_id: tenantId,
+          tenant_id: activeTenantId,
           case_id: c.id,
           event_type: "case_created",
           actor_type: "admin",
-          actor_id: (user as any)?.id ?? null,
+          actor_id: userId,
           message: `Estratégia "${casesToInsert.find(cti => cti.title === casesToInsert[insertedCases.indexOf(c)].title)?.title || 'Novo ciclo'}" iniciada através do assistente de planejamento.`,
           occurred_at: new Date().toISOString()
         }));
