@@ -685,7 +685,7 @@ export default function OperacaoM30() {
       const { data, error } = await supabase
         .from("cases")
         .select(
-          "id,journey_id,customer_id,customer_entity_id,title,status,state,created_at,updated_at,assigned_user_id,is_chat,users_profile:users_profile(display_name,email),meta_json"
+          "id,journey_id,customer_id,customer_entity_id,title,status,state,case_type,created_at,updated_at,assigned_user_id,is_chat,users_profile:users_profile(display_name,email),meta_json"
         )
         .eq("tenant_id", activeTenantId!)
         .eq("journey_id", selectedJourney!.id)
@@ -1419,7 +1419,8 @@ export default function OperacaoM30() {
                         if (col.key === "__other__") return;
                         const cid = e.dataTransfer.getData("text/caseId");
                         const droppedCase = filteredRows.find(r => r.id === cid);
-                        if (droppedCase?.meta_json?.case_type === 'strategy') {
+                        const isStrat = droppedCase?.case_type === 'strategy' || droppedCase?.meta_json?.case_type === 'strategy';
+                        if (isStrat) {
                             showError("Cards de estratégia não podem ser movidos manualmente. Atualize os itens internos.");
                             return;
                         }
@@ -1479,13 +1480,15 @@ export default function OperacaoM30() {
                                 "Caso")
                               : c.title ?? "Caso";
 
+                          const isStrategyCase = c.case_type === 'strategy' || (c.meta_json as any)?.case_type === 'strategy';
+
                           return (
                             <Link
                               key={c.id}
                               to={`/app/operacao-m30/${c.id}`}
-                              draggable={!((c.meta_json as any)?.case_type === 'strategy')}
+                              draggable={!isStrategyCase}
                               onDragStart={(e) => {
-                                if ((c.meta_json as any)?.case_type === 'strategy') {
+                                if (isStrategyCase) {
                                   e.preventDefault();
                                   return;
                                 }
@@ -1495,16 +1498,14 @@ export default function OperacaoM30() {
                               className={cn(
                                 "block rounded-[22px] border bg-white p-4 shadow-sm transition hover:shadow-md",
                                 (c.meta_json as any)?.priority ? "border-rose-500 ring-2 ring-rose-500/20" : unread ? "border-rose-200 hover:border-rose-300" : "border-slate-200 hover:border-slate-300",
-                                !((c.meta_json as any)?.case_type === 'strategy') ? "cursor-grab active:cursor-grabbing" : "cursor-pointer",
+                                !isStrategyCase ? "cursor-grab active:cursor-grabbing" : "cursor-pointer",
                                 isMoving ? "opacity-60" : ""
                               )}
-                              title={!((c.meta_json as any)?.case_type === 'strategy') ? "Arraste para mudar de etapa" : "Cards estratégicos atualizam automaticamente"}
+                              title={!isStrategyCase ? "Arraste para mudar de etapa" : "Cards estratégicos atualizam automaticamente"}
                             >
                               <div className="flex items-start justify-between gap-3">
                                 {(() => {
-                                  const isStrategy = (c.meta_json as any)?.case_type === 'strategy';
-                                  
-                                  if (isStrategy) {
+                                  if (isStrategyCase) {
                                       const prog = calculateStrategyProgress((c.meta_json as any)?.pending_subtasks || []);
                                       return (
                                           <div className="flex flex-col gap-2 p-1 pt-0">
@@ -1650,7 +1651,7 @@ export default function OperacaoM30() {
                                 })()}
                               </div>
 
-                              {!((c.meta_json as any)?.case_type === 'strategy') && (
+                              {!isStrategyCase && (
                                 <div className="mt-3 flex items-center justify-between gap-2 text-xs text-slate-600">
                                   <div className="flex items-center gap-1">
                                     <Clock className="h-3.5 w-3.5 text-slate-400" />
