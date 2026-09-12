@@ -153,11 +153,12 @@ type CaseRow = {
 
 function SubtaskItemContent({ 
     st, idx, caseMeta, caseId, onRefetch, caseState, caseData, allDeliverables,
-    getBestDeliverableId, handleCreateIndividualTask 
+    getBestDeliverableId, handleCreateIndividualTask, usersMap
 }: { 
     st: any, idx: number, caseMeta: any, caseId: string, onRefetch: () => void, caseState?: string, caseData?: any, allDeliverables: any[],
     getBestDeliverableId: (type: string) => string | null,
-    handleCreateIndividualTask: (st: any, idx: number, deliverableId: string, type: string) => Promise<void>
+    handleCreateIndividualTask: (st: any, idx: number, deliverableId: string, type: string) => Promise<void>,
+    usersMap?: Map<string, string>
 }) {
     const { user } = useSession();
     const qc = useQueryClient();
@@ -171,6 +172,7 @@ function SubtaskItemContent({
     const [description, setDescription] = useState(st.description || "");
     const [scriptRaw, setScriptRaw] = useState(st.script_raw || "");
     const [scriptItems, setScriptItems] = useState<any[]>(st.script_items || []);
+    const [editorId, setEditorId] = useState(st.editor_id || "");
     
     const [activeTab, setActiveTab] = useState("briefing");
     const [generatingAi, setGeneratingAi] = useState(false);
@@ -189,7 +191,7 @@ function SubtaskItemContent({
             return;
         }
         setIsDirty(true);
-    }, [title, type, status, postDate, priority, postado, deliverableId, description, scriptRaw, scriptItems, approvalLink]);
+    }, [title, type, status, postDate, priority, postado, deliverableId, description, scriptRaw, scriptItems, approvalLink, editorId]);
 
     useEffect(() => {
         if (!isDirty) return;
@@ -238,7 +240,8 @@ function SubtaskItemContent({
                 description,
                 script_raw: scriptRaw,
                 script_items: scriptItems,
-                drive_link: approvalLink
+                drive_link: approvalLink,
+                editor_id: editorId === "none" ? null : editorId
             };
 
             // Pega os dados mais recentes do banco pra evitar race condition
@@ -609,6 +612,23 @@ function SubtaskItemContent({
                         />
                     </div>
                 </div>
+
+                {(type === 'edicao' || type === 'video') && (
+                    <div className="space-y-2 sm:col-span-2 lg:col-span-1">
+                        <Label className="text-[10px] font-bold text-slate-500 uppercase">Editor (Responsável)</Label>
+                        <Select value={editorId} onValueChange={setEditorId}>
+                            <SelectTrigger className="w-full h-9 text-xs rounded-xl border-slate-200 shadow-sm bg-white">
+                                <SelectValue placeholder="Sem editor..." />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="none" className="text-xs text-slate-500 font-medium">Sem editor...</SelectItem>
+                                {usersMap && Array.from(usersMap.entries()).map(([uId, uName]) => (
+                                    <SelectItem key={uId} value={uId} className="text-xs font-bold">{uName}</SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    </div>
+                )}
 
                 <div className="space-y-2 sm:col-span-2 lg:col-span-4">
                     <Label className="text-[10px] font-bold text-slate-500 uppercase">Link do Drive (Para Aprovação)</Label>
@@ -3017,6 +3037,7 @@ export default function OperacaoM30Case() {
                                                                         allDeliverables={allDeliverablesQ.data || []}
                                                                         getBestDeliverableId={getBestDeliverableId}
                                                                         handleCreateIndividualTask={handleCreateIndividualTask}
+                                                                        usersMap={usersQ.data}
                                                                     />
                                                                 </AccordionContent>
                                                                 </>
