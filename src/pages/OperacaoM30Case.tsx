@@ -295,60 +295,70 @@ function SubtaskItemContent({
             const isJustCompleted = (status === "concluido" || status === "done") && oldStatus !== "concluido" && oldStatus !== "done";
             
             if (isJustCompleted && type === "edicao") {
-                const { error: videoEventError } = await supabase.from("timeline_events").insert({
-                    tenant_id: caseData?.tenant_id,
-                    case_id: caseId,
-                    event_type: "video_completed",
-                    actor_type: "admin",
-                    actor_id: (editorId && editorId !== "none") ? editorId : ((user as any)?.id ?? null),
-                    message: `Edição de vídeo concluída: ${title}`,
-                    meta_json: { editor_id: editorId },
-                    occurred_at: new Date().toISOString(),
-                });
-                if (videoEventError) console.error("Erro ao gerar log de video_completed:", videoEventError);
-                
-                // Fetch Gatilhos
-                const { data: gatilhos } = await supabase.from("goal_triggers").select("metric_key").eq("tenant_id", caseData?.tenant_id).eq("event_type", "video_completed");
-                
-                if (gatilhos && gatilhos.length > 0) {
-                     const targetUser = editorId !== "none" && editorId ? editorId : (user as any)?.id;
-                     
-                     // Busca o participante
-                     const { data: participant } = await supabase.from("incentive_participants").select("id").eq("tenant_id", caseData?.tenant_id).eq("user_id", targetUser).maybeSingle();
-                     
-                     // Busca a meta (seja customizada ou de template)
-                     let userGoal = null;
-                     const { data: ug } = await supabase.from("user_goals").select("id, name, target_value").eq("tenant_id", caseData?.tenant_id).eq("user_id", targetUser).eq("metric_key", gatilhos[0].metric_key).limit(1).maybeSingle();
-                     if (ug) userGoal = ug;
-                     else {
-                         const { data: gt } = await supabase.from("goal_templates").select("id, name, target_value").eq("tenant_id", caseData?.tenant_id).eq("metric_key", gatilhos[0].metric_key).limit(1).maybeSingle();
-                         if (gt) userGoal = gt;
-                     }
+                // Previne contagem duplicada se a subtarefa já disparou o evento antes
+                const { data: existingEvents } = await supabase.from("timeline_events")
+                    .select("id")
+                    .eq("case_id", caseId)
+                    .eq("event_type", "video_completed")
+                    .contains("meta_json", { subtask_id: st.id })
+                    .limit(1);
 
-                     if (participant && userGoal) {
-                         // Aguarda o trigger de banco processar o ponto
-                         await new Promise(r => setTimeout(r, 600)); 
+                if (!existingEvents || existingEvents.length === 0) {
+                    const { error: videoEventError } = await supabase.from("timeline_events").insert({
+                        tenant_id: caseData?.tenant_id,
+                        case_id: caseId,
+                        event_type: "video_completed",
+                        actor_type: "admin",
+                        actor_id: (editorId && editorId !== "none") ? editorId : ((user as any)?.id ?? null),
+                        message: `Edição de vídeo concluída: ${title}`,
+                        meta_json: { editor_id: editorId, subtask_id: st.id },
+                        occurred_at: new Date().toISOString(),
+                    });
+                    if (videoEventError) console.error("Erro ao gerar log de video_completed:", videoEventError);
+                    
+                    // Fetch Gatilhos
+                    const { data: gatilhos } = await supabase.from("goal_triggers").select("metric_key").eq("tenant_id", caseData?.tenant_id).eq("event_type", "video_completed");
+                    
+                    if (gatilhos && gatilhos.length > 0) {
+                         const targetUser = editorId !== "none" && editorId ? editorId : (user as any)?.id;
                          
-                         const startOfMonth = new Date();
-                         startOfMonth.setDate(1);
-                         startOfMonth.setHours(0, 0, 0, 0);
-
-                         const { data: currentEvents } = await supabase.from("incentive_events")
-                            .select("value")
-                            .eq("participant_id", participant.id)
-                            .eq("event_type", gatilhos[0].metric_key)
-                            .gte("created_at", startOfMonth.toISOString());
+                         // Busca o participante
+                         const { data: participant } = await supabase.from("incentive_participants").select("id").eq("tenant_id", caseData?.tenant_id).eq("user_id", targetUser).maybeSingle();
                          
-                         const totalValue = (currentEvents || []).reduce((acc: number, curr: any) => acc + (curr.value || 0), 0);
-                         
-                         if (totalValue > 0) {
-                             setCelebrationData({
-                                 goalName: userGoal.name,
-                                 progress: totalValue,
-                                 target: userGoal.target_value || 1
-                             });
+                         // Busca a meta (seja customizada ou de template)
+                         let userGoal = null;
+                         const { data: ug } = await supabase.from("user_goals").select("id, name, target_value").eq("tenant_id", caseData?.tenant_id).eq("user_id", targetUser).eq("metric_key", gatilhos[0].metric_key).limit(1).maybeSingle();
+                         if (ug) userGoal = ug;
+                         else {
+                             const { data: gt } = await supabase.from("goal_templates").select("id, name, target_value").eq("tenant_id", caseData?.tenant_id).eq("metric_key", gatilhos[0].metric_key).limit(1).maybeSingle();
+                             if (gt) userGoal = gt;
                          }
-                     }
+
+                         if (participant && userGoal) {
+                             // Aguarda o trigger de banco processar o ponto
+                             await new Promise(r => setTimeout(r, 600)); 
+                             
+                             const startOfMonth = new Date();
+                             startOfMonth.setDate(1);
+                             startOfMonth.setHours(0, 0, 0, 0);
+
+                             const { data: currentEvents } = await supabase.from("incentive_events")
+                                .select("value")
+                                .eq("participant_id", participant.id)
+                                .eq("event_type", gatilhos[0].metric_key)
+                                .gte("created_at", startOfMonth.toISOString());
+                             
+                             const totalValue = (currentEvents || []).reduce((acc: number, curr: any) => acc + (curr.value || 0), 0);
+                             
+                             if (totalValue > 0) {
+                                 setCelebrationData({
+                                     goalName: userGoal.name,
+                                     progress: totalValue,
+                                     target: userGoal.target_value || 1
+                                 });
+                             }
+                         }
+                    }
                 }
             }
 
