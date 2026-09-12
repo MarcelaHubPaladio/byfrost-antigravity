@@ -2316,7 +2316,7 @@ export default function OperacaoM30Case() {
                                                     Datas da Estratégia
                                                 </Button>
                                             </DialogTrigger>
-                                            <DialogContent className="sm:max-w-[425px] rounded-3xl p-6">
+                                            <DialogContent className="sm:max-w-[550px] rounded-3xl p-6">
                                                 <DialogHeader>
                                                     <DialogTitle className="text-lg font-black text-slate-800">Datas da Estratégia</DialogTitle>
                                                     <DialogDescription>
@@ -2385,7 +2385,7 @@ export default function OperacaoM30Case() {
                                                                                 type="date"
                                                                                 value={videoPostDates[sid] || ""}
                                                                                 onChange={(e) => setVideoPostDates(prev => ({ ...prev, [sid]: e.target.value }))}
-                                                                                className="w-32 h-8 rounded-lg border border-slate-200 px-2 text-xs focus:ring-2 focus:ring-indigo-500/20 outline-none shadow-sm"
+                                                                                className="w-36 h-9 rounded-lg border border-slate-200 px-3 text-xs focus:ring-2 focus:ring-indigo-500/20 outline-none shadow-sm"
                                                                             />
                                                                         </div>
                                                                     );
