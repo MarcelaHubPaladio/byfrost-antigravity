@@ -1471,7 +1471,8 @@ export default function OperacaoM30Case() {
             const { data } = await supabase
                 .from("users_profile")
                 .select("user_id, display_name")
-                .eq("tenant_id", activeTenantId!);
+                .eq("tenant_id", activeTenantId!)
+                .is("deleted_at", null);
             const map = new Map<string, string>();
             for (const row of (data || [])) {
                 if (row.display_name) map.set(row.user_id, row.display_name);
