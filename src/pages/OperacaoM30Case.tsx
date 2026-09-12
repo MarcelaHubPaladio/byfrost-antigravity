@@ -1067,8 +1067,9 @@ export default function OperacaoM30Case() {
     const [datePlanning, setDatePlanning] = useState("");
     const [dateRecording, setDateRecording] = useState("");
     const [dateApproval, setDateApproval] = useState("");
-    const [datePosting, setDatePosting] = useState("");
     const [dateReport, setDateReport] = useState("");
+    const [videoSubtasks, setVideoSubtasks] = useState<any[]>([]);
+    const [videoPostDates, setVideoPostDates] = useState<Record<string, string>>({});
     const [assignedUserId, setAssignedUserId] = useState("");
 
     const [approvalModalOpen, setApprovalModalOpen] = useState(false);
@@ -1947,8 +1948,17 @@ export default function OperacaoM30Case() {
         setDatePlanning(m?.date_planning || "");
         setDateRecording(m?.date_recording || "");
         setDateApproval(m?.date_approval || "");
-        setDatePosting(m?.date_posting || "");
         setDateReport(m?.date_report || "");
+        
+        const subtasks = m?.pending_subtasks || [];
+        const videos = subtasks.filter((st: any) => st.type === "edicao" || st.type === "video");
+        setVideoSubtasks(videos);
+        
+        const initialDates: Record<string, string> = {};
+        videos.forEach((st: any) => {
+            initialDates[st._dndId || st.id] = st.post_date || "";
+        });
+        setVideoPostDates(initialDates);
         setEditStrategyDatesModalOpen(true);
     };
 
@@ -1969,8 +1979,14 @@ export default function OperacaoM30Case() {
                         date_planning: datePlanning || null,
                         date_recording: dateRecording || null,
                         date_approval: dateApproval || null,
-                        date_posting: datePosting || null,
                         date_report: dateReport || null,
+                        pending_subtasks: (latestMeta.pending_subtasks || []).map((st: any) => {
+                            const id = st._dndId || st.id;
+                            if ((st.type === "edicao" || st.type === "video") && videoPostDates[id] !== undefined) {
+                                return { ...st, post_date: videoPostDates[id] };
+                            }
+                            return st;
+                        })
                     },
                     updated_at: new Date().toISOString()
                 })
@@ -2343,13 +2359,39 @@ export default function OperacaoM30Case() {
                                                             <input type="date" value={dateApproval} onChange={e => setDateApproval(e.target.value)} className="w-full h-10 rounded-xl border border-slate-200 px-3 text-sm focus:ring-2 focus:ring-indigo-500/20 outline-none" />
                                                         </div>
                                                         <div className="space-y-2">
-                                                            <Label className="text-xs font-bold text-slate-500 uppercase">Postagem</Label>
-                                                            <input type="date" value={datePosting} onChange={e => setDatePosting(e.target.value)} className="w-full h-10 rounded-xl border border-slate-200 px-3 text-sm focus:ring-2 focus:ring-indigo-500/20 outline-none" />
-                                                        </div>
-                                                        <div className="space-y-2">
                                                             <Label className="text-xs font-bold text-slate-500 uppercase">Relatório</Label>
                                                             <input type="date" value={dateReport} onChange={e => setDateReport(e.target.value)} className="w-full h-10 rounded-xl border border-slate-200 px-3 text-sm focus:ring-2 focus:ring-indigo-500/20 outline-none" />
                                                         </div>
+                                                    </div>
+                                                    
+                                                    <hr className="border-slate-100" />
+                                                    <div className="space-y-4">
+                                                        <h4 className="text-xs font-bold text-slate-700 uppercase tracking-widest flex items-center gap-2"><Calendar className="w-4 h-4" /> Cronograma de Postagens (Vídeos)</h4>
+                                                        {videoSubtasks.length === 0 ? (
+                                                            <div className="text-xs text-slate-500 italic p-4 bg-slate-50 rounded-xl text-center border border-slate-100">
+                                                                Nenhuma subtarefa de vídeo encontrada.
+                                                            </div>
+                                                        ) : (
+                                                            <div className="space-y-2 pr-1">
+                                                                {videoSubtasks.map(st => {
+                                                                    const sid = st._dndId || st.id;
+                                                                    return (
+                                                                        <div key={sid} className="flex items-center justify-between gap-3 bg-slate-50 p-3 rounded-xl border border-slate-200">
+                                                                            <div className="flex flex-col flex-1 min-w-0">
+                                                                                <span className="text-[11px] font-bold text-slate-700 truncate" title={st.title}>{st.title || "Sem título"}</span>
+                                                                                <span className="text-[9px] text-slate-400 uppercase font-black tracking-wider">Vídeo</span>
+                                                                            </div>
+                                                                            <input 
+                                                                                type="date"
+                                                                                value={videoPostDates[sid] || ""}
+                                                                                onChange={(e) => setVideoPostDates(prev => ({ ...prev, [sid]: e.target.value }))}
+                                                                                className="w-32 h-8 rounded-lg border border-slate-200 px-2 text-xs focus:ring-2 focus:ring-indigo-500/20 outline-none shadow-sm"
+                                                                            />
+                                                                        </div>
+                                                                    );
+                                                                })}
+                                                            </div>
+                                                        )}
                                                     </div>
                                                 </div>
                                                 <div className="flex justify-end gap-2 pt-4">
