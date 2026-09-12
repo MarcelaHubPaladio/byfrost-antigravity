@@ -241,7 +241,8 @@ function SubtaskItemContent({
                 script_raw: scriptRaw,
                 script_items: scriptItems,
                 drive_link: approvalLink,
-                editor_id: editorId === "none" ? null : editorId
+                editor_id: editorId === "none" ? null : editorId,
+                deliverable_id: deliverableId === "none" ? null : deliverableId
             };
 
             // Pega os dados mais recentes do banco pra evitar race condition
@@ -259,6 +260,17 @@ function SubtaskItemContent({
             const { error: updateError } = await supabase.from("cases").update(updatePayload).eq("id", caseId);
 
             if (updateError) throw updateError;
+
+            // Atualiza status do entregável associado
+            const targetDelivId = deliverableId === "none" ? null : deliverableId;
+            if (targetDelivId) {
+                const delStatus = (status === "concluido" || status === "done") ? "completed" : "pending";
+                const { error: delError } = await supabase
+                    .from("deliverables")
+                    .update({ status: delStatus })
+                    .eq("id", targetDelivId);
+                if (delError) console.error("Erro ao atualizar deliverable:", delError);
+            }
 
             // Log Timeline
             if (caseData?.case_type === "planejamento" && caseState === "planejamento") {
@@ -280,6 +292,7 @@ function SubtaskItemContent({
             onRefetch();
             qc.invalidateQueries({ queryKey: ["cases_by_tenant_journey", caseData.tenant_id] });
             qc.invalidateQueries({ queryKey: ["cases_by_tenant", caseData.tenant_id] });
+            qc.invalidateQueries({ queryKey: ["commitment_deliverables"] });
             showSuccess("Alterações salvas.");
         } catch (e: any) {
             console.error("Erro ao salvar subtarefa:", e);
@@ -629,6 +642,23 @@ function SubtaskItemContent({
                         </Select>
                     </div>
                 )}
+
+                <div className="space-y-2 sm:col-span-2 lg:col-span-2">
+                    <Label className="text-[10px] font-bold text-slate-500 uppercase">Entregável Vinculado</Label>
+                    <Select value={deliverableId || "none"} onValueChange={setDeliverableId}>
+                        <SelectTrigger className="w-full h-9 text-xs rounded-xl border-slate-200 shadow-sm bg-white">
+                            <SelectValue placeholder="Nenhum entregável..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="none" className="text-[10px] text-slate-500 font-medium">Nenhum entregável...</SelectItem>
+                            {allDeliverables.map(d => (
+                                <SelectItem key={d.id} value={d.id} className="text-[10px] font-bold">
+                                    {d.title}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                </div>
 
                 <div className="space-y-2 sm:col-span-2 lg:col-span-4">
                     <Label className="text-[10px] font-bold text-slate-500 uppercase">Link do Drive (Para Aprovação)</Label>
