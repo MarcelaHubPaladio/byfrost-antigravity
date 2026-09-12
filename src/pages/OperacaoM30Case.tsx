@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState, useRef } from "react";
 import { useNavigate, useParams, Link } from "react-router-dom";
+import { ptBR } from "date-fns/locale";
+import { Calendar as UICalendar } from "@/components/ui/calendar";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAcquireM30CaseLock } from "@/hooks/useM30CasePresence";
 import { Lock } from "lucide-react";
@@ -2316,38 +2318,40 @@ export default function OperacaoM30Case() {
                                                     Datas da Estratégia
                                                 </Button>
                                             </DialogTrigger>
-                                            <DialogContent className="sm:max-w-[550px] rounded-3xl p-6">
+                                            <DialogContent className="sm:max-w-[850px] rounded-3xl p-6">
                                                 <DialogHeader>
                                                     <DialogTitle className="text-lg font-black text-slate-800">Datas da Estratégia</DialogTitle>
                                                     <DialogDescription>
                                                         Defina o período de duração desta estratégia.
                                                     </DialogDescription>
                                                 </DialogHeader>
-                                                <div className="grid gap-4 py-4 max-h-[60vh] overflow-y-auto">
-                                                    <div className="grid grid-cols-2 gap-4">
-                                                        <div className="space-y-2">
-                                                            <Label className="text-xs font-bold text-slate-500 uppercase">Data Inicial</Label>
-                                                            <input 
-                                                                type="date"
-                                                                value={cycleStart}
-                                                                onChange={(e) => setCycleStart(e.target.value)}
-                                                                className="w-full h-10 rounded-xl border border-slate-200 px-3 text-sm focus:ring-2 focus:ring-indigo-500/20 outline-none"
-                                                            />
+                                                <div className="grid md:grid-cols-[1fr,320px] gap-8 py-4">
+                                                    {/* Lado Esquerdo - Campos */}
+                                                    <div className="max-h-[60vh] overflow-y-auto pr-2 space-y-4">
+                                                        <div className="grid grid-cols-2 gap-4">
+                                                            <div className="space-y-2">
+                                                                <Label className="text-xs font-bold text-slate-500 uppercase">Data Inicial</Label>
+                                                                <input 
+                                                                    type="date"
+                                                                    value={cycleStart}
+                                                                    onChange={(e) => setCycleStart(e.target.value)}
+                                                                    className="w-full h-10 rounded-xl border border-slate-200 px-3 text-sm focus:ring-2 focus:ring-indigo-500/20 outline-none"
+                                                                />
+                                                            </div>
+                                                            <div className="space-y-2">
+                                                                <Label className="text-xs font-bold text-slate-500 uppercase">Data Final</Label>
+                                                                <input 
+                                                                    type="date"
+                                                                    value={cycleEnd}
+                                                                    onChange={(e) => setCycleEnd(e.target.value)}
+                                                                    className="w-full h-10 rounded-xl border border-slate-200 px-3 text-sm focus:ring-2 focus:ring-indigo-500/20 outline-none"
+                                                                />
+                                                            </div>
                                                         </div>
-                                                        <div className="space-y-2">
-                                                            <Label className="text-xs font-bold text-slate-500 uppercase">Data Final</Label>
-                                                            <input 
-                                                                type="date"
-                                                                value={cycleEnd}
-                                                                onChange={(e) => setCycleEnd(e.target.value)}
-                                                                className="w-full h-10 rounded-xl border border-slate-200 px-3 text-sm focus:ring-2 focus:ring-indigo-500/20 outline-none"
-                                                            />
-                                                        </div>
-                                                    </div>
-                                                    <hr className="border-slate-100" />
-                                                    <div className="grid grid-cols-2 gap-4">
-                                                        <div className="space-y-2">
-                                                            <Label className="text-xs font-bold text-slate-500 uppercase">Planejamento</Label>
+                                                        <hr className="border-slate-100" />
+                                                        <div className="grid grid-cols-2 gap-4">
+                                                            <div className="space-y-2">
+                                                                <Label className="text-xs font-bold text-slate-500 uppercase">Planejamento</Label>
                                                             <input type="date" value={datePlanning} onChange={e => setDatePlanning(e.target.value)} className="w-full h-10 rounded-xl border border-slate-200 px-3 text-sm focus:ring-2 focus:ring-indigo-500/20 outline-none" />
                                                         </div>
                                                         <div className="space-y-2">
@@ -2393,8 +2397,24 @@ export default function OperacaoM30Case() {
                                                             </div>
                                                         )}
                                                     </div>
+                                                    </div>
+                                                    
+                                                    {/* Lado Direito - Calendário */}
+                                                    <div className="hidden md:flex flex-col border-l border-slate-100 pl-8">
+                                                        <h4 className="text-xs font-bold text-slate-700 uppercase tracking-widest flex items-center gap-2 mb-4">
+                                                            <Calendar className="w-4 h-4" /> Calendário de Apoio
+                                                        </h4>
+                                                        <div className="bg-slate-50 rounded-2xl border border-slate-100 p-2 flex justify-center flex-1">
+                                                            <UICalendar
+                                                                mode="single"
+                                                                locale={ptBR}
+                                                                className="bg-white rounded-xl shadow-sm border border-slate-200 self-start"
+                                                            />
+                                                        </div>
+                                                        <p className="text-[10px] text-slate-400 text-center mt-3 leading-relaxed">Use este calendário para visualizar rapidamente os dias da semana ao definir os prazos.</p>
+                                                    </div>
                                                 </div>
-                                                <div className="flex justify-end gap-2 pt-4">
+                                                <div className="flex justify-end gap-2 pt-4 border-t border-slate-100">
                                                     <Button variant="ghost" onClick={() => setEditStrategyDatesModalOpen(false)} className="rounded-xl">Cancelar</Button>
                                                     <Button onClick={handleSaveStrategyDates} disabled={saving} className="rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white">
                                                         {saving ? "Salvando..." : "Salvar Datas"}
