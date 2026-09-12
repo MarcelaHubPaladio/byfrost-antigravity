@@ -179,6 +179,24 @@ function SubtaskItemContent({
     const [saving, setSaving] = useState(false);
     const [lastSaved, setLastSaved] = useState<Date | null>(null);
     const initialRender = useRef(true);
+    const [isDirty, setIsDirty] = useState(false);
+
+    useEffect(() => {
+        if (initialRender.current) {
+            initialRender.current = false;
+            return;
+        }
+        setIsDirty(true);
+    }, [title, type, status, postDate, priority, postado, deliverableId, description, scriptRaw, scriptItems, approvalLink]);
+
+    useEffect(() => {
+        if (!isDirty) return;
+        const t = setTimeout(() => {
+            handleSave();
+            setIsDirty(false);
+        }, 1500);
+        return () => clearTimeout(t);
+    });
 
     const handleOpenApprovalModal = () => {
         showSuccess("Abrindo modal..."); // DEBUG TOAST
@@ -600,7 +618,7 @@ function SubtaskItemContent({
                             className="flex-1 h-9 rounded-xl border border-slate-200 bg-white px-3 text-xs focus:ring-indigo-500/20 outline-none shadow-sm"
                             placeholder="https://drive.google.com/..."
                         />
-                        {status === 'aprovacao' && (
+                        {status === 'aprovacao' && type === 'video' && (
                             <Button 
                                 type="button"
                                 variant="default"
@@ -1962,6 +1980,26 @@ export default function OperacaoM30Case() {
             setSaving(false);
         }
     };
+
+    const mainCardInitialRender = useRef(true);
+    const [mainCardDirty, setMainCardDirty] = useState(false);
+
+    useEffect(() => {
+        if (mainCardInitialRender.current) {
+            mainCardInitialRender.current = false;
+            return;
+        }
+        setMainCardDirty(true);
+    }, [mainTitle, mainSummary, assignedUserId, videoUrl, importantLinks, mainScript, meetingTranscription, aiPlanningContext, strategyTitle, strategyObjective, strategyContext]);
+
+    useEffect(() => {
+        if (!mainCardDirty) return;
+        const t = setTimeout(() => {
+            handleSaveMainCard();
+            setMainCardDirty(false);
+        }, 1500);
+        return () => clearTimeout(t);
+    });
 
     const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -3469,6 +3507,20 @@ export default function OperacaoM30Case() {
                     onSave={repairDna}
                     saving={saving}
                 />
+
+                <div className="fixed bottom-6 right-6 z-50">
+                    <Button 
+                        size="lg"
+                        onClick={handleSaveMainCard} 
+                        className="h-14 px-8 rounded-full shadow-2xl bg-slate-900 hover:bg-slate-800 text-white font-bold tracking-wide transition-all hover:scale-105"
+                    >
+                        {saving ? (
+                            <><RefreshCw className="h-5 w-5 mr-3 animate-spin" /> Salvando...</>
+                        ) : (
+                            <><Save className="h-5 w-5 mr-3" /> Salvar Estratégia</>
+                        )}
+                    </Button>
+                </div>
             </AppShell>
         </RequireAuth>
     );
