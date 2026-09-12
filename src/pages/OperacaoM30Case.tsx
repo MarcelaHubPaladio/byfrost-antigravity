@@ -653,7 +653,7 @@ function SubtaskItemContent({
                             <SelectItem value="none" className="text-[10px] text-slate-500 font-medium">Nenhum entregável...</SelectItem>
                             {allDeliverables.map(d => (
                                 <SelectItem key={d.id} value={d.id} className="text-[10px] font-bold">
-                                    {d.title}
+                                    {d.name || "Sem Nome"}
                                 </SelectItem>
                             ))}
                         </SelectContent>
@@ -3106,7 +3106,8 @@ export default function OperacaoM30Case() {
                                                         const { data: latestCase } = await supabase.from("cases").select("meta_json").eq("id", id!).single();
                                                         const latestMeta = latestCase?.meta_json as any || caseQ.data?.meta_json || {};
                                                         const current = latestMeta.pending_subtasks || [];
-                                                        const next = [...current, { id: `st-${Date.now()}`, title: el.value, type: "edicao" }];
+                                                        const bestId = getBestDeliverableId("edicao");
+                                                        const next = [...current, { id: `st-${Date.now()}`, title: el.value, type: "edicao", deliverable_id: bestId }];
                                                         await supabase.from("cases").update({
                                                             meta_json: { ...latestMeta, pending_subtasks: next }
                                                         }).eq("id", id!);
