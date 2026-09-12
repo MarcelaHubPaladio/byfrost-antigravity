@@ -3140,6 +3140,7 @@ export default function OperacaoM30Case() {
                                                                         usersMap={usersQ.data}
                                                                     />
                                                                 </AccordionContent>
+                                                                </>
                                                             )}
                                                         </SortableAccordionItem>
                                                         ))}
