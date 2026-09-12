@@ -1472,6 +1472,7 @@ export default function OperacaoM30Case() {
                 .from("users_profile")
                 .select("user_id, display_name")
                 .eq("tenant_id", activeTenantId!)
+                .neq("role", "m30_client")
                 .is("deleted_at", null);
             const map = new Map<string, string>();
             for (const row of (data || [])) {
