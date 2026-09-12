@@ -288,6 +288,25 @@ function SubtaskItemContent({
                 if (logError) console.error("Erro ao gerar log da timeline:", logError);
             }
 
+            // Metas Guardian: Evento Específico para Edição/Vídeo Concluído
+            const oldStatus = caseMeta?.pending_subtasks?.[idx]?.status;
+            const isJustCompleted = (status === "concluido" || status === "done") && oldStatus !== "concluido" && oldStatus !== "done";
+            
+            if (isJustCompleted && type === "video") {
+                const { error: videoEventError } = await supabase.from("timeline_events").insert({
+                    tenant_id: caseData?.tenant_id,
+                    case_id: caseId,
+                    event_type: "video_completed",
+                    actor_type: "admin",
+                    actor_id: (user as any)?.id ?? null,
+                    participant_id: editorId !== "none" ? editorId : null,
+                    message: `Edição de vídeo concluída: ${title}`,
+                    meta_json: { editor_id: editorId },
+                    occurred_at: new Date().toISOString(),
+                });
+                if (videoEventError) console.error("Erro ao gerar log de video_completed:", videoEventError);
+            }
+
             setLastSaved(new Date());
             onRefetch();
             qc.invalidateQueries({ queryKey: ["cases_by_tenant_journey", caseData.tenant_id] });
