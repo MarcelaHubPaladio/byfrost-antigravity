@@ -10,6 +10,38 @@ import { showSuccess, showError } from "@/utils/toast";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { cn } from "@/lib/utils";
 import { PublicPortalShell, type PublicPalette } from "@/components/public/PublicPortalShell";
+import { Calendar } from "lucide-react";
+
+const getSubtaskTypeLabel = (type: string) => {
+    switch (type) {
+        case 'arte_estatica': return 'DESIGN/ARTE';
+        case 'planejamento': return 'PLANEJAMENTO';
+        case 'gravacao': return 'GRAVAÇÃO';
+        case 'edicao': 
+        case 'video': return 'VÍDEO/ROTEIRO';
+        default: return type ? type.toUpperCase() : 'TAREFA';
+    }
+};
+
+const getSubtaskStatusLabel = (status: string) => {
+    switch (status) {
+        case 'backlog': return 'BACKLOG';
+        case 'planejamento': return 'PLANEJAMENTO';
+        case 'gravacao': return 'GRAVAÇÃO';
+        case 'edicao': return 'EDIÇÃO';
+        case 'aprovacao': return 'APROVAÇÃO';
+        case 'postar': return 'POSTAR / PUBLICAÇÃO';
+        case 'concluido': return 'CONCLUÍDO';
+        default: return status ? status.toUpperCase() : 'PENDENTE';
+    }
+};
+
+const formatDateBR = (dateStr: string) => {
+    if (!dateStr) return "";
+    const [year, month, day] = dateStr.split('-');
+    if (!year || !month || !day) return dateStr;
+    return `${day}/${month}/${year}`;
+};
 
 export default function PublicScriptApproval() {
     const { token } = useParams();
@@ -464,7 +496,16 @@ export default function PublicScriptApproval() {
                                                 </div>
                                                 <div className="flex-1">
                                                     <div className="text-[10px] font-black text-slate-500 uppercase tracking-wider mb-0.5 flex flex-wrap items-center gap-2">
-                                                        {st.type === 'arte_estatica' ? 'Design/Arte' : 'Vídeo/Roteiro'}
+                                                        {getSubtaskTypeLabel(st.type)}
+                                                        <Badge variant="outline" className="text-[8px] h-4 px-1.5 border-slate-700/50 text-slate-400 bg-slate-800/50">
+                                                            {getSubtaskStatusLabel(st.status)}
+                                                        </Badge>
+                                                        {st.post_date && (
+                                                            <Badge variant="outline" className="text-[8px] h-4 px-1.5 border-slate-700/50 text-slate-400 bg-slate-800/50 flex items-center gap-1">
+                                                                <Calendar className="h-2.5 w-2.5" />
+                                                                {st.status === 'concluido' ? 'POSTADO EM' : 'POSTAGEM'}: {formatDateBR(st.post_date)}
+                                                            </Badge>
+                                                        )}
                                                         {st.is_approved && <Badge className="bg-primary text-primary-foreground border-none h-4 px-1.5 text-[8px]">APROVADO</Badge>}
                                                     </div>
                                                     <div className="text-sm font-black text-slate-100 break-words leading-tight pr-2">{st.title}</div>
