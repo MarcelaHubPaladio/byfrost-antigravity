@@ -113,6 +113,7 @@ import { RichTextEditor } from "@/components/RichTextEditor";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { GoalCelebrationModal } from "@/components/goals/GoalCelebrationModal";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -184,6 +185,7 @@ function SubtaskItemContent({
     const [lastSaved, setLastSaved] = useState<Date | null>(null);
     const initialRender = useRef(true);
     const [isDirty, setIsDirty] = useState(false);
+    const [celebrationData, setCelebrationData] = useState<{ goalName: string, progress: number, target: number } | null>(null);
 
     useEffect(() => {
         if (initialRender.current) {
@@ -305,6 +307,32 @@ function SubtaskItemContent({
                     occurred_at: new Date().toISOString(),
                 });
                 if (videoEventError) console.error("Erro ao gerar log de video_completed:", videoEventError);
+                
+                // Fetch Gatilhos
+                const { data: gatilhos } = await supabase.from("goal_triggers").select("metric_key").eq("tenant_id", caseData?.tenant_id).eq("event_type", "video_completed");
+                
+                if (gatilhos && gatilhos.length > 0) {
+                     const targetUser = editorId !== "none" && editorId ? editorId : (user as any)?.id;
+                     const { data: userGoals } = await supabase.from("goals").select("id, name, target_value").eq("tenant_id", caseData?.tenant_id).eq("metric_key", gatilhos[0].metric_key).eq("participant_id", targetUser).eq("status", "active");
+                     
+                     if (userGoals && userGoals.length > 0) {
+                         const goal = userGoals[0];
+                         // Wait a short moment to ensure DB trigger finished processing
+                         await new Promise(r => setTimeout(r, 600)); 
+                         const { data: currentEvents } = await supabase.from("incentive_events").select("value").eq("participant_id", targetUser).eq("event_type", gatilhos[0].metric_key);
+                         
+                         const totalValue = (currentEvents || []).reduce((acc: number, curr: any) => acc + (curr.value || 0), 0);
+                         
+                         // Só exibe se total > 0 para evitar falsos positivos
+                         if (totalValue > 0) {
+                             setCelebrationData({
+                                 goalName: goal.name,
+                                 progress: totalValue,
+                                 target: goal.target_value
+                             });
+                         }
+                     }
+                }
             }
 
             setLastSaved(new Date());
@@ -885,6 +913,16 @@ function SubtaskItemContent({
                     </Button>
                 )}
             </div>
+
+            {celebrationData && (
+                <GoalCelebrationModal
+                    isOpen={!!celebrationData}
+                    onClose={() => setCelebrationData(null)}
+                    goalName={celebrationData.goalName}
+                    progress={celebrationData.progress}
+                    target={celebrationData.target}
+                />
+            )}
         </div>
     );
 }
@@ -3102,7 +3140,6 @@ export default function OperacaoM30Case() {
                                                                         usersMap={usersQ.data}
                                                                     />
                                                                 </AccordionContent>
-                                                                </>
                                                             )}
                                                         </SortableAccordionItem>
                                                         ))}
