@@ -1060,6 +1060,10 @@ export default function OperacaoM30Case() {
     const [strategyTitle, setStrategyTitle] = useState("");
     const [strategyObjective, setStrategyObjective] = useState("");
     const [strategyContext, setStrategyContext] = useState("");
+    
+    const [editStrategyDatesModalOpen, setEditStrategyDatesModalOpen] = useState(false);
+    const [strategyStartDate, setStrategyStartDate] = useState("");
+    const [strategyEndDate, setStrategyEndDate] = useState("");
     const [assignedUserId, setAssignedUserId] = useState("");
 
     const [approvalModalOpen, setApprovalModalOpen] = useState(false);
@@ -1931,6 +1935,43 @@ export default function OperacaoM30Case() {
         }
     };
 
+    const handleOpenEditDates = () => {
+        const m = caseQ.data?.meta_json as any;
+        setStrategyStartDate(m?.strategy_start_date || "");
+        setStrategyEndDate(m?.strategy_end_date || "");
+        setEditStrategyDatesModalOpen(true);
+    };
+
+    const handleSaveStrategyDates = async () => {
+        if (!activeTenantId || !id || !caseQ.data) return;
+        setSaving(true);
+        try {
+            const { data: latestCase } = await supabase.from("cases").select("meta_json").eq("id", id).single();
+            const latestMeta = latestCase?.meta_json as any || caseQ.data.meta_json;
+
+            const { error } = await supabase
+                .from("cases")
+                .update({ 
+                    meta_json: {
+                        ...latestMeta,
+                        strategy_start_date: strategyStartDate,
+                        strategy_end_date: strategyEndDate,
+                    },
+                    updated_at: new Date().toISOString()
+                })
+                .eq("id", id);
+            
+            if (error) throw error;
+            showSuccess("Datas da estratégia atualizadas.");
+            setEditStrategyDatesModalOpen(false);
+            caseQ.refetch();
+        } catch (e: any) {
+            showError(`Erro ao salvar datas: ${e?.message}`);
+        } finally {
+            setSaving(false);
+        }
+    };
+
     const handleSaveMainCard = async () => {
         if (!activeTenantId || !id || !caseQ.data) return;
         setSaving(true);
@@ -2231,6 +2272,55 @@ export default function OperacaoM30Case() {
                                 </div>
 
                                 <div className="flex flex-wrap items-center gap-2 mt-4 sm:mt-0">
+                                    {caseQ.data?.case_type === 'strategy' && (
+                                        <Dialog open={editStrategyDatesModalOpen} onOpenChange={setEditStrategyDatesModalOpen}>
+                                            <DialogTrigger asChild>
+                                                <Button 
+                                                    variant="outline" 
+                                                    size="sm" 
+                                                    className="h-8 rounded-full bg-white border-slate-200 shadow-sm text-slate-700 font-bold hover:bg-slate-50"
+                                                    onClick={handleOpenEditDates}
+                                                >
+                                                    <Calendar className="h-3 w-3 mr-2" /> 
+                                                    Datas da Estratégia
+                                                </Button>
+                                            </DialogTrigger>
+                                            <DialogContent className="sm:max-w-[425px] rounded-3xl p-6">
+                                                <DialogHeader>
+                                                    <DialogTitle className="text-lg font-black text-slate-800">Datas da Estratégia</DialogTitle>
+                                                    <DialogDescription>
+                                                        Defina o período de duração desta estratégia.
+                                                    </DialogDescription>
+                                                </DialogHeader>
+                                                <div className="grid gap-4 py-4">
+                                                    <div className="space-y-2">
+                                                        <Label className="text-xs font-bold text-slate-500 uppercase">Data de Início</Label>
+                                                        <input 
+                                                            type="date"
+                                                            value={strategyStartDate}
+                                                            onChange={(e) => setStrategyStartDate(e.target.value)}
+                                                            className="w-full h-10 rounded-xl border border-slate-200 px-3 text-sm focus:ring-2 focus:ring-indigo-500/20 outline-none"
+                                                        />
+                                                    </div>
+                                                    <div className="space-y-2">
+                                                        <Label className="text-xs font-bold text-slate-500 uppercase">Data de Término</Label>
+                                                        <input 
+                                                            type="date"
+                                                            value={strategyEndDate}
+                                                            onChange={(e) => setStrategyEndDate(e.target.value)}
+                                                            className="w-full h-10 rounded-xl border border-slate-200 px-3 text-sm focus:ring-2 focus:ring-indigo-500/20 outline-none"
+                                                        />
+                                                    </div>
+                                                </div>
+                                                <div className="flex justify-end gap-2 pt-4">
+                                                    <Button variant="ghost" onClick={() => setEditStrategyDatesModalOpen(false)} className="rounded-xl">Cancelar</Button>
+                                                    <Button onClick={handleSaveStrategyDates} disabled={saving} className="rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white">
+                                                        {saving ? "Salvando..." : "Salvar Datas"}
+                                                    </Button>
+                                                </div>
+                                            </DialogContent>
+                                        </Dialog>
+                                    )}
                                     {(() => {
                                         const isFinalState = (s: string) => {
                                             const up = s.toUpperCase();
