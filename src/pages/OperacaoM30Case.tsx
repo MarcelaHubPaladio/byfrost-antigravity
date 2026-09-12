@@ -318,7 +318,7 @@ function SubtaskItemContent({
                      
                      // Busca a meta (seja customizada ou de template)
                      let userGoal = null;
-                     const { data: ug } = await supabase.from("user_goals").select("id, name, target_value").eq("tenant_id", caseData?.tenant_id).eq("user_id", targetUser).eq("metric_key", gatilhos[0].metric_key).maybeSingle();
+                     const { data: ug } = await supabase.from("user_goals").select("id, name, target_value").eq("tenant_id", caseData?.tenant_id).eq("user_id", targetUser).eq("metric_key", gatilhos[0].metric_key).limit(1).maybeSingle();
                      if (ug) userGoal = ug;
                      else {
                          const { data: gt } = await supabase.from("goal_templates").select("id, name, target_value").eq("tenant_id", caseData?.tenant_id).eq("metric_key", gatilhos[0].metric_key).limit(1).maybeSingle();
