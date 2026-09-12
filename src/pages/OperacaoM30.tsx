@@ -879,10 +879,28 @@ export default function OperacaoM30() {
 
     // Filtro de Entidade (Cliente)
     if (entityFilterIds.length > 0) {
+      const selectedEntityNames = entityFilterIds.map(id => {
+        if (id === "__unassigned__") return null;
+        const e = (entitiesQ.data || []).find((x: any) => x.id === id);
+        return e ? ((e.metadata as any)?.internal_label || e.display_name || "").toLowerCase().trim() : null;
+      }).filter(Boolean) as string[];
+
       base = base.filter((r) => {
-        const eid = String((r as any).customer_entity_id || (r.meta_json as any)?.entity_id || r.customer_id || "");
-        if (entityFilterIds.includes("__unassigned__") && !eid) return true;
-        return eid && entityFilterIds.includes(eid);
+        const e1 = String((r as any).customer_entity_id || "");
+        const e2 = String((r.meta_json as any)?.entity_id || "");
+        const e3 = String(r.customer_id || "");
+        
+        const hasNoId = !e1 && !e2 && !e3;
+        if (entityFilterIds.includes("__unassigned__") && hasNoId) return true;
+        
+        if (e1 && entityFilterIds.includes(e1)) return true;
+        if (e2 && entityFilterIds.includes(e2)) return true;
+        if (e3 && entityFilterIds.includes(e3)) return true;
+
+        const metaName = String((r.meta_json as any)?.customer_entity_name || (r.meta_json as any)?.entity_name || "").toLowerCase().trim();
+        if (metaName && selectedEntityNames.some(name => name.includes(metaName) || metaName.includes(name))) return true;
+
+        return false;
       });
     }
 
@@ -909,7 +927,7 @@ export default function OperacaoM30() {
 
       return t.includes(qq);
     });
-  }, [journeyRows, q, isCrm, customersQ.data, caseEntitiesQ.data, casePhoneQ.data, instanceFilterId, assigneeFilterId, entityFilterIds, startDate, endDate]);
+  }, [journeyRows, q, isCrm, customersQ.data, caseEntitiesQ.data, casePhoneQ.data, instanceFilterId, assigneeFilterId, entityFilterIds, startDate, endDate, entitiesQ.data]);
 
   const visibleCaseIds = useMemo(() => filteredRows.map((r) => r.id), [filteredRows]);
 

@@ -102,7 +102,7 @@ const ExternalLinkIcon = ExternalLink;
 const CalendarIcon = Calendar;
 const PlusIcon = Plus;
 import { cn, titleizeState } from "@/lib/utils";
-import { computeStrategyState } from "@/lib/journeys/m30MacroStates";
+import { computeStrategyState, calculateStrategyProgress } from "@/lib/journeys/m30MacroStates";
 import { showError, showSuccess } from "@/utils/toast";
 import { getStateLabel } from "@/lib/journeyLabels";
 import { getClientOperationalContext } from "@/lib/journeys/m30OperationalContext";
@@ -2862,10 +2862,23 @@ export default function OperacaoM30Case() {
                                 {(caseQ.data?.case_type === "planejamento" || caseQ.data?.case_type === "gravacao" || caseQ.data?.case_type === "strategy") && (
                                     <div className="rounded-[32px] border border-slate-200 bg-slate-50/40 p-6 shadow-inner-sm">
                                         <div className="flex items-center justify-between mb-4">
-                                            <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
-                                                <PackageCheck className="h-4 w-4 text-indigo-600" />
-                                                Subtarefas de Produção
-                                            </h3>
+                                            <div className="flex flex-col gap-1">
+                                                <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                                                    <PackageCheck className="h-4 w-4 text-indigo-600" />
+                                                    Subtarefas de Produção
+                                                </h3>
+                                                {(() => {
+                                                    const progress = calculateStrategyProgress(pendingSubtasks);
+                                                    return (
+                                                        <div className="flex items-center gap-2 mt-1">
+                                                            <div className="h-2 w-24 bg-slate-200 rounded-full overflow-hidden">
+                                                                <div className="h-full bg-emerald-500 rounded-full transition-all" style={{ width: `${progress.percentage}%` }} />
+                                                            </div>
+                                                            <span className="text-[10px] font-bold text-slate-400">{progress.completed}/{progress.total} ({progress.percentage}%)</span>
+                                                        </div>
+                                                    );
+                                                })()}
+                                            </div>
 
                                             <div className="flex items-center gap-2">
                                                 <Button 
