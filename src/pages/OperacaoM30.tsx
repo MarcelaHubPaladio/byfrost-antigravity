@@ -1,4 +1,4 @@
-import { useMemo, useEffect, useState } from "react";
+import { useMemo, useEffect, useState, useCallback } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useM30CasePresence } from "@/hooks/useM30CasePresence";
 import { Lock } from "lucide-react";
@@ -13,6 +13,7 @@ import { cn, titleizeState } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { AsyncMultiSelect } from "@/components/ui/async-multi-select";
 import {
   Table,
   TableBody,
@@ -402,7 +403,7 @@ export default function OperacaoM30() {
   // Filtros jornada Auditoria e Responsável
   const [instanceFilterId, setInstanceFilterId] = useState<string>(() => { try { return JSON.parse(localStorage.getItem("operacao_m30_filters") || "{}").instanceFilterId || "all"; } catch { return "all"; } });
   const [assigneeFilterId, setAssigneeFilterId] = useState<string>(() => { try { return JSON.parse(localStorage.getItem("operacao_m30_filters") || "{}").assigneeFilterId || "all"; } catch { return "all"; } });
-  const [entityFilterId, setEntityFilterId] = useState(() => { try { return JSON.parse(localStorage.getItem("operacao_m30_filters") || "{}").entityFilterId || "all"; } catch { return "all"; } });
+  const [entityFilterIds, setEntityFilterIds] = useState<string[]>(() => { try { return JSON.parse(localStorage.getItem("operacao_m30_filters") || "{}").entityFilterIds || []; } catch { return []; } });
   const [dateRange, setDateRange] = useState<{ from?: Date; to?: Date } | undefined>(() => {
     try {
       const f = JSON.parse(localStorage.getItem("operacao_m30_filters") || "{}");
@@ -423,11 +424,11 @@ export default function OperacaoM30() {
     localStorage.setItem("operacao_m30_filters", JSON.stringify({
       instanceFilterId,
       assigneeFilterId,
-      entityFilterId,
+      entityFilterIds,
       startDate,
       endDate
     }));
-  }, [instanceFilterId, assigneeFilterId, entityFilterId, startDate, endDate]);
+  }, [instanceFilterId, assigneeFilterId, entityFilterIds, startDate, endDate]);
 
   const entitiesQ = useQuery({
     queryKey: ["active_client_entities", activeTenantId],
@@ -446,7 +447,7 @@ export default function OperacaoM30() {
 
       const { data, error } = await supabase
         .from("core_entities")
-        .select("id,display_name")
+        .select("id,display_name,metadata")
         .eq("tenant_id", activeTenantId!)
         .in("id", activeIds)
         .is("deleted_at", null)
@@ -532,11 +533,11 @@ export default function OperacaoM30() {
     let base = contractsQ.data || [];
 
     // Filter by Entity (Cliente)
-    if (entityFilterId !== "all") {
+    if (entityFilterIds.length > 0) {
       base = base.filter(c => {
         const eid = c.customer_entity_id;
-        if (entityFilterId === "__unassigned__") return !eid;
-        return eid === entityFilterId;
+        if (entityFilterIds.includes("__unassigned__") && !eid) return true;
+        return eid && entityFilterIds.includes(eid);
       });
     }
 
@@ -564,7 +565,7 @@ export default function OperacaoM30() {
     }
 
     return base;
-  }, [contractsQ.data, entityFilterId, startDate, endDate, q]);
+  }, [contractsQ.data, entityFilterIds, startDate, endDate, q]);
 
   const globalLabelsMap = useMemo(() => {
     const map = new Map<string, {id: string, name: string, color: string}>();
@@ -908,7 +909,7 @@ export default function OperacaoM30() {
 
       return t.includes(qq);
     });
-  }, [journeyRows, q, isCrm, customersQ.data, caseEntitiesQ.data, casePhoneQ.data, instanceFilterId, assigneeFilterId, entityFilterId, startDate, endDate]);
+  }, [journeyRows, q, isCrm, customersQ.data, caseEntitiesQ.data, casePhoneQ.data, instanceFilterId, assigneeFilterId, entityFilterIds, startDate, endDate]);
 
   const visibleCaseIds = useMemo(() => filteredRows.map((r) => r.id), [filteredRows]);
 
@@ -1324,19 +1325,25 @@ export default function OperacaoM30() {
                 <div className="flex flex-wrap items-center gap-3 flex-1">
                   <div className="flex flex-col gap-1 w-full sm:w-auto">
                     <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider pl-1">Cliente</label>
-                    <select
-                      value={entityFilterId}
-                      onChange={(e) => setEntityFilterId(e.target.value)}
-                      className="h-10 w-full sm:w-auto min-w-[160px] rounded-xl border border-slate-200 dark:border-slate-850 bg-white dark:bg-slate-900 px-3 text-sm text-slate-800 dark:text-slate-200 outline-none focus:border-indigo-400"
-                    >
-                      <option value="all">Todos os clientes</option>
-                      <option value="__unassigned__">Sem cliente</option>
-                      {(entitiesQ.data ?? []).map((e) => (
-                        <option key={e.id} value={e.id}>
-                          {e.display_name || "Sem nome"}
-                        </option>
-                      ))}
-                    </select>
+                    <AsyncMultiSelect
+                      values={entityFilterIds}
+                      onChange={setEntityFilterIds}
+                      loadOptions={async (qVal) => {
+                        const opts = [{ value: "__unassigned__", label: "Sem cliente" }];
+                        (entitiesQ.data ?? []).forEach(e => {
+                          opts.push({
+                            value: e.id,
+                            label: (e.metadata as any)?.internal_label || e.display_name || "Sem nome"
+                          });
+                        });
+                        if (!qVal) return opts;
+                        const l = qVal.toLowerCase();
+                        return opts.filter(o => o.label.toLowerCase().includes(l));
+                      }}
+                      placeholder="Todos os clientes"
+                      defaultOptions
+                      className="w-full sm:w-auto min-w-[200px]"
+                    />
                   </div>
                   <div className="flex flex-col gap-1 w-full sm:w-auto">
                     <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider pl-1">Responsável</label>
@@ -1517,6 +1524,34 @@ export default function OperacaoM30() {
                                                 <div className="text-[10px] text-slate-500 font-medium truncate mt-0.5">
                                                   {(c.meta_json as any)?.strategy_title || "Sem título estratégico"}
                                                 </div>
+                                                
+                                                {(() => {
+                                                  const eid = (c as any).customer_entity_id || (c as any).customer_id || (c.meta_json as any)?.entity_id;
+                                                  const metaName = (c.meta_json as any)?.customer_entity_name || (c.meta_json as any)?.entity_name;
+                                                  const entityFullName = metaName || (eid ? caseEntitiesQ.data?.get(eid) : null);
+                                                  
+                                                  if (!entityFullName) return null;
+
+                                                  const nameParts = entityFullName.split(" ");
+                                                  const entityDisplayName = nameParts.slice(0, 2).join(" ");
+                                                  
+                                                  return (
+                                                    <div 
+                                                      onClick={(e) => {
+                                                        e.preventDefault();
+                                                        e.stopPropagation();
+                                                        const commitmentId = (c.meta_json as any)?.commitment_id;
+                                                        if (commitmentId) {
+                                                          nav(`/app/commitments/${commitmentId}`);
+                                                        }
+                                                      }}
+                                                      className="mt-1 inline-block cursor-pointer hover:bg-indigo-100 transition-colors truncate max-w-full rounded bg-indigo-50 px-1.5 py-0.5 text-[10px] uppercase tracking-wider font-bold text-indigo-700 ring-1 ring-inset ring-indigo-700/10"
+                                                      title={`${entityFullName} (Ver Contrato)`}
+                                                    >
+                                                      {entityDisplayName}
+                                                    </div>
+                                                  );
+                                                })()}
                                               </div>
                                               {((c.meta_json as any)?.labels || []).length > 0 && (
                                                 <div className="flex flex-wrap gap-1 justify-end shrink-0 max-w-[60px]">
