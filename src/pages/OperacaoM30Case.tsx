@@ -294,7 +294,7 @@ function SubtaskItemContent({
             const oldStatus = caseMeta?.pending_subtasks?.[idx]?.status;
             const isJustCompleted = (status === "concluido" || status === "done") && oldStatus !== "concluido" && oldStatus !== "done";
             
-            if (isJustCompleted && type === "video") {
+            if (isJustCompleted && type === "edicao") {
                 const { error: videoEventError } = await supabase.from("timeline_events").insert({
                     tenant_id: caseData?.tenant_id,
                     case_id: caseId,
