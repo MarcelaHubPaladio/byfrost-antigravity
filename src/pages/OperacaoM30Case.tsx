@@ -1062,8 +1062,13 @@ export default function OperacaoM30Case() {
     const [strategyContext, setStrategyContext] = useState("");
     
     const [editStrategyDatesModalOpen, setEditStrategyDatesModalOpen] = useState(false);
-    const [strategyStartDate, setStrategyStartDate] = useState("");
-    const [strategyEndDate, setStrategyEndDate] = useState("");
+    const [cycleStart, setCycleStart] = useState("");
+    const [cycleEnd, setCycleEnd] = useState("");
+    const [datePlanning, setDatePlanning] = useState("");
+    const [dateRecording, setDateRecording] = useState("");
+    const [dateApproval, setDateApproval] = useState("");
+    const [datePosting, setDatePosting] = useState("");
+    const [dateReport, setDateReport] = useState("");
     const [assignedUserId, setAssignedUserId] = useState("");
 
     const [approvalModalOpen, setApprovalModalOpen] = useState(false);
@@ -1937,8 +1942,13 @@ export default function OperacaoM30Case() {
 
     const handleOpenEditDates = () => {
         const m = caseQ.data?.meta_json as any;
-        setStrategyStartDate(m?.strategy_start_date || "");
-        setStrategyEndDate(m?.strategy_end_date || "");
+        setCycleStart(m?.cycle_start || "");
+        setCycleEnd(m?.cycle_end || "");
+        setDatePlanning(m?.date_planning || "");
+        setDateRecording(m?.date_recording || "");
+        setDateApproval(m?.date_approval || "");
+        setDatePosting(m?.date_posting || "");
+        setDateReport(m?.date_report || "");
         setEditStrategyDatesModalOpen(true);
     };
 
@@ -1954,8 +1964,13 @@ export default function OperacaoM30Case() {
                 .update({ 
                     meta_json: {
                         ...latestMeta,
-                        strategy_start_date: strategyStartDate,
-                        strategy_end_date: strategyEndDate,
+                        cycle_start: cycleStart || null,
+                        cycle_end: cycleEnd || null,
+                        date_planning: datePlanning || null,
+                        date_recording: dateRecording || null,
+                        date_approval: dateApproval || null,
+                        date_posting: datePosting || null,
+                        date_report: dateReport || null,
                     },
                     updated_at: new Date().toISOString()
                 })
@@ -2292,24 +2307,49 @@ export default function OperacaoM30Case() {
                                                         Defina o período de duração desta estratégia.
                                                     </DialogDescription>
                                                 </DialogHeader>
-                                                <div className="grid gap-4 py-4">
-                                                    <div className="space-y-2">
-                                                        <Label className="text-xs font-bold text-slate-500 uppercase">Data de Início</Label>
-                                                        <input 
-                                                            type="date"
-                                                            value={strategyStartDate}
-                                                            onChange={(e) => setStrategyStartDate(e.target.value)}
-                                                            className="w-full h-10 rounded-xl border border-slate-200 px-3 text-sm focus:ring-2 focus:ring-indigo-500/20 outline-none"
-                                                        />
+                                                <div className="grid gap-4 py-4 max-h-[60vh] overflow-y-auto">
+                                                    <div className="grid grid-cols-2 gap-4">
+                                                        <div className="space-y-2">
+                                                            <Label className="text-xs font-bold text-slate-500 uppercase">Data Inicial</Label>
+                                                            <input 
+                                                                type="date"
+                                                                value={cycleStart}
+                                                                onChange={(e) => setCycleStart(e.target.value)}
+                                                                className="w-full h-10 rounded-xl border border-slate-200 px-3 text-sm focus:ring-2 focus:ring-indigo-500/20 outline-none"
+                                                            />
+                                                        </div>
+                                                        <div className="space-y-2">
+                                                            <Label className="text-xs font-bold text-slate-500 uppercase">Data Final</Label>
+                                                            <input 
+                                                                type="date"
+                                                                value={cycleEnd}
+                                                                onChange={(e) => setCycleEnd(e.target.value)}
+                                                                className="w-full h-10 rounded-xl border border-slate-200 px-3 text-sm focus:ring-2 focus:ring-indigo-500/20 outline-none"
+                                                            />
+                                                        </div>
                                                     </div>
-                                                    <div className="space-y-2">
-                                                        <Label className="text-xs font-bold text-slate-500 uppercase">Data de Término</Label>
-                                                        <input 
-                                                            type="date"
-                                                            value={strategyEndDate}
-                                                            onChange={(e) => setStrategyEndDate(e.target.value)}
-                                                            className="w-full h-10 rounded-xl border border-slate-200 px-3 text-sm focus:ring-2 focus:ring-indigo-500/20 outline-none"
-                                                        />
+                                                    <hr className="border-slate-100" />
+                                                    <div className="grid grid-cols-2 gap-4">
+                                                        <div className="space-y-2">
+                                                            <Label className="text-xs font-bold text-slate-500 uppercase">Planejamento</Label>
+                                                            <input type="date" value={datePlanning} onChange={e => setDatePlanning(e.target.value)} className="w-full h-10 rounded-xl border border-slate-200 px-3 text-sm focus:ring-2 focus:ring-indigo-500/20 outline-none" />
+                                                        </div>
+                                                        <div className="space-y-2">
+                                                            <Label className="text-xs font-bold text-slate-500 uppercase">Gravação</Label>
+                                                            <input type="date" value={dateRecording} onChange={e => setDateRecording(e.target.value)} className="w-full h-10 rounded-xl border border-slate-200 px-3 text-sm focus:ring-2 focus:ring-indigo-500/20 outline-none" />
+                                                        </div>
+                                                        <div className="space-y-2">
+                                                            <Label className="text-xs font-bold text-slate-500 uppercase">Previsão de Aprovação</Label>
+                                                            <input type="date" value={dateApproval} onChange={e => setDateApproval(e.target.value)} className="w-full h-10 rounded-xl border border-slate-200 px-3 text-sm focus:ring-2 focus:ring-indigo-500/20 outline-none" />
+                                                        </div>
+                                                        <div className="space-y-2">
+                                                            <Label className="text-xs font-bold text-slate-500 uppercase">Postagem</Label>
+                                                            <input type="date" value={datePosting} onChange={e => setDatePosting(e.target.value)} className="w-full h-10 rounded-xl border border-slate-200 px-3 text-sm focus:ring-2 focus:ring-indigo-500/20 outline-none" />
+                                                        </div>
+                                                        <div className="space-y-2">
+                                                            <Label className="text-xs font-bold text-slate-500 uppercase">Relatório</Label>
+                                                            <input type="date" value={dateReport} onChange={e => setDateReport(e.target.value)} className="w-full h-10 rounded-xl border border-slate-200 px-3 text-sm focus:ring-2 focus:ring-indigo-500/20 outline-none" />
+                                                        </div>
                                                     </div>
                                                 </div>
                                                 <div className="flex justify-end gap-2 pt-4">
