@@ -55,8 +55,12 @@ export function computeStrategyState(subtasks: any[]): string {
     return 'planejado';
 }
 
-export function calculateStrategyProgress(subtasks: any[]): number {
-    if (!subtasks || subtasks.length === 0) return 0;
+export function calculateStrategyProgress(subtasks: any[]): { completed: number; total: number; percentage: number } {
+    if (!subtasks || subtasks.length === 0) return { completed: 0, total: 0, percentage: 0 };
     const done = subtasks.filter(st => st.status === 'done').length;
-    return Math.round((done / subtasks.length) * 100);
+    return {
+        completed: done,
+        total: subtasks.length,
+        percentage: Math.round((done / subtasks.length) * 100)
+    };
 }
