@@ -312,22 +312,40 @@ function SubtaskItemContent({
                 
                 if (gatilhos && gatilhos.length > 0) {
                      const targetUser = editorId !== "none" && editorId ? editorId : (user as any)?.id;
-                     const { data: userGoals } = await supabase.from("goals").select("id, name, target_value").eq("tenant_id", caseData?.tenant_id).eq("metric_key", gatilhos[0].metric_key).eq("participant_id", targetUser).eq("status", "active");
                      
-                     if (userGoals && userGoals.length > 0) {
-                         const goal = userGoals[0];
-                         // Wait a short moment to ensure DB trigger finished processing
+                     // Busca o participante
+                     const { data: participant } = await supabase.from("incentive_participants").select("id").eq("tenant_id", caseData?.tenant_id).eq("user_id", targetUser).maybeSingle();
+                     
+                     // Busca a meta (seja customizada ou de template)
+                     let userGoal = null;
+                     const { data: ug } = await supabase.from("user_goals").select("id, name, target_value").eq("tenant_id", caseData?.tenant_id).eq("user_id", targetUser).eq("metric_key", gatilhos[0].metric_key).maybeSingle();
+                     if (ug) userGoal = ug;
+                     else {
+                         const { data: gt } = await supabase.from("goal_templates").select("id, name, target_value").eq("tenant_id", caseData?.tenant_id).eq("metric_key", gatilhos[0].metric_key).limit(1).maybeSingle();
+                         if (gt) userGoal = gt;
+                     }
+
+                     if (participant && userGoal) {
+                         // Aguarda o trigger de banco processar o ponto
                          await new Promise(r => setTimeout(r, 600)); 
-                         const { data: currentEvents } = await supabase.from("incentive_events").select("value").eq("participant_id", targetUser).eq("event_type", gatilhos[0].metric_key);
+                         
+                         const startOfMonth = new Date();
+                         startOfMonth.setDate(1);
+                         startOfMonth.setHours(0, 0, 0, 0);
+
+                         const { data: currentEvents } = await supabase.from("incentive_events")
+                            .select("value")
+                            .eq("participant_id", participant.id)
+                            .eq("event_type", gatilhos[0].metric_key)
+                            .gte("created_at", startOfMonth.toISOString());
                          
                          const totalValue = (currentEvents || []).reduce((acc: number, curr: any) => acc + (curr.value || 0), 0);
                          
-                         // Só exibe se total > 0 para evitar falsos positivos
                          if (totalValue > 0) {
                              setCelebrationData({
-                                 goalName: goal.name,
+                                 goalName: userGoal.name,
                                  progress: totalValue,
-                                 target: goal.target_value
+                                 target: userGoal.target_value || 1
                              });
                          }
                      }
