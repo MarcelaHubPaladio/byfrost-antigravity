@@ -878,11 +878,11 @@ export default function OperacaoM30() {
 
 
     // Filtro de Entidade (Cliente)
-    if (entityFilterId !== "all") {
+    if (entityFilterIds.length > 0) {
       base = base.filter((r) => {
         const eid = String((r as any).customer_entity_id || (r.meta_json as any)?.entity_id || r.customer_id || "");
-        if (entityFilterId === "__unassigned__") return !eid;
-        return eid === entityFilterId;
+        if (entityFilterIds.includes("__unassigned__") && !eid) return true;
+        return eid && entityFilterIds.includes(eid);
       });
     }
 
