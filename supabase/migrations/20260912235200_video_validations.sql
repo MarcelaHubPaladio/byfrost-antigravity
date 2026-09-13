@@ -37,28 +37,28 @@ ALTER TABLE public.video_validations ENABLE ROW LEVEL SECURITY;
 -- Policies for standards
 CREATE POLICY "Users can view standards of their tenant" 
     ON public.video_validation_standards FOR SELECT 
-    USING (tenant_id = (select current_tenant_id from users_profile where id = auth.uid()));
+    USING (public.has_tenant_access(tenant_id));
 
 CREATE POLICY "Users can manage standards of their tenant" 
     ON public.video_validation_standards FOR ALL 
-    USING (tenant_id = (select current_tenant_id from users_profile where id = auth.uid()));
+    USING (public.has_tenant_access(tenant_id));
 
 -- Policies for validations
 CREATE POLICY "Users can view validations of their tenant" 
     ON public.video_validations FOR SELECT 
-    USING (tenant_id = (select current_tenant_id from users_profile where id = auth.uid()));
+    USING (public.has_tenant_access(tenant_id));
 
 CREATE POLICY "Users can insert validations of their tenant" 
     ON public.video_validations FOR INSERT 
-    WITH CHECK (tenant_id = (select current_tenant_id from users_profile where id = auth.uid()));
+    WITH CHECK (public.has_tenant_access(tenant_id));
 
 CREATE POLICY "Users can update validations of their tenant" 
     ON public.video_validations FOR UPDATE 
-    USING (tenant_id = (select current_tenant_id from users_profile where id = auth.uid()));
+    USING (public.has_tenant_access(tenant_id));
 
 CREATE POLICY "Users can delete validations of their tenant" 
     ON public.video_validations FOR DELETE 
-    USING (tenant_id = (select current_tenant_id from users_profile where id = auth.uid()));
+    USING (public.has_tenant_access(tenant_id));
 
 -- Storage Bucket setup (Assuming a bucket called 'video_validations' will be created)
 INSERT INTO storage.buckets (id, name, public) VALUES ('video_validations', 'video_validations', false) ON CONFLICT DO NOTHING;
