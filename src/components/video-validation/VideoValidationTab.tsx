@@ -150,22 +150,28 @@ export function VideoValidationTab({
 
     const handleAprovar = async (validationId: string) => {
         try {
-            await supabase.from('video_validations').update({ decision_status: 'approved' }).eq('id', validationId);
+            const { error } = await supabase.from('video_validations').update({ decision_status: 'approved' }).eq('id', validationId);
+            if (error) throw error;
+            
             if (onStatusChange) onStatusChange('concluido');
             toast({ title: 'Vídeo Aprovado', description: 'A subtarefa foi marcada como Concluída.' });
             loadValidations();
         } catch (e: any) {
+            console.error(e);
             toast({ title: 'Erro', description: 'Não foi possível aprovar.', variant: 'destructive' });
         }
     };
 
     const handleRejeitar = async (validationId: string) => {
         try {
-            await supabase.from('video_validations').update({ decision_status: 'rejected' }).eq('id', validationId);
+            const { error } = await supabase.from('video_validations').update({ decision_status: 'rejected' }).eq('id', validationId);
+            if (error) throw error;
+
             if (onStatusChange) onStatusChange('ajustes'); // Assuming 'ajustes' or 'edicao' will send it back
             toast({ title: 'Ajustes Solicitados', description: 'Status atualizado para ajustes.' });
             loadValidations();
         } catch (e: any) {
+            console.error(e);
             toast({ title: 'Erro', description: 'Não foi possível solicitar ajustes.', variant: 'destructive' });
         }
     };
@@ -261,10 +267,20 @@ export function VideoValidationTab({
                             {val.status === 'completed' && val.ai_response && (
                                 <div className="mt-2 bg-slate-50 rounded-lg p-3 border border-slate-100 text-xs text-slate-700">
                                     <p className="font-bold mb-2">Recomendação: {val.recommendation}</p>
-                                    <pre className="whitespace-pre-wrap font-mono text-[10px] overflow-auto max-h-40">
-                                        {JSON.stringify(val.ai_response, null, 2)}
-                                    </pre>
                                     
+                                    {val.ai_response?.details && (
+                                        <div className="space-y-1.5 mt-3">
+                                            {val.ai_response.details.map((detail: any, i: number) => (
+                                                <div key={i} className="flex items-start gap-2 bg-white p-2 rounded-md border border-slate-100 shadow-sm">
+                                                    <span className="text-[10px] mt-0.5">{detail.status === 'approved' ? '✅' : '❌'}</span>
+                                                    <div className="flex-1">
+                                                        <span className="font-bold">{detail.topic}: </span>
+                                                        <span>{detail.note}</span>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
                                     {val.decision_status === 'pending' ? (
                                         <div className="flex gap-2 mt-4 pt-3 border-t border-slate-200">
                                             <Button size="sm" variant="outline" onClick={() => handleAprovar(val.id)} className="flex-1 text-xs h-8 border-emerald-200 text-emerald-700 hover:bg-emerald-50">
