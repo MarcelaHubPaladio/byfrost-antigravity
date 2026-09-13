@@ -10,7 +10,8 @@ export function VideoValidationTab({
     caseId, 
     tenantId, 
     roteiro, 
-    onValidationResult 
+    onValidationResult,
+    onStatusChange
 }: { 
     subtaskId: string, 
     caseId: string, 
@@ -167,12 +168,31 @@ export function VideoValidationTab({
             const { error } = await supabase.from('video_validations').update({ decision_status: 'rejected' }).eq('id', validationId);
             if (error) throw error;
 
-            if (onStatusChange) onStatusChange('ajustes'); // Assuming 'ajustes' or 'edicao' will send it back
+            if (onStatusChange) onStatusChange('ajustes');
             toast({ title: 'Ajustes Solicitados', description: 'Status atualizado para ajustes.' });
             loadValidations();
         } catch (e: any) {
             console.error(e);
             toast({ title: 'Erro', description: 'Não foi possível solicitar ajustes.', variant: 'destructive' });
+        }
+    };
+
+    const handleExcluir = async (validationId: string, videoPath?: string) => {
+        try {
+            // Delete from database
+            const { error: dbError } = await supabase.from('video_validations').delete().eq('id', validationId);
+            if (dbError) throw dbError;
+
+            // Delete from storage if path exists
+            if (videoPath) {
+                await supabase.storage.from('video_validations').remove([videoPath]);
+            }
+
+            toast({ title: 'Excluído', description: 'A análise foi removida.' });
+            loadValidations();
+        } catch (e: any) {
+            console.error(e);
+            toast({ title: 'Erro', description: 'Não foi possível excluir a análise.', variant: 'destructive' });
         }
     };
 
@@ -255,13 +275,24 @@ export function VideoValidationTab({
                                         </p>
                                     </div>
                                 </div>
-                                {val.score !== null && (
-                                    <div className="text-right">
-                                        <span className={`text-xl font-bold ${val.score >= 90 ? 'text-emerald-600' : val.score >= 70 ? 'text-amber-500' : 'text-rose-600'}`}>
-                                            {val.score}/100
-                                        </span>
-                                    </div>
-                                )}
+                                <div className="flex items-center gap-4">
+                                    {val.score !== null && (
+                                        <div className="text-right">
+                                            <span className={`text-xl font-bold ${val.score >= 90 ? 'text-emerald-600' : val.score >= 70 ? 'text-amber-500' : 'text-rose-600'}`}>
+                                                {val.score}/100
+                                            </span>
+                                        </div>
+                                    )}
+                                    <Button 
+                                        variant="ghost" 
+                                        size="sm" 
+                                        className="h-8 w-8 p-0 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-full"
+                                        onClick={() => handleExcluir(val.id, val.video_path)}
+                                        title="Excluir Análise"
+                                    >
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-trash-2"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>
+                                    </Button>
+                                </div>
                             </div>
 
                             {val.status === 'completed' && val.ai_response && (
