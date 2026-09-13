@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { Button } from '@/components/ui/button';
-import { Upload, CheckCircle, AlertCircle, RefreshCw, Sparkles, Play, Settings2 } from 'lucide-react';
+import { Upload, CheckCircle, AlertCircle, RefreshCw, Sparkles, Play, Settings2, Clock } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { Progress } from '@/components/ui/progress';
 
 export function VideoValidationTab({ 
     subtaskId, 
@@ -15,11 +16,14 @@ export function VideoValidationTab({
     caseId: string, 
     tenantId: string, 
     roteiro: string,
-    onValidationResult?: (result: any) => void
+    onValidationResult?: (result: any) => void,
+    onStatusChange?: (status: string) => void
 }) {
     const [file, setFile] = useState<File | null>(null);
     const [uploading, setUploading] = useState(false);
     const [processing, setProcessing] = useState(false);
+    const [progressValue, setProgressValue] = useState(0);
+    const [progressStatus, setProgressStatus] = useState('');
     const [validations, setValidations] = useState<any[]>([]);
     const { toast } = useToast();
 
@@ -52,6 +56,17 @@ export function VideoValidationTab({
         }
 
         setUploading(true);
+        setProgressValue(5);
+        setProgressStatus('Enviando arquivo de vídeo...');
+        
+        // Simulate progress slowly increasing while waiting
+        const progressInterval = setInterval(() => {
+            setProgressValue(prev => {
+                if (prev < 90) return prev + (90 - prev) * 0.05; // slowly approaches 90
+                return prev;
+            });
+        }, 1000);
+
         try {
             // Upload to Supabase Storage
             const fileExt = file.name.split('.').pop();
@@ -62,6 +77,9 @@ export function VideoValidationTab({
                 .upload(fileName, file);
 
             if (uploadError) throw uploadError;
+
+            setProgressValue(30);
+            setProgressStatus('Processando com a Inteligência Artificial...');
 
             // Get public URL
             const { data: { publicUrl } } = supabase.storage
@@ -104,16 +122,50 @@ export function VideoValidationTab({
 
             if (fnError) throw fnError;
 
+            clearInterval(progressInterval);
+            setProgressValue(100);
+            setProgressStatus('Análise finalizada com sucesso!');
+
             setProcessing(false);
             loadValidations();
             toast({ title: 'Análise Concluída', description: 'O relatório de IA está disponível.' });
 
+            setTimeout(() => {
+                setProgressStatus('');
+                setProgressValue(0);
+            }, 3000);
+
         } catch (error: any) {
             console.error('Upload erro:', error);
+            clearInterval(progressInterval);
             toast({ title: 'Erro', description: error.message || 'Falha ao processar o vídeo', variant: 'destructive' });
             setProcessing(false);
+            setProgressStatus('');
+            setProgressValue(0);
         } finally {
             setUploading(false);
+        }
+    };
+
+    const handleAprovar = async (validationId: string) => {
+        try {
+            await supabase.from('video_validations').update({ decision_status: 'approved' }).eq('id', validationId);
+            if (onStatusChange) onStatusChange('concluido');
+            toast({ title: 'Vídeo Aprovado', description: 'A subtarefa foi marcada como Concluída.' });
+            loadValidations();
+        } catch (e: any) {
+            toast({ title: 'Erro', description: 'Não foi possível aprovar.', variant: 'destructive' });
+        }
+    };
+
+    const handleRejeitar = async (validationId: string) => {
+        try {
+            await supabase.from('video_validations').update({ decision_status: 'rejected' }).eq('id', validationId);
+            if (onStatusChange) onStatusChange('ajustes'); // Assuming 'ajustes' or 'edicao' will send it back
+            toast({ title: 'Ajustes Solicitados', description: 'Status atualizado para ajustes.' });
+            loadValidations();
+        } catch (e: any) {
+            toast({ title: 'Erro', description: 'Não foi possível solicitar ajustes.', variant: 'destructive' });
         }
     };
 
@@ -136,16 +188,34 @@ export function VideoValidationTab({
                         type="file" 
                         accept="video/mp4,video/quicktime,video/webm"
                         onChange={handleFileChange}
-                        className="text-xs flex-1 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-rose-50 file:text-rose-700 hover:file:bg-rose-100 bg-white border border-slate-200 rounded-xl px-2 py-1"
+                        disabled={uploading || processing}
+                        className="text-xs flex-1 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-rose-50 file:text-rose-700 hover:file:bg-rose-100 disabled:opacity-50 bg-white border border-slate-200 rounded-xl px-2 py-1"
                     />
                     <Button 
                         onClick={handleUploadAndValidate}
                         disabled={!file || uploading || processing}
-                        className="bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs h-9"
+                        className="bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs h-9 px-4"
                     >
-                        {uploading ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+                        {uploading || processing ? (
+                            <div className="flex items-center gap-2">
+                                <RefreshCw className="h-4 w-4 animate-spin" />
+                                <span>Processando...</span>
+                            </div>
+                        ) : (
+                            <Upload className="h-4 w-4" />
+                        )}
                     </Button>
                 </div>
+
+                {(uploading || processing) && progressStatus && (
+                    <div className="w-full max-w-sm mt-4 space-y-2">
+                        <div className="flex justify-between text-[10px] font-medium text-slate-500">
+                            <span className="flex items-center gap-1"><Clock className="h-3 w-3" /> {progressStatus}</span>
+                            <span>{Math.round(progressValue)}%</span>
+                        </div>
+                        <Progress value={progressValue} className="h-1.5 bg-slate-200" />
+                    </div>
+                )}
             </div>
 
             {/* Historico de Validações */}
@@ -194,14 +264,28 @@ export function VideoValidationTab({
                                         {JSON.stringify(val.ai_response, null, 2)}
                                     </pre>
                                     
-                                    <div className="flex gap-2 mt-4 pt-3 border-t border-slate-200">
-                                        <Button size="sm" variant="outline" className="flex-1 text-xs h-8 border-emerald-200 text-emerald-700 hover:bg-emerald-50">
-                                            Aprovar
-                                        </Button>
-                                        <Button size="sm" variant="outline" className="flex-1 text-xs h-8 border-rose-200 text-rose-700 hover:bg-rose-50">
-                                            Solicitar Ajustes
-                                        </Button>
-                                    </div>
+                                    {val.decision_status === 'pending' ? (
+                                        <div className="flex gap-2 mt-4 pt-3 border-t border-slate-200">
+                                            <Button size="sm" variant="outline" onClick={() => handleAprovar(val.id)} className="flex-1 text-xs h-8 border-emerald-200 text-emerald-700 hover:bg-emerald-50">
+                                                Aprovar
+                                            </Button>
+                                            <Button size="sm" variant="outline" onClick={() => handleRejeitar(val.id)} className="flex-1 text-xs h-8 border-rose-200 text-rose-700 hover:bg-rose-50">
+                                                Solicitar Ajustes
+                                            </Button>
+                                        </div>
+                                    ) : (
+                                        <div className="mt-4 pt-3 border-t border-slate-200 flex justify-center">
+                                            {val.decision_status === 'approved' ? (
+                                                <span className="text-xs font-bold text-emerald-600 bg-emerald-50 px-3 py-1 rounded-full flex items-center gap-1">
+                                                    <CheckCircle className="h-3 w-3" /> Aprovado pelo Guardião
+                                                </span>
+                                            ) : (
+                                                <span className="text-xs font-bold text-rose-600 bg-rose-50 px-3 py-1 rounded-full flex items-center gap-1">
+                                                    <AlertCircle className="h-3 w-3" /> Ajustes Solicitados
+                                                </span>
+                                            )}
+                                        </div>
+                                    )}
                                 </div>
                             )}
                         </div>

@@ -1,7 +1,24 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
-import { corsHeaders } from "../_shared/cors.ts";
-import { createSupabaseAdmin } from "../_shared/supabaseAdmin.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-requested-with, prefer",
+  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+};
+
+function createSupabaseAdmin(token?: string) {
+  const url = Deno.env.get("SUPABASE_URL") ?? "";
+  const key = token ?? Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+
+  if (!url || !key) {
+    throw new Error("Missing SUPABASE_URL or token");
+  }
+
+  return createClient(url, key, {
+    auth: { persistSession: false },
+  });
+}
 function json(data: any, status = 200) {
   return new Response(JSON.stringify(data), {
     status,

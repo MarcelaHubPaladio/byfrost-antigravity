@@ -833,6 +833,7 @@ function SubtaskItemContent({
                             caseId={caseId}
                             tenantId={caseData?.tenant_id}
                             roteiro={scriptRaw}
+                            onStatusChange={setStatus}
                         />
                     </TabsContent>
                 )}
