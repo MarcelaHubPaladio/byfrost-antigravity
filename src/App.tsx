@@ -119,6 +119,7 @@ const SmartCampaignDetail = lazyWithRetry(() => import("@/pages/SmartCampaignDet
 const BeeIA = lazyWithRetry(() => import("@/pages/BeeIA"));
 const BiDashboard = lazyWithRetry(() => import("@/pages/bi/BiDashboard"));
 const MetaPlannerPage = lazyWithRetry(() => import("@/pages/MetaPlannerPage"));
+const VideoValidationRedirect = lazyWithRetry(() => import("@/pages/VideoValidationRedirect"));
 const GlobalLoading = () => (
   <div className="flex h-screen w-full items-center justify-center bg-slate-50 dark:bg-slate-950">
     <div className="h-8 w-8 animate-spin rounded-full border-4 border-slate-200 border-t-blue-500 dark:border-slate-800" />
@@ -194,6 +195,9 @@ const App = () => (
                   <Route path="/public/mkt-techa/approve/:id" element={<MktTechaPublicApproval />} />
                   <Route path="/public/mkt-techa/summary/:id" element={<MktTechaPublicSummary />} />
                   <Route path="/public/mkt-techa/report/:id" element={<MktTechaPublicReport />} />
+
+                  {/* Public Video Validation Redirect (no auth) */}
+                  <Route path="/v/:id" element={<VideoValidationRedirect />} />
 
                   {/* Incentives (gestão interna; protegido por matriz de acesso) */}
                   <Route
