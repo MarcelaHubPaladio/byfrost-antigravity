@@ -89,17 +89,29 @@ export function VideoValidationTab({
             setProcessing(true);
             loadValidations();
             
-            // Call Edge Function or API to process
-            // (Mocking call for MVP step)
-            setTimeout(() => {
-                setProcessing(false);
-                loadValidations();
-                toast({ title: 'Análise Concluída', description: 'O relatório de IA está disponível.' });
-            }, 5000);
+            // Call Edge Function to process
+            const { error: fnError } = await supabase.functions.invoke('video-validation-ai', {
+                body: {
+                    validationId: validationData.id,
+                    tenantId,
+                    caseId,
+                    subtaskId,
+                    videoPath: fileName,
+                    videoUrl: publicUrl,
+                    roteiro
+                }
+            });
+
+            if (fnError) throw fnError;
+
+            setProcessing(false);
+            loadValidations();
+            toast({ title: 'Análise Concluída', description: 'O relatório de IA está disponível.' });
 
         } catch (error: any) {
             console.error('Upload erro:', error);
-            toast({ title: 'Erro', description: error.message || 'Falha ao fazer upload do vídeo', variant: 'destructive' });
+            toast({ title: 'Erro', description: error.message || 'Falha ao processar o vídeo', variant: 'destructive' });
+            setProcessing(false);
         } finally {
             setUploading(false);
         }
