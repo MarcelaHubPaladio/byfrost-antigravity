@@ -126,7 +126,7 @@ serve(async (req) => {
         for (const sc of cycleCases) {
           const subs = (sc.meta_json as any)?.pending_subtasks || [];
           totalSubtasks += subs.length;
-          doneSubtasks += subs.filter((s: any) => s.status === 'done').length;
+          doneSubtasks += subs.filter((s: any) => s.status === 'done' || s.status === 'concluido').length;
           
           if (sc.state !== 'concluido') activeCount++;
           if (sc.state === 'aprovacao') pendingApprovalsCount++;

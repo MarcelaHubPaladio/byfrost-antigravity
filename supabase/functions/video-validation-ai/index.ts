@@ -137,7 +137,7 @@ VOCÊ DEVE OBRIGATORIAMENTE RETORNAR O TEXTO EXATAMENTE NA SEGUINTE ESTRUTURA JS
 }
 Não inclua crases \`\`\`json no retorno, apenas o objeto JSON.`;
 
-    const generateRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent?key=${apiKey}`, {
+    const generateRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -172,6 +172,8 @@ Não inclua crases \`\`\`json no retorno, apenas o objeto JSON.`;
     console.log("Validation complete:", aiResponse.score);
 
     // Update the validation record
+    const decisionStatus = aiResponse.score >= 90 ? 'approved' : 'pending';
+
     await supabase
       .from('video_validations')
       .update({
@@ -179,14 +181,16 @@ Não inclua crases \`\`\`json no retorno, apenas o objeto JSON.`;
         score: aiResponse.score,
         recommendation: aiResponse.recommendation,
         ai_response: aiResponse,
+        decision_status: decisionStatus,
         updated_at: new Date().toISOString()
       })
       .eq('id', validationId);
 
-    // If score < 90, send Discord Webhook
+    // Send Discord Webhook based on score
+    const webhookUrl = "https://discord.com/api/webhooks/1548525329235320882/nCz3V_-zUBq8kRn70vGIOGMelUCBF0Ig2kIQbuza89flkd2Hz0TW4nNJayEwiR8Q1DTa";
+    
     if (aiResponse.score < 90) {
       console.log("Score below 90, sending Discord webhook...");
-      const webhookUrl = "https://discord.com/api/webhooks/1548525329235320882/nCz3V_-zUBq8kRn70vGIOGMelUCBF0Ig2kIQbuza89flkd2Hz0TW4nNJayEwiR8Q1DTa";
       await fetch(webhookUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -194,6 +198,94 @@ Não inclua crases \`\`\`json no retorno, apenas o objeto JSON.`;
           content: `⚠️ **Ajuste Necessário no Vídeo**\n\n**Caso:** ${caseId}\n**Subtarefa:** ${subtaskId}\n**Nota IA:** ${aiResponse.score}/100\n\n**Recomendação:**\n${aiResponse.recommendation}\n\n[Link do Vídeo](${videoUrl})`
         })
       });
+    } else {
+      console.log("Score 90+, sending success WhatsApp message (no Discord)...");
+
+      // Send WhatsApp message to customer group
+      try {
+        const { data: caseData, error: caseErr } = await supabase.from('cases').select('customer_entity_id, meta_json, title').eq('id', caseId).maybeSingle();
+        if (caseErr) console.error("Error fetching case:", caseErr);
+        
+        let entityId = caseData?.customer_entity_id || caseData?.meta_json?.entity_id;
+        
+        if (!entityId && caseData?.meta_json?.customer_entity_name) {
+          const { data: nameData } = await supabase
+            .from('core_entities')
+            .select('id')
+            .eq('display_name', caseData.meta_json.customer_entity_name)
+            .maybeSingle();
+          if (nameData) entityId = nameData.id;
+        }
+        
+        if (entityId) {
+          // 1. Try to get the specific BeeIA CS group configured for this customer
+          const { data: csGroupData, error: csErr } = await supabase
+            .from('beeia_cs_groups')
+            .select('group_jid, wa_instance_id')
+            .eq('customer_entity_id', entityId)
+            .maybeSingle();
+            
+          if (csErr) console.error("Error fetching beeia_cs_groups:", csErr);
+          
+          let targetGroup = csGroupData?.group_jid;
+          let targetInstance = csGroupData?.wa_instance_id;
+          
+          // 2. Fallback: try core_entities metadata and first instance found
+          if (!targetGroup) {
+            const { data: entityData } = await supabase.from('core_entities').select('metadata').eq('id', entityId).maybeSingle();
+            targetGroup = entityData?.metadata?.whatsapp || entityData?.metadata?.phone;
+            
+            if (targetGroup) {
+              const { data: inst } = await supabase.from("wa_instances").select("id").eq("tenant_id", tenantId).limit(1).maybeSingle();
+              targetInstance = inst?.id;
+            }
+          }
+          
+          if (targetGroup && targetInstance) {
+            // Find video title from subtasks if available
+            let videoTitle = caseData?.title || 'Sem título';
+            if (caseData?.meta_json?.pending_subtasks) {
+              const st = caseData.meta_json.pending_subtasks.find((s: any) => s.id === subtaskId);
+              if (st && st.title) videoTitle = st.title;
+            }
+            
+            // Use internal redirect link
+            const origin = req.headers.get("origin") || "https://app2.m30.company";
+            const friendlyUrl = `${origin}/v/${validationId}`;
+
+            const greetings = [
+              "Olá! 👋",
+              "Opa! 🚀",
+              "Oi, oi! ✌️",
+              "Fala pessoal! ✨",
+              "Passando pra avisar... 👀",
+              "Tudo pronto por aqui! 🎬"
+            ];
+            const randomGreeting = greetings[Math.floor(Math.random() * greetings.length)];
+
+            const msg = `${randomGreeting}\n\n🚀 *Ficou pronto mais um vídeo!*\n\n*Título*: ${videoTitle}\n\nAssista ou baixe no link abaixo:\n${friendlyUrl}`;
+            console.log(`Sending WhatsApp text message to group ${targetGroup} using instance ${targetInstance}`);
+            
+            const res = await supabase.functions.invoke("integrations-zapi-send", {
+              body: {
+                tenantId,
+                instanceId: targetInstance,
+                to: targetGroup,
+                type: "text",
+                text: msg,
+                meta: { case_id: caseId }
+              }
+            });
+            console.log("integrations-zapi-send result:", res.data, res.error);
+          } else {
+            console.log("No WhatsApp group or instance found for entity", entityId);
+          }
+        } else {
+            console.log("No customer_entity_id or meta_json.entity_id on case", caseId);
+        }
+      } catch (waErr) {
+        console.error("Error sending WhatsApp:", waErr);
+      }
     }
 
     return json({ ok: true, message: "Validation processed", result: aiResponse });

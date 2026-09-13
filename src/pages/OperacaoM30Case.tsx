@@ -239,7 +239,6 @@ function SubtaskItemContent({
                 post_date: postDate,
                 priority,
                 postado,
-                deliverable_id: deliverableId,
                 description,
                 script_raw: scriptRaw,
                 script_items: scriptItems,
