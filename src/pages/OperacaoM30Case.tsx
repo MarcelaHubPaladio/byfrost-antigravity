@@ -45,6 +45,7 @@ import { CaseTimeline, type CaseTimelineEvent } from "@/components/case/CaseTime
 import { TrelloCardDetails } from "@/components/trello/TrelloCardDetails";
 import { VideoDeliverySection } from "@/components/case/VideoDeliverySection";
 import { LinkDnaModal } from "@/components/case/LinkDnaModal";
+import { VideoValidationTab } from "@/components/video-validation/VideoValidationTab";
 import { Card } from "@/components/ui/card";
 import {
     Command,
@@ -774,6 +775,11 @@ function SubtaskItemContent({
                     <TabsTrigger value="ia" className="rounded-lg text-xs font-bold data-[state=active]:bg-white data-[state=active]:shadow-sm gap-2 text-indigo-600 data-[state=active]:text-indigo-700">
                         <Sparkles className="h-3.5 w-3.5" /> IA
                     </TabsTrigger>
+                    {(type === 'video' || type === 'edicao') && (
+                        <TabsTrigger value="validacao" className="rounded-lg text-xs font-bold data-[state=active]:bg-white data-[state=active]:shadow-sm gap-2 text-rose-600 data-[state=active]:text-rose-700">
+                            <Upload className="h-3.5 w-3.5" /> Validação
+                        </TabsTrigger>
+                    )}
                 </TabsList>
                 
                 <TabsContent value="briefing" className="mt-0 focus-visible:ring-0">
@@ -819,6 +825,17 @@ function SubtaskItemContent({
                         </Button>
                     </div>
                 </TabsContent>
+
+                {(type === 'video' || type === 'edicao') && (
+                    <TabsContent value="validacao" className="mt-0 focus-visible:ring-0">
+                        <VideoValidationTab
+                            subtaskId={st.id}
+                            caseId={caseId}
+                            tenantId={caseData?.tenant_id}
+                            roteiro={scriptRaw}
+                        />
+                    </TabsContent>
+                )}
 
                 <TabsContent value="roteiro" className="mt-0 focus-visible:ring-0 space-y-4">
                     <div className="space-y-2">
