@@ -26,8 +26,9 @@ function json(data: any, status = 200) {
   });
 }
 
-function err(message: string, status = 400, extra?: any) {
-  return json({ ok: false, error: message, ...extra }, status);
+function err(message: string, originalStatus = 400, extra?: any) {
+  // Always return 200 so the frontend gets the JSON payload instead of an opaque 500 exception.
+  return json({ ok: false, error: message, originalStatus, ...extra }, 200);
 }
 
 serve(async (req) => {

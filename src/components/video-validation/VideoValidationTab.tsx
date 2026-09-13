@@ -108,7 +108,7 @@ export function VideoValidationTab({
             loadValidations();
             
             // Call Edge Function to process
-            const { error: fnError } = await supabase.functions.invoke('video-validation-ai', {
+            const { data: fnData, error: fnError } = await supabase.functions.invoke('video-validation-ai', {
                 body: {
                     validationId: validationData.id,
                     tenantId,
@@ -121,6 +121,7 @@ export function VideoValidationTab({
             });
 
             if (fnError) throw fnError;
+            if (fnData && fnData.ok === false) throw new Error(fnData.error || "Erro na IA");
 
             clearInterval(progressInterval);
             setProgressValue(100);
